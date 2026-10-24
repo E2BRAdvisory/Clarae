@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
+	"nodus/services/cloud/internal/app"
 	"nodus/services/cloud/internal/auth"
 	"nodus/services/cloud/internal/config"
 	"nodus/services/cloud/internal/configprofiles"
@@ -24,8 +25,8 @@ import (
 	"nodus/services/cloud/internal/grpcserver"
 	"nodus/services/cloud/internal/httpserver"
 	"nodus/services/cloud/internal/observability"
+	"nodus/services/cloud/internal/storage"
 	"nodus/services/cloud/internal/system"
-	"nodus/services/cloud/internal/users"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=...".
@@ -68,6 +69,12 @@ func run(role config.Role) error {
 		logger.Info().Msg("database migrated")
 	}
 
+	store, err := openStore(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	application := app.New(database, store, logger)
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	if cfg.ServesAPI() {
@@ -75,10 +82,9 @@ func run(role config.Role) error {
 		if err != nil {
 			return err
 		}
-		userSvc := users.NewService(database)
-		authn := auth.NewMiddleware(verifier, userSvc, httpserver.NewRateLimiter(20, 60), cfg.OIDC.StatusCacheTTL)
+		authn := auth.NewMiddleware(verifier, application.Users, httpserver.NewRateLimiter(20, 60), cfg.OIDC.StatusCacheTTL)
 
-		router := httpserver.NewRouter(httpserver.Deps{
+		router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
 			Logger: logger,
 			Auth:   authn,
 			System: system.NewHTTP(Version, system.ClientConfig{
@@ -86,12 +92,11 @@ func run(role config.Role) error {
 				DesktopClientID: cfg.OIDC.DesktopClientID,
 				Audience:        cfg.OIDC.Audience,
 				GRPCEndpoint:    cfg.OIDC.PublicGRPCAddr,
-			}, system.CheckerFunc{N: "database", F: database.Ping}),
-			Users:       users.NewHTTP(userSvc),
+			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
 			Config:      configprofiles.NewHTTP(),
 			WebUIOrigin: cfg.WebUIOrigin,
 			Metrics:     observability.New(),
-		})
+		}))
 		httpSrv := httpserver.NewServer(cfg.ListenAddr, router)
 		g.Go(func() error {
 			logger.Info().Str("addr", cfg.ListenAddr).Msg("http listening")
@@ -107,7 +112,8 @@ func run(role config.Role) error {
 			return httpSrv.Shutdown(shutdownCtx)
 		})
 
-		grpcSrv := grpcserver.New(authn)
+		g.Go(func() error { return application.Hub.Run(ctx) })
+		grpcSrv := grpcserver.New(authn, application.Hub)
 		lis, err := net.Listen("tcp", cfg.GRPCListenAddr)
 		if err != nil {
 			return fmt.Errorf("grpc listen: %w", err)
@@ -131,8 +137,8 @@ func run(role config.Role) error {
 
 	if cfg.RunsWorker() {
 		g.Go(func() error {
-			logger.Info().Msg("worker ready (no jobs scheduled before M2)")
-			<-ctx.Done()
+			logger.Info().Msg("worker started")
+			application.Jobs().Run(ctx)
 			return nil
 		})
 	}
@@ -171,4 +177,16 @@ func newLogger(level string) zerolog.Logger {
 	}
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	return zerolog.New(os.Stdout).Level(lvl).With().Timestamp().Logger()
+}
+
+// openStore selects the blob store: S3-compatible when configured, otherwise a
+// local directory.
+func openStore(ctx context.Context, cfg config.Config) (storage.BlobStore, error) {
+	if cfg.S3.Endpoint != "" {
+		return storage.NewS3(ctx, storage.S3Options{
+			Endpoint: cfg.S3.Endpoint, AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey,
+			Region: cfg.S3.Region, Bucket: cfg.S3.BucketBlobs, UsePathStyle: cfg.S3.UsePathStyle,
+		})
+	}
+	return storage.NewFS(cfg.StorageDir)
 }

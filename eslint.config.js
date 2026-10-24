@@ -16,6 +16,7 @@ export default tseslint.config(
       '**/src/gen/**',
       'apps/desktop/frontend/dist/**',
       '**/test-results/**',
+      'services/cloud/test/load/**',
       '**/playwright-report/**',
     ],
   },

@@ -18,11 +18,16 @@ import (
 
 	"nodus/services/cloud/internal/api"
 	"nodus/services/cloud/internal/auth"
+	"nodus/services/cloud/internal/blobs"
 	"nodus/services/cloud/internal/configprofiles"
 	"nodus/services/cloud/internal/httpproblem"
 	"nodus/services/cloud/internal/observability"
+	"nodus/services/cloud/internal/quota"
+	"nodus/services/cloud/internal/revisions"
+	"nodus/services/cloud/internal/sync"
 	"nodus/services/cloud/internal/system"
 	"nodus/services/cloud/internal/users"
+	"nodus/services/cloud/internal/vaults"
 	"nodus/shared/syncproto"
 )
 
@@ -31,11 +36,20 @@ const BasePath = "/api/v1"
 
 // Deps are the module handlers composed into the API.
 type Deps struct {
-	Logger      zerolog.Logger
-	Auth        *auth.Middleware
-	System      *system.HTTP
-	Users       *users.HTTP
-	Config      *configprofiles.HTTP
+	Logger    zerolog.Logger
+	Auth      *auth.Middleware
+	System    *system.HTTP
+	Users     *users.HTTP
+	Config    *configprofiles.HTTP
+	Vaults    *vaults.HTTP
+	Blobs     *blobs.HTTP
+	Sync      *sync.HTTP
+	Revisions *revisions.HTTP
+	Quota     *quota.HTTP
+	// Tus serves resumable uploads; Events serves the SSE stream. Both live
+	// outside the generated router and are optional (nil in unit tests).
+	Tus         *blobs.TusHandler
+	Events      http.Handler
 	WebUIOrigin string
 	Metrics     *observability.Metrics
 }
@@ -46,15 +60,25 @@ type Deps struct {
 // Aliases give each embedded field a distinct name (embedding three types
 // called HTTP would clash).
 type (
-	systemHTTP = system.HTTP
-	usersHTTP  = users.HTTP
-	configHTTP = configprofiles.HTTP
+	systemHTTP    = system.HTTP
+	usersHTTP     = users.HTTP
+	configHTTP    = configprofiles.HTTP
+	vaultsHTTP    = vaults.HTTP
+	blobsHTTP     = blobs.HTTP
+	syncHTTP      = sync.HTTP
+	revisionsHTTP = revisions.HTTP
+	quotaHTTP     = quota.HTTP
 )
 
 type handlers struct {
 	*systemHTTP
 	*usersHTTP
 	*configHTTP
+	*vaultsHTTP
+	*blobsHTTP
+	*syncHTTP
+	*revisionsHTTP
+	*quotaHTTP
 }
 
 var _ api.StrictServerInterface = handlers{}
@@ -87,8 +111,19 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Handle("/metrics", promhttp.Handler())
 
+	// Routes outside the OpenAPI contract: tus (own protocol) and SSE (streaming).
+	if d.Tus != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(d.Auth.Protect)
+			d.Tus.Mount(r, BasePath)
+		})
+	}
+	if d.Events != nil {
+		r.With(d.Auth.Protect).Method(http.MethodGet, BasePath+"/events", d.Events)
+	}
+
 	strict := api.NewStrictHandlerWithOptions(
-		handlers{d.System, d.Users, d.Config},
+		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota},
 		nil,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
