@@ -1,0 +1,84 @@
+{
+  "app": {
+    "name": "Nodus"
+  },
+  "welcome": {
+    "title": "Open a vault",
+    "subtitle": "A vault is a folder of Markdown notes on your computer.",
+    "openFolder": "Open folder as vault",
+    "createVault": "Create new vault",
+    "recent": "Recent vaults",
+    "pickTitle": "Choose the vault folder"
+  },
+  "sidebar": {
+    "files": "Files",
+    "search": "Search",
+    "newNote": "New note",
+    "newFolder": "New folder",
+    "rename": "Rename",
+    "trash": "Move to trash",
+    "rebuildIndex": "Rebuild index",
+    "closeVault": "Close vault",
+    "promptNoteName": "Note name",
+    "promptFolderName": "Folder name",
+    "promptRename": "New name",
+    "untitled": "Untitled",
+    "confirmLinkUpdate": "{{links}} link(s) in {{notes}} note(s) will be updated. Continue?"
+  },
+  "search": {
+    "placeholder": "Search…  (file: path: tag: line: task: [prop:value] /regex/)",
+    "noResults": "No results",
+    "sort": "Sort",
+    "sortRelevance": "Relevance",
+    "sortName": "Name",
+    "sortModified": "Modified",
+    "count": "{{count}} result(s)"
+  },
+  "editor": {
+    "empty": "Select a note or create a new one.",
+    "conflict": "This note changed on disk. Reload to see the new content or overwrite it.",
+    "reload": "Reload",
+    "overwrite": "Overwrite",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "unsaved": "Unsaved changes"
+  },
+  "status": {
+    "indexing": "Indexing {{done}}/{{total}}",
+    "indexed": "Index up to date",
+    "words": "{{count}} words"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "language": "Language",
+    "languageSystem": "System",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "cloud": "Cloud",
+    "about": "About",
+    "version": "Version",
+    "dataDir": "Data folder",
+    "close": "Close"
+  },
+  "cloud": {
+    "serverUrl": "Server address",
+    "login": "Sign in",
+    "logout": "Sign out",
+    "signingIn": "Waiting for the browser…",
+    "signedOut": "Not signed in",
+    "ready": "Signed in as {{name}}",
+    "disconnected": "Offline — signed in as {{name}}",
+    "device": "Device",
+    "role": "Role",
+    "placeholder": "https://nodus.example.com"
+  },
+  "backlinks": {
+    "title": "Backlinks",
+    "none": "No backlinks",
+    "mentions": "Unlinked mentions",
+    "line": "line {{n}}"
+  }
+}

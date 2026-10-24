@@ -1,0 +1,364 @@
+@import './styles/tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--font-size);
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover {
+  background: var(--bg-hover);
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+button.icon {
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+button.icon:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+input,
+select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+}
+
+/* ---- layout ---- */
+.shell {
+  display: grid;
+  grid-template-rows: 38px 1fr 24px;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100%;
+}
+.titlebar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 80px; /* room for macOS traffic lights (hidden inset title bar) */
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  --wails-draggable: drag;
+}
+.titlebar .title {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.titlebar .spacer {
+  flex: 1;
+}
+.titlebar button {
+  --wails-draggable: no-drag;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+}
+.sidebar .tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar .tabs button {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px;
+  color: var(--text-muted);
+}
+.sidebar .tabs button.active {
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.sidebar .toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar .content {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.tree .node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  border-radius: var(--radius);
+  margin: 0 4px;
+}
+.tree .node:hover {
+  background: var(--bg-hover);
+}
+.tree .node.active {
+  background: var(--bg-active);
+}
+.tree .node .caret {
+  width: 12px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.tree .node .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree .node.file .name {
+  color: var(--text);
+}
+.tree .node.folder .name {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.editor-header .path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.editor-host .cm-editor {
+  height: 100%;
+  font-size: 15px;
+}
+.editor-host .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  padding: 16px 24px;
+}
+.editor-host .cm-content {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.editor-host .cm-focused {
+  outline: none;
+}
+.editor-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.banner {
+  padding: 8px 16px;
+  background: var(--mark);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.statusbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+.statusbar .spacer {
+  flex: 1;
+}
+
+/* ---- welcome ---- */
+.welcome {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  user-select: none;
+}
+.welcome .card {
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.welcome h1 {
+  margin: 0;
+}
+.welcome .muted {
+  color: var(--text-muted);
+}
+.welcome .recent button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 4px;
+}
+.welcome .recent .path {
+  display: block;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---- search ---- */
+.search {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search input {
+  width: 100%;
+}
+.search .hit {
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  cursor: default;
+}
+.search .hit:hover {
+  background: var(--bg-hover);
+}
+.search .hit .title {
+  font-weight: 600;
+}
+.search .hit .snippet {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.search mark {
+  background: var(--mark);
+  color: inherit;
+}
+
+/* ---- settings ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+}
+.modal {
+  width: 520px;
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal h2 {
+  margin: 0;
+}
+.modal h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.modal .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.modal .muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.modal .actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- backlinks ---- */
+.backlinks {
+  border-top: 1px solid var(--border);
+  padding: 8px 16px;
+  max-height: 30%;
+  overflow: auto;
+  background: var(--bg-secondary);
+}
+.backlinks h3 {
+  margin: 4px 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.backlinks .item {
+  padding: 2px 0;
+  cursor: default;
+}
+.backlinks .item:hover {
+  color: var(--accent);
+}
+.backlinks .muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}

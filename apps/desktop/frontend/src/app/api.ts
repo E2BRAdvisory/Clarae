@@ -1,0 +1,94 @@
+// Thin typed facade over the generated Wails bindings (wailsjs/, do not edit)
+// so the rest of the frontend imports one module and tests can mock it.
+// Model types are exposed as plain data shapes (without the generated
+// `convertValues` helper) so literals and mocks type-check structurally.
+import * as VaultAPI from '../../wailsjs/go/app/VaultAPI';
+import * as SearchAPI from '../../wailsjs/go/app/SearchAPI';
+import * as SettingsAPI from '../../wailsjs/go/app/SettingsAPI';
+import * as AuthAPI from '../../wailsjs/go/app/AuthAPI';
+import * as LinksAPI from '../../wailsjs/go/app/LinksAPI';
+import { EventsOn } from '../../wailsjs/runtime/runtime';
+import type { app, auth, links, search, vault } from '../../wailsjs/go/models';
+
+type Plain<T> = Omit<T, 'convertValues'>;
+
+export type VaultInfo = Plain<app.VaultInfo>;
+export type NoteContent = Plain<app.NoteContent>;
+export type WriteResult = Plain<app.WriteResult>;
+export type AppSettings = Plain<app.AppSettings>;
+export type Entry = Plain<vault.Entry>;
+export type SearchHit = Plain<search.Hit>;
+export type SearchResults = Omit<Plain<search.Results>, 'hits'> & { hits: SearchHit[] };
+export type SearchSort = 'relevance' | 'name' | 'modified';
+export type NoteLink = Plain<links.Link>;
+export type Mention = Plain<links.Mention>;
+export type RenamePlan = Plain<links.Plan>;
+export type AuthProfile = Plain<auth.Profile>;
+export type AuthState = Omit<Plain<auth.State>, 'profile'> & { profile: AuthProfile };
+
+export const api = {
+  vault: {
+    listRecent: (): Promise<VaultInfo[]> => VaultAPI.ListRecent(),
+    listOpen: (): Promise<VaultInfo[]> => VaultAPI.ListOpen(),
+    pickFolder: (title: string): Promise<string> => VaultAPI.PickFolder(title),
+    open: (path: string): Promise<VaultInfo> => VaultAPI.OpenVault(path),
+    close: (vaultId: string): Promise<void> => VaultAPI.CloseVault(vaultId),
+    listTree: (vaultId: string): Promise<Entry[]> => VaultAPI.ListTree(vaultId),
+    readNote: (vaultId: string, path: string): Promise<NoteContent> =>
+      VaultAPI.ReadNote(vaultId, path),
+    writeNote: (
+      vaultId: string,
+      path: string,
+      content: string,
+      expectedHash: string,
+    ): Promise<WriteResult> => VaultAPI.WriteNote(vaultId, path, content, expectedHash),
+    createFolder: (vaultId: string, path: string): Promise<void> =>
+      VaultAPI.CreateFolder(vaultId, path),
+    rename: (vaultId: string, from: string, to: string): Promise<void> =>
+      VaultAPI.Rename(vaultId, from, to),
+    trash: (vaultId: string, path: string): Promise<string> => VaultAPI.Trash(vaultId, path),
+    rebuildIndex: (vaultId: string): Promise<void> => VaultAPI.RebuildIndex(vaultId),
+  },
+  search: {
+    query: (
+      vaultId: string,
+      q: string,
+      sort: SearchSort = 'relevance',
+      limit = 100,
+    ): Promise<SearchResults> => SearchAPI.Query(vaultId, q, sort, limit),
+    explain: (q: string): Promise<string[]> => SearchAPI.Explain(q),
+  },
+  settings: {
+    get: (): Promise<AppSettings> => SettingsAPI.Get(),
+    set: (s: AppSettings): Promise<void> => SettingsAPI.Set(s),
+    info: (): Promise<Record<string, string>> => SettingsAPI.Info(),
+  },
+  links: {
+    outgoing: (vaultId: string, path: string): Promise<NoteLink[]> =>
+      LinksAPI.Outgoing(vaultId, path),
+    backlinks: (vaultId: string, path: string): Promise<NoteLink[]> =>
+      LinksAPI.Backlinks(vaultId, path),
+    planRename: (vaultId: string, from: string, to: string): Promise<RenamePlan> =>
+      LinksAPI.PlanRename(vaultId, from, to),
+    applyRename: (vaultId: string, from: string, to: string): Promise<RenamePlan> =>
+      LinksAPI.ApplyRename(vaultId, from, to),
+    mentions: (vaultId: string, path: string): Promise<Mention[]> =>
+      LinksAPI.UnlinkedMentions(vaultId, path),
+  },
+  auth: {
+    status: (): Promise<AuthState> => AuthAPI.Status(),
+    login: (serverUrl: string): Promise<AuthState> => AuthAPI.Login(serverUrl),
+    logout: (): Promise<AuthState> => AuthAPI.Logout(),
+  },
+  /** Subscribes to a backend event; returns the unsubscribe function. */
+  on<T>(name: string, handler: (payload: T) => void): () => void {
+    return EventsOn(name, handler as (...data: unknown[]) => void);
+  },
+};
+
+/** Backend errors are plain messages prefixed with a stable code ("conflict: …"). */
+export function errorCode(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const i = msg.indexOf(':');
+  return i > 0 ? msg.slice(0, i) : msg;
+}

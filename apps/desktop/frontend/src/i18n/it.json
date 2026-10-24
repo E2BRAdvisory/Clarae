@@ -1,0 +1,84 @@
+{
+  "app": {
+    "name": "Nodus"
+  },
+  "welcome": {
+    "title": "Apri un vault",
+    "subtitle": "Un vault è una cartella di note Markdown sul tuo computer.",
+    "openFolder": "Apri cartella come vault",
+    "createVault": "Crea nuovo vault",
+    "recent": "Vault recenti",
+    "pickTitle": "Scegli la cartella del vault"
+  },
+  "sidebar": {
+    "files": "File",
+    "search": "Cerca",
+    "newNote": "Nuova nota",
+    "newFolder": "Nuova cartella",
+    "rename": "Rinomina",
+    "trash": "Sposta nel cestino",
+    "rebuildIndex": "Ricostruisci indice",
+    "closeVault": "Chiudi vault",
+    "promptNoteName": "Nome della nota",
+    "promptFolderName": "Nome della cartella",
+    "promptRename": "Nuovo nome",
+    "untitled": "Senza titolo",
+    "confirmLinkUpdate": "Verranno aggiornati {{links}} link in {{notes}} nota/e. Continuare?"
+  },
+  "search": {
+    "placeholder": "Cerca…  (file: path: tag: line: task: [prop:valore] /regex/)",
+    "noResults": "Nessun risultato",
+    "sort": "Ordina",
+    "sortRelevance": "Rilevanza",
+    "sortName": "Nome",
+    "sortModified": "Modifica",
+    "count": "{{count}} risultato/i"
+  },
+  "editor": {
+    "empty": "Seleziona una nota o creane una nuova.",
+    "conflict": "Questa nota è cambiata su disco. Ricarica per vedere il nuovo contenuto oppure sovrascrivilo.",
+    "reload": "Ricarica",
+    "overwrite": "Sovrascrivi",
+    "saving": "Salvataggio…",
+    "saved": "Salvato",
+    "unsaved": "Modifiche non salvate"
+  },
+  "status": {
+    "indexing": "Indicizzazione {{done}}/{{total}}",
+    "indexed": "Indice aggiornato",
+    "words": "{{count}} parole"
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "general": "Generale",
+    "language": "Lingua",
+    "languageSystem": "Sistema",
+    "theme": "Tema",
+    "themeSystem": "Sistema",
+    "themeLight": "Chiaro",
+    "themeDark": "Scuro",
+    "cloud": "Cloud",
+    "about": "Informazioni",
+    "version": "Versione",
+    "dataDir": "Cartella dati",
+    "close": "Chiudi"
+  },
+  "cloud": {
+    "serverUrl": "Indirizzo del server",
+    "login": "Accedi",
+    "logout": "Esci",
+    "signingIn": "In attesa del browser…",
+    "signedOut": "Non connesso",
+    "ready": "Connesso come {{name}}",
+    "disconnected": "Offline — connesso come {{name}}",
+    "device": "Dispositivo",
+    "role": "Ruolo",
+    "placeholder": "https://nodus.example.com"
+  },
+  "backlinks": {
+    "title": "Backlink",
+    "none": "Nessun backlink",
+    "mentions": "Menzioni non collegate",
+    "line": "riga {{n}}"
+  }
+}
