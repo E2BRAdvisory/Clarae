@@ -136,3 +136,59 @@ test('New drawing and New canvas are in the file explorer menu', async ({ page }
   await page.getByRole('menuitem', { name: 'New canvas' }).click();
   await expect(page.getByRole('tab', { name: /Canvas \d{4}.*canvas/ })).toBeVisible();
 });
+
+test('app dialogs stay above an open drawing', async ({ page }) => {
+  await openVault(page, { 'Sketch.excalidraw': SKETCH });
+  await page.locator('.tree .node', { hasText: 'Sketch' }).click();
+  await expect(page.locator('.drawing-canvas .excalidraw canvas.interactive')).toBeVisible({
+    timeout: 60_000,
+  });
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.locator('.modal').first();
+  await expect(dialog).toBeVisible();
+  // The element under the dialog's centre must belong to the dialog, not to Excalidraw's UI.
+  const onTop = await dialog.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && el.contains(hit);
+  });
+  expect(onTop).toBe(true);
+  // So must its left edge, where Excalidraw's toolbar and menus sit.
+  const leftOnTop = await dialog.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + 20, r.top + 60);
+    return !!hit && el.contains(hit);
+  });
+  expect(leftOnTop).toBe(true);
+});
+
+test('Present toggles: it hides Excalidraw’s icons and a second click shows them again', async ({
+  page,
+}) => {
+  await openVault(page, { 'Sketch.excalidraw': SKETCH });
+  await page.locator('.tree .node', { hasText: 'Sketch' }).click();
+  await expect(page.locator('.drawing-canvas .excalidraw canvas.interactive')).toBeVisible({
+    timeout: 60_000,
+  });
+  const chrome = page.locator('.drawing-canvas .excalidraw .layer-ui__wrapper');
+  const present = page.getByRole('button', { name: 'Present' });
+
+  await expect(chrome).toBeVisible();
+  await expect(present).toHaveAttribute('aria-pressed', 'false');
+
+  await present.click();
+  await expect(present).toHaveAttribute('aria-pressed', 'true');
+  await expect(chrome).toBeHidden();
+
+  await present.click();
+  await expect(present).toHaveAttribute('aria-pressed', 'false');
+  await expect(chrome).toBeVisible();
+
+  // Escape ends a presentation too.
+  await present.click();
+  await expect(chrome).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(present).toHaveAttribute('aria-pressed', 'false');
+  await expect(chrome).toBeVisible();
+});

@@ -303,6 +303,7 @@ select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  z-index: 200; /* above menus (100), previews (90) and the internals of embedded editors */
   background: rgba(0, 0, 0, 0.35);
   display: grid;
   place-items: center;
@@ -1390,9 +1391,14 @@ textarea.merge {
 
 /* ---- drawings (M3) ---- */
 .drawing-canvas {
+  isolation: isolate; /* Excalidraw's own z-indexes must not climb above app dialogs */
   flex: 1;
   min-height: 0;
   position: relative;
+}
+.drawing-canvas.presenting .excalidraw .layer-ui__wrapper {
+  /* Presentation: toolbar, menu, library, zoom, undo/redo and hints are all hidden. */
+  display: none;
 }
 .drawing-canvas .excalidraw {
   height: 100%;

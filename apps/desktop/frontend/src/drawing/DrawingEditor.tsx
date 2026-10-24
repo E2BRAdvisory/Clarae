@@ -230,6 +230,15 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       void el.requestFullscreen?.().catch(() => undefined);
     if (!present && document.fullscreenElement === el) void document.exitFullscreen?.();
   }, [present]);
+  // Escape also ends the presentation where the webview has no element full screen.
+  useEffect(() => {
+    if (!present) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPresent(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [present]);
   useEffect(() => {
     const off = () => {
       if (!document.fullscreenElement) setPresent(false);
@@ -327,7 +336,13 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           <button className={zen ? 'active' : ''} aria-pressed={zen} onClick={() => setZen(!zen)}>
             {t('drawing.zen')}
           </button>
-          <button onClick={() => setPresent(true)}>{t('drawing.present')}</button>
+          <button
+            className={present ? 'active' : ''}
+            aria-pressed={present}
+            onClick={() => setPresent(!present)}
+          >
+            {t('drawing.present')}
+          </button>
         </div>
       </div>
       {doc.save === 'conflict' && (
@@ -342,7 +357,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           {t('drawing.tooLarge')}
         </div>
       )}
-      <div className="drawing-canvas">
+      <div className={`drawing-canvas${present ? ' presenting' : ''}`}>
         <Excalidraw
           key={path}
           excalidrawAPI={setApi}
