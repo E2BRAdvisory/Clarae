@@ -35,7 +35,13 @@ func (m *Manager) Info(ctx context.Context, localID string) (LinkInfo, error) {
 	server, _ := mv.db.Meta(ctx, MetaServerURL)
 	paused, _ := mv.db.Meta(ctx, MetaPaused)
 	poll, _ := mv.db.MetaInt(ctx, MetaPollSeconds)
-	return LinkInfo{PollSeconds: poll, Linked: true, CloudVaultID: cloud, Kind: kind, Name: name, ServerURL: server, Paused: paused == "1", Locked: kind == "private" && m.crypto.IsLocked(cloud)}, nil
+	info := LinkInfo{PollSeconds: poll, Linked: true, CloudVaultID: cloud, Kind: kind, Name: name, ServerURL: server, Paused: paused == "1", Locked: kind == "private" && m.crypto.IsLocked(cloud), Permission: PermOwner}
+	if mm, ok, _ := readMountMeta(ctx, mv.db); ok {
+		info.Mount, info.Permission, info.Revoked = true, mm.Permission, mm.Revoked
+		info.ReadOnly = mm.Revoked || mm.Permission == PermViewer
+		info.OwnerName, info.ShareID, info.Name = mm.OwnerName, mm.ShareID, mm.Name
+	}
+	return info, nil
 }
 
 // Status returns the latest status of a vault.
@@ -174,12 +180,12 @@ func (m *Manager) Unlink(ctx context.Context, localID string) error {
 	m.mu.Lock()
 	m.stopLocked(mv)
 	cloud, kind := mv.cloudID, mv.kind
-	mv.engine, mv.cloudID, mv.kind = nil, "", ""
+	mv.engine, mv.cloudID, mv.kind, mv.scope = nil, "", "", ""
 	m.mu.Unlock()
 	if cloud != "" && kind == "private" {
 		_ = m.crypto.Forget(cloud)
 	}
-	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt} {
+	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
 		_ = mv.db.DeleteMeta(ctx, k)
 	}
 	if _, err := mv.sdb.ExecContext(ctx, `DELETE FROM sync_files; DELETE FROM outbox; DELETE FROM conflicts; UPDATE sync_cursor SET last_seq = 0`); err != nil {
@@ -493,7 +499,7 @@ func (m *Manager) History(ctx context.Context, localID, path string) ([]Revision
 		return nil, err
 	}
 	info, _ := m.session.Info()
-	revs, _, err := c.ListRevisions(ctx, mv.cloudID, row.FileID, 200, "")
+	revs, _, err := c.ListRevisions(ctx, transport.Ref(mv.cloudID, mv.scope), row.FileID, 200, "")
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +546,7 @@ func (m *Manager) RestoreRevision(ctx context.Context, localID, path string, rev
 	if err != nil {
 		return err
 	}
-	res, err := c.RestoreRevision(ctx, mv.cloudID, row.FileID, rev)
+	res, err := c.RestoreRevision(ctx, transport.Ref(mv.cloudID, mv.scope), row.FileID, rev)
 	if err != nil {
 		return err
 	}

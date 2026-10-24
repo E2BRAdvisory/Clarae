@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,6 +30,12 @@ type VaultEvent struct {
 	Seq     int64
 }
 
+// ShareEvent says that a share was granted to the user, revoked or updated.
+type ShareEvent struct {
+	ShareID string
+	Kind    string // granted | revoked | updated
+}
+
 // NotifyOptions configure the realtime channel (§3.4.4 D, §3.6).
 type NotifyOptions struct {
 	// GRPCEndpoint is host:port of NotifyService; "" disables gRPC (SSE only).
@@ -36,8 +43,14 @@ type NotifyOptions struct {
 	DeviceID     string
 	// Known returns the last seq the client holds per cloud vault id (replay).
 	Known func() map[string]int64
-	// Handler receives events; it must not block for long.
+	// Handler receives vault events; it must not block for long.
 	Handler func(VaultEvent)
+	// OnShare receives share events (invitations, revocations); may be nil.
+	OnShare func(ShareEvent)
+	// OnConfig receives the new configuration revision; may be nil.
+	OnConfig func(version int)
+	// ConfigVersion returns the revision the client holds (replayed when behind); may be nil.
+	ConfigVersion func() int
 	// OnState reports whether a stream is connected (the poller slows down while it is).
 	OnState func(connected bool, via string)
 	// Retry bounds the reconnect delay (default 60 s).
@@ -122,7 +135,11 @@ func (c *Client) streamGRPC(ctx context.Context, o NotifyOptions) error {
 	if o.Known != nil {
 		known = o.Known()
 	}
-	stream, err := notifyv1.NewNotifyServiceClient(conn).Subscribe(sctx, &notifyv1.SubscribeRequest{DeviceId: o.DeviceID, KnownSeq: known})
+	req := &notifyv1.SubscribeRequest{DeviceId: o.DeviceID, KnownSeq: known}
+	if o.ConfigVersion != nil {
+		req.ConfigVersion = clampInt32(o.ConfigVersion())
+	}
+	stream, err := notifyv1.NewNotifyServiceClient(conn).Subscribe(sctx, req)
 	if err != nil {
 		return err
 	}
@@ -139,6 +156,12 @@ func (c *Client) streamGRPC(ctx context.Context, o NotifyOptions) error {
 		if vc := ev.GetVaultChanged(); vc != nil && o.Handler != nil {
 			o.Handler(VaultEvent{VaultID: vc.GetVaultId(), Seq: vc.GetSeq()})
 		}
+		if sc := ev.GetShareChanged(); sc != nil && o.OnShare != nil {
+			o.OnShare(ShareEvent{ShareID: sc.GetShareId(), Kind: sc.GetKind()})
+		}
+		if cc := ev.GetConfigChanged(); cc != nil && o.OnConfig != nil {
+			o.OnConfig(int(cc.GetVersion()))
+		}
 	}
 }
 
@@ -150,6 +173,9 @@ func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 			parts = append(parts, id+":"+strconv.FormatInt(seq, 10))
 		}
 		q.Set("known", strings.Join(parts, ","))
+	}
+	if o.ConfigVersion != nil {
+		q.Set("config", strconv.Itoa(o.ConfigVersion()))
 	}
 	tok, err := c.tokens.Token(ctx)
 	if err != nil {
@@ -194,6 +220,21 @@ func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 				if json.Unmarshal([]byte(data), &ev) == nil && o.Handler != nil {
 					o.Handler(VaultEvent{VaultID: ev.VaultID, Seq: ev.Seq})
 				}
+			case "share_changed":
+				var ev struct {
+					ShareID string `json:"share_id"`
+					Kind    string `json:"kind"`
+				}
+				if json.Unmarshal([]byte(data), &ev) == nil && o.OnShare != nil {
+					o.OnShare(ShareEvent{ShareID: ev.ShareID, Kind: ev.Kind})
+				}
+			case "config_changed":
+				var ev struct {
+					Version int `json:"version"`
+				}
+				if json.Unmarshal([]byte(data), &ev) == nil && o.OnConfig != nil {
+					o.OnConfig(ev.Version)
+				}
 			case "token-expired":
 				return errTokenExpired
 			}
@@ -205,4 +246,14 @@ func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 		return err
 	}
 	return nil
+}
+
+func clampInt32(n int) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < 0 {
+		return 0
+	}
+	return int32(n)
 }

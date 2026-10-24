@@ -111,6 +111,9 @@ func (v *VaultAPI) ReadNote(vaultID, relPath string) (NoteContent, error) {
 // returned by the last ReadNote/WriteNote of that file; an empty hash means
 // "create" (fails if the file exists).
 func (v *VaultAPI) WriteNote(vaultID, relPath, content, expectedHash string) (WriteResult, error) {
+	if err := v.app.writable(vaultID); err != nil {
+		return WriteResult{}, err
+	}
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return WriteResult{}, err
@@ -125,6 +128,9 @@ func (v *VaultAPI) WriteNote(vaultID, relPath, content, expectedHash string) (Wr
 
 // CreateFolder creates a folder (and parents).
 func (v *VaultAPI) CreateFolder(vaultID, relPath string) error {
+	if err := v.app.writable(vaultID); err != nil {
+		return err
+	}
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return err
@@ -134,6 +140,9 @@ func (v *VaultAPI) CreateFolder(vaultID, relPath string) error {
 
 // Rename moves a file or folder. Link rewriting (RenameWithLinkUpdate) arrives in M1-WP3.
 func (v *VaultAPI) Rename(vaultID, fromPath, toPath string) error {
+	if err := v.app.writable(vaultID); err != nil {
+		return err
+	}
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return err
@@ -149,6 +158,9 @@ func (v *VaultAPI) Rename(vaultID, fromPath, toPath string) error {
 // vault's .trash/ folder, depending on the TrashMode setting. It returns the
 // new vault-relative path for the vault trash and "" for the OS trash.
 func (v *VaultAPI) Trash(vaultID, relPath string) (string, error) {
+	if err := v.app.writable(vaultID); err != nil {
+		return "", err
+	}
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return "", err
@@ -336,6 +348,9 @@ func (l *LinksAPI) PlanRename(vaultID, from, to string) (links.Plan, error) {
 // It re-plans against the current content, so it is safe to call after a
 // preview even if notes changed meanwhile; the whole operation is all or nothing.
 func (l *LinksAPI) ApplyRename(vaultID, from, to string) (links.Plan, error) {
+	if err := l.app.writable(vaultID); err != nil {
+		return links.Plan{}, err
+	}
 	ov, err := l.app.vault(vaultID)
 	if err != nil {
 		return links.Plan{}, err

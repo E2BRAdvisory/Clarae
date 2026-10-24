@@ -75,6 +75,14 @@ type device struct {
 // newDevice creates a local vault folder and an engine linked to cloudVault.
 func newDevice(t *testing.T, user, name, cloudVault string, cipher syncpkg.Cipher) *device {
 	t.Helper()
+	return newDeviceRef(t, user, name, cloudVault, false, cipher)
+}
+
+// newDeviceRef is newDevice for a vault reference that may carry a share scope
+// (transport.Ref), optionally read-only like the mount of a viewer.
+func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, cipher syncpkg.Cipher) *device {
+	t.Helper()
+	cloudVault := cloudRef
 	ctx := context.Background()
 	dir := t.TempDir()
 	fs, err := vault.NewFS(dir)
@@ -98,7 +106,7 @@ func newDevice(t *testing.T, user, name, cloudVault string, cipher syncpkg.Ciphe
 	d := &device{t: t, name: name, user: user, dir: dir, fs: fs, db: syncpkg.NewDB(sdb), client: client, vaultID: cloudVault}
 	d.remote = &flaky{Remote: syncpkg.HTTPRemote{C: client, Vault: cloudVault}}
 	cfg := syncpkg.Config{
-		LocalID: name, FS: fs, DB: d.db, Remote: d.remote, DeviceID: dev.ID, DeviceName: name, UserID: me.ID,
+		LocalID: name, FS: fs, DB: d.db, Remote: d.remote, DeviceID: dev.ID, DeviceName: name, UserID: me.ID, ReadOnly: readOnly,
 		Logger: zerolog.Nop(), OnConflict: func(c syncpkg.Conflict) { d.conflicts = append(d.conflicts, c) },
 	}
 	if cipher != nil {

@@ -58,9 +58,11 @@ type Config struct {
 	DeviceID   string
 	DeviceName string
 	UserID     string
-	CacheDir   string // where prepared ciphertext is kept (default <vault>/.nodus/cache/outbox)
-	Logger     zerolog.Logger
-	Now        func() time.Time
+	// ReadOnly makes the engine pull only (a viewer of a share): local edits are never sent.
+	ReadOnly bool
+	CacheDir string // where prepared ciphertext is kept (default <vault>/.nodus/cache/outbox)
+	Logger   zerolog.Logger
+	Now      func() time.Time
 	// OnStatus and OnConflict receive updates (may be nil).
 	OnStatus   func(Status)
 	OnConflict func(Conflict)
@@ -102,6 +104,9 @@ func New(cfg Config) *Engine {
 	}
 	return e
 }
+
+// DeviceID is the id the engine commits with.
+func (e *Engine) DeviceID() string { return e.cfg.DeviceID }
 
 // Status returns the latest status.
 func (e *Engine) Status() Status {
@@ -176,9 +181,11 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 		if err != nil {
 			return fmt.Errorf("resolve: %w", err)
 		}
-		pushed, err := e.push(ctx)
-		if err != nil {
-			return fmt.Errorf("push: %w", err)
+		pushed := false
+		if !e.cfg.ReadOnly {
+			if pushed, err = e.push(ctx); err != nil {
+				return fmt.Errorf("push: %w", err)
+			}
 		}
 		e.mu.Lock()
 		stop := e.stop

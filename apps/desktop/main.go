@@ -95,6 +95,8 @@ func run() int {
 			app.NewSyncAPI(a),
 			app.NewVaultCryptoAPI(a),
 			app.NewDrawingAPI(a),
+			app.NewSharingAPI(a),
+			app.NewConfigAPI(a),
 		},
 	})
 	if err != nil {

@@ -109,6 +109,9 @@ func (v *VaultAPI) ReadBinary(vaultID, relPath string) (BinaryContent, error) {
 // SaveAttachment stores pasted or dropped data (base64) as dir/name, adding a
 // numeric suffix instead of overwriting, and returns the final vault path.
 func (v *VaultAPI) SaveAttachment(vaultID, dir, name, dataBase64 string) (string, error) {
+	if err := v.app.writable(vaultID); err != nil {
+		return "", err
+	}
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return "", err
@@ -255,6 +258,9 @@ func (p *PropertiesAPI) Schema(vaultID string) (map[string]string, error) {
 
 // SetType declares the type of a property for the whole vault; an empty kind removes the declaration.
 func (p *PropertiesAPI) SetType(vaultID, key, kind string) error {
+	if err := p.app.writable(vaultID); err != nil {
+		return err
+	}
 	ov, err := p.app.vault(vaultID)
 	if err != nil {
 		return err
@@ -284,6 +290,9 @@ func (p *PropertiesAPI) SetType(vaultID, key, kind string) error {
 // coerced to the declared (or inferred) type of the property. expectedHash
 // guards against concurrent edits like WriteNote.
 func (p *PropertiesAPI) Update(vaultID, notePath, key, valueJSON, expectedHash string) (WriteResult, error) {
+	if err := p.app.writable(vaultID); err != nil {
+		return WriteResult{}, err
+	}
 	ov, err := p.app.vault(vaultID)
 	if err != nil {
 		return WriteResult{}, err
@@ -318,6 +327,9 @@ func (p *PropertiesAPI) Update(vaultID, notePath, key, valueJSON, expectedHash s
 
 // Remove deletes a property from a note.
 func (p *PropertiesAPI) Remove(vaultID, notePath, key, expectedHash string) (WriteResult, error) {
+	if err := p.app.writable(vaultID); err != nil {
+		return WriteResult{}, err
+	}
 	ov, err := p.app.vault(vaultID)
 	if err != nil {
 		return WriteResult{}, err

@@ -43,7 +43,36 @@ const (
 	EventStatus   = "sync:status"
 	EventConflict = "sync:conflict"
 	EventLocked   = "vault:locked"
+	// EventShares says that shares changed (invitation, revocation, new level): refresh the lists.
+	EventShares = "shares:changed"
+	// EventConfig says that the distributed configuration has a new revision.
+	EventConfig = "config:changed"
 )
+
+// Hooks lets the application react to server events the manager only forwards: the share
+// and config events arrive on the same realtime stream as the vault ones.
+type Hooks struct {
+	// Shares is called for every share event (invitation, revocation, update).
+	Shares func(transport.ShareEvent)
+	// Config is called with the new configuration revision.
+	Config func(version int)
+	// ConfigVersion returns the revision this device holds (the server replays what is newer).
+	ConfigVersion func() int
+}
+
+// SetManagedPoll sets the polling interval distributed by the administrator (0 = none).
+// Unless locked it only replaces the automatic interval; a user's own choice stands.
+func (m *Manager) SetManagedPoll(seconds int, locked bool) {
+	m.managedPoll.Store(int64(seconds))
+	m.managedLocked.Store(locked)
+}
+
+// SetHooks installs the application's event hooks; call it before Start.
+func (m *Manager) SetHooks(h Hooks) {
+	m.mu.Lock()
+	m.hooks = h
+	m.mu.Unlock()
+}
 
 // Manager owns the sync engines of the open vaults and the realtime stream.
 type Manager struct {
@@ -57,6 +86,10 @@ type Manager struct {
 	notifier context.CancelFunc
 	appCtx   context.Context
 	streamUp atomic.Bool
+	hooks    Hooks
+	// managed polling interval from the distributed configuration (§2.6.6).
+	managedPoll   atomic.Int64
+	managedLocked atomic.Bool
 }
 
 type managed struct {
@@ -68,6 +101,7 @@ type managed struct {
 	engine  *Engine
 	cloudID string
 	kind    string
+	scope   string // share scope of a mount ("" for a vault of one's own)
 	cancel  context.CancelFunc
 	kick    chan struct{}
 	now     chan struct{} // immediate sync request (skips the debounce)
@@ -99,6 +133,14 @@ type LinkInfo struct {
 	Locked       bool   `json:"locked"`
 	Paused       bool   `json:"paused"`
 	PollSeconds  int    `json:"pollSeconds"`
+	// Mount is set when the vault is a share received from someone else.
+	Mount bool `json:"mount"`
+	// Permission is owner, or the level of the share on a mount; ReadOnly follows from it.
+	Permission string `json:"permission"`
+	ReadOnly   bool   `json:"readOnly"`
+	Revoked    bool   `json:"revoked"`
+	OwnerName  string `json:"ownerName"`
+	ShareID    string `json:"shareId"`
 }
 
 // sessionRemote resolves the API client at call time, so a re-login (new
@@ -176,6 +218,11 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		return err
 	}
 	kind, _ := mv.db.Meta(ctx, MetaKind)
+	mount, isMount, _ := readMountMeta(ctx, mv.db)
+	if isMount && mount.Revoked {
+		m.publish(mv)
+		return nil // the share is gone: nothing to sync until the user decides what to do with the copy
+	}
 	deviceID, _ := mv.db.Meta(ctx, MetaDeviceID)
 	userID, _ := mv.db.Meta(ctx, MetaUserID)
 	name := ""
@@ -189,7 +236,8 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		}
 	}
 	cfg := Config{
-		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: sessionRemote{m: m, vault: cloud},
+		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: sessionRemote{m: m, vault: transport.Ref(cloud, mount.Scope)},
+		ReadOnly: isMount && mount.Permission == PermViewer,
 		DeviceID: deviceID, DeviceName: name, UserID: userID, Logger: m.log.With().Str("vault", mv.localID).Logger(),
 		OnStatus:   func(s Status) { m.emit(EventStatus, s) },
 		OnConflict: func(c Conflict) { m.emit(EventConflict, map[string]any{"vaultId": mv.localID, "conflict": c}) },
@@ -198,7 +246,7 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		_, _ = m.crypto.Restore(cloud) // unlock silently from the keychain when possible
 		cfg.Cipher = m.crypto.Cipher(cloud)
 	}
-	mv.engine, mv.cloudID, mv.kind = New(cfg), cloud, kind
+	mv.engine, mv.cloudID, mv.kind, mv.scope = New(cfg), cloud, kind, mount.Scope
 	m.publish(mv)
 	if _, ok := m.session.Info(); ok {
 		m.startLoop(mv)
@@ -336,6 +384,24 @@ func (m *Manager) restartNotifier(ctx context.Context, info SessionInfo, signedI
 				m.kickNow(v)
 			}
 		},
+		OnShare: func(ev transport.ShareEvent) {
+			m.emit(EventShares, map[string]any{"shareId": ev.ShareID, "kind": ev.Kind})
+			if h := m.hooksSnapshot().Shares; h != nil {
+				h(ev)
+			}
+		},
+		OnConfig: func(version int) {
+			m.emit(EventConfig, map[string]any{"version": version})
+			if h := m.hooksSnapshot().Config; h != nil {
+				h(version)
+			}
+		},
+		ConfigVersion: func() int {
+			if h := m.hooksSnapshot().ConfigVersion; h != nil {
+				return h()
+			}
+			return 0
+		},
 		OnState: func(connected bool, via string) {
 			m.streamUp.Store(connected)
 			m.log.Debug().Bool("connected", connected).Str("via", via).Msg("notify stream")
@@ -343,15 +409,29 @@ func (m *Manager) restartNotifier(ctx context.Context, info SessionInfo, signedI
 	})
 }
 
+func (m *Manager) hooksSnapshot() Hooks {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hooks
+}
+
+// knownSeqs is the replay position per cloud vault. Several mounts can come from one cloud
+// vault (two shares of different folders), each with its own cursor: the lowest wins so
+// that none of them misses an event after a reconnect.
 func (m *Manager) knownSeqs() map[string]int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := map[string]int64{}
 	for _, v := range m.vaults {
-		if v.cloudID != "" {
-			if seq, err := v.db.Cursor(context.Background()); err == nil {
-				out[v.cloudID] = seq
-			}
+		if v.cloudID == "" {
+			continue
+		}
+		seq, err := v.db.Cursor(context.Background())
+		if err != nil {
+			continue
+		}
+		if cur, ok := out[v.cloudID]; !ok || seq < cur {
+			out[v.cloudID] = seq
 		}
 	}
 	return out
@@ -460,8 +540,12 @@ func (m *Manager) loop(ctx context.Context, mv *managed) {
 			if m.streamUp.Load() {
 				wait = maxPoll
 			}
-			if secs, _ := mv.db.MetaInt(ctx, MetaPollSeconds); secs > 0 {
-				wait = time.Duration(max(secs, 15)) * time.Second // the user's choice overrides the adaptive interval
+			secs, _ := mv.db.MetaInt(ctx, MetaPollSeconds)
+			if managed := int(m.managedPoll.Load()); managed > 0 && (secs == 0 || m.managedLocked.Load()) {
+				secs = managed // the administrator's interval: a default, or binding when the key is locked
+			}
+			if secs > 0 {
+				wait = time.Duration(max(secs, 15)) * time.Second // the chosen interval overrides the adaptive one
 			}
 		case errors.Is(err, ErrLocked):
 			m.emit(EventLocked, map[string]any{"vaultId": mv.localID})
@@ -469,6 +553,9 @@ func (m *Manager) loop(ctx context.Context, mv *managed) {
 		case errors.Is(err, ErrPaused):
 			wait = maxPoll // resume kicks the loop
 		case errors.Is(err, context.Canceled):
+			return
+		case mv.scope != "" && isRevocation(err):
+			m.markRevoked(ctx, mv)
 			return
 		default:
 			failures++

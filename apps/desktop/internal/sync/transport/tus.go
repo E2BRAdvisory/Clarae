@@ -21,7 +21,8 @@ const tusChunk = 8 << 20
 // progress, if set, is called with the bytes sent so far. resumeURL may be
 // the Location returned by a previous attempt ("" to start a new upload).
 // It returns the upload URL so callers can persist it for resumption.
-func (c *Client) TusUpload(ctx context.Context, vault, hash string, data []byte, resumeURL string, progress func(sent int64)) (string, error) {
+func (c *Client) TusUpload(ctx context.Context, ref, hash string, data []byte, resumeURL string, progress func(sent int64)) (string, error) {
+	vault, scope := splitRef(ref)
 	loc := resumeURL
 	offset := int64(0)
 	if loc != "" {
@@ -38,7 +39,7 @@ func (c *Client) TusUpload(ctx context.Context, vault, hash string, data []byte,
 	}
 	if loc == "" {
 		meta := "sha256 " + base64.StdEncoding.EncodeToString([]byte(hash))
-		resp, err := c.raw(ctx, http.MethodPost, "/vaults/"+vault+"/uploads", nil, tusHeaders(map[string]string{
+		resp, err := c.raw(ctx, http.MethodPost, withScope("/vaults/"+vault+"/uploads", scope), nil, tusHeaders(map[string]string{
 			"Upload-Length": strconv.Itoa(len(data)), "Upload-Metadata": meta,
 		}))
 		if err != nil {

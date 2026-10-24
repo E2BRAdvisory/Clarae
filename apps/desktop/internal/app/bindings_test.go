@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"nodus/apps/desktop/internal/store"
+	syncpkg "nodus/apps/desktop/internal/sync"
 )
 
 func newTestApp(t *testing.T) (*App, VaultInfo, string) {
@@ -223,5 +224,55 @@ func TestDrawingPreviewCache(t *testing.T) {
 		if err := d.SavePreview(info.ID, c.hash, c.svg); err == nil {
 			t.Errorf("%s must be refused", name)
 		}
+	}
+}
+
+func TestViewerMountIsReadOnlyThroughTheBindings(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	ctx := context.Background()
+	dir := filepath.Join(a.mountsDir(), "share-1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "doc.md"), []byte("shared text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mm := syncpkg.MountMeta{ShareID: "share-1", CloudVaultID: "cloud-1", Scope: "share:share-1", Permission: syncpkg.PermViewer, Name: "Team docs", OwnerName: "ada", ResourceType: "folder"}
+	if err := syncpkg.PrepareMount(ctx, dir, mm, syncpkg.SessionInfo{ServerURL: "http://cloud.test"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := a.openVault(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Name != "Team docs" {
+		t.Fatalf("a mount shows the name of its share, got %q", info.Name)
+	}
+	v := NewVaultAPI(a)
+	if _, err := v.ReadNote(info.ID, "doc.md"); err != nil {
+		t.Fatalf("a viewer reads: %v", err)
+	}
+	for name, err := range map[string]error{
+		"WriteNote":    func() error { _, e := v.WriteNote(info.ID, "doc.md", "x", ""); return e }(),
+		"CreateFolder": v.CreateFolder(info.ID, "new"),
+		"Rename":       v.Rename(info.ID, "doc.md", "other.md"),
+		"Trash":        func() error { _, e := v.Trash(info.ID, "doc.md"); return e }(),
+		"Attachment":   func() error { _, e := v.SaveAttachment(info.ID, "", "a.png", "AAAA"); return e }(),
+		"Property":     func() error { _, e := NewPropertiesAPI(a).Update(info.ID, "doc.md", "k", `"v"`, ""); return e }(),
+	} {
+		if err == nil || !strings.HasPrefix(err.Error(), "read-only:") {
+			t.Errorf("%s on a viewer mount: %v", name, err)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "doc.md")); string(b) != "shared text" {
+		t.Error("the file must be untouched")
+	}
+	// The same vault as an editor can write.
+	mm.Permission = syncpkg.PermEditor
+	if err := a.sync.UpdateMount(ctx, info.ID, mm); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.WriteNote(info.ID, "doc.md", "edited", func() string { c, _ := v.ReadNote(info.ID, "doc.md"); return c.Hash }()); err != nil {
+		t.Fatalf("an editor writes: %v", err)
 	}
 }

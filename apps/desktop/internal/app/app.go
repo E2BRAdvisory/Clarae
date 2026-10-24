@@ -19,6 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"nodus/apps/desktop/internal/auth"
+	"nodus/apps/desktop/internal/config"
 	"nodus/apps/desktop/internal/crypto"
 	"nodus/apps/desktop/internal/indexer"
 	"nodus/apps/desktop/internal/platform"
@@ -48,6 +49,7 @@ type App struct {
 	auth    *auth.Service
 	crypto  *crypto.Manager
 	sync    *syncpkg.Manager
+	config  *config.Service
 	emitter func(name string, payload any) // nil = Wails runtime
 	mu      sync.Mutex
 	vaults  map[string]*openVault
@@ -75,7 +77,7 @@ type VaultInfo struct {
 // New prepares the application; Startup finishes initialization once Wails
 // provides the context.
 func New(opts Options) *App {
-	a := &App{opts: opts, logger: opts.Logger, vaults: map[string]*openVault{}}
+	a := &App{opts: opts, logger: opts.Logger, vaults: map[string]*openVault{}, config: config.New(nil)}
 	a.auth = auth.New(auth.Options{
 		DataDir:      opts.DataDir,
 		Logger:       opts.Logger.With().Str("module", "auth").Logger(),
@@ -91,10 +93,18 @@ func New(opts Options) *App {
 		OnState: func(st auth.State) {
 			a.emit(EventAuthState, st)
 			a.sync.SessionChanged()
+			if st.Status == auth.StatusReady {
+				go a.onSignedIn()
+			}
 		},
 	})
 	a.crypto = crypto.NewManager(crypto.Options{Store: opts.KeyStore})
 	a.sync = syncpkg.NewManager(sessionAdapter{a}, a.crypto, opts.Logger.With().Str("module", "sync").Logger(), a.emit)
+	a.sync.SetHooks(syncpkg.Hooks{
+		Shares:        func(transport.ShareEvent) { go a.reconcileMounts() },
+		Config:        func(int) { go a.refreshConfigQuietly() },
+		ConfigVersion: func() int { return a.config.Version() },
+	})
 	return a
 }
 
@@ -124,6 +134,11 @@ func (a *App) Startup(ctx context.Context) {
 		return
 	}
 	a.appDB = db
+	a.config = config.New(db)
+	if st := a.auth.State(); st.ServerURL != "" {
+		a.config.Load(ctx, st.ServerURL) // the last valid configuration applies from the first moment, offline included
+		a.applyConfig()
+	}
 	a.sync.Start(ctx)
 	a.auth.Restore(ctx)
 	a.logger.Info().Str("version", a.opts.Version).Str("data_dir", a.opts.DataDir).Msg("started")
@@ -241,6 +256,9 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 		return VaultInfo{}, err
 	}
 	info := VaultInfo{ID: id, Name: filepath.Base(abs), Path: abs, LastOpenedAt: time.Now()}
+	if mm, ok, _ := syncpkg.ReadMount(a.ctx, abs); ok && mm.Name != "" {
+		info.Name = mm.Name // a mount lives in a folder named by the share id: show the share's name
+	}
 	log := a.logger.With().Str("vault", info.Name).Logger()
 	ix := indexer.New(fsys, indexDB, log, func(p indexer.Progress) {
 		a.emit(EventIndexProgress, map[string]any{"vaultId": id, "done": p.Done, "total": p.Total, "path": p.Path, "finished": p.Finished})

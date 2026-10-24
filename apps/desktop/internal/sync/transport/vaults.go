@@ -159,17 +159,22 @@ func (c *Client) PutKeyEnvelope(ctx context.Context, id string, env KeyEnvelope)
 }
 
 // GetTree returns the manifest.
-func (c *Client) GetTree(ctx context.Context, id string) (Tree, error) {
+func (c *Client) GetTree(ctx context.Context, ref string) (Tree, error) {
+	id, scope := splitRef(ref)
 	var out Tree
-	err := c.Do(ctx, http.MethodGet, "/vaults/"+id+"/tree", nil, &out, true)
+	err := c.Do(ctx, http.MethodGet, withScope("/vaults/"+id+"/tree", scope), nil, &out, true)
 	return out, err
 }
 
 // GetChanges returns changelog entries after since. A cursor older than the
 // compaction window yields an error matching CodeError(CURSOR_EXPIRED).
-func (c *Client) GetChanges(ctx context.Context, id string, since int64, limit int) (Changes, error) {
+func (c *Client) GetChanges(ctx context.Context, ref string, since int64, limit int) (Changes, error) {
+	id, scope := splitRef(ref)
 	var out Changes
 	q := url.Values{"since": {strconv.FormatInt(since, 10)}}
+	if scope != "" {
+		q.Set("scope", scope)
+	}
 	if limit > 0 {
 		q.Set("limit", strconv.Itoa(limit))
 	}
@@ -178,23 +183,26 @@ func (c *Client) GetChanges(ctx context.Context, id string, since int64, limit i
 }
 
 // CheckBlobs returns the hashes the server does not have.
-func (c *Client) CheckBlobs(ctx context.Context, id string, hashes []string) ([]string, error) {
+func (c *Client) CheckBlobs(ctx context.Context, ref string, hashes []string) ([]string, error) {
+	id, scope := splitRef(ref)
 	var out struct {
 		Missing []string `json:"missing"`
 	}
-	err := c.Do(ctx, http.MethodPost, "/vaults/"+id+"/blobs:check", map[string]any{"hashes": hashes}, &out, true)
+	err := c.Do(ctx, http.MethodPost, withScope("/vaults/"+id+"/blobs:check", scope), map[string]any{"hashes": hashes}, &out, true)
 	return out.Missing, err
 }
 
 // Commit sends a batch of operations.
-func (c *Client) Commit(ctx context.Context, id string, req syncproto.CommitRequest) (syncproto.CommitResponse, error) {
+func (c *Client) Commit(ctx context.Context, ref string, req syncproto.CommitRequest) (syncproto.CommitResponse, error) {
+	id, scope := splitRef(ref)
 	var out syncproto.CommitResponse
-	err := c.Do(ctx, http.MethodPost, "/vaults/"+id+"/commit", req, &out, true)
+	err := c.Do(ctx, http.MethodPost, withScope("/vaults/"+id+"/commit", scope), req, &out, true)
 	return out, err
 }
 
 // ListRevisions returns the history of a file, newest first.
-func (c *Client) ListRevisions(ctx context.Context, vault, file string, limit int, cursor string) (items []Revision, next string, err error) {
+func (c *Client) ListRevisions(ctx context.Context, ref, file string, limit int, cursor string) (items []Revision, next string, err error) {
+	vault, scope := splitRef(ref)
 	var out struct {
 		Items      []Revision `json:"items"`
 		NextCursor string     `json:"next_cursor"`
@@ -206,14 +214,18 @@ func (c *Client) ListRevisions(ctx context.Context, vault, file string, limit in
 	if cursor != "" {
 		q.Set("cursor", cursor)
 	}
+	if scope != "" {
+		q.Set("scope", scope)
+	}
 	err = c.Do(ctx, http.MethodGet, "/vaults/"+vault+"/files/"+file+"/revisions?"+q.Encode(), nil, &out, true)
 	return out.Items, out.NextCursor, err
 }
 
 // RestoreRevision restores a revision as a new one.
-func (c *Client) RestoreRevision(ctx context.Context, vault, file string, rev int) (syncproto.OpResult, error) {
+func (c *Client) RestoreRevision(ctx context.Context, ref, file string, rev int) (syncproto.OpResult, error) {
+	vault, scope := splitRef(ref)
 	var out syncproto.OpResult
-	err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/vaults/%s/files/%s/revisions/%d:restore", vault, file, rev), nil, &out, true)
+	err := c.Do(ctx, http.MethodPost, withScope(fmt.Sprintf("/vaults/%s/files/%s/revisions/%d:restore", vault, file, rev), scope), nil, &out, true)
 	return out, err
 }
 
@@ -287,11 +299,12 @@ func (c *Client) raw(ctx context.Context, method, path string, body []byte, head
 }
 
 // PutBlob uploads a blob of at most MaxSingleUpload bytes.
-func (c *Client) PutBlob(ctx context.Context, vault, hash string, data []byte) error {
+func (c *Client) PutBlob(ctx context.Context, ref, hash string, data []byte) error {
+	vault, scope := splitRef(ref)
 	if len(data) > MaxSingleUpload {
 		return fmt.Errorf("blob of %d bytes needs a resumable upload", len(data))
 	}
-	resp, err := c.raw(ctx, http.MethodPut, "/vaults/"+vault+"/blobs/"+hash, data, map[string]string{"Content-Type": "application/octet-stream"})
+	resp, err := c.raw(ctx, http.MethodPut, withScope("/vaults/"+vault+"/blobs/"+hash, scope), data, map[string]string{"Content-Type": "application/octet-stream"})
 	if err != nil {
 		return err
 	}
@@ -299,8 +312,9 @@ func (c *Client) PutBlob(ctx context.Context, vault, hash string, data []byte) e
 }
 
 // GetBlob downloads a blob into w and returns its size.
-func (c *Client) GetBlob(ctx context.Context, vault, hash string, w io.Writer) (int64, error) {
-	resp, err := c.raw(ctx, http.MethodGet, "/vaults/"+vault+"/blobs/"+hash, nil, nil)
+func (c *Client) GetBlob(ctx context.Context, ref, hash string, w io.Writer) (int64, error) {
+	vault, scope := splitRef(ref)
+	resp, err := c.raw(ctx, http.MethodGet, withScope("/vaults/"+vault+"/blobs/"+hash, scope), nil, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -312,8 +326,9 @@ func (c *Client) GetBlob(ctx context.Context, vault, hash string, w io.Writer) (
 }
 
 // GetRevisionContent downloads the blob of a revision into w.
-func (c *Client) GetRevisionContent(ctx context.Context, vault, file string, rev int, w io.Writer) (int64, error) {
-	resp, err := c.raw(ctx, http.MethodGet, fmt.Sprintf("/vaults/%s/files/%s/revisions/%d/content", vault, file, rev), nil, nil)
+func (c *Client) GetRevisionContent(ctx context.Context, ref, file string, rev int, w io.Writer) (int64, error) {
+	vault, scope := splitRef(ref)
+	resp, err := c.raw(ctx, http.MethodGet, withScope(fmt.Sprintf("/vaults/%s/files/%s/revisions/%d/content", vault, file, rev), scope), nil, nil)
 	if err != nil {
 		return 0, err
 	}

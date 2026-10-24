@@ -75,6 +75,28 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class ConfigState {
+	    version: number;
+	    config: Record<string, any>;
+	    lockedKeys: string[];
+	    managed: boolean;
+	    fetchedAt: string;
+	    features: Record<string, boolean>;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.config = source["config"];
+	        this.lockedKeys = source["lockedKeys"];
+	        this.managed = source["managed"];
+	        this.fetchedAt = source["fetchedAt"];
+	        this.features = source["features"];
+	    }
+	}
 	export class ConflictTexts {
 	    current: string;
 	    ours: string;
@@ -130,6 +152,60 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class DirectoryEntry {
+	    type: string;
+	    id: string;
+	    name: string;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DirectoryEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.label = source["label"];
+	    }
+	}
+	export class GrantInfo {
+	    principalType: string;
+	    principalId: string;
+	    principalName: string;
+	    permission: string;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GrantInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.principalType = source["principalType"];
+	        this.principalId = source["principalId"];
+	        this.principalName = source["principalName"];
+	        this.permission = source["permission"];
+	        this.status = source["status"];
+	    }
+	}
+	export class GrantInput {
+	    principalType: string;
+	    principalId: string;
+	    permission: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GrantInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.principalType = source["principalType"];
+	        this.principalId = source["principalId"];
+	        this.permission = source["permission"];
+	    }
+	}
 	export class NoteContent {
 	    path: string;
 	    content: string;
@@ -163,6 +239,58 @@ export namespace app {
 	        this.kind = source["kind"];
 	        this.count = source["count"];
 	    }
+	}
+	export class ShareInfo {
+	    id: string;
+	    vaultId: string;
+	    vaultName: string;
+	    resourceType: string;
+	    pathPrefix: string;
+	    displayName: string;
+	    ownerName: string;
+	    createdAt: string;
+	    expiresAt: string;
+	    myPermission: string;
+	    myStatus: string;
+	    grants: GrantInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ShareInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.vaultId = source["vaultId"];
+	        this.vaultName = source["vaultName"];
+	        this.resourceType = source["resourceType"];
+	        this.pathPrefix = source["pathPrefix"];
+	        this.displayName = source["displayName"];
+	        this.ownerName = source["ownerName"];
+	        this.createdAt = source["createdAt"];
+	        this.expiresAt = source["expiresAt"];
+	        this.myPermission = source["myPermission"];
+	        this.myStatus = source["myStatus"];
+	        this.grants = this.convertValues(source["grants"], GrantInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class TagCount {
 	    name: string;
@@ -605,6 +733,12 @@ export namespace sync {
 	    locked: boolean;
 	    paused: boolean;
 	    pollSeconds: number;
+	    mount: boolean;
+	    permission: string;
+	    readOnly: boolean;
+	    revoked: boolean;
+	    ownerName: string;
+	    shareId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new LinkInfo(source);
@@ -620,6 +754,12 @@ export namespace sync {
 	        this.locked = source["locked"];
 	        this.paused = source["paused"];
 	        this.pollSeconds = source["pollSeconds"];
+	        this.mount = source["mount"];
+	        this.permission = source["permission"];
+	        this.readOnly = source["readOnly"];
+	        this.revoked = source["revoked"];
+	        this.ownerName = source["ownerName"];
+	        this.shareId = source["shareId"];
 	    }
 	}
 	export class LinkResult {
@@ -634,6 +774,36 @@ export namespace sync {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.cloudVaultId = source["cloudVaultId"];
 	        this.recoveryKey = source["recoveryKey"];
+	    }
+	}
+	export class MountState {
+	    shareId: string;
+	    cloudVaultId: string;
+	    name: string;
+	    ownerName: string;
+	    resourceType: string;
+	    permission: string;
+	    path: string;
+	    mounted: boolean;
+	    revoked: boolean;
+	    vaultId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MountState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.shareId = source["shareId"];
+	        this.cloudVaultId = source["cloudVaultId"];
+	        this.name = source["name"];
+	        this.ownerName = source["ownerName"];
+	        this.resourceType = source["resourceType"];
+	        this.permission = source["permission"];
+	        this.path = source["path"];
+	        this.mounted = source["mounted"];
+	        this.revoked = source["revoked"];
+	        this.vaultId = source["vaultId"];
 	    }
 	}
 	export class RevisionInfo {
