@@ -1,0 +1,78 @@
+/* Embedded search (```query blocks) in Live Preview and Reading view. */
+.cm-lp-query {
+  display: block;
+  margin: 4px 0;
+}
+.query-block {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 6px 10px;
+  margin: 6px 0;
+  font-size: 0.95em;
+  user-select: text;
+}
+.query-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-bottom: 4px;
+}
+.query-hit {
+  padding: 3px 0;
+}
+.query-hit-title {
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+.query-hit-title:hover {
+  text-decoration: underline;
+}
+.query-hit-path {
+  color: var(--text-faint);
+  font-size: 0.8em;
+}
+.query-hit-snippet {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.query-hit-snippet mark {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+.query-error {
+  color: var(--danger);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9em;
+}
+.query-notice {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+.query-more {
+  margin-top: 6px;
+}
+.query-cards .query-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.query-cards .query-hit {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 6px 8px;
+}
+.query-cards .query-notice,
+.query-cards .query-error,
+.query-cards .query-more {
+  grid-column: 1 / -1;
+}
