@@ -7,6 +7,7 @@ package indexer
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -19,6 +20,7 @@ import (
 
 	"nodus/apps/desktop/internal/links"
 	"nodus/apps/desktop/internal/parser"
+	"nodus/apps/desktop/internal/properties"
 	"nodus/apps/desktop/internal/vault"
 	"nodus/shared/pathrules"
 	"nodus/shared/syncproto"
@@ -149,7 +151,7 @@ func (ix *Indexer) walkDir(ctx context.Context, dir string) error {
 
 // Rebuild clears every table and runs a full pass.
 func (ix *Indexer) Rebuild(ctx context.Context) error {
-	for _, table := range []string{"fts_content", "aliases", "tags", "links", "headings", "files"} {
+	for _, table := range []string{"fts_content", "aliases", "tags", "links", "headings", "properties", "tasks", "block_ids", "files"} {
 		if _, err := ix.db.ExecContext(ctx, "DELETE FROM "+table); err != nil { //nolint:gosec // table names are constants
 			return err
 		}
@@ -205,7 +207,7 @@ func (ix *Indexer) write(ctx context.Context, e vault.Entry, hash, title string,
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	for _, table := range []string{"headings", "links", "tags", "aliases"} {
+	for _, table := range []string{"headings", "links", "tags", "aliases", "properties", "tasks", "block_ids"} {
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE path = ?", table), e.Path); err != nil {
 			return err
 		}
@@ -244,6 +246,25 @@ func (ix *Indexer) write(ctx context.Context, e vault.Entry, hash, title string,
 				return err
 			}
 		}
+		for k, v := range doc.Properties {
+			raw, err := json.Marshal(v)
+			if err != nil {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO properties (path, key, kind, value) VALUES (?, ?, ?, ?)`, e.Path, k, string(properties.Infer(v)), string(raw)); err != nil {
+				return err
+			}
+		}
+		for _, t := range doc.Tasks {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (path, line, state, text) VALUES (?, ?, ?, ?)`, e.Path, t.Line, t.State, t.Text); err != nil {
+				return err
+			}
+		}
+		for _, b := range doc.BlockIDs {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO block_ids (path, line, id) VALUES (?, ?, ?)`, e.Path, b.Line, b.ID); err != nil {
+				return err
+			}
+		}
 	}
 	var id int64
 	if err := tx.QueryRowContext(ctx, `SELECT id FROM files WHERE path = ?`, e.Path).Scan(&id); err != nil {
@@ -268,7 +289,7 @@ func (ix *Indexer) remove(ctx context.Context, path string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM fts_content WHERE rowid = (SELECT id FROM files WHERE path = ?)`, path); err != nil {
 		return err
 	}
-	for _, table := range []string{"aliases", "tags", "links", "headings", "files"} {
+	for _, table := range []string{"aliases", "tags", "links", "headings", "properties", "tasks", "block_ids", "files"} {
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE path = ?", table), path); err != nil {
 			return err
 		}
