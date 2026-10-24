@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Entry } from '../app/api';
+import { newCanvas } from '../canvas/commands';
+import { newDrawing } from '../drawing/commands';
 import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
 import { selectActivePath, useAppStore } from '../state/store';
 import { useTree } from '../state/queries';
@@ -83,6 +85,12 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const newNote = async (dir: string) => {
     await guard(createNote({ dir }));
   };
+  const newDrawingIn = async (dir: string) => {
+    await guard(newDrawing({ dir }));
+  };
+  const newCanvasIn = async (dir: string) => {
+    await guard(newCanvas({ dir }));
+  };
   const newFolder = async (dir: string) => {
     const name = await dialog.prompt(t('sidebar.promptFolderName'));
     if (name) await guard(createFolder((dir ? dir + '/' : '') + name));
@@ -127,6 +135,8 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
       onSelect: () => void newNote(dirForNew(entry)),
       separator: !entry.isDir,
     },
+    { label: t('sidebar.newDrawing'), onSelect: () => void newDrawingIn(dirForNew(entry)) },
+    { label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn(dirForNew(entry)) },
     { label: t('sidebar.newFolder'), onSelect: () => void newFolder(dirForNew(entry)) },
     { label: t('sidebar.rename'), onSelect: () => void rename(entry), separator: true },
     {
@@ -227,6 +237,8 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
             y: e.clientY,
             items: [
               { label: t('sidebar.newNote'), onSelect: () => void newNote('') },
+              { label: t('sidebar.newDrawing'), onSelect: () => void newDrawingIn('') },
+              { label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn('') },
               { label: t('sidebar.newFolder'), onSelect: () => void newFolder('') },
             ],
           });
