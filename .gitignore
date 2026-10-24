@@ -40,3 +40,4 @@ deploy/docker/.data/
 
 # Claude Code local state
 .claude/
+CLAUDE.md
