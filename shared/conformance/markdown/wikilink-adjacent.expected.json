@@ -1,0 +1,40 @@
+{
+  "title": "wikilink-adjacent",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "a",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "b",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "c",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 2
+}

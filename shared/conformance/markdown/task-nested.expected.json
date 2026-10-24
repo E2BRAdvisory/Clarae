@@ -1,0 +1,28 @@
+{
+  "title": "task-nested",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [
+    {
+      "line": 1,
+      "state": " ",
+      "text": "padre"
+    },
+    {
+      "line": 2,
+      "state": "x",
+      "text": "figlio"
+    },
+    {
+      "line": 3,
+      "state": " ",
+      "text": "nipote"
+    }
+  ],
+  "footnotes": [],
+  "wordCount": 4
+}

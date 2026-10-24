@@ -1,0 +1,40 @@
+{
+  "title": "wikilink-heading-block-alias",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "Sezione",
+      "block": "",
+      "alias": "Testo",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "",
+      "block": "b1",
+      "alias": "Blocco",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "a/b/Nota",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}

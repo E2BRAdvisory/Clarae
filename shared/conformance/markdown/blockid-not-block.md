@@ -1,0 +1,1 @@
+testo^attaccato e ^solo

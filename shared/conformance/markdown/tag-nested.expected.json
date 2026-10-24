@@ -1,0 +1,25 @@
+{
+  "title": "tag-nested",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [
+    {
+      "line": 1,
+      "name": "a/b/c"
+    },
+    {
+      "line": 1,
+      "name": "a-b"
+    },
+    {
+      "line": 1,
+      "name": "a_b"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 5
+}

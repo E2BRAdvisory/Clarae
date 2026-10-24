@@ -1,0 +1,22 @@
+{
+  "title": "wikilink-in-tilde-fence",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 4,
+      "kind": "wikilink",
+      "target": "b",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}

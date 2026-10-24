@@ -1,0 +1,27 @@
+{
+  "title": "callout-basic",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 2,
+      "kind": "wikilink",
+      "target": "link",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 2,
+      "name": "tag"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 9
+}

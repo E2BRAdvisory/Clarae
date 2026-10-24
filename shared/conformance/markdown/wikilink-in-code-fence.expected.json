@@ -1,0 +1,33 @@
+{
+  "title": "wikilink-in-code-fence",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "Fence",
+      "line": 1
+    }
+  ],
+  "links": [
+    {
+      "line": 7,
+      "kind": "wikilink",
+      "target": "fuori",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 7,
+      "name": "tag"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 6
+}

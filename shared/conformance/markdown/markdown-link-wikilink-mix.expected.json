@@ -1,0 +1,49 @@
+{
+  "title": "markdown-link-wikilink-mix",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "wiki",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "markdown",
+      "target": "md.md",
+      "heading": "",
+      "block": "",
+      "alias": "md",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "embed",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": true
+    },
+    {
+      "line": 1,
+      "kind": "markdown",
+      "target": "m.png",
+      "heading": "",
+      "block": "",
+      "alias": "m",
+      "embed": true
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 4
+}

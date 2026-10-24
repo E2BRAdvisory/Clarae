@@ -1,0 +1,21 @@
+{
+  "title": "frontmatter-tags-string",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [
+    {
+      "line": 2,
+      "name": "uno"
+    },
+    {
+      "line": 2,
+      "name": "due"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 0
+}

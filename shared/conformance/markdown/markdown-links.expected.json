@@ -1,0 +1,49 @@
+{
+  "title": "markdown-links",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "markdown",
+      "target": "Nota.md",
+      "heading": "",
+      "block": "",
+      "alias": "testo",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "external",
+      "target": "https://example.com/p",
+      "heading": "",
+      "block": "",
+      "alias": "ext",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "markdown",
+      "target": "img/a.png",
+      "heading": "",
+      "block": "",
+      "alias": "img",
+      "embed": true
+    },
+    {
+      "line": 1,
+      "kind": "markdown",
+      "target": "a.md",
+      "heading": "",
+      "block": "",
+      "alias": "t",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 8
+}

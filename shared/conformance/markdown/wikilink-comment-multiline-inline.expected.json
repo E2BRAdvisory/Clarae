@@ -1,0 +1,31 @@
+{
+  "title": "wikilink-comment-multiline-inline",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "uno",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "due",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 5
+}

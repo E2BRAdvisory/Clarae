@@ -1,0 +1,5 @@
+![[Nota]]
+![[Nota#Sezione]]
+![[img.png|300x200]]
+![[doc.pdf#page=2]]
+![[disegno.excalidraw]]

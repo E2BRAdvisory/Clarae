@@ -1,0 +1,21 @@
+{
+  "title": "tag-in-parens",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [
+    {
+      "line": 1,
+      "name": "paren"
+    },
+    {
+      "line": 1,
+      "name": "brk"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}

@@ -1,0 +1,21 @@
+{
+  "title": "blockid-basic",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [],
+  "blockIds": [
+    {
+      "line": 1,
+      "id": "abc123"
+    },
+    {
+      "line": 3,
+      "id": "b-2"
+    }
+  ],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 5
+}

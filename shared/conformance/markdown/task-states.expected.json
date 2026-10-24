@@ -1,0 +1,43 @@
+{
+  "title": "task-states",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [
+    {
+      "line": 1,
+      "state": " ",
+      "text": "aperto"
+    },
+    {
+      "line": 2,
+      "state": "x",
+      "text": "fatto"
+    },
+    {
+      "line": 3,
+      "state": "/",
+      "text": "in corso"
+    },
+    {
+      "line": 4,
+      "state": "-",
+      "text": "annullato"
+    },
+    {
+      "line": 5,
+      "state": " ",
+      "text": "stella"
+    },
+    {
+      "line": 6,
+      "state": "x",
+      "text": "numerato"
+    }
+  ],
+  "footnotes": [],
+  "wordCount": 10
+}

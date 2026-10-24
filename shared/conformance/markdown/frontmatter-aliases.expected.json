@@ -1,0 +1,27 @@
+{
+  "title": "frontmatter-aliases",
+  "aliases": ["Alias Uno", "Alias Due"],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "Titolo",
+      "line": 8
+    }
+  ],
+  "links": [],
+  "tags": [
+    {
+      "line": 3,
+      "name": "alfa"
+    },
+    {
+      "line": 3,
+      "name": "beta/gamma"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 1
+}

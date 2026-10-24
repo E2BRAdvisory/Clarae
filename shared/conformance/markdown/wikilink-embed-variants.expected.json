@@ -1,0 +1,58 @@
+{
+  "title": "wikilink-embed-variants",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": true
+    },
+    {
+      "line": 2,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "Sezione",
+      "block": "",
+      "alias": "",
+      "embed": true
+    },
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "img.png",
+      "heading": "",
+      "block": "",
+      "alias": "300x200",
+      "embed": true
+    },
+    {
+      "line": 4,
+      "kind": "wikilink",
+      "target": "doc.pdf",
+      "heading": "page=2",
+      "block": "",
+      "alias": "",
+      "embed": true
+    },
+    {
+      "line": 5,
+      "kind": "wikilink",
+      "target": "disegno.excalidraw",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": true
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 5
+}

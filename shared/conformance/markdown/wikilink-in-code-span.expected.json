@@ -1,0 +1,28 @@
+{
+  "title": "wikilink-in-code-span",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "Codice",
+      "line": 1
+    }
+  ],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "vero",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 6
+}

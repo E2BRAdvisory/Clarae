@@ -1,0 +1,28 @@
+{
+  "title": "tag-heading-not-tag",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "Titolo",
+      "line": 1
+    },
+    {
+      "level": 2,
+      "text": "Altro",
+      "line": 3
+    }
+  ],
+  "links": [],
+  "tags": [
+    {
+      "line": 5,
+      "name": "tag"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}

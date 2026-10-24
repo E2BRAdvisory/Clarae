@@ -1,0 +1,33 @@
+{
+  "title": "crlf-lines",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "Titolo",
+      "line": 1
+    }
+  ],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "a",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 3,
+      "name": "t"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}
