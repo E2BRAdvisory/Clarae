@@ -1,0 +1,181 @@
+package links_test
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/rs/zerolog"
+
+	"nodus/apps/desktop/internal/indexer"
+	"nodus/apps/desktop/internal/links"
+	"nodus/apps/desktop/internal/store"
+	"nodus/apps/desktop/internal/vault"
+)
+
+func setup(t *testing.T, files map[string]string) (*indexer.Indexer, context.Context) {
+	t.Helper()
+	ctx := context.Background()
+	root := t.TempDir()
+	fsys, err := vault.NewFS(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(ctx, filepath.Join(root, ".nodus", "index.db"), store.KindIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, c := range files {
+		if _, err := fsys.WriteFile(p, []byte(c), "", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ix := indexer.New(fsys, db, zerolog.Nop(), nil)
+	if err := ix.Full(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return ix, ctx
+}
+
+func TestResolveBacklinksMentions(t *testing.T) {
+	ix, ctx := setup(t, map[string]string{
+		"Projects/Alpha.md": "---\naliases: [Alfa]\n---\n# Alpha\n",
+		"Archive/Alpha.md":  "old\n",
+		"Projects/Plan.md":  "See [[Alpha]] and [[Alfa]] and [[Ghost]] and [[Archive/Alpha]]. ![[logo.png]]\n",
+		"Notes/Daily.md":    "Talked about Alpha today, link: [[Plan]] and [[Projects/Alpha#Alpha]].\n",
+		"Notes/Idea.md":     "The Alpha project is great.\n",
+		"logo.png":          "PNG",
+	})
+	db := ix.DB()
+
+	out, err := links.Outgoing(ctx, db, "Projects/Plan.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		raw, res string
+	}{
+		{"Alpha", "Projects/Alpha.md"}, // same folder wins over Archive/Alpha.md
+		{"Alfa", "Projects/Alpha.md"},  // alias
+		{"Ghost", ""},                  // ghost note
+		{"Archive/Alpha", "Archive/Alpha.md"},
+		{"logo.png", "logo.png"}, // attachment keeps its extension
+	}
+	if len(out) != len(want) {
+		t.Fatalf("outgoing: %+v", out)
+	}
+	for i, w := range want {
+		if out[i].Raw != w.raw || out[i].Path != w.res || out[i].Resolved != (w.res != "") {
+			t.Errorf("outgoing[%d] = %+v, want %+v", i, out[i], w)
+		}
+	}
+
+	bl, err := links.Backlinks(ctx, db, "Projects/Alpha.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, l := range bl {
+		got = append(got, l.Path)
+	}
+	if len(got) != 3 || got[0] != "Notes/Daily.md" || got[1] != "Projects/Plan.md" || got[2] != "Projects/Plan.md" {
+		t.Fatalf("backlinks: %v", got)
+	}
+
+	men, err := links.UnlinkedMentions(ctx, db, "Projects/Alpha.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(men) != 1 || men[0].Path != "Notes/Idea.md" {
+		t.Fatalf("mentions: %+v", men)
+	}
+}
+
+func TestResolveSelfHeadingLink(t *testing.T) {
+	r := &links.Resolver{}
+	if got := r.Resolve("a/b.md", ""); got != "a/b.md" {
+		t.Fatalf("[[#heading]] should resolve to the note itself, got %q", got)
+	}
+}
+
+func TestRenameRewritesLinks(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	fsys, _ := vault.NewFS(root)
+	db, err := store.Open(ctx, filepath.Join(root, ".nodus", "index.db"), store.KindIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	put := func(p, c string) {
+		if _, err := fsys.WriteFile(p, []byte(c), "", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("Plan.md", "# Plan\n")
+	put("Other/Plan.md", "# other plan\n")
+	put("Notes/A.md", "Café [[Plan]] [[Plan#Goals|goals]] ![[Plan]] [p](../Plan.md) [[Missing]] `[[Plan]]`\n")
+	put("Notes/B.md", "[[Other/Plan]] and [[A]]\n")
+	ix := indexer.New(fsys, db, zerolog.Nop(), nil)
+	if err := ix.Full(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rename Plan.md -> Roadmap.md: name-based links follow, the code span and ghost stay.
+	plan, err := links.PlanRename(ctx, db, fsys, "Plan.md", "Roadmap.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Moves) != 1 || len(plan.Files) != 1 || plan.Files[0].Path != "Notes/A.md" || len(plan.Files[0].Edits) != 4 {
+		t.Fatalf("plan: %+v", plan)
+	}
+	if err := links.ApplyRename(fsys, plan); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := fsys.ReadFile("Notes/A.md")
+	want := "Café [[Roadmap]] [[Roadmap#Goals|goals]] ![[Roadmap]] [p](../Roadmap.md) [[Missing]] `[[Plan]]`\n"
+	if string(a.Data) != want {
+		t.Fatalf("A.md = %q\nwant   %q", a.Data, want)
+	}
+	if _, err := fsys.ReadFile("Roadmap.md"); err != nil {
+		t.Fatal("file not moved")
+	}
+	// Notes/B.md linked to Other/Plan: unaffected.
+	b, _ := fsys.ReadFile("Notes/B.md")
+	if string(b.Data) != "[[Other/Plan]] and [[A]]\n" {
+		t.Fatalf("B.md changed: %q", b.Data)
+	}
+
+	// Moving a folder keeps unique-name wikilinks untouched but fixes ambiguous ones.
+	if err := ix.Rebuild(ctx); err != nil {
+		t.Fatal(err)
+	}
+	plan, err = links.PlanRename(ctx, db, fsys, "Notes", "Archive/Notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Moves) != 2 {
+		t.Fatalf("folder moves: %+v", plan.Moves)
+	}
+	if err := links.ApplyRename(fsys, plan); err != nil {
+		t.Fatal(err)
+	}
+	a, _ = fsys.ReadFile("Archive/Notes/A.md")
+	if want := "Café [[Roadmap]] [[Roadmap#Goals|goals]] ![[Roadmap]] [p](../../Roadmap.md) [[Missing]] `[[Plan]]`\n"; string(a.Data) != want {
+		t.Fatalf("moved A.md = %q\nwant      %q", a.Data, want)
+	}
+
+	// A stale plan is refused and leaves everything untouched.
+	if err := ix.Rebuild(ctx); err != nil {
+		t.Fatal(err)
+	}
+	stale, _ := links.PlanRename(ctx, db, fsys, "Roadmap.md", "Final.md")
+	_, _ = fsys.WriteFile("Archive/Notes/A.md", []byte("[[Roadmap]] changed\n"), "", false)
+	if err := links.ApplyRename(fsys, stale); err == nil {
+		t.Fatal("stale plan must fail")
+	}
+	if _, err := fsys.ReadFile("Roadmap.md"); err != nil {
+		t.Fatal("failed rename must not move the file")
+	}
+}
