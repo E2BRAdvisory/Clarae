@@ -18,6 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"nodus/apps/desktop/internal/canvas"
+	"nodus/apps/desktop/internal/drawing"
 	"nodus/apps/desktop/internal/links"
 	"nodus/apps/desktop/internal/parser"
 	"nodus/apps/desktop/internal/properties"
@@ -179,6 +181,9 @@ func (ix *Indexer) loadRows(ctx context.Context) (map[string]fileRow, error) {
 
 func (ix *Indexer) indexEntry(ctx context.Context, e vault.Entry, prev fileRow) error {
 	title := strings.TrimSuffix(e.Name, pathrules.Ext(e.Path))
+	if e.Kind == syncproto.KindExcalidraw || e.Kind == syncproto.KindCanvas {
+		return ix.indexStructured(ctx, e, prev, title)
+	}
 	if e.Kind != syncproto.KindMarkdown {
 		hash, _, err := ix.fs.HashFile(e.Path)
 		if err != nil {
@@ -198,6 +203,38 @@ func (ix *Indexer) indexEntry(ctx context.Context, e vault.Entry, prev fileRow) 
 	}
 	doc := parser.Parse(title, content.Data)
 	return ix.write(ctx, e, content.Hash, title, &doc, string(content.Data))
+}
+
+// indexStructured indexes a drawing or a canvas: the text of its elements is searchable
+// and the links they hold feed the graph and the backlinks. A file that does not
+// parse stays listed (and searchable by name) with a warning, never blocks the pass.
+func (ix *Indexer) indexStructured(ctx context.Context, e vault.Entry, prev fileRow, title string) error {
+	content, err := ix.fs.ReadFile(e.Path)
+	if err != nil {
+		return err
+	}
+	if prev.hash == content.Hash {
+		_, err := ix.db.ExecContext(ctx, `UPDATE files SET mtime_ns=?, size=?, indexed_at=? WHERE path=?`,
+			e.Mtime.UnixNano(), e.Size, time.Now().UTC().Format(time.RFC3339Nano), e.Path)
+		return err
+	}
+	var text string
+	var found []parser.Link
+	if e.Kind == syncproto.KindExcalidraw {
+		d, perr := drawing.Parse(content.Data)
+		if perr != nil {
+			ix.logger.Warn().Err(perr).Str("path", e.Path).Msg("drawing not indexed")
+		}
+		text, found = d.Text, d.Links
+	} else {
+		d, perr := canvas.Extract(content.Data)
+		if perr != nil {
+			ix.logger.Warn().Err(perr).Str("path", e.Path).Msg("canvas not indexed")
+		}
+		text, found = d.Text, d.Links
+	}
+	doc := parser.Document{Title: title, Links: found, WordCount: len(strings.Fields(text))}
+	return ix.write(ctx, e, content.Hash, title, &doc, text)
 }
 
 func (ix *Indexer) write(ctx context.Context, e vault.Entry, hash, title string, doc *parser.Document, body string) error {

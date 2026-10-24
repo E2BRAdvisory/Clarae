@@ -197,3 +197,31 @@ func TestPropertiesTagsTrash(t *testing.T) {
 		t.Error("invalid trash mode must be refused")
 	}
 }
+
+func TestDrawingPreviewCache(t *testing.T) {
+	a, info, root := newTestApp(t)
+	d := NewDrawingAPI(a)
+	hash := strings.Repeat("ab", 32)
+	if got, err := d.ReadPreview(info.ID, hash); err != nil || got != "" {
+		t.Fatalf("empty cache: %q %v", got, err)
+	}
+	if err := d.SavePreview(info.ID, hash, `<svg xmlns="http://www.w3.org/2000/svg"></svg>`); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := d.ReadPreview(info.ID, hash); !strings.HasPrefix(got, "<svg") {
+		t.Fatalf("round trip: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".nodus", "cache", "drawings", hash+".svg")); err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct{ hash, svg string }{
+		"traversal": {"../../../etc/passwd", "<svg/>"},
+		"short":     {"abcd", "<svg/>"},
+		"not svg":   {hash, "hello"},
+		"script":    {hash, "<svg><script>alert(1)</script></svg>"},
+	} {
+		if err := d.SavePreview(info.ID, c.hash, c.svg); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+}

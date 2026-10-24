@@ -94,6 +94,7 @@ func run() int {
 			app.NewPropertiesAPI(a),
 			app.NewSyncAPI(a),
 			app.NewVaultCryptoAPI(a),
+			app.NewDrawingAPI(a),
 		},
 	})
 	if err != nil {
