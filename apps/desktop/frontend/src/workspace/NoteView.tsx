@@ -12,11 +12,11 @@ import { renderMath, renderMermaid } from '../embeds/typeset';
 import { backendFor, ReadingView } from '../reading/ReadingView';
 import { commandForEvent } from '../commands/registry';
 import { useSettings, type NoteMode } from '../state/settings';
+import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
 import { isSafeExternalUrl } from '../util/sanitize';
 import { openExternal } from '../util/external';
 import type { Pane, Tab } from './layout';
-import { NoteProperties } from './NoteProperties';
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
 
@@ -174,9 +174,30 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
 
   // The authoritative text: includes edits the editor made since the last load.
   const text = doc.current();
+
+  // The Properties sidebar edits the frontmatter of the note in focus.
+  const docRef = useRef(doc);
+  useEffect(() => {
+    docRef.current = doc;
+  });
+  const isActive = visible && activePane === pane.id;
+  useEffect(() => {
+    if (!isActive || doc.status !== 'ready') return;
+    useActiveNote.getState().publish({
+      vaultId,
+      path,
+      text,
+      prepare: async () => {
+        await docRef.current.flush();
+        return (await api.vault.readNote(vaultId, path)).hash;
+      },
+      reload: () => void docRef.current.reload(),
+    });
+  }, [isActive, doc.status, vaultId, path, text]);
+  useEffect(() => () => useActiveNote.getState().retire(path), [path]);
+
   const revealHere =
     reveal && reveal.paneId === pane.id && reveal.path === path ? reveal : undefined;
-  const isActive = visible && activePane === pane.id;
 
   if (doc.status === 'loading') return <div className="note-loading muted">…</div>;
   if (doc.status === 'error')
@@ -227,16 +248,6 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
           <button onClick={() => void doc.overwrite()}>{t('editor.overwrite')}</button>
         </div>
       )}
-      <NoteProperties
-        vaultId={vaultId}
-        path={path}
-        text={text}
-        prepare={async () => {
-          await doc.flush();
-          return (await api.vault.readNote(vaultId, path)).hash;
-        }}
-        onChanged={() => void doc.reload()}
-      />
       {tab.mode === 'reading' ? (
         <div className="reading-scroll">
           <ReadingView

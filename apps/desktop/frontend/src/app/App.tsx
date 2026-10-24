@@ -20,7 +20,7 @@ import { FileExplorer } from '../sidebar/FileExplorer';
 import { TagsPanel } from '../sidebar/TagsPanel';
 import { OutlinePanel } from '../sidebar/OutlinePanel';
 import { BacklinksPanel } from '../sidebar/BacklinksPanel';
-import { PropertyKeysPanel } from '../sidebar/PropertyKeysPanel';
+import { PropertiesPanel } from '../sidebar/PropertiesPanel';
 import { SearchPanel } from '../search/SearchPanel';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { CommandPalette } from '../commands/CommandPalette';
@@ -398,7 +398,7 @@ function VaultView({ vaultId }: { vaultId: string }) {
             ) : (
               <div className="muted pad">{t('outline.none')}</div>
             ))}
-          {right.tab === 'properties' && <PropertyKeysPanel vaultId={vaultId} />}
+          {right.tab === 'properties' && <PropertiesPanel vaultId={vaultId} />}
           <SidebarResizer side="right" />
         </aside>
       ) : (

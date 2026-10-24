@@ -649,6 +649,38 @@ select {
 .note-properties .add {
   align-self: flex-start;
 }
+/* In the narrow right sidebar each property takes two rows: key and remove, then type and value. */
+.sidebar .note-properties {
+  border-bottom: 0;
+  padding: 4px 10px;
+}
+.sidebar .note-properties .prop {
+  grid-template-columns: minmax(0, 1fr) 90px auto;
+  grid-template-areas:
+    'key type remove'
+    'value value value';
+  row-gap: 2px;
+  padding-bottom: 6px;
+}
+.sidebar .note-properties .prop > :nth-child(1) {
+  grid-area: key;
+}
+.sidebar .note-properties .prop > :nth-child(2) {
+  grid-area: type;
+}
+.sidebar .note-properties .prop > :nth-child(3) {
+  grid-area: value;
+}
+.sidebar .note-properties .prop > :nth-child(4) {
+  grid-area: remove;
+}
+.properties-panel h4 {
+  margin: 12px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
 
 /* ---- status bar ---- */
 .statusbar .path {
@@ -962,9 +994,6 @@ button.record.active {
 .cm-lp-wikilink-raw,
 .cm-hl-math {
   color: var(--text-muted);
-}
-.cm-lp-frontmatter {
-  display: none;
 }
 .cm-lp-embed {
   border-left: 3px solid var(--accent);

@@ -151,6 +151,7 @@
   "properties": {
     "title": "Proprietà",
     "vault": "Proprietà del vault",
+    "noNote": "Apri una nota per modificarne le proprietà",
     "none": "Ancora nessuna proprietà",
     "add": "Aggiungi proprietà",
     "name": "Nome della proprietà",

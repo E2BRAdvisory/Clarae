@@ -70,11 +70,12 @@ describe('App shell', () => {
       expect(useAppStore.getState().layout.root).toMatchObject({ kind: 'pane' });
     });
 
-    it('shows the typed properties of the note', async () => {
+    it('shows the typed properties of the note in the Properties sidebar tab', async () => {
       await openDemo();
       useAppStore.getState().openNote('Home.md');
+      useAppStore.getState().setRight({ open: true, tab: 'properties' });
       renderApp();
-      expect(await screen.findByText('status')).toBeInTheDocument();
+      expect(await screen.findByTitle('status')).toBeInTheDocument();
       expect(screen.getByDisplayValue('draft')).toBeInTheDocument();
     });
 

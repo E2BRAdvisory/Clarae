@@ -2,12 +2,13 @@
 // only allows from state fields (not view plugins): hidden frontmatter, display
 // math, Mermaid diagrams and foldable callouts. Blocks are scanned when the
 // document changes; decorations follow the selection (a block being edited
-// shows its source).
-import { StateField, type EditorState, type Range } from '@codemirror/state';
+// shows its source). The frontmatter is the exception: it never shows in Live
+// Preview (the Properties sidebar edits it); only Source mode displays it.
+import { EditorState, RangeSet, StateField, Transaction, type Range } from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 import { splitFrontmatter } from '@nodus/markdown';
 import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
-import { FrontmatterWidget, MathWidget, MermaidWidget } from './widgets';
+import { MathWidget, MermaidWidget } from './widgets';
 
 export type BlockKind = 'frontmatter' | 'math' | 'mermaid' | 'callout';
 
@@ -138,6 +139,16 @@ export function scanBlocks(state: EditorState): Block[] {
   return blocks;
 }
 
+/**
+ * The range hidden in Live Preview: the frontmatter lines up to the start of the first body
+ * line. Null when there is no frontmatter, or nothing follows it (it would trap the cursor).
+ */
+export function hiddenFrontmatter(state: EditorState): { from: number; to: number } | null {
+  const fm = state.field(blocksField).find((b) => b.kind === 'frontmatter');
+  if (!fm || fm.to + 1 > state.doc.length) return null;
+  return { from: 0, to: fm.to + 1 };
+}
+
 export const blocksField = StateField.define<Block[]>({
   create: (state) => scanBlocks(state),
   update: (value, tr) => (tr.docChanged ? scanBlocks(tr.state) : value),
@@ -151,15 +162,11 @@ export function blockDecorations(state: EditorState): DecorationSet {
     sel.some((r) => r.from <= to && r.to >= from);
   for (const b of state.field(blocksField)) {
     switch (b.kind) {
-      case 'frontmatter':
-        if (!editing(b.from, b.to))
-          out.push(
-            Decoration.replace({ widget: new FrontmatterWidget(), block: true }).range(
-              b.from,
-              b.to,
-            ),
-          );
+      case 'frontmatter': {
+        const hidden = hiddenFrontmatter(state);
+        if (hidden) out.push(Decoration.replace({ block: true }).range(hidden.from, hidden.to));
         break;
+      }
       case 'math':
         if (!editing(b.from, b.to))
           out.push(
@@ -197,6 +204,45 @@ const blockDecorationsField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+/**
+ * Keeps edits out of the hidden frontmatter: a typed character at its start lands at the
+ * start of the body instead, and any other change that would touch it is dropped (a change
+ * replacing the whole document, such as a reload, passes).
+ */
+const frontmatterGuard = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  const hidden = hiddenFrontmatter(tr.startState);
+  if (!hidden) return tr;
+  let touches = false;
+  let whole = false;
+  tr.changes.iterChangedRanges((fromA, toA) => {
+    if (fromA === 0 && toA >= hidden.to) whole = true;
+    else if (fromA < hidden.to) touches = true;
+  });
+  if (!touches || whole) return tr;
+  const only: { from: number; to: number; text: string }[] = [];
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) =>
+    only.push({ from: fromA, to: toA, text: inserted.toString() }),
+  );
+  const [c] = only;
+  if (only.length === 1 && c && c.from === c.to && c.text !== '') {
+    return {
+      changes: { from: hidden.to, insert: c.text },
+      selection: { anchor: hidden.to + c.text.length },
+      userEvent: tr.annotation(Transaction.userEvent) ?? 'input',
+    };
+  }
+  return [];
+});
+
+/** The cursor moves over the hidden frontmatter instead of entering it. */
+const frontmatterAtomic = EditorView.atomicRanges.of((view) => {
+  const hidden = hiddenFrontmatter(view.state);
+  return hidden
+    ? RangeSet.of([Decoration.replace({}).range(hidden.from, hidden.to)])
+    : Decoration.none;
+});
+
 export function blockWidgets() {
-  return [calloutToggles, blocksField, blockDecorationsField];
+  return [calloutToggles, blocksField, blockDecorationsField, frontmatterGuard, frontmatterAtomic];
 }

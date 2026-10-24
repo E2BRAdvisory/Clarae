@@ -150,6 +150,34 @@ describe('block widgets', () => {
     expect(blocks[2]?.data.trim()).toBe('graph TD; A-->B');
   });
 
+  it('hides the frontmatter in Live Preview even with the caret inside it', () => {
+    const doc = '---\na: 1\n---\nBody\n';
+    for (const caret of [0, 6]) {
+      const d = blockDecorations(stateFor(doc, caret));
+      const ranges: [number, number][] = [];
+      d.between(0, doc.length, (from, to) => void ranges.push([from, to]));
+      expect(ranges).toEqual([[0, 13]]); // up to the start of the body line
+    }
+  });
+
+  it('keeps edits out of the hidden frontmatter', () => {
+    const doc = '---\na: 1\n---\nBody\n';
+    const s = stateFor(doc);
+    // Typing at the very start lands at the start of the body.
+    expect(s.update({ changes: { from: 0, insert: 'x' } }).state.doc.toString()).toBe(
+      '---\na: 1\n---\nxBody\n',
+    );
+    // Deleting into it (backspace at the start of the body) is refused.
+    expect(s.update({ changes: { from: 12, to: 13 } }).state.doc.toString()).toBe(doc);
+    // Editing the body and replacing the whole document are fine.
+    expect(s.update({ changes: { from: 13, insert: 'x' } }).state.doc.toString()).toBe(
+      '---\na: 1\n---\nxBody\n',
+    );
+    expect(
+      s.update({ changes: { from: 0, to: doc.length, insert: 'new' } }).state.doc.toString(),
+    ).toBe('new');
+  });
+
   it('shows source when the caret is inside a block and folds callouts with the default marker', () => {
     const doc = '$$\nx\n$$\n\n> [!note]- Folded\n> body\n';
     const away = blockDecorations(stateFor(doc, doc.length));

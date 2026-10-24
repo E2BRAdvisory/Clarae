@@ -220,16 +220,3 @@ export class CalloutTitleWidget extends WidgetType {
     return true;
   }
 }
-
-/** Collapsed frontmatter placeholder (the Properties panel edits it). */
-export class FrontmatterWidget extends WidgetType {
-  override eq(): boolean {
-    return true;
-  }
-  override toDOM(): HTMLElement {
-    const el = document.createElement('div');
-    el.className = 'cm-lp-frontmatter';
-    el.textContent = '— properties —';
-    return el;
-  }
-}
