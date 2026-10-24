@@ -34,6 +34,102 @@ export namespace app {
 	        this.size = source["size"];
 	    }
 	}
+	export class CloudVault {
+	    id: string;
+	    name: string;
+	    kind: string;
+	    totalBytes: number;
+	    fileCount: number;
+	    // Go type: time
+	    createdAt: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new CloudVault(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.totalBytes = source["totalBytes"];
+	        this.fileCount = source["fileCount"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ConflictTexts {
+	    current: string;
+	    ours: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConflictTexts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.current = source["current"];
+	        this.ours = source["ours"];
+	    }
+	}
+	export class DeviceInfo {
+	    id: string;
+	    name: string;
+	    platform: string;
+	    appVersion: string;
+	    // Go type: time
+	    lastSeenAt?: any;
+	    current: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.platform = source["platform"];
+	        this.appVersion = source["appVersion"];
+	        this.lastSeenAt = this.convertValues(source["lastSeenAt"], null);
+	        this.current = source["current"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class NoteContent {
 	    path: string;
 	    content: string;
@@ -80,6 +176,22 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.count = source["count"];
+	    }
+	}
+	export class UsageInfo {
+	    usedBytes: number;
+	    quotaBytes: number;
+	    level: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UsageInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.usedBytes = source["usedBytes"];
+	        this.quotaBytes = source["quotaBytes"];
+	        this.level = source["level"];
 	    }
 	}
 	export class VaultInfo {
@@ -410,6 +522,194 @@ export namespace search {
 	        this.hits = this.convertValues(source["hits"], Hit);
 	        this.total = source["total"];
 	        this.explain = source["explain"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace sync {
+	
+	export class Conflict {
+	    id: number;
+	    fileId: string;
+	    path: string;
+	    copyPath: string;
+	    strategy: string;
+	    localHash: string;
+	    remoteRev: number;
+	    detail: string;
+	    // Go type: time
+	    createdAt: any;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Conflict(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.fileId = source["fileId"];
+	        this.path = source["path"];
+	        this.copyPath = source["copyPath"];
+	        this.strategy = source["strategy"];
+	        this.localHash = source["localHash"];
+	        this.remoteRev = source["remoteRev"];
+	        this.detail = source["detail"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.status = source["status"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LinkInfo {
+	    linked: boolean;
+	    cloudVaultId: string;
+	    kind: string;
+	    name: string;
+	    serverUrl: string;
+	    locked: boolean;
+	    paused: boolean;
+	    pollSeconds: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LinkInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.linked = source["linked"];
+	        this.cloudVaultId = source["cloudVaultId"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.serverUrl = source["serverUrl"];
+	        this.locked = source["locked"];
+	        this.paused = source["paused"];
+	        this.pollSeconds = source["pollSeconds"];
+	    }
+	}
+	export class LinkResult {
+	    cloudVaultId: string;
+	    recoveryKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LinkResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cloudVaultId = source["cloudVaultId"];
+	        this.recoveryKey = source["recoveryKey"];
+	    }
+	}
+	export class RevisionInfo {
+	    rev: number;
+	    op: string;
+	    path: string;
+	    size: number;
+	    authorId: string;
+	    deviceId: string;
+	    // Go type: time
+	    time: any;
+	    hasContent: boolean;
+	    mine: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RevisionInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rev = source["rev"];
+	        this.op = source["op"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.authorId = source["authorId"];
+	        this.deviceId = source["deviceId"];
+	        this.time = this.convertValues(source["time"], null);
+	        this.hasContent = source["hasContent"];
+	        this.mine = source["mine"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Status {
+	    vaultId: string;
+	    phase: string;
+	    // Go type: time
+	    lastSync: any;
+	    pending: number;
+	    conflicts: number;
+	    done: number;
+	    total: number;
+	    error: string;
+	    kind: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.vaultId = source["vaultId"];
+	        this.phase = source["phase"];
+	        this.lastSync = this.convertValues(source["lastSync"], null);
+	        this.pending = source["pending"];
+	        this.conflicts = source["conflicts"];
+	        this.done = source["done"];
+	        this.total = source["total"];
+	        this.error = source["error"];
+	        this.kind = source["kind"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

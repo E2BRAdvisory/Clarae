@@ -8,6 +8,7 @@ import { api } from '../app/api';
 import { getActiveEditor } from '../editor/registry';
 import * as fmt from '../editor/commands';
 import { dialog } from '../ui/dialogs';
+import { infoOf, useSync } from '../state/sync';
 import { useAppStore } from '../state/store';
 import { invalidateVault } from '../app/actions';
 import i18next from 'i18next';
@@ -30,6 +31,8 @@ const store = () => useAppStore.getState();
 const hasVault = (): boolean => store().vault !== null;
 const activePath = (): string | null => activeTab(store().layout)?.path ?? null;
 const hasNote = (): boolean => activePath() !== null;
+const syncInfo = () => infoOf(useSync.getState(), store().vault?.id);
+const isLinked = (): boolean => hasVault() && syncInfo().linked;
 const editorMode = (): boolean => {
   const t = activeTab(store().layout);
   return !!t && t.mode !== 'reading' && getActiveEditor() !== null;
@@ -366,6 +369,44 @@ export const commands: Command[] = [
     defaults: ['Mod-Enter'],
     enabled: editorMode,
     run: withEditor(fmt.toggleTask),
+  },
+
+  // ---- cloud ----
+  {
+    id: 'sync:connect',
+    group: 'app',
+    defaults: [],
+    enabled: () => hasVault() && !syncInfo().linked,
+    run: () => useSync.getState().setWizardOpen(true),
+  },
+  {
+    id: 'sync:now',
+    group: 'app',
+    defaults: ['Mod-Shift-s'],
+    enabled: () => isLinked() && !syncInfo().locked,
+    run: () => guard(api.sync.syncNow(store().vault?.id ?? '')),
+  },
+  {
+    id: 'sync:conflicts',
+    group: 'app',
+    defaults: [],
+    enabled: isLinked,
+    run: () => useSync.getState().setConflictsOpen(true),
+  },
+  {
+    id: 'sync:history',
+    group: 'app',
+    defaults: [],
+    enabled: () => isLinked() && hasNote(),
+    run: () => useSync.getState().openHistory(activePath()),
+  },
+  { id: 'sync:settings', group: 'app', defaults: [], run: () => store().openSettings('sync') },
+  {
+    id: 'sync:unlock',
+    group: 'app',
+    defaults: [],
+    enabled: () => isLinked() && syncInfo().locked,
+    run: () => useSync.getState().setUnlockOpen(true),
   },
 
   // ---- app ----

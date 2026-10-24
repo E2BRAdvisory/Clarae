@@ -9,8 +9,10 @@ import * as AuthAPI from '../../wailsjs/go/app/AuthAPI';
 import * as LinksAPI from '../../wailsjs/go/app/LinksAPI';
 import * as TagsAPI from '../../wailsjs/go/app/TagsAPI';
 import * as PropertiesAPI from '../../wailsjs/go/app/PropertiesAPI';
+import * as SyncAPI from '../../wailsjs/go/app/SyncAPI';
+import * as VaultCryptoAPI from '../../wailsjs/go/app/VaultCryptoAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
-import type { app, auth, links, search, vault } from '../../wailsjs/go/models';
+import type { app, auth, links, search, sync, vault } from '../../wailsjs/go/models';
 
 type Plain<T> = Omit<T, 'convertValues'>;
 
@@ -47,6 +49,22 @@ export interface RenamePlan {
   moves: { from: string; to: string }[];
   files: RenameFileEdit[];
 }
+export type SyncLinkInfo = Plain<sync.LinkInfo>;
+export type SyncLinkResult = Plain<sync.LinkResult>;
+export type SyncPhase = 'idle' | 'syncing' | 'paused' | 'offline' | 'error' | 'locked';
+export type SyncStatus = Omit<Plain<sync.Status>, 'phase' | 'lastSync'> & {
+  phase: SyncPhase;
+  lastSync: string;
+};
+export type SyncConflict = Omit<Plain<sync.Conflict>, 'createdAt'> & { createdAt: string };
+export type RevisionInfo = Omit<Plain<sync.RevisionInfo>, 'time'> & { time: string };
+export type CloudVault = Omit<Plain<app.CloudVault>, 'createdAt'> & { createdAt: string };
+export type DeviceInfo = Omit<Plain<app.DeviceInfo>, 'lastSeenAt'> & { lastSeenAt: string | null };
+export type UsageInfo = Plain<app.UsageInfo>;
+export type ConflictTexts = Plain<app.ConflictTexts>;
+export type ConflictAction = 'keep-remote' | 'keep-local' | 'keep-both' | 'merged';
+export type VaultKind = 'private' | 'shared';
+export type DiskEncryption = 'encrypted' | 'unencrypted' | 'unknown';
 export type AuthProfile = Plain<auth.Profile>;
 export type AuthState = Omit<Plain<auth.State>, 'profile'> & { profile: AuthProfile };
 
@@ -138,6 +156,60 @@ export const api = {
       LinksAPI.ApplyRename(vaultId, from, to),
     mentions: (vaultId: string, path: string): Promise<Mention[]> =>
       LinksAPI.UnlinkedMentions(vaultId, path),
+  },
+  sync: {
+    info: (vaultId: string): Promise<SyncLinkInfo> => SyncAPI.Info(vaultId),
+    status: (vaultId: string): Promise<SyncStatus> =>
+      SyncAPI.Status(vaultId) as Promise<SyncStatus>,
+    linkNew: (
+      vaultId: string,
+      name: string,
+      kind: VaultKind,
+      passphrase: string,
+    ): Promise<SyncLinkResult> => SyncAPI.LinkNew(vaultId, name, kind, passphrase),
+    listCloudVaults: (): Promise<CloudVault[]> => SyncAPI.ListCloudVaults(),
+    linkExisting: (vaultId: string, cloudVaultId: string): Promise<void> =>
+      SyncAPI.LinkExisting(vaultId, cloudVaultId),
+    unlink: (vaultId: string): Promise<void> => SyncAPI.Unlink(vaultId),
+    setPaused: (vaultId: string, paused: boolean): Promise<void> =>
+      SyncAPI.SetPaused(vaultId, paused),
+    setPollInterval: (vaultId: string, seconds: number): Promise<void> =>
+      SyncAPI.SetPollInterval(vaultId, seconds),
+    syncNow: (vaultId: string): Promise<void> => SyncAPI.SyncNow(vaultId),
+    conflicts: (vaultId: string): Promise<SyncConflict[]> => SyncAPI.Conflicts(vaultId),
+    conflictTexts: (vaultId: string, id: number): Promise<ConflictTexts> =>
+      SyncAPI.ConflictTexts(vaultId, id),
+    resolveConflict: (
+      vaultId: string,
+      id: number,
+      action: ConflictAction,
+      merged = '',
+    ): Promise<void> => SyncAPI.ResolveConflict(vaultId, id, action, merged),
+    history: (vaultId: string, path: string): Promise<RevisionInfo[]> =>
+      SyncAPI.History(vaultId, path),
+    revisionText: (vaultId: string, path: string, rev: number): Promise<string> =>
+      SyncAPI.RevisionText(vaultId, path, rev),
+    restoreRevision: (vaultId: string, path: string, rev: number): Promise<void> =>
+      SyncAPI.RestoreRevision(vaultId, path, rev),
+    devices: (): Promise<DeviceInfo[]> => SyncAPI.Devices() as Promise<DeviceInfo[]>,
+    revokeDevice: (id: string): Promise<void> => SyncAPI.RevokeDevice(id),
+    usage: (): Promise<UsageInfo> => SyncAPI.Usage(),
+  },
+  crypto: {
+    unlock: (vaultId: string, secret: string, isRecovery: boolean): Promise<boolean> =>
+      VaultCryptoAPI.Unlock(vaultId, secret, isRecovery),
+    lock: (vaultId: string): Promise<void> => VaultCryptoAPI.Lock(vaultId),
+    setPassphrase: (vaultId: string, newPassphrase: string): Promise<void> =>
+      VaultCryptoAPI.SetPassphrase(vaultId, newPassphrase),
+    changePassphrase: (
+      vaultId: string,
+      oldPassphrase: string,
+      newPassphrase: string,
+    ): Promise<void> => VaultCryptoAPI.ChangePassphrase(vaultId, oldPassphrase, newPassphrase),
+    regenerateRecoveryKey: (vaultId: string, passphrase: string): Promise<string> =>
+      VaultCryptoAPI.RegenerateRecoveryKey(vaultId, passphrase),
+    diskEncryption: (): Promise<DiskEncryption> =>
+      VaultCryptoAPI.DiskEncryption() as Promise<DiskEncryption>,
   },
   auth: {
     status: (): Promise<AuthState> => AuthAPI.Status(),

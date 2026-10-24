@@ -10,16 +10,26 @@ import type {
   AppSettings,
   AuthState,
   BinaryContent,
+  CloudVault,
+  ConflictAction,
+  ConflictTexts,
+  DeviceInfo,
+  DiskEncryption,
   Entry,
   Mention,
   NoteContent,
   NoteLink,
   PropertyKey,
   RenamePlan,
+  RevisionInfo,
   SearchHit,
   SearchResults,
   Suggestion,
+  SyncConflict,
+  SyncLinkInfo,
+  SyncStatus,
   TagCount,
+  UsageInfo,
   VaultInfo,
   WriteResult,
 } from '../../app/api';
@@ -34,7 +44,27 @@ export interface MockVault {
   binaries: Map<string, string>;
 }
 
+/** State behind the SyncAPI/VaultCryptoAPI mock; tests seed and inspect it. */
+export interface MockSync {
+  /** Per local vault id: link info, plus the secrets of a private vault. */
+  links: Map<string, SyncLinkInfo & { passphrase?: string; recoveryKey?: string }>;
+  status: Map<string, SyncStatus>;
+  conflicts: Map<string, SyncConflict[]>;
+  conflictTexts: Map<number, ConflictTexts>;
+  resolved: { vaultId: string; id: number; action: ConflictAction; merged: string }[];
+  history: Map<string, RevisionInfo[]>; // key: vaultId + '|' + path
+  revisionTexts: Map<string, string>; // key: vaultId + '|' + path + '|' + rev
+  restored: { vaultId: string; path: string; rev: number }[];
+  cloudVaults: CloudVault[];
+  devices: DeviceInfo[];
+  usage: UsageInfo;
+  disk: DiskEncryption;
+  /** Passphrase and recovery key that unlock a cloud vault being linked on a new device. */
+  secrets: Map<string, { passphrase: string; recoveryKey: string }>;
+}
+
 export interface WailsMock {
+  sync: MockSync;
   vaults: Map<string, MockVault>;
   recent: VaultInfo[];
   settings: AppSettings;
@@ -155,6 +185,30 @@ function resolve(v: MockVault, from: string, target: string): string {
 export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const handlers = new Map<string, Set<Handler>>();
   const mock: WailsMock = {
+    sync: seed?.sync ?? {
+      links: new Map(),
+      status: new Map(),
+      conflicts: new Map(),
+      conflictTexts: new Map(),
+      resolved: [],
+      history: new Map(),
+      revisionTexts: new Map(),
+      restored: [],
+      cloudVaults: [],
+      devices: [
+        {
+          id: 'dev-1',
+          name: 'This computer',
+          platform: 'macos',
+          appVersion: '0.0.1',
+          lastSeenAt: null,
+          current: true,
+        },
+      ],
+      usage: { usedBytes: 0, quotaBytes: 5 * 1024 ** 3, level: 'ok' },
+      disk: 'encrypted',
+      secrets: new Map(),
+    },
     vaults: seed?.vaults ?? new Map<string, MockVault>(),
     recent: seed?.recent ?? [],
     settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
@@ -648,9 +702,270 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
   };
 
+  // --- cloud synchronization ----------------------------------------------------
+  const sy = mock.sync;
+  const linkOf = (id: string): SyncLinkInfo & { passphrase?: string; recoveryKey?: string } =>
+    sy.links.get(id) ?? {
+      linked: false,
+      cloudVaultId: '',
+      kind: '',
+      name: '',
+      serverUrl: '',
+      locked: false,
+      paused: false,
+      pollSeconds: 0,
+    };
+  const setStatus = (id: string, patch: Partial<SyncStatus>): void => {
+    const cur = sy.status.get(id) ?? {
+      vaultId: id,
+      phase: 'idle',
+      lastSync: '',
+      pending: 0,
+      conflicts: 0,
+      done: 0,
+      total: 0,
+      error: '',
+      kind: '',
+    };
+    const next = { ...cur, ...patch, vaultId: id } as SyncStatus;
+    sy.status.set(id, next);
+    mock.emit('sync:status', next);
+  };
+  const signedIn = (): boolean =>
+    mock.auth.status === 'ready' || mock.auth.status === 'disconnected';
+  const requireSignIn = (): Promise<never> | null =>
+    signedIn() ? null : reject('not signed in to the cloud');
+  const runFirstSync = (id: string): void => {
+    setStatus(id, { phase: 'syncing', total: 3, done: 0 });
+    setTimeout(
+      () =>
+        setStatus(id, {
+          phase: 'idle',
+          lastSync: new Date().toISOString(),
+          total: 0,
+          done: 0,
+          pending: 0,
+          conflicts: (sy.conflicts.get(id) ?? []).length,
+        }),
+      0,
+    );
+  };
+
+  const SyncAPI = {
+    Info: (id: string): Promise<SyncLinkInfo> => {
+      const info: SyncLinkInfo & { passphrase?: string; recoveryKey?: string } = { ...linkOf(id) };
+      delete info.passphrase;
+      delete info.recoveryKey;
+      return Promise.resolve(info);
+    },
+    Status: (id: string): Promise<SyncStatus> =>
+      Promise.resolve(
+        sy.status.get(id) ?? {
+          vaultId: id,
+          phase: 'idle',
+          lastSync: '',
+          pending: 0,
+          conflicts: 0,
+          done: 0,
+          total: 0,
+          error: '',
+          kind: linkOf(id).kind,
+        },
+      ),
+    LinkNew: (
+      id: string,
+      name: string,
+      kind: string,
+      passphrase: string,
+    ): Promise<{ cloudVaultId: string; recoveryKey: string }> => {
+      const err = requireSignIn();
+      if (err) return err;
+      if (linkOf(id).linked) return reject('this vault is already connected to the cloud');
+      if (kind !== 'shared' && kind !== 'private') return reject(`unknown vault kind "${kind}"`);
+      if (kind === 'private' && [...passphrase].length < 12)
+        return reject('the passphrase must have at least 12 characters');
+      if (sy.cloudVaults.some((v) => v.name === name))
+        return reject('name-in-use: you already have a vault with this name');
+      const cloudVaultId = `cloud-${sy.cloudVaults.length + 1}`;
+      const recoveryKey =
+        kind === 'private' ? 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z2345-67ABC-DEFGH-IJKLM-NOPQR-STU' : '';
+      sy.cloudVaults.push({
+        id: cloudVaultId,
+        name,
+        kind,
+        totalBytes: 0,
+        fileCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+      sy.links.set(id, {
+        linked: true,
+        cloudVaultId,
+        kind,
+        name,
+        serverUrl: mock.auth.serverUrl,
+        locked: false,
+        paused: false,
+        pollSeconds: 0,
+        passphrase,
+        recoveryKey,
+      });
+      sy.secrets.set(cloudVaultId, { passphrase, recoveryKey });
+      runFirstSync(id);
+      return Promise.resolve({ cloudVaultId, recoveryKey });
+    },
+    ListCloudVaults: (): Promise<CloudVault[]> =>
+      requireSignIn() ?? Promise.resolve(sy.cloudVaults),
+    LinkExisting: (id: string, cloudVaultId: string): Promise<void> => {
+      const err = requireSignIn();
+      if (err) return err;
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId);
+      if (!v) return reject('not-found: vault not found');
+      sy.links.set(id, {
+        linked: true,
+        cloudVaultId,
+        kind: v.kind,
+        name: v.name,
+        serverUrl: mock.auth.serverUrl,
+        locked: v.kind === 'private',
+        paused: false,
+        pollSeconds: 0,
+      });
+      if (v.kind === 'private') setStatus(id, { phase: 'locked', kind: 'private' });
+      else runFirstSync(id);
+      return Promise.resolve();
+    },
+    Unlink: (id: string): Promise<void> => {
+      sy.links.delete(id);
+      sy.status.delete(id);
+      mock.emit('sync:status', {
+        vaultId: id,
+        phase: 'idle',
+        lastSync: '',
+        pending: 0,
+        conflicts: 0,
+        done: 0,
+        total: 0,
+        error: '',
+        kind: '',
+      });
+      return Promise.resolve();
+    },
+    SetPaused: (id: string, paused: boolean): Promise<void> => {
+      const l = linkOf(id);
+      if (!l.linked) return reject('this vault is not connected to the cloud');
+      sy.links.set(id, { ...l, paused });
+      setStatus(id, { phase: paused ? 'paused' : 'idle' });
+      return Promise.resolve();
+    },
+    SetPollInterval: (id: string, seconds: number): Promise<void> => {
+      const l = linkOf(id);
+      if (!l.linked) return reject('this vault is not connected to the cloud');
+      if (seconds < 0 || (seconds > 0 && seconds < 15))
+        return reject('the interval must be 0 (automatic) or at least 15 seconds');
+      sy.links.set(id, { ...l, pollSeconds: seconds });
+      return Promise.resolve();
+    },
+    SyncNow: (id: string): Promise<void> => {
+      if (!linkOf(id).linked) return reject('this vault is not connected to the cloud');
+      runFirstSync(id);
+      return Promise.resolve();
+    },
+    Conflicts: (id: string): Promise<SyncConflict[]> => Promise.resolve(sy.conflicts.get(id) ?? []),
+    ConflictTexts: (_id: string, cid: number): Promise<ConflictTexts> => {
+      const t = sy.conflictTexts.get(cid);
+      return t ? Promise.resolve(t) : reject('conflict not found');
+    },
+    ResolveConflict: (id: string, cid: number, action: string, merged: string): Promise<void> => {
+      const list = sy.conflicts.get(id) ?? [];
+      if (!list.some((c) => c.id === cid)) return reject('conflict not found or already resolved');
+      sy.resolved.push({ vaultId: id, id: cid, action: action as ConflictAction, merged });
+      sy.conflicts.set(
+        id,
+        list.filter((c) => c.id !== cid),
+      );
+      setStatus(id, { conflicts: list.length - 1 });
+      return Promise.resolve();
+    },
+    History: (id: string, path: string): Promise<RevisionInfo[]> =>
+      Promise.resolve(sy.history.get(`${id}|${path}`) ?? []),
+    RevisionText: (id: string, path: string, rev: number): Promise<string> => {
+      const t = sy.revisionTexts.get(`${id}|${path}|${rev}`);
+      return t === undefined ? reject('not-found: revision not found') : Promise.resolve(t);
+    },
+    RestoreRevision: (id: string, path: string, rev: number): Promise<void> => {
+      sy.restored.push({ vaultId: id, path, rev });
+      return Promise.resolve();
+    },
+    Devices: (): Promise<DeviceInfo[]> => requireSignIn() ?? Promise.resolve(sy.devices),
+    RevokeDevice: (devId: string): Promise<void> => {
+      sy.devices = sy.devices.filter((d) => d.id !== devId);
+      return Promise.resolve();
+    },
+    Usage: (): Promise<UsageInfo> => requireSignIn() ?? Promise.resolve(sy.usage),
+  };
+
+  const VaultCryptoAPI = {
+    Unlock: (id: string, secret: string, isRecovery: boolean): Promise<boolean> => {
+      const l = linkOf(id);
+      if (!l.linked || l.kind !== 'private') return reject('only private vaults are encrypted');
+      const keys = sy.secrets.get(l.cloudVaultId);
+      const ok = isRecovery
+        ? secret.replace(/[-\s]/g, '').toUpperCase() === (keys?.recoveryKey ?? '').replace(/-/g, '')
+        : secret === keys?.passphrase;
+      if (!ok) return reject('wrong passphrase or recovery key');
+      sy.links.set(id, { ...l, locked: false });
+      setStatus(id, { phase: 'idle', kind: 'private' });
+      return Promise.resolve(isRecovery);
+    },
+    Lock: (id: string): Promise<void> => {
+      const l = linkOf(id);
+      sy.links.set(id, { ...l, locked: true });
+      setStatus(id, { phase: 'locked' });
+      mock.emit('vault:locked', { vaultId: id });
+      return Promise.resolve();
+    },
+    SetPassphrase: (id: string, passphrase: string): Promise<void> => {
+      const l = linkOf(id);
+      if ([...passphrase].length < 12)
+        return reject('the passphrase must have at least 12 characters');
+      const keys = sy.secrets.get(l.cloudVaultId);
+      if (keys) sy.secrets.set(l.cloudVaultId, { ...keys, passphrase });
+      return Promise.resolve();
+    },
+    ChangePassphrase: (id: string, oldPass: string, newPass: string): Promise<void> => {
+      const l = linkOf(id);
+      const keys = sy.secrets.get(l.cloudVaultId);
+      if (!keys || keys.passphrase !== oldPass) return reject('wrong passphrase or recovery key');
+      if ([...newPass].length < 12)
+        return reject('the passphrase must have at least 12 characters');
+      sy.secrets.set(l.cloudVaultId, { ...keys, passphrase: newPass });
+      return Promise.resolve();
+    },
+    RegenerateRecoveryKey: (id: string, passphrase: string): Promise<string> => {
+      const l = linkOf(id);
+      const keys = sy.secrets.get(l.cloudVaultId);
+      if (!keys || keys.passphrase !== passphrase)
+        return reject('wrong passphrase or recovery key');
+      const recoveryKey = 'ZZZZZ-YYYYY-XXXXX-WWWWW-VVVVV-UUUUU-TTTTT-SSSSS-RRRRR-QQQQQ-PPP';
+      sy.secrets.set(l.cloudVaultId, { ...keys, recoveryKey });
+      return Promise.resolve(recoveryKey);
+    },
+    DiskEncryption: (): Promise<DiskEncryption> => Promise.resolve(sy.disk),
+  };
+
   const w = window as unknown as Record<string, unknown>;
   w['go'] = {
-    app: { VaultAPI, SearchAPI, SettingsAPI, AuthAPI, LinksAPI, TagsAPI, PropertiesAPI },
+    app: {
+      VaultAPI,
+      SearchAPI,
+      SettingsAPI,
+      AuthAPI,
+      LinksAPI,
+      TagsAPI,
+      PropertiesAPI,
+      SyncAPI,
+      VaultCryptoAPI,
+    },
   };
   w['runtime'] = {
     EventsOnMultiple: (name: string, cb: Handler, _max: number) => {

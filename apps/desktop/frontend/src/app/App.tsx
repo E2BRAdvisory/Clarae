@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, type AuthState } from './api';
+import { api, type AuthState, type SyncStatus } from './api';
 import {
   Events,
   type FileChangedPayload,
   type IndexProgressPayload,
   type OpenRequestPayload,
+  type SyncConflictPayload,
+  type VaultLockedPayload,
 } from './events';
 import { applyTheme, type Theme } from './theme';
 import { initI18n } from '../i18n';
@@ -25,6 +27,9 @@ import { CommandPalette } from '../commands/CommandPalette';
 import { QuickSwitcher } from '../commands/QuickSwitcher';
 import { commandForEvent } from '../commands/registry';
 import { DialogHost, dialog } from '../ui/dialogs';
+import { infoOf, useSync } from '../state/sync';
+import { SyncDialogs } from '../sync/SyncDialogs';
+import { SyncIndicator } from '../sync/SyncIndicator';
 import { followLinkPath } from './open';
 
 const LEFT_TABS: LeftTab[] = ['files', 'search', 'tags'];
@@ -92,6 +97,33 @@ export function App() {
     }
   };
 
+  // Cloud synchronization: status and conflicts are pushed by the backend.
+  useEffect(() => {
+    const offStatus = api.on<SyncStatus>(Events.syncStatus, (s) => useSync.getState().setStatus(s));
+    const offConflict = api.on<SyncConflictPayload>(
+      Events.syncConflict,
+      (p) => void useSync.getState().refreshConflicts(p.vaultId),
+    );
+    const offLocked = api.on<VaultLockedPayload>(Events.vaultLocked, (p) => {
+      if (p.vaultId === useAppStore.getState().vault?.id) useSync.getState().setUnlockOpen(true);
+    });
+    return () => {
+      offStatus();
+      offConflict();
+      offLocked();
+    };
+  }, []);
+
+  const vaultId = vault?.id;
+  const syncInfo = useSync((s) => infoOf(s, vaultId));
+  useEffect(() => {
+    if (vaultId) void useSync.getState().refresh(vaultId);
+  }, [vaultId]);
+  useEffect(() => {
+    if (syncInfo.linked && syncInfo.kind === 'private') void useSync.getState().checkDisk();
+    if (syncInfo.linked && syncInfo.locked) useSync.getState().setUnlockOpen(true);
+  }, [syncInfo.linked, syncInfo.kind, syncInfo.locked]);
+
   // nodus://open?vault=…&file=… (from the OS or another instance).
   useEffect(
     () =>
@@ -142,6 +174,7 @@ export function App() {
       {vault ? <VaultView key={vault.id} vaultId={vault.id} /> : <Welcome onOpen={openVault} />}
       <StatusBar />
       {settingsOpen && <SettingsPanel />}
+      <SyncDialogs />
       <CommandPalette />
       <QuickSwitcher />
       <DialogHost />
@@ -410,6 +443,7 @@ function StatusBar() {
           <span>{t('status.chars', { count: stats.chars })}</span>
         </>
       )}
+      <SyncIndicator />
       {vault && (
         <span>
           {progress

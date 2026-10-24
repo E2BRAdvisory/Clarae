@@ -23,6 +23,14 @@ export interface IndexProgressPayload {
   finished: boolean;
 }
 
+export interface SyncConflictPayload {
+  vaultId: string;
+}
+
+export interface VaultLockedPayload {
+  vaultId: string;
+}
+
 export interface OpenRequestPayload {
   vault: string;
   file: string;

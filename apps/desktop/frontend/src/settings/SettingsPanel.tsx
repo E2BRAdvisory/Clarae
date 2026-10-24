@@ -12,6 +12,7 @@ import {
 } from '../state/settings';
 import { useAppStore, type SettingsSection } from '../state/store';
 import { CloudSection } from './CloudSection';
+import { SyncSection } from './SyncSection';
 import { HotkeysEditor } from './HotkeysEditor';
 
 const SECTIONS: SettingsSection[] = [
@@ -21,6 +22,7 @@ const SECTIONS: SettingsSection[] = [
   'appearance',
   'hotkeys',
   'cloud',
+  'sync',
   'about',
 ];
 
@@ -288,6 +290,8 @@ export function SettingsPanel() {
         return <HotkeysEditor />;
       case 'cloud':
         return <CloudSection />;
+      case 'sync':
+        return <SyncSection />;
       case 'about':
         return (
           <>
