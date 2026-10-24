@@ -274,6 +274,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 8. M3 — Excalidraw + Canvas (esito: disegni nativi sincronizzati)
 
+> **Stato (2026-10-24):** WP1–WP4 implementati ([ADR-0010](adr/0010-drawing-and-canvas-details.md)). Verificati in locale: unit test Go (`drawing`, `canvas`, indexer) e frontend, e2e Playwright su mock dei binding (apertura/modifica/salvataggio di un disegno senza richieste di rete, embed, canvas), e2e a due dispositivi per `.excalidraw` e `.canvas`. Resta la checklist manuale sul webview reale (`docs/qa/m3-drawings-canvas.md`).
+
 ### M3-WP1 Excalidraw (frontend `drawing/`)
 
 - Wrapper `@excalidraw/excalidraw` con `React.lazy`, `EXCALIDRAW_ASSET_PATH` → asset copiati nel bundle (`vite` plugin di copia), tema app, i18n.
