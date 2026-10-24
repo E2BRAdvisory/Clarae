@@ -304,6 +304,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 9. M4 — Condivisione e gruppi (esito: collaborazione asincrona)
 
+> **Stato (2026-10-24):** WP1–WP5 implementati ([ADR-0011](adr/0011-sharing-groups-config-details.md)). Verificati in locale: unit e integrazione del cloud (matrice ACL, scope, eventi, config profile), e2e desktop contro il cloud reale (due utenti: merge, conflict copy per autori diversi, viewer in sola lettura, revoca, manager) e sul mock (inviti, mount, sola lettura, chiavi `locked`), Web UI con unit test e Playwright. Resta la checklist manuale (`docs/qa/m4-sharing.md`); la finestra "nuova condivisione" della Web UI e le API admin (M5) non sono incluse.
+
 ### M4-WP1 Gruppi e directory (cloud)
 
 - Migrazione `0003_groups_sharing.sql`: `groups`, `group_members`, `shares`, `share_grants`, trigger `shares_vault_kind_chk`, `config_profiles`, `config_assignments`.
@@ -333,6 +335,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 - `web/`: Vite + React, `oidc-client-ts` PKCE (`nodus-web`), guardie di ruolo, `packages/api-client`, `packages/ui` (design system: tokens, tabelle, form, barra quota).
 - Route utente: Spazio utilizzato (`/me/usage`), I miei vault (tipo, dimensione, file, ultimo sync), Dispositivi, Condivisioni. Download ZIP rinviato a M5.
 - `services/cloud/web-embed` con `go:embed` + fallback SPA; CSP rigida e SRI.
+
+> **Stato (2026-10-24):** implementato ([docs/web-ui.md](web-ui.md)). Verificati: lint/typecheck/vitest (web, ui), e2e Playwright su API mockata, test Go di `web-embed`, build di produzione con SRI. Non verificato: login reale contro Keycloak e immagine Docker con la SPA (stack locale non avviabile in questa sessione).
 
 **Criteri di uscita M4:** utente A condivide una cartella con un gruppo; B (membro) accetta, vede il mount, modifica (editor) e A riceve; `viewer` non può scrivere (server e UI); revoca → smontaggio; config profile con chiave `locked` bloccata nella UI del client; Web UI utente funzionante.
 
