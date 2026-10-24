@@ -8,6 +8,8 @@ COPY package.json yarn.lock .yarnrc.yml tsconfig.base.json ./
 COPY .yarn .yarn
 COPY web web
 COPY packages packages
+# The admin console validates configuration profiles against the shared JSON Schema.
+COPY api/config-profile.schema.json api/config-profile.schema.json
 # yarn needs the manifest of every workspace to resolve the lockfile; only the web app is installed.
 COPY apps/desktop/frontend/package.json apps/desktop/frontend/package.json
 COPY shared/conformance/ts/package.json shared/conformance/ts/package.json
