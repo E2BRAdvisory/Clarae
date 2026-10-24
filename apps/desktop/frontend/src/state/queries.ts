@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { extract } from '@nodus/markdown';
 import { api, type SearchSort } from '../app/api';
 
 export const queryKeys = {
@@ -7,7 +8,36 @@ export const queryKeys = {
   note: (vaultId: string, path: string) => ['note', vaultId, path] as const,
   backlinks: (vaultId: string, path: string) => ['backlinks', vaultId, path] as const,
   search: (vaultId: string, q: string, sort: SearchSort) => ['search', vaultId, q, sort] as const,
+  tags: (vaultId: string) => ['tags', vaultId] as const,
+  propkeys: (vaultId: string) => ['propkeys', vaultId] as const,
+  outline: (vaultId: string, path: string) => ['outline', vaultId, path] as const,
 };
+
+export function useTags(vaultId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tags(vaultId ?? ''),
+    queryFn: () => api.tags.list(vaultId ?? ''),
+    enabled: !!vaultId,
+  });
+}
+
+export function usePropertyKeys(vaultId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.propkeys(vaultId ?? ''),
+    queryFn: () => api.properties.keys(vaultId ?? ''),
+    enabled: !!vaultId,
+  });
+}
+
+/** Headings of a note as last saved (re-read when the file changes on disk). */
+export function useOutline(vaultId: string | undefined, path: string | null) {
+  return useQuery({
+    queryKey: queryKeys.outline(vaultId ?? '', path ?? ''),
+    queryFn: async () =>
+      extract(path ?? '', (await api.vault.readNote(vaultId ?? '', path ?? '')).content).headings,
+    enabled: !!vaultId && !!path && (path ?? '').endsWith('.md'),
+  });
+}
 
 export function useRecentVaults() {
   return useQuery({ queryKey: queryKeys.recentVaults, queryFn: () => api.vault.listRecent() });
@@ -64,6 +94,9 @@ export function useInvalidate() {
       qc.invalidateQueries({ queryKey: queryKeys.note(vaultId, path) }),
     search: (vaultId: string) => qc.invalidateQueries({ queryKey: ['search', vaultId] }),
     backlinks: (vaultId: string) => qc.invalidateQueries({ queryKey: ['backlinks', vaultId] }),
+    tags: (vaultId: string) => qc.invalidateQueries({ queryKey: queryKeys.tags(vaultId) }),
+    propkeys: (vaultId: string) => qc.invalidateQueries({ queryKey: queryKeys.propkeys(vaultId) }),
+    outline: (vaultId: string) => qc.invalidateQueries({ queryKey: ['outline', vaultId] }),
     recent: () => qc.invalidateQueries({ queryKey: queryKeys.recentVaults }),
   };
 }

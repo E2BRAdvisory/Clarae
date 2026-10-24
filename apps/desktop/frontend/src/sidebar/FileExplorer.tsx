@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, type Entry } from '../app/api';
-import { useAppStore } from '../state/store';
-import { useInvalidate, useTree } from '../state/queries';
+import type { Entry } from '../app/api';
+import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
+import { selectActivePath, useAppStore } from '../state/store';
+import { useTree } from '../state/queries';
+import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
+import { dialog } from '../ui/dialogs';
 
 interface TreeNode {
   entry: Entry;
   children: TreeNode[];
 }
 
-function buildTree(entries: Entry[]): TreeNode[] {
+export type FileSort = 'name' | 'name-desc' | 'modified' | 'created';
+
+export function buildTree(entries: Entry[], sort: FileSort = 'name'): TreeNode[] {
   const byPath = new Map<string, TreeNode>();
   const roots: TreeNode[] = [];
   for (const entry of entries) {
@@ -19,103 +24,125 @@ function buildTree(entries: Entry[]): TreeNode[] {
     const parent = i >= 0 ? byPath.get(entry.path.slice(0, i)) : undefined;
     (parent ? parent.children : roots).push(node);
   }
-  const sortNodes = (nodes: TreeNode[]): void => {
-    nodes.sort((a, b) => {
-      if (a.entry.isDir !== b.entry.isDir) return a.entry.isDir ? -1 : 1;
-      return a.entry.name.localeCompare(b.entry.name, undefined, { sensitivity: 'base' });
+  const time = (e: Entry): number => new Date(e.mtime as string).getTime() || 0;
+  const cmp = (a: TreeNode, b: TreeNode): number => {
+    if (a.entry.isDir !== b.entry.isDir) return a.entry.isDir ? -1 : 1;
+    const byName = a.entry.name.localeCompare(b.entry.name, undefined, {
+      sensitivity: 'base',
+      numeric: true,
     });
+    if (sort === 'name-desc') return -byName;
+    if (sort === 'modified' || sort === 'created') return time(b.entry) - time(a.entry) || byName;
+    return byName;
+  };
+  const sortNodes = (nodes: TreeNode[]): void => {
+    nodes.sort(cmp);
     nodes.forEach((n) => sortNodes(n.children));
   };
   sortNodes(roots);
   return roots;
 }
 
-function parentDir(path: string | null): string {
-  if (!path) return '';
-  const i = path.lastIndexOf('/');
-  return i >= 0 ? path.slice(0, i) : '';
+/** Dot-files and dot-folders (.nodus, .trash, .git) are not shown in the explorer. */
+export const isHidden = (path: string): boolean => path.split('/').some((s) => s.startsWith('.'));
+
+const parentDir = (path: string | null): string =>
+  path && path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+const display = (e: Entry): string =>
+  e.isDir || !e.name.endsWith('.md') ? e.name : e.name.slice(0, -3);
+
+async function guard(p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (e) {
+    await dialog.error(e);
+  }
 }
 
 export function FileExplorer({ vaultId }: { vaultId: string }) {
   const { t } = useTranslation();
   const { data: entries = [] } = useTree(vaultId);
-  const invalidate = useInvalidate();
-  const openPath = useAppStore((s) => s.openPath);
+  const activePath = useAppStore(selectActivePath);
   const openNote = useAppStore((s) => s.openNote);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const tree = useMemo(() => buildTree(entries), [entries]);
+  const [sort, setSort] = useState<FileSort>('name');
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const tree = useMemo(
+    () =>
+      buildTree(
+        entries.filter((e) => !isHidden(e.path)),
+        sort,
+      ),
+    [entries, sort],
+  );
 
-  const dirForNew = (): string => {
-    const active = entries.find((e) => e.path === openPath);
-    return active?.isDir ? active.path : parentDir(openPath);
+  const dirForNew = (entry?: Entry): string =>
+    entry ? (entry.isDir ? entry.path : parentDir(entry.path)) : parentDir(activePath);
+
+  const newNote = async (dir: string) => {
+    await guard(createNote({ dir }));
   };
-
-  const newNote = async () => {
-    const name = window.prompt(t('sidebar.promptNoteName'), t('sidebar.untitled'));
-    if (!name) return;
-    const dir = dirForNew();
-    const path = (dir ? dir + '/' : '') + (name.endsWith('.md') ? name : name + '.md');
-    try {
-      await api.vault.writeNote(vaultId, path, '', '');
-      await invalidate.tree(vaultId);
-      openNote(path);
-    } catch (e) {
-      window.alert(String(e));
-    }
+  const newFolder = async (dir: string) => {
+    const name = await dialog.prompt(t('sidebar.promptFolderName'));
+    if (name) await guard(createFolder((dir ? dir + '/' : '') + name));
   };
-
-  const newFolder = async () => {
-    const name = window.prompt(t('sidebar.promptFolderName'));
-    if (!name) return;
-    const dir = dirForNew();
-    try {
-      await api.vault.createFolder(vaultId, (dir ? dir + '/' : '') + name);
-      await invalidate.tree(vaultId);
-    } catch (e) {
-      window.alert(String(e));
-    }
-  };
-
   const rename = async (entry: Entry) => {
-    const name = window.prompt(t('sidebar.promptRename'), entry.name);
+    const name = await dialog.prompt(t('sidebar.promptRename'), entry.name);
     if (!name || name === entry.name) return;
     const dir = parentDir(entry.path);
-    const to = (dir ? dir + '/' : '') + name;
-    try {
-      const plan = await api.links.planRename(vaultId, entry.path, to);
-      const notes = plan.files.length;
-      const links = plan.files.reduce((n, f) => n + f.edits.length, 0);
-      if (notes > 0 && !window.confirm(t('sidebar.confirmLinkUpdate', { links, notes }))) return;
-      await api.links.applyRename(vaultId, entry.path, to);
-      await invalidate.tree(vaultId);
-      await invalidate.backlinks(vaultId);
-      if (openPath === entry.path) openNote(to);
-    } catch (e) {
-      window.alert(String(e));
-    }
+    await guard(
+      renameEntry(entry.path, (dir ? dir + '/' : '') + name, ({ notes, links }) =>
+        dialog.confirm(t('sidebar.rename'), t('sidebar.confirmLinkUpdate', { links, notes })),
+      ),
+    );
   };
-
   const trash = async (entry: Entry) => {
-    if (!window.confirm(`${t('sidebar.trash')}: ${entry.path}?`)) return;
-    try {
-      await api.vault.trash(vaultId, entry.path);
-      await invalidate.tree(vaultId);
-      if (openPath && (openPath === entry.path || openPath.startsWith(entry.path + '/'))) {
-        openNote(null);
-      }
-    } catch (e) {
-      window.alert(String(e));
-    }
+    if (!(await dialog.confirm(t('sidebar.trash'), entry.path, true))) return;
+    await guard(deleteEntry(entry.path));
+  };
+  const move = async (from: string, intoDir: string) => {
+    const name = from.slice(from.lastIndexOf('/') + 1);
+    const to = (intoDir ? intoDir + '/' : '') + name;
+    if (to === from || intoDir === from || intoDir.startsWith(from + '/')) return;
+    await guard(
+      renameEntry(from, to, ({ notes, links }) =>
+        dialog.confirm(t('sidebar.rename'), t('sidebar.confirmLinkUpdate', { links, notes })),
+      ),
+    );
   };
 
-  const toggle = (path: string) => {
+  const contextFor = (entry: Entry): MenuItem[] => [
+    ...(!entry.isDir
+      ? [
+          {
+            label: t('sidebar.openNewTab'),
+            onSelect: () => openNote(entry.path, { newTab: true }),
+          },
+          { label: t('sidebar.openRight'), onSelect: () => openNote(entry.path, { split: 'row' }) },
+        ]
+      : []),
+    {
+      label: t('sidebar.newNote'),
+      onSelect: () => void newNote(dirForNew(entry)),
+      separator: !entry.isDir,
+    },
+    { label: t('sidebar.newFolder'), onSelect: () => void newFolder(dirForNew(entry)) },
+    { label: t('sidebar.rename'), onSelect: () => void rename(entry), separator: true },
+    {
+      label: t('sidebar.copyPath'),
+      onSelect: () => void navigator.clipboard?.writeText(entry.path),
+    },
+    { label: t('sidebar.trash'), onSelect: () => void trash(entry), danger: true, separator: true },
+  ];
+
+  const toggle = (path: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
       return next;
     });
-  };
 
   const renderNodes = (nodes: TreeNode[], depth: number) =>
     nodes.map((node) => {
@@ -124,23 +151,37 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
       return (
         <div key={entry.path}>
           <div
-            className={`node ${entry.isDir ? 'folder' : 'file'} ${openPath === entry.path ? 'active' : ''}`}
+            className={`node ${entry.isDir ? 'folder' : 'file'} ${activePath === entry.path ? 'active' : ''} ${dropTarget === entry.path ? 'drop' : ''}`}
             style={{ paddingLeft: 8 + depth * 14 }}
-            onClick={() => (entry.isDir ? toggle(entry.path) : openNote(entry.path))}
-            onContextMenu={(ev) => {
-              ev.preventDefault();
-              const choice = window.prompt(
-                `${entry.path}\n1 = ${t('sidebar.rename')}, 2 = ${t('sidebar.trash')}`,
-              );
-              if (choice === '1') void rename(entry);
-              if (choice === '2') void trash(entry);
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData('application/x-nodus-path', entry.path)}
+            onDragOver={(e) => {
+              if (!entry.isDir || !e.dataTransfer.types.includes('application/x-nodus-path'))
+                return;
+              e.preventDefault();
+              setDropTarget(entry.path);
+            }}
+            onDragLeave={() => setDropTarget((d) => (d === entry.path ? null : d))}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDropTarget(null);
+              const from = e.dataTransfer.getData('application/x-nodus-path');
+              if (from && entry.isDir) void move(from, entry.path);
+            }}
+            onClick={(e) =>
+              entry.isDir
+                ? toggle(entry.path)
+                : openNote(entry.path, { newTab: e.metaKey || e.ctrlKey })
+            }
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ x: e.clientX, y: e.clientY, items: contextFor(entry) });
             }}
             title={entry.path}
           >
             <span className="caret">{entry.isDir ? (isCollapsed ? '▸' : '▾') : ''}</span>
-            <span className="name">
-              {entry.isDir || !entry.name.endsWith('.md') ? entry.name : entry.name.slice(0, -3)}
-            </span>
+            <span className="name">{display(entry)}</span>
           </div>
           {entry.isDir && !isCollapsed && renderNodes(node.children, depth + 1)}
         </div>
@@ -150,14 +191,64 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   return (
     <>
       <div className="toolbar">
-        <button className="icon" onClick={() => void newNote()} title={t('sidebar.newNote')}>
+        <button
+          className="icon"
+          onClick={() => void newNote(dirForNew())}
+          title={t('sidebar.newNote')}
+          aria-label={t('sidebar.newNote')}
+        >
           ＋📝
         </button>
-        <button className="icon" onClick={() => void newFolder()} title={t('sidebar.newFolder')}>
+        <button
+          className="icon"
+          onClick={() => void newFolder(dirForNew())}
+          title={t('sidebar.newFolder')}
+          aria-label={t('sidebar.newFolder')}
+        >
           ＋📁
         </button>
+        <span className="spacer" />
+        <select
+          aria-label={t('sidebar.sort')}
+          value={sort}
+          onChange={(e) => setSort(e.target.value as FileSort)}
+        >
+          <option value="name">{t('sidebar.sortName')}</option>
+          <option value="name-desc">{t('sidebar.sortNameDesc')}</option>
+          <option value="modified">{t('sidebar.sortModified')}</option>
+        </select>
       </div>
-      <div className="content tree">{renderNodes(tree, 0)}</div>
+      <div
+        className={`content tree ${dropTarget === '' ? 'drop' : ''}`}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenu({
+            x: e.clientX,
+            y: e.clientY,
+            items: [
+              { label: t('sidebar.newNote'), onSelect: () => void newNote('') },
+              { label: t('sidebar.newFolder'), onSelect: () => void newFolder('') },
+            ],
+          });
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('application/x-nodus-path')) {
+            e.preventDefault();
+            setDropTarget('');
+          }
+        }}
+        onDragLeave={() => setDropTarget(null)}
+        onDrop={(e) => {
+          const from = e.dataTransfer.getData('application/x-nodus-path');
+          setDropTarget(null);
+          if (from) void move(from, '');
+        }}
+      >
+        {renderNodes(tree, 0)}
+      </div>
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
+      )}
     </>
   );
 }

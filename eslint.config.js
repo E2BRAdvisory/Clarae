@@ -15,6 +15,8 @@ export default tseslint.config(
       '**/*.gen.ts',
       '**/src/gen/**',
       'apps/desktop/frontend/dist/**',
+      '**/test-results/**',
+      '**/playwright-report/**',
     ],
   },
   js.configs.recommended,

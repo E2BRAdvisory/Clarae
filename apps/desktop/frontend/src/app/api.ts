@@ -7,6 +7,8 @@ import * as SearchAPI from '../../wailsjs/go/app/SearchAPI';
 import * as SettingsAPI from '../../wailsjs/go/app/SettingsAPI';
 import * as AuthAPI from '../../wailsjs/go/app/AuthAPI';
 import * as LinksAPI from '../../wailsjs/go/app/LinksAPI';
+import * as TagsAPI from '../../wailsjs/go/app/TagsAPI';
+import * as PropertiesAPI from '../../wailsjs/go/app/PropertiesAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import type { app, auth, links, search, vault } from '../../wailsjs/go/models';
 
@@ -20,9 +22,31 @@ export type Entry = Plain<vault.Entry>;
 export type SearchHit = Plain<search.Hit>;
 export type SearchResults = Omit<Plain<search.Results>, 'hits'> & { hits: SearchHit[] };
 export type SearchSort = 'relevance' | 'name' | 'modified';
+export type BinaryContent = Plain<app.BinaryContent>;
+export type TagCount = Plain<app.TagCount>;
+export type PropertyKey = Plain<app.PropertyKey>;
+export type Suggestion = Plain<links.Suggestion>;
+export type SuggestKind = 'notes' | 'headings' | 'blocks' | 'tags' | 'properties' | 'all';
 export type NoteLink = Plain<links.Link>;
 export type Mention = Plain<links.Mention>;
-export type RenamePlan = Plain<links.Plan>;
+export interface RenameEdit {
+  line: number;
+  start: number;
+  end: number;
+  old: string;
+  new: string;
+}
+export interface RenameFileEdit {
+  path: string;
+  hash: string;
+  edits: RenameEdit[];
+}
+export interface RenamePlan {
+  from: string;
+  to: string;
+  moves: { from: string; to: string }[];
+  files: RenameFileEdit[];
+}
 export type AuthProfile = Plain<auth.Profile>;
 export type AuthState = Omit<Plain<auth.State>, 'profile'> & { profile: AuthProfile };
 
@@ -48,6 +72,14 @@ export const api = {
       VaultAPI.Rename(vaultId, from, to),
     trash: (vaultId: string, path: string): Promise<string> => VaultAPI.Trash(vaultId, path),
     rebuildIndex: (vaultId: string): Promise<void> => VaultAPI.RebuildIndex(vaultId),
+    readConfig: (vaultId: string, name: string): Promise<string> =>
+      VaultAPI.ReadConfig(vaultId, name),
+    writeConfig: (vaultId: string, name: string, content: string): Promise<void> =>
+      VaultAPI.WriteConfig(vaultId, name, content),
+    readBinary: (vaultId: string, path: string): Promise<BinaryContent> =>
+      VaultAPI.ReadBinary(vaultId, path),
+    saveAttachment: (vaultId: string, dir: string, name: string, base64: string): Promise<string> =>
+      VaultAPI.SaveAttachment(vaultId, dir, name, base64),
   },
   search: {
     query: (
@@ -63,7 +95,39 @@ export const api = {
     set: (s: AppSettings): Promise<void> => SettingsAPI.Set(s),
     info: (): Promise<Record<string, string>> => SettingsAPI.Info(),
   },
+  tags: {
+    list: (vaultId: string): Promise<TagCount[]> => TagsAPI.List(vaultId),
+  },
+  properties: {
+    keys: (vaultId: string): Promise<PropertyKey[]> => PropertiesAPI.Keys(vaultId),
+    schema: (vaultId: string): Promise<Record<string, string>> => PropertiesAPI.Schema(vaultId),
+    setType: (vaultId: string, key: string, kind: string): Promise<void> =>
+      PropertiesAPI.SetType(vaultId, key, kind),
+    update: (
+      vaultId: string,
+      path: string,
+      key: string,
+      value: unknown,
+      expectedHash: string,
+    ): Promise<WriteResult> =>
+      PropertiesAPI.Update(vaultId, path, key, JSON.stringify(value), expectedHash),
+    remove: (
+      vaultId: string,
+      path: string,
+      key: string,
+      expectedHash: string,
+    ): Promise<WriteResult> => PropertiesAPI.Remove(vaultId, path, key, expectedHash),
+  },
   links: {
+    resolve: (vaultId: string, from: string, target: string): Promise<string> =>
+      LinksAPI.Resolve(vaultId, from, target),
+    suggest: (
+      vaultId: string,
+      kind: SuggestKind,
+      query: string,
+      notePath = '',
+      limit = 30,
+    ): Promise<Suggestion[]> => LinksAPI.Suggest(vaultId, kind, query, notePath, limit),
     outgoing: (vaultId: string, path: string): Promise<NoteLink[]> =>
       LinksAPI.Outgoing(vaultId, path),
     backlinks: (vaultId: string, path: string): Promise<NoteLink[]> =>

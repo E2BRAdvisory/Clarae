@@ -23,7 +23,20 @@
     "promptFolderName": "Folder name",
     "promptRename": "New name",
     "untitled": "Untitled",
-    "confirmLinkUpdate": "{{links}} link(s) in {{notes}} note(s) will be updated. Continue?"
+    "confirmLinkUpdate": "{{links}} link(s) in {{notes}} note(s) will be updated. Continue?",
+    "tags": "Tags",
+    "left": "Left sidebar",
+    "right": "Right sidebar",
+    "outline": "Outline",
+    "backlinks": "Backlinks",
+    "properties": "Properties",
+    "openNewTab": "Open in new tab",
+    "openRight": "Open to the right",
+    "copyPath": "Copy path",
+    "sort": "Sort files",
+    "sortName": "Name (A→Z)",
+    "sortNameDesc": "Name (Z→A)",
+    "sortModified": "Modified"
   },
   "search": {
     "placeholder": "Search…  (file: path: tag: line: task: [prop:value] /regex/)",
@@ -41,12 +54,20 @@
     "overwrite": "Overwrite",
     "saving": "Saving…",
     "saved": "Saved",
-    "unsaved": "Unsaved changes"
+    "unsaved": "Unsaved changes",
+    "mode": "Editor mode",
+    "mode_live": "Live",
+    "mode_source": "Source",
+    "mode_reading": "Reading",
+    "saveError": "Could not save"
   },
   "status": {
     "indexing": "Indexing {{done}}/{{total}}",
     "indexed": "Index up to date",
-    "words": "{{count}} words"
+    "words": "{{count}} words",
+    "position": "Ln {{line}}, Col {{col}}",
+    "selection": "{{words}} words, {{chars}} chars selected",
+    "chars": "{{count}} characters"
   },
   "settings": {
     "title": "Settings",
@@ -61,7 +82,38 @@
     "about": "About",
     "version": "Version",
     "dataDir": "Data folder",
-    "close": "Close"
+    "close": "Close",
+    "needsVault": "Open a vault to change these settings (they are stored per vault).",
+    "section_general": "General",
+    "section_editor": "Editor",
+    "section_files": "Files & links",
+    "section_appearance": "Appearance",
+    "section_hotkeys": "Hotkeys",
+    "section_cloud": "Cloud",
+    "section_about": "About",
+    "defaultMode": "Default note mode",
+    "lineNumbers": "Line numbers",
+    "wrap": "Wrap long lines",
+    "readableWidth": "Readable line width",
+    "spellcheck": "Spell check",
+    "autoPair": "Auto-close brackets",
+    "smartPaste": "Smart paste (links, images, rich text)",
+    "foldHeadings": "Fold headings",
+    "fontSize": "Editor font size",
+    "tabSize": "Tab size",
+    "linkFormat": "New link format",
+    "linkShortest": "Shortest path when possible",
+    "linkPath": "Absolute path in vault",
+    "linkRelative": "Relative path to the note",
+    "newNoteFolder": "Folder for new notes",
+    "attachmentsFolder": "Folder for attachments",
+    "trashMode": "Deleted files go to",
+    "trashSystem": "System trash",
+    "trashVault": "Vault .trash folder",
+    "accent": "Accent color",
+    "interfaceFont": "Interface font",
+    "interfaceFontSize": "Interface font size",
+    "zoom": "Zoom"
   },
   "cloud": {
     "serverUrl": "Server address",
@@ -80,5 +132,108 @@
     "none": "No backlinks",
     "mentions": "Unlinked mentions",
     "line": "line {{n}}"
+  },
+  "tags": {
+    "none": "No tags in this vault"
+  },
+  "outline": {
+    "title": "Outline",
+    "none": "Open a note to see its outline",
+    "empty": "No headings"
+  },
+  "properties": {
+    "title": "Properties",
+    "vault": "Properties in this vault",
+    "none": "No properties yet",
+    "add": "Add property",
+    "name": "Property name",
+    "remove": "Remove property",
+    "type": "Type of {{key}}",
+    "kind": {
+      "text": "Text",
+      "list": "List",
+      "number": "Number",
+      "checkbox": "Checkbox",
+      "date": "Date",
+      "datetime": "Date & time"
+    }
+  },
+  "tabs": {
+    "close": "Close",
+    "closeOthers": "Close other tabs",
+    "splitRight": "Split right",
+    "splitDown": "Split down",
+    "link": "Link with other panes",
+    "unlink": "Unlink pane"
+  },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Cancel"
+  },
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Type a command…",
+    "none": "No matching command"
+  },
+  "switcher": {
+    "title": "Quick switcher",
+    "placeholder": "Find or create a note…",
+    "create": "Create \"{{name}}\""
+  },
+  "hotkeys": {
+    "filter": "Filter commands…",
+    "conflict": "Another command uses this hotkey",
+    "remove": "Remove hotkey",
+    "press": "Press keys…",
+    "reset": "Restore default"
+  },
+  "commands": {
+    "note_new": "New note",
+    "note_new_tab": "New note in a new tab",
+    "note_rename": "Rename current note",
+    "note_delete": "Delete current note",
+    "vault_close": "Close vault",
+    "index_rebuild": "Rebuild index",
+    "switcher_open": "Quick switcher",
+    "palette_open": "Command palette",
+    "search_vault": "Search in vault",
+    "tab_next": "Next tab",
+    "tab_prev": "Previous tab",
+    "tab_close": "Close tab",
+    "pane_close": "Close pane",
+    "mode_toggle_reading": "Toggle reading view",
+    "mode_toggle_source": "Toggle source mode",
+    "mode_live": "Live Preview mode",
+    "mode_source": "Source mode",
+    "mode_reading": "Reading mode",
+    "pane_split_right": "Split right",
+    "pane_split_down": "Split down",
+    "pane_link": "Link/unlink pane",
+    "sidebar_left": "Toggle left sidebar",
+    "sidebar_right": "Toggle right sidebar",
+    "sidebar_outline": "Show outline",
+    "sidebar_backlinks": "Show backlinks",
+    "sidebar_tags": "Show tags",
+    "sidebar_files": "Show files",
+    "editor_bold": "Bold",
+    "editor_italic": "Italic",
+    "editor_highlight": "Highlight",
+    "editor_strike": "Strikethrough",
+    "editor_code": "Inline code",
+    "editor_comment": "Comment",
+    "editor_link": "Insert link",
+    "editor_wikilink": "Insert wikilink",
+    "editor_heading_1": "Heading 1",
+    "editor_heading_2": "Heading 2",
+    "editor_heading_3": "Heading 3",
+    "editor_heading_4": "Heading 4",
+    "editor_heading_5": "Heading 5",
+    "editor_heading_6": "Heading 6",
+    "editor_bullet": "Bulleted list",
+    "editor_numbered": "Numbered list",
+    "editor_quote": "Quote",
+    "editor_task": "Toggle task",
+    "settings_open": "Open settings",
+    "settings_hotkeys": "Open hotkeys settings"
   }
 }

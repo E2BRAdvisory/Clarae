@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SearchSort } from '../app/api';
 import { useAppStore } from '../state/store';
@@ -6,22 +6,29 @@ import { useSearch } from '../state/queries';
 
 export function SearchPanel({ vaultId }: { vaultId: string }) {
   const { t } = useTranslation();
-  const [q, setQ] = useState('');
+  const q = useAppStore((s) => s.searchQuery);
+  const focus = useAppStore((s) => s.searchFocus);
   const [sort, setSort] = useState<SearchSort>('relevance');
   const { data, error, isFetched } = useSearch(vaultId, q, sort);
   const openNote = useAppStore((s) => s.openNote);
+  const input = useRef<HTMLInputElement>(null);
   const hits = data?.hits ?? [];
   const parseError = error instanceof Error ? error.message : error ? String(error) : '';
+
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, [focus]);
 
   return (
     <div className="search">
       <input
+        ref={input}
         type="search"
         placeholder={t('search.placeholder')}
         aria-label={t('search.placeholder')}
         value={q}
-        onChange={(e) => setQ(e.target.value)}
-        autoFocus
+        onChange={(e) => useAppStore.setState({ searchQuery: e.target.value })}
       />
       <div className="row">
         <select
@@ -46,7 +53,17 @@ export function SearchPanel({ vaultId }: { vaultId: string }) {
       )}
       <div>
         {hits.map((h) => (
-          <div key={h.path} className="hit" onClick={() => openNote(h.path)} title={h.path}>
+          <div
+            key={h.path}
+            className="hit"
+            onClick={(e) =>
+              openNote(h.path, {
+                newTab: e.metaKey || e.ctrlKey,
+                ...(h.line > 0 ? { line: h.line } : {}),
+              })
+            }
+            title={h.path}
+          >
             <div className="title">{h.title}</div>
             {h.snippet && (
               <div className="snippet">

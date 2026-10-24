@@ -23,7 +23,20 @@
     "promptFolderName": "Nome della cartella",
     "promptRename": "Nuovo nome",
     "untitled": "Senza titolo",
-    "confirmLinkUpdate": "Verranno aggiornati {{links}} link in {{notes}} nota/e. Continuare?"
+    "confirmLinkUpdate": "Verranno aggiornati {{links}} link in {{notes}} nota/e. Continuare?",
+    "tags": "Tag",
+    "left": "Barra laterale sinistra",
+    "right": "Barra laterale destra",
+    "outline": "Struttura",
+    "backlinks": "Backlink",
+    "properties": "Proprietà",
+    "openNewTab": "Apri in una nuova scheda",
+    "openRight": "Apri a destra",
+    "copyPath": "Copia percorso",
+    "sort": "Ordina file",
+    "sortName": "Nome (A→Z)",
+    "sortNameDesc": "Nome (Z→A)",
+    "sortModified": "Modificato"
   },
   "search": {
     "placeholder": "Cerca…  (file: path: tag: line: task: [prop:valore] /regex/)",
@@ -41,12 +54,20 @@
     "overwrite": "Sovrascrivi",
     "saving": "Salvataggio…",
     "saved": "Salvato",
-    "unsaved": "Modifiche non salvate"
+    "unsaved": "Modifiche non salvate",
+    "mode": "Modalità editor",
+    "mode_live": "Live",
+    "mode_source": "Sorgente",
+    "mode_reading": "Lettura",
+    "saveError": "Salvataggio non riuscito"
   },
   "status": {
     "indexing": "Indicizzazione {{done}}/{{total}}",
     "indexed": "Indice aggiornato",
-    "words": "{{count}} parole"
+    "words": "{{count}} parole",
+    "position": "Rg {{line}}, Col {{col}}",
+    "selection": "{{words}} parole, {{chars}} caratteri selezionati",
+    "chars": "{{count}} caratteri"
   },
   "settings": {
     "title": "Impostazioni",
@@ -61,7 +82,38 @@
     "about": "Informazioni",
     "version": "Versione",
     "dataDir": "Cartella dati",
-    "close": "Chiudi"
+    "close": "Chiudi",
+    "needsVault": "Apri un vault per modificare queste impostazioni (sono salvate per vault).",
+    "section_general": "Generale",
+    "section_editor": "Editor",
+    "section_files": "File e link",
+    "section_appearance": "Aspetto",
+    "section_hotkeys": "Scorciatoie",
+    "section_cloud": "Cloud",
+    "section_about": "Informazioni",
+    "defaultMode": "Modalità predefinita delle note",
+    "lineNumbers": "Numeri di riga",
+    "wrap": "A capo automatico",
+    "readableWidth": "Larghezza di riga leggibile",
+    "spellcheck": "Controllo ortografico",
+    "autoPair": "Chiudi automaticamente le parentesi",
+    "smartPaste": "Incolla intelligente (link, immagini, testo formattato)",
+    "foldHeadings": "Comprimi i titoli",
+    "fontSize": "Dimensione del carattere dell'editor",
+    "tabSize": "Dimensione tabulazione",
+    "linkFormat": "Formato dei nuovi link",
+    "linkShortest": "Percorso più breve se possibile",
+    "linkPath": "Percorso assoluto nel vault",
+    "linkRelative": "Percorso relativo alla nota",
+    "newNoteFolder": "Cartella per le nuove note",
+    "attachmentsFolder": "Cartella degli allegati",
+    "trashMode": "I file eliminati vanno nel",
+    "trashSystem": "Cestino di sistema",
+    "trashVault": "Cartella .trash del vault",
+    "accent": "Colore d'accento",
+    "interfaceFont": "Carattere dell'interfaccia",
+    "interfaceFontSize": "Dimensione del carattere dell'interfaccia",
+    "zoom": "Zoom"
   },
   "cloud": {
     "serverUrl": "Indirizzo del server",
@@ -80,5 +132,108 @@
     "none": "Nessun backlink",
     "mentions": "Menzioni non collegate",
     "line": "riga {{n}}"
+  },
+  "tags": {
+    "none": "Nessun tag in questo vault"
+  },
+  "outline": {
+    "title": "Struttura",
+    "none": "Apri una nota per vederne la struttura",
+    "empty": "Nessun titolo"
+  },
+  "properties": {
+    "title": "Proprietà",
+    "vault": "Proprietà del vault",
+    "none": "Ancora nessuna proprietà",
+    "add": "Aggiungi proprietà",
+    "name": "Nome della proprietà",
+    "remove": "Rimuovi proprietà",
+    "type": "Tipo di {{key}}",
+    "kind": {
+      "text": "Testo",
+      "list": "Elenco",
+      "number": "Numero",
+      "checkbox": "Casella",
+      "date": "Data",
+      "datetime": "Data e ora"
+    }
+  },
+  "tabs": {
+    "close": "Chiudi",
+    "closeOthers": "Chiudi le altre schede",
+    "splitRight": "Dividi a destra",
+    "splitDown": "Dividi in basso",
+    "link": "Collega agli altri pannelli",
+    "unlink": "Scollega pannello"
+  },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Annulla"
+  },
+  "palette": {
+    "title": "Palette comandi",
+    "placeholder": "Scrivi un comando…",
+    "none": "Nessun comando corrispondente"
+  },
+  "switcher": {
+    "title": "Selettore rapido",
+    "placeholder": "Trova o crea una nota…",
+    "create": "Crea \"{{name}}\""
+  },
+  "hotkeys": {
+    "filter": "Filtra comandi…",
+    "conflict": "Un altro comando usa questa scorciatoia",
+    "remove": "Rimuovi scorciatoia",
+    "press": "Premi i tasti…",
+    "reset": "Ripristina predefinito"
+  },
+  "commands": {
+    "note_new": "Nuova nota",
+    "note_new_tab": "Nuova nota in una nuova scheda",
+    "note_rename": "Rinomina nota corrente",
+    "note_delete": "Elimina nota corrente",
+    "vault_close": "Chiudi vault",
+    "index_rebuild": "Ricostruisci indice",
+    "switcher_open": "Selettore rapido",
+    "palette_open": "Palette comandi",
+    "search_vault": "Cerca nel vault",
+    "tab_next": "Scheda successiva",
+    "tab_prev": "Scheda precedente",
+    "tab_close": "Chiudi scheda",
+    "pane_close": "Chiudi pannello",
+    "mode_toggle_reading": "Attiva/disattiva vista lettura",
+    "mode_toggle_source": "Attiva/disattiva modalità sorgente",
+    "mode_live": "Modalità Live Preview",
+    "mode_source": "Modalità sorgente",
+    "mode_reading": "Modalità lettura",
+    "pane_split_right": "Dividi a destra",
+    "pane_split_down": "Dividi in basso",
+    "pane_link": "Collega/scollega pannello",
+    "sidebar_left": "Mostra/nascondi barra sinistra",
+    "sidebar_right": "Mostra/nascondi barra destra",
+    "sidebar_outline": "Mostra struttura",
+    "sidebar_backlinks": "Mostra backlink",
+    "sidebar_tags": "Mostra tag",
+    "sidebar_files": "Mostra file",
+    "editor_bold": "Grassetto",
+    "editor_italic": "Corsivo",
+    "editor_highlight": "Evidenzia",
+    "editor_strike": "Barrato",
+    "editor_code": "Codice inline",
+    "editor_comment": "Commento",
+    "editor_link": "Inserisci link",
+    "editor_wikilink": "Inserisci wikilink",
+    "editor_heading_1": "Titolo 1",
+    "editor_heading_2": "Titolo 2",
+    "editor_heading_3": "Titolo 3",
+    "editor_heading_4": "Titolo 4",
+    "editor_heading_5": "Titolo 5",
+    "editor_heading_6": "Titolo 6",
+    "editor_bullet": "Elenco puntato",
+    "editor_numbered": "Elenco numerato",
+    "editor_quote": "Citazione",
+    "editor_task": "Attiva/disattiva attività",
+    "settings_open": "Apri impostazioni",
+    "settings_hotkeys": "Apri impostazioni scorciatoie"
   }
 }

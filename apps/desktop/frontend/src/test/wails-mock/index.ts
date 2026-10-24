@@ -1,16 +1,25 @@
 // In-memory implementation of the Wails bindings used by unit tests (Vitest)
 // and by Playwright runs in a plain browser, where there is no Go backend.
+// It mirrors the observable behavior of the Go backend closely enough for UI
+// work: link resolution, backlinks, search, suggestions, properties, rename
+// with link updates, attachments and vault settings files.
 // Install with installWailsMock() before the application modules are used.
+import { parseDocument } from 'yaml';
+import { extract, splitFrontmatter } from '@nodus/markdown';
 import type {
   AppSettings,
   AuthState,
-  Mention,
-  NoteLink,
-  RenamePlan,
+  BinaryContent,
   Entry,
+  Mention,
   NoteContent,
+  NoteLink,
+  PropertyKey,
+  RenamePlan,
   SearchHit,
   SearchResults,
+  Suggestion,
+  TagCount,
   VaultInfo,
   WriteResult,
 } from '../../app/api';
@@ -19,7 +28,10 @@ type Handler = (...data: unknown[]) => void;
 
 export interface MockVault {
   info: VaultInfo;
-  files: Map<string, string>; // path -> content
+  /** Text files: path -> content. Includes .nodus/*.json settings. */
+  files: Map<string, string>;
+  /** Binary attachments: path -> base64. */
+  binaries: Map<string, string>;
 }
 
 export interface WailsMock {
@@ -28,9 +40,11 @@ export interface WailsMock {
   settings: AppSettings;
   auth: AuthState;
   emit: (name: string, payload: unknown) => void;
+  /** Handlers registered through EventsOn, for assertions. */
+  listeners: (name: string) => number;
 }
 
-function hashOf(s: string): string {
+export function hashOf(s: string): string {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -39,34 +53,103 @@ function hashOf(s: string): string {
   return h.toString(16).padStart(8, '0').repeat(8);
 }
 
+const isNote = (p: string): boolean => p.endsWith('.md');
+const baseName = (p: string): string => p.slice(p.lastIndexOf('/') + 1);
+const stem = (p: string): string => baseName(p).replace(/\.md$/, '');
+const dirOf = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+const lower = (s: string): string => s.toLowerCase();
+
 function entriesOf(v: MockVault): Entry[] {
   const out: Entry[] = [];
   const dirs = new Set<string>();
-  for (const path of v.files.keys()) {
+  // Device-local files inside .nodus/ are not part of the vault tree (pathrules.IsExcluded).
+  const all = [...v.files.keys(), ...v.binaries.keys()].filter(
+    (p) =>
+      !/^\.nodus\/(workspace[^/]*\.json|(index|sync|app)\.db[^/]*|cache\/.*|snapshots\/.*)$/.test(
+        p,
+      ),
+  );
+  for (const path of all) {
     const parts = path.split('/');
     for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
   }
   for (const d of dirs) {
-    out.push({
-      path: d,
-      name: d.split('/').pop() ?? d,
-      isDir: true,
-      kind: '',
-      size: 0,
-      mtime: new Date(),
-    });
+    out.push({ path: d, name: baseName(d), isDir: true, kind: '', size: 0, mtime: new Date() });
   }
-  for (const [path, content] of v.files) {
+  for (const path of all) {
+    const text = v.files.get(path);
     out.push({
       path,
-      name: path.split('/').pop() ?? path,
+      name: baseName(path),
       isDir: false,
-      kind: path.endsWith('.md') ? 'md' : 'other',
-      size: content.length,
+      kind: isNote(path) ? 'md' : 'other',
+      size: text?.length ?? 0,
       mtime: new Date(),
     });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function fuzzy(query: string, text: string): number {
+  const q = lower(query.trim());
+  const t = lower(text);
+  if (!q) return 1;
+  if (t === q) return 1000;
+  if (t.startsWith(q)) return 800;
+  if (t.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q))) return 600;
+  if (t.includes(q)) return 400;
+  let i = 0;
+  for (const c of q) {
+    i = t.indexOf(c, i);
+    if (i < 0) return 0;
+    i++;
+  }
+  return 100;
+}
+
+/** Resolves a link target like internal/links.Resolver (shortest path, aliases). */
+function resolve(v: MockVault, from: string, target: string): string {
+  const t = target.trim().replace(/^\//, '');
+  if (!t) return from;
+  const paths = [...v.files.keys(), ...v.binaries.keys()];
+  const byLower = new Map(paths.map((p) => [lower(p), p]));
+  if (t.startsWith('./') || t.startsWith('../')) {
+    const parts = [...(dirOf(from) ? dirOf(from).split('/') : []), ...t.split('/')];
+    const stack: string[] = [];
+    for (const p of parts) {
+      if (p === '..') stack.pop();
+      else if (p !== '.') stack.push(p);
+    }
+    const joined = stack.join('/');
+    return byLower.get(lower(joined)) ?? byLower.get(lower(joined + '.md')) ?? '';
+  }
+  for (const c of [t, t + '.md']) if (byLower.has(lower(c))) return byLower.get(lower(c)) ?? '';
+  const dir = dirOf(from);
+  if (dir) {
+    for (const c of [`${dir}/${t}`, `${dir}/${t}.md`]) {
+      if (byLower.has(lower(c))) return byLower.get(lower(c)) ?? '';
+    }
+  }
+  const key = lower(t.replace(/\.md$/, '').split('/').pop() ?? t);
+  let cands = paths.filter((p) => (isNote(p) ? lower(stem(p)) : lower(baseName(p))) === key);
+  if (t.includes('/')) {
+    const suffix = '/' + lower(t.replace(/\.md$/, ''));
+    cands = cands.filter((p) => ('/' + lower(p.replace(/\.md$/, ''))).endsWith(suffix));
+  }
+  if (cands.length === 0) {
+    cands = [...v.files.entries()]
+      .filter(
+        ([p, c]) => isNote(p) && extract(stem(p), c).aliases.some((a) => lower(a) === lower(t)),
+      )
+      .map(([p]) => p);
+  }
+  cands.sort(
+    (a, b) =>
+      Number(dirOf(b) === dir) - Number(dirOf(a) === dir) ||
+      a.length - b.length ||
+      a.localeCompare(b),
+  );
+  return cands[0] ?? '';
 }
 
 export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
@@ -74,7 +157,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const mock: WailsMock = {
     vaults: seed?.vaults ?? new Map<string, MockVault>(),
     recent: seed?.recent ?? [],
-    settings: seed?.settings ?? { language: '', theme: 'system' },
+    settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
     auth: seed?.auth ?? {
       status: 'signed_out',
       serverUrl: '',
@@ -85,6 +168,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     emit: (name, payload) => {
       for (const h of handlers.get(name) ?? []) h(payload);
     },
+    listeners: (name) => handlers.get(name)?.size ?? 0,
   };
   const vaultOf = (id: string): MockVault => {
     const v = mock.vaults.get(id);
@@ -92,6 +176,28 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     return v;
   };
   const reject = (msg: string): Promise<never> => Promise.reject(new Error(msg));
+  const changed = (id: string, paths: string[]): void =>
+    mock.emit('vault:file-changed', { vaultId: id, paths });
+
+  const outgoing = (v: MockVault, path: string): NoteLink[] => {
+    const src = v.files.get(path);
+    if (src === undefined) return [];
+    return extract(stem(path), src)
+      .links.filter((l) => l.kind !== 'external')
+      .map((l) => {
+        const res = resolve(v, path, l.target);
+        return {
+          path: res,
+          line: l.line,
+          raw: l.target,
+          heading: l.heading,
+          block: l.block,
+          alias: l.alias,
+          embed: l.embed,
+          resolved: res !== '',
+        };
+      });
+  };
 
   const VaultAPI = {
     ListRecent: (): Promise<VaultInfo[]> => Promise.resolve(mock.recent),
@@ -103,13 +209,15 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (!mock.vaults.has(id)) {
         const info: VaultInfo = {
           id,
-          name: path.split('/').pop() ?? path,
+          name: baseName(path) || path,
           path,
           lastOpenedAt: new Date(),
         };
-        mock.vaults.set(id, { info, files: new Map() });
+        mock.vaults.set(id, { info, files: new Map(), binaries: new Map() });
       }
-      return Promise.resolve(vaultOf(id).info);
+      const info = vaultOf(id).info;
+      if (!mock.recent.some((r) => r.path === info.path)) mock.recent.unshift(info);
+      return Promise.resolve(info);
     },
     CloseVault: (id: string): Promise<void> => {
       mock.vaults.delete(id);
@@ -134,42 +242,370 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (expectedHash !== '' && (current === undefined || hashOf(current) !== expectedHash))
         return reject('conflict: file changed on disk');
       v.files.set(path, content);
+      changed(id, [path]);
       return Promise.resolve({ path, hash: hashOf(content), size: content.length });
     },
     CreateFolder: (): Promise<void> => Promise.resolve(),
-    Rename: (id: string, from: string, to: string): Promise<void> => {
+    Rename: (id: string, from: string, to: string): Promise<void> => VaultAPI.rename(id, from, to),
+    rename: (id: string, from: string, to: string): Promise<void> => {
       const v = vaultOf(id);
-      const content = v.files.get(from);
-      if (content === undefined) return reject('not-found: no such file');
-      v.files.delete(from);
-      v.files.set(to, content);
+      const moves = [...v.files.keys()].filter((p) => p === from || p.startsWith(from + '/'));
+      if (v.files.has(from) === false && moves.length === 0 && !v.binaries.has(from))
+        return reject('not-found: no such file');
+      for (const p of moves) {
+        const content = v.files.get(p) ?? '';
+        v.files.delete(p);
+        v.files.set(to + p.slice(from.length), content);
+      }
+      const bin = v.binaries.get(from);
+      if (bin !== undefined) {
+        v.binaries.delete(from);
+        v.binaries.set(to, bin);
+      }
+      changed(id, [from, to]);
       return Promise.resolve();
     },
     Trash: (id: string, path: string): Promise<string> => {
-      vaultOf(id).files.delete(path);
+      const v = vaultOf(id);
+      for (const p of [...v.files.keys()])
+        if (p === path || p.startsWith(path + '/')) v.files.delete(p);
+      v.binaries.delete(path);
+      changed(id, [path]);
       return Promise.resolve('.trash/' + path);
     },
     RebuildIndex: (): Promise<void> => Promise.resolve(),
+    ReadConfig: (id: string, name: string): Promise<string> =>
+      Promise.resolve(vaultOf(id).files.get('.nodus/' + name) ?? ''),
+    WriteConfig: (id: string, name: string, content: string): Promise<void> => {
+      vaultOf(id).files.set('.nodus/' + name, content);
+      return Promise.resolve();
+    },
+    ReadBinary: (id: string, path: string): Promise<BinaryContent> => {
+      const data = vaultOf(id).binaries.get(path);
+      if (data === undefined) return reject('not-found: no such file');
+      const ext = path.split('.').pop()?.toLowerCase() ?? '';
+      const mime =
+        (
+          {
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            gif: 'image/gif',
+            svg: 'image/svg+xml',
+            pdf: 'application/pdf',
+          } as Record<string, string>
+        )[ext] ?? 'application/octet-stream';
+      return Promise.resolve({ path, mime, data, size: data.length });
+    },
+    SaveAttachment: (id: string, dir: string, name: string, base64: string): Promise<string> => {
+      const v = vaultOf(id);
+      let candidate = dir ? `${dir}/${name}` : name;
+      const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+      for (let i = 1; v.binaries.has(candidate); i++) {
+        candidate = `${dir ? dir + '/' : ''}${name.slice(0, name.length - ext.length)} ${i}${ext}`;
+      }
+      v.binaries.set(candidate, base64);
+      changed(id, [candidate]);
+      return Promise.resolve(candidate);
+    },
   };
+
   const SearchAPI = {
-    Query: (id: string, q: string): Promise<SearchResults> => {
+    Query: (id: string, q: string, _sort: string, limit: number): Promise<SearchResults> => {
+      const v = vaultOf(id);
+      const terms = q.split(/\s+/).filter(Boolean);
       const hits: SearchHit[] = [];
-      for (const [path, content] of vaultOf(id).files) {
-        if (content.toLowerCase().includes(q.toLowerCase())) {
-          hits.push({
-            path,
-            title: path.replace(/\.md$/, ''),
-            snippet: content.slice(0, 80),
-            line: 1,
-            matches: 1,
+      for (const [path, content] of v.files) {
+        if (!isNote(path)) continue;
+        let ok = terms.length > 0;
+        let snippet = '';
+        let line = 0;
+        for (const term of terms) {
+          const neg = term.startsWith('-');
+          const t = lower(neg ? term.slice(1) : term);
+          let match: boolean;
+          if (t.startsWith('tag:'))
+            match = extract(stem(path), content).tags.some(
+              (x) => lower(x.name) === t.slice(4).replace(/^#/, ''),
+            );
+          else if (t.startsWith('file:')) match = lower(baseName(path)).includes(t.slice(5));
+          else if (t.startsWith('path:')) match = lower(path).includes(t.slice(5));
+          else match = lower(path).includes(t) || lower(content).includes(t);
+          if (neg ? match : !match) {
+            ok = false;
+            break;
+          }
+          if (!neg && !snippet) {
+            const lines = content.split('\n');
+            const idx = lines.findIndex((l) => lower(l).includes(t.replace(/^\w+:/, '')));
+            if (idx >= 0) {
+              snippet = (lines[idx] ?? '').trim();
+              line = idx + 1;
+            }
+          }
+        }
+        if (ok) hits.push({ path, title: stem(path), snippet, line, matches: 1, score: 1 });
+      }
+      const sliced = hits.slice(0, limit || 100);
+      return Promise.resolve({ hits: sliced, total: hits.length, explain: [q] });
+    },
+    Explain: (q: string): Promise<string[]> => Promise.resolve([q]),
+  };
+
+  const LinksAPI = {
+    Outgoing: (id: string, path: string): Promise<NoteLink[]> =>
+      Promise.resolve(outgoing(vaultOf(id), path)),
+    Backlinks: (id: string, path: string): Promise<NoteLink[]> => {
+      const v = vaultOf(id);
+      const out: NoteLink[] = [];
+      for (const p of [...v.files.keys()].filter(isNote).sort()) {
+        if (p === path) continue;
+        for (const l of outgoing(v, p)) if (l.path === path) out.push({ ...l, path: p });
+      }
+      return Promise.resolve(out);
+    },
+    UnlinkedMentions: (id: string, path: string): Promise<Mention[]> => {
+      const v = vaultOf(id);
+      const name = stem(path);
+      if (name.length < 3) return Promise.resolve([]);
+      // Like the Go side: notes that already link here are not "unlinked" mentions.
+      const linked = new Set(
+        [...v.files.keys()].filter((p) => isNote(p) && outgoing(v, p).some((l) => l.path === path)),
+      );
+      return Promise.resolve(
+        [...v.files.entries()]
+          .filter(
+            ([p, c]) => isNote(p) && p !== path && !linked.has(p) && lower(c).includes(lower(name)),
+          )
+          .map(([p, c]) => ({
+            path: p,
+            snippet: (c.split('\n').find((l) => lower(l).includes(lower(name))) ?? '').trim(),
+          })),
+      );
+    },
+    Resolve: (id: string, from: string, target: string): Promise<string> =>
+      Promise.resolve(resolve(vaultOf(id), from, target)),
+    Suggest: (
+      id: string,
+      kind: string,
+      query: string,
+      notePath: string,
+      limit: number,
+    ): Promise<Suggestion[]> => {
+      const v = vaultOf(id);
+      const out: Suggestion[] = [];
+      const notes = [...v.files.entries()].filter(([p]) => isNote(p));
+      if (kind === 'notes' || kind === 'all') {
+        for (const [p, c] of notes) {
+          const s = Math.max(fuzzy(query, stem(p)), Math.floor(fuzzy(query, p) / 2));
+          if (s > 0)
+            out.push({
+              kind: 'note',
+              label: stem(p),
+              path: p,
+              detail: dirOf(p),
+              line: 0,
+              score: s,
+            });
+          for (const a of extract(stem(p), c).aliases) {
+            const sa = fuzzy(query, a);
+            if (sa > 0)
+              out.push({ kind: 'alias', label: a, path: p, detail: stem(p), line: 0, score: sa });
+          }
+        }
+      }
+      if (kind === 'headings' || (kind === 'all' && query.length >= 2)) {
+        for (const [p, c] of notes) {
+          if (notePath && p !== notePath) continue;
+          for (const h of extract(stem(p), c).headings) {
+            const s = fuzzy(query, h.text);
+            if (s > 0)
+              out.push({
+                kind: 'heading',
+                label: h.text,
+                path: p,
+                detail: '#'.repeat(h.level),
+                line: h.line,
+                score: s,
+              });
+          }
+        }
+      }
+      if (kind === 'blocks') {
+        const c = v.files.get(notePath) ?? '';
+        const lines = c.split('\n');
+        for (const b of extract(stem(notePath), c).blockIds) {
+          out.push({
+            kind: 'block',
+            label: b.id,
+            path: notePath,
+            detail: (lines[b.line - 1] ?? '').replace(`^${b.id}`, '').trim(),
+            line: b.line,
             score: 1,
           });
         }
       }
-      return Promise.resolve({ hits, total: hits.length, explain: [q] });
+      if (kind === 'tags') {
+        const counts = new Map<string, number>();
+        for (const [p, c] of notes)
+          for (const t of extract(stem(p), c).tags)
+            counts.set(t.name, (counts.get(t.name) ?? 0) + 1);
+        for (const [name, n] of counts) {
+          const s = fuzzy(query.replace(/^#/, ''), name);
+          if (s > 0)
+            out.push({ kind: 'tag', label: name, path: '', detail: String(n), line: 0, score: s });
+        }
+      }
+      out.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+      return Promise.resolve(out.slice(0, limit || 30));
     },
-    Explain: (q: string): Promise<string[]> => Promise.resolve([q]),
+    PlanRename: (id: string, from: string, to: string): Promise<RenamePlan> =>
+      Promise.resolve(planRename(vaultOf(id), from, to)),
+    ApplyRename: (id: string, from: string, to: string): Promise<RenamePlan> => {
+      const v = vaultOf(id);
+      const plan = planRename(v, from, to);
+      for (const f of plan.files) {
+        let c = v.files.get(f.path) ?? '';
+        for (const e of [...f.edits].sort((a, b) => b.start - a.start))
+          c = c.slice(0, e.start) + e.new + c.slice(e.end);
+        v.files.set(f.path, c);
+      }
+      void VaultAPI.rename(id, from, to);
+      return Promise.resolve(plan);
+    },
   };
+
+  function planRename(v: MockVault, from: string, to: string): RenamePlan {
+    const moved = new Map<string, string>();
+    for (const p of [...v.files.keys(), ...v.binaries.keys()]) {
+      if (p === from) moved.set(p, to);
+      else if (p.startsWith(from + '/')) moved.set(p, to + p.slice(from.length));
+    }
+    const files: RenamePlan['files'] = [];
+    for (const [p, content] of v.files) {
+      if (!isNote(p)) continue;
+      const edits: RenamePlan['files'][number]['edits'] = [];
+      for (const l of extract(stem(p), content).links) {
+        if (l.kind === 'external' || !l.target) continue;
+        const old = resolve(v, p, l.target);
+        const np = moved.get(old);
+        if (!old || !np) continue;
+        const text = isNote(np) ? stem(np) : baseName(np);
+        if (content.slice(l.targetStart, l.targetEnd) !== text) {
+          edits.push({
+            line: l.line,
+            start: l.targetStart,
+            end: l.targetEnd,
+            old: content.slice(l.targetStart, l.targetEnd),
+            new: text,
+          });
+        }
+      }
+      if (edits.length) files.push({ path: p, hash: hashOf(content), edits });
+    }
+    return { from, to, moves: [...moved].map(([f, t]) => ({ from: f, to: t })), files };
+  }
+
+  const TagsAPI = {
+    List: (id: string): Promise<TagCount[]> => {
+      const v = vaultOf(id);
+      const counts = new Map<string, number>();
+      for (const [p, c] of v.files) {
+        if (!isNote(p)) continue;
+        for (const name of new Set(extract(stem(p), c).tags.map((t) => t.name)))
+          counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+      return Promise.resolve(
+        [...counts]
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => lower(a.name).localeCompare(lower(b.name))),
+      );
+    },
+  };
+
+  const schemaOf = (v: MockVault): Record<string, string> => {
+    try {
+      return JSON.parse(v.files.get('.nodus/types.json') || '{}') as Record<string, string>;
+    } catch {
+      return {};
+    }
+  };
+  const inferKind = (x: unknown): string =>
+    typeof x === 'boolean'
+      ? 'checkbox'
+      : typeof x === 'number'
+        ? 'number'
+        : Array.isArray(x)
+          ? 'list'
+          : typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x)
+            ? 'date'
+            : typeof x === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(x)
+              ? 'datetime'
+              : 'text';
+
+  const PropertiesAPI = {
+    Keys: (id: string): Promise<PropertyKey[]> => {
+      const v = vaultOf(id);
+      const schema = schemaOf(v);
+      const keys = new Map<string, PropertyKey>();
+      for (const [p, c] of v.files) {
+        if (!isNote(p)) continue;
+        for (const [k, val] of Object.entries(extract(stem(p), c).properties)) {
+          const cur = keys.get(lower(k));
+          if (cur) cur.count++;
+          else keys.set(lower(k), { key: k, kind: schema[k] ?? inferKind(val), count: 1 });
+        }
+      }
+      return Promise.resolve(
+        [...keys.values()].sort((a, b) => lower(a.key).localeCompare(lower(b.key))),
+      );
+    },
+    Schema: (id: string): Promise<Record<string, string>> => Promise.resolve(schemaOf(vaultOf(id))),
+    SetType: (id: string, key: string, kind: string): Promise<void> => {
+      const v = vaultOf(id);
+      const s = schemaOf(v);
+      if (kind) s[key] = kind;
+      else delete s[key];
+      v.files.set('.nodus/types.json', JSON.stringify(s, null, 2));
+      return Promise.resolve();
+    },
+    Update: (
+      id: string,
+      path: string,
+      key: string,
+      valueJSON: string,
+      expectedHash: string,
+    ): Promise<WriteResult> => {
+      const v = vaultOf(id);
+      const cur = v.files.get(path);
+      if (cur === undefined) return reject('not-found: no such file');
+      if (expectedHash && hashOf(cur) !== expectedHash)
+        return reject('conflict: file changed on disk');
+      const fm = splitFrontmatter(cur);
+      const doc = parseDocument(fm.yaml ?? '');
+      doc.set(key, JSON.parse(valueJSON));
+      const out = `---\n${doc.toString()}---\n${fm.body}`;
+      v.files.set(path, out);
+      changed(id, [path]);
+      return Promise.resolve({ path, hash: hashOf(out), size: out.length });
+    },
+    Remove: (id: string, path: string, key: string, expectedHash: string): Promise<WriteResult> => {
+      const v = vaultOf(id);
+      const cur = v.files.get(path);
+      if (cur === undefined) return reject('not-found: no such file');
+      if (expectedHash && hashOf(cur) !== expectedHash)
+        return reject('conflict: file changed on disk');
+      const fm = splitFrontmatter(cur);
+      if (fm.yaml === null) return Promise.resolve({ path, hash: hashOf(cur), size: cur.length });
+      const doc = parseDocument(fm.yaml);
+      doc.delete(key);
+      const body = doc.toString().trim();
+      const out = body ? `---\n${doc.toString()}---\n${fm.body}` : fm.body;
+      v.files.set(path, out);
+      changed(id, [path]);
+      return Promise.resolve({ path, hash: hashOf(out), size: out.length });
+    },
+  };
+
   const SettingsAPI = {
     Get: (): Promise<AppSettings> => Promise.resolve(mock.settings),
     Set: (s: AppSettings): Promise<void> => {
@@ -180,44 +616,6 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       Promise.resolve({ version: 'test', dataDir: '/mock/data' }),
   };
 
-  const LinksAPI = {
-    Outgoing: (): Promise<NoteLink[]> => Promise.resolve([]),
-    Backlinks: (id: string, path: string): Promise<NoteLink[]> => {
-      const name = path.replace(/\.md$/, '').split('/').pop() ?? path;
-      const out: NoteLink[] = [];
-      for (const [p, content] of vaultOf(id).files) {
-        if (p !== path && content.includes('[[' + name + ']]'))
-          out.push({
-            path: p,
-            line: 1,
-            raw: name,
-            heading: '',
-            block: '',
-            alias: '',
-            embed: false,
-            resolved: true,
-          });
-      }
-      return Promise.resolve(out);
-    },
-    UnlinkedMentions: (): Promise<Mention[]> => Promise.resolve([]),
-    PlanRename: (_id: string, from: string, to: string): Promise<RenamePlan> =>
-      Promise.resolve({ from, to, moves: [{ from, to }], files: [] } as unknown as RenamePlan),
-    ApplyRename: (id: string, from: string, to: string): Promise<RenamePlan> => {
-      const v = vaultOf(id);
-      const content = v.files.get(from);
-      if (content !== undefined) {
-        v.files.delete(from);
-        v.files.set(to, content);
-      }
-      return Promise.resolve({
-        from,
-        to,
-        moves: [{ from, to }],
-        files: [],
-      } as unknown as RenamePlan);
-    },
-  };
   const AuthAPI = {
     Status: (): Promise<AuthState> => Promise.resolve(mock.auth),
     Login: (server: string): Promise<AuthState> => {
@@ -251,7 +649,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   };
 
   const w = window as unknown as Record<string, unknown>;
-  w['go'] = { app: { VaultAPI, SearchAPI, SettingsAPI, AuthAPI, LinksAPI } };
+  w['go'] = {
+    app: { VaultAPI, SearchAPI, SettingsAPI, AuthAPI, LinksAPI, TagsAPI, PropertiesAPI },
+  };
   w['runtime'] = {
     EventsOnMultiple: (name: string, cb: Handler, _max: number) => {
       if (!handlers.has(name)) handlers.set(name, new Set());
@@ -260,6 +660,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
     EventsOff: (name: string) => handlers.delete(name),
     EventsEmit: (name: string, ...data: unknown[]) => mock.emit(name, data[0]),
+    BrowserOpenURL: () => undefined,
     WindowShow: () => undefined,
   };
   return mock;
