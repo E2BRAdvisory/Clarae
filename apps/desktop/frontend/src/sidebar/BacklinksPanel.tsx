@@ -8,7 +8,15 @@ export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: strin
   const { data } = useBacklinks(vaultId, path);
   const linked = data?.linked ?? [];
   const mentions = data?.mentions ?? [];
-  const label = (p: string) => p.replace(/\.md$/, '');
+  const name = (p: string) => p.slice(p.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
+  // A drawing or a canvas links to the note too: labelled by what it is, without a line number.
+  const label = (p: string) =>
+    /\.excalidraw$/i.test(p)
+      ? t('backlinks.drawing', { name: name(p) })
+      : /\.canvas$/i.test(p)
+        ? t('backlinks.canvas', { name: name(p) })
+        : p.replace(/\.md$/, '');
+  const hasLines = (p: string) => /\.md$/i.test(p);
 
   return (
     <section className="backlinks" aria-label={t('backlinks.title')}>
@@ -20,9 +28,12 @@ export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: strin
         <div
           key={`${l.path}:${l.line}:${i}`}
           className="item"
-          onClick={() => openNote(l.path, { line: l.line })}
+          onClick={() => openNote(l.path, hasLines(l.path) ? { line: l.line } : {})}
         >
-          {label(l.path)} <span className="muted">· {t('backlinks.line', { n: l.line })}</span>
+          {label(l.path)}
+          {hasLines(l.path) && (
+            <span className="muted"> · {t('backlinks.line', { n: l.line })}</span>
+          )}
         </div>
       ))}
       {mentions.length > 0 && (
