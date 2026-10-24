@@ -1,179 +1,269 @@
 import { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { EditorState } from '@codemirror/state';
 import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import {
+  bracketMatching,
+  codeFolding,
+  foldGutter,
+  foldKeymap,
+  indentUnit,
+} from '@codemirror/language';
+import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
+import { Annotation, Compartment, EditorState, Prec, type Extension } from '@codemirror/state';
+import {
+  crosshairCursor,
+  drawSelection,
+  dropCursor,
   EditorView,
+  highlightActiveLine,
+  highlightSpecialChars,
   keymap,
   lineNumbers,
-  highlightActiveLine,
-  drawSelection,
+  rectangularSelection,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
-import { api, errorCode, type NoteContent } from '../app/api';
-import { Events, type FileChangedPayload } from '../app/events';
+import { extract } from '@nodus/markdown';
+import type { Reveal } from '../reading/ReadingView';
+import type { EditorSettings } from '../state/settings';
+import { blockWidgets } from './blockWidgets';
+import { ofmCompletionSources, type CompletionOptions } from './completions';
+import { livePreviewContext, type LivePreviewContext } from './context';
+import { linkStatusChanged, livePreview } from './livePreview';
+import { smartPaste, type PasteDeps } from './paste';
+import { registerEditor, setActiveEditor, unregisterEditor } from './registry';
+import { sourceMode } from './sourceMode';
 
-const SAVE_DEBOUNCE_MS = 500;
+/** Marks transactions that replace the document from outside (reload); not user edits. */
+const External = Annotation.define<boolean>();
 
-type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
-
-interface Props {
-  vaultId: string;
-  path: string;
+export interface EditorStats {
+  words: number;
+  chars: number;
+  selWords: number;
+  selChars: number;
+  line: number;
+  col: number;
 }
 
-/**
- * Source-mode Markdown editor (CodeMirror 6). Live Preview and Reading view
- * arrive with M1. Saves with a debounce through WriteNote(expectedHash): a
- * hash mismatch means the file changed on disk and the user decides.
- */
-export function Editor({ vaultId, path }: Props) {
-  const { t } = useTranslation();
-  const hostRef = useRef<HTMLDivElement>(null);
+export interface LinkResolver {
+  subscribe(cb: () => void): () => void;
+}
+
+interface Props {
+  /** Registry key (pane id): formatting commands act on the focused editor. */
+  id: string;
+  doc: string;
+  /** Increment to replace the document with `doc` (after a reload from disk). */
+  version: number;
+  mode: 'live' | 'source';
+  settings: EditorSettings;
+  context: LivePreviewContext;
+  completion: CompletionOptions;
+  paste: PasteDeps;
+  resolver?: LinkResolver;
+  reveal?: Reveal | undefined;
+  readOnly?: boolean;
+  /** Gets every key event first; return true when it ran an application command. */
+  hotkey?: (event: KeyboardEvent) => boolean;
+  onChange(text: string): void;
+  onStats(stats: EditorStats): void;
+}
+
+const words = (s: string): number => (s.match(/[\p{L}\p{N}]+/gu) ?? []).length;
+
+function settingsExtensions(s: EditorSettings): Extension[] {
+  return [
+    s.lineNumbers ? lineNumbers() : [],
+    s.wrap ? EditorView.lineWrapping : [],
+    s.foldHeadings ? [codeFolding(), foldGutter({ openText: '▾', closedText: '▸' })] : [],
+    EditorState.tabSize.of(s.tabSize),
+    indentUnit.of(' '.repeat(s.tabSize)),
+    s.autoPair ? closeBrackets() : [],
+    EditorView.contentAttributes.of({
+      spellcheck: String(s.spellcheck),
+      autocorrect: 'off',
+      'aria-label': 'Note editor',
+    }),
+    EditorView.theme({ '&': { fontSize: `${s.fontSize}px` } }),
+  ];
+}
+
+/** The note editor: CodeMirror 6 in Source or Live Preview mode (ADR-0004). */
+export function Editor(props: Props) {
+  const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const hashRef = useRef<string>('');
-  const timerRef = useRef<number | undefined>(undefined);
-  const [state, setState] = useState<SaveState>('saved');
-  const [loaded, setLoaded] = useState<NoteContent | null>(null);
-  const [error, setError] = useState<string>('');
-
-  // Load the note once: the parent keys this component by vault and path, so a
-  // different note always mounts a fresh editor with fresh state.
+  const latest = useRef(props);
   useEffect(() => {
-    let cancelled = false;
-    api.vault
-      .readNote(vaultId, path)
-      .then((note) => {
-        if (!cancelled) {
-          hashRef.current = note.hash;
-          setLoaded(note);
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(String(e));
-          setState('error');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [vaultId, path]);
+    latest.current = props;
+  });
+  const [modeC] = useState(() => new Compartment());
+  const [settingsC] = useState(() => new Compartment());
+  const [contextC] = useState(() => new Compartment());
+  const [readOnlyC] = useState(() => new Compartment());
+  const versionRef = useRef(props.version);
 
-  const save = async (content: string, force: boolean) => {
-    setState('saving');
-    try {
-      const res = await api.vault.writeNote(vaultId, path, content, force ? '' : hashRef.current);
-      hashRef.current = res.hash;
-      setState('saved');
-    } catch (e) {
-      if (errorCode(e) === 'conflict') {
-        setState('conflict');
-      } else {
-        setError(String(e));
-        setState('error');
-      }
-    }
-  };
-
-  // Mount CodeMirror once the content is loaded.
+  // Create the view once.
   useEffect(() => {
-    if (!loaded || !hostRef.current) return;
+    const p = latest.current;
     const view = new EditorView({
+      parent: host.current as HTMLElement,
       state: EditorState.create({
-        doc: loaded.content,
+        doc: p.doc,
         extensions: [
-          lineNumbers(),
+          Prec.highest(
+            keymap.of([{ any: (_view, event) => latest.current.hotkey?.(event) ?? false }]),
+          ),
           history(),
           drawSelection(),
+          dropCursor(),
+          highlightSpecialChars(),
           highlightActiveLine(),
           highlightSelectionMatches(),
-          markdown({ base: markdownLanguage }),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-          EditorView.lineWrapping,
-          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
-          EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return;
-            setState((s) => (s === 'conflict' ? s : 'dirty'));
-            window.clearTimeout(timerRef.current);
-            timerRef.current = window.setTimeout(() => {
-              setState((s) => {
-                if (s === 'conflict') return s;
-                void save(update.state.doc.toString(), false);
-                return s;
-              });
-            }, SAVE_DEBOUNCE_MS);
+          bracketMatching(),
+          rectangularSelection(),
+          crosshairCursor(),
+          EditorState.allowMultipleSelections.of(true),
+          search({ top: true }),
+          markdown({ base: markdownLanguage, addKeymap: true }),
+          autocompletion({
+            override: ofmCompletionSources({
+              backend: latest.current.completion.backend,
+              notePath: () => latest.current.completion.notePath(),
+              linkFormat: () => latest.current.completion.linkFormat(),
+            }),
+            activateOnTyping: true,
           }),
+          smartPaste({
+            saveAttachment: (name, b64) => latest.current.paste.saveAttachment(name, b64),
+            enabled: () => latest.current.paste.enabled(),
+          }),
+          keymap.of([
+            ...closeBracketsKeymap,
+            ...completionKeymap,
+            ...searchKeymap,
+            ...foldKeymap,
+            ...historyKeymap,
+            ...defaultKeymap,
+            indentWithTab,
+          ]),
+          modeC.of(p.mode === 'live' ? [livePreview(), blockWidgets()] : sourceMode()),
+          settingsC.of(settingsExtensions(p.settings)),
+          contextC.of(livePreviewContext.of(p.context)),
+          readOnlyC.of(EditorState.readOnly.of(!!p.readOnly)),
+          EditorView.updateListener.of((u) => {
+            const cur = latest.current;
+            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External)))
+              cur.onChange(u.state.doc.toString());
+            if (u.docChanged || u.selectionSet) {
+              const doc = u.state.doc.toString();
+              const sel = u.state.selection.main;
+              const selText = u.state.sliceDoc(sel.from, sel.to);
+              const line = u.state.doc.lineAt(sel.head);
+              cur.onStats({
+                words: words(doc),
+                chars: doc.length,
+                selWords: words(selText),
+                selChars: selText.length,
+                line: line.number,
+                col: sel.head - line.from + 1,
+              });
+            }
+          }),
+          EditorView.domEventHandlers({ focus: () => (setActiveEditor(latest.current.id), false) }),
         ],
       }),
-      parent: hostRef.current,
     });
     viewRef.current = view;
-    view.focus();
+    registerEditor(p.id, view);
+    setActiveEditor(p.id);
     return () => {
-      window.clearTimeout(timerRef.current);
+      unregisterEditor(p.id, view);
       view.destroy();
       viewRef.current = null;
     };
+    // Created once per mount; everything else is reconfigured below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+  }, []);
 
-  // External change of this very file (watcher): flag a conflict only when
-  // the hash differs from what we last wrote/read.
+  // Mode switch keeps selection and scroll.
   useEffect(() => {
-    return api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
-      if (p.vaultId !== vaultId || !p.paths.includes(path)) return;
-      void api.vault.readNote(vaultId, path).then((note) => {
-        if (note.hash !== hashRef.current) setState('conflict');
-      });
+    viewRef.current?.dispatch({
+      effects: modeC.reconfigure(
+        props.mode === 'live' ? [livePreview(), blockWidgets()] : sourceMode(),
+      ),
     });
-  }, [vaultId, path]);
+  }, [props.mode, modeC]);
 
-  const reload = () => {
-    void api.vault.readNote(vaultId, path).then((note) => {
-      hashRef.current = note.hash;
-      setLoaded(note); // remounts the editor with the disk content
-      setState('saved');
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: settingsC.reconfigure(settingsExtensions(props.settings)),
     });
-  };
+  }, [props.settings, settingsC]);
 
-  const overwrite = () => {
-    const content = viewRef.current?.state.doc.toString() ?? loaded?.content ?? '';
-    void save(content, true);
-  };
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: contextC.reconfigure(livePreviewContext.of(props.context)),
+    });
+  }, [props.context, contextC]);
 
-  const label =
-    state === 'saving'
-      ? t('editor.saving')
-      : state === 'dirty'
-        ? t('editor.unsaved')
-        : state === 'saved'
-          ? t('editor.saved')
-          : '';
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: readOnlyC.reconfigure(EditorState.readOnly.of(!!props.readOnly)),
+    });
+  }, [props.readOnly, readOnlyC]);
 
-  return (
-    <>
-      <div className="editor-header">
-        <span className="path">{path}</span>
-        <span>{label}</span>
-      </div>
-      {state === 'conflict' && (
-        <div className="banner" role="alert">
-          <span>{t('editor.conflict')}</span>
-          <button onClick={reload}>{t('editor.reload')}</button>
-          <button className="primary" onClick={overwrite}>
-            {t('editor.overwrite')}
-          </button>
-        </div>
-      )}
-      {state === 'error' && (
-        <div className="banner" role="alert">
-          {error}
-        </div>
-      )}
-      <div className="editor-host" ref={hostRef} />
-    </>
-  );
+  // Link resolution finished: rebuild decorations.
+  useEffect(() => {
+    return props.resolver?.subscribe(() =>
+      viewRef.current?.dispatch({ effects: linkStatusChanged.of(null) }),
+    );
+  }, [props.resolver]);
+
+  // The document was replaced from outside (reload after an external change).
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || versionRef.current === props.version) return;
+    versionRef.current = props.version;
+    if (view.state.doc.toString() === props.doc) return;
+    const sel = Math.min(view.state.selection.main.head, props.doc.length);
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: props.doc },
+      selection: { anchor: sel },
+      annotations: [External.of(true)],
+    });
+  }, [props.version, props.doc]);
+
+  // Scroll to a heading, block or line.
+  useEffect(() => {
+    const view = viewRef.current;
+    const r = props.reveal;
+    if (!view || !r) return;
+    let line = r.line ?? 0;
+    if (!line) {
+      const note = extract('', view.state.doc.toString());
+      if (r.block) line = note.blockIds.find((b) => b.id === r.block)?.line ?? 0;
+      else if (r.heading) {
+        const norm = (s: string): string =>
+          s
+            .toLowerCase()
+            .replace(/[*_`=~[\]]/g, '')
+            .trim();
+        line = note.headings.find((h) => norm(h.text) === norm(r.heading ?? ''))?.line ?? 0;
+      }
+    }
+    if (line < 1 || line > view.state.doc.lines) return;
+    const pos = view.state.doc.line(line).from;
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 24 }),
+    });
+    view.focus();
+  }, [props.reveal]);
+
+  return <div className="editor-host" ref={host} data-mode={props.mode} />;
 }
