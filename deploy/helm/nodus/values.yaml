@@ -25,6 +25,9 @@ config:
   S3_BUCKET_BLOBS: nodus-blobs
   S3_BUCKET_EXPORTS: nodus-exports
   S3_USE_PATH_STYLE: 'true'
+  # Where browsers reach the object store: when set, export downloads use presigned URLs
+  # (the bucket then needs a CORS rule for the Web UI origin); empty = served through the API.
+  # S3_PUBLIC_ENDPOINT: https://s3.example.com
   KC_ADMIN_BASE_URL: https://auth.example.com
   KC_REALM: nodus
   KC_ADMIN_CLIENT_ID: nodus-admin-svc

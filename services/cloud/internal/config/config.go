@@ -56,6 +56,9 @@ type S3Config struct {
 	BucketBlobs   string
 	BucketExports string
 	UsePathStyle  bool
+	// PublicEndpoint is where clients reach the store (presigned export URLs); empty
+	// serves exports through the API.
+	PublicEndpoint string
 }
 
 // OIDCConfig configures bearer token validation.
@@ -98,13 +101,14 @@ func Load(role Role, version string) (Config, error) {
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 		StorageDir:      env("STORAGE_DIR", ""),
 		S3: S3Config{
-			Endpoint:      env("S3_ENDPOINT", ""),
-			AccessKey:     env("S3_ACCESS_KEY", ""),
-			SecretKey:     env("S3_SECRET_KEY", ""),
-			Region:        env("S3_REGION", "us-east-1"),
-			BucketBlobs:   env("S3_BUCKET_BLOBS", "nodus-blobs"),
-			BucketExports: env("S3_BUCKET_EXPORTS", "nodus-exports"),
-			UsePathStyle:  envBool("S3_USE_PATH_STYLE", true),
+			Endpoint:       env("S3_ENDPOINT", ""),
+			AccessKey:      env("S3_ACCESS_KEY", ""),
+			SecretKey:      env("S3_SECRET_KEY", ""),
+			Region:         env("S3_REGION", "us-east-1"),
+			BucketBlobs:    env("S3_BUCKET_BLOBS", "nodus-blobs"),
+			BucketExports:  env("S3_BUCKET_EXPORTS", "nodus-exports"),
+			UsePathStyle:   envBool("S3_USE_PATH_STYLE", true),
+			PublicEndpoint: env("S3_PUBLIC_ENDPOINT", ""),
 		},
 		OIDC: OIDCConfig{
 			Issuer:          env("OIDC_ISSUER", ""),

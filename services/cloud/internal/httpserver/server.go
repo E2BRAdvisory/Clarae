@@ -16,10 +16,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 
+	"nodus/services/cloud/internal/admin"
 	"nodus/services/cloud/internal/api"
 	"nodus/services/cloud/internal/auth"
 	"nodus/services/cloud/internal/blobs"
 	"nodus/services/cloud/internal/configprofiles"
+	"nodus/services/cloud/internal/export"
 	"nodus/services/cloud/internal/groups"
 	"nodus/services/cloud/internal/httpproblem"
 	"nodus/services/cloud/internal/observability"
@@ -50,6 +52,8 @@ type Deps struct {
 	Quota     *quota.HTTP
 	Groups    *groups.HTTP
 	Sharing   *sharing.HTTP
+	Admin     *admin.HTTP
+	Export    *export.HTTP
 	// Tus serves resumable uploads; Events serves the SSE stream. Both live
 	// outside the generated router and are optional (nil in unit tests).
 	Tus    *blobs.TusHandler
@@ -77,6 +81,8 @@ type (
 	quotaHTTP     = quota.HTTP
 	groupsHTTP    = groups.HTTP
 	sharingHTTP   = sharing.HTTP
+	adminHTTP     = admin.HTTP
+	exportHTTP    = export.HTTP
 )
 
 type handlers struct {
@@ -90,6 +96,8 @@ type handlers struct {
 	*quotaHTTP
 	*groupsHTTP
 	*sharingHTTP
+	*adminHTTP
+	*exportHTTP
 }
 
 var _ api.StrictServerInterface = handlers{}
@@ -134,7 +142,7 @@ func NewRouter(d Deps) http.Handler {
 	}
 
 	strict := api.NewStrictHandlerWithOptions(
-		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota, d.Groups, d.Sharing},
+		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota, d.Groups, d.Sharing, d.Admin, d.Export},
 		nil,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {

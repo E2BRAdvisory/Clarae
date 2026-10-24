@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 )
 
 // ErrNotFound is returned when an object does not exist.
@@ -29,4 +30,10 @@ type BlobStore interface {
 // prefix keeps directory listings small on the filesystem implementation.
 func BlobKey(hash string) string {
 	return "blobs/" + hash[:2] + "/" + hash
+}
+
+// Presigner is implemented by stores that can hand out direct, time-limited download URLs.
+type Presigner interface {
+	// PresignGet returns the URL, or "" when the store cannot (not configured).
+	PresignGet(ctx context.Context, key, filename string, ttl time.Duration) (string, error)
 }

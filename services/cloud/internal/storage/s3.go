@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -19,11 +21,15 @@ type S3Options struct {
 	Region       string
 	Bucket       string
 	UsePathStyle bool
+	// PublicEndpoint is the address clients reach the store at; when set, PresignGet
+	// signs URLs for it (the internal endpoint is often not reachable from outside).
+	PublicEndpoint string
 }
 
 // S3 is a BlobStore on an S3-compatible bucket.
 type S3 struct {
 	c      *minio.Client
+	pub    *minio.Client // signs URLs for PublicEndpoint; nil when not configured
 	bucket string
 }
 
@@ -37,16 +43,28 @@ func NewS3(ctx context.Context, o S3Options) (*S3, error) {
 	if o.UsePathStyle {
 		lookup = minio.BucketLookupPath
 	}
-	c, err := minio.New(endpoint, &minio.Options{
-		Creds:        credentials.NewStaticV4(o.AccessKey, o.SecretKey, ""),
-		Secure:       secure,
-		Region:       o.Region,
-		BucketLookup: lookup,
-	})
+	newClient := func(endpoint string, secure bool) (*minio.Client, error) {
+		return minio.New(endpoint, &minio.Options{
+			Creds:        credentials.NewStaticV4(o.AccessKey, o.SecretKey, ""),
+			Secure:       secure,
+			Region:       o.Region,
+			BucketLookup: lookup,
+		})
+	}
+	c, err := newClient(endpoint, secure)
 	if err != nil {
 		return nil, err
 	}
 	s := &S3{c: c, bucket: o.Bucket}
+	if o.PublicEndpoint != "" {
+		pe, psecure := o.PublicEndpoint, true
+		if u, err := url.Parse(o.PublicEndpoint); err == nil && u.Host != "" {
+			pe, psecure = u.Host, u.Scheme == "https"
+		}
+		if s.pub, err = newClient(pe, psecure); err != nil {
+			return nil, err
+		}
+	}
 	ok, err := c.BucketExists(ctx, o.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("s3: check bucket %q: %w", o.Bucket, err)
@@ -112,6 +130,24 @@ func (s *S3) Delete(ctx context.Context, key string) error {
 		return err
 	}
 	return nil
+}
+
+// PresignGet returns a time-limited download URL for the object, or "" when no public
+// endpoint is configured (callers then serve the object themselves). Signing is local:
+// the region is configured, so no request is made.
+func (s *S3) PresignGet(ctx context.Context, key, filename string, ttl time.Duration) (string, error) {
+	if s.pub == nil {
+		return "", nil
+	}
+	q := url.Values{}
+	if filename != "" {
+		q.Set("response-content-disposition", `attachment; filename="`+strings.NewReplacer(`"`, "", `\`, "", "\n", "", "\r", "").Replace(filename)+`"`)
+	}
+	u, err := s.pub.PresignedGetObject(ctx, s.bucket, key, ttl, q)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
 }
 
 // Ping checks the bucket is reachable.

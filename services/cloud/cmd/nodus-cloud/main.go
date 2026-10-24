@@ -23,6 +23,7 @@ import (
 	"nodus/services/cloud/internal/db"
 	"nodus/services/cloud/internal/grpcserver"
 	"nodus/services/cloud/internal/httpserver"
+	"nodus/services/cloud/internal/keycloak"
 	"nodus/services/cloud/internal/observability"
 	"nodus/services/cloud/internal/storage"
 	"nodus/services/cloud/internal/system"
@@ -74,6 +75,19 @@ func run(role config.Role) error {
 		return err
 	}
 	application := app.New(database, store, logger)
+	if cfg.S3.Endpoint != "" {
+		exportStore, err := storage.NewS3(ctx, storage.S3Options{
+			Endpoint: cfg.S3.Endpoint, AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey, Region: cfg.S3.Region,
+			Bucket: cfg.S3.BucketExports, UsePathStyle: cfg.S3.UsePathStyle, PublicEndpoint: cfg.S3.PublicEndpoint,
+		})
+		if err != nil {
+			return err
+		}
+		application.ExportStore = exportStore
+	}
+	application.Keycloak = keycloak.New(keycloak.Config{
+		BaseURL: cfg.Keycloak.BaseURL, Realm: cfg.Keycloak.Realm, ClientID: cfg.Keycloak.ClientID, ClientSecret: cfg.Keycloak.ClientSecret,
+	})
 
 	g, ctx := errgroup.WithContext(ctx)
 

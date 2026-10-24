@@ -32,16 +32,31 @@ type Runner struct {
 	log       zerolog.Logger
 	now       func() time.Time
 
+	exports ExportWorker
+
 	// Intervals (zero values use the defaults).
 	GCInterval          time.Duration
 	UploadsInterval     time.Duration
 	RetentionInterval   time.Duration
 	MaintenanceInterval time.Duration // compaction, purge, reconciliation
+	ExportsInterval     time.Duration
 }
 
 // New creates a runner.
 func New(d *db.DB, store storage.BlobStore, b *blobs.Service, r *revisions.Service, log zerolog.Logger) *Runner {
 	return &Runner{db: d, store: store, blobs: b, revisions: r, log: log, now: time.Now}
+}
+
+// ExportWorker builds queued export archives and retires expired ones (export.Service).
+type ExportWorker interface {
+	ProcessPending(ctx context.Context) (int, error)
+	Expire(ctx context.Context) error
+}
+
+// WithExports enables the export loop.
+func (r *Runner) WithExports(e ExportWorker) *Runner {
+	r.exports = e
+	return r
 }
 
 // SetClock replaces the time source (tests move time forward instead of waiting days).
@@ -53,6 +68,7 @@ const (
 	lockUploads
 	lockRetention
 	lockMaintenance
+	lockExports
 )
 
 func (r *Runner) setting(ctx context.Context, key string, def int) int {
@@ -101,6 +117,20 @@ func (r *Runner) Run(ctx context.Context) {
 		{"uploads", r.UploadsInterval, 15 * time.Minute, lockUploads, func(c context.Context) error { _, err := r.blobs.CleanupExpired(c); return err }},
 		{"retention", r.RetentionInterval, 6 * time.Hour, lockRetention, func(c context.Context) error { _, err := r.PruneRevisions(c); return err }},
 		{"maintenance", r.MaintenanceInterval, 24 * time.Hour, lockMaintenance, r.Maintain},
+	}
+	if r.exports != nil {
+		loops = append(loops, struct {
+			name  string
+			every time.Duration
+			def   time.Duration
+			lock  int64
+			run   func(context.Context) error
+		}{"exports", r.ExportsInterval, 15 * time.Second, lockExports, func(c context.Context) error {
+			if _, err := r.exports.ProcessPending(c); err != nil {
+				return err
+			}
+			return r.exports.Expire(c)
+		}})
 	}
 	done := make(chan struct{})
 	for _, l := range loops {
@@ -195,7 +225,20 @@ func (r *Runner) Maintain(ctx context.Context) error {
 	if err := r.ReconcileBlobRefs(ctx); err != nil {
 		return fmt.Errorf("reconcile blob refs: %w", err)
 	}
+	if err := r.SnapshotStorage(ctx); err != nil {
+		return fmt.Errorf("storage snapshot: %w", err)
+	}
 	return nil
+}
+
+// SnapshotStorage records today's total usage for the trend of the admin dashboard.
+func (r *Runner) SnapshotStorage(ctx context.Context) error {
+	q := r.db.Queries()
+	totals, err := q.StorageTotals(ctx)
+	if err != nil {
+		return err
+	}
+	return q.UpsertStorageSnapshot(ctx, totals.TotalUsed)
 }
 
 // CompactChangelogs advances compaction_seq so entries older than the window
