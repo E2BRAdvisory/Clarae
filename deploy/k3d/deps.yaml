@@ -1,0 +1,106 @@
+# Dependencies of the Nodus Cloud Service for the local k3d session: PostgreSQL, an
+# S3-compatible store (RustFS) and Keycloak. Development values only.
+# Keycloak's Service has a fixed ClusterIP so the cluster can alias the public issuer
+# host to it (see scripts/run-cloud-k3d.sh). The realm comes from the `keycloak-realm`
+# ConfigMap, created from deploy/keycloak/realm-nodus.json.
+apiVersion: v1
+kind: Service
+metadata: { name: postgres }
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: postgres }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - { name: POSTGRES_USER, value: nodus }
+            - { name: POSTGRES_PASSWORD, value: nodus }
+            - { name: POSTGRES_DB, value: nodus }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          readinessProbe:
+            exec: { command: [pg_isready, -U, nodus, -d, nodus] }
+            periodSeconds: 3
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+      volumes: [{ name: data, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: s3 }
+spec:
+  type: LoadBalancer # also reachable from the host on :9000
+  selector: { app: s3 }
+  ports: [{ name: api, port: 9000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: s3 }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: s3 } }
+  template:
+    metadata: { labels: { app: s3 } }
+    spec:
+      containers:
+        - name: rustfs
+          image: rustfs/rustfs:latest
+          env:
+            - { name: RUSTFS_ACCESS_KEY, value: nodus }
+            - { name: RUSTFS_SECRET_KEY, value: nodus-secret }
+            - { name: RUSTFS_VOLUMES, value: /data }
+            - { name: RUSTFS_ADDRESS, value: ':9000' }
+          ports: [{ containerPort: 9000 }]
+          readinessProbe:
+            tcpSocket: { port: 9000 }
+            periodSeconds: 3
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: keycloak }
+spec:
+  type: LoadBalancer # published on the host as :8080
+  clusterIP: 10.43.0.50 # inside the default k3s service CIDR; keep in sync with the script
+  selector: { app: keycloak }
+  ports: [{ name: http, port: 8080 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: keycloak }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: keycloak } }
+  template:
+    metadata: { labels: { app: keycloak } }
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7
+          args: [start-dev, --import-realm, --http-port=8080]
+          env:
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+            - { name: KC_HEALTH_ENABLED, value: 'true' }
+            - { name: KC_HOSTNAME, value: 'http://keycloak.localtest.me:8080' }
+            - { name: KC_HOSTNAME_STRICT, value: 'false' }
+          ports: [{ containerPort: 8080 }, { containerPort: 9000 }]
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 9000 }
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 40
+          resources:
+            requests: { memory: 512Mi }
+          volumeMounts: [{ name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }]
+      volumes: [{ name: realm, configMap: { name: keycloak-realm } }]

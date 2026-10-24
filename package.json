@@ -16,7 +16,9 @@
     "format": "prettier --write .",
     "typecheck": "yarn workspaces foreach -A --topological run typecheck",
     "test": "yarn workspaces foreach -A run test",
-    "build": "yarn workspaces foreach -A --topological run build"
+    "build": "yarn workspaces foreach -A --topological run build",
+    "dev:desktop": "bash scripts/run-desktop.sh --demo",
+    "dev:cloud:k3d": "bash scripts/run-cloud-k3d.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
