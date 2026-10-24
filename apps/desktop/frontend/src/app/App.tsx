@@ -30,6 +30,8 @@ import { DialogHost, dialog } from '../ui/dialogs';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
 import { SyncIndicator } from '../sync/SyncIndicator';
+import { SharingDialogs } from '../sharing/SharingDialogs';
+import { InvitesIndicator, PermissionBadge } from '../sharing/StatusItems';
 import { followLinkPath } from './open';
 
 const LEFT_TABS: LeftTab[] = ['files', 'search', 'tags'];
@@ -175,6 +177,7 @@ export function App() {
       <StatusBar />
       {settingsOpen && <SettingsPanel />}
       <SyncDialogs />
+      <SharingDialogs />
       <CommandPalette />
       <QuickSwitcher />
       <DialogHost />
@@ -443,7 +446,9 @@ function StatusBar() {
           <span>{t('status.chars', { count: stats.chars })}</span>
         </>
       )}
+      <PermissionBadge />
       <SyncIndicator />
+      <InvitesIndicator />
       {vault && (
         <span>
           {progress

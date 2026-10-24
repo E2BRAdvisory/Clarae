@@ -1,16 +1,7 @@
 import { create } from 'zustand';
-import { api, type SyncConflict, type SyncLinkInfo, type SyncStatus } from '../app/api';
+import { api, linkInfo, type SyncConflict, type SyncLinkInfo, type SyncStatus } from '../app/api';
 
-const unlinked: SyncLinkInfo = {
-  linked: false,
-  cloudVaultId: '',
-  kind: '',
-  name: '',
-  serverUrl: '',
-  locked: false,
-  paused: false,
-  pollSeconds: 0,
-};
+const unlinked: SyncLinkInfo = linkInfo();
 
 interface SyncState {
   info: Record<string, SyncLinkInfo>;

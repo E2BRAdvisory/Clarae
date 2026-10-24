@@ -12,6 +12,8 @@ import {
 } from '../state/settings';
 import { useAppStore, type SettingsSection } from '../state/store';
 import { CloudSection } from './CloudSection';
+import { SharingPanel } from '../sharing/SharingPanel';
+import { editorKeyOf, isLocked, useManaged } from '../state/managed';
 import { SyncSection } from './SyncSection';
 import { HotkeysEditor } from './HotkeysEditor';
 
@@ -23,24 +25,44 @@ const SECTIONS: SettingsSection[] = [
   'hotkeys',
   'cloud',
   'sync',
+  'sharing',
   'about',
 ];
 
+/**
+ * One setting. With `cfg` (its dotted key in the distributed configuration) the row is disabled
+ * and marked when an administrator locked that key (§2.6.6).
+ */
 function Row({
   label,
   htmlFor,
   children,
+  cfg,
 }: {
   label: string;
   htmlFor?: string;
   children: ReactNode;
+  cfg?: string | undefined;
 }) {
+  const { t } = useTranslation();
+  const locked = useManaged((m) => (cfg ? isLocked(m.locked, cfg) : false));
   return (
-    <div className="row">
+    <div className={`row${locked ? ' managed' : ''}`}>
       <label htmlFor={htmlFor}>{label}</label>
-      {children}
+      <fieldset className="row-controls" disabled={locked}>
+        {children}
+      </fieldset>
+      {locked && (
+        <span className="muted small managed-note">🔒 {t('settings.managedByAdmin')}</span>
+      )}
     </div>
   );
+}
+
+/** The dotted configuration key of an editor setting. */
+function editorCfg(field: keyof EditorSettings): string | undefined {
+  const key = editorKeyOf(field);
+  return key ? `editor.${key}` : undefined;
 }
 
 function Toggle({
@@ -64,7 +86,7 @@ function Toggle({
   const value = useSettings((s) => s.editor[k]);
   const setEditor = useSettings((s) => s.setEditor);
   return (
-    <Row label={label} htmlFor={id}>
+    <Row label={label} htmlFor={id} cfg={editorCfg(k)}>
       <input
         id={id}
         type="checkbox"
@@ -124,7 +146,7 @@ export function SettingsPanel() {
                 <option value="it">Italiano</option>
               </select>
             </Row>
-            <Row label={t('settings.theme')} htmlFor="theme">
+            <Row label={t('settings.theme')} cfg="appearance.theme" htmlFor="theme">
               <select
                 id="theme"
                 value={settings.theme}
@@ -159,7 +181,7 @@ export function SettingsPanel() {
             <Toggle id="autoPair" label={t('settings.autoPair')} k="autoPair" />
             <Toggle id="smartPaste" label={t('settings.smartPaste')} k="smartPaste" />
             <Toggle id="foldHeadings" label={t('settings.foldHeadings')} k="foldHeadings" />
-            <Row label={t('settings.fontSize')} htmlFor="fontSize">
+            <Row label={t('settings.fontSize')} cfg="editor.fontSize" htmlFor="fontSize">
               <input
                 id="fontSize"
                 type="number"
@@ -189,7 +211,7 @@ export function SettingsPanel() {
         return (
           <>
             {!vault && <p className="muted">{t('settings.needsVault')}</p>}
-            <Row label={t('settings.linkFormat')} htmlFor="linkFormat">
+            <Row label={t('settings.linkFormat')} cfg="editor.linkFormat" htmlFor="linkFormat">
               <select
                 id="linkFormat"
                 value={editor.linkFormat}
@@ -200,7 +222,11 @@ export function SettingsPanel() {
                 <option value="relative">{t('settings.linkRelative')}</option>
               </select>
             </Row>
-            <Row label={t('settings.newNoteFolder')} htmlFor="newNoteFolder">
+            <Row
+              label={t('settings.newNoteFolder')}
+              cfg="editor.newNoteFolder"
+              htmlFor="newNoteFolder"
+            >
               <input
                 id="newNoteFolder"
                 value={editor.newNoteFolder}
@@ -208,7 +234,11 @@ export function SettingsPanel() {
                 onChange={(e) => setEditor({ newNoteFolder: e.target.value })}
               />
             </Row>
-            <Row label={t('settings.attachmentsFolder')} htmlFor="attachmentsFolder">
+            <Row
+              label={t('settings.attachmentsFolder')}
+              cfg="editor.attachmentsFolder"
+              htmlFor="attachmentsFolder"
+            >
               <input
                 id="attachmentsFolder"
                 value={editor.attachmentsFolder}
@@ -232,7 +262,7 @@ export function SettingsPanel() {
         return (
           <>
             {!vault && <p className="muted">{t('settings.needsVault')}</p>}
-            <Row label={t('settings.accent')} htmlFor="accent">
+            <Row label={t('settings.accent')} cfg="appearance.accent" htmlFor="accent">
               <input
                 id="accent"
                 type="color"
@@ -268,7 +298,7 @@ export function SettingsPanel() {
                 }}
               />
             </Row>
-            <Row label={t('settings.zoom')} htmlFor="zoom">
+            <Row label={t('settings.zoom')} cfg="appearance.zoom" htmlFor="zoom">
               <input
                 id="zoom"
                 type="range"
@@ -292,6 +322,8 @@ export function SettingsPanel() {
         return <CloudSection />;
       case 'sync':
         return <SyncSection />;
+      case 'sharing':
+        return <SharingPanel />;
       case 'about':
         return (
           <>

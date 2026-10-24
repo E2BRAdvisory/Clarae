@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Entry } from '../app/api';
+import { featureOn, useManaged } from '../state/managed';
+import { useSharing } from '../state/sharing';
+import { infoOf, useSync } from '../state/sync';
 import { newCanvas } from '../canvas/commands';
 import { newDrawing } from '../drawing/commands';
 import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
@@ -70,6 +73,12 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const [sort, setSort] = useState<FileSort>('name');
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const info = useSync((st) => infoOf(st, vaultId));
+  const sharingOn = useManaged((m) => featureOn(m.features, 'sharing'));
+  const readOnly = info.readOnly;
+  const drawingsOn = useManaged((m) => featureOn(m.features, 'drawings'));
+  const canvasOn = useManaged((m) => featureOn(m.features, 'canvas'));
+  const canShare = sharingOn && info.linked && info.kind === 'shared' && !info.mount;
   const tree = useMemo(
     () =>
       buildTree(
@@ -110,6 +119,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     await guard(deleteEntry(entry.path));
   };
   const move = async (from: string, intoDir: string) => {
+    if (readOnly) return;
     const name = from.slice(from.lastIndexOf('/') + 1);
     const to = (intoDir ? intoDir + '/' : '') + name;
     if (to === from || intoDir === from || intoDir.startsWith(from + '/')) return;
@@ -120,31 +130,79 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     );
   };
 
-  const contextFor = (entry: Entry): MenuItem[] => [
-    ...(!entry.isDir
+  const contextFor = (entry: Entry): MenuItem[] =>
+    readOnly
       ? [
+          ...(!entry.isDir
+            ? [
+                {
+                  label: t('sidebar.openNewTab'),
+                  onSelect: () => openNote(entry.path, { newTab: true }),
+                },
+              ]
+            : []),
           {
-            label: t('sidebar.openNewTab'),
-            onSelect: () => openNote(entry.path, { newTab: true }),
+            label: t('sidebar.copyPath'),
+            onSelect: () => void navigator.clipboard?.writeText(entry.path),
           },
-          { label: t('sidebar.openRight'), onSelect: () => openNote(entry.path, { split: 'row' }) },
         ]
-      : []),
-    {
-      label: t('sidebar.newNote'),
-      onSelect: () => void newNote(dirForNew(entry)),
-      separator: !entry.isDir,
-    },
-    { label: t('sidebar.newDrawing'), onSelect: () => void newDrawingIn(dirForNew(entry)) },
-    { label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn(dirForNew(entry)) },
-    { label: t('sidebar.newFolder'), onSelect: () => void newFolder(dirForNew(entry)) },
-    { label: t('sidebar.rename'), onSelect: () => void rename(entry), separator: true },
-    {
-      label: t('sidebar.copyPath'),
-      onSelect: () => void navigator.clipboard?.writeText(entry.path),
-    },
-    { label: t('sidebar.trash'), onSelect: () => void trash(entry), danger: true, separator: true },
-  ];
+      : [
+          ...(!entry.isDir
+            ? [
+                {
+                  label: t('sidebar.openNewTab'),
+                  onSelect: () => openNote(entry.path, { newTab: true }),
+                },
+                {
+                  label: t('sidebar.openRight'),
+                  onSelect: () => openNote(entry.path, { split: 'row' }),
+                },
+              ]
+            : []),
+          {
+            label: t('sidebar.newNote'),
+            onSelect: () => void newNote(dirForNew(entry)),
+            separator: !entry.isDir,
+          },
+          ...(drawingsOn
+            ? [
+                {
+                  label: t('sidebar.newDrawing'),
+                  onSelect: () => void newDrawingIn(dirForNew(entry)),
+                },
+              ]
+            : []),
+          ...(canvasOn
+            ? [
+                {
+                  label: t('sidebar.newCanvas'),
+                  onSelect: () => void newCanvasIn(dirForNew(entry)),
+                },
+              ]
+            : []),
+          { label: t('sidebar.newFolder'), onSelect: () => void newFolder(dirForNew(entry)) },
+          ...(canShare
+            ? [
+                {
+                  label: t('sharing.menuShare'),
+                  onSelect: () =>
+                    useSharing.getState().openShare({ path: entry.path, isDir: entry.isDir }),
+                  separator: true,
+                },
+              ]
+            : []),
+          { label: t('sidebar.rename'), onSelect: () => void rename(entry), separator: !canShare },
+          {
+            label: t('sidebar.copyPath'),
+            onSelect: () => void navigator.clipboard?.writeText(entry.path),
+          },
+          {
+            label: t('sidebar.trash'),
+            onSelect: () => void trash(entry),
+            danger: true,
+            separator: true,
+          },
+        ];
 
   const toggle = (path: string) =>
     setCollapsed((prev) => {
@@ -163,7 +221,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           <div
             className={`node ${entry.isDir ? 'folder' : 'file'} ${activePath === entry.path ? 'active' : ''} ${dropTarget === entry.path ? 'drop' : ''}`}
             style={{ paddingLeft: 8 + depth * 14 }}
-            draggable
+            draggable={!readOnly}
             onDragStart={(e) => e.dataTransfer.setData('application/x-nodus-path', entry.path)}
             onDragOver={(e) => {
               if (!entry.isDir || !e.dataTransfer.types.includes('application/x-nodus-path'))
@@ -203,6 +261,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
       <div className="toolbar">
         <button
           className="icon"
+          disabled={readOnly}
           onClick={() => void newNote(dirForNew())}
           title={t('sidebar.newNote')}
           aria-label={t('sidebar.newNote')}
@@ -211,6 +270,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
         </button>
         <button
           className="icon"
+          disabled={readOnly}
           onClick={() => void newFolder(dirForNew())}
           title={t('sidebar.newFolder')}
           aria-label={t('sidebar.newFolder')}
@@ -232,13 +292,18 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
         className={`content tree ${dropTarget === '' ? 'drop' : ''}`}
         onContextMenu={(e) => {
           e.preventDefault();
+          if (readOnly) return;
           setMenu({
             x: e.clientX,
             y: e.clientY,
             items: [
               { label: t('sidebar.newNote'), onSelect: () => void newNote('') },
-              { label: t('sidebar.newDrawing'), onSelect: () => void newDrawingIn('') },
-              { label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn('') },
+              ...(drawingsOn
+                ? [{ label: t('sidebar.newDrawing'), onSelect: () => void newDrawingIn('') }]
+                : []),
+              ...(canvasOn
+                ? [{ label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn('') }]
+                : []),
               { label: t('sidebar.newFolder'), onSelect: () => void newFolder('') },
             ],
           });

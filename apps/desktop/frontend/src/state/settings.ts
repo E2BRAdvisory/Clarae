@@ -3,6 +3,17 @@
 // values of the wrong type are ignored so a hand-edited file cannot break the app.
 import { create } from 'zustand';
 import { api } from '../app/api';
+import {
+  editorKeyOf,
+  isLocked,
+  lockedFields,
+  managedAppearance,
+  managedEditor,
+  managedHotkeys,
+  unmanaged,
+  useManaged,
+  type Managed,
+} from './managed';
 
 export type NoteMode = 'live' | 'source' | 'reading';
 export type LinkFormat = 'shortest' | 'path' | 'relative';
@@ -93,10 +104,80 @@ export function parseHotkeys(text: string): HotkeyOverrides {
   }
 }
 
+/** The keys of raw that are known and of the right type: what the user set explicitly. */
+export function pickKnown<T extends object>(raw: unknown, defaults: T): Partial<T> {
+  const base = defaults as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (k in base && typeof v === typeof base[k]) out[k] = v;
+    }
+  }
+  return out as Partial<T>;
+}
+
+function parseUser<T extends object>(text: string, defaults: T): Partial<T> {
+  if (!text.trim()) return {};
+  try {
+    return pickKnown(JSON.parse(text), defaults);
+  } catch {
+    return {};
+  }
+}
+
+/** The user's own choices, as stored in the vault: only the keys they set. */
+interface UserSettings {
+  editor: Partial<EditorSettings>;
+  appearance: Partial<AppearanceSettings>;
+  hotkeys: HotkeyOverrides;
+}
+
+const emptyUser = (): UserSettings => ({ editor: {}, appearance: {}, hotkeys: {} });
+
+/**
+ * Settings in force: product defaults, then the defaults of the administrator's configuration,
+ * then what the user chose, then the keys the administrator locked (§2.6.6).
+ */
+export function resolveSettings(user: UserSettings, managed: Managed) {
+  const me = managedEditor(managed.config);
+  const ma = managedAppearance(managed.config);
+  const editor: Record<string, unknown> = { ...defaultEditorSettings, ...me, ...user.editor };
+  for (const field of lockedFields(managed.locked, 'editor', editorFieldsOf())) {
+    if (field in me) editor[field] = (me as Record<string, unknown>)[field];
+  }
+  const appearance: Record<string, unknown> = { ...defaultAppearance, ...ma, ...user.appearance };
+  for (const field of lockedFields(managed.locked, 'appearance', {
+    accent: 'accent',
+    zoom: 'zoom',
+  })) {
+    if (field in ma) appearance[field] = (ma as Record<string, unknown>)[field];
+  }
+  const mh = managedHotkeys(managed.config);
+  const hotkeys: HotkeyOverrides = { ...mh, ...user.hotkeys };
+  for (const id of Object.keys(mh))
+    if (isLocked(managed.locked, `hotkeys.${id}`)) hotkeys[id] = mh[id] ?? [];
+  return {
+    editor: editor as unknown as EditorSettings,
+    appearance: appearance as unknown as AppearanceSettings,
+    hotkeys,
+  };
+}
+
+function editorFieldsOf(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const field of Object.keys(defaultEditorSettings)) {
+    const key = editorKeyOf(field as keyof EditorSettings);
+    if (key) out[key] = field;
+  }
+  return out;
+}
+
 interface SettingsState {
+  /** Settings in force (managed defaults and locks applied). */
   editor: EditorSettings;
   appearance: AppearanceSettings;
   hotkeys: HotkeyOverrides;
+  user: UserSettings;
   vaultId: string | null;
   load: (vaultId: string) => Promise<void>;
   reset: () => void;
@@ -120,10 +201,20 @@ function persist(name: string, vaultId: string | null, value: unknown): void {
   );
 }
 
+const managedNow = (): Managed => {
+  const m = useManaged.getState();
+  return {
+    managed: m.managed,
+    version: m.version,
+    config: m.config,
+    locked: m.locked,
+    features: m.features,
+  };
+};
+
 export const useSettings = create<SettingsState>((set, get) => ({
-  editor: { ...defaultEditorSettings },
-  appearance: { ...defaultAppearance },
-  hotkeys: {},
+  ...resolveSettings(emptyUser(), unmanaged),
+  user: emptyUser(),
   vaultId: null,
   async load(vaultId) {
     const [e, a, h] = await Promise.all([
@@ -131,35 +222,45 @@ export const useSettings = create<SettingsState>((set, get) => ({
       api.vault.readConfig(vaultId, 'appearance.json'),
       api.vault.readConfig(vaultId, 'hotkeys.json'),
     ]);
-    set({
-      vaultId,
-      editor: parseSettings(e, defaultEditorSettings),
-      appearance: parseSettings(a, defaultAppearance),
+    const user: UserSettings = {
+      editor: parseUser(e, defaultEditorSettings),
+      appearance: parseUser(a, defaultAppearance),
       hotkeys: parseHotkeys(h),
-    });
+    };
+    set({ vaultId, user, ...resolveSettings(user, managedNow()) });
   },
   reset: () =>
-    set({
-      vaultId: null,
-      editor: { ...defaultEditorSettings },
-      appearance: { ...defaultAppearance },
-      hotkeys: {},
-    }),
+    set({ vaultId: null, user: emptyUser(), ...resolveSettings(emptyUser(), managedNow()) }),
   setEditor(patch) {
-    const editor = { ...get().editor, ...patch };
-    set({ editor });
-    persist('editor.json', get().vaultId, editor);
+    const user = { ...get().user, editor: { ...get().user.editor, ...patch } };
+    set({ user, ...resolveSettings(user, managedNow()) });
+    persist('editor.json', get().vaultId, user.editor);
   },
   setAppearance(patch) {
-    const appearance = { ...get().appearance, ...patch };
-    set({ appearance });
-    persist('appearance.json', get().vaultId, appearance);
+    const user = { ...get().user, appearance: { ...get().user.appearance, ...patch } };
+    set({ user, ...resolveSettings(user, managedNow()) });
+    persist('appearance.json', get().vaultId, user.appearance);
   },
   setHotkeys(next) {
-    set({ hotkeys: next });
+    const user = { ...get().user, hotkeys: next };
+    set({ user, ...resolveSettings(user, managedNow()) });
     persist('hotkeys.json', get().vaultId, next);
   },
 }));
+
+// A new configuration from the administrator re-resolves the settings in force.
+useManaged.subscribe((m) => {
+  const { user } = useSettings.getState();
+  useSettings.setState(
+    resolveSettings(user, {
+      managed: m.managed,
+      version: m.version,
+      config: m.config,
+      locked: m.locked,
+      features: m.features,
+    }),
+  );
+});
 
 /** Applies appearance settings to the document (CSS variables and zoom). */
 export function applyAppearance(a: AppearanceSettings): void {

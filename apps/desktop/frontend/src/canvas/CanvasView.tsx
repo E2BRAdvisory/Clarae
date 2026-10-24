@@ -142,7 +142,7 @@ function ToolButton({
 export function CanvasView({ vaultId, path }: { vaultId: string; path: string }) {
   const { t } = useTranslation();
   const doc = useNoteDocument(vaultId, path, AUTOSAVE_MS);
-  const locked = useSync((s) => infoOf(s, vaultId).locked);
+  const locked = useSync((s) => infoOf(s, vaultId).locked || infoOf(s, vaultId).readOnly);
 
   const [data, setData] = useState<CanvasData>({ nodes: [], edges: [] });
   const [error, setError] = useState('');

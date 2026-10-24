@@ -26,7 +26,15 @@ import { useSettings, type NoteMode } from './settings';
 export type LeftTab = 'files' | 'search' | 'tags';
 export type RightTab = 'outline' | 'backlinks' | 'properties';
 export type SettingsSection =
-  'general' | 'editor' | 'files' | 'appearance' | 'hotkeys' | 'cloud' | 'sync' | 'about';
+  | 'general'
+  | 'editor'
+  | 'files'
+  | 'appearance'
+  | 'hotkeys'
+  | 'cloud'
+  | 'sync'
+  | 'sharing'
+  | 'about';
 
 export interface SidebarState<T extends string> {
   open: boolean;

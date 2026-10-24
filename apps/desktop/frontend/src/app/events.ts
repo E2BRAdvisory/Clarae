@@ -7,6 +7,9 @@ export const Events = {
   vaultLocked: 'vault:locked',
   authState: 'auth:state',
   configUpdated: 'config:updated',
+  sharesChanged: 'shares:changed',
+  mountsChanged: 'mounts:changed',
+  mountRevoked: 'mount:revoked',
   openRequest: 'app:open-request',
 } as const;
 
@@ -34,4 +37,10 @@ export interface VaultLockedPayload {
 export interface OpenRequestPayload {
   vault: string;
   file: string;
+}
+
+export interface MountRevokedPayload {
+  vaultId: string;
+  shareId: string;
+  name: string;
 }

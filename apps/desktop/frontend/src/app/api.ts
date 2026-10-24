@@ -12,6 +12,8 @@ import * as PropertiesAPI from '../../wailsjs/go/app/PropertiesAPI';
 import * as SyncAPI from '../../wailsjs/go/app/SyncAPI';
 import * as VaultCryptoAPI from '../../wailsjs/go/app/VaultCryptoAPI';
 import * as DrawingAPI from '../../wailsjs/go/app/DrawingAPI';
+import * as SharingAPI from '../../wailsjs/go/app/SharingAPI';
+import * as ConfigAPI from '../../wailsjs/go/app/ConfigAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import type { app, auth, links, search, sync, vault } from '../../wailsjs/go/models';
 
@@ -51,6 +53,52 @@ export interface RenamePlan {
   files: RenameFileEdit[];
 }
 export type SyncLinkInfo = Plain<sync.LinkInfo>;
+/** A SyncLinkInfo with every field present (an unlinked vault by default). */
+export function linkInfo(over: Partial<SyncLinkInfo> = {}): SyncLinkInfo {
+  return {
+    linked: false,
+    cloudVaultId: '',
+    kind: '',
+    name: '',
+    serverUrl: '',
+    locked: false,
+    paused: false,
+    pollSeconds: 0,
+    mount: false,
+    permission: '',
+    readOnly: false,
+    revoked: false,
+    ownerName: '',
+    shareId: '',
+    ...over,
+  };
+}
+export type PermissionLevel = 'viewer' | 'editor' | 'manager';
+export type ShareGrant = Omit<Plain<app.GrantInfo>, 'principalType' | 'permission' | 'status'> & {
+  principalType: 'user' | 'group';
+  permission: PermissionLevel;
+  status: 'pending' | 'accepted' | 'declined';
+};
+export type ShareInfo = Omit<
+  Plain<app.ShareInfo>,
+  'resourceType' | 'myPermission' | 'myStatus' | 'grants'
+> & {
+  resourceType: 'vault' | 'folder' | 'file';
+  myPermission: PermissionLevel | '';
+  myStatus: 'pending' | 'accepted' | 'declined' | '';
+  grants: ShareGrant[];
+};
+export type MountState = Omit<Plain<sync.MountState>, 'permission' | 'resourceType'> & {
+  permission: PermissionLevel;
+  resourceType: 'vault' | 'folder' | 'file';
+};
+export type DirectoryEntry = Omit<Plain<app.DirectoryEntry>, 'type'> & { type: 'user' | 'group' };
+export type GrantInput = {
+  principalType: 'user' | 'group';
+  principalId: string;
+  permission: PermissionLevel;
+};
+export type ConfigState = Plain<app.ConfigState>;
 export type SyncLinkResult = Plain<sync.LinkResult>;
 export type SyncPhase = 'idle' | 'syncing' | 'paused' | 'offline' | 'error' | 'locked';
 export type SyncStatus = Omit<Plain<sync.Status>, 'phase' | 'lastSync'> & {
@@ -202,6 +250,47 @@ export const api = {
     devices: (): Promise<DeviceInfo[]> => SyncAPI.Devices() as Promise<DeviceInfo[]>,
     revokeDevice: (id: string): Promise<void> => SyncAPI.RevokeDevice(id),
     usage: (): Promise<UsageInfo> => SyncAPI.Usage(),
+  },
+  sharing: {
+    invitations: (): Promise<ShareInfo[]> => SharingAPI.Invitations() as Promise<ShareInfo[]>,
+    mounts: (): Promise<MountState[]> => SharingAPI.Mounts() as Promise<MountState[]>,
+    accept: (shareId: string): Promise<MountState> =>
+      SharingAPI.AcceptShare(shareId) as Promise<MountState>,
+    decline: (shareId: string): Promise<void> => SharingAPI.DeclineShare(shareId),
+    openMount: (shareId: string): Promise<VaultInfo> => SharingAPI.OpenMount(shareId),
+    removeMount: (shareId: string, keepCopy: boolean): Promise<VaultInfo> =>
+      SharingAPI.RemoveMount(shareId, keepCopy),
+    vaultShares: (vaultId: string): Promise<ShareInfo[]> =>
+      SharingAPI.VaultShares(vaultId) as Promise<ShareInfo[]>,
+    create: (
+      vaultId: string,
+      path: string,
+      isDir: boolean,
+      name: string,
+      grants: GrantInput[],
+      expiresAt = '',
+    ): Promise<ShareInfo> =>
+      SharingAPI.CreateShare(vaultId, path, isDir, name, grants, expiresAt) as Promise<ShareInfo>,
+    share: (shareId: string): Promise<ShareInfo> => SharingAPI.Share(shareId) as Promise<ShareInfo>,
+    revoke: (shareId: string): Promise<void> => SharingAPI.RevokeShare(shareId),
+    setGrant: (
+      shareId: string,
+      principalType: 'user' | 'group',
+      principalId: string,
+      permission: PermissionLevel,
+    ): Promise<ShareGrant> =>
+      SharingAPI.SetGrant(shareId, principalType, principalId, permission) as Promise<ShareGrant>,
+    removeGrant: (
+      shareId: string,
+      principalType: 'user' | 'group',
+      principalId: string,
+    ): Promise<void> => SharingAPI.RemoveGrant(shareId, principalType, principalId),
+    directory: (query: string): Promise<DirectoryEntry[]> =>
+      SharingAPI.Directory(query) as Promise<DirectoryEntry[]>,
+  },
+  config: {
+    effective: (): Promise<ConfigState> => ConfigAPI.Effective(),
+    refresh: (): Promise<ConfigState> => ConfigAPI.Refresh(),
   },
   crypto: {
     unlock: (vaultId: string, secret: string, isRecovery: boolean): Promise<boolean> =>

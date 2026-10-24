@@ -16,6 +16,7 @@ import { CanvasView } from '../canvas/CanvasView';
 import { DrawingView } from '../drawing/DrawingView';
 import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
+import { infoOf, useSync } from '../state/sync';
 import { isSafeExternalUrl } from '../util/sanitize';
 import { openExternal } from '../util/external';
 import type { Pane, Tab } from './layout';
@@ -186,6 +187,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
     docRef.current = doc;
   });
   const isActive = visible && activePane === pane.id;
+  const readOnly = useSync((s) => infoOf(s, vaultId).readOnly);
   useEffect(() => {
     if (!isActive || doc.status !== 'ready') return;
     useActiveNote.getState().publish({
@@ -283,6 +285,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
             return true;
           }}
           reveal={revealHere}
+          readOnly={readOnly}
           onChange={(v) => {
             doc.edit(v);
             rerender((n) => n + 1);

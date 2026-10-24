@@ -138,7 +138,7 @@ function ExportDialog({
 export default function DrawingEditor({ vaultId, path }: Props) {
   const { t, i18n } = useTranslation();
   const doc = useNoteDocument(vaultId, path, AUTOSAVE_MS);
-  const locked = useSync((s) => infoOf(s, vaultId).locked);
+  const locked = useSync((s) => infoOf(s, vaultId).locked || infoOf(s, vaultId).readOnly);
   const theme = useAppTheme();
   const [excalidraw, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [library, setLibrary] = useState<LibraryItems | null>(null);

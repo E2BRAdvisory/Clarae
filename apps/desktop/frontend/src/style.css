@@ -1619,3 +1619,97 @@ textarea.merge {
   border-radius: 4px;
   cursor: pointer;
 }
+
+/* ---- sharing and managed settings (M4) ---- */
+.row-controls {
+  display: contents;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.row.managed label {
+  color: var(--text-muted);
+}
+.managed-note {
+  margin-left: 8px;
+}
+.sharing-panel h3 {
+  margin: 14px 0 6px;
+}
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.share-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.share-list .mount.revoked {
+  opacity: 0.7;
+}
+.share-list .small,
+.grants .small {
+  font-size: 12px;
+}
+.share-dialog {
+  max-width: 640px;
+  max-height: 85vh;
+  overflow: auto;
+}
+.grants {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.grants li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.grants li > span:first-child {
+  flex: 1;
+}
+.existing-share {
+  border-top: 1px solid var(--border);
+  padding: 8px 0;
+}
+.existing-share header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.existing-share header .danger {
+  margin-left: auto;
+}
+.recipient-search {
+  flex: 1;
+  position: relative;
+}
+.badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.badge.permission.read-only {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.status-accepted {
+  color: #2f9e44;
+}
+.status-pending {
+  color: #e8890c;
+}

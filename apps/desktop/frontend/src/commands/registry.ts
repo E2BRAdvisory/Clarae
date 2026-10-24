@@ -11,6 +11,8 @@ import { dialog } from '../ui/dialogs';
 import { newCanvas } from '../canvas/commands';
 import { insertDrawing, newDrawing } from '../drawing/commands';
 import { infoOf, useSync } from '../state/sync';
+import { featureOn, useManaged } from '../state/managed';
+import { useSharing } from '../state/sharing';
 import { useAppStore } from '../state/store';
 import { invalidateVault } from '../app/actions';
 import i18next from 'i18next';
@@ -31,6 +33,13 @@ export interface Command {
 
 const store = () => useAppStore.getState();
 const hasVault = (): boolean => store().vault !== null;
+/** The open vault may not be changed (viewer on a share, or a share that ended). */
+const readOnlyVault = (): boolean => {
+  const v = store().vault;
+  return v ? infoOf(useSync.getState(), v.id).readOnly : false;
+};
+const canWrite = (): boolean => hasVault() && !readOnlyVault();
+const feature = (name: string): boolean => featureOn(useManaged.getState().features, name);
 const activePath = (): string | null => activeTab(store().layout)?.path ?? null;
 const hasNote = (): boolean => activePath() !== null;
 const syncInfo = () => infoOf(useSync.getState(), store().vault?.id);
@@ -99,39 +108,73 @@ export const commands: Command[] = [
     id: 'note:new',
     group: 'file',
     defaults: ['Mod-n'],
-    enabled: hasVault,
+    enabled: canWrite,
     run: () => guard(createNote()),
   },
   {
     id: 'note:new-tab',
     group: 'file',
     defaults: ['Mod-Alt-n'],
-    enabled: hasVault,
+    enabled: canWrite,
     run: () => guard(createNote({ newTab: true })),
   },
   {
     id: 'drawing:new',
     group: 'file',
     defaults: [],
-    enabled: hasVault,
+    enabled: () => canWrite() && feature('drawings'),
     run: () => guard(newDrawing()),
   },
   {
     id: 'canvas:new',
     group: 'file',
     defaults: [],
-    enabled: hasVault,
+    enabled: () => canWrite() && feature('canvas'),
     run: () => guard(newCanvas()),
   },
   {
     id: 'drawing:insert',
     group: 'editor',
     defaults: [],
-    enabled: editorMode,
+    enabled: () => editorMode() && !readOnlyVault() && feature('drawings'),
     run: () => guard(insertDrawing()),
   },
-  { id: 'note:rename', group: 'file', defaults: ['F2'], enabled: hasNote, run: renameActive },
-  { id: 'note:delete', group: 'file', defaults: [], enabled: hasNote, run: deleteActive },
+  {
+    id: 'note:rename',
+    group: 'file',
+    defaults: ['F2'],
+    enabled: () => hasNote() && !readOnlyVault(),
+    run: renameActive,
+  },
+  {
+    id: 'note:delete',
+    group: 'file',
+    defaults: [],
+    enabled: () => hasNote() && !readOnlyVault(),
+    run: deleteActive,
+  },
+  {
+    id: 'sharing:open',
+    group: 'app',
+    defaults: [],
+    enabled: () => feature('sharing'),
+    run: () => store().openSettings('sharing'),
+  },
+  {
+    id: 'sharing:share',
+    group: 'file',
+    defaults: [],
+    enabled: () => {
+      const v = store().vault;
+      if (!v || !hasNote() || !feature('sharing')) return false;
+      const info = infoOf(useSync.getState(), v.id);
+      return info.linked && info.kind === 'shared' && !info.mount;
+    },
+    run: () => {
+      const path = activePath();
+      if (path) useSharing.getState().openShare({ path, isDir: false });
+    },
+  },
   {
     id: 'vault:close',
     group: 'file',
