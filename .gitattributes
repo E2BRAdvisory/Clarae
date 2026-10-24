@@ -1,0 +1,2 @@
+# Conformance fixtures must keep their exact bytes (CRLF cases).
+shared/conformance/** -text
