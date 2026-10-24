@@ -1,0 +1,12 @@
+# Generates Go code into the shared module so the cloud server and the desktop
+# client import the same package (nodus/shared/notifyv1).
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: ../../shared/go
+    opt:
+      - module=nodus/shared
+  - local: protoc-gen-go-grpc
+    out: ../../shared/go
+    opt:
+      - module=nodus/shared

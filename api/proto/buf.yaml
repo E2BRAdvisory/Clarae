@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # Specifications.md §3.6 names the streamed message "Event", not "SubscribeResponse".
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

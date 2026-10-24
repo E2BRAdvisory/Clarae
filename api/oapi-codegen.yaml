@@ -1,0 +1,15 @@
+# oapi-codegen configuration; run from services/cloud (see Makefile gen-openapi).
+package: api
+output: internal/api/api.gen.go
+generate:
+  models: true
+  chi-server: true
+  strict-server: true
+  embedded-spec: true
+compatibility:
+  # Store the security scopes of each operation in the request context so the
+  # auth middleware can tell protected routes from public ones (health probes).
+  enable-auth-scopes-on-context: true
+output-options:
+  skip-prune: false
+  nullable-type: false

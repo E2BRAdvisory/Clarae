@@ -1,0 +1,47 @@
+// Realtime notification stream (Specifications.md §3.6). REST is the normative
+// contract; gRPC only pushes "something changed" events so that clients pull.
+syntax = "proto3";
+
+package nodus.v1;
+
+option go_package = "nodus/shared/notifyv1;notifyv1";
+
+service NotifyService {
+  // Stream of events for every vault and shared mount accessible to the token.
+  // The stream is closed with UNAUTHENTICATED when the token expires; the
+  // client refreshes and reconnects, passing the last known seq per vault.
+  rpc Subscribe(SubscribeRequest) returns (stream Event);
+}
+
+message SubscribeRequest {
+  string device_id = 1;
+  map<string, int64> known_seq = 2; // vault_id -> last seq known by the client (for replay)
+  int32 config_version = 3;
+}
+
+message Event {
+  oneof payload {
+    VaultChanged vault_changed = 1;
+    ConfigChanged config_changed = 2;
+    ShareChanged share_changed = 3;
+    AccountChanged account_changed = 4; // suspension, quota change
+  }
+}
+
+message VaultChanged {
+  string vault_id = 1;
+  int64 seq = 2;
+}
+
+message ConfigChanged {
+  int32 version = 1;
+}
+
+message ShareChanged {
+  string share_id = 1;
+  string kind = 2; // granted | revoked | updated
+}
+
+message AccountChanged {
+  string kind = 1; // suspended | activated | quota_changed
+}

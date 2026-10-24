@@ -1,0 +1,433 @@
+openapi: 3.1.0
+info:
+  title: Nodus Cloud API
+  version: 1.0.0-m0
+  description: |
+    REST contract of the Nodus Cloud Service (Specifications.md §3.1, §3.5).
+    This file is the single source of truth: Go server stubs and the TypeScript
+    client are generated from it (`make gen`). Endpoints are added milestone by
+    milestone; see docs/roadmap.md.
+
+    Conventions: JSON UTF-8, RFC 3339 UTC timestamps, sizes in bytes, UUID v7
+    identifiers, errors as `application/problem+json` with an application `code`.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: system
+    description: Health and readiness (no authentication)
+  - name: me
+    description: Profile, devices and configuration of the authenticated user
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      operationId: healthz
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /readyz:
+    get:
+      tags: [system]
+      operationId: readyz
+      summary: Readiness probe (database, object storage, identity provider reachable)
+      security: []
+      responses:
+        '200':
+          description: Ready to serve
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /client-config:
+    get:
+      tags: [system]
+      operationId: getClientConfig
+      summary: Public bootstrap information for clients (OIDC issuer and client id, notify endpoint)
+      description: Lets a desktop client start a login knowing only the server URL (ADR-0008).
+      security: []
+      responses:
+        '200':
+          description: Client configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientConfig'
+
+  /me:
+    get:
+      tags: [me]
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      summary: Profile, role, effective quota, usage and config version
+      description: Provisions the user just-in-time on first login (§1.3).
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /me/devices:
+    get:
+      tags: [me]
+      operationId: listMyDevices
+      security:
+        - bearerAuth: []
+      summary: Registered devices of the current user
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [me]
+      operationId: registerDevice
+      security:
+        - bearerAuth: []
+      summary: Register this device and obtain its device_id
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistration'
+      responses:
+        '201':
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/devices/{deviceId}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    delete:
+      tags: [me]
+      operationId: revokeDevice
+      security:
+        - bearerAuth: []
+      summary: Revoke a device
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /config/effective:
+    get:
+      tags: [me]
+      operationId: getEffectiveConfig
+      security:
+        - bearerAuth: []
+      summary: Effective configuration for the current user (product defaults → global → groups → user)
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Effective configuration
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveConfig'
+        '304':
+          description: Not modified
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak access token with `aud=nodus-api`
+
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Client-chosen key that makes a mutating POST safe to retry
+      schema:
+        type: string
+        maxLength: 128
+
+  responses:
+    Unauthenticated:
+      description: Missing or invalid token (code UNAUTHENTICATED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed (code FORBIDDEN or USER_SUSPENDED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found or not visible to the caller (code NOT_FOUND)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ValidationFailed:
+      description: Request does not satisfy the schema (code VALIDATION_FAILED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RateLimited:
+      description: Too many requests (code RATE_LIMITED); honour Retry-After
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    ClientConfig:
+      type: object
+      required: [issuer, desktop_client_id, audience, grpc_endpoint, api_version]
+      properties:
+        issuer:
+          type: string
+          format: uri
+          description: OIDC issuer (Keycloak realm URL)
+        desktop_client_id:
+          type: string
+        audience:
+          type: string
+          description: Expected `aud` of access tokens
+        grpc_endpoint:
+          type: string
+          description: host:port of the NotifyService stream
+        api_version:
+          type: string
+          description: Server version
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details with the Nodus application code
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        detail:
+          type: string
+        request_id:
+          type: string
+        extra:
+          type: object
+          additionalProperties: true
+
+    ErrorCode:
+      type: string
+      description: Application error codes (§3.1); mirrored in shared/go/syncproto
+      enum:
+        - UNAUTHENTICATED
+        - FORBIDDEN
+        - USER_SUSPENDED
+        - NOT_FOUND
+        - VALIDATION_FAILED
+        - QUOTA_EXCEEDED
+        - FILE_TOO_LARGE
+        - REV_CONFLICT
+        - PATH_INVALID
+        - PATH_COLLISION
+        - SHARE_ROOT_MOVE
+        - BLOB_MISSING
+        - VAULT_ENCRYPTED
+        - VAULT_KIND_IMMUTABLE
+        - RATE_LIMITED
+        - CURSOR_EXPIRED
+        - INTERNAL
+
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unavailable]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+          description: Per-dependency status (database, storage, oidc)
+        version:
+          type: string
+
+    Role:
+      type: string
+      enum: [admin, user]
+
+    UserStatus:
+      type: string
+      enum: [pending, active, suspended, deleted]
+
+    Me:
+      type: object
+      required:
+        [id, username, email, role, status, quota_bytes, used_bytes, config_version, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        quota_bytes:
+          type: integer
+          format: int64
+          description: Effective quota; -1 means unlimited
+        used_bytes:
+          type: integer
+          format: int64
+        config_version:
+          type: integer
+          description: Version of the effective configuration (ETag of /config/effective)
+        created_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+
+    DeviceRegistration:
+      type: object
+      required: [name, platform]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Human readable device name (host name by default)
+        platform:
+          type: string
+          enum: [windows, macos, linux, web]
+        app_version:
+          type: string
+          maxLength: 64
+
+    Device:
+      type: object
+      required: [id, name, platform, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        platform:
+          type: string
+        app_version:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+
+    EffectiveConfig:
+      type: object
+      required: [version, config, locked_keys]
+      properties:
+        version:
+          type: integer
+        config:
+          type: object
+          additionalProperties: true
+          description: Validated against api/config-profile.schema.json (M4)
+        locked_keys:
+          type: array
+          items:
+            type: string
+          description: Dotted keys the user cannot override
