@@ -1,0 +1,14 @@
+{
+ "nodes": [
+  {
+   "id": "1",
+   "type": "text",
+   "text": "ours",
+   "x": 0,
+   "y": 0,
+   "width": 10,
+   "height": 10
+  }
+ ],
+ "edges": []
+}

@@ -15,3 +15,5 @@ shared/conformance/markdown/**
 # Playwright output
 **/test-results/
 **/playwright-report/
+shared/conformance/merge/**
+shared/conformance/crypto/**

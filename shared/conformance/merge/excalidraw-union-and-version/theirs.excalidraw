@@ -1,0 +1,26 @@
+{
+ "type": "excalidraw",
+ "elements": [
+  {
+   "id": "a",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "x": 0
+  },
+  {
+   "id": "b",
+   "version": 3,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "x": 9
+  },
+  {
+   "id": "d",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "x": 0
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "config",
+  "clean": true,
+  "copyOf": "",
+  "oursNewer": true,
+  "ext": "json"
+}
