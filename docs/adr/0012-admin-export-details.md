@@ -1,0 +1,32 @@
+# ADR-0012 — Dettagli implementativi di console admin ed export (M5)
+
+|                       |                                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | proposta (da recepire nello spec a cura dell'owner)                                                                        |
+| **Data**              | 2026-10-24                                                                                                                 |
+| **Riferimenti spec**  | §2.6.2–2.6.4 (quota, export), §3.5.5 (admin), §3.6 (`AccountChanged`), §3.8 (cifratura), D-03, D-05                        |
+| **Devia dallo spec?** | sì, in modo additivo (migrazione 0005, codici d'errore su operazioni admin, `S3_PUBLIC_ENDPOINT`, `quota_bytes` opzionale) |
+
+## Contesto
+
+M5 aggiunge le API di amministrazione (utenti allineati a Keycloak, gruppi, profili, limiti, audit), l'export ZIP e le relative UI. Lo spec fissa i confini ma lascia aperti alcuni dettagli.
+
+## Decisioni
+
+1. **Migrazione `0005_admin.sql`** (la roadmap la chiamava `0004_admin`, già occupata da gruppi e condivisioni): `config_profile_versions` (con riempimento dei profili esistenti), `export_jobs`, `storage_snapshots` (trend del cruscotto) e indici su `audit_log(actor_id|action, at)`.
+2. **Ruolo admin**: ogni handler `/admin/*` richiede `principal.IsAdmin()` (`403 FORBIDDEN` altrimenti). Il ruolo in `users.role` è lo specchio del claim del token, riletto a ogni login; un cambio di ruolo avviene quindi in Keycloak (ruolo realm `nodus-admin`) **e** nello specchio. Non si può sospendere o eliminare se stessi, né togliersi il ruolo, né rimuovere l'ultimo amministratore attivo (`409 INVALID_STATE`).
+3. **Client Keycloak con privilegi minimi** (`internal/keycloak`): service account con `manage-users`, `view-users`, `query-users` (niente `view-realm`). Il ruolo `nodus-admin` si risolve da `role-mappings/realm[/available]` dell'utente, non da `GET /roles/{name}`: lo ha scoperto il test contro il Keycloak reale (`KC_LIVE_URL=http://localhost:8080 go test ./internal/keycloak -run Live`), che i fake non avrebbero rivelato. Un utente creato senza password temporanea riceve `UPDATE_PASSWORD` e `VERIFY_EMAIL`. Senza `KC_ADMIN_*` il client è `Disabled`: le operazioni che lo richiedono rispondono `409 INVALID_STATE`, quelle su utenti solo-DB (installazioni standalone) proseguono.
+4. **Sospensione**: lo stato nel DB è la barriera effettiva (la cache di stato del middleware dura 30 s; sulla replica che serve l'operazione viene invalidata subito); poi Keycloak disabilita l'account e revoca le sessioni. Se Keycloak fallisce l'utente è comunque bloccato e il ritentativo completa l'operazione. Evento `AccountChanged` (`suspended`, `activated`, `quota_changed`) sul canale NOTIFY `account_changed`: lo stream gRPC si chiude con `PERMISSION_DENIED` dopo `suspended`; SSE emette `account_changed`. L'eliminazione porta l'utente a `deleted`, manda i suoi vault in retention e disabilita (non cancella) l'account Keycloak: lo username non è riutilizzabile.
+5. **Quota**: `quota_bytes` assente o `null` = default globale, `-1` = illimitata (campo opzionale nello schema OpenAPI, perché il generatore non distingue `null`). Le modifiche (singole e in blocco, max 500 utenti) emettono `AccountChanged`.
+6. **Profili di configurazione**: ogni creazione o modifica (anche la retrocessione del profilo globale uscente) scrive uno snapshot in `config_profile_versions`. Il ripristino è una nuova versione col contenuto di quella vecchia; `is_global` resta quello attuale del profilo.
+7. **Cruscotto storage**: contatori e top consumer calcolati sui dati vivi con la quota di default; il trend legge `storage_snapshots`, scritto dal job notturno di manutenzione (e alla lettura del cruscotto, così non resta vuoto nel primo giorno). Soglie e limiti sono le chiavi `settings` già seminate, validate (`1 ≤ warn < critical ≤ 100`, retention giornaliera ≥ retention).
+8. **Audit**: ordine per `id` decrescente con cursore a chiave (`next_cursor`), filtri attore/azione (prefisso)/target/intervallo; CSV fino a 50 000 righe con neutralizzazione delle formule (celle che iniziano con `= + - @`). L'indirizzo IP non è ancora registrato (`audit.Record` non lo riceve): colonna presente, vuota.
+9. **Export (cloud)**: solo il proprietario, vault condiviso, mai privato (`VAULT_ENCRYPTED`: il server ha solo cifrato). `GET /vaults/{vid}/export.zip` in streaming fino a 512 MB (`409 INVALID_STATE` oltre: serve un job); `POST …/exports` crea un job che un worker (`jobs`, ogni 15 s) costruisce in un file temporaneo e carica nel bucket `S3_BUCKET_EXPORTS` come `exports/<id>.zip` (nei test e in dev senza S3 usa lo store dei blob). Il link vale 24 h, poi il job passa a `expired` e l'archivio è cancellato; un job `running` da più di un'ora è rimesso in coda. `download_url` è un URL presigned solo se è configurato `S3_PUBLIC_ENDPOINT` (l'endpoint interno di solito non è raggiungibile dal browser); altrimenti è il percorso autenticato `…/exports/{id}/download`. I file escono con `deflate` per i formati testuali e `store` per il resto; sono esclusi i percorsi che `pathrules.IsExcluded` dichiara device-specific (la sync li rifiuta già). Ogni export è registrato in audit (`vault.export`).
+10. **Export (desktop)**: comando "Esporta vault come ZIP" → `VaultAPI.ExportZip` con il dialogo nativo "Salva con nome"; scrive in un file `.part` accanto alla destinazione e lo rinomina a fine corsa; rifiuta una destinazione dentro il vault; esclude i dati device-specific e il cestino `.trash/`; include le cartelle vuote.
+
+## Limiti noti
+
+- La lista sessioni mostra le sessioni SSO di Keycloak, non i token del desktop.
+- Senza SMTP in Keycloak il reset password richiede il cambio al prossimo accesso ma non invia l'e-mail (`email_sent=false`).
+- L'export server non include le cartelle vuote (il server non le conosce).
+- Il trend ha un punto per giorno di manutenzione (o di apertura del cruscotto).
