@@ -38,7 +38,7 @@ interface Props {
 }
 
 /** Text shown in an input for a property value. */
-function show(value: unknown): string {
+export function show(value: unknown): string {
   if (Array.isArray(value)) return value.map(show).join(', ');
   if (value === null || value === undefined) return '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
@@ -47,7 +47,7 @@ function show(value: unknown): string {
 }
 
 // Remounted (key) whenever the stored value changes, so the draft never goes stale.
-function ValueEditor({
+export function ValueEditor({
   kind,
   value,
   onCommit,
