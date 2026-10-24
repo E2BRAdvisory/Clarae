@@ -1,0 +1,42 @@
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Go
+/bin/
+apps/desktop/build/bin/
+*.test
+*.out
+
+# Local data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Generated at runtime
+deploy/docker/.data/
+
+# Yarn 4 (node-modules linker, global cache)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+.pnp.*
+
+# Dev scripts scratch area (data dirs, logs, binaries)
+.dev/
+
+# Claude Code local state
+.claude/

@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+apps/desktop/build/bin
+apps/desktop/frontend
+web
+packages
+tools
+docs
+deploy
+.git
+.claude
+*.md

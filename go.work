@@ -1,0 +1,7 @@
+go 1.26.0
+
+use (
+	./apps/desktop
+	./services/cloud
+	./shared/go
+)

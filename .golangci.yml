@@ -1,0 +1,54 @@
+version: '2'
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - depguard
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nolintlint
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    depguard:
+      rules:
+        # Cloud modular monolith (spec §4.3): modules depend only on db, storage,
+        # audit, notify and on other modules' interfaces, never on their tables.
+        # Package-level rules are added as the modules appear (M0-WP3 onwards).
+        main:
+          files:
+            - '$all'
+          deny:
+            - pkg: 'github.com/pkg/errors'
+              desc: 'use the standard errors package and fmt.Errorf with %w'
+    gosec:
+      excludes:
+        - G304 # file inclusion via variable: vault FS access is validated by pathrules
+        - G301 # directory permissions: vault folders are ordinary user folders (0755)
+        - G302 # chmod of atomic-write temporaries to 0644: same rationale
+        - G306 # file permissions: notes are ordinary user files (0644), as in Obsidian
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: lax
+    paths:
+      - ".*\\.gen\\.go$"
+      - 'internal/api/.*'
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - nodus

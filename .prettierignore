@@ -1,0 +1,13 @@
+node_modules
+dist
+build/bin
+**/wailsjs/**
+**/*.gen.ts
+**/src/gen/**
+yarn.lock
+.yarn/releases
+.yarn/cache
+.pnp.*
+deploy/helm/**/templates/**
+Specifications.md
+shared/conformance/markdown/**
