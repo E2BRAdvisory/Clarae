@@ -17,3 +17,4 @@ shared/conformance/markdown/**
 **/playwright-report/
 shared/conformance/merge/**
 shared/conformance/crypto/**
+apps/desktop/internal/importer/testdata

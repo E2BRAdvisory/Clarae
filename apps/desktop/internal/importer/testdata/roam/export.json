@@ -1,0 +1,48 @@
+[
+ {
+  "title": "January 5th, 2024",
+  "create-time": 1704412800000,
+  "edit-time": 1704416400000,
+  "children": [
+   {
+    "string": "{{[[TODO]]}} Write the report",
+    "uid": "aaaaaaaaa",
+    "children": [
+     {
+      "string": "Draft in [[Project/Alpha]]",
+      "uid": "bbbbbbbbb"
+     }
+    ]
+   },
+   {
+    "string": "{{[[DONE]]}} Send email",
+    "uid": "ddddddddd"
+   }
+  ]
+ },
+ {
+  "title": "Project/Alpha",
+  "create-time": 1704000000000,
+  "children": [
+   {
+    "string": "Goal",
+    "heading": 2,
+    "uid": "eeeeeeeee",
+    "children": [
+     {
+      "string": "See ((aaaaaaaaa)) and ((zzzzzzzzz))",
+      "uid": "fffffffff"
+     },
+     {
+      "string": "This is ^^important^^ and __slanted__ with #[[multi word]] and [alias]([[January 5th, 2024]])",
+      "uid": "ggggggggg"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Empty page",
+  "children": []
+ }
+]
