@@ -56,6 +56,20 @@ jobs:
       - run: yarn typecheck
       - run: yarn run test
 
+  e2e:
+    name: UI end-to-end (Playwright, mocked bindings)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn workspace @nodus/desktop-frontend exec playwright install --with-deps chromium
+      - run: yarn workspace @nodus/desktop-frontend run e2e
+
   conformance:
     name: Conformance fixtures (Go + TS)
     runs-on: ubuntu-24.04
@@ -75,6 +89,7 @@ jobs:
           (cd shared/go && go test -race -count=1 -run Conformance ./conformance/...)
           (cd apps/desktop && go test -race -count=1 -tags webkit2_41 -run Conformance ./internal/parser/...)
           yarn workspace @nodus/conformance run test
+          yarn workspace @nodus/markdown run test
 
   cloud-integration:
     name: Cloud integration (testcontainers)

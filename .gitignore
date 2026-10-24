@@ -41,3 +41,7 @@ deploy/docker/.data/
 # Claude Code local state
 .claude/
 CLAUDE.md
+
+# Playwright output
+test-results/
+playwright-report/

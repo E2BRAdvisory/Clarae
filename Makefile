@@ -66,7 +66,12 @@ conformance: ## Shared Markdown/merge/crypto fixtures run by Go and TS
 	cd shared/go && go test -race -count=1 -run Conformance ./conformance/...
 	@if [ -d $(DESKTOP)/internal/parser ]; then cd $(DESKTOP) && go test -race -count=1 -run Conformance ./internal/parser/...; fi
 	yarn workspace @nodus/conformance run test
+	yarn workspace @nodus/markdown run test
 	@if [ -f $(DESKTOP)/frontend/src/test/conformance.test.ts ]; then yarn workspace @nodus/desktop-frontend exec vitest run src/test/conformance.test.ts; fi
+
+.PHONY: e2e
+e2e: ## Playwright (Chromium) against the in-memory Wails mock
+	yarn workspace @nodus/desktop-frontend run e2e
 
 .PHONY: ci
 ci: lint vuln test ## What CI runs on every push

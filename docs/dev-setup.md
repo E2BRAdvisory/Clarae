@@ -50,13 +50,15 @@ Accesso nel cloud: `user1` / `nodus-dev-password` (anche `user2`, e `admin` per 
 make gen             # rigenera OpenAPI, proto, sqlc, binding Wails
 make lint            # golangci-lint + eslint + prettier
 make test            # go test -race, vitest, conformance
+make e2e             # Playwright (Chromium) sull'UI con i binding simulati (prima volta: yarn workspace @nodus/desktop-frontend exec playwright install chromium)
 make test-integration
 make ci              # lint + vuln + test (lo stesso della CI)
 make help
 ```
 
 Per un singolo test Go: `cd services/cloud && go test -run 'TestNome' ./internal/sync/...`.
-Per un singolo test TS: `pnpm --filter @nodus/desktop-frontend exec vitest run src/editor/foo.test.ts`.
+Per un singolo test TS: `yarn workspace @nodus/desktop-frontend exec vitest run src/editor/foo.test.ts`.
+Gli e2e girano in un browser normale: `VITE_E2E=1` fa installare a `main.tsx` il mock dei binding (`src/test/wails-mock`), esposto come `window.__mock` per preparare note nei test.
 
 ## Struttura
 

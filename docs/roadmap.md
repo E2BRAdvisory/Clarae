@@ -149,6 +149,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 6. M1 — Core editing (P0) (esito: parità funzionale P0 offline)
 
+> **Stato (2026-10-24):** WP1–WP9 implementati (ADR-0004). Verificati in CI locale: conformance Go/TS su 69 fixture, vitest, e2e Playwright su mock dei binding. Restano la checklist manuale su webview reale (`docs/qa/obsidian-parity.md`) e il benchmark di ricerca a 50k note (cache dei candidati).
+
 ### M1-WP1 Parser OFM completo (Go) ∥ con WP5
 
 - `internal/parser`: estensioni goldmark per wikilink (`[[Nota]]`, alias, `#heading`, `#^block`, `[[#heading]]`), embed `![[…]]` con parametri (`|WxH`, `#page=`), callout (`> [!type]±` con titolo), highlight `==`, commento `%%`, block-id `^id`, task con stati custom, tag `#a/b` (regole Obsidian: no solo cifre), footnote, math `$`/`$$` (solo riconoscimento), frontmatter YAML tipizzato (`tags`, `aliases`; `cssclasses` ignorata), tabelle GFM.
