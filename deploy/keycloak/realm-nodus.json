@@ -36,6 +36,10 @@
   "roles": {
     "realm": [
       {
+        "name": "offline_access",
+        "description": "${role_offline-access}"
+      },
+      {
         "name": "nodus-admin",
         "description": "Nodus administrator: users, groups, quotas, config profiles, audit. No access to vault content."
       },
@@ -53,6 +57,162 @@
     }
   },
   "clientScopes": [
+    {
+      "name": "basic",
+      "description": "Adds the sub claim",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile",
+      "description": "User profile claims",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "firstName",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "firstName",
+            "claim.name": "given_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "lastName",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "lastName",
+            "claim.name": "family_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "full name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "email",
+      "description": "Email claims",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "email",
+            "claim.name": "email",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "emailVerified",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "emailVerified",
+            "claim.name": "email_verified",
+            "jsonType.label": "boolean",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "roles",
+      "description": "Realm roles (realm_access.roles)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
     {
       "name": "nodus-api-audience",
       "description": "Adds aud=nodus-api to access tokens issued to Nodus clients",
@@ -96,7 +256,7 @@
         "post.logout.redirect.uris": "nodus://auth/logout##http://127.0.0.1/*",
         "use.refresh.tokens": "true"
       },
-      "defaultClientScopes": ["openid", "profile", "email", "roles", "nodus-api-audience"],
+      "defaultClientScopes": ["basic", "openid", "profile", "email", "roles", "nodus-api-audience"],
       "optionalClientScopes": ["offline_access"]
     },
     {
@@ -115,7 +275,7 @@
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:5174/*##http://localhost:18081/*"
       },
-      "defaultClientScopes": ["openid", "profile", "email", "roles", "nodus-api-audience"],
+      "defaultClientScopes": ["basic", "openid", "profile", "email", "roles", "nodus-api-audience"],
       "optionalClientScopes": []
     },
     {
@@ -142,7 +302,7 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
-      "defaultClientScopes": ["roles"],
+      "defaultClientScopes": ["basic", "roles"],
       "optionalClientScopes": []
     }
   ],
@@ -162,8 +322,14 @@
       "lastName": "Admin",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "nodus-dev-password", "temporary": false }],
-      "realmRoles": ["nodus-admin", "nodus-user"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nodus-dev-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["nodus-admin", "nodus-user", "offline_access"]
     },
     {
       "username": "user1",
@@ -172,8 +338,14 @@
       "lastName": "Utente",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "nodus-dev-password", "temporary": false }],
-      "realmRoles": ["nodus-user"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nodus-dev-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["nodus-user", "offline_access"]
     },
     {
       "username": "user2",
@@ -182,8 +354,14 @@
       "lastName": "Utente",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "nodus-dev-password", "temporary": false }],
-      "realmRoles": ["nodus-user"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nodus-dev-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["nodus-user", "offline_access"]
     }
   ]
 }
