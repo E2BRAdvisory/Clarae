@@ -18,6 +18,14 @@ export function PlanRename(arg1, arg2, arg3) {
   return window['go']['app']['LinksAPI']['PlanRename'](arg1, arg2, arg3);
 }
 
+export function Resolve(arg1, arg2, arg3) {
+  return window['go']['app']['LinksAPI']['Resolve'](arg1, arg2, arg3);
+}
+
+export function Suggest(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['LinksAPI']['Suggest'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function UnlinkedMentions(arg1, arg2) {
   return window['go']['app']['LinksAPI']['UnlinkedMentions'](arg1, arg2);
 }

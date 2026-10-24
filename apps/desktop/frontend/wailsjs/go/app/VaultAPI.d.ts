@@ -17,12 +17,20 @@ export function OpenVault(arg1:string):Promise<app.VaultInfo>;
 
 export function PickFolder(arg1:string):Promise<string>;
 
+export function ReadBinary(arg1:string,arg2:string):Promise<app.BinaryContent>;
+
+export function ReadConfig(arg1:string,arg2:string):Promise<string>;
+
 export function ReadNote(arg1:string,arg2:string):Promise<app.NoteContent>;
 
 export function RebuildIndex(arg1:string):Promise<void>;
 
 export function Rename(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SaveAttachment(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
 export function Trash(arg1:string,arg2:string):Promise<string>;
+
+export function WriteConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function WriteNote(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.WriteResult>;

@@ -30,6 +30,14 @@ export function PickFolder(arg1) {
   return window['go']['app']['VaultAPI']['PickFolder'](arg1);
 }
 
+export function ReadBinary(arg1, arg2) {
+  return window['go']['app']['VaultAPI']['ReadBinary'](arg1, arg2);
+}
+
+export function ReadConfig(arg1, arg2) {
+  return window['go']['app']['VaultAPI']['ReadConfig'](arg1, arg2);
+}
+
 export function ReadNote(arg1, arg2) {
   return window['go']['app']['VaultAPI']['ReadNote'](arg1, arg2);
 }
@@ -42,8 +50,16 @@ export function Rename(arg1, arg2, arg3) {
   return window['go']['app']['VaultAPI']['Rename'](arg1, arg2, arg3);
 }
 
+export function SaveAttachment(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['VaultAPI']['SaveAttachment'](arg1, arg2, arg3, arg4);
+}
+
 export function Trash(arg1, arg2) {
   return window['go']['app']['VaultAPI']['Trash'](arg1, arg2);
+}
+
+export function WriteConfig(arg1, arg2, arg3) {
+  return window['go']['app']['VaultAPI']['WriteConfig'](arg1, arg2, arg3);
 }
 
 export function WriteNote(arg1, arg2, arg3, arg4) {

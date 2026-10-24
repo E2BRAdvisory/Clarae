@@ -27,7 +27,13 @@ type OpenRequestPayload struct {
 	File  string `json:"file"`
 }
 
+// emit sends an event to the frontend. Tests replace App.emitter because the
+// Wails runtime aborts the process when given a context it did not create.
 func (a *App) emit(name string, payload any) {
+	if a.emitter != nil {
+		a.emitter(name, payload)
+		return
+	}
 	if a.ctx == nil {
 		return
 	}

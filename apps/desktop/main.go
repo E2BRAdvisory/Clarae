@@ -90,6 +90,8 @@ func run() int {
 			app.NewSettingsAPI(a),
 			app.NewAuthAPI(a),
 			app.NewLinksAPI(a),
+			app.NewTagsAPI(a),
+			app.NewPropertiesAPI(a),
 		},
 	})
 	if err != nil {

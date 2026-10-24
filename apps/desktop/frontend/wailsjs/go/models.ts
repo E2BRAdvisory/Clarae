@@ -3,6 +3,7 @@ export namespace app {
 	export class AppSettings {
 	    language: string;
 	    theme: string;
+	    trashMode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -12,6 +13,25 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.language = source["language"];
 	        this.theme = source["theme"];
+	        this.trashMode = source["trashMode"];
+	    }
+	}
+	export class BinaryContent {
+	    path: string;
+	    mime: string;
+	    data: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BinaryContent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.mime = source["mime"];
+	        this.data = source["data"];
+	        this.size = source["size"];
 	    }
 	}
 	export class NoteContent {
@@ -30,6 +50,36 @@ export namespace app {
 	        this.content = source["content"];
 	        this.hash = source["hash"];
 	        this.size = source["size"];
+	    }
+	}
+	export class PropertyKey {
+	    key: string;
+	    kind: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PropertyKey(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.kind = source["kind"];
+	        this.count = source["count"];
+	    }
+	}
+	export class TagCount {
+	    name: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.count = source["count"];
 	    }
 	}
 	export class VaultInfo {
@@ -296,6 +346,28 @@ export namespace links {
 		    }
 		    return a;
 		}
+	}
+	export class Suggestion {
+	    kind: string;
+	    label: string;
+	    path: string;
+	    detail: string;
+	    line: number;
+	    score: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Suggestion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.label = source["label"];
+	        this.path = source["path"];
+	        this.detail = source["detail"];
+	        this.line = source["line"];
+	        this.score = source["score"];
+	    }
 	}
 
 }

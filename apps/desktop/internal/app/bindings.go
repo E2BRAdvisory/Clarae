@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 
+	"github.com/Bios-Marcel/wastebasket/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"nodus/apps/desktop/internal/links"
@@ -142,15 +144,34 @@ func (v *VaultAPI) Rename(vaultID, fromPath, toPath string) error {
 	return ov.Indexer.Update(context.Background(), []string{fromPath, toPath})
 }
 
-// Trash moves a file or folder to the vault's .trash/ folder and returns its new path.
+// Trash deletes a file or folder recoverably: to the OS trash or to the
+// vault's .trash/ folder, depending on the TrashMode setting. It returns the
+// new vault-relative path for the vault trash and "" for the OS trash.
 func (v *VaultAPI) Trash(vaultID, relPath string) (string, error) {
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return "", err
 	}
-	dest, err := ov.FS.Trash(relPath)
-	if err != nil {
-		return "", bindingError(err)
+	mode := "system"
+	if cur, err := NewSettingsAPI(v.app).Get(); err == nil && cur.TrashMode != "" {
+		mode = cur.TrashMode
+	}
+	var dest string
+	if mode == "system" {
+		abs, _, err := ov.FS.Resolve(relPath)
+		if err != nil {
+			return "", bindingError(err)
+		}
+		if err := wastebasket.Trash(abs); err != nil {
+			// No usable OS trash (e.g. a headless Linux): fall back to the vault trash.
+			v.app.logger.Warn().Err(err).Msg("system trash unavailable; using .trash")
+			mode = "vault"
+		}
+	}
+	if mode == "vault" {
+		if dest, err = ov.FS.Trash(relPath); err != nil {
+			return "", bindingError(err)
+		}
 	}
 	_ = ov.Indexer.Update(context.Background(), []string{relPath})
 	return dest, nil
@@ -197,11 +218,14 @@ func NewSettingsAPI(a *App) *SettingsAPI { return &SettingsAPI{app: a} }
 type AppSettings struct {
 	Language string `json:"language"` // "it" | "en" | "" (system)
 	Theme    string `json:"theme"`    // "system" | "light" | "dark"
+	// TrashMode is where deleted files go: "system" (OS trash, default) or
+	// "vault" (the vault's .trash/ folder).
+	TrashMode string `json:"trashMode"`
 }
 
 // Get returns the saved preferences (defaults when unset).
 func (s *SettingsAPI) Get() (AppSettings, error) {
-	out := AppSettings{Theme: "system"}
+	out := AppSettings{Theme: "system", TrashMode: "system"}
 	if s.app.appDB == nil {
 		return out, nil
 	}
@@ -220,6 +244,11 @@ func (s *SettingsAPI) Set(settings AppSettings) error {
 	case "", "system", "light", "dark":
 	default:
 		return fmt.Errorf("invalid theme %q", settings.Theme)
+	}
+	switch settings.TrashMode {
+	case "", "system", "vault":
+	default:
+		return fmt.Errorf("invalid trash mode %q", settings.TrashMode)
 	}
 	raw, err := json.Marshal(settings)
 	if err != nil {
@@ -323,4 +352,62 @@ func (l *LinksAPI) ApplyRename(vaultID, from, to string) (links.Plan, error) {
 		touched = append(touched, f.Path)
 	}
 	return plan, ov.Indexer.Update(ctx, touched)
+}
+
+// Resolve returns the vault path a link written in fromPath points to ("" when unresolved).
+func (l *LinksAPI) Resolve(vaultID, fromPath, target string) (string, error) {
+	ov, err := l.app.vault(vaultID)
+	if err != nil {
+		return "", err
+	}
+	r, err := links.Load(context.Background(), ov.Indexer.DB())
+	if err != nil {
+		return "", err
+	}
+	return r.Resolve(fromPath, target), nil
+}
+
+// Suggest returns completion candidates. kind is "notes" (titles, paths,
+// aliases), "headings" (of notePath, or of every note when empty), "blocks"
+// (ids in notePath), "tags", "properties" or "all" (notes + headings, for the
+// quick switcher).
+func (l *LinksAPI) Suggest(vaultID, kind, query, notePath string, limit int) ([]links.Suggestion, error) {
+	ov, err := l.app.vault(vaultID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, db := context.Background(), ov.Indexer.DB()
+	switch kind {
+	case "notes":
+		return links.SuggestNotes(ctx, db, query, limit)
+	case "headings":
+		return links.SuggestHeadings(ctx, db, notePath, query, limit)
+	case "blocks":
+		return links.SuggestBlocks(ctx, db, notePath, query, limit)
+	case "tags":
+		return links.SuggestTags(ctx, db, query, limit)
+	case "properties":
+		return links.SuggestPropertyKeys(ctx, db, query, limit)
+	case "all":
+		notes, err := links.SuggestNotes(ctx, db, query, limit)
+		if err != nil {
+			return nil, err
+		}
+		if len([]rune(query)) < 2 {
+			return notes, nil
+		}
+		heads, err := links.SuggestHeadings(ctx, db, "", query, limit)
+		if err != nil {
+			return nil, err
+		}
+		all := make([]links.Suggestion, 0, len(notes)+len(heads))
+		all = append(all, notes...)
+		all = append(all, heads...)
+		sort.SliceStable(all, func(i, j int) bool { return all[i].Score > all[j].Score })
+		if limit > 0 && len(all) > limit {
+			all = all[:limit]
+		}
+		return all, nil
+	}
+	return nil, fmt.Errorf("invalid: unknown suggestion kind %q", kind)
 }

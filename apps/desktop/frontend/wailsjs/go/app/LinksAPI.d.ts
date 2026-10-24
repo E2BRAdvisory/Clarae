@@ -10,4 +10,8 @@ export function Outgoing(arg1:string,arg2:string):Promise<Array<links.Link>>;
 
 export function PlanRename(arg1:string,arg2:string,arg3:string):Promise<links.Plan>;
 
+export function Resolve(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function Suggest(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number):Promise<Array<links.Suggestion>>;
+
 export function UnlinkedMentions(arg1:string,arg2:string):Promise<Array<links.Mention>>;

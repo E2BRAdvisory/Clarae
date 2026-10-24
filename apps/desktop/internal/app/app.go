@@ -41,6 +41,7 @@ type App struct {
 	logger  zerolog.Logger
 	appDB   *sql.DB
 	auth    *auth.Service
+	emitter func(name string, payload any) // nil = Wails runtime
 	mu      sync.Mutex
 	vaults  map[string]*openVault
 	pending []string // nodus:// URLs received before the frontend was ready
