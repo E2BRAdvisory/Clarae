@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AuditLog struct {
@@ -49,6 +50,18 @@ type ConfigProfile struct {
 	UpdatedAt   time.Time
 }
 
+type ConfigProfileVersion struct {
+	ProfileID   uuid.UUID
+	Version     int32
+	Name        string
+	Description *string
+	IsGlobal    bool
+	Config      []byte
+	LockedKeys  []string
+	UpdatedBy   *uuid.UUID
+	UpdatedAt   time.Time
+}
+
 type Device struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
@@ -58,6 +71,19 @@ type Device struct {
 	CreatedAt  time.Time
 	LastSeenAt *time.Time
 	RevokedAt  *time.Time
+}
+
+type ExportJob struct {
+	ID          uuid.UUID
+	VaultID     uuid.UUID
+	RequestedBy uuid.UUID
+	Status      string
+	Size        *int64
+	ObjectKey   *string
+	Error       *string
+	CreatedAt   time.Time
+	FinishedAt  *time.Time
+	ExpiresAt   *time.Time
 }
 
 type File struct {
@@ -137,6 +163,11 @@ type ShareGrant struct {
 	Status        string
 	GrantedBy     uuid.UUID
 	CreatedAt     time.Time
+}
+
+type StorageSnapshot struct {
+	Day        pgtype.Date
+	TotalBytes int64
 }
 
 type Upload struct {

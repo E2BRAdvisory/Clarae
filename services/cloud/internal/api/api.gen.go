@@ -178,6 +178,33 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for ExportJobStatus.
+const (
+	Expired ExportJobStatus = "expired"
+	Failed  ExportJobStatus = "failed"
+	Queued  ExportJobStatus = "queued"
+	Ready   ExportJobStatus = "ready"
+	Running ExportJobStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the ExportJobStatus enum.
+func (e ExportJobStatus) Valid() bool {
+	switch e {
+	case Expired:
+		return true
+	case Failed:
+		return true
+	case Queued:
+		return true
+	case Ready:
+		return true
+	case Running:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GrantPrincipalType.
 const (
 	GrantPrincipalTypeGroup GrantPrincipalType = "group"
@@ -211,6 +238,24 @@ func (e GrantStatus) Valid() bool {
 	case GrantStatusDeclined:
 		return true
 	case GrantStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupMemberMemberRole.
+const (
+	GroupMemberMemberRoleManager GroupMemberMemberRole = "manager"
+	GroupMemberMemberRoleMember  GroupMemberMemberRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the GroupMemberMemberRole enum.
+func (e GroupMemberMemberRole) Valid() bool {
+	switch e {
+	case GroupMemberMemberRoleManager:
+		return true
+	case GroupMemberMemberRoleMember:
 		return true
 	default:
 		return false
@@ -370,6 +415,24 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for SetMemberRoleMemberRole.
+const (
+	SetMemberRoleMemberRoleManager SetMemberRoleMemberRole = "manager"
+	SetMemberRoleMemberRoleMember  SetMemberRoleMemberRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the SetMemberRoleMemberRole enum.
+func (e SetMemberRoleMemberRole) Valid() bool {
+	switch e {
+	case SetMemberRoleMemberRoleManager:
+		return true
+	case SetMemberRoleMemberRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SharePermission.
 const (
 	SharePermissionEditor  SharePermission = "editor"
@@ -493,6 +556,70 @@ func (e ListSharesParamsScope) Valid() bool {
 	}
 }
 
+// AdminGroup defines model for AdminGroup.
+type AdminGroup struct {
+	CreatedAt   time.Time          `json:"created_at"`
+	Description *string            `json:"description,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	MemberCount int                `json:"member_count"`
+	Name        string             `json:"name"`
+}
+
+// AdminUser defines model for AdminUser.
+type AdminUser struct {
+	CreatedAt   time.Time          `json:"created_at"`
+	DisplayName *string            `json:"display_name,omitempty"`
+	Email       string             `json:"email"`
+	Id          openapi_types.UUID `json:"id"`
+	LastLoginAt *time.Time         `json:"last_login_at,omitempty"`
+
+	// QuotaBytes Effective quota, -1 = unlimited
+	QuotaBytes int64 `json:"quota_bytes"`
+
+	// QuotaBytesOverride null = the global default, -1 = unlimited
+	QuotaBytesOverride *int64     `json:"quota_bytes_override,omitempty"`
+	Role               Role       `json:"role"`
+	Status             UserStatus `json:"status"`
+	UsedBytes          int64      `json:"used_bytes"`
+	Username           string     `json:"username"`
+}
+
+// AdminUserList defines model for AdminUserList.
+type AdminUserList struct {
+	Items []AdminUser `json:"items"`
+	Total int         `json:"total"`
+}
+
+// AdminVault defines model for AdminVault.
+type AdminVault struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	DeletedAt  *time.Time         `json:"deleted_at,omitempty"`
+	FileCount  int                `json:"file_count"`
+	Id         openapi_types.UUID `json:"id"`
+	Kind       VaultKind          `json:"kind"`
+	Name       string             `json:"name"`
+	TotalBytes int64              `json:"total_bytes"`
+}
+
+// AuditEntry defines model for AuditEntry.
+type AuditEntry struct {
+	Action     string                  `json:"action"`
+	ActorId    *openapi_types.UUID     `json:"actor_id,omitempty"`
+	ActorName  *string                 `json:"actor_name,omitempty"`
+	At         time.Time               `json:"at"`
+	Details    *map[string]interface{} `json:"details,omitempty"`
+	Id         int64                   `json:"id"`
+	Ip         *string                 `json:"ip,omitempty"`
+	TargetId   *string                 `json:"target_id,omitempty"`
+	TargetType *string                 `json:"target_type,omitempty"`
+}
+
+// AuditPage defines model for AuditPage.
+type AuditPage struct {
+	Items      []AuditEntry `json:"items"`
+	NextCursor *string      `json:"next_cursor,omitempty"`
+}
+
 // BlobCheck defines model for BlobCheck.
 type BlobCheck struct {
 	Hashes []string `json:"hashes"`
@@ -501,6 +628,17 @@ type BlobCheck struct {
 // BlobCheckResult defines model for BlobCheckResult.
 type BlobCheckResult struct {
 	Missing []string `json:"missing"`
+}
+
+// BulkQuota defines model for BulkQuota.
+type BulkQuota struct {
+	QuotaBytes *int64               `json:"quota_bytes,omitempty"`
+	UserIds    []openapi_types.UUID `json:"user_ids"`
+}
+
+// BulkQuotaResult defines model for BulkQuotaResult.
+type BulkQuotaResult struct {
+	Updated int `json:"updated"`
 }
 
 // Change defines model for Change.
@@ -585,6 +723,39 @@ type CommitResponse struct {
 	Results []OpResult `json:"results"`
 }
 
+// ConfigProfile defines model for ConfigProfile.
+type ConfigProfile struct {
+	Config      map[string]interface{} `json:"config"`
+	Description *string                `json:"description,omitempty"`
+	Id          openapi_types.UUID     `json:"id"`
+	IsGlobal    bool                   `json:"is_global"`
+	LockedKeys  []string               `json:"locked_keys"`
+	Name        string                 `json:"name"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	UpdatedBy   *openapi_types.UUID    `json:"updated_by,omitempty"`
+	Version     int                    `json:"version"`
+}
+
+// ConfigProfileInput defines model for ConfigProfileInput.
+type ConfigProfileInput struct {
+	Config      map[string]interface{} `json:"config"`
+	Description *string                `json:"description,omitempty"`
+	IsGlobal    *bool                  `json:"is_global,omitempty"`
+	LockedKeys  *[]string              `json:"locked_keys,omitempty"`
+	Name        string                 `json:"name"`
+}
+
+// CreateAdminUser defines model for CreateAdminUser.
+type CreateAdminUser struct {
+	DisplayName *string             `json:"display_name,omitempty"`
+	Email       openapi_types.Email `json:"email"`
+	Role        *Role               `json:"role,omitempty"`
+
+	// TemporaryPassword Optional; the user must change it at the first login
+	TemporaryPassword *string `json:"temporary_password,omitempty"`
+	Username          string  `json:"username"`
+}
+
 // CreateShare defines model for CreateShare.
 type CreateShare struct {
 	DisplayName  string              `json:"display_name"`
@@ -654,6 +825,23 @@ type EffectiveConfig struct {
 // ErrorCode Application error codes (§3.1); mirrored in shared/go/syncproto
 type ErrorCode string
 
+// ExportJob defines model for ExportJob.
+type ExportJob struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DownloadUrl Where to download a ready export
+	DownloadUrl *string            `json:"download_url,omitempty"`
+	Error       *string            `json:"error,omitempty"`
+	ExpiresAt   *time.Time         `json:"expires_at,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Size        *int64             `json:"size,omitempty"`
+	Status      ExportJobStatus    `json:"status"`
+	VaultId     openapi_types.UUID `json:"vault_id"`
+}
+
+// ExportJobStatus defines model for ExportJob.Status.
+type ExportJobStatus string
+
 // Grant defines model for Grant.
 type Grant struct {
 	CreatedAt     time.Time           `json:"created_at"`
@@ -675,6 +863,24 @@ type GrantInput struct {
 
 // GrantStatus defines model for GrantStatus.
 type GrantStatus string
+
+// GroupInput defines model for GroupInput.
+type GroupInput struct {
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+}
+
+// GroupMember defines model for GroupMember.
+type GroupMember struct {
+	DisplayName *string               `json:"display_name,omitempty"`
+	Email       *string               `json:"email,omitempty"`
+	MemberRole  GroupMemberMemberRole `json:"member_role"`
+	UserId      openapi_types.UUID    `json:"user_id"`
+	Username    string                `json:"username"`
+}
+
+// GroupMemberMemberRole defines model for GroupMember.MemberRole.
+type GroupMemberMemberRole string
 
 // GroupMembership defines model for GroupMembership.
 type GroupMembership struct {
@@ -811,6 +1017,36 @@ type Problem struct {
 	Type      string                  `json:"type"`
 }
 
+// ProfileAssignment defines model for ProfileAssignment.
+type ProfileAssignment struct {
+	// Priority Higher wins
+	Priority  int                `json:"priority"`
+	ProfileId openapi_types.UUID `json:"profile_id"`
+}
+
+// ProfileAssignments defines model for ProfileAssignments.
+type ProfileAssignments struct {
+	Items []ProfileAssignment `json:"items"`
+}
+
+// ProfileVersion defines model for ProfileVersion.
+type ProfileVersion struct {
+	Config      map[string]interface{} `json:"config"`
+	Description *string                `json:"description,omitempty"`
+	IsGlobal    bool                   `json:"is_global"`
+	LockedKeys  []string               `json:"locked_keys"`
+	Name        string                 `json:"name"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	UpdatedBy   *openapi_types.UUID    `json:"updated_by,omitempty"`
+	Version     int                    `json:"version"`
+}
+
+// ResetPasswordResult defines model for ResetPasswordResult.
+type ResetPasswordResult struct {
+	// EmailSent False when Keycloak could not send the e-mail; the new password is still required at the next login
+	EmailSent bool `json:"email_sent"`
+}
+
 // ResourceType defines model for ResourceType.
 type ResourceType string
 
@@ -838,6 +1074,25 @@ type RevisionList struct {
 // Role defines model for Role.
 type Role string
 
+// SetMemberRole defines model for SetMemberRole.
+type SetMemberRole struct {
+	MemberRole SetMemberRoleMemberRole `json:"member_role"`
+}
+
+// SetMemberRoleMemberRole defines model for SetMemberRole.MemberRole.
+type SetMemberRoleMemberRole string
+
+// SetQuota defines model for SetQuota.
+type SetQuota struct {
+	// QuotaBytes Omitted or null = the global default, -1 = unlimited
+	QuotaBytes *int64 `json:"quota_bytes,omitempty"`
+}
+
+// SetRole defines model for SetRole.
+type SetRole struct {
+	Role Role `json:"role"`
+}
+
 // Share defines model for Share.
 type Share struct {
 	CreatedAt   time.Time           `json:"created_at"`
@@ -863,6 +1118,35 @@ type Share struct {
 // SharePermission defines model for SharePermission.
 type SharePermission string
 
+// StorageOverview defines model for StorageOverview.
+type StorageOverview struct {
+	DefaultQuotaBytes int64         `json:"default_quota_bytes"`
+	TopConsumers      []TopConsumer `json:"top_consumers"`
+	TotalUsedBytes    int64         `json:"total_used_bytes"`
+	Trend             []TrendPoint  `json:"trend"`
+	UserCount         int           `json:"user_count"`
+	UsersOverCritical int           `json:"users_over_critical"`
+	UsersOverWarn     int           `json:"users_over_warn"`
+}
+
+// StorageSettings defines model for StorageSettings.
+type StorageSettings struct {
+	CriticalPercent           int   `json:"critical_percent"`
+	DefaultQuotaBytes         int64 `json:"default_quota_bytes"`
+	HistoryDailyRetentionDays int   `json:"history_daily_retention_days"`
+	HistoryRetentionDays      int   `json:"history_retention_days"`
+	MaxFileSizeBytes          int64 `json:"max_file_size_bytes"`
+	WarnPercent               int   `json:"warn_percent"`
+}
+
+// TopConsumer defines model for TopConsumer.
+type TopConsumer struct {
+	QuotaBytes int64              `json:"quota_bytes"`
+	UsedBytes  int64              `json:"used_bytes"`
+	UserId     openapi_types.UUID `json:"user_id"`
+	Username   string             `json:"username"`
+}
+
 // Tree defines model for Tree.
 type Tree struct {
 	// AsOfSeq The changelog position the manifest reflects: continue with changes?since=as_of_seq
@@ -878,6 +1162,18 @@ type TreeEntry struct {
 	Path   string             `json:"path"`
 	Rev    int                `json:"rev"`
 	Size   int64              `json:"size"`
+}
+
+// TrendPoint defines model for TrendPoint.
+type TrendPoint struct {
+	Day        openapi_types.Date `json:"day"`
+	TotalBytes int64              `json:"total_bytes"`
+}
+
+// UpdateAdminUser defines model for UpdateAdminUser.
+type UpdateAdminUser struct {
+	DisplayName *string              `json:"display_name,omitempty"`
+	Email       *openapi_types.Email `json:"email,omitempty"`
 }
 
 // UpdateShare defines model for UpdateShare.
@@ -905,6 +1201,15 @@ type Usage struct {
 
 // UsageLevel ok below 80 %, warning from 80 %, critical from 95 %, full at 100 %
 type UsageLevel string
+
+// UserSession defines model for UserSession.
+type UserSession struct {
+	Clients    *[]string `json:"clients,omitempty"`
+	Id         string    `json:"id"`
+	IpAddress  *string   `json:"ip_address,omitempty"`
+	LastAccess time.Time `json:"last_access"`
+	Started    time.Time `json:"started"`
+}
 
 // UserStatus defines model for UserStatus.
 type UserStatus string
@@ -939,8 +1244,14 @@ type DeviceId = openapi_types.UUID
 // DirectoryQuery defines model for DirectoryQuery.
 type DirectoryQuery = string
 
+// ExportPathId defines model for ExportPathId.
+type ExportPathId = openapi_types.UUID
+
 // FileId defines model for FileId.
 type FileId = openapi_types.UUID
+
+// GroupPathId defines model for GroupPathId.
+type GroupPathId = openapi_types.UUID
 
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
@@ -950,6 +1261,9 @@ type PrincipalId = openapi_types.UUID
 
 // PrincipalType defines model for PrincipalType.
 type PrincipalType string
+
+// ProfilePathId defines model for ProfilePathId.
+type ProfilePathId = openapi_types.UUID
 
 // Rev defines model for Rev.
 type Rev = int
@@ -963,8 +1277,14 @@ type Sha256 = string
 // SharePathId defines model for SharePathId.
 type SharePathId = openapi_types.UUID
 
+// UserPathId defines model for UserPathId.
+type UserPathId = openapi_types.UUID
+
 // VaultId defines model for VaultId.
 type VaultId = openapi_types.UUID
+
+// VersionPathId defines model for VersionPathId.
+type VersionPathId = int
 
 // Conflict RFC 9457 problem details with the Nodus application code
 type Conflict = Problem
@@ -986,6 +1306,37 @@ type ValidationFailed = Problem
 
 // bearerAuthContextKey is the context key for bearerAuth security scheme
 type bearerAuthContextKey string
+
+// AdminAuditLogParams defines parameters for AdminAuditLog.
+type AdminAuditLogParams struct {
+	Actor  *openapi_types.UUID `form:"actor,omitempty" json:"actor,omitempty"`
+	Action *string             `form:"action,omitempty" json:"action,omitempty"`
+	Target *string             `form:"target,omitempty" json:"target,omitempty"`
+	From   *time.Time          `form:"from,omitempty" json:"from,omitempty"`
+	To     *time.Time          `form:"to,omitempty" json:"to,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// AdminAuditLogCsvParams defines parameters for AdminAuditLogCsv.
+type AdminAuditLogCsvParams struct {
+	Actor  *openapi_types.UUID `form:"actor,omitempty" json:"actor,omitempty"`
+	Action *string             `form:"action,omitempty" json:"action,omitempty"`
+	Target *string             `form:"target,omitempty" json:"target,omitempty"`
+	From   *time.Time          `form:"from,omitempty" json:"from,omitempty"`
+	To     *time.Time          `form:"to,omitempty" json:"to,omitempty"`
+}
+
+// AdminListUsersParams defines parameters for AdminListUsers.
+type AdminListUsersParams struct {
+	Q      *string             `form:"q,omitempty" json:"q,omitempty"`
+	Status *string             `form:"status,omitempty" json:"status,omitempty"`
+	Role   *string             `form:"role,omitempty" json:"role,omitempty"`
+	Group  *openapi_types.UUID `form:"group,omitempty" json:"group,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int                `form:"offset,omitempty" json:"offset,omitempty"`
+	Sort   *string             `form:"sort,omitempty" json:"sort,omitempty"`
+}
 
 // GetEffectiveConfigParams defines parameters for GetEffectiveConfig.
 type GetEffectiveConfigParams struct {
@@ -1088,6 +1439,42 @@ type GetVaultTreeParams struct {
 	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
 }
 
+// AdminCreateConfigProfileJSONRequestBody defines body for AdminCreateConfigProfile for application/json ContentType.
+type AdminCreateConfigProfileJSONRequestBody = ConfigProfileInput
+
+// AdminUpdateConfigProfileJSONRequestBody defines body for AdminUpdateConfigProfile for application/json ContentType.
+type AdminUpdateConfigProfileJSONRequestBody = ConfigProfileInput
+
+// AdminCreateGroupJSONRequestBody defines body for AdminCreateGroup for application/json ContentType.
+type AdminCreateGroupJSONRequestBody = GroupInput
+
+// AdminUpdateGroupJSONRequestBody defines body for AdminUpdateGroup for application/json ContentType.
+type AdminUpdateGroupJSONRequestBody = GroupInput
+
+// AdminSetGroupProfilesJSONRequestBody defines body for AdminSetGroupProfiles for application/json ContentType.
+type AdminSetGroupProfilesJSONRequestBody = ProfileAssignments
+
+// AdminSetGroupMemberJSONRequestBody defines body for AdminSetGroupMember for application/json ContentType.
+type AdminSetGroupMemberJSONRequestBody = SetMemberRole
+
+// AdminPutStorageSettingsJSONRequestBody defines body for AdminPutStorageSettings for application/json ContentType.
+type AdminPutStorageSettingsJSONRequestBody = StorageSettings
+
+// AdminBulkQuotaJSONRequestBody defines body for AdminBulkQuota for application/json ContentType.
+type AdminBulkQuotaJSONRequestBody = BulkQuota
+
+// AdminCreateUserJSONRequestBody defines body for AdminCreateUser for application/json ContentType.
+type AdminCreateUserJSONRequestBody = CreateAdminUser
+
+// AdminUpdateUserJSONRequestBody defines body for AdminUpdateUser for application/json ContentType.
+type AdminUpdateUserJSONRequestBody = UpdateAdminUser
+
+// AdminSetUserQuotaJSONRequestBody defines body for AdminSetUserQuota for application/json ContentType.
+type AdminSetUserQuotaJSONRequestBody = SetQuota
+
+// AdminSetUserRoleJSONRequestBody defines body for AdminSetUserRole for application/json ContentType.
+type AdminSetUserRoleJSONRequestBody = SetRole
+
 // RegisterDeviceJSONRequestBody defines body for RegisterDevice for application/json ContentType.
 type RegisterDeviceJSONRequestBody = DeviceRegistration
 
@@ -1117,6 +1504,117 @@ type PutKeyEnvelopeJSONRequestBody = KeyEnvelopeInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// AdminAuditLog Audit trail, newest first
+	// (GET /admin/audit-log)
+	AdminAuditLog(w http.ResponseWriter, r *http.Request, params AdminAuditLogParams)
+	// AdminAuditLogCsv The audit trail as CSV (same filters, up to 50000 rows)
+	// (GET /admin/audit-log.csv)
+	AdminAuditLogCsv(w http.ResponseWriter, r *http.Request, params AdminAuditLogCsvParams)
+	// AdminListConfigProfiles Profiles
+	// (GET /admin/config-profiles)
+	AdminListConfigProfiles(w http.ResponseWriter, r *http.Request)
+	// AdminCreateConfigProfile Create a profile (validated against the schema)
+	// (POST /admin/config-profiles)
+	AdminCreateConfigProfile(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteConfigProfile Delete a profile and its assignments
+	// (DELETE /admin/config-profiles/{profileId})
+	AdminDeleteConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId)
+	// AdminGetConfigProfile One profile
+	// (GET /admin/config-profiles/{profileId})
+	AdminGetConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId)
+	// AdminUpdateConfigProfile Replace a profile: its version grows and the old one goes to the history
+	// (PUT /admin/config-profiles/{profileId})
+	AdminUpdateConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId)
+	// AdminListProfileVersions History of a profile, newest first
+	// (GET /admin/config-profiles/{profileId}/versions)
+	AdminListProfileVersions(w http.ResponseWriter, r *http.Request, profileId ProfilePathId)
+	// AdminRestoreProfileVersion Roll back: an old version becomes the new current one
+	// (POST /admin/config-profiles/{profileId}/versions/{version}:restore)
+	AdminRestoreProfileVersion(w http.ResponseWriter, r *http.Request, profileId ProfilePathId, version VersionPathId)
+	// AdminListGroups Groups
+	// (GET /admin/groups)
+	AdminListGroups(w http.ResponseWriter, r *http.Request)
+	// AdminCreateGroup Create a group
+	// (POST /admin/groups)
+	AdminCreateGroup(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteGroup Delete a group with its memberships, grants and assignments
+	// (DELETE /admin/groups/{groupId})
+	AdminDeleteGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId)
+	// AdminGetGroup One group
+	// (GET /admin/groups/{groupId})
+	AdminGetGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId)
+	// AdminUpdateGroup Rename or describe a group
+	// (PATCH /admin/groups/{groupId})
+	AdminUpdateGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId)
+	// AdminGetGroupProfiles Profiles assigned to a group
+	// (GET /admin/groups/{groupId}/config-profiles)
+	AdminGetGroupProfiles(w http.ResponseWriter, r *http.Request, groupId GroupPathId)
+	// AdminSetGroupProfiles Replace the profiles assigned to a group
+	// (PUT /admin/groups/{groupId}/config-profiles)
+	AdminSetGroupProfiles(w http.ResponseWriter, r *http.Request, groupId GroupPathId)
+	// AdminListGroupMembers Members of a group
+	// (GET /admin/groups/{groupId}/members)
+	AdminListGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupPathId)
+	// AdminRemoveGroupMember Remove a member
+	// (DELETE /admin/groups/{groupId}/members/{userId})
+	AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request, groupId GroupPathId, userId UserPathId)
+	// AdminSetGroupMember Add a member or change their role
+	// (PUT /admin/groups/{groupId}/members/{userId})
+	AdminSetGroupMember(w http.ResponseWriter, r *http.Request, groupId GroupPathId, userId UserPathId)
+	// AdminGetStorageSettings Default quota, thresholds, retention
+	// (GET /admin/settings/storage)
+	AdminGetStorageSettings(w http.ResponseWriter, r *http.Request)
+	// AdminPutStorageSettings Change the storage settings
+	// (PUT /admin/settings/storage)
+	AdminPutStorageSettings(w http.ResponseWriter, r *http.Request)
+	// AdminBulkQuota Set the quota override of several users at once
+	// (POST /admin/storage/bulk-quota)
+	AdminBulkQuota(w http.ResponseWriter, r *http.Request)
+	// AdminStorageOverview Totals, top consumers, users over the thresholds, trend
+	// (GET /admin/storage/overview)
+	AdminStorageOverview(w http.ResponseWriter, r *http.Request)
+	// AdminListUsers Users, paginated and filtered
+	// (GET /admin/users)
+	AdminListUsers(w http.ResponseWriter, r *http.Request, params AdminListUsersParams)
+	// AdminCreateUser Create a user (also in Keycloak, with required actions)
+	// (POST /admin/users)
+	AdminCreateUser(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteUser Delete a user: disabled in Keycloak, their vaults enter the retention period
+	// (DELETE /admin/users/{userId})
+	AdminDeleteUser(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminGetUser One user
+	// (GET /admin/users/{userId})
+	AdminGetUser(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminUpdateUser Change the profile of a user
+	// (PATCH /admin/users/{userId})
+	AdminUpdateUser(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminUserEffectiveConfig Preview of the configuration a user receives
+	// (GET /admin/users/{userId}/config/effective)
+	AdminUserEffectiveConfig(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminListUserDevices Active devices of a user
+	// (GET /admin/users/{userId}/devices)
+	AdminListUserDevices(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminSetUserQuota Set the quota override: null = default, -1 = unlimited
+	// (PUT /admin/users/{userId}/quota)
+	AdminSetUserQuota(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminSetUserRole Set the global role
+	// (PUT /admin/users/{userId}/role)
+	AdminSetUserRole(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminListUserSessions Open Keycloak sessions of a user
+	// (GET /admin/users/{userId}/sessions)
+	AdminListUserSessions(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminListUserVaults Vault metadata only (name, kind, size)
+	// (GET /admin/users/{userId}/vaults)
+	AdminListUserVaults(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminActivateUser Activate a suspended user
+	// (POST /admin/users/{userId}:activate)
+	AdminActivateUser(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminResetPassword Require a new password at the next login (and send the e-mail when Keycloak can)
+	// (POST /admin/users/{userId}:reset-password)
+	AdminResetPassword(w http.ResponseWriter, r *http.Request, userId UserPathId)
+	// AdminSuspendUser Suspend: Keycloak account disabled, sessions revoked, access ends within 30 s
+	// (POST /admin/users/{userId}:suspend)
+	AdminSuspendUser(w http.ResponseWriter, r *http.Request, userId UserPathId)
 	// GetClientConfig Public bootstrap information for clients (OIDC issuer and client id, notify endpoint)
 	// (GET /client-config)
 	GetClientConfig(w http.ResponseWriter, r *http.Request)
@@ -1213,6 +1711,18 @@ type ServerInterface interface {
 	// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	// (POST /vaults/{vaultId}/commit)
 	Commit(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CommitParams)
+	// ExportVaultZip Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
+	// (GET /vaults/{vaultId}/export.zip)
+	ExportVaultZip(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// CreateExport Start an export job (any size); the ZIP is built in the background
+	// (POST /vaults/{vaultId}/exports)
+	CreateExport(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// GetExport State of an export job
+	// (GET /vaults/{vaultId}/exports/{exportId})
+	GetExport(w http.ResponseWriter, r *http.Request, vaultId VaultId, exportId ExportPathId)
+	// DownloadExport Download the ZIP of a ready export (valid 24 hours)
+	// (GET /vaults/{vaultId}/exports/{exportId}/download)
+	DownloadExport(w http.ResponseWriter, r *http.Request, vaultId VaultId, exportId ExportPathId)
 	// ListRevisions History of a file, newest first
 	// (GET /vaults/{vaultId}/files/{fileId}/revisions)
 	ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams)
@@ -1239,6 +1749,228 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// AdminAuditLog Audit trail, newest first
+// (GET /admin/audit-log)
+func (_ Unimplemented) AdminAuditLog(w http.ResponseWriter, r *http.Request, params AdminAuditLogParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminAuditLogCsv The audit trail as CSV (same filters, up to 50000 rows)
+// (GET /admin/audit-log.csv)
+func (_ Unimplemented) AdminAuditLogCsv(w http.ResponseWriter, r *http.Request, params AdminAuditLogCsvParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListConfigProfiles Profiles
+// (GET /admin/config-profiles)
+func (_ Unimplemented) AdminListConfigProfiles(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminCreateConfigProfile Create a profile (validated against the schema)
+// (POST /admin/config-profiles)
+func (_ Unimplemented) AdminCreateConfigProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminDeleteConfigProfile Delete a profile and its assignments
+// (DELETE /admin/config-profiles/{profileId})
+func (_ Unimplemented) AdminDeleteConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminGetConfigProfile One profile
+// (GET /admin/config-profiles/{profileId})
+func (_ Unimplemented) AdminGetConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminUpdateConfigProfile Replace a profile: its version grows and the old one goes to the history
+// (PUT /admin/config-profiles/{profileId})
+func (_ Unimplemented) AdminUpdateConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListProfileVersions History of a profile, newest first
+// (GET /admin/config-profiles/{profileId}/versions)
+func (_ Unimplemented) AdminListProfileVersions(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminRestoreProfileVersion Roll back: an old version becomes the new current one
+// (POST /admin/config-profiles/{profileId}/versions/{version}:restore)
+func (_ Unimplemented) AdminRestoreProfileVersion(w http.ResponseWriter, r *http.Request, profileId ProfilePathId, version VersionPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListGroups Groups
+// (GET /admin/groups)
+func (_ Unimplemented) AdminListGroups(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminCreateGroup Create a group
+// (POST /admin/groups)
+func (_ Unimplemented) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminDeleteGroup Delete a group with its memberships, grants and assignments
+// (DELETE /admin/groups/{groupId})
+func (_ Unimplemented) AdminDeleteGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminGetGroup One group
+// (GET /admin/groups/{groupId})
+func (_ Unimplemented) AdminGetGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminUpdateGroup Rename or describe a group
+// (PATCH /admin/groups/{groupId})
+func (_ Unimplemented) AdminUpdateGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminGetGroupProfiles Profiles assigned to a group
+// (GET /admin/groups/{groupId}/config-profiles)
+func (_ Unimplemented) AdminGetGroupProfiles(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminSetGroupProfiles Replace the profiles assigned to a group
+// (PUT /admin/groups/{groupId}/config-profiles)
+func (_ Unimplemented) AdminSetGroupProfiles(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListGroupMembers Members of a group
+// (GET /admin/groups/{groupId}/members)
+func (_ Unimplemented) AdminListGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminRemoveGroupMember Remove a member
+// (DELETE /admin/groups/{groupId}/members/{userId})
+func (_ Unimplemented) AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request, groupId GroupPathId, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminSetGroupMember Add a member or change their role
+// (PUT /admin/groups/{groupId}/members/{userId})
+func (_ Unimplemented) AdminSetGroupMember(w http.ResponseWriter, r *http.Request, groupId GroupPathId, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminGetStorageSettings Default quota, thresholds, retention
+// (GET /admin/settings/storage)
+func (_ Unimplemented) AdminGetStorageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminPutStorageSettings Change the storage settings
+// (PUT /admin/settings/storage)
+func (_ Unimplemented) AdminPutStorageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminBulkQuota Set the quota override of several users at once
+// (POST /admin/storage/bulk-quota)
+func (_ Unimplemented) AdminBulkQuota(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminStorageOverview Totals, top consumers, users over the thresholds, trend
+// (GET /admin/storage/overview)
+func (_ Unimplemented) AdminStorageOverview(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListUsers Users, paginated and filtered
+// (GET /admin/users)
+func (_ Unimplemented) AdminListUsers(w http.ResponseWriter, r *http.Request, params AdminListUsersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminCreateUser Create a user (also in Keycloak, with required actions)
+// (POST /admin/users)
+func (_ Unimplemented) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminDeleteUser Delete a user: disabled in Keycloak, their vaults enter the retention period
+// (DELETE /admin/users/{userId})
+func (_ Unimplemented) AdminDeleteUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminGetUser One user
+// (GET /admin/users/{userId})
+func (_ Unimplemented) AdminGetUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminUpdateUser Change the profile of a user
+// (PATCH /admin/users/{userId})
+func (_ Unimplemented) AdminUpdateUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminUserEffectiveConfig Preview of the configuration a user receives
+// (GET /admin/users/{userId}/config/effective)
+func (_ Unimplemented) AdminUserEffectiveConfig(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListUserDevices Active devices of a user
+// (GET /admin/users/{userId}/devices)
+func (_ Unimplemented) AdminListUserDevices(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminSetUserQuota Set the quota override: null = default, -1 = unlimited
+// (PUT /admin/users/{userId}/quota)
+func (_ Unimplemented) AdminSetUserQuota(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminSetUserRole Set the global role
+// (PUT /admin/users/{userId}/role)
+func (_ Unimplemented) AdminSetUserRole(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListUserSessions Open Keycloak sessions of a user
+// (GET /admin/users/{userId}/sessions)
+func (_ Unimplemented) AdminListUserSessions(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminListUserVaults Vault metadata only (name, kind, size)
+// (GET /admin/users/{userId}/vaults)
+func (_ Unimplemented) AdminListUserVaults(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminActivateUser Activate a suspended user
+// (POST /admin/users/{userId}:activate)
+func (_ Unimplemented) AdminActivateUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminResetPassword Require a new password at the next login (and send the e-mail when Keycloak can)
+// (POST /admin/users/{userId}:reset-password)
+func (_ Unimplemented) AdminResetPassword(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AdminSuspendUser Suspend: Keycloak account disabled, sessions revoked, access ends within 30 s
+// (POST /admin/users/{userId}:suspend)
+func (_ Unimplemented) AdminSuspendUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // GetClientConfig Public bootstrap information for clients (OIDC issuer and client id, notify endpoint)
 // (GET /client-config)
@@ -1432,6 +2164,30 @@ func (_ Unimplemented) Commit(w http.ResponseWriter, r *http.Request, vaultId Va
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ExportVaultZip Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
+// (GET /vaults/{vaultId}/export.zip)
+func (_ Unimplemented) ExportVaultZip(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateExport Start an export job (any size); the ZIP is built in the background
+// (POST /vaults/{vaultId}/exports)
+func (_ Unimplemented) CreateExport(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetExport State of an export job
+// (GET /vaults/{vaultId}/exports/{exportId})
+func (_ Unimplemented) GetExport(w http.ResponseWriter, r *http.Request, vaultId VaultId, exportId ExportPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DownloadExport Download the ZIP of a ready export (valid 24 hours)
+// (GET /vaults/{vaultId}/exports/{exportId}/download)
+func (_ Unimplemented) DownloadExport(w http.ResponseWriter, r *http.Request, vaultId VaultId, exportId ExportPathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListRevisions History of a file, newest first
 // (GET /vaults/{vaultId}/files/{fileId}/revisions)
 func (_ Unimplemented) ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams) {
@@ -1482,6 +2238,1338 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AdminAuditLog operation middleware
+func (siw *ServerInterfaceWrapper) AdminAuditLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminAuditLogParams
+
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor", r.URL.Query(), &params.Actor, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "target" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "target", r.URL.Query(), &params.Target, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "target"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminAuditLog(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminAuditLogCsv operation middleware
+func (siw *ServerInterfaceWrapper) AdminAuditLogCsv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminAuditLogCsvParams
+
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor", r.URL.Query(), &params.Actor, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "target" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "target", r.URL.Query(), &params.Target, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "target"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminAuditLogCsv(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListConfigProfiles operation middleware
+func (siw *ServerInterfaceWrapper) AdminListConfigProfiles(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListConfigProfiles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateConfigProfile operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateConfigProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateConfigProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteConfigProfile operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteConfigProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileId ProfilePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", chi.URLParam(r, "profileId"), &profileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteConfigProfile(w, r, profileId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetConfigProfile operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetConfigProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileId ProfilePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", chi.URLParam(r, "profileId"), &profileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetConfigProfile(w, r, profileId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateConfigProfile operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateConfigProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileId ProfilePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", chi.URLParam(r, "profileId"), &profileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateConfigProfile(w, r, profileId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListProfileVersions operation middleware
+func (siw *ServerInterfaceWrapper) AdminListProfileVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileId ProfilePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", chi.URLParam(r, "profileId"), &profileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListProfileVersions(w, r, profileId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRestoreProfileVersion operation middleware
+func (siw *ServerInterfaceWrapper) AdminRestoreProfileVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileId ProfilePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", chi.URLParam(r, "profileId"), &profileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRestoreProfileVersion(w, r, profileId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListGroups operation middleware
+func (siw *ServerInterfaceWrapper) AdminListGroups(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateGroup operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateGroup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteGroup operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteGroup(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetGroup operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetGroup(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateGroup operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateGroup(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetGroupProfiles operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetGroupProfiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetGroupProfiles(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetGroupProfiles operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetGroupProfiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetGroupProfiles(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListGroupMembers operation middleware
+func (siw *ServerInterfaceWrapper) AdminListGroupMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListGroupMembers(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRemoveGroupMember operation middleware
+func (siw *ServerInterfaceWrapper) AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRemoveGroupMember(w, r, groupId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetGroupMember operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetGroupMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetGroupMember(w, r, groupId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetStorageSettings operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetStorageSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetStorageSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminPutStorageSettings operation middleware
+func (siw *ServerInterfaceWrapper) AdminPutStorageSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminPutStorageSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminBulkQuota operation middleware
+func (siw *ServerInterfaceWrapper) AdminBulkQuota(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminBulkQuota(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminStorageOverview operation middleware
+func (siw *ServerInterfaceWrapper) AdminStorageOverview(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminStorageOverview(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListUsers operation middleware
+func (siw *ServerInterfaceWrapper) AdminListUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminListUsersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "role" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "role", r.URL.Query(), &params.Role, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "role"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "group", r.URL.Query(), &params.Group, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "group"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListUsers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateUser operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteUser operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetUser operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateUser operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUserEffectiveConfig operation middleware
+func (siw *ServerInterfaceWrapper) AdminUserEffectiveConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUserEffectiveConfig(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListUserDevices operation middleware
+func (siw *ServerInterfaceWrapper) AdminListUserDevices(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListUserDevices(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetUserQuota operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetUserQuota(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetUserQuota(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetUserRole operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetUserRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetUserRole(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListUserSessions operation middleware
+func (siw *ServerInterfaceWrapper) AdminListUserSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListUserSessions(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListUserVaults operation middleware
+func (siw *ServerInterfaceWrapper) AdminListUserVaults(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListUserVaults(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminActivateUser operation middleware
+func (siw *ServerInterfaceWrapper) AdminActivateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminActivateUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminResetPassword operation middleware
+func (siw *ServerInterfaceWrapper) AdminResetPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminResetPassword(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSuspendUser operation middleware
+func (siw *ServerInterfaceWrapper) AdminSuspendUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSuspendUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetClientConfig operation middleware
 func (siw *ServerInterfaceWrapper) GetClientConfig(w http.ResponseWriter, r *http.Request) {
@@ -2637,6 +4725,152 @@ func (siw *ServerInterfaceWrapper) Commit(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// ExportVaultZip operation middleware
+func (siw *ServerInterfaceWrapper) ExportVaultZip(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportVaultZip(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateExport operation middleware
+func (siw *ServerInterfaceWrapper) CreateExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateExport(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetExport operation middleware
+func (siw *ServerInterfaceWrapper) GetExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "exportId" -------------
+	var exportId ExportPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "exportId", chi.URLParam(r, "exportId"), &exportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exportId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetExport(w, r, vaultId, exportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadExport operation middleware
+func (siw *ServerInterfaceWrapper) DownloadExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "exportId" -------------
+	var exportId ExportPathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "exportId", chi.URLParam(r, "exportId"), &exportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exportId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadExport(w, r, vaultId, exportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRevisions operation middleware
 func (siw *ServerInterfaceWrapper) ListRevisions(w http.ResponseWriter, r *http.Request) {
 
@@ -3256,6 +5490,129 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/shared-with-me", wrapper.ListSharedWithMe)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users", wrapper.AdminListUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/users", wrapper.AdminCreateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/users/{userId}", wrapper.AdminDeleteUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users/{userId}", wrapper.AdminGetUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/users/{userId}", wrapper.AdminUpdateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/users/{userId}:suspend", wrapper.AdminSuspendUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/users/{userId}:activate", wrapper.AdminActivateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/users/{userId}:reset-password", wrapper.AdminResetPassword)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/users/{userId}/role", wrapper.AdminSetUserRole)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/users/{userId}/quota", wrapper.AdminSetUserQuota)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users/{userId}/vaults", wrapper.AdminListUserVaults)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users/{userId}/devices", wrapper.AdminListUserDevices)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users/{userId}/sessions", wrapper.AdminListUserSessions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users/{userId}/config/effective", wrapper.AdminUserEffectiveConfig)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups", wrapper.AdminListGroups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/groups", wrapper.AdminCreateGroup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/groups/{groupId}", wrapper.AdminDeleteGroup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups/{groupId}", wrapper.AdminGetGroup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/groups/{groupId}", wrapper.AdminUpdateGroup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups/{groupId}/members", wrapper.AdminListGroupMembers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/groups/{groupId}/members/{userId}", wrapper.AdminRemoveGroupMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/groups/{groupId}/members/{userId}", wrapper.AdminSetGroupMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups/{groupId}/config-profiles", wrapper.AdminGetGroupProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/groups/{groupId}/config-profiles", wrapper.AdminSetGroupProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/config-profiles", wrapper.AdminListConfigProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/config-profiles", wrapper.AdminCreateConfigProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/config-profiles/{profileId}", wrapper.AdminDeleteConfigProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/config-profiles/{profileId}", wrapper.AdminGetConfigProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/config-profiles/{profileId}", wrapper.AdminUpdateConfigProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/config-profiles/{profileId}/versions", wrapper.AdminListProfileVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/config-profiles/{profileId}/versions/{version}:restore", wrapper.AdminRestoreProfileVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/settings/storage", wrapper.AdminGetStorageSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/settings/storage", wrapper.AdminPutStorageSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/storage/overview", wrapper.AdminStorageOverview)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/storage/bulk-quota", wrapper.AdminBulkQuota)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/audit-log", wrapper.AdminAuditLog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/audit-log.csv", wrapper.AdminAuditLogCsv)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/export.zip", wrapper.ExportVaultZip)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/vaults/{vaultId}/exports", wrapper.CreateExport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/exports/{exportId}", wrapper.GetExport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/exports/{exportId}/download", wrapper.DownloadExport)
+	})
 
 	return r
 }
@@ -3278,6 +5635,2796 @@ type RateLimitedApplicationProblemPlusJSONResponse struct {
 type UnauthenticatedApplicationProblemPlusJSONResponse Problem
 
 type ValidationFailedApplicationProblemPlusJSONResponse Problem
+
+type AdminAuditLogRequestObject struct {
+	Params AdminAuditLogParams
+}
+
+type AdminAuditLogResponseObject interface {
+	VisitAdminAuditLogResponse(w http.ResponseWriter) error
+}
+
+type AdminAuditLog200JSONResponse AuditPage
+
+func (response AdminAuditLog200JSONResponse) VisitAdminAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAuditLog400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminAuditLog400ApplicationProblemPlusJSONResponse) VisitAdminAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAuditLog401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminAuditLog401ApplicationProblemPlusJSONResponse) VisitAdminAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAuditLog403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminAuditLog403ApplicationProblemPlusJSONResponse) VisitAdminAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAuditLogCsvRequestObject struct {
+	Params AdminAuditLogCsvParams
+}
+
+type AdminAuditLogCsvResponseObject interface {
+	VisitAdminAuditLogCsvResponse(w http.ResponseWriter) error
+}
+
+type AdminAuditLogCsv200TextcsvResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response AdminAuditLogCsv200TextcsvResponse) VisitAdminAuditLogCsvResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type AdminAuditLogCsv400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminAuditLogCsv400ApplicationProblemPlusJSONResponse) VisitAdminAuditLogCsvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAuditLogCsv401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminAuditLogCsv401ApplicationProblemPlusJSONResponse) VisitAdminAuditLogCsvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAuditLogCsv403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminAuditLogCsv403ApplicationProblemPlusJSONResponse) VisitAdminAuditLogCsvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListConfigProfilesRequestObject struct {
+}
+
+type AdminListConfigProfilesResponseObject interface {
+	VisitAdminListConfigProfilesResponse(w http.ResponseWriter) error
+}
+
+type AdminListConfigProfiles200JSONResponse []ConfigProfile
+
+func (response AdminListConfigProfiles200JSONResponse) VisitAdminListConfigProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListConfigProfiles401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListConfigProfiles401ApplicationProblemPlusJSONResponse) VisitAdminListConfigProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListConfigProfiles403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListConfigProfiles403ApplicationProblemPlusJSONResponse) VisitAdminListConfigProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateConfigProfileRequestObject struct {
+	Body *AdminCreateConfigProfileJSONRequestBody
+}
+
+type AdminCreateConfigProfileResponseObject interface {
+	VisitAdminCreateConfigProfileResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateConfigProfile201JSONResponse ConfigProfile
+
+func (response AdminCreateConfigProfile201JSONResponse) VisitAdminCreateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateConfigProfile400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateConfigProfile400ApplicationProblemPlusJSONResponse) VisitAdminCreateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateConfigProfile401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateConfigProfile401ApplicationProblemPlusJSONResponse) VisitAdminCreateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateConfigProfile403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateConfigProfile403ApplicationProblemPlusJSONResponse) VisitAdminCreateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateConfigProfile409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateConfigProfile409ApplicationProblemPlusJSONResponse) VisitAdminCreateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteConfigProfileRequestObject struct {
+	ProfileId ProfilePathId `json:"profileId"`
+}
+
+type AdminDeleteConfigProfileResponseObject interface {
+	VisitAdminDeleteConfigProfileResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteConfigProfile204Response struct {
+}
+
+func (response AdminDeleteConfigProfile204Response) VisitAdminDeleteConfigProfileResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteConfigProfile401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteConfigProfile401ApplicationProblemPlusJSONResponse) VisitAdminDeleteConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteConfigProfile403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteConfigProfile403ApplicationProblemPlusJSONResponse) VisitAdminDeleteConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteConfigProfile404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteConfigProfile404ApplicationProblemPlusJSONResponse) VisitAdminDeleteConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetConfigProfileRequestObject struct {
+	ProfileId ProfilePathId `json:"profileId"`
+}
+
+type AdminGetConfigProfileResponseObject interface {
+	VisitAdminGetConfigProfileResponse(w http.ResponseWriter) error
+}
+
+type AdminGetConfigProfile200JSONResponse ConfigProfile
+
+func (response AdminGetConfigProfile200JSONResponse) VisitAdminGetConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetConfigProfile401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetConfigProfile401ApplicationProblemPlusJSONResponse) VisitAdminGetConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetConfigProfile403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetConfigProfile403ApplicationProblemPlusJSONResponse) VisitAdminGetConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetConfigProfile404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetConfigProfile404ApplicationProblemPlusJSONResponse) VisitAdminGetConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateConfigProfileRequestObject struct {
+	ProfileId ProfilePathId `json:"profileId"`
+	Body      *AdminUpdateConfigProfileJSONRequestBody
+}
+
+type AdminUpdateConfigProfileResponseObject interface {
+	VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateConfigProfile200JSONResponse ConfigProfile
+
+func (response AdminUpdateConfigProfile200JSONResponse) VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateConfigProfile400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateConfigProfile400ApplicationProblemPlusJSONResponse) VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateConfigProfile401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateConfigProfile401ApplicationProblemPlusJSONResponse) VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateConfigProfile403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateConfigProfile403ApplicationProblemPlusJSONResponse) VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateConfigProfile404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateConfigProfile404ApplicationProblemPlusJSONResponse) VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateConfigProfile409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateConfigProfile409ApplicationProblemPlusJSONResponse) VisitAdminUpdateConfigProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListProfileVersionsRequestObject struct {
+	ProfileId ProfilePathId `json:"profileId"`
+}
+
+type AdminListProfileVersionsResponseObject interface {
+	VisitAdminListProfileVersionsResponse(w http.ResponseWriter) error
+}
+
+type AdminListProfileVersions200JSONResponse []ProfileVersion
+
+func (response AdminListProfileVersions200JSONResponse) VisitAdminListProfileVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListProfileVersions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListProfileVersions401ApplicationProblemPlusJSONResponse) VisitAdminListProfileVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListProfileVersions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListProfileVersions403ApplicationProblemPlusJSONResponse) VisitAdminListProfileVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListProfileVersions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListProfileVersions404ApplicationProblemPlusJSONResponse) VisitAdminListProfileVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRestoreProfileVersionRequestObject struct {
+	ProfileId ProfilePathId `json:"profileId"`
+	Version   VersionPathId `json:"version"`
+}
+
+type AdminRestoreProfileVersionResponseObject interface {
+	VisitAdminRestoreProfileVersionResponse(w http.ResponseWriter) error
+}
+
+type AdminRestoreProfileVersion200JSONResponse ConfigProfile
+
+func (response AdminRestoreProfileVersion200JSONResponse) VisitAdminRestoreProfileVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRestoreProfileVersion401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminRestoreProfileVersion401ApplicationProblemPlusJSONResponse) VisitAdminRestoreProfileVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRestoreProfileVersion403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminRestoreProfileVersion403ApplicationProblemPlusJSONResponse) VisitAdminRestoreProfileVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRestoreProfileVersion404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminRestoreProfileVersion404ApplicationProblemPlusJSONResponse) VisitAdminRestoreProfileVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroupsRequestObject struct {
+}
+
+type AdminListGroupsResponseObject interface {
+	VisitAdminListGroupsResponse(w http.ResponseWriter) error
+}
+
+type AdminListGroups200JSONResponse []AdminGroup
+
+func (response AdminListGroups200JSONResponse) VisitAdminListGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroups401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListGroups401ApplicationProblemPlusJSONResponse) VisitAdminListGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroups403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListGroups403ApplicationProblemPlusJSONResponse) VisitAdminListGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateGroupRequestObject struct {
+	Body *AdminCreateGroupJSONRequestBody
+}
+
+type AdminCreateGroupResponseObject interface {
+	VisitAdminCreateGroupResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateGroup201JSONResponse AdminGroup
+
+func (response AdminCreateGroup201JSONResponse) VisitAdminCreateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateGroup400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateGroup400ApplicationProblemPlusJSONResponse) VisitAdminCreateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateGroup401ApplicationProblemPlusJSONResponse) VisitAdminCreateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateGroup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateGroup403ApplicationProblemPlusJSONResponse) VisitAdminCreateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateGroup409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateGroup409ApplicationProblemPlusJSONResponse) VisitAdminCreateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteGroupRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+}
+
+type AdminDeleteGroupResponseObject interface {
+	VisitAdminDeleteGroupResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteGroup204Response struct {
+}
+
+func (response AdminDeleteGroup204Response) VisitAdminDeleteGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteGroup401ApplicationProblemPlusJSONResponse) VisitAdminDeleteGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteGroup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteGroup403ApplicationProblemPlusJSONResponse) VisitAdminDeleteGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteGroup404ApplicationProblemPlusJSONResponse) VisitAdminDeleteGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroupRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+}
+
+type AdminGetGroupResponseObject interface {
+	VisitAdminGetGroupResponse(w http.ResponseWriter) error
+}
+
+type AdminGetGroup200JSONResponse AdminGroup
+
+func (response AdminGetGroup200JSONResponse) VisitAdminGetGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetGroup401ApplicationProblemPlusJSONResponse) VisitAdminGetGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetGroup403ApplicationProblemPlusJSONResponse) VisitAdminGetGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetGroup404ApplicationProblemPlusJSONResponse) VisitAdminGetGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateGroupRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+	Body    *AdminUpdateGroupJSONRequestBody
+}
+
+type AdminUpdateGroupResponseObject interface {
+	VisitAdminUpdateGroupResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateGroup200JSONResponse AdminGroup
+
+func (response AdminUpdateGroup200JSONResponse) VisitAdminUpdateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateGroup400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateGroup400ApplicationProblemPlusJSONResponse) VisitAdminUpdateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateGroup401ApplicationProblemPlusJSONResponse) VisitAdminUpdateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateGroup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateGroup403ApplicationProblemPlusJSONResponse) VisitAdminUpdateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateGroup404ApplicationProblemPlusJSONResponse) VisitAdminUpdateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateGroup409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateGroup409ApplicationProblemPlusJSONResponse) VisitAdminUpdateGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroupProfilesRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+}
+
+type AdminGetGroupProfilesResponseObject interface {
+	VisitAdminGetGroupProfilesResponse(w http.ResponseWriter) error
+}
+
+type AdminGetGroupProfiles200JSONResponse []ProfileAssignment
+
+func (response AdminGetGroupProfiles200JSONResponse) VisitAdminGetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroupProfiles401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetGroupProfiles401ApplicationProblemPlusJSONResponse) VisitAdminGetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroupProfiles403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetGroupProfiles403ApplicationProblemPlusJSONResponse) VisitAdminGetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGroupProfiles404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetGroupProfiles404ApplicationProblemPlusJSONResponse) VisitAdminGetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupProfilesRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+	Body    *AdminSetGroupProfilesJSONRequestBody
+}
+
+type AdminSetGroupProfilesResponseObject interface {
+	VisitAdminSetGroupProfilesResponse(w http.ResponseWriter) error
+}
+
+type AdminSetGroupProfiles204Response struct {
+}
+
+func (response AdminSetGroupProfiles204Response) VisitAdminSetGroupProfilesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSetGroupProfiles400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupProfiles400ApplicationProblemPlusJSONResponse) VisitAdminSetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupProfiles401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupProfiles401ApplicationProblemPlusJSONResponse) VisitAdminSetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupProfiles403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupProfiles403ApplicationProblemPlusJSONResponse) VisitAdminSetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupProfiles404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupProfiles404ApplicationProblemPlusJSONResponse) VisitAdminSetGroupProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroupMembersRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+}
+
+type AdminListGroupMembersResponseObject interface {
+	VisitAdminListGroupMembersResponse(w http.ResponseWriter) error
+}
+
+type AdminListGroupMembers200JSONResponse []GroupMember
+
+func (response AdminListGroupMembers200JSONResponse) VisitAdminListGroupMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroupMembers401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListGroupMembers401ApplicationProblemPlusJSONResponse) VisitAdminListGroupMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroupMembers403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListGroupMembers403ApplicationProblemPlusJSONResponse) VisitAdminListGroupMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListGroupMembers404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListGroupMembers404ApplicationProblemPlusJSONResponse) VisitAdminListGroupMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemoveGroupMemberRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+	UserId  UserPathId  `json:"userId"`
+}
+
+type AdminRemoveGroupMemberResponseObject interface {
+	VisitAdminRemoveGroupMemberResponse(w http.ResponseWriter) error
+}
+
+type AdminRemoveGroupMember204Response struct {
+}
+
+func (response AdminRemoveGroupMember204Response) VisitAdminRemoveGroupMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRemoveGroupMember401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminRemoveGroupMember401ApplicationProblemPlusJSONResponse) VisitAdminRemoveGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemoveGroupMember403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminRemoveGroupMember403ApplicationProblemPlusJSONResponse) VisitAdminRemoveGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemoveGroupMember404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminRemoveGroupMember404ApplicationProblemPlusJSONResponse) VisitAdminRemoveGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupMemberRequestObject struct {
+	GroupId GroupPathId `json:"groupId"`
+	UserId  UserPathId  `json:"userId"`
+	Body    *AdminSetGroupMemberJSONRequestBody
+}
+
+type AdminSetGroupMemberResponseObject interface {
+	VisitAdminSetGroupMemberResponse(w http.ResponseWriter) error
+}
+
+type AdminSetGroupMember204Response struct {
+}
+
+func (response AdminSetGroupMember204Response) VisitAdminSetGroupMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSetGroupMember400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupMember400ApplicationProblemPlusJSONResponse) VisitAdminSetGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupMember401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupMember401ApplicationProblemPlusJSONResponse) VisitAdminSetGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupMember403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupMember403ApplicationProblemPlusJSONResponse) VisitAdminSetGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetGroupMember404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetGroupMember404ApplicationProblemPlusJSONResponse) VisitAdminSetGroupMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStorageSettingsRequestObject struct {
+}
+
+type AdminGetStorageSettingsResponseObject interface {
+	VisitAdminGetStorageSettingsResponse(w http.ResponseWriter) error
+}
+
+type AdminGetStorageSettings200JSONResponse StorageSettings
+
+func (response AdminGetStorageSettings200JSONResponse) VisitAdminGetStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStorageSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetStorageSettings401ApplicationProblemPlusJSONResponse) VisitAdminGetStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStorageSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetStorageSettings403ApplicationProblemPlusJSONResponse) VisitAdminGetStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPutStorageSettingsRequestObject struct {
+	Body *AdminPutStorageSettingsJSONRequestBody
+}
+
+type AdminPutStorageSettingsResponseObject interface {
+	VisitAdminPutStorageSettingsResponse(w http.ResponseWriter) error
+}
+
+type AdminPutStorageSettings200JSONResponse StorageSettings
+
+func (response AdminPutStorageSettings200JSONResponse) VisitAdminPutStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPutStorageSettings400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminPutStorageSettings400ApplicationProblemPlusJSONResponse) VisitAdminPutStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPutStorageSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminPutStorageSettings401ApplicationProblemPlusJSONResponse) VisitAdminPutStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPutStorageSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminPutStorageSettings403ApplicationProblemPlusJSONResponse) VisitAdminPutStorageSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminBulkQuotaRequestObject struct {
+	Body *AdminBulkQuotaJSONRequestBody
+}
+
+type AdminBulkQuotaResponseObject interface {
+	VisitAdminBulkQuotaResponse(w http.ResponseWriter) error
+}
+
+type AdminBulkQuota200JSONResponse BulkQuotaResult
+
+func (response AdminBulkQuota200JSONResponse) VisitAdminBulkQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminBulkQuota400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminBulkQuota400ApplicationProblemPlusJSONResponse) VisitAdminBulkQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminBulkQuota401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminBulkQuota401ApplicationProblemPlusJSONResponse) VisitAdminBulkQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminBulkQuota403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminBulkQuota403ApplicationProblemPlusJSONResponse) VisitAdminBulkQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminStorageOverviewRequestObject struct {
+}
+
+type AdminStorageOverviewResponseObject interface {
+	VisitAdminStorageOverviewResponse(w http.ResponseWriter) error
+}
+
+type AdminStorageOverview200JSONResponse StorageOverview
+
+func (response AdminStorageOverview200JSONResponse) VisitAdminStorageOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminStorageOverview401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminStorageOverview401ApplicationProblemPlusJSONResponse) VisitAdminStorageOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminStorageOverview403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminStorageOverview403ApplicationProblemPlusJSONResponse) VisitAdminStorageOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUsersRequestObject struct {
+	Params AdminListUsersParams
+}
+
+type AdminListUsersResponseObject interface {
+	VisitAdminListUsersResponse(w http.ResponseWriter) error
+}
+
+type AdminListUsers200JSONResponse AdminUserList
+
+func (response AdminListUsers200JSONResponse) VisitAdminListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUsers400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUsers400ApplicationProblemPlusJSONResponse) VisitAdminListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUsers401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUsers401ApplicationProblemPlusJSONResponse) VisitAdminListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUsers403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUsers403ApplicationProblemPlusJSONResponse) VisitAdminListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateUserRequestObject struct {
+	Body *AdminCreateUserJSONRequestBody
+}
+
+type AdminCreateUserResponseObject interface {
+	VisitAdminCreateUserResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateUser201JSONResponse AdminUser
+
+func (response AdminCreateUser201JSONResponse) VisitAdminCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateUser400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateUser400ApplicationProblemPlusJSONResponse) VisitAdminCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateUser401ApplicationProblemPlusJSONResponse) VisitAdminCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateUser403ApplicationProblemPlusJSONResponse) VisitAdminCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateUser409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminCreateUser409ApplicationProblemPlusJSONResponse) VisitAdminCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteUserRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminDeleteUserResponseObject interface {
+	VisitAdminDeleteUserResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteUser204Response struct {
+}
+
+func (response AdminDeleteUser204Response) VisitAdminDeleteUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteUser401ApplicationProblemPlusJSONResponse) VisitAdminDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteUser403ApplicationProblemPlusJSONResponse) VisitAdminDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteUser404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteUser404ApplicationProblemPlusJSONResponse) VisitAdminDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteUser409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminDeleteUser409ApplicationProblemPlusJSONResponse) VisitAdminDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetUserRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminGetUserResponseObject interface {
+	VisitAdminGetUserResponse(w http.ResponseWriter) error
+}
+
+type AdminGetUser200JSONResponse AdminUser
+
+func (response AdminGetUser200JSONResponse) VisitAdminGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetUser401ApplicationProblemPlusJSONResponse) VisitAdminGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetUser403ApplicationProblemPlusJSONResponse) VisitAdminGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetUser404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminGetUser404ApplicationProblemPlusJSONResponse) VisitAdminGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateUserRequestObject struct {
+	UserId UserPathId `json:"userId"`
+	Body   *AdminUpdateUserJSONRequestBody
+}
+
+type AdminUpdateUserResponseObject interface {
+	VisitAdminUpdateUserResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateUser200JSONResponse AdminUser
+
+func (response AdminUpdateUser200JSONResponse) VisitAdminUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateUser400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateUser400ApplicationProblemPlusJSONResponse) VisitAdminUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateUser401ApplicationProblemPlusJSONResponse) VisitAdminUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateUser403ApplicationProblemPlusJSONResponse) VisitAdminUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateUser404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateUser404ApplicationProblemPlusJSONResponse) VisitAdminUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateUser409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUpdateUser409ApplicationProblemPlusJSONResponse) VisitAdminUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUserEffectiveConfigRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminUserEffectiveConfigResponseObject interface {
+	VisitAdminUserEffectiveConfigResponse(w http.ResponseWriter) error
+}
+
+type AdminUserEffectiveConfig200JSONResponse EffectiveConfig
+
+func (response AdminUserEffectiveConfig200JSONResponse) VisitAdminUserEffectiveConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUserEffectiveConfig401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUserEffectiveConfig401ApplicationProblemPlusJSONResponse) VisitAdminUserEffectiveConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUserEffectiveConfig403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUserEffectiveConfig403ApplicationProblemPlusJSONResponse) VisitAdminUserEffectiveConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUserEffectiveConfig404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminUserEffectiveConfig404ApplicationProblemPlusJSONResponse) VisitAdminUserEffectiveConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserDevicesRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminListUserDevicesResponseObject interface {
+	VisitAdminListUserDevicesResponse(w http.ResponseWriter) error
+}
+
+type AdminListUserDevices200JSONResponse []Device
+
+func (response AdminListUserDevices200JSONResponse) VisitAdminListUserDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserDevices401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserDevices401ApplicationProblemPlusJSONResponse) VisitAdminListUserDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserDevices403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserDevices403ApplicationProblemPlusJSONResponse) VisitAdminListUserDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserDevices404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserDevices404ApplicationProblemPlusJSONResponse) VisitAdminListUserDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserQuotaRequestObject struct {
+	UserId UserPathId `json:"userId"`
+	Body   *AdminSetUserQuotaJSONRequestBody
+}
+
+type AdminSetUserQuotaResponseObject interface {
+	VisitAdminSetUserQuotaResponse(w http.ResponseWriter) error
+}
+
+type AdminSetUserQuota200JSONResponse AdminUser
+
+func (response AdminSetUserQuota200JSONResponse) VisitAdminSetUserQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserQuota400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserQuota400ApplicationProblemPlusJSONResponse) VisitAdminSetUserQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserQuota401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserQuota401ApplicationProblemPlusJSONResponse) VisitAdminSetUserQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserQuota403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserQuota403ApplicationProblemPlusJSONResponse) VisitAdminSetUserQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserQuota404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserQuota404ApplicationProblemPlusJSONResponse) VisitAdminSetUserQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserRoleRequestObject struct {
+	UserId UserPathId `json:"userId"`
+	Body   *AdminSetUserRoleJSONRequestBody
+}
+
+type AdminSetUserRoleResponseObject interface {
+	VisitAdminSetUserRoleResponse(w http.ResponseWriter) error
+}
+
+type AdminSetUserRole200JSONResponse AdminUser
+
+func (response AdminSetUserRole200JSONResponse) VisitAdminSetUserRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserRole400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserRole400ApplicationProblemPlusJSONResponse) VisitAdminSetUserRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserRole401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserRole401ApplicationProblemPlusJSONResponse) VisitAdminSetUserRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserRole403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserRole403ApplicationProblemPlusJSONResponse) VisitAdminSetUserRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserRole404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserRole404ApplicationProblemPlusJSONResponse) VisitAdminSetUserRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetUserRole409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSetUserRole409ApplicationProblemPlusJSONResponse) VisitAdminSetUserRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserSessionsRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminListUserSessionsResponseObject interface {
+	VisitAdminListUserSessionsResponse(w http.ResponseWriter) error
+}
+
+type AdminListUserSessions200JSONResponse []UserSession
+
+func (response AdminListUserSessions200JSONResponse) VisitAdminListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserSessions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserSessions401ApplicationProblemPlusJSONResponse) VisitAdminListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserSessions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserSessions403ApplicationProblemPlusJSONResponse) VisitAdminListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserSessions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserSessions404ApplicationProblemPlusJSONResponse) VisitAdminListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserVaultsRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminListUserVaultsResponseObject interface {
+	VisitAdminListUserVaultsResponse(w http.ResponseWriter) error
+}
+
+type AdminListUserVaults200JSONResponse []AdminVault
+
+func (response AdminListUserVaults200JSONResponse) VisitAdminListUserVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserVaults401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserVaults401ApplicationProblemPlusJSONResponse) VisitAdminListUserVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserVaults403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserVaults403ApplicationProblemPlusJSONResponse) VisitAdminListUserVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListUserVaults404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminListUserVaults404ApplicationProblemPlusJSONResponse) VisitAdminListUserVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminActivateUserRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminActivateUserResponseObject interface {
+	VisitAdminActivateUserResponse(w http.ResponseWriter) error
+}
+
+type AdminActivateUser200JSONResponse AdminUser
+
+func (response AdminActivateUser200JSONResponse) VisitAdminActivateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminActivateUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminActivateUser401ApplicationProblemPlusJSONResponse) VisitAdminActivateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminActivateUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminActivateUser403ApplicationProblemPlusJSONResponse) VisitAdminActivateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminActivateUser404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminActivateUser404ApplicationProblemPlusJSONResponse) VisitAdminActivateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminActivateUser409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminActivateUser409ApplicationProblemPlusJSONResponse) VisitAdminActivateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetPasswordRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminResetPasswordResponseObject interface {
+	VisitAdminResetPasswordResponse(w http.ResponseWriter) error
+}
+
+type AdminResetPassword200JSONResponse ResetPasswordResult
+
+func (response AdminResetPassword200JSONResponse) VisitAdminResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetPassword401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminResetPassword401ApplicationProblemPlusJSONResponse) VisitAdminResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetPassword403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminResetPassword403ApplicationProblemPlusJSONResponse) VisitAdminResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetPassword404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminResetPassword404ApplicationProblemPlusJSONResponse) VisitAdminResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetPassword409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminResetPassword409ApplicationProblemPlusJSONResponse) VisitAdminResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSuspendUserRequestObject struct {
+	UserId UserPathId `json:"userId"`
+}
+
+type AdminSuspendUserResponseObject interface {
+	VisitAdminSuspendUserResponse(w http.ResponseWriter) error
+}
+
+type AdminSuspendUser200JSONResponse AdminUser
+
+func (response AdminSuspendUser200JSONResponse) VisitAdminSuspendUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSuspendUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSuspendUser401ApplicationProblemPlusJSONResponse) VisitAdminSuspendUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSuspendUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSuspendUser403ApplicationProblemPlusJSONResponse) VisitAdminSuspendUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSuspendUser404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSuspendUser404ApplicationProblemPlusJSONResponse) VisitAdminSuspendUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSuspendUser409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AdminSuspendUser409ApplicationProblemPlusJSONResponse) VisitAdminSuspendUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetClientConfigRequestObject struct {
 }
@@ -5356,6 +10503,300 @@ func (response Commit404ApplicationProblemPlusJSONResponse) VisitCommitResponse(
 	return err
 }
 
+type ExportVaultZipRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type ExportVaultZipResponseObject interface {
+	VisitExportVaultZipResponse(w http.ResponseWriter) error
+}
+
+type ExportVaultZip200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type ExportVaultZip200ApplicationzipResponse struct {
+	Body          io.Reader
+	Headers       ExportVaultZip200ResponseHeaders
+	ContentLength int64
+}
+
+func (response ExportVaultZip200ApplicationzipResponse) VisitExportVaultZipResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/zip")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportVaultZip400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportVaultZip400ApplicationProblemPlusJSONResponse) VisitExportVaultZipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportVaultZip401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportVaultZip401ApplicationProblemPlusJSONResponse) VisitExportVaultZipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportVaultZip404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ExportVaultZip404ApplicationProblemPlusJSONResponse) VisitExportVaultZipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportVaultZip409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ExportVaultZip409ApplicationProblemPlusJSONResponse) VisitExportVaultZipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExportRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type CreateExportResponseObject interface {
+	VisitCreateExportResponse(w http.ResponseWriter) error
+}
+
+type CreateExport202JSONResponse ExportJob
+
+func (response CreateExport202JSONResponse) VisitCreateExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateExport401ApplicationProblemPlusJSONResponse) VisitCreateExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateExport404ApplicationProblemPlusJSONResponse) VisitCreateExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExport409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateExport409ApplicationProblemPlusJSONResponse) VisitCreateExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExportRequestObject struct {
+	VaultId  VaultId      `json:"vaultId"`
+	ExportId ExportPathId `json:"exportId"`
+}
+
+type GetExportResponseObject interface {
+	VisitGetExportResponse(w http.ResponseWriter) error
+}
+
+type GetExport200JSONResponse ExportJob
+
+func (response GetExport200JSONResponse) VisitGetExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetExport401ApplicationProblemPlusJSONResponse) VisitGetExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetExport404ApplicationProblemPlusJSONResponse) VisitGetExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadExportRequestObject struct {
+	VaultId  VaultId      `json:"vaultId"`
+	ExportId ExportPathId `json:"exportId"`
+}
+
+type DownloadExportResponseObject interface {
+	VisitDownloadExportResponse(w http.ResponseWriter) error
+}
+
+type DownloadExport200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type DownloadExport200ApplicationzipResponse struct {
+	Body          io.Reader
+	Headers       DownloadExport200ResponseHeaders
+	ContentLength int64
+}
+
+func (response DownloadExport200ApplicationzipResponse) VisitDownloadExportResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/zip")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type DownloadExport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DownloadExport401ApplicationProblemPlusJSONResponse) VisitDownloadExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadExport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DownloadExport404ApplicationProblemPlusJSONResponse) VisitDownloadExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRevisionsRequestObject struct {
 	VaultId VaultId `json:"vaultId"`
 	FileId  FileId  `json:"fileId"`
@@ -5937,6 +11378,117 @@ func (response RestoreVault409ApplicationProblemPlusJSONResponse) VisitRestoreVa
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// AdminAuditLog Audit trail, newest first
+	// (GET /admin/audit-log)
+	AdminAuditLog(ctx context.Context, request AdminAuditLogRequestObject) (AdminAuditLogResponseObject, error)
+	// AdminAuditLogCsv The audit trail as CSV (same filters, up to 50000 rows)
+	// (GET /admin/audit-log.csv)
+	AdminAuditLogCsv(ctx context.Context, request AdminAuditLogCsvRequestObject) (AdminAuditLogCsvResponseObject, error)
+	// AdminListConfigProfiles Profiles
+	// (GET /admin/config-profiles)
+	AdminListConfigProfiles(ctx context.Context, request AdminListConfigProfilesRequestObject) (AdminListConfigProfilesResponseObject, error)
+	// AdminCreateConfigProfile Create a profile (validated against the schema)
+	// (POST /admin/config-profiles)
+	AdminCreateConfigProfile(ctx context.Context, request AdminCreateConfigProfileRequestObject) (AdminCreateConfigProfileResponseObject, error)
+	// AdminDeleteConfigProfile Delete a profile and its assignments
+	// (DELETE /admin/config-profiles/{profileId})
+	AdminDeleteConfigProfile(ctx context.Context, request AdminDeleteConfigProfileRequestObject) (AdminDeleteConfigProfileResponseObject, error)
+	// AdminGetConfigProfile One profile
+	// (GET /admin/config-profiles/{profileId})
+	AdminGetConfigProfile(ctx context.Context, request AdminGetConfigProfileRequestObject) (AdminGetConfigProfileResponseObject, error)
+	// AdminUpdateConfigProfile Replace a profile: its version grows and the old one goes to the history
+	// (PUT /admin/config-profiles/{profileId})
+	AdminUpdateConfigProfile(ctx context.Context, request AdminUpdateConfigProfileRequestObject) (AdminUpdateConfigProfileResponseObject, error)
+	// AdminListProfileVersions History of a profile, newest first
+	// (GET /admin/config-profiles/{profileId}/versions)
+	AdminListProfileVersions(ctx context.Context, request AdminListProfileVersionsRequestObject) (AdminListProfileVersionsResponseObject, error)
+	// AdminRestoreProfileVersion Roll back: an old version becomes the new current one
+	// (POST /admin/config-profiles/{profileId}/versions/{version}:restore)
+	AdminRestoreProfileVersion(ctx context.Context, request AdminRestoreProfileVersionRequestObject) (AdminRestoreProfileVersionResponseObject, error)
+	// AdminListGroups Groups
+	// (GET /admin/groups)
+	AdminListGroups(ctx context.Context, request AdminListGroupsRequestObject) (AdminListGroupsResponseObject, error)
+	// AdminCreateGroup Create a group
+	// (POST /admin/groups)
+	AdminCreateGroup(ctx context.Context, request AdminCreateGroupRequestObject) (AdminCreateGroupResponseObject, error)
+	// AdminDeleteGroup Delete a group with its memberships, grants and assignments
+	// (DELETE /admin/groups/{groupId})
+	AdminDeleteGroup(ctx context.Context, request AdminDeleteGroupRequestObject) (AdminDeleteGroupResponseObject, error)
+	// AdminGetGroup One group
+	// (GET /admin/groups/{groupId})
+	AdminGetGroup(ctx context.Context, request AdminGetGroupRequestObject) (AdminGetGroupResponseObject, error)
+	// AdminUpdateGroup Rename or describe a group
+	// (PATCH /admin/groups/{groupId})
+	AdminUpdateGroup(ctx context.Context, request AdminUpdateGroupRequestObject) (AdminUpdateGroupResponseObject, error)
+	// AdminGetGroupProfiles Profiles assigned to a group
+	// (GET /admin/groups/{groupId}/config-profiles)
+	AdminGetGroupProfiles(ctx context.Context, request AdminGetGroupProfilesRequestObject) (AdminGetGroupProfilesResponseObject, error)
+	// AdminSetGroupProfiles Replace the profiles assigned to a group
+	// (PUT /admin/groups/{groupId}/config-profiles)
+	AdminSetGroupProfiles(ctx context.Context, request AdminSetGroupProfilesRequestObject) (AdminSetGroupProfilesResponseObject, error)
+	// AdminListGroupMembers Members of a group
+	// (GET /admin/groups/{groupId}/members)
+	AdminListGroupMembers(ctx context.Context, request AdminListGroupMembersRequestObject) (AdminListGroupMembersResponseObject, error)
+	// AdminRemoveGroupMember Remove a member
+	// (DELETE /admin/groups/{groupId}/members/{userId})
+	AdminRemoveGroupMember(ctx context.Context, request AdminRemoveGroupMemberRequestObject) (AdminRemoveGroupMemberResponseObject, error)
+	// AdminSetGroupMember Add a member or change their role
+	// (PUT /admin/groups/{groupId}/members/{userId})
+	AdminSetGroupMember(ctx context.Context, request AdminSetGroupMemberRequestObject) (AdminSetGroupMemberResponseObject, error)
+	// AdminGetStorageSettings Default quota, thresholds, retention
+	// (GET /admin/settings/storage)
+	AdminGetStorageSettings(ctx context.Context, request AdminGetStorageSettingsRequestObject) (AdminGetStorageSettingsResponseObject, error)
+	// AdminPutStorageSettings Change the storage settings
+	// (PUT /admin/settings/storage)
+	AdminPutStorageSettings(ctx context.Context, request AdminPutStorageSettingsRequestObject) (AdminPutStorageSettingsResponseObject, error)
+	// AdminBulkQuota Set the quota override of several users at once
+	// (POST /admin/storage/bulk-quota)
+	AdminBulkQuota(ctx context.Context, request AdminBulkQuotaRequestObject) (AdminBulkQuotaResponseObject, error)
+	// AdminStorageOverview Totals, top consumers, users over the thresholds, trend
+	// (GET /admin/storage/overview)
+	AdminStorageOverview(ctx context.Context, request AdminStorageOverviewRequestObject) (AdminStorageOverviewResponseObject, error)
+	// AdminListUsers Users, paginated and filtered
+	// (GET /admin/users)
+	AdminListUsers(ctx context.Context, request AdminListUsersRequestObject) (AdminListUsersResponseObject, error)
+	// AdminCreateUser Create a user (also in Keycloak, with required actions)
+	// (POST /admin/users)
+	AdminCreateUser(ctx context.Context, request AdminCreateUserRequestObject) (AdminCreateUserResponseObject, error)
+	// AdminDeleteUser Delete a user: disabled in Keycloak, their vaults enter the retention period
+	// (DELETE /admin/users/{userId})
+	AdminDeleteUser(ctx context.Context, request AdminDeleteUserRequestObject) (AdminDeleteUserResponseObject, error)
+	// AdminGetUser One user
+	// (GET /admin/users/{userId})
+	AdminGetUser(ctx context.Context, request AdminGetUserRequestObject) (AdminGetUserResponseObject, error)
+	// AdminUpdateUser Change the profile of a user
+	// (PATCH /admin/users/{userId})
+	AdminUpdateUser(ctx context.Context, request AdminUpdateUserRequestObject) (AdminUpdateUserResponseObject, error)
+	// AdminUserEffectiveConfig Preview of the configuration a user receives
+	// (GET /admin/users/{userId}/config/effective)
+	AdminUserEffectiveConfig(ctx context.Context, request AdminUserEffectiveConfigRequestObject) (AdminUserEffectiveConfigResponseObject, error)
+	// AdminListUserDevices Active devices of a user
+	// (GET /admin/users/{userId}/devices)
+	AdminListUserDevices(ctx context.Context, request AdminListUserDevicesRequestObject) (AdminListUserDevicesResponseObject, error)
+	// AdminSetUserQuota Set the quota override: null = default, -1 = unlimited
+	// (PUT /admin/users/{userId}/quota)
+	AdminSetUserQuota(ctx context.Context, request AdminSetUserQuotaRequestObject) (AdminSetUserQuotaResponseObject, error)
+	// AdminSetUserRole Set the global role
+	// (PUT /admin/users/{userId}/role)
+	AdminSetUserRole(ctx context.Context, request AdminSetUserRoleRequestObject) (AdminSetUserRoleResponseObject, error)
+	// AdminListUserSessions Open Keycloak sessions of a user
+	// (GET /admin/users/{userId}/sessions)
+	AdminListUserSessions(ctx context.Context, request AdminListUserSessionsRequestObject) (AdminListUserSessionsResponseObject, error)
+	// AdminListUserVaults Vault metadata only (name, kind, size)
+	// (GET /admin/users/{userId}/vaults)
+	AdminListUserVaults(ctx context.Context, request AdminListUserVaultsRequestObject) (AdminListUserVaultsResponseObject, error)
+	// AdminActivateUser Activate a suspended user
+	// (POST /admin/users/{userId}:activate)
+	AdminActivateUser(ctx context.Context, request AdminActivateUserRequestObject) (AdminActivateUserResponseObject, error)
+	// AdminResetPassword Require a new password at the next login (and send the e-mail when Keycloak can)
+	// (POST /admin/users/{userId}:reset-password)
+	AdminResetPassword(ctx context.Context, request AdminResetPasswordRequestObject) (AdminResetPasswordResponseObject, error)
+	// AdminSuspendUser Suspend: Keycloak account disabled, sessions revoked, access ends within 30 s
+	// (POST /admin/users/{userId}:suspend)
+	AdminSuspendUser(ctx context.Context, request AdminSuspendUserRequestObject) (AdminSuspendUserResponseObject, error)
 	// GetClientConfig Public bootstrap information for clients (OIDC issuer and client id, notify endpoint)
 	// (GET /client-config)
 	GetClientConfig(ctx context.Context, request GetClientConfigRequestObject) (GetClientConfigResponseObject, error)
@@ -6033,6 +11585,18 @@ type StrictServerInterface interface {
 	// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	// (POST /vaults/{vaultId}/commit)
 	Commit(ctx context.Context, request CommitRequestObject) (CommitResponseObject, error)
+	// ExportVaultZip Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
+	// (GET /vaults/{vaultId}/export.zip)
+	ExportVaultZip(ctx context.Context, request ExportVaultZipRequestObject) (ExportVaultZipResponseObject, error)
+	// CreateExport Start an export job (any size); the ZIP is built in the background
+	// (POST /vaults/{vaultId}/exports)
+	CreateExport(ctx context.Context, request CreateExportRequestObject) (CreateExportResponseObject, error)
+	// GetExport State of an export job
+	// (GET /vaults/{vaultId}/exports/{exportId})
+	GetExport(ctx context.Context, request GetExportRequestObject) (GetExportResponseObject, error)
+	// DownloadExport Download the ZIP of a ready export (valid 24 hours)
+	// (GET /vaults/{vaultId}/exports/{exportId}/download)
+	DownloadExport(ctx context.Context, request DownloadExportRequestObject) (DownloadExportResponseObject, error)
 	// ListRevisions History of a file, newest first
 	// (GET /vaults/{vaultId}/files/{fileId}/revisions)
 	ListRevisions(ctx context.Context, request ListRevisionsRequestObject) (ListRevisionsResponseObject, error)
@@ -6093,6 +11657,1037 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AdminAuditLog operation middleware
+func (sh *strictHandler) AdminAuditLog(w http.ResponseWriter, r *http.Request, params AdminAuditLogParams) {
+	var request AdminAuditLogRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminAuditLog(ctx, request.(AdminAuditLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminAuditLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminAuditLogResponseObject); ok {
+		if err := validResponse.VisitAdminAuditLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminAuditLogCsv operation middleware
+func (sh *strictHandler) AdminAuditLogCsv(w http.ResponseWriter, r *http.Request, params AdminAuditLogCsvParams) {
+	var request AdminAuditLogCsvRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminAuditLogCsv(ctx, request.(AdminAuditLogCsvRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminAuditLogCsv")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminAuditLogCsvResponseObject); ok {
+		if err := validResponse.VisitAdminAuditLogCsvResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListConfigProfiles operation middleware
+func (sh *strictHandler) AdminListConfigProfiles(w http.ResponseWriter, r *http.Request) {
+	var request AdminListConfigProfilesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListConfigProfiles(ctx, request.(AdminListConfigProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListConfigProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListConfigProfilesResponseObject); ok {
+		if err := validResponse.VisitAdminListConfigProfilesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateConfigProfile operation middleware
+func (sh *strictHandler) AdminCreateConfigProfile(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateConfigProfileRequestObject
+
+	var body AdminCreateConfigProfileJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateConfigProfile(ctx, request.(AdminCreateConfigProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateConfigProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateConfigProfileResponseObject); ok {
+		if err := validResponse.VisitAdminCreateConfigProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteConfigProfile operation middleware
+func (sh *strictHandler) AdminDeleteConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	var request AdminDeleteConfigProfileRequestObject
+
+	request.ProfileId = profileId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteConfigProfile(ctx, request.(AdminDeleteConfigProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteConfigProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteConfigProfileResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteConfigProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetConfigProfile operation middleware
+func (sh *strictHandler) AdminGetConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	var request AdminGetConfigProfileRequestObject
+
+	request.ProfileId = profileId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetConfigProfile(ctx, request.(AdminGetConfigProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetConfigProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetConfigProfileResponseObject); ok {
+		if err := validResponse.VisitAdminGetConfigProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateConfigProfile operation middleware
+func (sh *strictHandler) AdminUpdateConfigProfile(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	var request AdminUpdateConfigProfileRequestObject
+
+	request.ProfileId = profileId
+
+	var body AdminUpdateConfigProfileJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateConfigProfile(ctx, request.(AdminUpdateConfigProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateConfigProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateConfigProfileResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateConfigProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListProfileVersions operation middleware
+func (sh *strictHandler) AdminListProfileVersions(w http.ResponseWriter, r *http.Request, profileId ProfilePathId) {
+	var request AdminListProfileVersionsRequestObject
+
+	request.ProfileId = profileId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListProfileVersions(ctx, request.(AdminListProfileVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListProfileVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListProfileVersionsResponseObject); ok {
+		if err := validResponse.VisitAdminListProfileVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRestoreProfileVersion operation middleware
+func (sh *strictHandler) AdminRestoreProfileVersion(w http.ResponseWriter, r *http.Request, profileId ProfilePathId, version VersionPathId) {
+	var request AdminRestoreProfileVersionRequestObject
+
+	request.ProfileId = profileId
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRestoreProfileVersion(ctx, request.(AdminRestoreProfileVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRestoreProfileVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRestoreProfileVersionResponseObject); ok {
+		if err := validResponse.VisitAdminRestoreProfileVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListGroups operation middleware
+func (sh *strictHandler) AdminListGroups(w http.ResponseWriter, r *http.Request) {
+	var request AdminListGroupsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListGroups(ctx, request.(AdminListGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListGroupsResponseObject); ok {
+		if err := validResponse.VisitAdminListGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateGroup operation middleware
+func (sh *strictHandler) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateGroupRequestObject
+
+	var body AdminCreateGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateGroup(ctx, request.(AdminCreateGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateGroupResponseObject); ok {
+		if err := validResponse.VisitAdminCreateGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteGroup operation middleware
+func (sh *strictHandler) AdminDeleteGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	var request AdminDeleteGroupRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteGroup(ctx, request.(AdminDeleteGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteGroupResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetGroup operation middleware
+func (sh *strictHandler) AdminGetGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	var request AdminGetGroupRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetGroup(ctx, request.(AdminGetGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetGroupResponseObject); ok {
+		if err := validResponse.VisitAdminGetGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateGroup operation middleware
+func (sh *strictHandler) AdminUpdateGroup(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	var request AdminUpdateGroupRequestObject
+
+	request.GroupId = groupId
+
+	var body AdminUpdateGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateGroup(ctx, request.(AdminUpdateGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateGroupResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetGroupProfiles operation middleware
+func (sh *strictHandler) AdminGetGroupProfiles(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	var request AdminGetGroupProfilesRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetGroupProfiles(ctx, request.(AdminGetGroupProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetGroupProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetGroupProfilesResponseObject); ok {
+		if err := validResponse.VisitAdminGetGroupProfilesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetGroupProfiles operation middleware
+func (sh *strictHandler) AdminSetGroupProfiles(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	var request AdminSetGroupProfilesRequestObject
+
+	request.GroupId = groupId
+
+	var body AdminSetGroupProfilesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetGroupProfiles(ctx, request.(AdminSetGroupProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetGroupProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetGroupProfilesResponseObject); ok {
+		if err := validResponse.VisitAdminSetGroupProfilesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListGroupMembers operation middleware
+func (sh *strictHandler) AdminListGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupPathId) {
+	var request AdminListGroupMembersRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListGroupMembers(ctx, request.(AdminListGroupMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListGroupMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListGroupMembersResponseObject); ok {
+		if err := validResponse.VisitAdminListGroupMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRemoveGroupMember operation middleware
+func (sh *strictHandler) AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request, groupId GroupPathId, userId UserPathId) {
+	var request AdminRemoveGroupMemberRequestObject
+
+	request.GroupId = groupId
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRemoveGroupMember(ctx, request.(AdminRemoveGroupMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRemoveGroupMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRemoveGroupMemberResponseObject); ok {
+		if err := validResponse.VisitAdminRemoveGroupMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetGroupMember operation middleware
+func (sh *strictHandler) AdminSetGroupMember(w http.ResponseWriter, r *http.Request, groupId GroupPathId, userId UserPathId) {
+	var request AdminSetGroupMemberRequestObject
+
+	request.GroupId = groupId
+	request.UserId = userId
+
+	var body AdminSetGroupMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetGroupMember(ctx, request.(AdminSetGroupMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetGroupMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetGroupMemberResponseObject); ok {
+		if err := validResponse.VisitAdminSetGroupMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetStorageSettings operation middleware
+func (sh *strictHandler) AdminGetStorageSettings(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetStorageSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetStorageSettings(ctx, request.(AdminGetStorageSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetStorageSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetStorageSettingsResponseObject); ok {
+		if err := validResponse.VisitAdminGetStorageSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminPutStorageSettings operation middleware
+func (sh *strictHandler) AdminPutStorageSettings(w http.ResponseWriter, r *http.Request) {
+	var request AdminPutStorageSettingsRequestObject
+
+	var body AdminPutStorageSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminPutStorageSettings(ctx, request.(AdminPutStorageSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminPutStorageSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminPutStorageSettingsResponseObject); ok {
+		if err := validResponse.VisitAdminPutStorageSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminBulkQuota operation middleware
+func (sh *strictHandler) AdminBulkQuota(w http.ResponseWriter, r *http.Request) {
+	var request AdminBulkQuotaRequestObject
+
+	var body AdminBulkQuotaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminBulkQuota(ctx, request.(AdminBulkQuotaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminBulkQuota")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminBulkQuotaResponseObject); ok {
+		if err := validResponse.VisitAdminBulkQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminStorageOverview operation middleware
+func (sh *strictHandler) AdminStorageOverview(w http.ResponseWriter, r *http.Request) {
+	var request AdminStorageOverviewRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminStorageOverview(ctx, request.(AdminStorageOverviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminStorageOverview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminStorageOverviewResponseObject); ok {
+		if err := validResponse.VisitAdminStorageOverviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListUsers operation middleware
+func (sh *strictHandler) AdminListUsers(w http.ResponseWriter, r *http.Request, params AdminListUsersParams) {
+	var request AdminListUsersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListUsers(ctx, request.(AdminListUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListUsersResponseObject); ok {
+		if err := validResponse.VisitAdminListUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateUser operation middleware
+func (sh *strictHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateUserRequestObject
+
+	var body AdminCreateUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateUser(ctx, request.(AdminCreateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateUserResponseObject); ok {
+		if err := validResponse.VisitAdminCreateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteUser operation middleware
+func (sh *strictHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminDeleteUserRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteUser(ctx, request.(AdminDeleteUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteUserResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetUser operation middleware
+func (sh *strictHandler) AdminGetUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminGetUserRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetUser(ctx, request.(AdminGetUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetUserResponseObject); ok {
+		if err := validResponse.VisitAdminGetUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateUser operation middleware
+func (sh *strictHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminUpdateUserRequestObject
+
+	request.UserId = userId
+
+	var body AdminUpdateUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateUser(ctx, request.(AdminUpdateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateUserResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUserEffectiveConfig operation middleware
+func (sh *strictHandler) AdminUserEffectiveConfig(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminUserEffectiveConfigRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUserEffectiveConfig(ctx, request.(AdminUserEffectiveConfigRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUserEffectiveConfig")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUserEffectiveConfigResponseObject); ok {
+		if err := validResponse.VisitAdminUserEffectiveConfigResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListUserDevices operation middleware
+func (sh *strictHandler) AdminListUserDevices(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminListUserDevicesRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListUserDevices(ctx, request.(AdminListUserDevicesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListUserDevices")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListUserDevicesResponseObject); ok {
+		if err := validResponse.VisitAdminListUserDevicesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetUserQuota operation middleware
+func (sh *strictHandler) AdminSetUserQuota(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminSetUserQuotaRequestObject
+
+	request.UserId = userId
+
+	var body AdminSetUserQuotaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetUserQuota(ctx, request.(AdminSetUserQuotaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetUserQuota")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetUserQuotaResponseObject); ok {
+		if err := validResponse.VisitAdminSetUserQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetUserRole operation middleware
+func (sh *strictHandler) AdminSetUserRole(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminSetUserRoleRequestObject
+
+	request.UserId = userId
+
+	var body AdminSetUserRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetUserRole(ctx, request.(AdminSetUserRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetUserRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetUserRoleResponseObject); ok {
+		if err := validResponse.VisitAdminSetUserRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListUserSessions operation middleware
+func (sh *strictHandler) AdminListUserSessions(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminListUserSessionsRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListUserSessions(ctx, request.(AdminListUserSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListUserSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListUserSessionsResponseObject); ok {
+		if err := validResponse.VisitAdminListUserSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListUserVaults operation middleware
+func (sh *strictHandler) AdminListUserVaults(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminListUserVaultsRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListUserVaults(ctx, request.(AdminListUserVaultsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListUserVaults")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListUserVaultsResponseObject); ok {
+		if err := validResponse.VisitAdminListUserVaultsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminActivateUser operation middleware
+func (sh *strictHandler) AdminActivateUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminActivateUserRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminActivateUser(ctx, request.(AdminActivateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminActivateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminActivateUserResponseObject); ok {
+		if err := validResponse.VisitAdminActivateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminResetPassword operation middleware
+func (sh *strictHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminResetPasswordRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminResetPassword(ctx, request.(AdminResetPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminResetPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminResetPasswordResponseObject); ok {
+		if err := validResponse.VisitAdminResetPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSuspendUser operation middleware
+func (sh *strictHandler) AdminSuspendUser(w http.ResponseWriter, r *http.Request, userId UserPathId) {
+	var request AdminSuspendUserRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSuspendUser(ctx, request.(AdminSuspendUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSuspendUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSuspendUserResponseObject); ok {
+		if err := validResponse.VisitAdminSuspendUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetClientConfig operation middleware
@@ -6976,6 +13571,112 @@ func (sh *strictHandler) Commit(w http.ResponseWriter, r *http.Request, vaultId 
 	}
 }
 
+// ExportVaultZip operation middleware
+func (sh *strictHandler) ExportVaultZip(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request ExportVaultZipRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportVaultZip(ctx, request.(ExportVaultZipRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportVaultZip")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportVaultZipResponseObject); ok {
+		if err := validResponse.VisitExportVaultZipResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateExport operation middleware
+func (sh *strictHandler) CreateExport(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request CreateExportRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateExport(ctx, request.(CreateExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateExportResponseObject); ok {
+		if err := validResponse.VisitCreateExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetExport operation middleware
+func (sh *strictHandler) GetExport(w http.ResponseWriter, r *http.Request, vaultId VaultId, exportId ExportPathId) {
+	var request GetExportRequestObject
+
+	request.VaultId = vaultId
+	request.ExportId = exportId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetExport(ctx, request.(GetExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetExportResponseObject); ok {
+		if err := validResponse.VisitGetExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DownloadExport operation middleware
+func (sh *strictHandler) DownloadExport(w http.ResponseWriter, r *http.Request, vaultId VaultId, exportId ExportPathId) {
+	var request DownloadExportRequestObject
+
+	request.VaultId = vaultId
+	request.ExportId = exportId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DownloadExport(ctx, request.(DownloadExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DownloadExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DownloadExportResponseObject); ok {
+		if err := validResponse.VisitDownloadExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRevisions operation middleware
 func (sh *strictHandler) ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams) {
 	var request ListRevisionsRequestObject
@@ -7180,124 +13881,174 @@ func (sh *strictHandler) RestoreVault(w http.ResponseWriter, r *http.Request, va
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"P800/Psv9/8TAAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

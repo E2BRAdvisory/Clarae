@@ -15,7 +15,41 @@ const (
 	ChannelShare = "share_changed"
 	// ChannelConfig carries the new configuration revision.
 	ChannelConfig = "config_changed"
+	// ChannelAccount carries a JSON AccountEvent (M5: suspension, quota).
+	ChannelAccount = "account_changed"
 )
+
+// Kinds of account events (§3.6 AccountChanged).
+const (
+	AccountSuspended    = "suspended"
+	AccountActivated    = "activated"
+	AccountQuotaChanged = "quota_changed"
+)
+
+// AccountEvent says that the account of one user changed.
+type AccountEvent struct {
+	User uuid.UUID `json:"u"`
+	Kind string    `json:"k"`
+}
+
+// PublishAccount announces an account change when the surrounding transaction commits.
+func PublishAccount(ctx context.Context, tx pgx.Tx, ev AccountEvent) error {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "SELECT pg_notify($1, $2)", ChannelAccount, string(b))
+	return err
+}
+
+// ParseAccount decodes a ChannelAccount payload.
+func ParseAccount(payload string) (AccountEvent, bool) {
+	var ev AccountEvent
+	if json.Unmarshal([]byte(payload), &ev) != nil || ev.User == uuid.Nil || ev.Kind == "" {
+		return AccountEvent{}, false
+	}
+	return ev, true
+}
 
 // Kinds of share events (§3.6 ShareChanged).
 const (

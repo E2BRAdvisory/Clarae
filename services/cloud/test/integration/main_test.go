@@ -115,6 +115,7 @@ type env struct {
 	db      *db.DB
 	server  *httptest.Server
 	baseURL string
+	kc      *fakeKeycloak
 }
 
 func newEnv(t *testing.T) *env {
@@ -139,6 +140,8 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	application := app.New(database, store, zerolog.Nop())
+	kc := newFakeKeycloak()
+	application.Keycloak = kc
 	authn := auth.NewMiddleware(verifier, application.Users, nil, 30*time.Second)
 	hubCtx, stopHub := context.WithCancel(ctx)
 	t.Cleanup(stopHub)
@@ -150,7 +153,7 @@ func newEnv(t *testing.T) *env {
 	}))
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
-	return &env{t: t, issuer: issuer, authn: authn, app: application, db: database, server: srv, baseURL: srv.URL + httpserver.BasePath}
+	return &env{t: t, issuer: issuer, authn: authn, app: application, db: database, server: srv, baseURL: srv.URL + httpserver.BasePath, kc: kc}
 }
 
 // do performs a request and validates request and response against the spec.

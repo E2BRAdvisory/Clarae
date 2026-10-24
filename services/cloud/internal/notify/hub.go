@@ -8,6 +8,7 @@ package notify
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ const (
 	KindVault Kind = iota
 	KindShare
 	KindConfig
+	KindAccount
 )
 
 // Event is one notification: "the vault reached this seq" (the default kind),
@@ -42,6 +44,8 @@ type Event struct {
 	ShareID   uuid.UUID
 	ShareKind string
 	Revision  int64
+	// AccountKind is set for KindAccount events.
+	AccountKind string
 }
 
 // Hub fans events out to subscribers.
@@ -81,6 +85,7 @@ type Sub struct {
 	pending map[uuid.UUID]int64
 	shares  []Event // share events are not coalesced by value, only de-duplicated
 	config  int64
+	account []string // account events, de-duplicated by kind
 	signal  chan struct{}
 }
 
@@ -117,6 +122,10 @@ func (s *Sub) push(ev Event) {
 		if ev.Revision > s.config {
 			s.config = ev.Revision
 		}
+	case KindAccount:
+		if !slices.Contains(s.account, ev.AccountKind) {
+			s.account = append(s.account, ev.AccountKind)
+		}
 	default:
 		if ev.Seq > s.pending[ev.VaultID] {
 			s.pending[ev.VaultID] = ev.Seq
@@ -137,7 +146,7 @@ func (s *Sub) Push(ev Event) { s.push(ev) }
 func (s *Sub) Next(ctx context.Context) ([]Event, error) {
 	for {
 		s.mu.Lock()
-		if len(s.pending) > 0 || len(s.shares) > 0 || s.config > 0 {
+		if len(s.pending) > 0 || len(s.shares) > 0 || s.config > 0 || len(s.account) > 0 {
 			out := make([]Event, 0, len(s.pending)+len(s.shares)+1)
 			for v, seq := range s.pending {
 				out = append(out, Event{VaultID: v, Seq: seq})
@@ -146,7 +155,10 @@ func (s *Sub) Next(ctx context.Context) ([]Event, error) {
 			if s.config > 0 {
 				out = append(out, Event{Kind: KindConfig, Revision: s.config})
 			}
-			s.pending, s.shares, s.config = map[uuid.UUID]int64{}, nil, 0
+			for _, k := range s.account {
+				out = append(out, Event{Kind: KindAccount, AccountKind: k})
+			}
+			s.pending, s.shares, s.config, s.account = map[uuid.UUID]int64{}, nil, 0, nil
 			s.mu.Unlock()
 			return out, nil
 		}
@@ -280,6 +292,11 @@ func (h *Hub) DispatchConfig(revision int64) {
 	h.deliver(nil, Event{Kind: KindConfig, Revision: revision})
 }
 
+// DispatchAccount tells one user's connected clients that their account changed.
+func (h *Hub) DispatchAccount(ev AccountEvent) {
+	h.deliver(map[uuid.UUID]bool{ev.User: true}, Event{Kind: KindAccount, AccountKind: ev.Kind})
+}
+
 // Snapshot returns what is ahead of what the client knows (replay after a reconnect, §3.6):
 // the vaults of the user, the ones shared with them, and the configuration revision.
 func (h *Hub) Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64, configVersion int64) ([]Event, error) {
@@ -332,7 +349,7 @@ func (h *Hub) listen(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 	defer conn.Release()
-	for _, ch := range []string{Channel, ChannelShare, ChannelConfig} {
+	for _, ch := range []string{Channel, ChannelShare, ChannelConfig, ChannelAccount} {
 		if _, err := conn.Exec(ctx, "LISTEN "+ch); err != nil {
 			return err
 		}
@@ -347,6 +364,10 @@ func (h *Hub) listen(ctx context.Context, pool *pgxpool.Pool) error {
 		case ChannelShare:
 			if se, ok := ParseShare(n.Payload); ok {
 				h.DispatchShare(ctx, se)
+			}
+		case ChannelAccount:
+			if ae, ok := ParseAccount(n.Payload); ok {
+				h.DispatchAccount(ae)
 			}
 		case ChannelConfig:
 			if rev, err := strconv.ParseInt(n.Payload, 10, 64); err == nil {

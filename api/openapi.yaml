@@ -1038,6 +1038,1102 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+  /admin/users:
+    get:
+      tags: [admin]
+      operationId: adminListUsers
+      security:
+        - bearerAuth: []
+      summary: Users, paginated and filtered
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: group
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    post:
+      tags: [admin]
+      operationId: adminCreateUser
+      security:
+        - bearerAuth: []
+      summary: Create a user (also in Keycloak, with required actions)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdminUser'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /admin/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    get:
+      tags: [admin]
+      operationId: adminGetUser
+      security:
+        - bearerAuth: []
+      summary: One user
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [admin]
+      operationId: adminUpdateUser
+      security:
+        - bearerAuth: []
+      summary: Change the profile of a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdminUser'
+      responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      tags: [admin]
+      operationId: adminDeleteUser
+      security:
+        - bearerAuth: []
+      summary: 'Delete a user: disabled in Keycloak, their vaults enter the retention period'
+      responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}:suspend:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    post:
+      tags: [admin]
+      operationId: adminSuspendUser
+      security:
+        - bearerAuth: []
+      summary: 'Suspend: Keycloak account disabled, sessions revoked, access ends within 30 s'
+      responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}:activate:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    post:
+      tags: [admin]
+      operationId: adminActivateUser
+      security:
+        - bearerAuth: []
+      summary: Activate a suspended user
+      responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}:reset-password:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    post:
+      tags: [admin]
+      operationId: adminResetPassword
+      security:
+        - bearerAuth: []
+      summary: Require a new password at the next login (and send the e-mail when Keycloak can)
+      responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordResult'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}/role:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    put:
+      tags: [admin]
+      operationId: adminSetUserRole
+      security:
+        - bearerAuth: []
+      summary: Set the global role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetRole'
+      responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /admin/users/{userId}/quota:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    put:
+      tags: [admin]
+      operationId: adminSetUserQuota
+      security:
+        - bearerAuth: []
+      summary: 'Set the quota override: null = default, -1 = unlimited'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetQuota'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /admin/users/{userId}/vaults:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    get:
+      tags: [admin]
+      operationId: adminListUserVaults
+      security:
+        - bearerAuth: []
+      summary: Vault metadata only (name, kind, size)
+      responses:
+        '200':
+          description: Vaults
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminVault'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}/devices:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    get:
+      tags: [admin]
+      operationId: adminListUserDevices
+      security:
+        - bearerAuth: []
+      summary: Active devices of a user
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    get:
+      tags: [admin]
+      operationId: adminListUserSessions
+      security:
+        - bearerAuth: []
+      summary: Open Keycloak sessions of a user
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSession'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}/config/effective:
+    parameters:
+      - $ref: '#/components/parameters/UserPathId'
+    get:
+      tags: [admin]
+      operationId: adminUserEffectiveConfig
+      security:
+        - bearerAuth: []
+      summary: Preview of the configuration a user receives
+      responses:
+        '200':
+          description: Configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveConfig'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/groups:
+    get:
+      tags: [admin]
+      operationId: adminListGroups
+      security:
+        - bearerAuth: []
+      summary: Groups
+      responses:
+        '200':
+          description: Groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminGroup'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [admin]
+      operationId: adminCreateGroup
+      security:
+        - bearerAuth: []
+      summary: Create a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminGroup'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /admin/groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupPathId'
+    get:
+      tags: [admin]
+      operationId: adminGetGroup
+      security:
+        - bearerAuth: []
+      summary: One group
+      responses:
+        '200':
+          description: Group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminGroup'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [admin]
+      operationId: adminUpdateGroup
+      security:
+        - bearerAuth: []
+      summary: Rename or describe a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminGroup'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [admin]
+      operationId: adminDeleteGroup
+      security:
+        - bearerAuth: []
+      summary: Delete a group with its memberships, grants and assignments
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/groups/{groupId}/members:
+    parameters:
+      - $ref: '#/components/parameters/GroupPathId'
+    get:
+      tags: [admin]
+      operationId: adminListGroupMembers
+      security:
+        - bearerAuth: []
+      summary: Members of a group
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupMember'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/groups/{groupId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupPathId'
+      - $ref: '#/components/parameters/UserPathId'
+    put:
+      tags: [admin]
+      operationId: adminSetGroupMember
+      security:
+        - bearerAuth: []
+      summary: Add a member or change their role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMemberRole'
+      responses:
+        '204':
+          description: Done
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      tags: [admin]
+      operationId: adminRemoveGroupMember
+      security:
+        - bearerAuth: []
+      summary: Remove a member
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/groups/{groupId}/config-profiles:
+    parameters:
+      - $ref: '#/components/parameters/GroupPathId'
+    get:
+      tags: [admin]
+      operationId: adminGetGroupProfiles
+      security:
+        - bearerAuth: []
+      summary: Profiles assigned to a group
+      responses:
+        '200':
+          description: Assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [admin]
+      operationId: adminSetGroupProfiles
+      security:
+        - bearerAuth: []
+      summary: Replace the profiles assigned to a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileAssignments'
+      responses:
+        '204':
+          description: Done
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /admin/config-profiles:
+    get:
+      tags: [admin]
+      operationId: adminListConfigProfiles
+      security:
+        - bearerAuth: []
+      summary: Profiles
+      responses:
+        '200':
+          description: Profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConfigProfile'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [admin]
+      operationId: adminCreateConfigProfile
+      security:
+        - bearerAuth: []
+      summary: Create a profile (validated against the schema)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigProfileInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigProfile'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /admin/config-profiles/{profileId}:
+    parameters:
+      - $ref: '#/components/parameters/ProfilePathId'
+    get:
+      tags: [admin]
+      operationId: adminGetConfigProfile
+      security:
+        - bearerAuth: []
+      summary: One profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigProfile'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [admin]
+      operationId: adminUpdateConfigProfile
+      security:
+        - bearerAuth: []
+      summary: 'Replace a profile: its version grows and the old one goes to the history'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigProfileInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigProfile'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [admin]
+      operationId: adminDeleteConfigProfile
+      security:
+        - bearerAuth: []
+      summary: Delete a profile and its assignments
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/config-profiles/{profileId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/ProfilePathId'
+    get:
+      tags: [admin]
+      operationId: adminListProfileVersions
+      security:
+        - bearerAuth: []
+      summary: History of a profile, newest first
+      responses:
+        '200':
+          description: Versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileVersion'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/config-profiles/{profileId}/versions/{version}:restore:
+    parameters:
+      - $ref: '#/components/parameters/ProfilePathId'
+      - $ref: '#/components/parameters/VersionPathId'
+    post:
+      tags: [admin]
+      operationId: adminRestoreProfileVersion
+      security:
+        - bearerAuth: []
+      summary: 'Roll back: an old version becomes the new current one'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigProfile'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/settings/storage:
+    get:
+      tags: [admin]
+      operationId: adminGetStorageSettings
+      security:
+        - bearerAuth: []
+      summary: Default quota, thresholds, retention
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageSettings'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [admin]
+      operationId: adminPutStorageSettings
+      security:
+        - bearerAuth: []
+      summary: Change the storage settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageSettings'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageSettings'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /admin/storage/overview:
+    get:
+      tags: [admin]
+      operationId: adminStorageOverview
+      security:
+        - bearerAuth: []
+      summary: Totals, top consumers, users over the thresholds, trend
+      responses:
+        '200':
+          description: Overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageOverview'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/storage/bulk-quota:
+    post:
+      tags: [admin]
+      operationId: adminBulkQuota
+      security:
+        - bearerAuth: []
+      summary: Set the quota override of several users at once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkQuota'
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkQuotaResult'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /admin/audit-log:
+    get:
+      tags: [admin]
+      operationId: adminAuditLog
+      security:
+        - bearerAuth: []
+      summary: Audit trail, newest first
+      parameters:
+        - name: actor
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: target
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /admin/audit-log.csv:
+    get:
+      tags: [admin]
+      operationId: adminAuditLogCsv
+      security:
+        - bearerAuth: []
+      summary: The audit trail as CSV (same filters, up to 50000 rows)
+      parameters:
+        - name: actor
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: target
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /vaults/{vaultId}/export.zip:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    get:
+      tags: [export]
+      operationId: exportVaultZip
+      security:
+        - bearerAuth: []
+      summary: Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
+      responses:
+        '200':
+          description: ZIP archive
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /vaults/{vaultId}/exports:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    post:
+      tags: [export]
+      operationId: createExport
+      security:
+        - bearerAuth: []
+      summary: Start an export job (any size); the ZIP is built in the background
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /vaults/{vaultId}/exports/{exportId}:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - $ref: '#/components/parameters/ExportPathId'
+    get:
+      tags: [export]
+      operationId: getExport
+      security:
+        - bearerAuth: []
+      summary: State of an export job
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/exports/{exportId}/download:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - $ref: '#/components/parameters/ExportPathId'
+    get:
+      tags: [export]
+      operationId: downloadExport
+      security:
+        - bearerAuth: []
+      summary: Download the ZIP of a ready export (valid 24 hours)
+      responses:
+        '200':
+          description: ZIP archive
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1077,6 +2173,41 @@ components:
         pattern: '^[0-9a-f]{64}$'
     DeviceId:
       name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserPathId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    GroupPathId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProfilePathId:
+      name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VersionPathId:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    ExportPathId:
+      name: exportId
       in: path
       required: true
       schema:
@@ -1950,3 +3081,258 @@ components:
         expires_at:
           type: string
           format: date-time
+
+    AdminUser:
+      type: object
+      required: [id, username, email, role, status, quota_bytes, used_bytes, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        email: {type: string}
+        display_name: {type: string}
+        role: {$ref: '#/components/schemas/Role'}
+        status: {$ref: '#/components/schemas/UserStatus'}
+        quota_bytes_override:
+          type: integer
+          format: int64
+          nullable: true
+          description: null = the global default, -1 = unlimited
+        quota_bytes: {type: integer, format: int64, description: 'Effective quota, -1 = unlimited'}
+        used_bytes: {type: integer, format: int64}
+        created_at: {type: string, format: date-time}
+        last_login_at: {type: string, format: date-time}
+    AdminUserList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminUser'}
+        total: {type: integer}
+    CreateAdminUser:
+      type: object
+      required: [username, email]
+      properties:
+        username: {type: string, minLength: 1, maxLength: 100}
+        email: {type: string, format: email}
+        display_name: {type: string, maxLength: 200}
+        role: {$ref: '#/components/schemas/Role'}
+        temporary_password:
+          type: string
+          minLength: 8
+          description: Optional; the user must change it at the first login
+    UpdateAdminUser:
+      type: object
+      properties:
+        display_name: {type: string, maxLength: 200}
+        email: {type: string, format: email}
+    SetRole:
+      type: object
+      required: [role]
+      properties:
+        role: {$ref: '#/components/schemas/Role'}
+    SetQuota:
+      type: object
+      properties:
+        quota_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: -1
+          description: Omitted or null = the global default, -1 = unlimited
+    ResetPasswordResult:
+      type: object
+      required: [email_sent]
+      properties:
+        email_sent: {type: boolean, description: 'False when Keycloak could not send the e-mail; the new password is still required at the next login'}
+    AdminVault:
+      type: object
+      required: [id, name, kind, total_bytes, file_count, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/VaultKind'}
+        total_bytes: {type: integer, format: int64}
+        file_count: {type: integer}
+        created_at: {type: string, format: date-time}
+        deleted_at: {type: string, format: date-time}
+    UserSession:
+      type: object
+      required: [id, started, last_access]
+      properties:
+        id: {type: string}
+        ip_address: {type: string}
+        started: {type: string, format: date-time}
+        last_access: {type: string, format: date-time}
+        clients:
+          type: array
+          items: {type: string}
+    AdminGroup:
+      type: object
+      required: [id, name, member_count, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string}
+        member_count: {type: integer}
+        created_at: {type: string, format: date-time}
+    GroupInput:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        description: {type: string, maxLength: 500}
+    GroupMember:
+      type: object
+      required: [user_id, username, member_role]
+      properties:
+        user_id: {type: string, format: uuid}
+        username: {type: string}
+        email: {type: string}
+        display_name: {type: string}
+        member_role: {type: string, enum: [member, manager]}
+    SetMemberRole:
+      type: object
+      required: [member_role]
+      properties:
+        member_role: {type: string, enum: [member, manager]}
+    ProfileAssignment:
+      type: object
+      required: [profile_id, priority]
+      properties:
+        profile_id: {type: string, format: uuid}
+        priority: {type: integer, description: 'Higher wins'}
+    ProfileAssignments:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ProfileAssignment'}
+    ConfigProfile:
+      type: object
+      required: [id, name, is_global, version, config, locked_keys, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string}
+        is_global: {type: boolean}
+        version: {type: integer}
+        config: {type: object, additionalProperties: true}
+        locked_keys:
+          type: array
+          items: {type: string}
+        updated_by: {type: string, format: uuid}
+        updated_at: {type: string, format: date-time}
+    ConfigProfileInput:
+      type: object
+      required: [name, config]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        description: {type: string, maxLength: 500}
+        is_global: {type: boolean}
+        config: {type: object, additionalProperties: true}
+        locked_keys:
+          type: array
+          items: {type: string}
+    ProfileVersion:
+      type: object
+      required: [version, name, is_global, config, locked_keys, updated_at]
+      properties:
+        version: {type: integer}
+        name: {type: string}
+        description: {type: string}
+        is_global: {type: boolean}
+        config: {type: object, additionalProperties: true}
+        locked_keys:
+          type: array
+          items: {type: string}
+        updated_by: {type: string, format: uuid}
+        updated_at: {type: string, format: date-time}
+    StorageSettings:
+      type: object
+      required: [default_quota_bytes, warn_percent, critical_percent, history_retention_days, history_daily_retention_days, max_file_size_bytes]
+      properties:
+        default_quota_bytes: {type: integer, format: int64, minimum: 0}
+        warn_percent: {type: integer, minimum: 1, maximum: 100}
+        critical_percent: {type: integer, minimum: 1, maximum: 100}
+        history_retention_days: {type: integer, minimum: 1}
+        history_daily_retention_days: {type: integer, minimum: 1}
+        max_file_size_bytes: {type: integer, format: int64, minimum: 1024}
+    TopConsumer:
+      type: object
+      required: [user_id, username, used_bytes, quota_bytes]
+      properties:
+        user_id: {type: string, format: uuid}
+        username: {type: string}
+        used_bytes: {type: integer, format: int64}
+        quota_bytes: {type: integer, format: int64}
+    TrendPoint:
+      type: object
+      required: [day, total_bytes]
+      properties:
+        day: {type: string, format: date}
+        total_bytes: {type: integer, format: int64}
+    StorageOverview:
+      type: object
+      required: [default_quota_bytes, total_used_bytes, user_count, users_over_warn, users_over_critical, top_consumers, trend]
+      properties:
+        default_quota_bytes: {type: integer, format: int64}
+        total_used_bytes: {type: integer, format: int64}
+        user_count: {type: integer}
+        users_over_warn: {type: integer}
+        users_over_critical: {type: integer}
+        top_consumers:
+          type: array
+          items: {$ref: '#/components/schemas/TopConsumer'}
+        trend:
+          type: array
+          items: {$ref: '#/components/schemas/TrendPoint'}
+    BulkQuota:
+      type: object
+      required: [user_ids]
+      properties:
+        user_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: {type: string, format: uuid}
+        quota_bytes: {type: integer, format: int64, nullable: true, minimum: -1}
+    BulkQuotaResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: {type: integer}
+    AuditEntry:
+      type: object
+      required: [id, at, action]
+      properties:
+        id: {type: integer, format: int64}
+        at: {type: string, format: date-time}
+        actor_id: {type: string, format: uuid}
+        actor_name: {type: string}
+        action: {type: string}
+        target_type: {type: string}
+        target_id: {type: string}
+        details: {type: object, additionalProperties: true}
+        ip: {type: string}
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AuditEntry'}
+        next_cursor: {type: string}
+    ExportJob:
+      type: object
+      required: [id, vault_id, status, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        vault_id: {type: string, format: uuid}
+        status: {type: string, enum: [queued, running, ready, failed, expired]}
+        size: {type: integer, format: int64}
+        error: {type: string}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        download_url: {type: string, description: 'Where to download a ready export'}

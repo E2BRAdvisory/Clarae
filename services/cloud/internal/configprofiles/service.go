@@ -252,6 +252,9 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in ProfileInput) 
 		if err != nil {
 			return err
 		}
+		if err := snapshot(ctx, q, p); err != nil {
+			return err
+		}
 		if err := audit.Record(ctx, q, actor, "config.profile.create", "config_profile", p.ID.String(), map[string]any{"name": name, "global": in.IsGlobal}); err != nil {
 			return err
 		}
@@ -261,6 +264,14 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in ProfileInput) 
 		return dbgen.ConfigProfile{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a profile named %q exists", name)
 	}
 	return p, err
+}
+
+// snapshot stores the state of a profile in its history (version numbers are unique per profile).
+func snapshot(ctx context.Context, q *dbgen.Queries, p dbgen.ConfigProfile) error {
+	return q.InsertProfileVersion(ctx, dbgen.InsertProfileVersionParams{
+		ProfileID: p.ID, Version: p.Version, Name: p.Name, Description: p.Description, IsGlobal: p.IsGlobal,
+		Config: p.Config, LockedKeys: p.LockedKeys, UpdatedBy: p.UpdatedBy, UpdatedAt: p.UpdatedAt,
+	})
 }
 
 func nilIfEmpty(s string) *string {
@@ -279,10 +290,13 @@ func (s *Service) demoteGlobal(ctx context.Context, q *dbgen.Queries, keep, acto
 	if err != nil {
 		return err
 	}
-	_, err = q.UpdateConfigProfile(ctx, dbgen.UpdateConfigProfileParams{
+	demoted, err := q.UpdateConfigProfile(ctx, dbgen.UpdateConfigProfileParams{
 		ID: cur.ID, Name: cur.Name, Description: cur.Description, IsGlobal: false, Config: cur.Config, LockedKeys: cur.LockedKeys, UpdatedBy: &actor,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return snapshot(ctx, q, demoted)
 }
 
 // Update replaces a profile and increments its version.
@@ -312,6 +326,9 @@ func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in ProfileInp
 			ID: id, Name: name, Description: nilIfEmpty(in.Description), IsGlobal: in.IsGlobal, Config: cfg, LockedKeys: locked, UpdatedBy: &actor,
 		})
 		if err != nil {
+			return err
+		}
+		if err := snapshot(ctx, q, p); err != nil {
 			return err
 		}
 		if err := audit.Record(ctx, q, actor, "config.profile.update", "config_profile", id.String(), map[string]any{"version": p.Version}); err != nil {
@@ -387,5 +404,36 @@ func (s *Service) SetGroupAssignments(ctx context.Context, actor, groupID uuid.U
 			return err
 		}
 		return s.Changed(ctx, tx)
+	})
+}
+
+// Versions returns the history of a profile, newest first.
+func (s *Service) Versions(ctx context.Context, id uuid.UUID) ([]dbgen.ConfigProfileVersion, error) {
+	if _, err := s.Get(ctx, id); err != nil {
+		return nil, err
+	}
+	return s.db.Queries().ListProfileVersions(ctx, id)
+}
+
+// Restore makes an old version the new current one (a rollback adds a version, it never rewrites history).
+// Whether the profile is global is a property of the profile now, not of the restored content.
+func (s *Service) Restore(ctx context.Context, actor, id uuid.UUID, version int32) (dbgen.ConfigProfile, error) {
+	cur, err := s.Get(ctx, id)
+	if err != nil {
+		return dbgen.ConfigProfile{}, err
+	}
+	old, err := s.db.Queries().GetProfileVersion(ctx, dbgen.GetProfileVersionParams{ProfileID: id, Version: version})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dbgen.ConfigProfile{}, httpproblem.NotFound("version")
+	}
+	if err != nil {
+		return dbgen.ConfigProfile{}, err
+	}
+	desc := ""
+	if old.Description != nil {
+		desc = *old.Description
+	}
+	return s.Update(ctx, actor, id, ProfileInput{
+		Name: old.Name, Description: desc, IsGlobal: cur.IsGlobal, Config: old.Config, LockedKeys: old.LockedKeys,
 	})
 }

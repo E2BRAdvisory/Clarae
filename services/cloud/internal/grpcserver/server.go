@@ -84,6 +84,8 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 			switch ev.Kind {
 			case notify.KindShare:
 				msg = &notifyv1.Event{Payload: &notifyv1.Event_ShareChanged{ShareChanged: &notifyv1.ShareChanged{ShareId: ev.ShareID.String(), Kind: ev.ShareKind}}}
+			case notify.KindAccount:
+				msg = &notifyv1.Event{Payload: &notifyv1.Event_AccountChanged{AccountChanged: &notifyv1.AccountChanged{Kind: ev.AccountKind}}}
 			case notify.KindConfig:
 				msg = &notifyv1.Event{Payload: &notifyv1.Event_ConfigChanged{ConfigChanged: &notifyv1.ConfigChanged{Version: clampInt32(ev.Revision)}}}
 			default:
@@ -91,6 +93,9 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 			}
 			if err := stream.Send(msg); err != nil {
 				return err
+			}
+			if ev.Kind == notify.KindAccount && ev.AccountKind == notify.AccountSuspended {
+				return status.Error(codes.PermissionDenied, "account suspended")
 			}
 		}
 	}

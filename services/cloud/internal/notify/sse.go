@@ -88,6 +88,8 @@ func (h *Hub) SSEHandler() http.Handler {
 					switch ev.Kind {
 					case KindShare:
 						_, _ = fmt.Fprintf(w, "event: share_changed\ndata: {\"share_id\":%q,\"kind\":%q}\n\n", ev.ShareID, ev.ShareKind)
+					case KindAccount:
+						_, _ = fmt.Fprintf(w, "event: account_changed\ndata: {\"kind\":%q}\n\n", ev.AccountKind)
 					case KindConfig:
 						_, _ = fmt.Fprintf(w, "event: config_changed\ndata: {\"version\":%d}\n\n", ev.Revision)
 					default:
