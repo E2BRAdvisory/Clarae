@@ -185,7 +185,7 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 	env.batch = &batchState{usedAtStart: used, refs: map[string]int32{}}
 	var top int64
 	for _, op := range ops {
-		res, err := s.execOp(ctx, q, tx, env, op)
+		res, err := s.execOp(ctx, q, env, op)
 		if res2, handled := business(op.OpID, err); handled {
 			res, err = res2, nil
 		}
@@ -239,7 +239,7 @@ func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto
 		var res syncproto.OpResult
 		err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
 			var err error
-			if res, err = s.execOp(ctx, q, tx, env, op); err != nil {
+			if res, err = s.execOp(ctx, q, env, op); err != nil {
 				return err
 			}
 			if res.Status == syncproto.StatusAccepted && res.Seq > 0 {
@@ -273,7 +273,7 @@ func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto
 // execOp evaluates one operation inside tx. Business outcomes come back as
 // *opError or *conflictError (see business); anything else is an infrastructure
 // error.
-func (s *Service) execOp(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op) (syncproto.OpResult, error) {
+func (s *Service) execOp(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op) (syncproto.OpResult, error) {
 	opID, err := uuid.Parse(op.OpID)
 	if err != nil {
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "op_id must be a UUID")
@@ -286,7 +286,7 @@ func (s *Service) execOp(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env c
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.OpResult{}, err
 	}
-	return s.dispatch(ctx, q, tx, env, op, opID)
+	return s.dispatch(ctx, q, env, op, opID)
 }
 
 // business converts a rejection or conflict into the operation's result.
@@ -334,18 +334,18 @@ func accepted(opID string, fileID uuid.UUID, rev int32, seq int64) syncproto.OpR
 	return syncproto.OpResult{OpID: opID, Status: syncproto.StatusAccepted, FileID: fileID.String(), Rev: int(rev), Seq: seq}
 }
 
-func (s *Service) dispatch(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) dispatch(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	switch op.Op {
 	case syncproto.OpCreate:
-		return s.create(ctx, q, tx, env, op, opID)
+		return s.create(ctx, q, env, op, opID)
 	case syncproto.OpModify, syncproto.OpRestore:
-		return s.modify(ctx, q, tx, env, op, opID)
+		return s.modify(ctx, q, env, op, opID)
 	case syncproto.OpMove:
-		return s.move(ctx, q, tx, env, op, opID)
+		return s.move(ctx, q, env, op, opID)
 	case syncproto.OpDelete:
-		return s.remove(ctx, q, tx, env, op, opID)
+		return s.remove(ctx, q, env, op, opID)
 	case syncproto.OpMovePrefix:
-		return s.movePrefix(ctx, q, tx, env, op, opID)
+		return s.movePrefix(ctx, q, env, op, opID)
 	default:
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "unknown operation %q", op.Op)
 	}
@@ -440,7 +440,7 @@ type recordArgs struct {
 	conflict  *uuid.UUID
 }
 
-func (s *Service) record(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, a recordArgs) (seq int64, err error) {
+func (s *Service) record(ctx context.Context, q *dbgen.Queries, env commitEnv, a recordArgs) (seq int64, err error) {
 	seq, err = q.NextVaultSeq(ctx, env.vault.ID)
 	if err != nil {
 		return 0, err

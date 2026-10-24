@@ -33,7 +33,7 @@ func mtime(op syncproto.Op) *timePtr {
 
 func ptr[T any](v T) *T { return &v }
 
-func (s *Service) create(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) create(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	fileID, err := parseFileID(op)
 	if err != nil {
 		return syncproto.OpResult{}, err
@@ -70,7 +70,7 @@ func (s *Service) create(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env c
 		return syncproto.OpResult{}, err
 	}
 	f := dbgen.File{ID: fileID, VaultID: env.vault.ID, Path: path, PathKey: key, Kind: string(kind), BlobHash: ptr(op.BlobHash), Size: size}
-	seq, err := s.record(ctx, q, tx, env, recordArgs{file: f, rev: 1, op: "create", clientMtm: mtime(op), opID: &opID, conflict: conflictRev})
+	seq, err := s.record(ctx, q, env, recordArgs{file: f, rev: 1, op: "create", clientMtm: mtime(op), opID: &opID, conflict: conflictRev})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -110,7 +110,7 @@ func (s *Service) lockFile(ctx context.Context, q *dbgen.Queries, env commitEnv,
 	return f, nil
 }
 
-func (s *Service) modify(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) modify(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	f, err := s.lockFile(ctx, q, env, op)
 	if err != nil {
 		return syncproto.OpResult{}, err
@@ -151,7 +151,7 @@ func (s *Service) modify(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env c
 	nf := f
 	nf.Path, nf.PathKey, nf.Kind, nf.BlobHash, nf.Size, nf.IsDeleted = path, key, kind, ptr(op.BlobHash), size, false
 	rev := f.CurrentRev + 1
-	seq, err := s.record(ctx, q, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: opName, baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
+	seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: opName, baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -165,7 +165,7 @@ func (s *Service) modify(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env c
 	return accepted(op.OpID, f.ID, rev, seq), nil
 }
 
-func (s *Service) move(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) move(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	f, err := s.lockFile(ctx, q, env, op)
 	if err != nil {
 		return syncproto.OpResult{}, err
@@ -188,14 +188,14 @@ func (s *Service) move(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env com
 	nf := f
 	nf.Path, nf.PathKey, nf.Kind = path, key, string(kind)
 	rev := f.CurrentRev + 1
-	seq, err := s.record(ctx, q, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(f.Path), baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
+	seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(f.Path), baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
 }
 
-func (s *Service) remove(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) remove(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	f, err := s.lockFile(ctx, q, env, op)
 	if err != nil {
 		return syncproto.OpResult{}, err
@@ -209,7 +209,7 @@ func (s *Service) remove(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env c
 	nf := f
 	nf.BlobHash, nf.Size, nf.IsDeleted = nil, 0, true
 	rev := f.CurrentRev + 1
-	seq, err := s.record(ctx, q, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: "delete", baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
+	seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: "delete", baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -228,7 +228,7 @@ func likeEscape(s string) string {
 // movePrefix renames a folder atomically: every file below it gets a move
 // revision, or none does (shared vaults only; private vaults emit one move
 // per file because the server cannot see folders, §3.8.5).
-func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	if env.private() {
 		return syncproto.OpResult{}, reject(syncproto.CodeVaultEncrypted, "move_prefix is not available on private vaults")
 	}
@@ -290,7 +290,7 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, tx pgx.Tx, e
 			id = &opID // only the first revision can carry the idempotency id
 		}
 		rev := t.f.CurrentRev + 1
-		seq, err := s.record(ctx, q, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(t.f.Path), baseRev: ptr(t.f.CurrentRev), clientMtm: mtime(op), opID: id})
+		seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(t.f.Path), baseRev: ptr(t.f.CurrentRev), clientMtm: mtime(op), opID: id})
 		if err != nil {
 			return syncproto.OpResult{}, err
 		}

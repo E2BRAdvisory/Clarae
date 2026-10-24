@@ -74,7 +74,7 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID, fileID u
 		nf := f
 		nf.BlobHash, nf.Size, nf.IsDeleted = target.BlobHash, size, false
 		newRev := f.CurrentRev + 1
-		seq, err := s.record(ctx, q, tx, env, recordArgs{file: nf, exists: true, rev: newRev, op: "restore", baseRev: ptr(f.CurrentRev), opID: &opID})
+		seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: newRev, op: "restore", baseRev: ptr(f.CurrentRev), opID: &opID})
 		if err != nil {
 			return err
 		}
