@@ -19,9 +19,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"nodus/apps/desktop/internal/auth"
+	"nodus/apps/desktop/internal/crypto"
 	"nodus/apps/desktop/internal/indexer"
 	"nodus/apps/desktop/internal/platform"
 	"nodus/apps/desktop/internal/store"
+	syncpkg "nodus/apps/desktop/internal/sync"
+	"nodus/apps/desktop/internal/sync/transport"
 	"nodus/apps/desktop/internal/vault"
 	"nodus/apps/desktop/internal/watcher"
 	"nodus/shared/pathrules"
@@ -32,6 +35,8 @@ type Options struct {
 	DataDir string
 	Logger  zerolog.Logger
 	Version string
+	// KeyStore keeps the keys of private vaults (nil = OS keychain).
+	KeyStore crypto.KeyStore
 }
 
 // App is the backend root. Bound API structs hold a pointer to it.
@@ -41,6 +46,8 @@ type App struct {
 	logger  zerolog.Logger
 	appDB   *sql.DB
 	auth    *auth.Service
+	crypto  *crypto.Manager
+	sync    *syncpkg.Manager
 	emitter func(name string, payload any) // nil = Wails runtime
 	mu      sync.Mutex
 	vaults  map[string]*openVault
@@ -81,9 +88,30 @@ func New(opts Options) *App {
 			runtime.BrowserOpenURL(a.ctx, u)
 			return nil
 		},
-		OnState: func(st auth.State) { a.emit(EventAuthState, st) },
+		OnState: func(st auth.State) {
+			a.emit(EventAuthState, st)
+			a.sync.SessionChanged()
+		},
 	})
+	a.crypto = crypto.NewManager(crypto.Options{Store: opts.KeyStore})
+	a.sync = syncpkg.NewManager(sessionAdapter{a}, a.crypto, opts.Logger.With().Str("module", "sync").Logger(), a.emit)
 	return a
+}
+
+// sessionAdapter lets the sync manager use the cloud login.
+type sessionAdapter struct{ a *App }
+
+func (s sessionAdapter) Client() *transport.Client { return s.a.auth.Client() }
+
+func (s sessionAdapter) Info() (syncpkg.SessionInfo, bool) {
+	st := s.a.auth.State()
+	if st.Status != auth.StatusReady && st.Status != auth.StatusDisconnected {
+		return syncpkg.SessionInfo{}, false
+	}
+	return syncpkg.SessionInfo{
+		ServerURL: st.ServerURL, DeviceID: st.DeviceID, UserID: st.Profile.UserID,
+		DeviceName: s.a.auth.DeviceName(), GRPCEndpoint: s.a.auth.GRPCEndpoint(),
+	}, true
 }
 
 // Startup is the Wails OnStartup hook.
@@ -96,6 +124,7 @@ func (a *App) Startup(ctx context.Context) {
 		return
 	}
 	a.appDB = db
+	a.sync.Start(ctx)
 	a.auth.Restore(ctx)
 	a.logger.Info().Str("version", a.opts.Version).Str("data_dir", a.opts.DataDir).Msg("started")
 }
@@ -113,6 +142,7 @@ func (a *App) DomReady(_ context.Context) {
 
 // Shutdown is the Wails OnShutdown hook.
 func (a *App) Shutdown(_ context.Context) {
+	a.sync.Shutdown()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for id, v := range a.vaults {
@@ -230,6 +260,9 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 	if err := a.rememberVault(info); err != nil {
 		log.Warn().Err(err).Msg("remember vault")
 	}
+	if err := a.sync.Attach(ctx, id, fsys); err != nil {
+		log.Warn().Err(err).Msg("sync state unavailable")
+	}
 	go func() {
 		if err := ix.Full(ctx); err != nil {
 			log.Error().Err(err).Msg("initial index")
@@ -252,17 +285,20 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 				if err := v.Indexer.Full(ctx); err != nil {
 					a.logger.Warn().Err(err).Msg("reconcile")
 				}
+				a.sync.Kick(v.Info.ID)
 				continue
 			}
 			if err := v.Indexer.Update(ctx, ch.Paths); err != nil {
 				a.logger.Warn().Err(err).Msg("index update")
 			}
 			a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: ch.Paths})
+			a.sync.Kick(v.Info.ID)
 		}
 	}
 }
 
 func (a *App) closeVaultLocked(id string, v *openVault) {
+	a.sync.Detach(id)
 	v.cancel()
 	_ = v.Watcher.Close()
 	_ = v.IndexDB.Close()

@@ -141,6 +141,7 @@ func (v *VaultAPI) Rename(vaultID, fromPath, toPath string) error {
 	if err := ov.FS.Rename(fromPath, toPath); err != nil {
 		return bindingError(err)
 	}
+	v.app.sync.Renamed(context.Background(), vaultID, fromPath, toPath)
 	return ov.Indexer.Update(context.Background(), []string{fromPath, toPath})
 }
 
@@ -347,6 +348,9 @@ func (l *LinksAPI) ApplyRename(vaultID, from, to string) (links.Plan, error) {
 	if err := links.ApplyRename(ov.FS, plan); err != nil {
 		return plan, bindingError(err)
 	}
+	// Keep the file identity for synchronization even though the note's own
+	// content may have been rewritten by the link updates.
+	l.app.sync.Renamed(ctx, vaultID, plan.From, plan.To)
 	touched := []string{plan.From, plan.To}
 	for _, f := range plan.Files {
 		touched = append(touched, f.Path)

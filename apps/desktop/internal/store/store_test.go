@@ -10,7 +10,7 @@ import (
 func TestOpenAndMigrate(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	for _, kind := range []Kind{KindApp, KindIndex} {
+	for _, kind := range []Kind{KindApp, KindIndex, KindSync} {
 		db, err := Open(ctx, filepath.Join(dir, "sub", string(kind)+".db"), kind)
 		if err != nil {
 			t.Fatalf("%s: %v", kind, err)

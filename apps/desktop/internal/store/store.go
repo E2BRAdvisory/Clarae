@@ -20,7 +20,7 @@ import (
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
 
-//go:embed migrations/app/*.sql migrations/index/*.sql
+//go:embed migrations/app/*.sql migrations/index/*.sql migrations/sync/*.sql
 var migrations embed.FS
 
 // Kind selects a database schema.
@@ -30,6 +30,7 @@ type Kind string
 const (
 	KindApp   Kind = "app"
 	KindIndex Kind = "index"
+	KindSync  Kind = "sync"
 )
 
 // Open opens (creating if needed) the SQLite file at path, enables WAL and

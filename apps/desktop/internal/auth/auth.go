@@ -173,6 +173,19 @@ func (s *Service) setState(mutate func(*State)) {
 	s.opts.OnState(st)
 }
 
+// GRPCEndpoint is the host:port of the notification stream announced by the server.
+func (s *Service) GRPCEndpoint() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.session == nil {
+		return ""
+	}
+	return s.session.GRPCEndpoint
+}
+
+// DeviceName is the name this device registered with.
+func (s *Service) DeviceName() string { return s.opts.DeviceName }
+
 // Client returns an API client for the signed-in server, or nil when signed out.
 func (s *Service) Client() *transport.Client {
 	s.mu.Lock()
