@@ -34,9 +34,12 @@ import { blockWidgets } from './blockWidgets';
 import { ofmCompletionSources, type CompletionOptions } from './completions';
 import { livePreviewContext, type LivePreviewContext } from './context';
 import { linkStatusChanged, livePreview } from './livePreview';
+import { pagePreviewHover } from '../preview/hover';
 import { smartPaste, type PasteDeps } from './paste';
 import { registerEditor, setActiveEditor, unregisterEditor } from './registry';
 import { sourceMode } from './sourceMode';
+import { slashCompletionSource } from '../slash/slash';
+import { slashHost } from '../slash/host';
 
 /** Marks transactions that replace the document from outside (reload); not user edits. */
 const External = Annotation.define<boolean>();
@@ -131,11 +134,14 @@ export function Editor(props: Props) {
           search({ top: true }),
           markdown({ base: markdownLanguage, addKeymap: true }),
           autocompletion({
-            override: ofmCompletionSources({
-              backend: latest.current.completion.backend,
-              notePath: () => latest.current.completion.notePath(),
-              linkFormat: () => latest.current.completion.linkFormat(),
-            }),
+            override: [
+              ...ofmCompletionSources({
+                backend: latest.current.completion.backend,
+                notePath: () => latest.current.completion.notePath(),
+                linkFormat: () => latest.current.completion.linkFormat(),
+              }),
+              slashCompletionSource(slashHost),
+            ],
             activateOnTyping: true,
           }),
           smartPaste({
@@ -155,6 +161,7 @@ export function Editor(props: Props) {
           settingsC.of(settingsExtensions(p.settings)),
           contextC.of(livePreviewContext.of(p.context)),
           readOnlyC.of(EditorState.readOnly.of(!!p.readOnly)),
+          pagePreviewHover(),
           EditorView.updateListener.of((u) => {
             const cur = latest.current;
             if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External)))

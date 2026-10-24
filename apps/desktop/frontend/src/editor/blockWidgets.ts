@@ -8,9 +8,10 @@ import { EditorState, RangeSet, StateField, Transaction, type Range } from '@cod
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 import { splitFrontmatter } from '@nodus/markdown';
 import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
+import { QueryWidget } from '../query/widget';
 import { MathWidget, MermaidWidget } from './widgets';
 
-export type BlockKind = 'frontmatter' | 'math' | 'mermaid' | 'callout';
+export type BlockKind = 'frontmatter' | 'math' | 'mermaid' | 'callout' | 'query';
 
 export interface Block {
   kind: BlockKind;
@@ -52,7 +53,7 @@ export function scanBlocks(state: EditorState): Block[] {
         (f[1] ?? '').length >= fence.len &&
         !(f[2] ?? '')
       ) {
-        if (fence.lang === 'mermaid') {
+        if (fence.lang === 'mermaid' || fence.lang === 'query') {
           const start = doc.line(fence.startLine);
           const code = doc.sliceString(
             doc.line(fence.startLine + 1).from <= line.from - 1
@@ -61,7 +62,7 @@ export function scanBlocks(state: EditorState): Block[] {
             Math.max(line.from - 1, start.to),
           );
           blocks.push({
-            kind: 'mermaid',
+            kind: fence.lang === 'query' ? 'query' : 'mermaid',
             from: start.from,
             to: line.to,
             data: n - fence.startLine > 1 ? code : '',
@@ -180,6 +181,15 @@ export function blockDecorations(state: EditorState): DecorationSet {
         if (!editing(b.from, b.to) && b.data.trim())
           out.push(
             Decoration.replace({ widget: new MermaidWidget(b.data), block: true }).range(
+              b.from,
+              b.to,
+            ),
+          );
+        break;
+      case 'query':
+        if (!editing(b.from, b.to) && b.data.trim())
+          out.push(
+            Decoration.replace({ widget: new QueryWidget(b.data), block: true }).range(
               b.from,
               b.to,
             ),

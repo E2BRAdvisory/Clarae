@@ -23,12 +23,13 @@ import {
 } from '../workspace/layout';
 import { useSettings, type NoteMode } from './settings';
 
-export type LeftTab = 'files' | 'search' | 'tags';
+export type LeftTab = 'files' | 'search' | 'tags' | 'bookmarks';
 export type RightTab = 'outline' | 'backlinks' | 'properties';
 export type SettingsSection =
   | 'general'
   | 'editor'
   | 'files'
+  | 'daily'
   | 'appearance'
   | 'hotkeys'
   | 'cloud'

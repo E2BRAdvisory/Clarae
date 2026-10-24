@@ -1,9 +1,11 @@
 // High-level operations used by both the UI and the command registry.
 import { api, errorCode, type Entry } from './api';
+import { useBookmarks } from '../bookmarks/store';
 import { queryClient } from '../state/queryClient';
 import { queryKeys } from '../state/queries';
 import { useSettings } from '../state/settings';
-import { useAppStore } from '../state/store';
+import { newNoteDir } from '../settings/locations';
+import { selectActivePath, useAppStore } from '../state/store';
 
 function vaultId(): string {
   const v = useAppStore.getState().vault;
@@ -38,7 +40,9 @@ export async function createNote(
 ): Promise<string> {
   const id = vaultId();
   const tree = await api.vault.listTree(id);
-  const dir = (opts.dir ?? useSettings.getState().editor.newNoteFolder).replace(/^\/+|\/+$/g, '');
+  const dir = (
+    opts.dir ?? newNoteDir(useSettings.getState().editor, selectActivePath(useAppStore.getState()))
+  ).replace(/^\/+|\/+$/g, '');
   const base = (opts.name ?? 'Untitled').replace(/\.md$/, '');
   const path = uniqueName(tree, dir, base, '.md');
   await api.vault.writeNote(id, path, '', '');
@@ -72,6 +76,7 @@ export async function renameEntry(
   if (notes > 0 && confirm && !(await confirm({ notes, links }))) return null;
   await api.links.applyRename(id, from, to);
   useAppStore.getState().pathRenamed(from, to);
+  useBookmarks.getState().pathRenamed(from, to);
   invalidateVault(id);
   return { notesUpdated: notes, linksUpdated: links };
 }

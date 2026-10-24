@@ -87,16 +87,23 @@ func run() int {
 		Bind: []interface{}{
 			app.NewVaultAPI(a),
 			app.NewSearchAPI(a),
+			app.NewExportAPI(a),
 			app.NewSettingsAPI(a),
 			app.NewAuthAPI(a),
 			app.NewLinksAPI(a),
 			app.NewTagsAPI(a),
 			app.NewPropertiesAPI(a),
 			app.NewSyncAPI(a),
+			app.NewHistoryAPI(a),
 			app.NewVaultCryptoAPI(a),
 			app.NewDrawingAPI(a),
 			app.NewSharingAPI(a),
 			app.NewConfigAPI(a),
+			app.NewGraphAPI(a),
+			app.NewBasesAPI(a),
+			app.NewTemplatesAPI(a),
+			app.NewComposerAPI(a),
+			app.NewImporterAPI(a),
 		},
 	})
 	if err != nil {

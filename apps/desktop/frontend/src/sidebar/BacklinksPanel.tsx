@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
 import { useBacklinks } from '../state/queries';
+import { openLocalGraph } from '../graph/commands';
 
 export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: string }) {
   const { t } = useTranslation();
@@ -21,7 +22,18 @@ export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: strin
   return (
     <section className="backlinks" aria-label={t('backlinks.title')}>
       <h3>
-        {t('backlinks.title')} ({linked.length})
+        {t('backlinks.title')} ({linked.length}){' '}
+        {/\.md$/i.test(path) && (
+          <button
+            type="button"
+            className="icon"
+            title={t('backlinks.localGraph')}
+            aria-label={t('backlinks.localGraph')}
+            onClick={() => openLocalGraph(path)}
+          >
+            ⌖
+          </button>
+        )}
       </h3>
       {linked.length === 0 && <div className="muted">{t('backlinks.none')}</div>}
       {linked.map((l, i) => (

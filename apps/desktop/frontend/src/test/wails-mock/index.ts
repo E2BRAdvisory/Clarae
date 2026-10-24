@@ -7,6 +7,13 @@
 import { parseDocument } from 'yaml';
 import { extract, splitFrontmatter } from '@nodus/markdown';
 import { linkInfo } from '../../app/api';
+import { buildMockGraph } from '../../graph/mockBuild';
+import { syntheticGraph } from '../../graph/synthetic';
+import type { GraphData, GraphOptions } from '../../graph/types';
+import { makeBasesAPI } from './bases';
+import { notesMock } from './notes';
+import { createHistoryAPI, newMockHistory, type MockHistory } from './history';
+import { createImporterMock } from '../../importer/mock';
 import type {
   AppSettings,
   ConfigState,
@@ -88,6 +95,8 @@ export interface MockSharing {
 export interface WailsMock {
   sync: MockSync;
   sharing: MockSharing;
+  /** Local file snapshots (HistoryAPI). */
+  history: MockHistory;
   /** The configuration of the (mock) server. */
   config: ConfigState;
   /** SVG previews of drawings by content hash (DrawingAPI cache). */
@@ -96,6 +105,9 @@ export interface WailsMock {
   /** Vaults exported to ZIP (VaultAPI.ExportZip); set `exportCancelled` to simulate a cancelled dialog. */
   exports: string[];
   exportCancelled: boolean;
+  /** ExportAPI: standalone HTML files "saved" (cancelled when `exportCancelled`) and print requests. */
+  htmlExports: { vaultId: string; name: string; html: string }[];
+  prints: number;
   recent: VaultInfo[];
   settings: AppSettings;
   auth: AuthState;
@@ -257,6 +269,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       disk: 'encrypted',
       secrets: new Map(),
     },
+    history: seed?.history ?? newMockHistory(),
     sharing: {
       invitations: [],
       mounts: [],
@@ -271,6 +284,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     vaults: seed?.vaults ?? new Map<string, MockVault>(),
     exports: [],
     exportCancelled: false,
+    htmlExports: [],
+    prints: 0,
     recent: seed?.recent ?? [],
     settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
     auth: seed?.auth ?? {
@@ -337,7 +352,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
     ExportZip: (id: string): Promise<ExportResult> => {
       const v = vaultOf(id);
-      if (mock.exportCancelled) return Promise.resolve({ path: '', files: 0, bytes: 0, cancelled: true });
+      if (mock.exportCancelled)
+        return Promise.resolve({ path: '', files: 0, bytes: 0, cancelled: true });
       mock.exports.push(id);
       return Promise.resolve({
         path: `/mock/exports/${v.info.name}.zip`,
@@ -433,6 +449,24 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       v.binaries.set(candidate, base64);
       changed(id, [candidate]);
       return Promise.resolve(candidate);
+    },
+  };
+
+  const ExportAPI = {
+    SaveHTML: (id: string, name: string, html: string): Promise<ExportResult> => {
+      if (mock.exportCancelled)
+        return Promise.resolve({ path: '', files: 0, bytes: 0, cancelled: true });
+      mock.htmlExports.push({ vaultId: id, name, html });
+      return Promise.resolve({
+        path: `/mock/exports/${name}.html`,
+        files: 1,
+        bytes: html.length,
+        cancelled: false,
+      });
+    },
+    Print: (): Promise<void> => {
+      mock.prints++;
+      return Promise.resolve();
     },
   };
 
@@ -732,6 +766,13 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve({ path, hash: hashOf(out), size: out.length });
     },
   };
+
+  const BasesAPI = makeBasesAPI({
+    files: (id) => vaultOf(id).files,
+    hashOf,
+    updateProperty: (id, path, key, valueJSON, hash) =>
+      PropertiesAPI.Update(id, path, key, valueJSON, hash),
+  });
 
   const SettingsAPI = {
     Get: (): Promise<AppSettings> => Promise.resolve(mock.settings),
@@ -1184,21 +1225,56 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     DiskEncryption: (): Promise<DiskEncryption> => Promise.resolve(sy.disk),
   };
 
+  const GraphAPI = {
+    Build: (id: string, o: GraphOptions): Promise<GraphData> => {
+      // Benchmarks and e2e runs can ask for a synthetic graph of a given size.
+      const fixture = (window as unknown as { __NODUS_GRAPH_FIXTURE__?: number })
+        .__NODUS_GRAPH_FIXTURE__;
+      if (fixture) return Promise.resolve(syntheticGraph(fixture));
+      const v = vaultOf(id);
+      const notes = [...v.files.keys()].filter(isNote);
+      return Promise.resolve(
+        buildMockGraph(
+          {
+            paths: [...notes, ...v.binaries.keys()],
+            links: (p) =>
+              outgoing(v, p)
+                .filter((l) => l.path === '' || isNote(l.path) || v.binaries.has(l.path))
+                .map((l) => ({ path: l.path, raw: l.raw })),
+            tags: (p) => extract(stem(p), v.files.get(p) ?? '').tags.map((t) => t.name),
+            text: (p) => v.files.get(p) ?? '',
+          },
+          o,
+        ),
+      );
+    },
+  };
+
   const w = window as unknown as Record<string, unknown>;
   w['go'] = {
     app: {
       VaultAPI,
       SearchAPI,
+      ExportAPI,
       SettingsAPI,
       AuthAPI,
       LinksAPI,
       TagsAPI,
       PropertiesAPI,
+      BasesAPI,
       SyncAPI,
       VaultCryptoAPI,
       DrawingAPI,
       SharingAPI,
       ConfigAPI,
+      GraphAPI,
+      ...notesMock({ vaultOf, resolve, changed }),
+      HistoryAPI: createHistoryAPI(mock.history, {
+        files: (id) => vaultOf(id).files,
+        changed,
+        hash: hashOf,
+      }),
+      ImporterAPI: createImporterMock((name, payload) => mock.emit(name, payload)),
     },
   };
   w['runtime'] = {

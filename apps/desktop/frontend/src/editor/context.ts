@@ -28,6 +28,8 @@ export interface LivePreviewContext {
   renderMath(tex: string, display: boolean, el: HTMLElement): void;
   /** Renders a Mermaid diagram into el (lazy-loaded). */
   renderMermaid(code: string, el: HTMLElement): void;
+  /** Renders a ```query block (embedded search) into el. */
+  renderQuery?(source: string, el: HTMLElement): void;
 }
 
 const noop = (): void => undefined;

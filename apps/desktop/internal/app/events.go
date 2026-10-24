@@ -30,12 +30,22 @@ type OpenRequestPayload struct {
 // emit sends an event to the frontend. Tests replace App.emitter because the
 // Wails runtime aborts the process when given a context it did not create.
 func (a *App) emit(name string, payload any) {
-	if a.emitter != nil {
-		a.emitter(name, payload)
+	a.emitterMu.RLock()
+	emitter := a.emitter
+	a.emitterMu.RUnlock()
+	if emitter != nil {
+		emitter(name, payload)
 		return
 	}
 	if a.ctx == nil {
 		return
 	}
 	runtime.EventsEmit(a.ctx, name, payload)
+}
+
+// setEmitter swaps the emitter while background goroutines (indexer, watcher) may be emitting.
+func (a *App) setEmitter(f func(string, any)) {
+	a.emitterMu.Lock()
+	a.emitter = f
+	a.emitterMu.Unlock()
 }

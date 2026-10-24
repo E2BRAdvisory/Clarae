@@ -9,11 +9,16 @@ import { useNoteDocument } from '../editor/useNoteDocument';
 import { renderEmbedInto } from '../embeds/hydrate';
 import { classify } from '../embeds/media';
 import { renderMath, renderMermaid } from '../embeds/typeset';
+import { renderQueryInto } from '../query/env';
+import { attachmentDir } from '../settings/locations';
 import { backendFor, ReadingView } from '../reading/ReadingView';
 import { commandForEvent } from '../commands/registry';
 import { useSettings, type NoteMode } from '../state/settings';
 import { CanvasView } from '../canvas/CanvasView';
+import { BaseView } from '../bases/BaseView';
 import { DrawingView } from '../drawing/DrawingView';
+import { GraphView } from '../graph/GraphView';
+import { isGraphPath } from '../graph/paths';
 import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
@@ -82,9 +87,11 @@ interface Props {
 
 export function NoteView({ vaultId, pane, tab, visible }: Props) {
   const { t } = useTranslation();
+  if (isGraphPath(tab.path)) return <GraphView key={tab.path} vaultId={vaultId} path={tab.path} />;
   const kind = classify(tab.path);
   if (kind === 'drawing') return <DrawingView key={tab.path} vaultId={vaultId} path={tab.path} />;
   if (kind === 'canvas') return <CanvasView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (kind === 'base') return <BaseView key={tab.path} vaultId={vaultId} path={tab.path} />;
   if (kind !== 'note') return <AttachmentView vaultId={vaultId} path={tab.path} />;
   return (
     <MarkdownNote key={tab.path} vaultId={vaultId} pane={pane} tab={tab} visible={visible} t={t} />
@@ -152,6 +159,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
       openExternal,
       renderMath: (tex, display, el) => renderMath(el, tex, display),
       renderMermaid: (code, el) => renderMermaid(el, code),
+      renderQuery: (source, el) => void renderQueryInto(el, source, vaultId, path),
     }),
     [link, vaultId, path, open],
   );
@@ -172,10 +180,10 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
   const paste = useMemo(
     () => ({
       saveAttachment: (name: string, b64: string) =>
-        api.vault.saveAttachment(vaultId, settingsRef.current.attachmentsFolder, name, b64),
+        api.vault.saveAttachment(vaultId, attachmentDir(settingsRef.current, path), name, b64),
       enabled: () => settingsRef.current.smartPaste,
     }),
-    [vaultId],
+    [vaultId, path],
   );
 
   // The authoritative text: includes edits the editor made since the last load.

@@ -12,15 +12,20 @@ import {
 } from '../state/settings';
 import { useAppStore, type SettingsSection } from '../state/store';
 import { CloudSection } from './CloudSection';
+import { useImporter } from '../importer/store';
 import { SharingPanel } from '../sharing/SharingPanel';
 import { editorKeyOf, isLocked, useManaged } from '../state/managed';
 import { SyncSection } from './SyncSection';
+import { DailySection } from './DailySection';
 import { HotkeysEditor } from './HotkeysEditor';
+import { HistorySettings } from './HistorySettings';
+import { FilesExtra } from './FilesExtra';
 
 const SECTIONS: SettingsSection[] = [
   'general',
   'editor',
   'files',
+  'daily',
   'appearance',
   'hotkeys',
   'cloud',
@@ -81,6 +86,8 @@ function Toggle({
       | 'autoPair'
       | 'smartPaste'
       | 'foldHeadings'
+      | 'pagePreview'
+      | 'pagePreviewAlways'
     );
 }) {
   const value = useSettings((s) => s.editor[k]);
@@ -181,6 +188,12 @@ export function SettingsPanel() {
             <Toggle id="autoPair" label={t('settings.autoPair')} k="autoPair" />
             <Toggle id="smartPaste" label={t('settings.smartPaste')} k="smartPaste" />
             <Toggle id="foldHeadings" label={t('settings.foldHeadings')} k="foldHeadings" />
+            <Toggle id="pagePreview" label={t('settings.pagePreview')} k="pagePreview" />
+            <Toggle
+              id="pagePreviewAlways"
+              label={t('settings.pagePreviewAlways')}
+              k="pagePreviewAlways"
+            />
             <Row label={t('settings.fontSize')} cfg="editor.fontSize" htmlFor="fontSize">
               <input
                 id="fontSize"
@@ -256,6 +269,20 @@ export function SettingsPanel() {
                 <option value="vault">{t('settings.trashVault')}</option>
               </select>
             </Row>
+            <HistorySettings />
+            <FilesExtra />
+            <Row label={t('settings.importNotes')} htmlFor="importNotes">
+              <button
+                id="importNotes"
+                disabled={!vault}
+                onClick={() => {
+                  useAppStore.getState().closeSettings();
+                  useImporter.getState().show();
+                }}
+              >
+                {t('commands.import_open')}
+              </button>
+            </Row>
           </>
         );
       case 'appearance':
@@ -322,6 +349,8 @@ export function SettingsPanel() {
         return <CloudSection />;
       case 'sync':
         return <SyncSection />;
+      case 'daily':
+        return <DailySection />;
       case 'sharing':
         return <SharingPanel />;
       case 'about':

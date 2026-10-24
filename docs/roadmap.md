@@ -374,6 +374,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 11. M6 — P1 residui (esito: parità 1.0)
 
+> **Stato (2026-10-24):** WP1–WP6 implementati (ADR-0013…0019: grafo, Bases, daily/template/composer, bookmarks/workspaces/preview, importer, history, query/export). Verificati in locale: unit Go con `-race` e lint, Vitest (290 test), Playwright su mock; benchmark grafo e Bases in `docs/qa/m6-graph-benchmark.md` e ADR-0014. **Non verificato su webview reale** (hover, stampa PDF, selettori nativi, 30 fps del grafo in WKWebView/WebView2/WebKitGTK): checklist manuale in `docs/qa/obsidian-parity.md` (sezione M6) e `docs/qa/m6-search-export.md`. Lacune dichiarate: importer Keep HTML e Apple Notes (P2), "applica template a ogni nuova nota", `pre-sync-overwrite` della history non collegato alla sync.
+
 ### M6-WP1 Graph view
 
 - `internal/graph`: nodi/archi dall'indice (note, fantasma, allegati opzionali, tag opzionali), filtri (query di ricerca, tag, cartelle, orfani), dati per timelapse (ctime).

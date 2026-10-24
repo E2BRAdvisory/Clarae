@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { bookmarkMenuItems } from '../bookmarks/actions';
 import { useAppStore } from '../state/store';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
+import { graphTitle, isGraphPath } from '../graph/paths';
+import { useRecovery } from '../recovery/store';
 import type { Pane } from './layout';
 
 const label = (path: string): string => (path.split('/').pop() ?? path).replace(/\.md$/, '');
@@ -68,17 +71,27 @@ export function TabBar({ pane }: { pane: Pane }) {
                   onSelect: () =>
                     pane.tabs.filter((x) => x.id !== tab.id).forEach((x) => closeTabById(x.id)),
                 },
-                { label: t('tabs.splitRight'), onSelect: () => split('row'), separator: true },
+                {
+                  label: t('commands.recovery_open'),
+                  onSelect: () => useRecovery.getState().openNote(tab.path),
+                  separator: true,
+                },
+                { label: t('tabs.splitRight'), onSelect: () => split('row') },
                 { label: t('tabs.splitDown'), onSelect: () => split('column') },
                 {
                   label: pane.link ? t('tabs.unlink') : t('tabs.link'),
                   onSelect: () => toggleLinkedPane(pane.id),
                 },
+                ...bookmarkMenuItems(tab.path, false).map((m) => ({ ...m, separator: true })),
               ],
             });
           }}
         >
-          <span className="tab-title">{label(tab.path)}</span>
+          <span className="tab-title">
+            {isGraphPath(tab.path)
+              ? t(graphTitle(tab.path).key, { name: graphTitle(tab.path).name })
+              : label(tab.path)}
+          </span>
           <button
             className="icon close"
             aria-label={t('tabs.close')}

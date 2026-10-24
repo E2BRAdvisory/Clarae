@@ -17,6 +17,8 @@ export interface EmbedBackend {
   drawingPreview?(path: string): Promise<string>;
   /** Blob URL of the static picture of a canvas. */
   canvasPreview?(path: string): Promise<string>;
+  /** Mounts the live view of a `.base` file (optionally a named view) into el. */
+  baseEmbed?(el: HTMLElement, path: string, view: string, fromPath: string): void;
 }
 
 export interface EmbedDeps {
@@ -28,6 +30,8 @@ export interface EmbedDeps {
   /** Notes already being rendered up the chain, to break cycles. */
   visited: readonly string[];
   openLink?: (spec: LinkSpec, newTab: boolean) => void;
+  /** Renders a ```query block of `fromPath` (embedded search); without it the block stays code. */
+  renderQuery?: (el: HTMLElement, source: string, fromPath: string) => void;
 }
 
 export const MAX_EMBED_DEPTH = 5;
@@ -156,7 +160,11 @@ export async function renderEmbedInto(
         return;
       }
       case 'base':
-        return notice(el, 'embed-pending', `${path} (${kind} embeds arrive in a later milestone)`);
+        if (!deps.backend.baseEmbed) return notice(el, 'embed-other', path);
+        // `![[x.base#View]]`: the fragment names the view.
+        el.className = 'embed-base-wrap';
+        deps.backend.baseEmbed(el, path, spec.heading, deps.fromPath);
+        return;
       default:
         return notice(el, 'embed-other', path);
     }
@@ -176,6 +184,13 @@ export function hydrate(root: HTMLElement, deps: EmbedDeps): void {
     holder.className = 'mermaid-diagram';
     code.closest('pre')?.replaceWith(holder);
     renderMermaid(holder, code.textContent ?? '');
+  }
+  if (deps.renderQuery) {
+    for (const code of root.querySelectorAll<HTMLElement>('pre > code.language-query')) {
+      const holder = document.createElement('div');
+      code.closest('pre')?.replaceWith(holder);
+      deps.renderQuery(holder, code.textContent ?? '', deps.fromPath);
+    }
   }
   for (const el of root.querySelectorAll<HTMLElement>('span.embed')) {
     const spec: LinkSpec = {

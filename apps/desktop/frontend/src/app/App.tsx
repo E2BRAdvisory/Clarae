@@ -10,6 +10,7 @@ import {
   type VaultLockedPayload,
 } from './events';
 import { applyTheme, type Theme } from './theme';
+import { isGraphPath } from '../graph/paths';
 import { initI18n } from '../i18n';
 import { selectActivePath, useAppStore, type LeftTab, type RightTab } from '../state/store';
 import { applyAppearance, useSettings } from '../state/settings';
@@ -22,6 +23,7 @@ import { OutlinePanel } from '../sidebar/OutlinePanel';
 import { BacklinksPanel } from '../sidebar/BacklinksPanel';
 import { PropertiesPanel } from '../sidebar/PropertiesPanel';
 import { SearchPanel } from '../search/SearchPanel';
+import { BookmarksPanel } from '../bookmarks/BookmarksPanel';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { CommandPalette } from '../commands/CommandPalette';
 import { QuickSwitcher } from '../commands/QuickSwitcher';
@@ -29,12 +31,14 @@ import { commandForEvent } from '../commands/registry';
 import { DialogHost, dialog } from '../ui/dialogs';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
+import { RecoveryDialogs } from '../recovery/RecoveryDialog';
 import { SyncIndicator } from '../sync/SyncIndicator';
 import { SharingDialogs } from '../sharing/SharingDialogs';
+import { ImportWizard } from '../importer/ImportWizard';
 import { InvitesIndicator, PermissionBadge } from '../sharing/StatusItems';
 import { followLinkPath } from './open';
 
-const LEFT_TABS: LeftTab[] = ['files', 'search', 'tags'];
+const LEFT_TABS: LeftTab[] = ['files', 'search', 'tags', 'bookmarks'];
 const RIGHT_TABS: RightTab[] = ['outline', 'backlinks', 'properties'];
 
 export function App() {
@@ -177,7 +181,9 @@ export function App() {
       <StatusBar />
       {settingsOpen && <SettingsPanel />}
       <SyncDialogs />
+      <RecoveryDialogs />
       <SharingDialogs />
+      <ImportWizard />
       <CommandPalette />
       <QuickSwitcher />
       <DialogHost />
@@ -234,7 +240,8 @@ function useVaultSession(vaultId: string): boolean {
           const tree = new Set((await api.vault.listTree(vaultId)).map((e) => e.path));
           let next = layout;
           for (const p of allPanes(layout.root))
-            for (const tab of p.tabs) if (!tree.has(tab.path)) next = removePath(next, tab.path);
+            for (const tab of p.tabs)
+              if (!tree.has(tab.path) && !isGraphPath(tab.path)) next = removePath(next, tab.path);
           useAppStore.getState().setLayout(next);
           const l = saved?.['left'] as
             { open?: boolean; tab?: LeftTab; width?: number } | undefined;
@@ -378,6 +385,7 @@ function VaultView({ vaultId }: { vaultId: string }) {
           {left.tab === 'files' && <FileExplorer vaultId={vaultId} />}
           {left.tab === 'search' && <SearchPanel vaultId={vaultId} />}
           {left.tab === 'tags' && <TagsPanel vaultId={vaultId} />}
+          {left.tab === 'bookmarks' && <BookmarksPanel vaultId={vaultId} />}
           <SidebarResizer side="left" />
         </aside>
       ) : (

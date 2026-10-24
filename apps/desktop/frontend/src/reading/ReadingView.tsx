@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { canvasPreviewUrl } from '../canvas/preview';
+import { mountBaseEmbed } from '../bases/embed';
 import { drawingPreviewUrl } from '../drawing/preview';
 import { api } from '../app/api';
 import { hydrate, type EmbedBackend } from '../embeds/hydrate';
 import type { LinkSpec } from '../editor/context';
 import { openExternal } from '../util/external';
+import { readingPreviewHandlers } from '../preview/hover';
+import { renderQueryInto } from '../query/env';
 import { renderMarkdown } from './render';
 
 export interface Reveal {
@@ -37,6 +40,7 @@ export function backendFor(vaultId: string): EmbedBackend {
     readBinary: (p) => api.vault.readBinary(vaultId, p),
     drawingPreview: (p) => drawingPreviewUrl(vaultId, p),
     canvasPreview: (p) => canvasPreviewUrl(vaultId, p),
+    baseEmbed: (el, p, view, from) => mountBaseEmbed(el, vaultId, p, view, from),
   };
 }
 
@@ -55,6 +59,7 @@ export function ReadingView({ vaultId, path, content, reveal, onOpenLink, onSear
       depth: 0,
       visited: [path],
       openLink: onOpenLink,
+      renderQuery: (holder, source, from) => renderQueryInto(holder, source, vaultId, from),
     });
   }, [html, vaultId, path, onOpenLink]);
 
@@ -113,5 +118,12 @@ export function ReadingView({ vaultId, path, content, reveal, onOpenLink, onSear
     }
   };
 
-  return <div className="reading" ref={ref} onClick={onClick} />;
+  return (
+    <div
+      className="reading"
+      ref={ref}
+      onClick={onClick}
+      {...readingPreviewHandlers(vaultId, path)}
+    />
+  );
 }

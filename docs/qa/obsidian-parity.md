@@ -50,5 +50,26 @@ Segnare `[x]` con data e sistema operativo.
 ## Limiti noti
 
 - Ricerca su vault da 50k note: l'estrapolazione dei benchmark indica ≈ 0,9 s contro l'obiettivo di 200 ms; richiede una cache dei candidati (da pianificare, non bloccante per M1 su vault reali di migliaia di note).
-- Embed `.canvas`, `.excalidraw` e `.base`: segnaposto fino a M3/M6.
-- Page preview (hover) rinviato a M6.
+
+## M6 — funzioni P1 residue
+
+Da eseguire sul webview reale (le parti automatiche sono coperte da Vitest, Go e Playwright sul mock).
+
+- [ ] **Grafo** (⌘⇧G): globale e locale (pulsante nei backlink); filtri, gruppi colore per query, forze, timelapse; click apre la nota, ⌘/Ctrl-click in nuova tab, nodo fantasma crea la nota; su un vault da 10k note pan/zoom fluidi e ≥ 30 fps (annotare macchina e webview: la misura headless è in `docs/qa/m6-graph-benchmark.md`).
+- [ ] **Bases**: nuova base dal menu cartella; viste tabella/card, ordinamento, raggruppamento, filtro semplice, modifica inline di una property (il frontmatter cambia, il resto della nota no); `![[x.base#Vista]]` in Live Preview e Reading; un `.base` di Obsidian con chiavi sconosciute resta intatto dopo una modifica.
+- [ ] **Daily/unique note**: "Apri nota di oggi" crea dal template, giorno precedente/successivo; formato con `/` crea sottocartelle; unique note con prefisso timestamp.
+- [ ] **Template**: inserisci template con `{{date:FORMAT}}`, `{{time}}`, `{{title}}`; con la libreria di gruppo montata compaiono anche i template di gruppo (sola lettura).
+- [ ] **Composer**: unisci note (anteprima "N link in M note", link reindirizzati, sorgente nel cestino); estrai selezione in nuova nota sostituendola con `[[link]]`.
+- [ ] **Slash `/`** in una riga vuota apre il menu; non compare in codice, frontmatter, URL; si disattiva nelle impostazioni. **Nota casuale** non riapre la corrente.
+- [ ] **Bookmarks**: nota, heading, blocco, ricerca, gruppi con trascinamento; rinominare un file aggiorna il segnalibro; un file cancellato resta barrato; `.nodus/bookmarks.json` si sincronizza, `workspaces.json` no.
+- [ ] **Workspaces**: salva, carica (le modifiche non salvate vengono scritte prima), elimina; le tab di file inesistenti vengono scartate.
+- [ ] **Page preview**: ⌘/Ctrl + passaggio sul wikilink (o sempre, da impostazione) mostra l'anteprima di nota/heading/blocco; Esc chiude; nessun contenuto remoto.
+- [ ] **Importer** (wizard "Importa…"): una cartella Markdown, un ENEX, uno zip Notion, un JSON Roam, un Bear, un Takeout Keep, un CSV — **con export reali**, annotando differenze rispetto ai fixture; il report finale e la nota "Import report" sono corretti; nessun file esistente viene sovrascritto.
+- [ ] **File recovery**: modifica una nota, attendi lo snapshot (5 min o riducilo), apri "File recovery": versioni locali (e cloud se collegato) con diff; ripristina; "Recupera file eliminati".
+- [ ] **Blocco ```query**: risultati live in Live Preview e Reading, errore inline, "mostra altri".
+- [ ] **Export HTML/PDF**: l'HTML si apre offline, senza script né risorse remote; il PDF dal dialogo di stampa del sistema su macOS, Windows e Linux (limiti in ADR-0019).
+
+## Limiti noti (aggiornati)
+
+- Embed `![[x.canvas]]` ed `.excalidraw` come in M3; `.base` ora supportato (sottoinsieme in ADR-0014).
+- Il grafo usa Canvas 2D; se un portatile datato scende sotto 30 fps a 10k nodi la via di riserva è pixi.js (ADR-0013).

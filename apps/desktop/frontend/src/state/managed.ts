@@ -55,6 +55,10 @@ const EDITOR_KEYS: Record<string, keyof EditorSettings> = {
   attachmentsFolder: 'attachmentsFolder',
   linkFormat: 'linkFormat',
   smartPaste: 'smartPaste',
+  newNoteLocation: 'newNoteLocation',
+  attachmentLocation: 'attachmentLocation',
+  confirmDelete: 'confirmDelete',
+  queryIncludeHost: 'queryIncludeHost',
 };
 
 /** The editor settings the configuration sets, by their name in the app. */

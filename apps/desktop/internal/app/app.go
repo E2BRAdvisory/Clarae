@@ -21,6 +21,7 @@ import (
 	"nodus/apps/desktop/internal/auth"
 	"nodus/apps/desktop/internal/config"
 	"nodus/apps/desktop/internal/crypto"
+	"nodus/apps/desktop/internal/history"
 	"nodus/apps/desktop/internal/indexer"
 	"nodus/apps/desktop/internal/platform"
 	"nodus/apps/desktop/internal/store"
@@ -42,18 +43,19 @@ type Options struct {
 
 // App is the backend root. Bound API structs hold a pointer to it.
 type App struct {
-	ctx     context.Context
-	opts    Options
-	logger  zerolog.Logger
-	appDB   *sql.DB
-	auth    *auth.Service
-	crypto  *crypto.Manager
-	sync    *syncpkg.Manager
-	config  *config.Service
-	emitter func(name string, payload any) // nil = Wails runtime
-	mu      sync.Mutex
-	vaults  map[string]*openVault
-	pending []string // nodus:// URLs received before the frontend was ready
+	ctx       context.Context
+	opts      Options
+	logger    zerolog.Logger
+	appDB     *sql.DB
+	auth      *auth.Service
+	crypto    *crypto.Manager
+	sync      *syncpkg.Manager
+	config    *config.Service
+	emitter   func(name string, payload any) // nil = Wails runtime
+	emitterMu sync.RWMutex                   // guards emitter (tests swap it while indexing runs)
+	mu        sync.Mutex
+	vaults    map[string]*openVault
+	pending   []string // nodus:// URLs received before the frontend was ready
 }
 
 // openVault is a vault currently open in this process.
@@ -63,6 +65,7 @@ type openVault struct {
 	IndexDB *sql.DB
 	Indexer *indexer.Indexer
 	Watcher *watcher.Watcher
+	History *history.History
 	cancel  context.CancelFunc
 }
 
@@ -270,7 +273,12 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 		_ = indexDB.Close()
 		return VaultInfo{}, err
 	}
-	v := &openVault{Info: info, FS: fsys, IndexDB: indexDB, Indexer: ix, Watcher: w, cancel: cancel}
+	hist := history.New(history.Options{
+		FS: fsys, Logger: log,
+		ReadOnly: func() bool { return a.sync.ReadOnly(context.Background(), id) },
+	})
+	hist.Start(ctx)
+	v := &openVault{Info: info, FS: fsys, IndexDB: indexDB, Indexer: ix, Watcher: w, History: hist, cancel: cancel}
 	a.mu.Lock()
 	a.vaults[id] = v
 	a.mu.Unlock()
@@ -309,6 +317,7 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 			if err := v.Indexer.Update(ctx, ch.Paths); err != nil {
 				a.logger.Warn().Err(err).Msg("index update")
 			}
+			v.History.Observe(ch.Paths)
 			a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: ch.Paths})
 			a.sync.Kick(v.Info.ID)
 		}
@@ -318,6 +327,7 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 func (a *App) closeVaultLocked(id string, v *openVault) {
 	a.sync.Detach(id)
 	v.cancel()
+	v.History.Close()
 	_ = v.Watcher.Close()
 	_ = v.IndexDB.Close()
 	delete(a.vaults, id)

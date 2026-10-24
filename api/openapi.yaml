@@ -3086,37 +3086,38 @@ components:
       type: object
       required: [id, username, email, role, status, quota_bytes, used_bytes, created_at]
       properties:
-        id: {type: string, format: uuid}
-        username: {type: string}
-        email: {type: string}
-        display_name: {type: string}
-        role: {$ref: '#/components/schemas/Role'}
-        status: {$ref: '#/components/schemas/UserStatus'}
+        id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string }
+        display_name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { $ref: '#/components/schemas/UserStatus' }
         quota_bytes_override:
           type: integer
           format: int64
           nullable: true
           description: null = the global default, -1 = unlimited
-        quota_bytes: {type: integer, format: int64, description: 'Effective quota, -1 = unlimited'}
-        used_bytes: {type: integer, format: int64}
-        created_at: {type: string, format: date-time}
-        last_login_at: {type: string, format: date-time}
+        quota_bytes:
+          { type: integer, format: int64, description: 'Effective quota, -1 = unlimited' }
+        used_bytes: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time }
     AdminUserList:
       type: object
       required: [items, total]
       properties:
         items:
           type: array
-          items: {$ref: '#/components/schemas/AdminUser'}
-        total: {type: integer}
+          items: { $ref: '#/components/schemas/AdminUser' }
+        total: { type: integer }
     CreateAdminUser:
       type: object
       required: [username, email]
       properties:
-        username: {type: string, minLength: 1, maxLength: 100}
-        email: {type: string, format: email}
-        display_name: {type: string, maxLength: 200}
-        role: {$ref: '#/components/schemas/Role'}
+        username: { type: string, minLength: 1, maxLength: 100 }
+        email: { type: string, format: email }
+        display_name: { type: string, maxLength: 200 }
+        role: { $ref: '#/components/schemas/Role' }
         temporary_password:
           type: string
           minLength: 8
@@ -3124,13 +3125,13 @@ components:
     UpdateAdminUser:
       type: object
       properties:
-        display_name: {type: string, maxLength: 200}
-        email: {type: string, format: email}
+        display_name: { type: string, maxLength: 200 }
+        email: { type: string, format: email }
     SetRole:
       type: object
       required: [role]
       properties:
-        role: {$ref: '#/components/schemas/Role'}
+        role: { $ref: '#/components/schemas/Role' }
     SetQuota:
       type: object
       properties:
@@ -3144,150 +3145,171 @@ components:
       type: object
       required: [email_sent]
       properties:
-        email_sent: {type: boolean, description: 'False when Keycloak could not send the e-mail; the new password is still required at the next login'}
+        email_sent:
+          {
+            type: boolean,
+            description: 'False when Keycloak could not send the e-mail; the new password is still required at the next login',
+          }
     AdminVault:
       type: object
       required: [id, name, kind, total_bytes, file_count, created_at]
       properties:
-        id: {type: string, format: uuid}
-        name: {type: string}
-        kind: {$ref: '#/components/schemas/VaultKind'}
-        total_bytes: {type: integer, format: int64}
-        file_count: {type: integer}
-        created_at: {type: string, format: date-time}
-        deleted_at: {type: string, format: date-time}
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/VaultKind' }
+        total_bytes: { type: integer, format: int64 }
+        file_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time }
     UserSession:
       type: object
       required: [id, started, last_access]
       properties:
-        id: {type: string}
-        ip_address: {type: string}
-        started: {type: string, format: date-time}
-        last_access: {type: string, format: date-time}
+        id: { type: string }
+        ip_address: { type: string }
+        started: { type: string, format: date-time }
+        last_access: { type: string, format: date-time }
         clients:
           type: array
-          items: {type: string}
+          items: { type: string }
     AdminGroup:
       type: object
       required: [id, name, member_count, created_at]
       properties:
-        id: {type: string, format: uuid}
-        name: {type: string}
-        description: {type: string}
-        member_count: {type: integer}
-        created_at: {type: string, format: date-time}
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        member_count: { type: integer }
+        created_at: { type: string, format: date-time }
     GroupInput:
       type: object
       required: [name]
       properties:
-        name: {type: string, minLength: 1, maxLength: 100}
-        description: {type: string, maxLength: 500}
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
     GroupMember:
       type: object
       required: [user_id, username, member_role]
       properties:
-        user_id: {type: string, format: uuid}
-        username: {type: string}
-        email: {type: string}
-        display_name: {type: string}
-        member_role: {type: string, enum: [member, manager]}
+        user_id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string }
+        display_name: { type: string }
+        member_role: { type: string, enum: [member, manager] }
     SetMemberRole:
       type: object
       required: [member_role]
       properties:
-        member_role: {type: string, enum: [member, manager]}
+        member_role: { type: string, enum: [member, manager] }
     ProfileAssignment:
       type: object
       required: [profile_id, priority]
       properties:
-        profile_id: {type: string, format: uuid}
-        priority: {type: integer, description: 'Higher wins'}
+        profile_id: { type: string, format: uuid }
+        priority: { type: integer, description: 'Higher wins' }
     ProfileAssignments:
       type: object
       required: [items]
       properties:
         items:
           type: array
-          items: {$ref: '#/components/schemas/ProfileAssignment'}
+          items: { $ref: '#/components/schemas/ProfileAssignment' }
     ConfigProfile:
       type: object
       required: [id, name, is_global, version, config, locked_keys, updated_at]
       properties:
-        id: {type: string, format: uuid}
-        name: {type: string}
-        description: {type: string}
-        is_global: {type: boolean}
-        version: {type: integer}
-        config: {type: object, additionalProperties: true}
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        is_global: { type: boolean }
+        version: { type: integer }
+        config: { type: object, additionalProperties: true }
         locked_keys:
           type: array
-          items: {type: string}
-        updated_by: {type: string, format: uuid}
-        updated_at: {type: string, format: date-time}
+          items: { type: string }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
     ConfigProfileInput:
       type: object
       required: [name, config]
       properties:
-        name: {type: string, minLength: 1, maxLength: 100}
-        description: {type: string, maxLength: 500}
-        is_global: {type: boolean}
-        config: {type: object, additionalProperties: true}
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        is_global: { type: boolean }
+        config: { type: object, additionalProperties: true }
         locked_keys:
           type: array
-          items: {type: string}
+          items: { type: string }
     ProfileVersion:
       type: object
       required: [version, name, is_global, config, locked_keys, updated_at]
       properties:
-        version: {type: integer}
-        name: {type: string}
-        description: {type: string}
-        is_global: {type: boolean}
-        config: {type: object, additionalProperties: true}
+        version: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        is_global: { type: boolean }
+        config: { type: object, additionalProperties: true }
         locked_keys:
           type: array
-          items: {type: string}
-        updated_by: {type: string, format: uuid}
-        updated_at: {type: string, format: date-time}
+          items: { type: string }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
     StorageSettings:
       type: object
-      required: [default_quota_bytes, warn_percent, critical_percent, history_retention_days, history_daily_retention_days, max_file_size_bytes]
+      required:
+        [
+          default_quota_bytes,
+          warn_percent,
+          critical_percent,
+          history_retention_days,
+          history_daily_retention_days,
+          max_file_size_bytes,
+        ]
       properties:
-        default_quota_bytes: {type: integer, format: int64, minimum: 0}
-        warn_percent: {type: integer, minimum: 1, maximum: 100}
-        critical_percent: {type: integer, minimum: 1, maximum: 100}
-        history_retention_days: {type: integer, minimum: 1}
-        history_daily_retention_days: {type: integer, minimum: 1}
-        max_file_size_bytes: {type: integer, format: int64, minimum: 1024}
+        default_quota_bytes: { type: integer, format: int64, minimum: 0 }
+        warn_percent: { type: integer, minimum: 1, maximum: 100 }
+        critical_percent: { type: integer, minimum: 1, maximum: 100 }
+        history_retention_days: { type: integer, minimum: 1 }
+        history_daily_retention_days: { type: integer, minimum: 1 }
+        max_file_size_bytes: { type: integer, format: int64, minimum: 1024 }
     TopConsumer:
       type: object
       required: [user_id, username, used_bytes, quota_bytes]
       properties:
-        user_id: {type: string, format: uuid}
-        username: {type: string}
-        used_bytes: {type: integer, format: int64}
-        quota_bytes: {type: integer, format: int64}
+        user_id: { type: string, format: uuid }
+        username: { type: string }
+        used_bytes: { type: integer, format: int64 }
+        quota_bytes: { type: integer, format: int64 }
     TrendPoint:
       type: object
       required: [day, total_bytes]
       properties:
-        day: {type: string, format: date}
-        total_bytes: {type: integer, format: int64}
+        day: { type: string, format: date }
+        total_bytes: { type: integer, format: int64 }
     StorageOverview:
       type: object
-      required: [default_quota_bytes, total_used_bytes, user_count, users_over_warn, users_over_critical, top_consumers, trend]
+      required:
+        [
+          default_quota_bytes,
+          total_used_bytes,
+          user_count,
+          users_over_warn,
+          users_over_critical,
+          top_consumers,
+          trend,
+        ]
       properties:
-        default_quota_bytes: {type: integer, format: int64}
-        total_used_bytes: {type: integer, format: int64}
-        user_count: {type: integer}
-        users_over_warn: {type: integer}
-        users_over_critical: {type: integer}
+        default_quota_bytes: { type: integer, format: int64 }
+        total_used_bytes: { type: integer, format: int64 }
+        user_count: { type: integer }
+        users_over_warn: { type: integer }
+        users_over_critical: { type: integer }
         top_consumers:
           type: array
-          items: {$ref: '#/components/schemas/TopConsumer'}
+          items: { $ref: '#/components/schemas/TopConsumer' }
         trend:
           type: array
-          items: {$ref: '#/components/schemas/TrendPoint'}
+          items: { $ref: '#/components/schemas/TrendPoint' }
     BulkQuota:
       type: object
       required: [user_ids]
@@ -3296,43 +3318,43 @@ components:
           type: array
           minItems: 1
           maxItems: 500
-          items: {type: string, format: uuid}
-        quota_bytes: {type: integer, format: int64, nullable: true, minimum: -1}
+          items: { type: string, format: uuid }
+        quota_bytes: { type: integer, format: int64, nullable: true, minimum: -1 }
     BulkQuotaResult:
       type: object
       required: [updated]
       properties:
-        updated: {type: integer}
+        updated: { type: integer }
     AuditEntry:
       type: object
       required: [id, at, action]
       properties:
-        id: {type: integer, format: int64}
-        at: {type: string, format: date-time}
-        actor_id: {type: string, format: uuid}
-        actor_name: {type: string}
-        action: {type: string}
-        target_type: {type: string}
-        target_id: {type: string}
-        details: {type: object, additionalProperties: true}
-        ip: {type: string}
+        id: { type: integer, format: int64 }
+        at: { type: string, format: date-time }
+        actor_id: { type: string, format: uuid }
+        actor_name: { type: string }
+        action: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        details: { type: object, additionalProperties: true }
+        ip: { type: string }
     AuditPage:
       type: object
       required: [items]
       properties:
         items:
           type: array
-          items: {$ref: '#/components/schemas/AuditEntry'}
-        next_cursor: {type: string}
+          items: { $ref: '#/components/schemas/AuditEntry' }
+        next_cursor: { type: string }
     ExportJob:
       type: object
       required: [id, vault_id, status, created_at]
       properties:
-        id: {type: string, format: uuid}
-        vault_id: {type: string, format: uuid}
-        status: {type: string, enum: [queued, running, ready, failed, expired]}
-        size: {type: integer, format: int64}
-        error: {type: string}
-        created_at: {type: string, format: date-time}
-        expires_at: {type: string, format: date-time}
-        download_url: {type: string, description: 'Where to download a ready export'}
+        id: { type: string, format: uuid }
+        vault_id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, ready, failed, expired] }
+        size: { type: integer, format: int64 }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        download_url: { type: string, description: 'Where to download a ready export' }

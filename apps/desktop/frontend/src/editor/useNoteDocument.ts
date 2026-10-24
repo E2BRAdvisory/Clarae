@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorCode } from '../app/api';
 import { Events, type FileChangedPayload } from '../app/events';
+import { registerNoteFlusher } from '../workspaces/flush';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 
@@ -133,6 +134,9 @@ export function useNoteDocument(
     clearTimeout(timer.current);
     await doSave(false);
   }, [doSave]);
+
+  // Lets "load workspace" write every pending edit before the layout is replaced.
+  useEffect(() => registerNoteFlusher(flush), [flush]);
 
   // Save pending edits when the note is closed.
   useEffect(

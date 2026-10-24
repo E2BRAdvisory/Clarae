@@ -32,6 +32,18 @@ export interface EditorSettings {
   linkFormat: LinkFormat;
   attachmentsFolder: string;
   newNoteFolder: string;
+  /** Page preview: popover with the target note when hovering a wikilink. */
+  pagePreview: boolean;
+  /** Show the preview on plain hover; otherwise it needs Cmd/Ctrl held. */
+  pagePreviewAlways: boolean;
+  /** 'folder' = newNoteFolder, 'current' = next to the active note. */
+  newNoteLocation: 'folder' | 'current';
+  /** 'folder' = attachmentsFolder, 'current' = next to the note, 'subfolder' = attachmentsFolder inside the note's folder. */
+  attachmentLocation: 'folder' | 'current' | 'subfolder';
+  /** Ask before moving a file to the trash. */
+  confirmDelete: boolean;
+  /** Embedded searches also list the note that contains them. */
+  queryIncludeHost: boolean;
 }
 
 export const defaultEditorSettings: EditorSettings = {
@@ -48,6 +60,12 @@ export const defaultEditorSettings: EditorSettings = {
   linkFormat: 'shortest',
   attachmentsFolder: '',
   newNoteFolder: '',
+  pagePreview: true,
+  pagePreviewAlways: false,
+  newNoteLocation: 'folder',
+  attachmentLocation: 'folder',
+  confirmDelete: true,
+  queryIncludeHost: false,
 };
 
 export interface AppearanceSettings {

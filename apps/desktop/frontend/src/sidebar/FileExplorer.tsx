@@ -4,11 +4,15 @@ import type { Entry } from '../app/api';
 import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
 import { infoOf, useSync } from '../state/sync';
+import { useRecovery } from '../recovery/store';
 import { newCanvas } from '../canvas/commands';
+import { newBase } from '../bases/commands';
 import { newDrawing } from '../drawing/commands';
 import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
 import { selectActivePath, useAppStore } from '../state/store';
 import { useTree } from '../state/queries';
+import { bookmarkMenuItems } from '../bookmarks/actions';
+import { useSettings } from '../state/settings';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { dialog } from '../ui/dialogs';
 
@@ -100,6 +104,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const newCanvasIn = async (dir: string) => {
     await guard(newCanvas({ dir }));
   };
+  const newBaseIn = async (dir: string) => {
+    await guard(newBase({ dir }));
+  };
   const newFolder = async (dir: string) => {
     const name = await dialog.prompt(t('sidebar.promptFolderName'));
     if (name) await guard(createFolder((dir ? dir + '/' : '') + name));
@@ -115,7 +122,11 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     );
   };
   const trash = async (entry: Entry) => {
-    if (!(await dialog.confirm(t('sidebar.trash'), entry.path, true))) return;
+    if (
+      useSettings.getState().editor.confirmDelete &&
+      !(await dialog.confirm(t('sidebar.trash'), entry.path, true))
+    )
+      return;
     await guard(deleteEntry(entry.path));
   };
   const move = async (from: string, intoDir: string) => {
@@ -130,6 +141,10 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     );
   };
 
+  const recoveryItem = (entry: Entry): MenuItem => ({
+    label: t('commands.recovery_open'),
+    onSelect: () => useRecovery.getState().openNote(entry.path),
+  });
   const contextFor = (entry: Entry): MenuItem[] =>
     readOnly
       ? [
@@ -139,6 +154,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                   label: t('sidebar.openNewTab'),
                   onSelect: () => openNote(entry.path, { newTab: true }),
                 },
+                recoveryItem(entry),
               ]
             : []),
           {
@@ -157,6 +173,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                   label: t('sidebar.openRight'),
                   onSelect: () => openNote(entry.path, { split: 'row' }),
                 },
+                recoveryItem(entry),
               ]
             : []),
           {
@@ -180,6 +197,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                 },
               ]
             : []),
+          { label: t('bases.new'), onSelect: () => void newBaseIn(dirForNew(entry)) },
           { label: t('sidebar.newFolder'), onSelect: () => void newFolder(dirForNew(entry)) },
           ...(canShare
             ? [
@@ -196,6 +214,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
             label: t('sidebar.copyPath'),
             onSelect: () => void navigator.clipboard?.writeText(entry.path),
           },
+          ...bookmarkMenuItems(entry.path, entry.isDir),
           {
             label: t('sidebar.trash'),
             onSelect: () => void trash(entry),
@@ -304,6 +323,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
               ...(canvasOn
                 ? [{ label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn('') }]
                 : []),
+              { label: t('bases.new'), onSelect: () => void newBaseIn('') },
               { label: t('sidebar.newFolder'), onSelect: () => void newFolder('') },
             ],
           });

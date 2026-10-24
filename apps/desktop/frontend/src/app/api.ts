@@ -4,6 +4,7 @@
 // `convertValues` helper) so literals and mocks type-check structurally.
 import * as VaultAPI from '../../wailsjs/go/app/VaultAPI';
 import * as SearchAPI from '../../wailsjs/go/app/SearchAPI';
+import * as ExportAPI from '../../wailsjs/go/app/ExportAPI';
 import * as SettingsAPI from '../../wailsjs/go/app/SettingsAPI';
 import * as AuthAPI from '../../wailsjs/go/app/AuthAPI';
 import * as LinksAPI from '../../wailsjs/go/app/LinksAPI';
@@ -14,8 +15,16 @@ import * as VaultCryptoAPI from '../../wailsjs/go/app/VaultCryptoAPI';
 import * as DrawingAPI from '../../wailsjs/go/app/DrawingAPI';
 import * as SharingAPI from '../../wailsjs/go/app/SharingAPI';
 import * as ConfigAPI from '../../wailsjs/go/app/ConfigAPI';
+import * as GraphAPI from '../../wailsjs/go/app/GraphAPI';
+import type { GraphData, GraphOptions } from '../graph/types';
+import * as BasesAPI from '../../wailsjs/go/app/BasesAPI';
+import type { BaseInfo, BaseResult, ViewPatch } from '../bases/types';
+import * as TemplatesAPI from '../../wailsjs/go/app/TemplatesAPI';
+import * as ComposerAPI from '../../wailsjs/go/app/ComposerAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
-import type { app, auth, links, search, sync, vault } from '../../wailsjs/go/models';
+import type { app, auth, composer, links, search, sync, vault } from '../../wailsjs/go/models';
+import * as HistoryAPI from '../../wailsjs/go/app/HistoryAPI';
+import type { history as localHistory } from '../../wailsjs/go/models';
 
 type Plain<T> = Omit<T, 'convertValues'>;
 
@@ -100,6 +109,16 @@ export type GrantInput = {
   permission: PermissionLevel;
 };
 export type ConfigState = Plain<app.ConfigState>;
+export type TemplateInfo = Omit<Plain<app.TemplateInfo>, 'source'> & {
+  source: 'vault' | 'library';
+};
+export type NoteResult = Plain<app.NoteResult>;
+export type DailyOptions = Plain<app.DailyOptions>;
+export type UniqueOptions = Plain<app.UniqueOptions>;
+export type MergePlan = Plain<composer.MergePlan>;
+export type MergeResult = Plain<composer.MergeResult>;
+export type ExtractOptions = Plain<composer.ExtractOptions>;
+export type ExtractResult = Plain<composer.ExtractResult>;
 export type SyncLinkResult = Plain<sync.LinkResult>;
 export type SyncPhase = 'idle' | 'syncing' | 'paused' | 'offline' | 'error' | 'locked';
 export type SyncStatus = Omit<Plain<sync.Status>, 'phase' | 'lastSync'> & {
@@ -108,6 +127,9 @@ export type SyncStatus = Omit<Plain<sync.Status>, 'phase' | 'lastSync'> & {
 };
 export type SyncConflict = Omit<Plain<sync.Conflict>, 'createdAt'> & { createdAt: string };
 export type RevisionInfo = Omit<Plain<sync.RevisionInfo>, 'time'> & { time: string };
+export type HistorySnapshot = Omit<Plain<localHistory.Snapshot>, 'time'> & { time: string };
+export type HistoryDeleted = Omit<Plain<localHistory.Deleted>, 'time'> & { time: string };
+export type HistorySettings = Plain<localHistory.Settings>;
 export type CloudVault = Omit<Plain<app.CloudVault>, 'createdAt'> & { createdAt: string };
 export type DeviceInfo = Omit<Plain<app.DeviceInfo>, 'lastSeenAt'> & { lastSeenAt: string | null };
 export type UsageInfo = Plain<app.UsageInfo>;
@@ -167,6 +189,13 @@ export const api = {
     ): Promise<SearchResults> => SearchAPI.Query(vaultId, q, sort, limit),
     explain: (q: string): Promise<string[]> => SearchAPI.Explain(q),
   },
+  exporter: {
+    /** Asks where to save (native dialog) and writes a standalone HTML document. */
+    saveHtml: (vaultId: string, name: string, html: string): Promise<ExportResult> =>
+      ExportAPI.SaveHTML(vaultId, name, html),
+    /** Opens the system print dialog (PDF through "Save as PDF"). */
+    print: (): Promise<void> => ExportAPI.Print(),
+  },
   settings: {
     get: (): Promise<AppSettings> => SettingsAPI.Get(),
     set: (s: AppSettings): Promise<void> => SettingsAPI.Set(s),
@@ -174,6 +203,29 @@ export const api = {
   },
   tags: {
     list: (vaultId: string): Promise<TagCount[]> => TagsAPI.List(vaultId),
+  },
+  bases: {
+    load: (vaultId: string, path: string): Promise<BaseInfo> =>
+      BasesAPI.Load(vaultId, path) as unknown as Promise<BaseInfo>,
+    run: (vaultId: string, path: string, viewIndex: number, thisPath = ''): Promise<BaseResult> =>
+      BasesAPI.Run(vaultId, path, viewIndex, thisPath),
+    updateView: (
+      vaultId: string,
+      path: string,
+      viewIndex: number,
+      patch: ViewPatch,
+      expectedHash: string,
+    ): Promise<WriteResult> =>
+      BasesAPI.UpdateView(vaultId, path, viewIndex, JSON.stringify(patch), expectedHash),
+    updateProperty: (
+      vaultId: string,
+      notePath: string,
+      key: string,
+      value: unknown,
+      expectedHash: string,
+    ): Promise<WriteResult> =>
+      BasesAPI.UpdateProperty(vaultId, notePath, key, JSON.stringify(value), expectedHash),
+    newContent: (folder: string): Promise<string> => BasesAPI.NewBaseContent(folder),
   },
   properties: {
     keys: (vaultId: string): Promise<PropertyKey[]> => PropertiesAPI.Keys(vaultId),
@@ -254,6 +306,21 @@ export const api = {
     revokeDevice: (id: string): Promise<void> => SyncAPI.RevokeDevice(id),
     usage: (): Promise<UsageInfo> => SyncAPI.Usage(),
   },
+  history: {
+    list: (vaultId: string, path: string): Promise<HistorySnapshot[]> =>
+      HistoryAPI.List(vaultId, path),
+    read: (
+      vaultId: string,
+      snapshotId: string,
+    ): Promise<{ snapshot: HistorySnapshot; content: string }> =>
+      HistoryAPI.Read(vaultId, snapshotId),
+    restore: (vaultId: string, snapshotId: string): Promise<WriteResult> =>
+      HistoryAPI.Restore(vaultId, snapshotId),
+    listDeleted: (vaultId: string): Promise<HistoryDeleted[]> => HistoryAPI.ListDeleted(vaultId),
+    getSettings: (vaultId: string): Promise<HistorySettings> => HistoryAPI.GetSettings(vaultId),
+    setSettings: (vaultId: string, s: HistorySettings): Promise<HistorySettings> =>
+      HistoryAPI.SetSettings(vaultId, s),
+  },
   sharing: {
     invitations: (): Promise<ShareInfo[]> => SharingAPI.Invitations() as Promise<ShareInfo[]>,
     mounts: (): Promise<MountState[]> => SharingAPI.Mounts() as Promise<MountState[]>,
@@ -295,6 +362,48 @@ export const api = {
     effective: (): Promise<ConfigState> => ConfigAPI.Effective(),
     refresh: (): Promise<ConfigState> => ConfigAPI.Refresh(),
   },
+  templates: {
+    /** Settings of daily notes, unique notes and templates (.nodus/daily.json; "" when unset). */
+    readSettings: (vaultId: string): Promise<string> => TemplatesAPI.ReadSettings(vaultId),
+    writeSettings: (vaultId: string, content: string): Promise<void> =>
+      TemplatesAPI.WriteSettings(vaultId, content),
+    /** Templates of the vault folder plus the read-only group library when mounted. */
+    list: (vaultId: string, folder: string): Promise<TemplateInfo[]> =>
+      TemplatesAPI.List(vaultId, folder) as Promise<TemplateInfo[]>,
+    expand: (vaultId: string, ref: string, title: string, lang: string): Promise<string> =>
+      TemplatesAPI.Expand(vaultId, ref, title, lang),
+    openDaily: (vaultId: string, o: DailyOptions): Promise<NoteResult> =>
+      TemplatesAPI.OpenDaily(vaultId, o),
+    dailyAdjacent: (
+      path: string,
+      folder: string,
+      format: string,
+      lang: string,
+      delta: number,
+    ): Promise<string> => TemplatesAPI.DailyAdjacent(path, folder, format, lang, delta),
+    newUnique: (vaultId: string, o: UniqueOptions): Promise<NoteResult> =>
+      TemplatesAPI.NewUnique(vaultId, o),
+    createFromTemplate: (
+      vaultId: string,
+      dir: string,
+      name: string,
+      ref: string,
+      lang: string,
+    ): Promise<string> => TemplatesAPI.CreateFromTemplate(vaultId, dir, name, ref, lang),
+  },
+  composer: {
+    planMerge: (vaultId: string, source: string, target: string): Promise<MergePlan> =>
+      ComposerAPI.PlanMerge(vaultId, source, target),
+    applyMerge: (
+      vaultId: string,
+      source: string,
+      target: string,
+      separator: string,
+    ): Promise<MergeResult> => ComposerAPI.ApplyMerge(vaultId, source, target, separator),
+    suggestTitle: (selection: string): Promise<string> => ComposerAPI.SuggestTitle(selection),
+    extract: (vaultId: string, o: ExtractOptions): Promise<ExtractResult> =>
+      ComposerAPI.Extract(vaultId, o),
+  },
   crypto: {
     unlock: (vaultId: string, secret: string, isRecovery: boolean): Promise<boolean> =>
       VaultCryptoAPI.Unlock(vaultId, secret, isRecovery),
@@ -315,6 +424,11 @@ export const api = {
     status: (): Promise<AuthState> => AuthAPI.Status(),
     login: (serverUrl: string): Promise<AuthState> => AuthAPI.Login(serverUrl),
     logout: (): Promise<AuthState> => AuthAPI.Logout(),
+  },
+  graph: {
+    /** Nodes and edges of the vault (or the neighbourhood of options.center) from the local index. */
+    build: (vaultId: string, options: GraphOptions): Promise<GraphData> =>
+      GraphAPI.Build(vaultId, options),
   },
   /** Subscribes to a backend event; returns the unsubscribe function. */
   on<T>(name: string, handler: (payload: T) => void): () => void {

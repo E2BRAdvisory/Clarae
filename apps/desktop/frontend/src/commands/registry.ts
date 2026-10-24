@@ -9,12 +9,21 @@ import { getActiveEditor } from '../editor/registry';
 import * as fmt from '../editor/commands';
 import { dialog } from '../ui/dialogs';
 import { newCanvas } from '../canvas/commands';
+import { openGraph, openLocalGraph } from '../graph/commands';
+import { newBase } from '../bases/commands';
 import { insertDrawing, newDrawing } from '../drawing/commands';
 import { infoOf, useSync } from '../state/sync';
 import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
+import { useRecovery } from '../recovery/store';
+import { useImporter } from '../importer/store';
 import { useAppStore } from '../state/store';
 import { invalidateVault } from '../app/actions';
+import { notesCommands } from '../daily/commands';
+import { bookmarkCommands } from '../bookmarks/commands';
+import { workspaceCommands } from '../workspaces/commands';
+import { previewCommands } from '../preview/commands';
+import { exportNoteHtml, exportNotePdf } from '../export/commands';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import type { EditorView } from '@codemirror/view';
@@ -149,6 +158,13 @@ export const commands: Command[] = [
     run: () => guard(newCanvas()),
   },
   {
+    id: 'bases:new',
+    group: 'file',
+    defaults: [],
+    enabled: () => canWrite(),
+    run: () => guard(newBase()),
+  },
+  {
     id: 'drawing:insert',
     group: 'editor',
     defaults: [],
@@ -197,6 +213,27 @@ export const commands: Command[] = [
     defaults: [],
     enabled: hasVault,
     run: exportVaultZip,
+  },
+  {
+    id: 'note:export-pdf',
+    group: 'file',
+    defaults: [],
+    enabled: hasNote,
+    run: exportNotePdf,
+  },
+  {
+    id: 'note:export-html',
+    group: 'file',
+    defaults: [],
+    enabled: hasNote,
+    run: exportNoteHtml,
+  },
+  {
+    id: 'import:open',
+    group: 'file',
+    defaults: [],
+    enabled: canWrite,
+    run: () => useImporter.getState().show(),
   },
   {
     id: 'vault:close',
@@ -346,6 +383,20 @@ export const commands: Command[] = [
     run: () => store().setRight({ open: true, tab: 'outline' }),
   },
   {
+    id: 'graph:open',
+    group: 'view',
+    defaults: ['Mod-Shift-g'],
+    enabled: hasVault,
+    run: () => openGraph(),
+  },
+  {
+    id: 'graph:open-local',
+    group: 'view',
+    defaults: [],
+    enabled: () => hasVault() && /\.md$/i.test(activePath() ?? ''),
+    run: () => void openLocalGraph(),
+  },
+  {
     id: 'sidebar:backlinks',
     group: 'view',
     defaults: [],
@@ -489,6 +540,23 @@ export const commands: Command[] = [
     enabled: () => isLinked() && hasNote(),
     run: () => useSync.getState().openHistory(activePath()),
   },
+  {
+    id: 'recovery:open',
+    group: 'file',
+    defaults: [],
+    enabled: hasNote,
+    run: () => {
+      const p = activePath();
+      if (p) useRecovery.getState().openNote(p);
+    },
+  },
+  {
+    id: 'recovery:deleted',
+    group: 'file',
+    defaults: [],
+    enabled: hasVault,
+    run: () => useRecovery.getState().openDeleted(),
+  },
   { id: 'sync:settings', group: 'app', defaults: [], run: () => store().openSettings('sync') },
   {
     id: 'sync:unlock',
@@ -497,6 +565,11 @@ export const commands: Command[] = [
     enabled: () => isLinked() && syncInfo().locked,
     run: () => useSync.getState().setUnlockOpen(true),
   },
+
+  // ---- bookmarks, workspaces, page preview (M6-WP3b) ----
+  ...bookmarkCommands,
+  ...workspaceCommands,
+  ...previewCommands,
 
   // ---- app ----
   { id: 'settings:open', group: 'app', defaults: ['Mod-,'], run: () => store().openSettings() },
@@ -507,6 +580,8 @@ export const commands: Command[] = [
     run: () => store().openSettings('hotkeys'),
   },
 ];
+
+commands.push(...notesCommands);
 
 export const commandById = new Map(commands.map((c) => [c.id, c]));
 
