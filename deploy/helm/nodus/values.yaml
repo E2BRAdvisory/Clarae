@@ -41,6 +41,7 @@ secret:
     KC_ADMIN_CLIENT_SECRET: ''
 
 service:
+  type: ClusterIP
   httpPort: 18081
   grpcPort: 18082
 
@@ -54,6 +55,8 @@ ingress:
   annotations: {}
   # gRPC needs HTTP/2 end to end; the notify stream is exposed on a dedicated host.
   grpcHost: notify.nodus.example.com
+
+podAnnotations: {}
 
 podSecurityContext:
   runAsNonRoot: true

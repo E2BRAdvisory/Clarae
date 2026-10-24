@@ -23,6 +23,7 @@ spec:
         app.kubernetes.io/component: {{ $role }}
       annotations:
         checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- with $root.Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
     spec:
       securityContext: {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
       containers:
@@ -48,9 +49,14 @@ spec:
             httpGet: { path: /api/v1/readyz, port: http }
             periodSeconds: 10
           {{- end }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp } # blob uploads are spooled to the temp dir
           resources: {{- toYaml $spec.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}
