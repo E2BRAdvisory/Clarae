@@ -179,3 +179,41 @@ func TestRenameRewritesLinks(t *testing.T) {
 		t.Fatal("failed rename must not move the file")
 	}
 }
+
+func TestFuzzyScoreAndSuggest(t *testing.T) {
+	if links.FuzzyScore("road", "Roadmap") <= links.FuzzyScore("map", "Roadmap") {
+		t.Error("prefix must beat substring")
+	}
+	if links.FuzzyScore("rdm", "Roadmap") == 0 || links.FuzzyScore("xyz", "Roadmap") != 0 {
+		t.Error("subsequence matching broken")
+	}
+	if links.FuzzyScore("roadmap", "Roadmap") != 1000 {
+		t.Error("exact match scores 1000")
+	}
+	ix, ctx := setup(t, map[string]string{
+		"Projects/Roadmap.md": "---\naliases: [Plan]\n---\n# Roadmap\n\n## Goals ^goals1\n\nShip it ^ship\n",
+		"Notes/Road trip.md":  "# Trip #travel/eu\n",
+		"Other.md":            "tags: #travel #work\n",
+	})
+	db := ix.DB()
+	notes, err := links.SuggestNotes(ctx, db, "road", 10)
+	if err != nil || len(notes) < 2 || notes[0].Kind != "note" {
+		t.Fatalf("notes: %+v %v", notes, err)
+	}
+	alias, _ := links.SuggestNotes(ctx, db, "plan", 10)
+	if len(alias) == 0 || alias[0].Kind != "alias" || alias[0].Path != "Projects/Roadmap.md" {
+		t.Fatalf("alias: %+v", alias)
+	}
+	heads, _ := links.SuggestHeadings(ctx, db, "Projects/Roadmap.md", "go", 10)
+	if len(heads) != 1 || heads[0].Label != "Goals" {
+		t.Fatalf("headings: %+v", heads)
+	}
+	blocks, _ := links.SuggestBlocks(ctx, db, "Projects/Roadmap.md", "", 10)
+	if len(blocks) != 2 || blocks[1].Label != "ship" || blocks[1].Detail != "Ship it" {
+		t.Fatalf("blocks: %+v", blocks)
+	}
+	tags, _ := links.SuggestTags(ctx, db, "#tra", 10)
+	if len(tags) != 2 || tags[0].Label != "travel" || tags[1].Label != "travel/eu" {
+		t.Fatalf("tags: %+v", tags)
+	}
+}
