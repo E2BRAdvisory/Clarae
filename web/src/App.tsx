@@ -16,7 +16,14 @@ import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { RequireAuth, RequireRole } from './auth/guards';
 import { ADMIN_ROLE, type AuthService } from './auth/types';
 import { Shell } from './layout/Shell';
-import { AdminPage } from './pages/Admin';
+import { AdminLayout } from './pages/Admin';
+import { AuditPage } from './pages/admin/AuditPage';
+import { ConfigDetailPage, ConfigListPage } from './pages/admin/ConfigPage';
+import { GroupDetailPage, GroupsPage } from './pages/admin/GroupsPage';
+import { LimitsPage } from './pages/admin/LimitsPage';
+import { StoragePage } from './pages/admin/StoragePage';
+import { UserDetailPage } from './pages/admin/UserDetailPage';
+import { UsersPage } from './pages/admin/UsersPage';
 import { CallbackPage } from './pages/Callback';
 import { DevicesPage } from './pages/Devices';
 import { SharesPage } from './pages/Shares';
@@ -40,7 +47,19 @@ export function AppRoutes() {
           <Route path="devices" element={<DevicesPage />} />
           <Route path="shares" element={<SharesPage />} />
           <Route element={<RequireRole role={ADMIN_ROLE} />}>
-            <Route path="admin/*" element={<AdminPage />} />
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<Navigate to="storage" replace />} />
+              <Route path="storage" element={<StoragePage />} />
+              <Route path="limits" element={<LimitsPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="users/:id" element={<UserDetailPage />} />
+              <Route path="groups" element={<GroupsPage />} />
+              <Route path="groups/:id" element={<GroupDetailPage />} />
+              <Route path="config" element={<ConfigListPage />} />
+              <Route path="config/:id" element={<ConfigDetailPage />} />
+              <Route path="audit" element={<AuditPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -34,9 +34,15 @@ describe('role guard', () => {
     expect(screen.queryByRole('link', { name: 'Administration' })).not.toBeInTheDocument();
   });
 
-  it('shows the admin placeholder to nodus-admin', async () => {
-    renderApp({ path: '/admin', routes: usage, user: { roles: ['nodus-admin'] } });
-    expect(await screen.findByText(/coming in a later release/)).toBeInTheDocument();
+  it('shows the administration console to nodus-admin', async () => {
+    renderApp({
+      path: '/admin',
+      routes: { ...usage, 'GET /admin/storage/overview': new Response(null, { status: 500 }) },
+      user: { roles: ['nodus-admin'] },
+    });
+    expect(
+      await screen.findByRole('navigation', { name: 'Administration sections' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Administration' })).toBeInTheDocument();
   });
 });

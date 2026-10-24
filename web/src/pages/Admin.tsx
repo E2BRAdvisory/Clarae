@@ -1,13 +1,24 @@
+import { NavLink, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { EmptyState } from '@nodus/ui';
 
-/** Placeholder: the console arrives with M5; only users with the admin realm role reach it. */
-export function AdminPage() {
+const SECTIONS = ['storage', 'limits', 'users', 'groups', 'config', 'audit'] as const;
+
+/** Frame of the administration console: sub-navigation plus the nested page. */
+export function AdminLayout() {
   const { t } = useTranslation();
   return (
     <>
       <h1>{t('admin.title')}</h1>
-      <EmptyState title={t('admin.title')}>{t('admin.soon')}</EmptyState>
+      <nav aria-label={t('admin.nav')} className="admin-nav">
+        {SECTIONS.map((s) => (
+          <NavLink key={s} to={`/admin/${s}`}>
+            {t(`admin.sections.${s}`)}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="admin-body">
+        <Outlet />
+      </div>
     </>
   );
 }

@@ -15,6 +15,7 @@
   "dependencies": {
     "@nodus/api-client": "workspace:*",
     "@nodus/ui": "workspace:*",
+    "@nodus/vaultcrypto-web": "workspace:*",
     "@tanstack/react-query": "^5.104.5",
     "i18next": "^26.5.2",
     "oidc-client-ts": "^3.5.0",

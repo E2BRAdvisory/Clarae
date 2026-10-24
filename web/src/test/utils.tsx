@@ -11,7 +11,7 @@ export interface RecordedCall {
   body: unknown;
 }
 
-type Handler = (call: RecordedCall) => unknown;
+type Handler = (call: RecordedCall) => unknown; // may return a Promise (awaited)
 /** Keys are "METHOD /path" below /api/v1. A function may return a Response, anything else is sent as JSON. */
 export type Routes = Record<string, unknown>;
 
@@ -46,7 +46,7 @@ export function mockApi(routes: Routes): MockApi {
     const entry = table[`${call.method} ${call.path}`];
     if (entry === undefined)
       return problem(404, 'NOT_FOUND', `no mock for ${call.method} ${call.path}`);
-    const out = typeof entry === 'function' ? (entry as Handler)(call) : entry;
+    const out = await (typeof entry === 'function' ? (entry as Handler)(call) : entry);
     if (out instanceof Response) return out;
     if (out === undefined || out === null) return new Response(null, { status: 204 });
     return new Response(JSON.stringify(out), {

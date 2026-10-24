@@ -1243,13 +1243,14 @@ __metadata:
     react: "npm:^19.3.1"
     react-dom: "npm:^19.3.1"
     typescript: "npm:^5.9.3"
+    vite: "npm:^8.3.5"
     vitest: "npm:^5.0.5"
   peerDependencies:
     react: ^19.3.1
   languageName: unknown
   linkType: soft
 
-"@nodus/vaultcrypto-web@workspace:packages/vaultcrypto-web":
+"@nodus/vaultcrypto-web@workspace:*, @nodus/vaultcrypto-web@workspace:packages/vaultcrypto-web":
   version: 0.0.0-use.local
   resolution: "@nodus/vaultcrypto-web@workspace:packages/vaultcrypto-web"
   dependencies:
@@ -1267,6 +1268,7 @@ __metadata:
   dependencies:
     "@nodus/api-client": "workspace:*"
     "@nodus/ui": "workspace:*"
+    "@nodus/vaultcrypto-web": "workspace:*"
     "@playwright/test": "npm:^1.64.1"
     "@tanstack/react-query": "npm:^5.104.5"
     "@testing-library/dom": "npm:^10.4.2"
