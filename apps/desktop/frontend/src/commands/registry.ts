@@ -98,6 +98,22 @@ async function deleteActive(): Promise<void> {
   await guard(deleteEntry(path));
 }
 
+/** Writes the open vault to a ZIP file chosen in the native "save as" dialog. */
+export async function exportVaultZip(): Promise<void> {
+  const v = store().vault;
+  if (!v) return;
+  try {
+    const res = await api.vault.exportZip(v.id);
+    if (res.cancelled) return;
+    await dialog.alert(
+      t('export.doneTitle'),
+      i18next.t('export.done', { count: res.files, path: res.path }),
+    );
+  } catch (e) {
+    await dialog.error(e);
+  }
+}
+
 function focusSearch(): void {
   store().search(store().searchQuery);
 }
@@ -174,6 +190,13 @@ export const commands: Command[] = [
       const path = activePath();
       if (path) useSharing.getState().openShare({ path, isDir: false });
     },
+  },
+  {
+    id: 'vault:export-zip',
+    group: 'file',
+    defaults: [],
+    enabled: hasVault,
+    run: exportVaultZip,
   },
   {
     id: 'vault:close',

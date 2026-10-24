@@ -203,11 +203,17 @@
     "press": "Press keys…",
     "reset": "Restore default"
   },
+  "export": {
+    "doneTitle": "Export finished",
+    "done_one": "{{count}} file saved to {{path}}",
+    "done_other": "{{count}} files saved to {{path}}"
+  },
   "commands": {
     "note_new": "New note",
     "note_new_tab": "New note in a new tab",
     "note_rename": "Rename current note",
     "note_delete": "Delete current note",
+    "vault_export_zip": "Export vault as ZIP",
     "vault_close": "Close vault",
     "index_rebuild": "Rebuild index",
     "switcher_open": "Quick switcher",

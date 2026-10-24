@@ -20,6 +20,7 @@ import type { app, auth, links, search, sync, vault } from '../../wailsjs/go/mod
 type Plain<T> = Omit<T, 'convertValues'>;
 
 export type VaultInfo = Plain<app.VaultInfo>;
+export type ExportResult = Plain<app.ExportResult>;
 export type NoteContent = Plain<app.NoteContent>;
 export type WriteResult = Plain<app.WriteResult>;
 export type AppSettings = Plain<app.AppSettings>;
@@ -124,6 +125,8 @@ export const api = {
     pickFolder: (title: string): Promise<string> => VaultAPI.PickFolder(title),
     open: (path: string): Promise<VaultInfo> => VaultAPI.OpenVault(path),
     close: (vaultId: string): Promise<void> => VaultAPI.CloseVault(vaultId),
+    /** Asks where to save (native dialog) and writes the vault as a ZIP file. */
+    exportZip: (vaultId: string): Promise<ExportResult> => VaultAPI.ExportZip(vaultId),
     listTree: (vaultId: string): Promise<Entry[]> => VaultAPI.ListTree(vaultId),
     readNote: (vaultId: string, path: string): Promise<NoteContent> =>
       VaultAPI.ReadNote(vaultId, path),

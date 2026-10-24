@@ -33,6 +33,7 @@ import type {
   SearchResults,
   Suggestion,
   SyncConflict,
+  ExportResult,
   SyncLinkInfo,
   SyncStatus,
   TagCount,
@@ -92,6 +93,9 @@ export interface WailsMock {
   /** SVG previews of drawings by content hash (DrawingAPI cache). */
   previews: Map<string, string>;
   vaults: Map<string, MockVault>;
+  /** Vaults exported to ZIP (VaultAPI.ExportZip); set `exportCancelled` to simulate a cancelled dialog. */
+  exports: string[];
+  exportCancelled: boolean;
   recent: VaultInfo[];
   settings: AppSettings;
   auth: AuthState;
@@ -265,6 +269,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     config: { version: 0, config: {}, lockedKeys: [], managed: false, fetchedAt: '', features: {} },
     previews: new Map<string, string>(),
     vaults: seed?.vaults ?? new Map<string, MockVault>(),
+    exports: [],
+    exportCancelled: false,
     recent: seed?.recent ?? [],
     settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
     auth: seed?.auth ?? {
@@ -328,6 +334,17 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const info = vaultOf(id).info;
       if (!mock.recent.some((r) => r.path === info.path)) mock.recent.unshift(info);
       return Promise.resolve(info);
+    },
+    ExportZip: (id: string): Promise<ExportResult> => {
+      const v = vaultOf(id);
+      if (mock.exportCancelled) return Promise.resolve({ path: '', files: 0, bytes: 0, cancelled: true });
+      mock.exports.push(id);
+      return Promise.resolve({
+        path: `/mock/exports/${v.info.name}.zip`,
+        files: v.files.size + v.binaries.size,
+        bytes: 1024,
+        cancelled: false,
+      });
     },
     CloseVault: (id: string): Promise<void> => {
       mock.vaults.delete(id);

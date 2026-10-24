@@ -203,11 +203,17 @@
     "press": "Premi i tasti…",
     "reset": "Ripristina predefinito"
   },
+  "export": {
+    "doneTitle": "Esportazione completata",
+    "done_one": "{{count}} file salvato in {{path}}",
+    "done_other": "{{count}} file salvati in {{path}}"
+  },
   "commands": {
     "note_new": "Nuova nota",
     "note_new_tab": "Nuova nota in una nuova scheda",
     "note_rename": "Rinomina nota corrente",
     "note_delete": "Elimina nota corrente",
+    "vault_export_zip": "Esporta vault come ZIP",
     "vault_close": "Chiudi vault",
     "index_rebuild": "Ricostruisci indice",
     "switcher_open": "Selettore rapido",

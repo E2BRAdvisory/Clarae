@@ -7,6 +7,8 @@ export function CloseVault(arg1:string):Promise<void>;
 
 export function CreateFolder(arg1:string,arg2:string):Promise<void>;
 
+export function ExportZip(arg1:string):Promise<app.ExportResult>;
+
 export function ListOpen():Promise<Array<app.VaultInfo>>;
 
 export function ListRecent():Promise<Array<app.VaultInfo>>;

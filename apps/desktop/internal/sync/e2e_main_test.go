@@ -155,7 +155,9 @@ func newIssuer() *testIssuer {
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "e2e", Algorithm: "RS256", Use: "sig"}}})
 	})
-	iss.srv = httptest.NewServer(mux)
+	// The handlers read iss.srv: publish it before the server starts serving.
+	iss.srv = httptest.NewUnstartedServer(mux)
+	iss.srv.Start()
 	return iss
 }
 

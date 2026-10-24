@@ -170,6 +170,24 @@ export namespace app {
 	        this.label = source["label"];
 	    }
 	}
+	export class ExportResult {
+	    path: string;
+	    files: number;
+	    bytes: number;
+	    cancelled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.files = source["files"];
+	        this.bytes = source["bytes"];
+	        this.cancelled = source["cancelled"];
+	    }
+	}
 	export class GrantInfo {
 	    principalType: string;
 	    principalId: string;

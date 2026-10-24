@@ -1,6 +1,7 @@
 package app
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/base64"
 	"os"
@@ -274,5 +275,54 @@ func TestViewerMountIsReadOnlyThroughTheBindings(t *testing.T) {
 	}
 	if _, err := v.WriteNote(info.ID, "doc.md", "edited", func() string { c, _ := v.ReadNote(info.ID, "doc.md"); return c.Hash }()); err != nil {
 		t.Fatalf("an editor writes: %v", err)
+	}
+}
+
+func TestExportZipWritesAnArchiveOutsideTheVault(t *testing.T) {
+	a, info, root := newTestApp(t)
+	if err := os.WriteFile(filepath.Join(root, "Home.md"), []byte("# Home"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "backup") // no extension: ".zip" is added
+	res, err := a.exportZip(info.ID, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Path != dest+".zip" || res.Files < 1 {
+		t.Fatalf("result: %+v", res)
+	}
+	zr, err := zip.OpenReader(res.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = zr.Close() }()
+	found := false
+	for _, f := range zr.File {
+		found = found || f.Name == "Home.md"
+	}
+	if !found {
+		t.Fatal("Home.md is not in the archive")
+	}
+	entries, _ := os.ReadDir(filepath.Dir(dest))
+	if len(entries) != 1 {
+		t.Fatalf("leftover files next to the archive: %v", entries)
+	}
+	// Inside the vault: refused.
+	if _, err := a.exportZip(info.ID, filepath.Join(root, "self.zip")); err == nil {
+		t.Fatal("exporting into the vault itself must fail")
+	}
+}
+
+func TestExportFilename(t *testing.T) {
+	now := time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC)
+	for in, want := range map[string]string{
+		"My Vault":   "My_Vault-20261024.zip",
+		"../../etc":  "etc-20261024.zip",
+		"???":        "vault-20261024.zip",
+		"Archivio é": "Archivio_é-20261024.zip",
+	} {
+		if got := exportFilename(in, now); got != want {
+			t.Errorf("exportFilename(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

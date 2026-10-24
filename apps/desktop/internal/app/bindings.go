@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/Bios-Marcel/wastebasket/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -59,6 +62,92 @@ func (v *VaultAPI) ListOpen() []VaultInfo {
 // PickFolder shows the native folder picker and returns the chosen path ("" when cancelled).
 func (v *VaultAPI) PickFolder(title string) (string, error) {
 	return runtime.OpenDirectoryDialog(v.app.ctx, runtime.OpenDialogOptions{Title: title, CanCreateDirectories: true})
+}
+
+// ExportResult reports an export of a vault to a ZIP file.
+type ExportResult struct {
+	// Path is where the archive was written; empty when the user cancelled.
+	Path      string `json:"path"`
+	Files     int    `json:"files"`
+	Bytes     int64  `json:"bytes"`
+	Cancelled bool   `json:"cancelled"`
+}
+
+// ExportZip asks where to save and writes the vault as a ZIP archive (the native "save as"
+// dialog suggests <vault>-<date>.zip). Cancelling the dialog is not an error.
+func (v *VaultAPI) ExportZip(vaultID string) (ExportResult, error) {
+	ov, err := v.app.vault(vaultID)
+	if err != nil {
+		return ExportResult{}, err
+	}
+	dest, err := runtime.SaveFileDialog(v.app.ctx, runtime.SaveDialogOptions{
+		Title:           "Export vault as ZIP",
+		DefaultFilename: exportFilename(ov.Info.Name, time.Now()),
+		Filters:         []runtime.FileFilter{{DisplayName: "ZIP archive (*.zip)", Pattern: "*.zip"}},
+	})
+	if err != nil {
+		return ExportResult{}, err
+	}
+	if dest == "" {
+		return ExportResult{Cancelled: true}, nil
+	}
+	return v.app.exportZip(vaultID, dest)
+}
+
+// exportFilename proposes a file name for an export, keeping only characters safe on every platform.
+func exportFilename(vaultName string, now time.Time) string {
+	var b strings.Builder
+	for _, r := range vaultName {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.', r > 127:
+			b.WriteRune(r)
+		case r == ' ':
+			b.WriteByte('_')
+		}
+	}
+	name := strings.Trim(b.String(), "._")
+	if name == "" {
+		name = "vault"
+	}
+	return name + "-" + now.Format("20060102") + ".zip"
+}
+
+// exportZip writes the archive next to its destination and renames it into place, so a
+// failed or interrupted export never leaves a truncated file under the chosen name.
+func (a *App) exportZip(vaultID, dest string) (ExportResult, error) {
+	ov, err := a.vault(vaultID)
+	if err != nil {
+		return ExportResult{}, err
+	}
+	if !strings.EqualFold(filepath.Ext(dest), ".zip") {
+		dest += ".zip"
+	}
+	// Writing the archive inside the vault would pack it into itself on the next export.
+	// The vault root has its symlinks resolved, so the destination folder must too.
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(dest)); err == nil {
+		if rel, err := filepath.Rel(ov.FS.Root(), filepath.Join(dir, filepath.Base(dest))); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return ExportResult{}, errors.New("choose a location outside the vault")
+		}
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".nodus-export-*.part")
+	if err != nil {
+		return ExportResult{}, err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	st, err := ov.FS.ExportZip(a.ctx, tmp)
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return ExportResult{}, err
+	}
+	if err := os.Rename(tmp.Name(), dest); err != nil {
+		return ExportResult{}, err
+	}
+	return ExportResult{Path: dest, Files: st.Files, Bytes: st.Bytes}, nil
 }
 
 // OpenVault opens the folder at path as a vault (creating the folder if needed).

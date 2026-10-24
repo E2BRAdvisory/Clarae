@@ -10,6 +10,10 @@ export function CreateFolder(arg1, arg2) {
   return window['go']['app']['VaultAPI']['CreateFolder'](arg1, arg2);
 }
 
+export function ExportZip(arg1) {
+  return window['go']['app']['VaultAPI']['ExportZip'](arg1);
+}
+
 export function ListOpen() {
   return window['go']['app']['VaultAPI']['ListOpen']();
 }
