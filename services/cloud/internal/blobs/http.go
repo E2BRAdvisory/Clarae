@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"nodus/services/cloud/internal/api"
 	"nodus/services/cloud/internal/auth"
@@ -31,10 +32,11 @@ func (h *HTTP) CheckBlobs(ctx context.Context, req api.CheckBlobsRequestObject) 
 
 // PutBlob implements PUT /vaults/{vaultId}/blobs/{sha256}.
 func (h *HTTP) PutBlob(ctx context.Context, req api.PutBlobRequestObject) (api.PutBlobResponseObject, error) {
-	if req.Body == nil {
-		return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "body is required")
+	body := req.Body
+	if body == nil { // empty file: the hash check below still applies
+		body = strings.NewReader("")
 	}
-	if err := h.svc.Put(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.Sha256, req.Body); err != nil {
+	if err := h.svc.Put(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.Sha256, body); err != nil {
 		return nil, err
 	}
 	return api.PutBlob204Response{}, nil

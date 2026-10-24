@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -519,5 +520,27 @@ func TestDeleteVersusModifyModificationWins(t *testing.T) {
 	vault := decode[map[string]any](t, ada.json(http.MethodGet, "/vaults/"+v, nil))
 	if vault["file_count"].(float64) != 1 || vault["total_bytes"].(float64) != 4 {
 		t.Fatalf("counters: %v", vault)
+	}
+}
+
+// An empty file is a valid blob: PUT with an empty body must be accepted and usable in a commit.
+func TestEmptyBlob(t *testing.T) {
+	e := newEnv(t)
+	ada := e.user("ada")
+	v := ada.createVault("Empty", "shared")
+
+	h := hashOf(nil)
+	expect(t, ada.raw(http.MethodPut, "/vaults/"+v+"/blobs/"+h, "application/octet-stream", nil, nil), http.StatusNoContent)
+	// The hash is still verified for an empty body.
+	expect(t, ada.raw(http.MethodPut, "/vaults/"+v+"/blobs/"+hashOf([]byte("x")), "application/octet-stream", nil, nil), http.StatusBadRequest)
+
+	res := ada.commit(v, create(newID(), "empty.md", h))
+	if res[0].status() != "accepted" {
+		t.Fatalf("commit of an empty file: %v", res[0])
+	}
+	resp := ada.json(http.MethodGet, "/vaults/"+v+"/blobs/"+h, nil)
+	expect(t, resp, http.StatusOK)
+	if b, _ := io.ReadAll(readAll(t, resp)); len(b) != 0 {
+		t.Fatalf("empty blob returned %d bytes", len(b))
 	}
 }

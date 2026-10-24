@@ -523,7 +523,7 @@ paths:
         - bearerAuth: []
       summary: Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
       requestBody:
-        required: true
+        required: false # an empty file is a valid blob (empty body)
         content:
           application/octet-stream:
             schema:
