@@ -4,8 +4,18 @@ import type { Schemas } from '@nodus/api-client';
 import { useVaults } from '../api/queries';
 import { formatBytes, formatDay } from '../format';
 import { QueryState } from './QueryState';
+import { VaultExport } from './VaultExport';
 
-function VaultsTable({ vaults, caption }: { vaults: Schemas['Vault'][]; caption: string }) {
+function VaultsTable({
+  vaults,
+  caption,
+  exportable = false,
+}: {
+  vaults: Schemas['Vault'][];
+  caption: string;
+  /** Owned vaults can be downloaded as ZIP; mounts of other users' shares cannot. */
+  exportable?: boolean;
+}) {
   const { t, i18n } = useTranslation();
   const loc = i18n.language;
   return (
@@ -24,6 +34,11 @@ function VaultsTable({ vaults, caption }: { vaults: Schemas['Vault'][]; caption:
             {t('vaults.colSeq')}
           </th>
           <th scope="col">{t('vaults.colCreated')}</th>
+          {exportable && (
+            <th scope="col">
+              <span className="nd-visually-hidden">{t('vaultExport.column')}</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -39,6 +54,11 @@ function VaultsTable({ vaults, caption }: { vaults: Schemas['Vault'][]; caption:
             <td className="nd-num">{v.file_count.toLocaleString(loc)}</td>
             <td className="nd-num">{v.last_seq.toLocaleString(loc)}</td>
             <td>{formatDay(v.created_at, loc)}</td>
+            {exportable && (
+              <td>
+                <VaultExport vault={{ id: v.id, name: v.name }} kind={v.kind} />
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
@@ -59,7 +79,7 @@ export function VaultsPage() {
           ) : (
             <div className="nd-stack">
               {list.items.length > 0 && (
-                <VaultsTable vaults={list.items} caption={t('vaults.title')} />
+                <VaultsTable vaults={list.items} caption={t('vaults.title')} exportable />
               )}
               {list.mounts.length > 0 && (
                 <VaultsTable vaults={list.mounts} caption={t('vaults.mounts')} />

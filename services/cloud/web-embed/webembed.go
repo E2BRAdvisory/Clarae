@@ -42,7 +42,7 @@ func CSP(issuer string) string {
 	if u, err := url.Parse(issuer); err == nil && u.Scheme != "" && u.Host != "" {
 		connect += " " + u.Scheme + "://" + u.Host
 	}
-	return "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+	return "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; " +
 		"connect-src " + connect + "; frame-ancestors 'none'; base-uri 'none'; " +
 		"form-action 'self'; object-src 'none'"
 }

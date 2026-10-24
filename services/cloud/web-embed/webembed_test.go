@@ -71,7 +71,7 @@ func TestSecurityHeaders(t *testing.T) {
 	rec := get(testHandler(), http.MethodGet, "/")
 	csp := rec.Header().Get("Content-Security-Policy")
 	for _, want := range []string{
-		"default-src 'self'", "script-src 'self'", "style-src 'self'", "img-src 'self' data:",
+		"default-src 'self'", "script-src 'self' 'wasm-unsafe-eval'", "style-src 'self'", "img-src 'self' data:",
 		"connect-src 'self' https://id.example.com:8443;", "frame-ancestors 'none'",
 		"base-uri 'none'", "form-action 'self'", "object-src 'none'",
 	} {
@@ -79,7 +79,8 @@ func TestSecurityHeaders(t *testing.T) {
 			t.Errorf("CSP %q lacks %q", csp, want)
 		}
 	}
-	if strings.Contains(csp, "realms") || strings.Contains(csp, "unsafe") {
+	// 'wasm-unsafe-eval' is deliberate (Argon2id runs as WebAssembly); script eval and inline code stay forbidden.
+	if strings.Contains(csp, "realms") || strings.Contains(csp, "unsafe-inline") || strings.Contains(strings.ReplaceAll(csp, "wasm-unsafe-eval", ""), "unsafe-eval") {
 		t.Errorf("CSP must only carry the issuer origin and no unsafe source: %q", csp)
 	}
 	if rec.Header().Get("X-Content-Type-Options") != "nosniff" || rec.Header().Get("Referrer-Policy") == "" {
