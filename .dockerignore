@@ -1,9 +1,9 @@
 **/node_modules
 **/dist
 apps/desktop/build/bin
-apps/desktop/frontend
-web
-packages
+apps/desktop/frontend/src
+apps/desktop/frontend/e2e
+apps/desktop/frontend/wailsjs
 tools
 docs
 deploy

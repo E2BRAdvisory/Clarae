@@ -1,6 +1,9 @@
 # Node
 node_modules/
 dist/
+!services/cloud/web-embed/dist/
+services/cloud/web-embed/dist/*
+!services/cloud/web-embed/dist/index.html
 coverage/
 *.tsbuildinfo
 

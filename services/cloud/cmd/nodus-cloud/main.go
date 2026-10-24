@@ -20,13 +20,13 @@ import (
 	"nodus/services/cloud/internal/app"
 	"nodus/services/cloud/internal/auth"
 	"nodus/services/cloud/internal/config"
-	"nodus/services/cloud/internal/configprofiles"
 	"nodus/services/cloud/internal/db"
 	"nodus/services/cloud/internal/grpcserver"
 	"nodus/services/cloud/internal/httpserver"
 	"nodus/services/cloud/internal/observability"
 	"nodus/services/cloud/internal/storage"
 	"nodus/services/cloud/internal/system"
+	webembed "nodus/services/cloud/web-embed"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=...".
@@ -90,10 +90,11 @@ func run(role config.Role) error {
 			System: system.NewHTTP(Version, system.ClientConfig{
 				Issuer:          cfg.OIDC.Issuer,
 				DesktopClientID: cfg.OIDC.DesktopClientID,
+				WebClientID:     cfg.OIDC.WebClientID,
 				Audience:        cfg.OIDC.Audience,
 				GRPCEndpoint:    cfg.OIDC.PublicGRPCAddr,
 			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
-			Config:      configprofiles.NewHTTP(),
+			WebUI:       webembed.Handler(webembed.Options{Issuer: cfg.OIDC.Issuer}),
 			WebUIOrigin: cfg.WebUIOrigin,
 			Metrics:     observability.New(),
 		}))

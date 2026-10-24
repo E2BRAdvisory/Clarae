@@ -1,0 +1,61 @@
+.app__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 16px;
+  background: var(--nd-surface);
+  border-bottom: 1px solid var(--nd-border);
+}
+.app__brand {
+  font-size: 1.1rem;
+}
+.app__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  flex: 1 1 auto;
+}
+.app__nav a {
+  padding: 6px 12px;
+  border-radius: var(--nd-radius);
+  color: var(--nd-text);
+  text-decoration: none;
+}
+.app__nav a:hover {
+  background: var(--nd-surface-2);
+}
+.app__nav a[aria-current='page'] {
+  background: var(--nd-accent);
+  color: var(--nd-accent-text);
+}
+.app__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.app__user {
+  color: var(--nd-text-muted);
+}
+.app__main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+.app__skip {
+  position: absolute;
+  left: -9999px;
+}
+.app__skip:focus {
+  left: 8px;
+  top: 8px;
+  z-index: 2000;
+  padding: 6px 10px;
+  background: var(--nd-surface);
+}
+@media (max-width: 600px) {
+  .app__main {
+    padding: 16px 16px 48px;
+  }
+}

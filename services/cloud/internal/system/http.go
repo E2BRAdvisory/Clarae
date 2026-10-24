@@ -32,6 +32,7 @@ func (c CheckerFunc) Check(ctx context.Context) error { return c.F(ctx) }
 type ClientConfig struct {
 	Issuer          string
 	DesktopClientID string
+	WebClientID     string
 	Audience        string
 	GRPCEndpoint    string
 }
@@ -92,6 +93,7 @@ func (h *HTTP) GetClientConfig(_ context.Context, _ api.GetClientConfigRequestOb
 	return api.GetClientConfig200JSONResponse{
 		Issuer:          h.client.Issuer,
 		DesktopClientId: h.client.DesktopClientID,
+		WebClientId:     h.client.WebClientID,
 		Audience:        h.client.Audience,
 		GrpcEndpoint:    h.client.GRPCEndpoint,
 		ApiVersion:      h.version,

@@ -1,0 +1,395 @@
+/* Nodus UI design system: tokens, then components. Plain CSS, no runtime.
+   Dark mode follows the OS unless data-theme="light" | "dark" is set on <html>. */
+
+:root {
+  color-scheme: light dark;
+  --nd-bg: #f6f7f9;
+  --nd-surface: #ffffff;
+  --nd-surface-2: #eef0f4;
+  --nd-text: #1b1f27;
+  --nd-text-muted: #5a6372;
+  --nd-border: #d5d9e1;
+  --nd-accent: #2f5fd0;
+  --nd-accent-text: #ffffff;
+  --nd-danger: #b3261e;
+  --nd-danger-bg: #fdecea;
+  --nd-ok: #1e7a46;
+  --nd-ok-bg: #e5f5ec;
+  --nd-warn: #8a5a00;
+  --nd-warn-bg: #fff3d6;
+  --nd-focus: #2f5fd0;
+  --nd-radius: 8px;
+  --nd-gap: 16px;
+  --nd-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --nd-bg: #14171c;
+    --nd-surface: #1d2129;
+    --nd-surface-2: #272c36;
+    --nd-text: #e8ebf1;
+    --nd-text-muted: #a2abbb;
+    --nd-border: #3a4150;
+    --nd-accent: #7ea2ff;
+    --nd-accent-text: #0e1320;
+    --nd-danger: #ff8a80;
+    --nd-danger-bg: #3a1f1d;
+    --nd-ok: #6fd69c;
+    --nd-ok-bg: #17301f;
+    --nd-warn: #f2c35b;
+    --nd-warn-bg: #3a2f14;
+    --nd-focus: #7ea2ff;
+    --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --nd-bg: #14171c;
+  --nd-surface: #1d2129;
+  --nd-surface-2: #272c36;
+  --nd-text: #e8ebf1;
+  --nd-text-muted: #a2abbb;
+  --nd-border: #3a4150;
+  --nd-accent: #7ea2ff;
+  --nd-accent-text: #0e1320;
+  --nd-danger: #ff8a80;
+  --nd-danger-bg: #3a1f1d;
+  --nd-ok: #6fd69c;
+  --nd-ok-bg: #17301f;
+  --nd-warn: #f2c35b;
+  --nd-warn-bg: #3a2f14;
+  --nd-focus: #7ea2ff;
+  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--nd-bg);
+}
+
+body {
+  margin: 0;
+  background: var(--nd-bg);
+  color: var(--nd-text);
+  font: 15px/1.5 var(--nd-font);
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 0 0 12px;
+}
+h1 {
+  font-size: 1.5rem;
+}
+h2 {
+  font-size: 1.15rem;
+}
+
+a {
+  color: var(--nd-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--nd-focus);
+  outline-offset: 2px;
+}
+
+.nd-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Button */
+.nd-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  color: var(--nd-text);
+  font: inherit;
+  cursor: pointer;
+}
+.nd-button:hover:not(:disabled) {
+  background: var(--nd-surface-2);
+}
+.nd-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.nd-button--primary {
+  background: var(--nd-accent);
+  border-color: var(--nd-accent);
+  color: var(--nd-accent-text);
+}
+.nd-button--primary:hover:not(:disabled) {
+  background: var(--nd-accent);
+  filter: brightness(1.08);
+}
+.nd-button--danger {
+  color: var(--nd-danger);
+  border-color: var(--nd-danger);
+}
+.nd-button--small {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 0.9rem;
+}
+
+/* Form controls */
+.nd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.nd-field__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.nd-field__hint {
+  color: var(--nd-text-muted);
+  font-size: 0.85rem;
+}
+.nd-input,
+.nd-select {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  color: var(--nd-text);
+  font: inherit;
+  max-width: 100%;
+}
+
+/* Card */
+.nd-card {
+  background: var(--nd-surface);
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  padding: var(--nd-gap);
+  margin-bottom: var(--nd-gap);
+}
+
+/* Table: scrolls horizontally inside its wrapper on narrow screens */
+.nd-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+}
+.nd-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.nd-table caption {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.nd-table th,
+.nd-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-top: 1px solid var(--nd-border);
+  vertical-align: middle;
+}
+.nd-table thead th {
+  border-top: 0;
+  background: var(--nd-surface-2);
+  font-size: 0.85rem;
+  color: var(--nd-text-muted);
+  white-space: nowrap;
+}
+.nd-table .nd-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Badge */
+.nd-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--nd-border);
+  background: var(--nd-surface-2);
+  color: var(--nd-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.nd-badge--ok {
+  background: var(--nd-ok-bg);
+  color: var(--nd-ok);
+  border-color: var(--nd-ok);
+}
+.nd-badge--warn {
+  background: var(--nd-warn-bg);
+  color: var(--nd-warn);
+  border-color: var(--nd-warn);
+}
+.nd-badge--danger {
+  background: var(--nd-danger-bg);
+  color: var(--nd-danger);
+  border-color: var(--nd-danger);
+}
+
+/* Quota bar: a native <progress> so that no inline style is needed (CSP style-src 'self') */
+.nd-quota__bar {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--nd-surface-2);
+  --nd-quota-color: var(--nd-ok);
+}
+.nd-quota__bar::-webkit-progress-bar {
+  background: var(--nd-surface-2);
+}
+.nd-quota__bar::-webkit-progress-value {
+  background: var(--nd-quota-color);
+}
+.nd-quota__bar::-moz-progress-bar {
+  background: var(--nd-quota-color);
+}
+.nd-quota[data-level='warn'] .nd-quota__bar {
+  --nd-quota-color: var(--nd-warn);
+}
+.nd-quota[data-level='critical'] .nd-quota__bar,
+.nd-quota[data-level='full'] .nd-quota__bar {
+  --nd-quota-color: var(--nd-danger);
+}
+.nd-quota__caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--nd-text-muted);
+}
+
+/* Empty state, inline error, toast */
+.nd-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--nd-text-muted);
+  border: 1px dashed var(--nd-border);
+  border-radius: var(--nd-radius);
+}
+.nd-empty__title {
+  color: var(--nd-text);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.nd-inline-error {
+  padding: 10px 12px;
+  border: 1px solid var(--nd-danger);
+  border-radius: var(--nd-radius);
+  background: var(--nd-danger-bg);
+  color: var(--nd-danger);
+  margin: 0 0 12px;
+}
+.nd-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 1000;
+  pointer-events: none;
+}
+.nd-toast {
+  pointer-events: auto;
+  max-width: 420px;
+  padding: 10px 14px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  box-shadow: var(--nd-shadow);
+}
+.nd-toast--error {
+  border-color: var(--nd-danger);
+  color: var(--nd-danger);
+}
+
+/* Dialog */
+.nd-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.45);
+  z-index: 900;
+}
+.nd-dialog {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  color: var(--nd-text);
+  box-shadow: var(--nd-shadow);
+}
+.nd-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Layout helpers */
+.nd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.nd-stack > * + * {
+  margin-top: var(--nd-gap);
+}
+.nd-muted {
+  color: var(--nd-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

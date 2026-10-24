@@ -57,7 +57,7 @@ jobs:
       - run: yarn run test
 
   e2e:
-    name: UI end-to-end (Playwright, mocked bindings)
+    name: UI end-to-end (Playwright, mocked bindings and API)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +69,7 @@ jobs:
       - run: yarn install --immutable
       - run: yarn workspace @nodus/desktop-frontend exec playwright install --with-deps chromium
       - run: yarn workspace @nodus/desktop-frontend run e2e
+      - run: yarn workspace @nodus/web run e2e
 
   conformance:
     name: Conformance fixtures (Go + TS)

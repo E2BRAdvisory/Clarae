@@ -4,6 +4,8 @@ SHELL := /bin/bash
 
 GO_MODULES := shared/go services/cloud apps/desktop
 CLOUD      := services/cloud
+WEB        := web
+WEBEMBED   := $(CLOUD)/web-embed
 DESKTOP    := apps/desktop
 COMPOSE    := docker compose -f deploy/docker/compose.dev.yaml
 
@@ -76,9 +78,14 @@ test-desktop-e2e: ## Two-device sync e2e (builds the cloud binary, PG via testco
 test-load: ## k6 load test (needs a running `make dev-cloud`; see services/cloud/test/load/README.md)
 	k6 run $(CLOUD)/test/load/sync.k6.js
 
-.PHONY: e2e
-e2e: ## Playwright (Chromium) against the in-memory Wails mock
+.PHONY: e2e e2e-desktop e2e-web
+e2e: e2e-desktop e2e-web ## Playwright (Chromium) for the desktop UI and the Web UI
+
+e2e-desktop: ## Desktop UI against the in-memory Wails mock
 	yarn workspace @nodus/desktop-frontend run e2e
+
+e2e-web: ## Web UI on the Vite dev server with the API mocked (OIDC test double)
+	yarn workspace @nodus/web run e2e
 
 .PHONY: ci
 ci: lint vuln test ## What CI runs on every push
@@ -99,12 +106,15 @@ stack-reset: ## Destroy the stack volumes (re-imports the Keycloak realm, emptie
 	$(COMPOSE) down -v
 	$(COMPOSE) up -d --wait
 
-.PHONY: dev-cloud dev-desktop
+.PHONY: dev-cloud dev-desktop dev-web
 dev-cloud: ## Run the cloud service against the local stack (role=all)
 	cd $(CLOUD) && set -a && source ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/nodus-cloud --role=all
 
 dev-desktop: ## Run the desktop app with hot reload
 	cd $(DESKTOP) && wails dev
+
+dev-web: ## Web UI on :5174 with hot reload, proxying /api to the cloud on :18081
+	yarn workspace @nodus/web run dev
 
 .PHONY: run-desktop run-desktop-cloud run-desktop-2devices dev-stop
 run-desktop: ## Desktop standalone (no cloud) with a demo vault: scripts/run-desktop.sh --demo
@@ -123,8 +133,17 @@ dev-stop: ## Stop the cloud process started by the run scripts (add ARGS=--stack
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: build-cloud build-desktop
-build-cloud: ## Build the cloud binary into bin/
+.PHONY: web-build web-clean build-cloud build-desktop
+web-build: ## Build the Web UI and copy it into the cloud binary's embed dir (then run build-cloud)
+	yarn workspace @nodus/web run build
+	rm -rf $(WEBEMBED)/dist && mkdir -p $(WEBEMBED)/dist
+	cp -R $(WEB)/dist/. $(WEBEMBED)/dist/
+
+web-clean: ## Drop the embedded Web UI build and restore the tracked placeholder index.html
+	rm -rf $(WEBEMBED)/dist && mkdir -p $(WEBEMBED)/dist
+	git checkout -- $(WEBEMBED)/dist/index.html
+
+build-cloud: ## Build the cloud binary into bin/ (embeds whatever is in web-embed/dist: run web-build first)
 	cd $(CLOUD) && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=$(VERSION)" -o ../../bin/nodus-cloud ./cmd/nodus-cloud
 
 build-desktop: ## Build the desktop app for the current OS

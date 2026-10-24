@@ -42,3 +42,41 @@ export function isProblem(body: unknown): body is Problem {
     typeof (body as { code: unknown }).code === 'string'
   );
 }
+
+/** Error thrown by {@link unwrap}: carries the HTTP status and the RFC 9457 application `code`. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: ErrorCode | 'UNKNOWN';
+  readonly requestId: string | undefined;
+  readonly problem: Problem | undefined;
+
+  constructor(status: number, problem: Problem | undefined, fallback: string) {
+    super(problem?.detail || problem?.title || fallback);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = problem?.code ?? 'UNKNOWN';
+    this.requestId = problem?.request_id;
+    this.problem = problem;
+  }
+}
+
+interface FetchResult<T> {
+  data?: T;
+  error?: unknown;
+  response: Response;
+}
+
+/**
+ * Resolves an openapi-fetch call to its payload, or throws an {@link ApiError}
+ * (also for network-level failures of the body, e.g. a 502 HTML page).
+ * 204 responses resolve to `undefined`.
+ */
+export async function unwrap<T>(call: Promise<FetchResult<T>>): Promise<T> {
+  const { data, error, response } = await call;
+  if (response.ok) return data as T;
+  throw new ApiError(
+    response.status,
+    isProblem(error) ? error : undefined,
+    `${response.status} ${response.statusText}`.trim(),
+  );
+}

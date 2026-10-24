@@ -67,6 +67,9 @@ type OIDCConfig struct {
 	// DesktopClientID is the public OIDC client the desktop app uses; served
 	// by GET /client-config so clients only need the server URL.
 	DesktopClientID string
+	// WebClientID is the public OIDC client of the Web UI, also served by
+	// GET /client-config.
+	WebClientID string
 	// PublicGRPCAddr is the host:port clients use to reach the notify stream
 	// (behind an ingress it differs from the listen address).
 	PublicGRPCAddr string
@@ -108,6 +111,7 @@ func Load(role Role, version string) (Config, error) {
 			Audience:        env("OIDC_AUDIENCE", "nodus-api"),
 			AllowedAZP:      envList("OIDC_ALLOWED_AZP", "nodus-desktop,nodus-web"),
 			DesktopClientID: env("OIDC_DESKTOP_CLIENT_ID", "nodus-desktop"),
+			WebClientID:     env("OIDC_WEB_CLIENT_ID", "nodus-web"),
 			PublicGRPCAddr:  env("PUBLIC_GRPC_ADDR", env("GRPC_LISTEN_ADDR", "127.0.0.1:18082")),
 			StatusCacheTTL:  envDuration("OIDC_STATUS_CACHE_TTL", 30*time.Second),
 		},

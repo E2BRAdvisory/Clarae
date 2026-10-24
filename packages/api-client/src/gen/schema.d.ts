@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/client-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public bootstrap information for clients (OIDC issuer and client id, notify endpoint)
+         * @description Lets a desktop client start a login knowing only the server URL (ADR-0008).
+         */
+        get: operations["getClientConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -112,10 +132,466 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Storage usage against the effective quota */
+        get: operations["getMyUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Own vaults (and, from M4, shared mounts) */
+        get: operations["listVaults"];
+        put?: never;
+        /** Create a vault; `kind` is immutable and private vaults require key envelopes */
+        post: operations["createVault"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        /** Vault detail (size, file count, last_seq) */
+        get: operations["getVault"];
+        put?: never;
+        post?: never;
+        /** Soft delete (owner); purged after the retention period */
+        delete: operations["deleteVault"];
+        options?: never;
+        head?: never;
+        /** Rename a vault (owner) */
+        patch: operations["updateVault"];
+        trace?: never;
+    };
+    "/vaults/{vaultId}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a soft-deleted vault within the retention period (owner) */
+        post: operations["restoreVault"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        /** Complete manifest of current files plus the changelog position it reflects */
+        get: operations["getVaultTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/key-envelopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        /** Wrapped VMK envelopes of a private vault (owner) */
+        get: operations["getKeyEnvelopes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/key-envelopes/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                kind: components["schemas"]["KeyEnvelopeKind"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the passphrase or recovery envelope (change passphrase, new recovery key) */
+        put: operations["putKeyEnvelope"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        /** Changelog entries after a cursor (§3.4.4 B) */
+        get: operations["getChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/blobs:check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Which of these blobs the server does not have yet */
+        post: operations["checkBlobs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/blobs/{sha256}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                sha256: components["parameters"]["Sha256"];
+            };
+            cookie?: never;
+        };
+        /** Download a blob (Range supported) */
+        get: operations["getBlob"];
+        /** Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch */
+        put: operations["putBlob"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a batch of operations; each one is evaluated independently (§3.4.4 C) */
+        post: operations["commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/files/{fileId}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        /** History of a file, newest first */
+        get: operations["listRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/files/{fileId}/revisions/{rev}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                fileId: components["parameters"]["FileId"];
+                rev: components["parameters"]["Rev"];
+            };
+            cookie?: never;
+        };
+        /** Content of a revision (ciphertext for private vaults) */
+        get: operations["getRevisionContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                fileId: components["parameters"]["FileId"];
+                rev: components["parameters"]["Rev"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a revision as a new revision that reuses its blob */
+        post: operations["restoreRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups the caller belongs to */
+        get: operations["listMyGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/directory/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find users to share with (minimal fields) */
+        get: operations["searchDirectoryUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/directory/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find groups to share with (minimal fields) */
+        get: operations["searchDirectoryGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shares the caller owns or manages (`owned`) or was invited to (`received`) */
+        get: operations["listShares"];
+        put?: never;
+        /** Share a vault, a folder or a document (shared vaults only) */
+        post: operations["createShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        /** A share, with its grants for managers and the owner */
+        get: operations["getShare"];
+        put?: never;
+        post?: never;
+        /** Revoke a share (owner of the vault) */
+        delete: operations["revokeShare"];
+        options?: never;
+        head?: never;
+        /** Rename a share or change its expiry (manager or owner) */
+        patch: operations["updateShare"];
+        trace?: never;
+    };
+    "/shares/{shareId}/grants/{principalType}/{principalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+                principalType: components["parameters"]["PrincipalType"];
+                principalId: components["parameters"]["PrincipalId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Add a grant or change its level (manager or owner) */
+        put: operations["putGrant"];
+        post?: never;
+        /** Remove a grant (manager or owner) */
+        delete: operations["deleteGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{shareId}:accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept an invitation (a group grant is accepted for the whole group) */
+        post: operations["acceptShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{shareId}:decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline an invitation sent to the caller as a user */
+        post: operations["declineShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shared-with-me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Accepted shares to mount, with the scope to sync them */
+        get: operations["listSharedWithMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ClientConfig: {
+            /**
+             * Format: uri
+             * @description OIDC issuer (Keycloak realm URL)
+             */
+            issuer: string;
+            desktop_client_id: string;
+            /** @description Public OIDC client of the Web UI (Authorization Code + PKCE) */
+            web_client_id: string;
+            /** @description Expected `aud` of access tokens */
+            audience: string;
+            /** @description host:port of the NotifyService stream */
+            grpc_endpoint: string;
+            /** @description Server version */
+            api_version: string;
+        };
         /** @description RFC 9457 problem details with the Nodus application code */
         Problem: {
             /** Format: uri */
@@ -133,7 +609,7 @@ export interface components {
          * @description Application error codes (§3.1); mirrored in shared/go/syncproto
          * @enum {string}
          */
-        ErrorCode: "UNAUTHENTICATED" | "FORBIDDEN" | "USER_SUSPENDED" | "NOT_FOUND" | "VALIDATION_FAILED" | "QUOTA_EXCEEDED" | "FILE_TOO_LARGE" | "REV_CONFLICT" | "PATH_INVALID" | "PATH_COLLISION" | "SHARE_ROOT_MOVE" | "BLOB_MISSING" | "VAULT_ENCRYPTED" | "VAULT_KIND_IMMUTABLE" | "RATE_LIMITED" | "CURSOR_EXPIRED" | "INTERNAL";
+        ErrorCode: "UNAUTHENTICATED" | "FORBIDDEN" | "USER_SUSPENDED" | "NOT_FOUND" | "VALIDATION_FAILED" | "QUOTA_EXCEEDED" | "FILE_TOO_LARGE" | "REV_CONFLICT" | "PATH_INVALID" | "PATH_COLLISION" | "SHARE_ROOT_MOVE" | "BLOB_MISSING" | "VAULT_ENCRYPTED" | "VAULT_KIND_IMMUTABLE" | "RATE_LIMITED" | "CURSOR_EXPIRED" | "NAME_IN_USE" | "INVALID_STATE" | "INTERNAL";
         Health: {
             /** @enum {string} */
             status: "ok" | "degraded" | "unavailable";
@@ -199,6 +675,317 @@ export interface components {
             /** @description Dotted keys the user cannot override */
             locked_keys: string[];
         };
+        Usage: {
+            /** Format: int64 */
+            used_bytes: number;
+            /**
+             * Format: int64
+             * @description -1 means unlimited
+             */
+            quota_bytes: number;
+            /**
+             * @description ok below 80 %, warning from 80 %, critical from 95 %, full at 100 %
+             * @enum {string}
+             */
+            level: "ok" | "warning" | "critical" | "full";
+        };
+        /** @enum {string} */
+        VaultKind: "private" | "shared";
+        Vault: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            owner_id: string;
+            name: string;
+            kind: components["schemas"]["VaultKind"];
+            /** Format: int64 */
+            last_seq: number;
+            /** Format: int64 */
+            total_bytes: number;
+            file_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            deleted_at?: string;
+        };
+        VaultList: {
+            items: components["schemas"]["Vault"][];
+            /** @description Shared mounts of other owners' vaults (empty until M4) */
+            mounts: components["schemas"]["Vault"][];
+        };
+        CreateVault: {
+            name: string;
+            kind: components["schemas"]["VaultKind"];
+            /** @description Both the passphrase and the recovery envelope: required for private vaults, forbidden for shared ones */
+            key_envelopes?: components["schemas"]["KeyEnvelopeInput"][];
+        };
+        UpdateVault: {
+            name: string;
+        };
+        /** @enum {string} */
+        KeyEnvelopeKind: "passphrase" | "recovery";
+        KdfParams: {
+            /** @enum {string} */
+            alg: "argon2id" | "hkdf-sha256";
+            t?: number;
+            m_kib?: number;
+            p?: number;
+            /** @description Standard base64 */
+            salt: string;
+        };
+        KeyEnvelopeInput: {
+            kind: components["schemas"]["KeyEnvelopeKind"];
+            kdf: components["schemas"]["KdfParams"];
+            /**
+             * Format: byte
+             * @description nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag, standard base64 (60 bytes)
+             */
+            wrapped_vmk: string;
+        };
+        KeyEnvelope: components["schemas"]["KeyEnvelopeInput"] & {
+            /** Format: date-time */
+            created_at: string;
+        };
+        KeyEnvelopes: {
+            items: components["schemas"]["KeyEnvelope"][];
+        };
+        TreeEntry: {
+            path: string;
+            /** Format: uuid */
+            file_id: string;
+            rev: number;
+            hash: string;
+            /** Format: int64 */
+            size: number;
+            kind: string;
+        };
+        Tree: {
+            items: components["schemas"]["TreeEntry"][];
+            /**
+             * Format: int64
+             * @description The changelog position the manifest reflects: continue with changes?since=as_of_seq
+             */
+            as_of_seq: number;
+        };
+        /** @enum {string} */
+        ChangeOp: "create" | "modify" | "move" | "delete" | "restore";
+        Change: {
+            /** Format: int64 */
+            seq: number;
+            /** Format: uuid */
+            file_id: string;
+            op: components["schemas"]["ChangeOp"];
+            path: string;
+            prev_path?: string;
+            rev: number;
+            blob_hash?: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: uuid */
+            author_id: string;
+            /** Format: uuid */
+            device_id?: string;
+            /** Format: date-time */
+            server_time: string;
+            /**
+             * Format: uuid
+             * @description Set on a conflict copy: the file it was derived from
+             */
+            conflict_of?: string;
+        };
+        Changes: {
+            items: components["schemas"]["Change"][];
+            /** Format: int64 */
+            next_seq: number;
+            has_more: boolean;
+        };
+        BlobCheck: {
+            hashes: string[];
+        };
+        BlobCheckResult: {
+            missing: string[];
+        };
+        /** @enum {string} */
+        CommitOpKind: "create" | "modify" | "move" | "delete" | "restore" | "move_prefix";
+        CommitOp: {
+            /** Format: uuid */
+            op_id: string;
+            op: components["schemas"]["CommitOpKind"];
+            /** Format: uuid */
+            file_id?: string;
+            path?: string;
+            /** @description Private vaults only: 'hmac1:<hex>' identity of the path, since the server cannot derive it from the opaque token (ADR-0009) */
+            path_key?: string;
+            base_rev?: number;
+            blob_hash?: string;
+            /** Format: int64 */
+            size?: number;
+            /** Format: date-time */
+            client_mtime?: string;
+            /**
+             * Format: uuid
+             * @description Marks a conflict copy (create only)
+             */
+            conflict_of?: string;
+            from?: string;
+            to?: string;
+        };
+        CommitRequest: {
+            /** Format: uuid */
+            device_id: string;
+            ops: components["schemas"]["CommitOp"][];
+        };
+        OpResult: {
+            /** Format: uuid */
+            op_id: string;
+            /** @enum {string} */
+            status: "accepted" | "conflict" | "rejected";
+            /** Format: uuid */
+            file_id?: string;
+            rev?: number;
+            /** Format: int64 */
+            seq?: number;
+            code?: components["schemas"]["ErrorCode"];
+            detail?: string;
+            current_rev?: number;
+            current_hash?: string;
+            /** Format: int64 */
+            current_seq?: number;
+        };
+        CommitResponse: {
+            results: components["schemas"]["OpResult"][];
+            /** Format: int64 */
+            last_seq: number;
+        };
+        Revision: {
+            rev: number;
+            /** Format: int64 */
+            seq: number;
+            op: components["schemas"]["ChangeOp"];
+            path: string;
+            prev_path?: string;
+            blob_hash?: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: uuid */
+            author_id: string;
+            /** Format: uuid */
+            device_id?: string;
+            /** Format: date-time */
+            server_time: string;
+            /** Format: uuid */
+            conflict_of?: string;
+        };
+        RevisionList: {
+            items: components["schemas"]["Revision"][];
+            next_cursor?: string;
+        };
+        GroupMembership: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            member_role: "member" | "manager";
+        };
+        DirectoryUser: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            display_name?: string;
+        };
+        DirectoryGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description?: string;
+        };
+        /** @enum {string} */
+        ResourceType: "vault" | "folder" | "file";
+        /** @enum {string} */
+        SharePermission: "viewer" | "editor" | "manager";
+        /** @enum {string} */
+        GrantStatus: "pending" | "accepted" | "declined";
+        Grant: {
+            /** @enum {string} */
+            principal_type: "user" | "group";
+            /** Format: uuid */
+            principal_id: string;
+            principal_name: string;
+            permission: components["schemas"]["SharePermission"];
+            status: components["schemas"]["GrantStatus"];
+            /** Format: uuid */
+            granted_by?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        GrantInput: {
+            permission: components["schemas"]["SharePermission"];
+        };
+        NewGrant: {
+            /** @enum {string} */
+            principal_type: "user" | "group";
+            /** Format: uuid */
+            principal_id: string;
+            permission: components["schemas"]["SharePermission"];
+        };
+        Share: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            vault_id: string;
+            vault_name: string;
+            resource_type: components["schemas"]["ResourceType"];
+            /** @description Folder shares; only shown to the owner and managers */
+            path_prefix?: string;
+            /** Format: uuid */
+            file_id?: string;
+            display_name: string;
+            /** Format: uuid */
+            owner_id: string;
+            owner_name: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at?: string;
+            my_permission?: components["schemas"]["SharePermission"];
+            my_status?: components["schemas"]["GrantStatus"];
+            /** @description Only for the owner and managers */
+            grants?: components["schemas"]["Grant"][];
+        };
+        CreateShare: {
+            /** Format: uuid */
+            vault_id: string;
+            resource_type: components["schemas"]["ResourceType"];
+            path_prefix?: string;
+            /** Format: uuid */
+            file_id?: string;
+            display_name: string;
+            /** Format: date-time */
+            expires_at?: string;
+            grants?: components["schemas"]["NewGrant"][];
+        };
+        UpdateShare: {
+            display_name?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            /** @description Remove the expiry (instead of setting expires_at) */
+            clear_expiry?: boolean;
+        };
+        Mount: {
+            /** Format: uuid */
+            share_id: string;
+            /** Format: uuid */
+            vault_id: string;
+            display_name: string;
+            resource_type: components["schemas"]["ResourceType"];
+            permission: components["schemas"]["SharePermission"];
+            /** @description Value of the `scope` parameter that syncs this mount (`share:{id}`) */
+            scope: string;
+            owner_name: string;
+            /** Format: date-time */
+            expires_at?: string;
+        };
     };
     responses: {
         /** @description Missing or invalid token (code UNAUTHENTICATED) */
@@ -237,6 +1024,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION or NAME_IN_USE) */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Too many requests (code RATE_LIMITED); honour Retry-After */
         RateLimited: {
             headers: {
@@ -249,7 +1045,17 @@ export interface components {
         };
     };
     parameters: {
+        VaultId: string;
+        FileId: string;
+        Rev: number;
+        Sha256: string;
         DeviceId: string;
+        /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+        Scope: string;
+        SharePathId: string;
+        PrincipalType: "user" | "group";
+        PrincipalId: string;
+        DirectoryQuery: string;
         /** @description Client-chosen key that makes a mutating POST safe to retry */
         IdempotencyKey: string;
     };
@@ -304,6 +1110,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    getClientConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientConfig"];
                 };
             };
         };
@@ -438,6 +1264,890 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getMyUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Usage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listVaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vaults */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createVault: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVault"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vault"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vault */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vault"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVault"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vault"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    restoreVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vault"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getVaultTree: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Manifest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tree"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getKeyEnvelopes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Envelopes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyEnvelopes"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putKeyEnvelope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                kind: components["schemas"]["KeyEnvelopeKind"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyEnvelopeInput"];
+            };
+        };
+        responses: {
+            /** @description Replaced */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyEnvelope"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getChanges: {
+        parameters: {
+            query: {
+                since: number;
+                limit?: number;
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Changes"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The cursor predates the compaction window (code CURSOR_EXPIRED): bootstrap from /tree */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    checkBlobs: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlobCheck"];
+            };
+        };
+        responses: {
+            /** @description Missing hashes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlobCheckResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getBlob: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: {
+                Range?: string;
+            };
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                sha256: components["parameters"]["Sha256"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blob bytes */
+            200: {
+                headers: {
+                    "Content-Length"?: number;
+                    "Accept-Ranges"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Partial content */
+            206: {
+                headers: {
+                    "Content-Range"?: string;
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Unsatisfiable range */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putBlob: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                sha256: components["parameters"]["Sha256"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Stored (or already present) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Blob larger than 32 MB (code FILE_TOO_LARGE) or quota exceeded (QUOTA_EXCEEDED) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    commit: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: {
+                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Per-operation outcomes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitResponse"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRevisions: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revisions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRevisionContent: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: never;
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                fileId: components["parameters"]["FileId"];
+                rev: components["parameters"]["Rev"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blob bytes */
+            200: {
+                headers: {
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreRevision: {
+        parameters: {
+            query?: {
+                /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
+                scope?: components["parameters"]["Scope"];
+            };
+            header?: {
+                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                vaultId: components["parameters"]["VaultId"];
+                fileId: components["parameters"]["FileId"];
+                rev: components["parameters"]["Rev"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored; the result carries the new revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listMyGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memberships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMembership"][];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    searchDirectoryUsers: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["DirectoryQuery"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches, at most 20 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryUser"][];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    searchDirectoryGroups: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["DirectoryQuery"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches, at most 20 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryGroup"][];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listShares: {
+        parameters: {
+            query: {
+                scope: "owned" | "received";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"][];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShare"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Share */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateShare"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+                principalType: components["parameters"]["PrincipalType"];
+                principalId: components["parameters"]["PrincipalId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantInput"];
+            };
+        };
+        responses: {
+            /** @description The grant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grant"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+                principalType: components["parameters"]["PrincipalType"];
+                principalId: components["parameters"]["PrincipalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acceptShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    declineShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: components["parameters"]["SharePathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listSharedWithMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Mount"][];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
         };
     };
 }
