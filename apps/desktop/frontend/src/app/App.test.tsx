@@ -37,8 +37,11 @@ describe('App shell', () => {
     mock.vaults.get(info.id)?.files.set('Notes/today.md', '# Today');
     useAppStore.getState().setVault(info);
     renderApp();
+    // Folders start closed: the nested note appears only once its folder is opened.
+    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument());
+    expect(screen.queryByText('today')).toBeNull();
+    fireEvent.click(screen.getByText('Notes'));
     await waitFor(() => expect(screen.getByText('today')).toBeInTheDocument());
-    expect(screen.getByText('Notes')).toBeInTheDocument();
   });
 
   describe('with a vault open', () => {

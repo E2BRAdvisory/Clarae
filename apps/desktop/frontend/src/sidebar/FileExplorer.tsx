@@ -15,6 +15,7 @@ import { bookmarkMenuItems } from '../bookmarks/actions';
 import { useSettings } from '../state/settings';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { dialog } from '../ui/dialogs';
+import { useExpanded } from './expanded';
 
 interface TreeNode {
   entry: Entry;
@@ -73,7 +74,8 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const { data: entries = [] } = useTree(vaultId);
   const activePath = useAppStore(selectActivePath);
   const openNote = useAppStore((s) => s.openNote);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const expanded = useExpanded((s) => s.open);
+  const toggle = (path: string): void => useExpanded.getState().toggle(path);
   const [sort, setSort] = useState<FileSort>('name');
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -223,18 +225,10 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           },
         ];
 
-  const toggle = (path: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-
   const renderNodes = (nodes: TreeNode[], depth: number) =>
     nodes.map((node) => {
       const { entry } = node;
-      const isCollapsed = collapsed.has(entry.path);
+      const isCollapsed = !expanded.has(entry.path);
       return (
         <div key={entry.path}>
           <div
