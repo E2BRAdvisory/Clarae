@@ -1,0 +1,16 @@
+{
+  "title": "heading-basic",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    { "level": 1, "text": "Titolo principale", "line": 1 },
+    { "level": 2, "text": "Sezione due", "line": 5 },
+    { "level": 3, "text": "Sotto-sezione tre", "line": 7 }
+  ],
+  "links": [],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 14
+}

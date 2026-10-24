@@ -1,0 +1,180 @@
+package pathrules
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestNormalize(t *testing.T) {
+	long := strings.Repeat("a", 256)
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr string // substring of the error reason, "" when valid
+	}{
+		{"simple", "Notes/today.md", "Notes/today.md", ""},
+		{"root file", "README.md", "README.md", ""},
+		{"nfd to nfc", "caffé.md", "caffé.md", ""},
+		{"unicode ok", "Progetti/Relazione finale ✓.md", "Progetti/Relazione finale ✓.md", ""},
+		{"dotfile ok", ".nodus/editor.json", ".nodus/editor.json", ""},
+		{"empty", "", "", "empty"},
+		{"absolute", "/Notes/a.md", "", "absolute"},
+		{"trailing slash", "Notes/", "", "empty segment"},
+		{"double slash", "Notes//a.md", "", "empty segment"},
+		{"dot segment", "Notes/./a.md", "", "relative segment"},
+		{"dotdot segment", "../a.md", "", "relative segment"},
+		{"backslash", "Notes\\a.md", "", "forbidden"},
+		{"colon", "a:b.md", "", "forbidden"},
+		{"star", "a*.md", "", "forbidden"},
+		{"question", "a?.md", "", "forbidden"},
+		{"quote", "a\".md", "", "forbidden"},
+		{"angle", "<a>.md", "", "forbidden"},
+		{"pipe", "a|b.md", "", "forbidden"},
+		{"nul", "a\x00b.md", "", "control"},
+		{"control", "a\tb.md", "", "control"},
+		{"trailing dot", "Notes/a.", "", "ends with"},
+		{"trailing space", "Notes/a ", "", "ends with"},
+		{"reserved con", "CON", "", "reserved"},
+		{"reserved con ext", "Notes/con.md", "", "reserved"},
+		{"reserved lpt1", "lpt1.txt", "", "reserved"},
+		{"not reserved", "CONTRACT.md", "CONTRACT.md", ""},
+		{"not reserved com10", "COM10.md", "COM10.md", ""},
+		{"segment too long", long + ".md", "", "segment longer"},
+		{"path too long", strings.Repeat("abcdefghi/", 103), "", "longer than 1024"},
+		{"invalid utf8", "a\xffb.md", "", "UTF-8"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Normalize(tt.in)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tt.want {
+					t.Fatalf("got %q, want %q", got, tt.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got path %q", tt.wantErr, got)
+			}
+			if !errors.Is(err, ErrInvalid) {
+				t.Fatalf("error does not wrap ErrInvalid: %v", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestKey(t *testing.T) {
+	tests := []struct {
+		a, b string
+		same bool
+	}{
+		{"Notes/Today.md", "notes/today.md", true},
+		{"Straße.md", "STRASSE.md", true},
+		{"caffé.md", "CAFFÉ.md", true},
+		{"Notes/a.md", "Notes/b.md", false},
+	}
+	for _, tt := range tests {
+		if got := Key(tt.a) == Key(tt.b); got != tt.same {
+			t.Errorf("Key(%q)==Key(%q): got %v, want %v", tt.a, tt.b, got, tt.same)
+		}
+	}
+}
+
+func TestSplitExt(t *testing.T) {
+	tests := []struct{ in, dir, base, ext string }{
+		{"a.md", "", "a.md", ".md"},
+		{"Notes/a.MD", "Notes", "a.MD", ".md"},
+		{"Notes/sub/drawing.excalidraw", "Notes/sub", "drawing.excalidraw", ".excalidraw"},
+		{".gitignore", "", ".gitignore", ""},
+		{"Notes/archive.tar.gz", "Notes", "archive.tar.gz", ".gz"},
+		{"Notes/noext", "Notes", "noext", ""},
+	}
+	for _, tt := range tests {
+		dir, base := Split(tt.in)
+		if dir != tt.dir || base != tt.base {
+			t.Errorf("Split(%q) = %q,%q want %q,%q", tt.in, dir, base, tt.dir, tt.base)
+		}
+		if ext := Ext(tt.in); ext != tt.ext {
+			t.Errorf("Ext(%q) = %q want %q", tt.in, ext, tt.ext)
+		}
+	}
+}
+
+func TestHasPrefixRebase(t *testing.T) {
+	if !HasPrefix("Progetti/Alfa/a.md", "Progetti/Alfa") {
+		t.Error("expected prefix match")
+	}
+	if !HasPrefix("Progetti/Alfa", "Progetti/Alfa") {
+		t.Error("expected equal path to match")
+	}
+	if HasPrefix("Progetti/Alfa2/a.md", "Progetti/Alfa") {
+		t.Error("sibling folder must not match")
+	}
+	if !HasPrefix("anything", "") {
+		t.Error("empty prefix is the root")
+	}
+
+	tests := []struct {
+		path, from, to string
+		want           string
+		ok             bool
+	}{
+		{"Progetti/Alfa/a.md", "Progetti/Alfa", "Archivio/Alfa", "Archivio/Alfa/a.md", true},
+		{"Progetti/Alfa", "Progetti/Alfa", "Archivio/Alfa", "Archivio/Alfa", true},
+		{"Progetti/Alfa/sub/a.md", "Progetti/Alfa", "", "sub/a.md", true},
+		{"Progetti/Alfa", "Progetti/Alfa", "", "", true},
+		{"a.md", "", "Mount", "Mount/a.md", true},
+		{"Altro/a.md", "Progetti/Alfa", "X", "", false},
+	}
+	for _, tt := range tests {
+		got, ok := Rebase(tt.path, tt.from, tt.to)
+		if ok != tt.ok || got != tt.want {
+			t.Errorf("Rebase(%q,%q,%q) = %q,%v want %q,%v", tt.path, tt.from, tt.to, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestIsExcluded(t *testing.T) {
+	tests := []struct {
+		path  string
+		trash bool
+		want  bool
+	}{
+		{"Notes/a.md", false, false},
+		{".DS_Store", false, true},
+		{"Notes/.DS_Store", false, true},
+		{"Notes/Thumbs.db", false, true},
+		{"Notes/draft.TMP", false, true},
+		{".trash/a.md", false, false},
+		{".trash/a.md", true, true},
+		{".trash", true, true},
+		{".nodus/editor.json", false, false},
+		{".nodus/appearance.json", false, false},
+		{".nodus/hotkeys.json", false, false},
+		{".nodus/types.json", false, false},
+		{".nodus/excalidraw-library.json", false, false},
+		{".nodus/templates/daily.md", false, false},
+		{".nodus/workspace.json", false, true},
+		{".nodus/workspaces.json", false, true},
+		{".nodus/workspace-mobile.json", false, true},
+		{".nodus/index.db", false, true},
+		{".nodus/sync.db", false, true},
+		{".nodus/sync.db-wal", false, true},
+		{".nodus/cache/drawings/abc.svg", false, true},
+		{".nodus/snapshots/2026/a.md", false, true},
+		{".nodus/cache", false, true},
+		{"Notes/.nodus/cache/x", false, false}, // only the vault-root .nodus is special
+	}
+	for _, tt := range tests {
+		if got := IsExcluded(tt.path, tt.trash); got != tt.want {
+			t.Errorf("IsExcluded(%q, trash=%v) = %v want %v", tt.path, tt.trash, got, tt.want)
+		}
+	}
+}

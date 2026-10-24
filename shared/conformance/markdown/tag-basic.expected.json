@@ -1,0 +1,18 @@
+{
+  "title": "tag-basic",
+  "aliases": [],
+  "properties": {},
+  "headings": [{ "level": 1, "text": "Tag", "line": 5 }],
+  "links": [],
+  "tags": [
+    { "line": 2, "name": "progetto" },
+    { "line": 2, "name": "cliente/acme" },
+    { "line": 7, "name": "riunione" },
+    { "line": 7, "name": "cliente/acme/2026" },
+    { "line": 9, "name": "ultimo" }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 17
+}

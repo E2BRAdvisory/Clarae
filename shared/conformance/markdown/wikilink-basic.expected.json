@@ -1,0 +1,67 @@
+{
+  "title": "wikilink-basic",
+  "aliases": [],
+  "properties": {},
+  "headings": [{ "level": 1, "text": "Collegamenti", "line": 1 }],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "Cartella/Altra nota",
+      "heading": "",
+      "block": "",
+      "alias": "con alias",
+      "embed": false
+    },
+    {
+      "line": 4,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "Capitolo",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 4,
+      "kind": "wikilink",
+      "target": "Nota",
+      "heading": "",
+      "block": "abc123",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 5,
+      "kind": "wikilink",
+      "target": "",
+      "heading": "Collegamenti",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 6,
+      "kind": "wikilink",
+      "target": "immagine.png",
+      "heading": "",
+      "block": "",
+      "alias": "300",
+      "embed": true
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 19
+}
