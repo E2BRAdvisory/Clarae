@@ -1,0 +1,24 @@
+{
+  "title": "frontmatter-with-body-hr",
+  "aliases": [],
+  "properties": {
+    "a": 1
+  },
+  "headings": [],
+  "links": [
+    {
+      "line": 9,
+      "kind": "wikilink",
+      "target": "x",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}

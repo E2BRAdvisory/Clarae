@@ -1,0 +1,27 @@
+{
+  "title": "url-variants",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "external",
+      "target": "https://e.f/g#h",
+      "heading": "",
+      "block": "",
+      "alias": "t",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 1,
+      "name": "realtag"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 6
+}

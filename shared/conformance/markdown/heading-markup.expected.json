@@ -1,0 +1,38 @@
+{
+  "title": "heading-markup",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "**Bold** and `code`",
+      "line": 1
+    },
+    {
+      "level": 3,
+      "text": "[[Link]] heading #tag",
+      "line": 3
+    }
+  ],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "Link",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 3,
+      "name": "tag"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 6
+}

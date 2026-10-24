@@ -1,0 +1,23 @@
+{
+  "title": "heading-unicode",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 1,
+      "text": "Città — è così",
+      "line": 1
+    },
+    {
+      "level": 2,
+      "text": "日本語",
+      "line": 3
+    }
+  ],
+  "links": [],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 4
+}

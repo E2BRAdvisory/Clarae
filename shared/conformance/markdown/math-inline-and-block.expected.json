@@ -1,0 +1,40 @@
+{
+  "title": "math-inline-and-block",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "l1",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 5,
+      "kind": "wikilink",
+      "target": "l2",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 6,
+      "kind": "wikilink",
+      "target": "l3",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 9
+}

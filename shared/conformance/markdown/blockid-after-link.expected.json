@@ -1,0 +1,27 @@
+{
+  "title": "blockid-after-link",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "Note",
+      "heading": "",
+      "block": "abc",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [
+    {
+      "line": 1,
+      "id": "real"
+    }
+  ],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 3
+}

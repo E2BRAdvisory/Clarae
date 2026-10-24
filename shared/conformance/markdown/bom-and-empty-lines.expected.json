@@ -1,0 +1,27 @@
+{
+  "title": "bom-and-empty-lines",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 4,
+      "kind": "wikilink",
+      "target": "a",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 7,
+      "name": "t"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 2
+}

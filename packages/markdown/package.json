@@ -1,0 +1,25 @@
+{
+  "name": "@nodus/markdown",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "2.0.2",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@nodus/conformance": "workspace:*",
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

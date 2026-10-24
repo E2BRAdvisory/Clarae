@@ -1,0 +1,31 @@
+{
+  "title": "link-multiple-lines",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "a",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 4,
+      "kind": "wikilink",
+      "target": "d",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 4
+}

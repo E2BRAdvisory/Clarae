@@ -1,0 +1,22 @@
+{
+  "title": "embed-in-table",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "a.png",
+      "heading": "",
+      "block": "",
+      "alias": "100",
+      "embed": true
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 2
+}

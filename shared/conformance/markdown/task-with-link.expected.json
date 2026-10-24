@@ -1,0 +1,47 @@
+{
+  "title": "task-with-link",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "Alice",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 2,
+      "kind": "external",
+      "target": "mailto:a@b.c",
+      "heading": "",
+      "block": "",
+      "alias": "x",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 1,
+      "name": "budget"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [
+    {
+      "line": 1,
+      "state": " ",
+      "text": "call [[Alice]] about #budget"
+    },
+    {
+      "line": 2,
+      "state": "x",
+      "text": "email [x](mailto:a@b.c)"
+    }
+  ],
+  "footnotes": [],
+  "wordCount": 7
+}

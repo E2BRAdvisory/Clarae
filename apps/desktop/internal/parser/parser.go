@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -110,6 +111,9 @@ func Parse(title string, src []byte) Document {
 		}
 		switch v := n.(type) {
 		case *ast.Heading:
+			if v.Lines().Len() == 0 {
+				break // empty heading ("#"): nothing to report
+			}
 			line := lineOf(body, v.Lines().At(0).Start)
 			doc.Headings = append(doc.Headings, Heading{Level: v.Level, Text: string(headingText(v, body)), Line: line + bodyLineOffset})
 		case *ast.FencedCodeBlock, *ast.CodeBlock:
@@ -121,7 +125,8 @@ func Parse(title string, src []byte) Document {
 	// them explicitly by scanning for fences.
 	markFenceDelimiters(lines, codeLines)
 
-	inMath := false
+	// Block-level states that span lines: %%comments%% and $$display math$$.
+	inMath, inComment := false, false
 	lineStart := len(src) - len(body)
 	for i, raw := range lines {
 		base := lineStart
@@ -131,17 +136,9 @@ func Parse(title string, src []byte) Document {
 			continue
 		}
 		line := string(raw)
-		// $$ … $$ display math: its content is never links or tags.
-		if n := strings.Count(line, "$$"); n > 0 {
-			if n%2 == 1 {
-				inMath = !inMath
-			}
-			continue
-		}
-		if inMath {
-			continue
-		}
-		scanLine(&doc, line, lineNo, base)
+		hidden := inMath || inComment // the line starts inside a comment or math block
+		visible := maskBlocks(stripInlineCode(line), &inMath, &inComment)
+		scanLine(&doc, line, visible, lineNo, base, hidden)
 	}
 	doc.WordCount = countWords(body)
 	return doc
@@ -195,6 +192,12 @@ func markFenceDelimiters(lines [][]byte, codeLines []bool) {
 
 // --- frontmatter ----------------------------------------------------------
 
+// SplitFrontmatter is the exported form of splitFrontmatter for packages that
+// edit the block (properties).
+func SplitFrontmatter(src []byte) (body []byte, bodyLineOffset int, fm []byte) {
+	return splitFrontmatter(src)
+}
+
 // splitFrontmatter separates a leading YAML block delimited by "---" lines.
 // bodyLineOffset is the number of file lines the block occupies (so body
 // line n is file line n+offset); fm is the YAML between the delimiters.
@@ -247,9 +250,34 @@ func parseFrontmatter(doc *Document, fm []byte) {
 		case "cssclasses", "cssclass":
 			// Ignored by design (D-01: no custom CSS).
 		default:
-			doc.Properties[k] = v
+			doc.Properties[k] = normalizeYAML(v)
 		}
 	}
+}
+
+// normalizeYAML maps YAML timestamps to the strings the TypeScript side sees:
+// "2006-01-02" for plain dates, RFC 3339 when a time of day is present.
+func normalizeYAML(v any) any {
+	switch t := v.(type) {
+	case time.Time:
+		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
+			return t.Format("2006-01-02")
+		}
+		return t.UTC().Format(time.RFC3339)
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = normalizeYAML(e)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			out[k] = normalizeYAML(e)
+		}
+		return out
+	}
+	return v
 }
 
 func frontmatterKeyLine(fm []byte, key string) int {
@@ -284,21 +312,25 @@ var (
 	mdLinkRe   = regexp.MustCompile(`(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)`)
 	tagRe      = regexp.MustCompile(`(^|[\s(\[{,;])#([\p{L}\p{N}_\-/]+)`)
 	blockIDRe  = regexp.MustCompile(`\s\^([A-Za-z0-9\-]+)\s*$`)
-	taskRe     = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[(.)\]\s*(.*)$`)
+	taskRe     = regexp.MustCompile(`^\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+\[(.)\]\s*(.*)$`)
 	footnoteRe = regexp.MustCompile(`^\[\^([^\]]+)\]:`)
 	urlRe      = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.\-]*://[^\s<>)]+`)
 )
 
-func scanLine(doc *Document, line string, lineNo, base int) {
-	// Strip inline code, comments and URLs so their content is not scanned.
-	clean := stripInlineCode(line)
-	clean = stripComments(clean)
+// scanLine extracts the inline elements of one line. clean is the line with
+// code spans, comments and math blanked (same byte length); line is the raw
+// text, used for list-level constructs; startedHidden marks a line that begins
+// inside a comment or math block.
+func scanLine(doc *Document, line, clean string, lineNo, base int, startedHidden bool) {
 	type positioned struct {
 		col  int
 		link Link
 	}
 	var found []positioned
 	for _, m := range wikilinkRe.FindAllStringSubmatchIndex(clean, -1) {
+		if m[0] > 0 && clean[m[0]-1] == '\\' {
+			continue // escaped: \[[not a link]]
+		}
 		l := parseWikilink(clean[m[4]:m[5]], m[3] > m[2], lineNo)
 		l.Start, l.End = base+m[0], base+m[1]
 		l.TargetStart, l.TargetEnd = wikiTargetSpan(clean, m[4], m[5], base)
@@ -310,7 +342,7 @@ func scanLine(doc *Document, line string, lineNo, base int) {
 	for _, m := range mdLinkRe.FindAllStringSubmatchIndex(noWiki, -1) {
 		target := noWiki[m[6]:m[7]]
 		kind := LinkMarkdown
-		if urlRe.MatchString(target) {
+		if isExternal(target) {
 			kind = LinkExternal
 		}
 		tEnd := m[7]
@@ -336,11 +368,67 @@ func scanLine(doc *Document, line string, lineNo, base int) {
 	if m := blockIDRe.FindStringSubmatch(clean); m != nil {
 		doc.BlockIDs = append(doc.BlockIDs, BlockID{Line: lineNo, ID: m[1]})
 	}
+	if startedHidden {
+		return
+	}
 	if m := taskRe.FindStringSubmatch(line); m != nil {
 		doc.Tasks = append(doc.Tasks, Task{Line: lineNo, State: m[1], Text: strings.TrimSpace(m[2])})
 	}
 	if m := footnoteRe.FindStringSubmatch(line); m != nil {
 		doc.Footnotes = append(doc.Footnotes, m[1])
+	}
+}
+
+var schemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]+:`)
+
+// isExternal reports whether a Markdown link target is a URL (https://…,
+// mailto:…) rather than a vault path; one-letter schemes are drive letters.
+func isExternal(target string) bool { return schemeRe.MatchString(target) }
+
+// maskBlocks blanks (keeping byte length) everything inside %%…%% comments and
+// $$…$$ math, updating the states that carry over to the next line. An unclosed
+// block runs to the end of the document.
+func maskBlocks(s string, inMath, inComment *bool) string {
+	b := []byte(s)
+	p := 0
+	for p < len(b) {
+		switch {
+		case *inComment || *inMath:
+			delim := "%%"
+			if *inMath {
+				delim = "$$"
+			}
+			end := strings.Index(string(b[p:]), delim)
+			if end < 0 {
+				blank(b[p:])
+				return string(b)
+			}
+			blank(b[p : p+end+2])
+			p += end + 2
+			*inComment, *inMath = false, false
+		default:
+			rest := string(b[p:])
+			c, m := strings.Index(rest, "%%"), strings.Index(rest, "$$")
+			if c < 0 && m < 0 {
+				return string(b)
+			}
+			if m < 0 || (c >= 0 && c < m) {
+				*inComment = true
+				blank(b[p+c : p+c+2])
+				p += c + 2
+			} else {
+				*inMath = true
+				blank(b[p+m : p+m+2])
+				p += m + 2
+			}
+		}
+	}
+	return string(b)
+}
+
+func blank(b []byte) {
+	for i := range b {
+		b[i] = ' '
 	}
 }
 
@@ -397,20 +485,6 @@ func stripInlineCode(s string) string {
 		}
 	}
 	return b.String()
-}
-
-func stripComments(s string) string {
-	for {
-		start := strings.Index(s, "%%")
-		if start < 0 {
-			return s
-		}
-		end := strings.Index(s[start+2:], "%%")
-		if end < 0 {
-			return s[:start]
-		}
-		s = s[:start] + strings.Repeat(" ", end+4) + s[start+2+end+2:]
-	}
 }
 
 // isValidTag applies Obsidian's rule: at least one non-numeric character.

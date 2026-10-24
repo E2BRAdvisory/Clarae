@@ -1,0 +1,36 @@
+{
+  "title": "table-links",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "x",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    },
+    {
+      "line": 4,
+      "kind": "markdown",
+      "target": "m.md",
+      "heading": "",
+      "block": "",
+      "alias": "m",
+      "embed": false
+    }
+  ],
+  "tags": [
+    {
+      "line": 3,
+      "name": "t"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 6
+}

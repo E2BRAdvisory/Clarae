@@ -1,0 +1,23 @@
+{
+  "title": "quote-task",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [
+    {
+      "line": 1,
+      "state": " ",
+      "text": "in quote"
+    },
+    {
+      "line": 2,
+      "state": "x",
+      "text": "done in quote"
+    }
+  ],
+  "footnotes": [],
+  "wordCount": 6
+}

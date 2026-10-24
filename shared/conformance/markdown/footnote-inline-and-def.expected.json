@@ -1,0 +1,24 @@
+{
+  "title": "footnote-inline-and-def",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 3,
+      "kind": "wikilink",
+      "target": "link",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [
+    "x"
+  ],
+  "wordCount": 7
+}

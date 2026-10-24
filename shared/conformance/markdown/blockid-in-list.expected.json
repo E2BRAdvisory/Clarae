@@ -1,0 +1,25 @@
+{
+  "title": "blockid-in-list",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [],
+  "blockIds": [
+    {
+      "line": 1,
+      "id": "id-1"
+    },
+    {
+      "line": 2,
+      "id": "id2"
+    },
+    {
+      "line": 3,
+      "id": "q1"
+    }
+  ],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 8
+}

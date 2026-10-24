@@ -1,0 +1,25 @@
+{
+  "title": "frontmatter-dates",
+  "aliases": [],
+  "properties": {
+    "done": false,
+    "due": "2026-12-01",
+    "items": [
+      "a",
+      2,
+      true
+    ],
+    "nested": {
+      "k": "v"
+    },
+    "ratio": 0.5,
+    "when": "2026-12-01T10:30:00Z"
+  },
+  "headings": [],
+  "links": [],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 1
+}

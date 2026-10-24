@@ -1,0 +1,33 @@
+{
+  "title": "frontmatter-not-first",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    {
+      "level": 2,
+      "text": "Intro",
+      "line": 1
+    },
+    {
+      "level": 2,
+      "text": "tags: [no]",
+      "line": 3
+    }
+  ],
+  "links": [
+    {
+      "line": 5,
+      "kind": "wikilink",
+      "target": "y",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 4
+}

@@ -1,0 +1,45 @@
+{
+  "title": "tag-edge-chars",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [],
+  "tags": [
+    {
+      "line": 1,
+      "name": "a"
+    },
+    {
+      "line": 1,
+      "name": "a"
+    },
+    {
+      "line": 1,
+      "name": "a/b/"
+    },
+    {
+      "line": 1,
+      "name": "-x"
+    },
+    {
+      "line": 1,
+      "name": "_y"
+    },
+    {
+      "line": 1,
+      "name": "z-"
+    },
+    {
+      "line": 1,
+      "name": "paren"
+    },
+    {
+      "line": 1,
+      "name": "1/a"
+    }
+  ],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 10
+}
