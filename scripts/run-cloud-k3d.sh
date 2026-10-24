@@ -128,6 +128,29 @@ else
     -p "18080:18080@loadbalancer" -p "9000:9000@loadbalancer" >/dev/null \
     || die "cluster creation failed (ports 18081, 18082, 18080, 9000 free?)"
 fi
+# After a Docker restart (or a load-balancer recreation by "k3d cluster edit") the serverlb
+# container can come back attached to no network: nginx then cannot resolve the server node and
+# crash-loops, so the API never answers. Reattach it and restart it.
+lb="k3d-$CLUSTER-serverlb"
+if docker inspect "$lb" >/dev/null 2>&1 \
+  && [ -z "$(docker inspect "$lb" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null)" ]; then
+  log "Reattaching $lb to the cluster network"
+  docker network connect "k3d-$CLUSTER" "$lb" >/dev/null 2>&1 || true
+  docker restart "$lb" >/dev/null 2>&1 || true
+fi
+# The API server is published on a random host port that changes whenever the cluster's load
+# balancer is recreated (start after a reboot or Docker restart, port edits above): refresh the
+# kubeconfig entry, then wait until the API answers instead of failing with "connection refused".
+k3d kubeconfig merge "$CLUSTER" --kubeconfig-merge-default --kubeconfig-switch-context=false >/dev/null 2>&1 || true
+log "Waiting for the Kubernetes API of '$CLUSTER'"
+api_ready=""
+for _ in $(seq 1 60); do
+  if kubectl --context "$CTX" get --raw /readyz >/dev/null 2>&1; then api_ready=1; break; fi
+  sleep 2
+  k3d kubeconfig merge "$CLUSTER" --kubeconfig-merge-default --kubeconfig-switch-context=false >/dev/null 2>&1 || true
+done
+[ -n "$api_ready" ] || die "the Kubernetes API of '$CLUSTER' does not answer (docker ps | grep k3d-$CLUSTER; k3d cluster stop $CLUSTER && k3d cluster start $CLUSTER)"
+ok "Kubernetes API ready"
 kubectl --context "$CTX" get ns "$NS" >/dev/null 2>&1 || kubectl --context "$CTX" create ns "$NS" >/dev/null
 
 # Pods resolve the public Keycloak host to its fixed ClusterIP through a dedicated CoreDNS
