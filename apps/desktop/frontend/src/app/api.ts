@@ -11,6 +11,7 @@ import * as TagsAPI from '../../wailsjs/go/app/TagsAPI';
 import * as PropertiesAPI from '../../wailsjs/go/app/PropertiesAPI';
 import * as SyncAPI from '../../wailsjs/go/app/SyncAPI';
 import * as VaultCryptoAPI from '../../wailsjs/go/app/VaultCryptoAPI';
+import * as DrawingAPI from '../../wailsjs/go/app/DrawingAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import type { app, auth, links, search, sync, vault } from '../../wailsjs/go/models';
 
@@ -98,6 +99,13 @@ export const api = {
       VaultAPI.ReadBinary(vaultId, path),
     saveAttachment: (vaultId: string, dir: string, name: string, base64: string): Promise<string> =>
       VaultAPI.SaveAttachment(vaultId, dir, name, base64),
+  },
+  drawing: {
+    /** SVG cached for a drawing content hash ("" when there is none). */
+    readPreview: (vaultId: string, hash: string): Promise<string> =>
+      DrawingAPI.ReadPreview(vaultId, hash),
+    savePreview: (vaultId: string, hash: string, svg: string): Promise<void> =>
+      DrawingAPI.SavePreview(vaultId, hash, svg),
   },
   search: {
     query: (

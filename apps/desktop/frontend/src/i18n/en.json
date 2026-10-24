@@ -36,7 +36,9 @@
     "sort": "Sort files",
     "sortName": "Name (A→Z)",
     "sortNameDesc": "Name (Z→A)",
-    "sortModified": "Modified"
+    "sortModified": "Modified",
+    "newDrawing": "New drawing",
+    "newCanvas": "New canvas"
   },
   "search": {
     "placeholder": "Search…  (file: path: tag: line: task: [prop:value] /regex/)",
@@ -138,7 +140,9 @@
     "title": "Backlinks",
     "none": "No backlinks",
     "mentions": "Unlinked mentions",
-    "line": "line {{n}}"
+    "line": "line {{n}}",
+    "drawing": "Drawing: {{name}}",
+    "canvas": "Canvas: {{name}}"
   },
   "tags": {
     "none": "No tags in this vault"
@@ -176,7 +180,9 @@
   },
   "dialog": {
     "ok": "OK",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "filter": "Filter…",
+    "nothing": "Nothing matches"
   },
   "palette": {
     "title": "Command palette",
@@ -248,7 +254,10 @@
     "sync_conflicts": "Resolve sync conflicts",
     "sync_history": "Note version history",
     "sync_settings": "Sync settings",
-    "sync_unlock": "Unlock encrypted vault"
+    "sync_unlock": "Unlock encrypted vault",
+    "drawing_new": "New drawing",
+    "drawing_insert": "Insert drawing",
+    "canvas_new": "New canvas"
   },
   "sync": {
     "title": "Sync",
@@ -366,5 +375,52 @@
     "diskUnencrypted": "The disk of this computer does not look encrypted. Your notes are stored in clear text here: turn on FileVault / BitLocker / disk encryption.",
     "kind_private": "private",
     "kind_shared": "shared"
+  },
+  "drawing": {
+    "loading": "Loading the drawing editor…",
+    "export": "Export",
+    "scale": "Scale",
+    "background": "Include the background",
+    "copy": "Copy to clipboard",
+    "saveToVault": "Save in the vault",
+    "exported": "Saved as {{path}}",
+    "zen": "Zen",
+    "present": "Present",
+    "tools": "Drawing tools",
+    "invalid": "This file is not a valid Excalidraw drawing: {{error}}",
+    "tooLarge": "This drawing is larger than 10 MB: saving and syncing may be slow. Consider splitting it.",
+    "insert": "Insert drawing",
+    "none": "There are no drawings in this vault yet."
+  },
+  "canvas": {
+    "tools": "Canvas tools",
+    "text": "Text",
+    "note": "Note",
+    "media": "Media",
+    "link": "Link",
+    "group": "Group",
+    "addText": "Add a text card",
+    "addNote": "Add a note",
+    "addMedia": "Add a media file",
+    "addLink": "Add a web link",
+    "addGroup": "Add a group",
+    "url": "Address",
+    "badUrl": "Only http, https, mailto and tel addresses can be added.",
+    "undo": "Undo",
+    "redo": "Redo",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to content",
+    "color": "Color",
+    "noColor": "No color",
+    "delete": "Delete selection",
+    "board": "Canvas",
+    "connect": "Drag to connect",
+    "label": "Label",
+    "edgeLabel": "Connection label",
+    "editText": "Card text",
+    "empty": "Double-click to write",
+    "hint": "Double-click the board to add a card",
+    "invalid": "This file is not a valid canvas: {{error}}"
   }
 }

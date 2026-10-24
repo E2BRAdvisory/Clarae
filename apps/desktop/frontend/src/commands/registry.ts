@@ -8,6 +8,8 @@ import { api } from '../app/api';
 import { getActiveEditor } from '../editor/registry';
 import * as fmt from '../editor/commands';
 import { dialog } from '../ui/dialogs';
+import { newCanvas } from '../canvas/commands';
+import { insertDrawing, newDrawing } from '../drawing/commands';
 import { infoOf, useSync } from '../state/sync';
 import { useAppStore } from '../state/store';
 import { invalidateVault } from '../app/actions';
@@ -106,6 +108,27 @@ export const commands: Command[] = [
     defaults: ['Mod-Alt-n'],
     enabled: hasVault,
     run: () => guard(createNote({ newTab: true })),
+  },
+  {
+    id: 'drawing:new',
+    group: 'file',
+    defaults: [],
+    enabled: hasVault,
+    run: () => guard(newDrawing()),
+  },
+  {
+    id: 'canvas:new',
+    group: 'file',
+    defaults: [],
+    enabled: hasVault,
+    run: () => guard(newCanvas()),
+  },
+  {
+    id: 'drawing:insert',
+    group: 'editor',
+    defaults: [],
+    enabled: editorMode,
+    run: () => guard(insertDrawing()),
   },
   { id: 'note:rename', group: 'file', defaults: ['F2'], enabled: hasNote, run: renameActive },
   { id: 'note:delete', group: 'file', defaults: [], enabled: hasNote, run: deleteActive },

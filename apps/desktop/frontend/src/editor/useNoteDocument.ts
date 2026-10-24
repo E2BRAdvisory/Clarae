@@ -25,14 +25,19 @@ export interface NoteDocument {
   overwrite: () => Promise<void>;
 }
 
-const DEBOUNCE_MS = 500;
+/** Default autosave delay; drawings use a longer one (they are written whole). */
+export const NOTE_DEBOUNCE_MS = 500;
 
 /**
  * Loads a note and keeps it saved. Writes carry the hash of the last read
  * (WriteNote expectedHash), so an external edit is detected instead of
  * overwritten; the user then chooses to reload or overwrite.
  */
-export function useNoteDocument(vaultId: string, path: string): NoteDocument {
+export function useNoteDocument(
+  vaultId: string,
+  path: string,
+  debounceMs: number = NOTE_DEBOUNCE_MS,
+): NoteDocument {
   const [state, setState] = useState<{
     status: NoteDocument['status'];
     content: string;
@@ -119,9 +124,9 @@ export function useNoteDocument(vaultId: string, path: string): NoteDocument {
       dirty.current = true;
       setSave((s) => (s === 'conflict' ? s : 'dirty'));
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => void doSave(false), DEBOUNCE_MS);
+      timer.current = setTimeout(() => void doSave(false), debounceMs);
     },
-    [doSave],
+    [doSave, debounceMs],
   );
 
   const flush = useCallback(async () => {

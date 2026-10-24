@@ -93,4 +93,38 @@ describe('embeds', () => {
     await renderEmbedInto(missing, spec('Ghost'), deps());
     expect(missing.className).toContain('embed-missing');
   });
+
+  it('renders a drawing from its preview and opens it on double click', async () => {
+    const open = vi.fn();
+    const el = document.createElement('span');
+    const withDrawing: EmbedBackend = {
+      ...backend,
+      resolve: (_f, t) => Promise.resolve(t),
+      drawingPreview: (p) => Promise.resolve(`blob:preview-of-${p}`),
+    };
+    await renderEmbedInto(el, spec('Sketch.excalidraw', { alias: '300' }), {
+      ...deps({ backend: withDrawing }),
+      openLink: open,
+    });
+    const img = el.querySelector('img.embed-drawing');
+    expect(img?.getAttribute('src')).toBe('blob:preview-of-Sketch.excalidraw');
+    expect(img?.getAttribute('width')).toBe('300');
+    img?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({ target: 'Sketch.excalidraw' }),
+      false,
+    );
+  });
+
+  it('falls back to the file name when a drawing has no preview support', async () => {
+    const el = document.createElement('span');
+    await renderEmbedInto(
+      el,
+      spec('Sketch.excalidraw'),
+      deps({
+        backend: { ...backend, resolve: (_f, t) => Promise.resolve(t) },
+      }),
+    );
+    expect(el.textContent).toBe('Sketch.excalidraw');
+  });
 });

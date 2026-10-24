@@ -12,6 +12,8 @@ import { renderMath, renderMermaid } from '../embeds/typeset';
 import { backendFor, ReadingView } from '../reading/ReadingView';
 import { commandForEvent } from '../commands/registry';
 import { useSettings, type NoteMode } from '../state/settings';
+import { CanvasView } from '../canvas/CanvasView';
+import { DrawingView } from '../drawing/DrawingView';
 import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
 import { isSafeExternalUrl } from '../util/sanitize';
@@ -79,7 +81,10 @@ interface Props {
 
 export function NoteView({ vaultId, pane, tab, visible }: Props) {
   const { t } = useTranslation();
-  if (classify(tab.path) !== 'note') return <AttachmentView vaultId={vaultId} path={tab.path} />;
+  const kind = classify(tab.path);
+  if (kind === 'drawing') return <DrawingView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (kind === 'canvas') return <CanvasView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (kind !== 'note') return <AttachmentView vaultId={vaultId} path={tab.path} />;
   return (
     <MarkdownNote key={tab.path} vaultId={vaultId} pane={pane} tab={tab} visible={visible} t={t} />
   );

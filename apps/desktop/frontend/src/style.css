@@ -1386,3 +1386,236 @@ textarea.merge {
   flex-direction: column;
   gap: 4px;
 }
+
+/* ---- drawings (M3) ---- */
+.drawing-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.drawing-canvas .excalidraw {
+  height: 100%;
+}
+.embed-drawing-wrap {
+  display: block;
+}
+.embed-drawing {
+  max-width: 100%;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pick-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+.pick-list button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.pick-list button:hover,
+.pick-list button:focus-visible {
+  background: var(--bg-hover, var(--bg-secondary));
+}
+
+/* ---- canvas (M3) ---- */
+.cv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.cv-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 6px;
+}
+.cv-zoom {
+  min-width: 42px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cv-colors {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cv-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  padding: 0;
+}
+.cv-swatch:disabled {
+  opacity: 0.35;
+}
+.cv-board {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  touch-action: none;
+  background-color: var(--bg-primary);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+  user-select: none;
+}
+.cv-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+.cv-node {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+.cv-node.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cv-group {
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  border-style: dashed;
+}
+.cv-group-label {
+  position: absolute;
+  top: -26px;
+  left: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.cv-group-input {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  min-width: 120px;
+}
+.cv-markdown,
+.cv-embed,
+.cv-text-input,
+.cv-link,
+.cv-placeholder {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+  user-select: text;
+}
+.cv-text-input {
+  width: 100%;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  box-sizing: border-box;
+  outline: none;
+}
+.cv-file-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 10px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cv-embed img {
+  max-width: 100%;
+}
+.cv-link {
+  display: block;
+  word-break: break-all;
+}
+.cv-resize {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--accent);
+  cursor: nwse-resize;
+}
+.cv-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  border: 2px solid var(--accent);
+  cursor: crosshair;
+}
+.cv-handle.top {
+  top: -7px;
+  left: calc(50% - 6px);
+}
+.cv-handle.bottom {
+  bottom: -7px;
+  left: calc(50% - 6px);
+}
+.cv-handle.left {
+  left: -7px;
+  top: calc(50% - 6px);
+}
+.cv-handle.right {
+  right: -7px;
+  top: calc(50% - 6px);
+}
+.cv-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.cv-edges g {
+  pointer-events: auto;
+}
+.cv-edge-label {
+  fill: var(--text-normal, currentColor);
+  font-size: 13px;
+  paint-order: stroke;
+  stroke: var(--bg-primary);
+  stroke-width: 4px;
+  pointer-events: none;
+}
+.cv-edge-draft {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.cv-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.embed-canvas {
+  max-width: 100%;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}

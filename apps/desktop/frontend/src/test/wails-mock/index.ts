@@ -65,6 +65,8 @@ export interface MockSync {
 
 export interface WailsMock {
   sync: MockSync;
+  /** SVG previews of drawings by content hash (DrawingAPI cache). */
+  previews: Map<string, string>;
   vaults: Map<string, MockVault>;
   recent: VaultInfo[];
   settings: AppSettings;
@@ -84,6 +86,24 @@ export function hashOf(s: string): string {
 }
 
 const isNote = (p: string): boolean => p.endsWith('.md');
+const isStructured = (p: string): boolean => /\.(excalidraw|canvas)$/.test(p);
+
+/** The Markdown an indexer would read out of a drawing or canvas: its texts, links and files. */
+function structuredSource(path: string, src: string): string {
+  try {
+    const o = JSON.parse(src) as {
+      elements?: { text?: string; link?: string }[];
+      nodes?: { type?: string; text?: string; file?: string }[];
+    };
+    const parts: string[] = [];
+    for (const e of o.elements ?? []) parts.push(e.text ?? '', e.link ?? '');
+    for (const n of o.nodes ?? [])
+      parts.push(n.type === 'file' ? `![[${n.file ?? ''}]]` : (n.text ?? ''));
+    return parts.filter(Boolean).join('\n\n');
+  } catch {
+    return '';
+  }
+}
 const baseName = (p: string): string => p.slice(p.lastIndexOf('/') + 1);
 const stem = (p: string): string => baseName(p).replace(/\.md$/, '');
 const dirOf = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
@@ -209,6 +229,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       disk: 'encrypted',
       secrets: new Map(),
     },
+    previews: new Map<string, string>(),
     vaults: seed?.vaults ?? new Map<string, MockVault>(),
     recent: seed?.recent ?? [],
     settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
@@ -234,8 +255,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     mock.emit('vault:file-changed', { vaultId: id, paths });
 
   const outgoing = (v: MockVault, path: string): NoteLink[] => {
-    const src = v.files.get(path);
-    if (src === undefined) return [];
+    const raw = v.files.get(path);
+    if (raw === undefined) return [];
+    const src = isStructured(path) ? structuredSource(path, raw) : raw;
     return extract(stem(path), src)
       .links.filter((l) => l.kind !== 'external')
       .map((l) => {
@@ -411,7 +433,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     Backlinks: (id: string, path: string): Promise<NoteLink[]> => {
       const v = vaultOf(id);
       const out: NoteLink[] = [];
-      for (const p of [...v.files.keys()].filter(isNote).sort()) {
+      for (const p of [...v.files.keys()].filter((f) => isNote(f) || isStructured(f)).sort()) {
         if (p === path) continue;
         for (const l of outgoing(v, p)) if (l.path === path) out.push({ ...l, path: p });
       }
@@ -904,6 +926,15 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     Usage: (): Promise<UsageInfo> => requireSignIn() ?? Promise.resolve(sy.usage),
   };
 
+  const DrawingAPI = {
+    ReadPreview: (_id: string, hash: string): Promise<string> =>
+      Promise.resolve(mock.previews.get(hash) ?? ''),
+    SavePreview: (_id: string, hash: string, svg: string): Promise<void> => {
+      mock.previews.set(hash, svg);
+      return Promise.resolve();
+    },
+  };
+
   const VaultCryptoAPI = {
     Unlock: (id: string, secret: string, isRecovery: boolean): Promise<boolean> => {
       const l = linkOf(id);
@@ -965,6 +996,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       PropertiesAPI,
       SyncAPI,
       VaultCryptoAPI,
+      DrawingAPI,
     },
   };
   w['runtime'] = {

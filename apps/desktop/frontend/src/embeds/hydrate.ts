@@ -13,6 +13,10 @@ export interface EmbedBackend {
   resolve(from: string, target: string): Promise<string>;
   readNote(path: string): Promise<string>;
   readBinary(path: string): Promise<BinaryContent>;
+  /** Blob URL of the SVG preview of a drawing (cached by content hash). */
+  drawingPreview?(path: string): Promise<string>;
+  /** Blob URL of the static picture of a canvas. */
+  canvasPreview?(path: string): Promise<string>;
 }
 
 export interface EmbedDeps {
@@ -116,8 +120,41 @@ export async function renderEmbedInto(
         });
         return;
       }
-      case 'drawing':
-      case 'canvas':
+      case 'drawing': {
+        const url = await deps.backend.drawingPreview?.(path);
+        if (!url) return notice(el, 'embed-other', path);
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = path.split('/').pop() ?? path;
+        img.className = 'embed-drawing';
+        const { width, height } = parseSize(spec.alias);
+        if (width) img.width = width;
+        if (height) img.height = height;
+        // Double click opens the drawing in the editor.
+        img.addEventListener('dblclick', () =>
+          deps.openLink?.({ target: path, heading: '', block: '', alias: '', embed: false }, false),
+        );
+        el.className = 'embed-drawing-wrap';
+        el.replaceChildren(img);
+        return;
+      }
+      case 'canvas': {
+        const url = await deps.backend.canvasPreview?.(path);
+        if (!url) return notice(el, 'embed-other', path);
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = path.split('/').pop() ?? path;
+        img.className = 'embed-canvas';
+        const { width, height } = parseSize(spec.alias);
+        if (width) img.width = width;
+        if (height) img.height = height;
+        img.addEventListener('dblclick', () =>
+          deps.openLink?.({ target: path, heading: '', block: '', alias: '', embed: false }, false),
+        );
+        el.className = 'embed-drawing-wrap';
+        el.replaceChildren(img);
+        return;
+      }
       case 'base':
         return notice(el, 'embed-pending', `${path} (${kind} embeds arrive in a later milestone)`);
       default:

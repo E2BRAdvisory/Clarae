@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { canvasPreviewUrl } from '../canvas/preview';
+import { drawingPreviewUrl } from '../drawing/preview';
 import { api } from '../app/api';
 import { hydrate, type EmbedBackend } from '../embeds/hydrate';
 import type { LinkSpec } from '../editor/context';
@@ -33,6 +35,8 @@ export function backendFor(vaultId: string): EmbedBackend {
     resolve: (from, target) => api.links.resolve(vaultId, from, target),
     readNote: async (p) => (await api.vault.readNote(vaultId, p)).content,
     readBinary: (p) => api.vault.readBinary(vaultId, p),
+    drawingPreview: (p) => drawingPreviewUrl(vaultId, p),
+    canvasPreview: (p) => canvasPreviewUrl(vaultId, p),
   };
 }
 

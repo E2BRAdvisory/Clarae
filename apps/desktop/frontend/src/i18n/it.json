@@ -36,7 +36,9 @@
     "sort": "Ordina file",
     "sortName": "Nome (A→Z)",
     "sortNameDesc": "Nome (Z→A)",
-    "sortModified": "Modificato"
+    "sortModified": "Modificato",
+    "newDrawing": "Nuovo disegno",
+    "newCanvas": "Nuova lavagna"
   },
   "search": {
     "placeholder": "Cerca…  (file: path: tag: line: task: [prop:valore] /regex/)",
@@ -138,7 +140,9 @@
     "title": "Backlink",
     "none": "Nessun backlink",
     "mentions": "Menzioni non collegate",
-    "line": "riga {{n}}"
+    "line": "riga {{n}}",
+    "drawing": "Disegno: {{name}}",
+    "canvas": "Lavagna: {{name}}"
   },
   "tags": {
     "none": "Nessun tag in questo vault"
@@ -176,7 +180,9 @@
   },
   "dialog": {
     "ok": "OK",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "filter": "Filtra…",
+    "nothing": "Nessun risultato"
   },
   "palette": {
     "title": "Palette comandi",
@@ -248,7 +254,10 @@
     "sync_conflicts": "Risolvi conflitti di sincronizzazione",
     "sync_history": "Cronologia versioni della nota",
     "sync_settings": "Impostazioni di sincronizzazione",
-    "sync_unlock": "Sblocca vault cifrato"
+    "sync_unlock": "Sblocca vault cifrato",
+    "drawing_new": "Nuovo disegno",
+    "drawing_insert": "Inserisci disegno",
+    "canvas_new": "Nuova lavagna"
   },
   "sync": {
     "title": "Sync",
@@ -366,5 +375,52 @@
     "diskUnencrypted": "Il disco di questo computer non sembra cifrato. Le note sono salvate in chiaro: attiva FileVault / BitLocker / la cifratura del disco.",
     "kind_private": "privato",
     "kind_shared": "condiviso"
+  },
+  "drawing": {
+    "loading": "Caricamento dell'editor di disegni…",
+    "export": "Esporta",
+    "scale": "Scala",
+    "background": "Includi lo sfondo",
+    "copy": "Copia negli appunti",
+    "saveToVault": "Salva nel vault",
+    "exported": "Salvato come {{path}}",
+    "zen": "Zen",
+    "present": "Presenta",
+    "tools": "Strumenti del disegno",
+    "invalid": "Questo file non è un disegno Excalidraw valido: {{error}}",
+    "tooLarge": "Questo disegno supera i 10 MB: salvataggio e sincronizzazione possono essere lenti. Valuta di dividerlo.",
+    "insert": "Inserisci disegno",
+    "none": "Non ci sono ancora disegni in questo vault."
+  },
+  "canvas": {
+    "tools": "Strumenti della lavagna",
+    "text": "Testo",
+    "note": "Nota",
+    "media": "Media",
+    "link": "Link",
+    "group": "Gruppo",
+    "addText": "Aggiungi una scheda di testo",
+    "addNote": "Aggiungi una nota",
+    "addMedia": "Aggiungi un file multimediale",
+    "addLink": "Aggiungi un link web",
+    "addGroup": "Aggiungi un gruppo",
+    "url": "Indirizzo",
+    "badUrl": "Si possono aggiungere solo indirizzi http, https, mailto e tel.",
+    "undo": "Annulla",
+    "redo": "Ripristina",
+    "zoomIn": "Ingrandisci",
+    "zoomOut": "Riduci",
+    "fit": "Adatta al contenuto",
+    "color": "Colore",
+    "noColor": "Nessun colore",
+    "delete": "Elimina la selezione",
+    "board": "Lavagna",
+    "connect": "Trascina per collegare",
+    "label": "Etichetta",
+    "edgeLabel": "Etichetta del collegamento",
+    "editText": "Testo della scheda",
+    "empty": "Doppio clic per scrivere",
+    "hint": "Doppio clic sulla lavagna per aggiungere una scheda",
+    "invalid": "Questo file non è una lavagna valida: {{error}}"
   }
 }

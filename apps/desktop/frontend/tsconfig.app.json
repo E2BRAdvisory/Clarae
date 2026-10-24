@@ -6,7 +6,8 @@
     "types": ["vite/client", "vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@excalidraw/utils/*": ["../../../node_modules/@excalidraw/excalidraw/dist/types/utils/*"]
     }
   },
   "include": ["src", "wailsjs"]
