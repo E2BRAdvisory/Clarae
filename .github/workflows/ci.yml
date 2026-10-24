@@ -101,6 +101,17 @@ jobs:
           go-version-file: tools/go.mod
       - run: cd services/cloud && go test -race -count=1 -tags integration ./test/...
 
+  desktop-sync-e2e:
+    name: Desktop sync e2e (two devices)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: cd apps/desktop && go test -race -count=1 -tags "integration webkit2_41" ./internal/sync/...
+
   gen-check:
     name: Generated code is up to date
     runs-on: ubuntu-24.04

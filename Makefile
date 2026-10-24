@@ -69,6 +69,13 @@ conformance: ## Shared Markdown/merge/crypto fixtures run by Go and TS
 	yarn workspace @nodus/markdown run test
 	@if [ -f $(DESKTOP)/frontend/src/test/conformance.test.ts ]; then yarn workspace @nodus/desktop-frontend exec vitest run src/test/conformance.test.ts; fi
 
+.PHONY: test-desktop-e2e test-load
+test-desktop-e2e: ## Two-device sync e2e (builds the cloud binary, PG via testcontainers)
+	cd $(DESKTOP) && go test -race -count=1 -tags integration ./internal/sync/...
+
+test-load: ## k6 load test (needs a running `make dev-cloud`; see services/cloud/test/load/README.md)
+	k6 run $(CLOUD)/test/load/sync.k6.js
+
 .PHONY: e2e
 e2e: ## Playwright (Chromium) against the in-memory Wails mock
 	yarn workspace @nodus/desktop-frontend run e2e

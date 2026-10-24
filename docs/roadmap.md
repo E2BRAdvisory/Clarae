@@ -214,6 +214,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 7. M2 — Sync (P0) (esito: multi-dispositivo affidabile, vault privati E2EE e condivisi)
 
+> **Stato: implementata (2026-10-24)** — WP1–WP8 completati; criteri di uscita verificati (e2e a 2 dispositivi in entrambi i tipi di vault, load test p95, test vector Go+TS). Dettagli e deviazioni: [ADR-0009](adr/0009-sync-protocol-details.md).
+
 ### M2-WP1 Schema e moduli cloud: vault, blob, revisioni
 
 - Migrazione `0002_vaults.sql`: `vaults`, `vault_key_envelopes`, `blobs`, `files`, `file_revisions` + trigger `vault_kind_immutable`; indici §3.2.2.
