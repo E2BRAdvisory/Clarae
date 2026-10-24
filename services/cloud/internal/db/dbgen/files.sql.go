@@ -11,6 +11,24 @@ import (
 	"github.com/google/uuid"
 )
 
+const countFilesUnderPrefix = `-- name: CountFilesUnderPrefix :one
+SELECT count(*)::int FROM files
+WHERE vault_id = $1 AND NOT is_deleted AND (path_key = $2::text OR path_key LIKE $3::text ESCAPE '\')
+`
+
+type CountFilesUnderPrefixParams struct {
+	VaultID     uuid.UUID
+	Exact       string
+	Descendants string
+}
+
+func (q *Queries) CountFilesUnderPrefix(ctx context.Context, arg CountFilesUnderPrefixParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countFilesUnderPrefix, arg.VaultID, arg.Exact, arg.Descendants)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const fileIDExists = `-- name: FileIDExists :one
 SELECT EXISTS (SELECT 1 FROM files WHERE id = $1)
 `

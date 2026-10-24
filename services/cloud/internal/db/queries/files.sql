@@ -33,3 +33,7 @@ SELECT id FROM files WHERE vault_id = $1 AND path_key = $2 AND NOT is_deleted LI
 -- Tombstones whose every revision is gone.
 DELETE FROM files f WHERE f.is_deleted AND f.vault_id = $1
   AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id);
+
+-- name: CountFilesUnderPrefix :one
+SELECT count(*)::int FROM files
+WHERE vault_id = $1 AND NOT is_deleted AND (path_key = sqlc.arg(exact)::text OR path_key LIKE sqlc.arg(descendants)::text ESCAPE '\');

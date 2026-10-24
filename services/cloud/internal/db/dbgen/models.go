@@ -31,6 +31,24 @@ type Blob struct {
 	UnreferencedSince *time.Time
 }
 
+type ConfigAssignment struct {
+	ProfileID uuid.UUID
+	GroupID   uuid.UUID
+	Priority  int32
+}
+
+type ConfigProfile struct {
+	ID          uuid.UUID
+	Name        string
+	Description *string
+	IsGlobal    bool
+	Version     int32
+	Config      []byte
+	LockedKeys  []string
+	UpdatedBy   *uuid.UUID
+	UpdatedAt   time.Time
+}
+
 type Device struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
@@ -76,11 +94,49 @@ type FileRevision struct {
 	ConflictOf  *uuid.UUID
 }
 
+type Group struct {
+	ID          uuid.UUID
+	Name        string
+	Description *string
+	CreatedAt   time.Time
+}
+
+type GroupMember struct {
+	GroupID    uuid.UUID
+	UserID     uuid.UUID
+	MemberRole string
+	AddedAt    time.Time
+}
+
 type Setting struct {
 	Key       string
 	Value     []byte
 	UpdatedBy *uuid.UUID
 	UpdatedAt time.Time
+}
+
+type Share struct {
+	ID           uuid.UUID
+	VaultID      uuid.UUID
+	ResourceType string
+	PathPrefix   *string
+	FileID       *uuid.UUID
+	DisplayName  string
+	CreatedBy    uuid.UUID
+	CreatedAt    time.Time
+	ExpiresAt    *time.Time
+	RevokedAt    *time.Time
+}
+
+type ShareGrant struct {
+	ID            uuid.UUID
+	ShareID       uuid.UUID
+	PrincipalType string
+	PrincipalID   uuid.UUID
+	Permission    string
+	Status        string
+	GrantedBy     uuid.UUID
+	CreatedAt     time.Time
 }
 
 type Upload struct {

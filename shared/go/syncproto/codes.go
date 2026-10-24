@@ -32,6 +32,7 @@ const (
 	CodeRateLimited        Code = "RATE_LIMITED"
 	CodeCursorExpired      Code = "CURSOR_EXPIRED"
 	CodeNameInUse          Code = "NAME_IN_USE"
+	CodeInvalidState       Code = "INVALID_STATE"
 	CodeInternal           Code = "INTERNAL"
 )
 
@@ -50,7 +51,7 @@ func (c Code) HTTPStatus() int {
 		return http.StatusBadRequest
 	case CodeQuotaExceeded, CodeFileTooLarge:
 		return http.StatusRequestEntityTooLarge
-	case CodeRevConflict, CodeNameInUse, CodePathCollision, CodeShareRootMove, CodeVaultEncrypted, CodeVaultKindImmutable:
+	case CodeRevConflict, CodeNameInUse, CodeInvalidState, CodePathCollision, CodeShareRootMove, CodeVaultEncrypted, CodeVaultKindImmutable:
 		return http.StatusConflict
 	case CodeBlobMissing:
 		return http.StatusUnprocessableEntity

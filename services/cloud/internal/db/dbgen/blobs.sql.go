@@ -190,6 +190,43 @@ func (q *Queries) LinkVaultBlob(ctx context.Context, arg LinkVaultBlobParams) er
 	return err
 }
 
+const listBlobFiles = `-- name: ListBlobFiles :many
+SELECT DISTINCT f.id, f.path FROM file_revisions r JOIN files f ON f.id = r.file_id
+WHERE r.vault_id = $1 AND r.blob_hash = $2
+LIMIT 500
+`
+
+type ListBlobFilesParams struct {
+	VaultID  uuid.UUID
+	BlobHash *string
+}
+
+type ListBlobFilesRow struct {
+	ID   uuid.UUID
+	Path string
+}
+
+// The files (by current path) that have a revision with this blob: what a share read is checked against.
+func (q *Queries) ListBlobFiles(ctx context.Context, arg ListBlobFilesParams) ([]ListBlobFilesRow, error) {
+	rows, err := q.db.Query(ctx, listBlobFiles, arg.VaultID, arg.BlobHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBlobFilesRow{}
+	for rows.Next() {
+		var i ListBlobFilesRow
+		if err := rows.Scan(&i.ID, &i.Path); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBlobRefCounts = `-- name: ListBlobRefCounts :many
 SELECT b.hash, b.ref_count, COUNT(r.id)::int AS actual
 FROM blobs b LEFT JOIN file_revisions r ON r.blob_hash = b.hash

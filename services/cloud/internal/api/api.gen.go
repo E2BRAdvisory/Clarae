@@ -116,6 +116,7 @@ const (
 	FILETOOLARGE       ErrorCode = "FILE_TOO_LARGE"
 	FORBIDDEN          ErrorCode = "FORBIDDEN"
 	INTERNAL           ErrorCode = "INTERNAL"
+	INVALIDSTATE       ErrorCode = "INVALID_STATE"
 	NAMEINUSE          ErrorCode = "NAME_IN_USE"
 	NOTFOUND           ErrorCode = "NOT_FOUND"
 	PATHCOLLISION      ErrorCode = "PATH_COLLISION"
@@ -144,6 +145,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case INTERNAL:
 		return true
+	case INVALIDSTATE:
+		return true
 	case NAMEINUSE:
 		return true
 	case NOTFOUND:
@@ -169,6 +172,63 @@ func (e ErrorCode) Valid() bool {
 	case VAULTENCRYPTED:
 		return true
 	case VAULTKINDIMMUTABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GrantPrincipalType.
+const (
+	GrantPrincipalTypeGroup GrantPrincipalType = "group"
+	GrantPrincipalTypeUser  GrantPrincipalType = "user"
+)
+
+// Valid indicates whether the value is a known member of the GrantPrincipalType enum.
+func (e GrantPrincipalType) Valid() bool {
+	switch e {
+	case GrantPrincipalTypeGroup:
+		return true
+	case GrantPrincipalTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GrantStatus.
+const (
+	GrantStatusAccepted GrantStatus = "accepted"
+	GrantStatusDeclined GrantStatus = "declined"
+	GrantStatusPending  GrantStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the GrantStatus enum.
+func (e GrantStatus) Valid() bool {
+	switch e {
+	case GrantStatusAccepted:
+		return true
+	case GrantStatusDeclined:
+		return true
+	case GrantStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupMembershipMemberRole.
+const (
+	GroupMembershipMemberRoleManager GroupMembershipMemberRole = "manager"
+	GroupMembershipMemberRoleMember  GroupMembershipMemberRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the GroupMembershipMemberRole enum.
+func (e GroupMembershipMemberRole) Valid() bool {
+	switch e {
+	case GroupMembershipMemberRoleManager:
+		return true
+	case GroupMembershipMemberRoleMember:
 		return true
 	default:
 		return false
@@ -232,6 +292,24 @@ func (e KeyEnvelopeKind) Valid() bool {
 	}
 }
 
+// Defines values for NewGrantPrincipalType.
+const (
+	NewGrantPrincipalTypeGroup NewGrantPrincipalType = "group"
+	NewGrantPrincipalTypeUser  NewGrantPrincipalType = "user"
+)
+
+// Valid indicates whether the value is a known member of the NewGrantPrincipalType enum.
+func (e NewGrantPrincipalType) Valid() bool {
+	switch e {
+	case NewGrantPrincipalTypeGroup:
+		return true
+	case NewGrantPrincipalTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OpResultStatus.
 const (
 	OpResultStatusAccepted OpResultStatus = "accepted"
@@ -253,18 +331,60 @@ func (e OpResultStatus) Valid() bool {
 	}
 }
 
+// Defines values for ResourceType.
+const (
+	ResourceTypeFile   ResourceType = "file"
+	ResourceTypeFolder ResourceType = "folder"
+	ResourceTypeVault  ResourceType = "vault"
+)
+
+// Valid indicates whether the value is a known member of the ResourceType enum.
+func (e ResourceType) Valid() bool {
+	switch e {
+	case ResourceTypeFile:
+		return true
+	case ResourceTypeFolder:
+		return true
+	case ResourceTypeVault:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
-	Admin Role = "admin"
-	User  Role = "user"
+	RoleAdmin Role = "admin"
+	RoleUser  Role = "user"
 )
 
 // Valid indicates whether the value is a known member of the Role enum.
 func (e Role) Valid() bool {
 	switch e {
-	case Admin:
+	case RoleAdmin:
 		return true
-	case User:
+	case RoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SharePermission.
+const (
+	SharePermissionEditor  SharePermission = "editor"
+	SharePermissionManager SharePermission = "manager"
+	SharePermissionViewer  SharePermission = "viewer"
+)
+
+// Valid indicates whether the value is a known member of the SharePermission enum.
+func (e SharePermission) Valid() bool {
+	switch e {
+	case SharePermissionEditor:
+		return true
+	case SharePermissionManager:
+		return true
+	case SharePermissionViewer:
 		return true
 	default:
 		return false
@@ -297,22 +417,22 @@ func (e UsageLevel) Valid() bool {
 
 // Defines values for UserStatus.
 const (
-	Active    UserStatus = "active"
-	Deleted   UserStatus = "deleted"
-	Pending   UserStatus = "pending"
-	Suspended UserStatus = "suspended"
+	UserStatusActive    UserStatus = "active"
+	UserStatusDeleted   UserStatus = "deleted"
+	UserStatusPending   UserStatus = "pending"
+	UserStatusSuspended UserStatus = "suspended"
 )
 
 // Valid indicates whether the value is a known member of the UserStatus enum.
 func (e UserStatus) Valid() bool {
 	switch e {
-	case Active:
+	case UserStatusActive:
 		return true
-	case Deleted:
+	case UserStatusDeleted:
 		return true
-	case Pending:
+	case UserStatusPending:
 		return true
-	case Suspended:
+	case UserStatusSuspended:
 		return true
 	default:
 		return false
@@ -331,6 +451,42 @@ func (e VaultKind) Valid() bool {
 	case Private:
 		return true
 	case Shared:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PrincipalType.
+const (
+	PrincipalTypeGroup PrincipalType = "group"
+	PrincipalTypeUser  PrincipalType = "user"
+)
+
+// Valid indicates whether the value is a known member of the PrincipalType enum.
+func (e PrincipalType) Valid() bool {
+	switch e {
+	case PrincipalTypeGroup:
+		return true
+	case PrincipalTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListSharesParamsScope.
+const (
+	Owned    ListSharesParamsScope = "owned"
+	Received ListSharesParamsScope = "received"
+)
+
+// Valid indicates whether the value is a known member of the ListSharesParamsScope enum.
+func (e ListSharesParamsScope) Valid() bool {
+	switch e {
+	case Owned:
+		return true
+	case Received:
 		return true
 	default:
 		return false
@@ -389,6 +545,9 @@ type ClientConfig struct {
 
 	// Issuer OIDC issuer (Keycloak realm URL)
 	Issuer string `json:"issuer"`
+
+	// WebClientId Public OIDC client of the Web UI (Authorization Code + PKCE)
+	WebClientId string `json:"web_client_id"`
 }
 
 // CommitOp defines model for CommitOp.
@@ -426,6 +585,17 @@ type CommitResponse struct {
 	Results []OpResult `json:"results"`
 }
 
+// CreateShare defines model for CreateShare.
+type CreateShare struct {
+	DisplayName  string              `json:"display_name"`
+	ExpiresAt    *time.Time          `json:"expires_at,omitempty"`
+	FileId       *openapi_types.UUID `json:"file_id,omitempty"`
+	Grants       *[]NewGrant         `json:"grants,omitempty"`
+	PathPrefix   *string             `json:"path_prefix,omitempty"`
+	ResourceType ResourceType        `json:"resource_type"`
+	VaultId      openapi_types.UUID  `json:"vault_id"`
+}
+
 // CreateVault defines model for CreateVault.
 type CreateVault struct {
 	// KeyEnvelopes Both the passphrase and the recovery envelope: required for private vaults, forbidden for shared ones
@@ -457,6 +627,20 @@ type DeviceRegistration struct {
 // DeviceRegistrationPlatform defines model for DeviceRegistration.Platform.
 type DeviceRegistrationPlatform string
 
+// DirectoryGroup defines model for DirectoryGroup.
+type DirectoryGroup struct {
+	Description *string            `json:"description,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+}
+
+// DirectoryUser defines model for DirectoryUser.
+type DirectoryUser struct {
+	DisplayName *string            `json:"display_name,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Username    string             `json:"username"`
+}
+
 // EffectiveConfig defines model for EffectiveConfig.
 type EffectiveConfig struct {
 	// Config Validated against api/config-profile.schema.json (M4)
@@ -469,6 +653,39 @@ type EffectiveConfig struct {
 
 // ErrorCode Application error codes (§3.1); mirrored in shared/go/syncproto
 type ErrorCode string
+
+// Grant defines model for Grant.
+type Grant struct {
+	CreatedAt     time.Time           `json:"created_at"`
+	GrantedBy     *openapi_types.UUID `json:"granted_by,omitempty"`
+	Permission    SharePermission     `json:"permission"`
+	PrincipalId   openapi_types.UUID  `json:"principal_id"`
+	PrincipalName string              `json:"principal_name"`
+	PrincipalType GrantPrincipalType  `json:"principal_type"`
+	Status        GrantStatus         `json:"status"`
+}
+
+// GrantPrincipalType defines model for Grant.PrincipalType.
+type GrantPrincipalType string
+
+// GrantInput defines model for GrantInput.
+type GrantInput struct {
+	Permission SharePermission `json:"permission"`
+}
+
+// GrantStatus defines model for GrantStatus.
+type GrantStatus string
+
+// GroupMembership defines model for GroupMembership.
+type GroupMembership struct {
+	Description *string                   `json:"description,omitempty"`
+	Id          openapi_types.UUID        `json:"id"`
+	MemberRole  GroupMembershipMemberRole `json:"member_role"`
+	Name        string                    `json:"name"`
+}
+
+// GroupMembershipMemberRole defines model for GroupMembership.MemberRole.
+type GroupMembershipMemberRole string
 
 // Health defines model for Health.
 type Health struct {
@@ -540,6 +757,30 @@ type Me struct {
 	Username   string     `json:"username"`
 }
 
+// Mount defines model for Mount.
+type Mount struct {
+	DisplayName  string          `json:"display_name"`
+	ExpiresAt    *time.Time      `json:"expires_at,omitempty"`
+	OwnerName    string          `json:"owner_name"`
+	Permission   SharePermission `json:"permission"`
+	ResourceType ResourceType    `json:"resource_type"`
+
+	// Scope Value of the `scope` parameter that syncs this mount (`share:{id}`)
+	Scope   string             `json:"scope"`
+	ShareId openapi_types.UUID `json:"share_id"`
+	VaultId openapi_types.UUID `json:"vault_id"`
+}
+
+// NewGrant defines model for NewGrant.
+type NewGrant struct {
+	Permission    SharePermission       `json:"permission"`
+	PrincipalId   openapi_types.UUID    `json:"principal_id"`
+	PrincipalType NewGrantPrincipalType `json:"principal_type"`
+}
+
+// NewGrantPrincipalType defines model for NewGrant.PrincipalType.
+type NewGrantPrincipalType string
+
 // OpResult defines model for OpResult.
 type OpResult struct {
 	// Code Application error codes (§3.1); mirrored in shared/go/syncproto
@@ -570,6 +811,9 @@ type Problem struct {
 	Type      string                  `json:"type"`
 }
 
+// ResourceType defines model for ResourceType.
+type ResourceType string
+
 // Revision defines model for Revision.
 type Revision struct {
 	AuthorId   openapi_types.UUID  `json:"author_id"`
@@ -594,6 +838,31 @@ type RevisionList struct {
 // Role defines model for Role.
 type Role string
 
+// Share defines model for Share.
+type Share struct {
+	CreatedAt   time.Time           `json:"created_at"`
+	DisplayName string              `json:"display_name"`
+	ExpiresAt   *time.Time          `json:"expires_at,omitempty"`
+	FileId      *openapi_types.UUID `json:"file_id,omitempty"`
+
+	// Grants Only for the owner and managers
+	Grants       *[]Grant           `json:"grants,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	MyPermission *SharePermission   `json:"my_permission,omitempty"`
+	MyStatus     *GrantStatus       `json:"my_status,omitempty"`
+	OwnerId      openapi_types.UUID `json:"owner_id"`
+	OwnerName    string             `json:"owner_name"`
+
+	// PathPrefix Folder shares; only shown to the owner and managers
+	PathPrefix   *string            `json:"path_prefix,omitempty"`
+	ResourceType ResourceType       `json:"resource_type"`
+	VaultId      openapi_types.UUID `json:"vault_id"`
+	VaultName    string             `json:"vault_name"`
+}
+
+// SharePermission defines model for SharePermission.
+type SharePermission string
+
 // Tree defines model for Tree.
 type Tree struct {
 	// AsOfSeq The changelog position the manifest reflects: continue with changes?since=as_of_seq
@@ -609,6 +878,14 @@ type TreeEntry struct {
 	Path   string             `json:"path"`
 	Rev    int                `json:"rev"`
 	Size   int64              `json:"size"`
+}
+
+// UpdateShare defines model for UpdateShare.
+type UpdateShare struct {
+	// ClearExpiry Remove the expiry (instead of setting expires_at)
+	ClearExpiry *bool      `json:"clear_expiry,omitempty"`
+	DisplayName *string    `json:"display_name,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 // UpdateVault defines model for UpdateVault.
@@ -659,17 +936,32 @@ type VaultList struct {
 // DeviceId defines model for DeviceId.
 type DeviceId = openapi_types.UUID
 
+// DirectoryQuery defines model for DirectoryQuery.
+type DirectoryQuery = string
+
 // FileId defines model for FileId.
 type FileId = openapi_types.UUID
 
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
+// PrincipalId defines model for PrincipalId.
+type PrincipalId = openapi_types.UUID
+
+// PrincipalType defines model for PrincipalType.
+type PrincipalType string
+
 // Rev defines model for Rev.
 type Rev = int
 
+// Scope defines model for Scope.
+type Scope = string
+
 // Sha256 defines model for Sha256.
 type Sha256 = string
+
+// SharePathId defines model for SharePathId.
+type SharePathId = openapi_types.UUID
 
 // VaultId defines model for VaultId.
 type VaultId = openapi_types.UUID
@@ -700,11 +992,29 @@ type GetEffectiveConfigParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
+// SearchDirectoryGroupsParams defines parameters for SearchDirectoryGroups.
+type SearchDirectoryGroupsParams struct {
+	Q *DirectoryQuery `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// SearchDirectoryUsersParams defines parameters for SearchDirectoryUsers.
+type SearchDirectoryUsersParams struct {
+	Q *DirectoryQuery `form:"q,omitempty" json:"q,omitempty"`
+}
+
 // RegisterDeviceParams defines parameters for RegisterDevice.
 type RegisterDeviceParams struct {
 	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
+
+// ListSharesParams defines parameters for ListShares.
+type ListSharesParams struct {
+	Scope ListSharesParamsScope `form:"scope" json:"scope"`
+}
+
+// ListSharesParamsScope defines parameters for ListShares.
+type ListSharesParamsScope string
 
 // CreateVaultParams defines parameters for CreateVault.
 type CreateVaultParams struct {
@@ -714,7 +1024,21 @@ type CreateVaultParams struct {
 
 // GetBlobParams defines parameters for GetBlob.
 type GetBlobParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope  `form:"scope,omitempty" json:"scope,omitempty"`
 	Range *string `json:"Range,omitempty"`
+}
+
+// PutBlobParams defines parameters for PutBlob.
+type PutBlobParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
+}
+
+// CheckBlobsParams defines parameters for CheckBlobs.
+type CheckBlobsParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
 }
 
 // GetChangesParams defines parameters for GetChanges.
@@ -722,30 +1046,59 @@ type GetChangesParams struct {
 	Since int64 `form:"since" json:"since"`
 	Limit *int  `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Scope Reserved for shared mounts (`share:{id}`, M4)
-	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
 }
 
 // CommitParams defines parameters for Commit.
 type CommitParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
+
 	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListRevisionsParams defines parameters for ListRevisions.
 type ListRevisionsParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope  *Scope  `form:"scope,omitempty" json:"scope,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// GetRevisionContentParams defines parameters for GetRevisionContent.
+type GetRevisionContentParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
+}
+
 // RestoreRevisionParams defines parameters for RestoreRevision.
 type RestoreRevisionParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
+
 	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// GetVaultTreeParams defines parameters for GetVaultTree.
+type GetVaultTreeParams struct {
+	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
+	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
+}
+
 // RegisterDeviceJSONRequestBody defines body for RegisterDevice for application/json ContentType.
 type RegisterDeviceJSONRequestBody = DeviceRegistration
+
+// CreateShareJSONRequestBody defines body for CreateShare for application/json ContentType.
+type CreateShareJSONRequestBody = CreateShare
+
+// UpdateShareJSONRequestBody defines body for UpdateShare for application/json ContentType.
+type UpdateShareJSONRequestBody = UpdateShare
+
+// PutGrantJSONRequestBody defines body for PutGrant for application/json ContentType.
+type PutGrantJSONRequestBody = GrantInput
 
 // CreateVaultJSONRequestBody defines body for CreateVault for application/json ContentType.
 type CreateVaultJSONRequestBody = CreateVault
@@ -770,6 +1123,12 @@ type ServerInterface interface {
 	// GetEffectiveConfig Effective configuration for the current user (product defaults → global → groups → user)
 	// (GET /config/effective)
 	GetEffectiveConfig(w http.ResponseWriter, r *http.Request, params GetEffectiveConfigParams)
+	// SearchDirectoryGroups Find groups to share with (minimal fields)
+	// (GET /directory/groups)
+	SearchDirectoryGroups(w http.ResponseWriter, r *http.Request, params SearchDirectoryGroupsParams)
+	// SearchDirectoryUsers Find users to share with (minimal fields)
+	// (GET /directory/users)
+	SearchDirectoryUsers(w http.ResponseWriter, r *http.Request, params SearchDirectoryUsersParams)
 	// Healthz Liveness probe
 	// (GET /healthz)
 	Healthz(w http.ResponseWriter, r *http.Request)
@@ -785,12 +1144,45 @@ type ServerInterface interface {
 	// RevokeDevice Revoke a device
 	// (DELETE /me/devices/{deviceId})
 	RevokeDevice(w http.ResponseWriter, r *http.Request, deviceId DeviceId)
+	// ListMyGroups Groups the caller belongs to
+	// (GET /me/groups)
+	ListMyGroups(w http.ResponseWriter, r *http.Request)
 	// GetMyUsage Storage usage against the effective quota
 	// (GET /me/usage)
 	GetMyUsage(w http.ResponseWriter, r *http.Request)
 	// Readyz Readiness probe (database, object storage, identity provider reachable)
 	// (GET /readyz)
 	Readyz(w http.ResponseWriter, r *http.Request)
+	// ListSharedWithMe Accepted shares to mount, with the scope to sync them
+	// (GET /shared-with-me)
+	ListSharedWithMe(w http.ResponseWriter, r *http.Request)
+	// ListShares Shares the caller owns or manages (`owned`) or was invited to (`received`)
+	// (GET /shares)
+	ListShares(w http.ResponseWriter, r *http.Request, params ListSharesParams)
+	// CreateShare Share a vault, a folder or a document (shared vaults only)
+	// (POST /shares)
+	CreateShare(w http.ResponseWriter, r *http.Request)
+	// RevokeShare Revoke a share (owner of the vault)
+	// (DELETE /shares/{shareId})
+	RevokeShare(w http.ResponseWriter, r *http.Request, shareId SharePathId)
+	// GetShare A share, with its grants for managers and the owner
+	// (GET /shares/{shareId})
+	GetShare(w http.ResponseWriter, r *http.Request, shareId SharePathId)
+	// UpdateShare Rename a share or change its expiry (manager or owner)
+	// (PATCH /shares/{shareId})
+	UpdateShare(w http.ResponseWriter, r *http.Request, shareId SharePathId)
+	// DeleteGrant Remove a grant (manager or owner)
+	// (DELETE /shares/{shareId}/grants/{principalType}/{principalId})
+	DeleteGrant(w http.ResponseWriter, r *http.Request, shareId SharePathId, principalType PrincipalType, principalId PrincipalId)
+	// PutGrant Add a grant or change its level (manager or owner)
+	// (PUT /shares/{shareId}/grants/{principalType}/{principalId})
+	PutGrant(w http.ResponseWriter, r *http.Request, shareId SharePathId, principalType PrincipalType, principalId PrincipalId)
+	// AcceptShare Accept an invitation (a group grant is accepted for the whole group)
+	// (POST /shares/{shareId}:accept)
+	AcceptShare(w http.ResponseWriter, r *http.Request, shareId SharePathId)
+	// DeclineShare Decline an invitation sent to the caller as a user
+	// (POST /shares/{shareId}:decline)
+	DeclineShare(w http.ResponseWriter, r *http.Request, shareId SharePathId)
 	// ListVaults Own vaults (and, from M4, shared mounts)
 	// (GET /vaults)
 	ListVaults(w http.ResponseWriter, r *http.Request)
@@ -811,10 +1203,10 @@ type ServerInterface interface {
 	GetBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params GetBlobParams)
 	// PutBlob Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
 	// (PUT /vaults/{vaultId}/blobs/{sha256})
-	PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256)
+	PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params PutBlobParams)
 	// CheckBlobs Which of these blobs the server does not have yet
 	// (POST /vaults/{vaultId}/blobs:check)
-	CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CheckBlobsParams)
 	// GetChanges Changelog entries after a cursor (§3.4.4 B)
 	// (GET /vaults/{vaultId}/changes)
 	GetChanges(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetChangesParams)
@@ -826,7 +1218,7 @@ type ServerInterface interface {
 	ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams)
 	// GetRevisionContent Content of a revision (ciphertext for private vaults)
 	// (GET /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content)
-	GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev)
+	GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params GetRevisionContentParams)
 	// RestoreRevision Restore a revision as a new revision that reuses its blob
 	// (POST /vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore)
 	RestoreRevision(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params RestoreRevisionParams)
@@ -838,7 +1230,7 @@ type ServerInterface interface {
 	PutKeyEnvelope(w http.ResponseWriter, r *http.Request, vaultId VaultId, kind KeyEnvelopeKind)
 	// GetVaultTree Complete manifest of current files plus the changelog position it reflects
 	// (GET /vaults/{vaultId}/tree)
-	GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetVaultTreeParams)
 	// RestoreVault Restore a soft-deleted vault within the retention period (owner)
 	// (POST /vaults/{vaultId}:restore)
 	RestoreVault(w http.ResponseWriter, r *http.Request, vaultId VaultId)
@@ -857,6 +1249,18 @@ func (_ Unimplemented) GetClientConfig(w http.ResponseWriter, r *http.Request) {
 // GetEffectiveConfig Effective configuration for the current user (product defaults → global → groups → user)
 // (GET /config/effective)
 func (_ Unimplemented) GetEffectiveConfig(w http.ResponseWriter, r *http.Request, params GetEffectiveConfigParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SearchDirectoryGroups Find groups to share with (minimal fields)
+// (GET /directory/groups)
+func (_ Unimplemented) SearchDirectoryGroups(w http.ResponseWriter, r *http.Request, params SearchDirectoryGroupsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SearchDirectoryUsers Find users to share with (minimal fields)
+// (GET /directory/users)
+func (_ Unimplemented) SearchDirectoryUsers(w http.ResponseWriter, r *http.Request, params SearchDirectoryUsersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -890,6 +1294,12 @@ func (_ Unimplemented) RevokeDevice(w http.ResponseWriter, r *http.Request, devi
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListMyGroups Groups the caller belongs to
+// (GET /me/groups)
+func (_ Unimplemented) ListMyGroups(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetMyUsage Storage usage against the effective quota
 // (GET /me/usage)
 func (_ Unimplemented) GetMyUsage(w http.ResponseWriter, r *http.Request) {
@@ -899,6 +1309,66 @@ func (_ Unimplemented) GetMyUsage(w http.ResponseWriter, r *http.Request) {
 // Readyz Readiness probe (database, object storage, identity provider reachable)
 // (GET /readyz)
 func (_ Unimplemented) Readyz(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListSharedWithMe Accepted shares to mount, with the scope to sync them
+// (GET /shared-with-me)
+func (_ Unimplemented) ListSharedWithMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListShares Shares the caller owns or manages (`owned`) or was invited to (`received`)
+// (GET /shares)
+func (_ Unimplemented) ListShares(w http.ResponseWriter, r *http.Request, params ListSharesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateShare Share a vault, a folder or a document (shared vaults only)
+// (POST /shares)
+func (_ Unimplemented) CreateShare(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeShare Revoke a share (owner of the vault)
+// (DELETE /shares/{shareId})
+func (_ Unimplemented) RevokeShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetShare A share, with its grants for managers and the owner
+// (GET /shares/{shareId})
+func (_ Unimplemented) GetShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateShare Rename a share or change its expiry (manager or owner)
+// (PATCH /shares/{shareId})
+func (_ Unimplemented) UpdateShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteGrant Remove a grant (manager or owner)
+// (DELETE /shares/{shareId}/grants/{principalType}/{principalId})
+func (_ Unimplemented) DeleteGrant(w http.ResponseWriter, r *http.Request, shareId SharePathId, principalType PrincipalType, principalId PrincipalId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutGrant Add a grant or change its level (manager or owner)
+// (PUT /shares/{shareId}/grants/{principalType}/{principalId})
+func (_ Unimplemented) PutGrant(w http.ResponseWriter, r *http.Request, shareId SharePathId, principalType PrincipalType, principalId PrincipalId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AcceptShare Accept an invitation (a group grant is accepted for the whole group)
+// (POST /shares/{shareId}:accept)
+func (_ Unimplemented) AcceptShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeclineShare Decline an invitation sent to the caller as a user
+// (POST /shares/{shareId}:decline)
+func (_ Unimplemented) DeclineShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -940,13 +1410,13 @@ func (_ Unimplemented) GetBlob(w http.ResponseWriter, r *http.Request, vaultId V
 
 // PutBlob Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
 // (PUT /vaults/{vaultId}/blobs/{sha256})
-func (_ Unimplemented) PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256) {
+func (_ Unimplemented) PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params PutBlobParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // CheckBlobs Which of these blobs the server does not have yet
 // (POST /vaults/{vaultId}/blobs:check)
-func (_ Unimplemented) CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+func (_ Unimplemented) CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CheckBlobsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -970,7 +1440,7 @@ func (_ Unimplemented) ListRevisions(w http.ResponseWriter, r *http.Request, vau
 
 // GetRevisionContent Content of a revision (ciphertext for private vaults)
 // (GET /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content)
-func (_ Unimplemented) GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev) {
+func (_ Unimplemented) GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params GetRevisionContentParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -994,7 +1464,7 @@ func (_ Unimplemented) PutKeyEnvelope(w http.ResponseWriter, r *http.Request, va
 
 // GetVaultTree Complete manifest of current files plus the changelog position it reflects
 // (GET /vaults/{vaultId}/tree)
-func (_ Unimplemented) GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+func (_ Unimplemented) GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetVaultTreeParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1065,6 +1535,84 @@ func (siw *ServerInterfaceWrapper) GetEffectiveConfig(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetEffectiveConfig(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchDirectoryGroups operation middleware
+func (siw *ServerInterfaceWrapper) SearchDirectoryGroups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchDirectoryGroupsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchDirectoryGroups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchDirectoryUsers operation middleware
+func (siw *ServerInterfaceWrapper) SearchDirectoryUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchDirectoryUsersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchDirectoryUsers(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1207,6 +1755,26 @@ func (siw *ServerInterfaceWrapper) RevokeDevice(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListMyGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListMyGroups(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMyUsage operation middleware
 func (siw *ServerInterfaceWrapper) GetMyUsage(w http.ResponseWriter, r *http.Request) {
 
@@ -1232,6 +1800,345 @@ func (siw *ServerInterfaceWrapper) Readyz(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Readyz(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSharedWithMe operation middleware
+func (siw *ServerInterfaceWrapper) ListSharedWithMe(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSharedWithMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListShares operation middleware
+func (siw *ServerInterfaceWrapper) ListShares(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSharesParams
+
+	// ------------- Required query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListShares(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateShare operation middleware
+func (siw *ServerInterfaceWrapper) CreateShare(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateShare(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeShare operation middleware
+func (siw *ServerInterfaceWrapper) RevokeShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeShare(w, r, shareId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetShare operation middleware
+func (siw *ServerInterfaceWrapper) GetShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetShare(w, r, shareId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateShare operation middleware
+func (siw *ServerInterfaceWrapper) UpdateShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateShare(w, r, shareId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteGrant operation middleware
+func (siw *ServerInterfaceWrapper) DeleteGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principalType" -------------
+	var principalType PrincipalType
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalType", chi.URLParam(r, "principalType"), &principalType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalType", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principalId" -------------
+	var principalId PrincipalId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", chi.URLParam(r, "principalId"), &principalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteGrant(w, r, shareId, principalType, principalId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutGrant operation middleware
+func (siw *ServerInterfaceWrapper) PutGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principalType" -------------
+	var principalType PrincipalType
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalType", chi.URLParam(r, "principalType"), &principalType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalType", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principalId" -------------
+	var principalId PrincipalId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", chi.URLParam(r, "principalId"), &principalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutGrant(w, r, shareId, principalType, principalId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AcceptShare operation middleware
+func (siw *ServerInterfaceWrapper) AcceptShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcceptShare(w, r, shareId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeclineShare operation middleware
+func (siw *ServerInterfaceWrapper) DeclineShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId SharePathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeclineShare(w, r, shareId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1437,6 +2344,19 @@ func (siw *ServerInterfaceWrapper) GetBlob(w http.ResponseWriter, r *http.Reques
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetBlobParams
 
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "Range" -------------
@@ -1499,8 +2419,24 @@ func (siw *ServerInterfaceWrapper) PutBlob(w http.ResponseWriter, r *http.Reques
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutBlobParams
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PutBlob(w, r, vaultId, sha256)
+		siw.Handler.PutBlob(w, r, vaultId, sha256, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1531,8 +2467,24 @@ func (siw *ServerInterfaceWrapper) CheckBlobs(w http.ResponseWriter, r *http.Req
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CheckBlobsParams
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CheckBlobs(w, r, vaultId)
+		siw.Handler.CheckBlobs(w, r, vaultId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1640,6 +2592,19 @@ func (siw *ServerInterfaceWrapper) Commit(w http.ResponseWriter, r *http.Request
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CommitParams
 
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "Idempotency-Key" -------------
@@ -1704,6 +2669,19 @@ func (siw *ServerInterfaceWrapper) ListRevisions(w http.ResponseWriter, r *http.
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListRevisionsParams
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "limit" -------------
 
@@ -1781,8 +2759,24 @@ func (siw *ServerInterfaceWrapper) GetRevisionContent(w http.ResponseWriter, r *
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRevisionContentParams
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRevisionContent(w, r, vaultId, fileId, rev)
+		siw.Handler.GetRevisionContent(w, r, vaultId, fileId, rev, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1833,6 +2827,19 @@ func (siw *ServerInterfaceWrapper) RestoreRevision(w http.ResponseWriter, r *htt
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RestoreRevisionParams
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
 
 	headers := r.Header
 
@@ -1960,8 +2967,24 @@ func (siw *ServerInterfaceWrapper) GetVaultTree(w http.ResponseWriter, r *http.R
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetVaultTreeParams
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetVaultTree(w, r, vaultId)
+		siw.Handler.GetVaultTree(w, r, vaultId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2194,6 +3217,45 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore", wrapper.RestoreRevision)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/groups", wrapper.ListMyGroups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/directory/users", wrapper.SearchDirectoryUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/directory/groups", wrapper.SearchDirectoryGroups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/shares", wrapper.ListShares)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/shares", wrapper.CreateShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/shares/{shareId}", wrapper.RevokeShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/shares/{shareId}", wrapper.GetShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/shares/{shareId}", wrapper.UpdateShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/shares/{shareId}/grants/{principalType}/{principalId}", wrapper.DeleteGrant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/shares/{shareId}/grants/{principalType}/{principalId}", wrapper.PutGrant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/shares/{shareId}:accept", wrapper.AcceptShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/shares/{shareId}:decline", wrapper.DeclineShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/shared-with-me", wrapper.ListSharedWithMe)
+	})
 
 	return r
 }
@@ -2306,6 +3368,82 @@ func (response GetEffectiveConfig403ApplicationProblemPlusJSONResponse) VisitGet
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchDirectoryGroupsRequestObject struct {
+	Params SearchDirectoryGroupsParams
+}
+
+type SearchDirectoryGroupsResponseObject interface {
+	VisitSearchDirectoryGroupsResponse(w http.ResponseWriter) error
+}
+
+type SearchDirectoryGroups200JSONResponse []DirectoryGroup
+
+func (response SearchDirectoryGroups200JSONResponse) VisitSearchDirectoryGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchDirectoryGroups401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SearchDirectoryGroups401ApplicationProblemPlusJSONResponse) VisitSearchDirectoryGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchDirectoryUsersRequestObject struct {
+	Params SearchDirectoryUsersParams
+}
+
+type SearchDirectoryUsersResponseObject interface {
+	VisitSearchDirectoryUsersResponse(w http.ResponseWriter) error
+}
+
+type SearchDirectoryUsers200JSONResponse []DirectoryUser
+
+func (response SearchDirectoryUsers200JSONResponse) VisitSearchDirectoryUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchDirectoryUsers401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SearchDirectoryUsers401ApplicationProblemPlusJSONResponse) VisitSearchDirectoryUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2593,6 +3731,43 @@ func (response RevokeDevice404ApplicationProblemPlusJSONResponse) VisitRevokeDev
 	return err
 }
 
+type ListMyGroupsRequestObject struct {
+}
+
+type ListMyGroupsResponseObject interface {
+	VisitListMyGroupsResponse(w http.ResponseWriter) error
+}
+
+type ListMyGroups200JSONResponse []GroupMembership
+
+func (response ListMyGroups200JSONResponse) VisitListMyGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyGroups401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListMyGroups401ApplicationProblemPlusJSONResponse) VisitListMyGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMyUsageRequestObject struct {
 }
 
@@ -2677,6 +3852,667 @@ func (response Readyz503JSONResponse) VisitReadyzResponse(w http.ResponseWriter)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSharedWithMeRequestObject struct {
+}
+
+type ListSharedWithMeResponseObject interface {
+	VisitListSharedWithMeResponse(w http.ResponseWriter) error
+}
+
+type ListSharedWithMe200JSONResponse []Mount
+
+func (response ListSharedWithMe200JSONResponse) VisitListSharedWithMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSharedWithMe401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListSharedWithMe401ApplicationProblemPlusJSONResponse) VisitListSharedWithMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSharesRequestObject struct {
+	Params ListSharesParams
+}
+
+type ListSharesResponseObject interface {
+	VisitListSharesResponse(w http.ResponseWriter) error
+}
+
+type ListShares200JSONResponse []Share
+
+func (response ListShares200JSONResponse) VisitListSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListShares400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response ListShares400ApplicationProblemPlusJSONResponse) VisitListSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListShares401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListShares401ApplicationProblemPlusJSONResponse) VisitListSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShareRequestObject struct {
+	Body *CreateShareJSONRequestBody
+}
+
+type CreateShareResponseObject interface {
+	VisitCreateShareResponse(w http.ResponseWriter) error
+}
+
+type CreateShare201JSONResponse Share
+
+func (response CreateShare201JSONResponse) VisitCreateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShare400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateShare400ApplicationProblemPlusJSONResponse) VisitCreateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateShare401ApplicationProblemPlusJSONResponse) VisitCreateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateShare404ApplicationProblemPlusJSONResponse) VisitCreateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShare409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateShare409ApplicationProblemPlusJSONResponse) VisitCreateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeShareRequestObject struct {
+	ShareId SharePathId `json:"shareId"`
+}
+
+type RevokeShareResponseObject interface {
+	VisitRevokeShareResponse(w http.ResponseWriter) error
+}
+
+type RevokeShare204Response struct {
+}
+
+func (response RevokeShare204Response) VisitRevokeShareResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeShare401ApplicationProblemPlusJSONResponse) VisitRevokeShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeShare403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeShare403ApplicationProblemPlusJSONResponse) VisitRevokeShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeShare404ApplicationProblemPlusJSONResponse) VisitRevokeShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetShareRequestObject struct {
+	ShareId SharePathId `json:"shareId"`
+}
+
+type GetShareResponseObject interface {
+	VisitGetShareResponse(w http.ResponseWriter) error
+}
+
+type GetShare200JSONResponse Share
+
+func (response GetShare200JSONResponse) VisitGetShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetShare401ApplicationProblemPlusJSONResponse) VisitGetShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetShare404ApplicationProblemPlusJSONResponse) VisitGetShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateShareRequestObject struct {
+	ShareId SharePathId `json:"shareId"`
+	Body    *UpdateShareJSONRequestBody
+}
+
+type UpdateShareResponseObject interface {
+	VisitUpdateShareResponse(w http.ResponseWriter) error
+}
+
+type UpdateShare200JSONResponse Share
+
+func (response UpdateShare200JSONResponse) VisitUpdateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateShare400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateShare400ApplicationProblemPlusJSONResponse) VisitUpdateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateShare401ApplicationProblemPlusJSONResponse) VisitUpdateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateShare403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateShare403ApplicationProblemPlusJSONResponse) VisitUpdateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateShare404ApplicationProblemPlusJSONResponse) VisitUpdateShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteGrantRequestObject struct {
+	ShareId       SharePathId   `json:"shareId"`
+	PrincipalType PrincipalType `json:"principalType"`
+	PrincipalId   PrincipalId   `json:"principalId"`
+}
+
+type DeleteGrantResponseObject interface {
+	VisitDeleteGrantResponse(w http.ResponseWriter) error
+}
+
+type DeleteGrant204Response struct {
+}
+
+func (response DeleteGrant204Response) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteGrant401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteGrant401ApplicationProblemPlusJSONResponse) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteGrant403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteGrant403ApplicationProblemPlusJSONResponse) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteGrant404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteGrant404ApplicationProblemPlusJSONResponse) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutGrantRequestObject struct {
+	ShareId       SharePathId   `json:"shareId"`
+	PrincipalType PrincipalType `json:"principalType"`
+	PrincipalId   PrincipalId   `json:"principalId"`
+	Body          *PutGrantJSONRequestBody
+}
+
+type PutGrantResponseObject interface {
+	VisitPutGrantResponse(w http.ResponseWriter) error
+}
+
+type PutGrant200JSONResponse Grant
+
+func (response PutGrant200JSONResponse) VisitPutGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutGrant400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response PutGrant400ApplicationProblemPlusJSONResponse) VisitPutGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutGrant401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PutGrant401ApplicationProblemPlusJSONResponse) VisitPutGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutGrant403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PutGrant403ApplicationProblemPlusJSONResponse) VisitPutGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutGrant404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PutGrant404ApplicationProblemPlusJSONResponse) VisitPutGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcceptShareRequestObject struct {
+	ShareId SharePathId `json:"shareId"`
+}
+
+type AcceptShareResponseObject interface {
+	VisitAcceptShareResponse(w http.ResponseWriter) error
+}
+
+type AcceptShare200JSONResponse Share
+
+func (response AcceptShare200JSONResponse) VisitAcceptShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcceptShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AcceptShare401ApplicationProblemPlusJSONResponse) VisitAcceptShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcceptShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AcceptShare404ApplicationProblemPlusJSONResponse) VisitAcceptShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineShareRequestObject struct {
+	ShareId SharePathId `json:"shareId"`
+}
+
+type DeclineShareResponseObject interface {
+	VisitDeclineShareResponse(w http.ResponseWriter) error
+}
+
+type DeclineShare200JSONResponse Share
+
+func (response DeclineShare200JSONResponse) VisitDeclineShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeclineShare401ApplicationProblemPlusJSONResponse) VisitDeclineShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeclineShare404ApplicationProblemPlusJSONResponse) VisitDeclineShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineShare409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeclineShare409ApplicationProblemPlusJSONResponse) VisitDeclineShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3100,6 +4936,22 @@ func (response GetBlob401ApplicationProblemPlusJSONResponse) VisitGetBlobRespons
 	return err
 }
 
+type GetBlob403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlob403ApplicationProblemPlusJSONResponse) VisitGetBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetBlob404ApplicationProblemPlusJSONResponse struct {
 	NotFoundApplicationProblemPlusJSONResponse
 }
@@ -3133,6 +4985,7 @@ func (response GetBlob416ApplicationProblemPlusJSONResponse) VisitGetBlobRespons
 type PutBlobRequestObject struct {
 	VaultId VaultId `json:"vaultId"`
 	Sha256  Sha256  `json:"sha256"`
+	Params  PutBlobParams
 	Body    io.Reader
 }
 
@@ -3180,6 +5033,22 @@ func (response PutBlob401ApplicationProblemPlusJSONResponse) VisitPutBlobRespons
 	return err
 }
 
+type PutBlob403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PutBlob403ApplicationProblemPlusJSONResponse) VisitPutBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PutBlob404ApplicationProblemPlusJSONResponse struct {
 	NotFoundApplicationProblemPlusJSONResponse
 }
@@ -3212,6 +5081,7 @@ func (response PutBlob413ApplicationProblemPlusJSONResponse) VisitPutBlobRespons
 
 type CheckBlobsRequestObject struct {
 	VaultId VaultId `json:"vaultId"`
+	Params  CheckBlobsParams
 	Body    *CheckBlobsJSONRequestBody
 }
 
@@ -3261,6 +5131,22 @@ func (response CheckBlobs401ApplicationProblemPlusJSONResponse) VisitCheckBlobsR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckBlobs403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CheckBlobs403ApplicationProblemPlusJSONResponse) VisitCheckBlobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3332,6 +5218,22 @@ func (response GetChanges401ApplicationProblemPlusJSONResponse) VisitGetChangesR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChanges403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetChanges403ApplicationProblemPlusJSONResponse) VisitGetChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3422,6 +5324,22 @@ func (response Commit401ApplicationProblemPlusJSONResponse) VisitCommitResponse(
 	return err
 }
 
+type Commit403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response Commit403ApplicationProblemPlusJSONResponse) VisitCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type Commit404ApplicationProblemPlusJSONResponse struct {
 	NotFoundApplicationProblemPlusJSONResponse
 }
@@ -3478,6 +5396,22 @@ func (response ListRevisions401ApplicationProblemPlusJSONResponse) VisitListRevi
 	return err
 }
 
+type ListRevisions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListRevisions403ApplicationProblemPlusJSONResponse) VisitListRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRevisions404ApplicationProblemPlusJSONResponse struct {
 	NotFoundApplicationProblemPlusJSONResponse
 }
@@ -3498,6 +5432,7 @@ type GetRevisionContentRequestObject struct {
 	VaultId VaultId `json:"vaultId"`
 	FileId  FileId  `json:"fileId"`
 	Rev     Rev     `json:"rev"`
+	Params  GetRevisionContentParams
 }
 
 type GetRevisionContentResponseObject interface {
@@ -3544,6 +5479,22 @@ func (response GetRevisionContent401ApplicationProblemPlusJSONResponse) VisitGet
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRevisionContent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetRevisionContent403ApplicationProblemPlusJSONResponse) VisitGetRevisionContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3617,6 +5568,22 @@ func (response RestoreRevision401ApplicationProblemPlusJSONResponse) VisitRestor
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreRevision403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreRevision403ApplicationProblemPlusJSONResponse) VisitRestoreRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3813,6 +5780,7 @@ func (response PutKeyEnvelope409ApplicationProblemPlusJSONResponse) VisitPutKeyE
 
 type GetVaultTreeRequestObject struct {
 	VaultId VaultId `json:"vaultId"`
+	Params  GetVaultTreeParams
 }
 
 type GetVaultTreeResponseObject interface {
@@ -3845,6 +5813,22 @@ func (response GetVaultTree401ApplicationProblemPlusJSONResponse) VisitGetVaultT
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVaultTree403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetVaultTree403ApplicationProblemPlusJSONResponse) VisitGetVaultTreeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3959,6 +5943,12 @@ type StrictServerInterface interface {
 	// GetEffectiveConfig Effective configuration for the current user (product defaults → global → groups → user)
 	// (GET /config/effective)
 	GetEffectiveConfig(ctx context.Context, request GetEffectiveConfigRequestObject) (GetEffectiveConfigResponseObject, error)
+	// SearchDirectoryGroups Find groups to share with (minimal fields)
+	// (GET /directory/groups)
+	SearchDirectoryGroups(ctx context.Context, request SearchDirectoryGroupsRequestObject) (SearchDirectoryGroupsResponseObject, error)
+	// SearchDirectoryUsers Find users to share with (minimal fields)
+	// (GET /directory/users)
+	SearchDirectoryUsers(ctx context.Context, request SearchDirectoryUsersRequestObject) (SearchDirectoryUsersResponseObject, error)
 	// Healthz Liveness probe
 	// (GET /healthz)
 	Healthz(ctx context.Context, request HealthzRequestObject) (HealthzResponseObject, error)
@@ -3974,12 +5964,45 @@ type StrictServerInterface interface {
 	// RevokeDevice Revoke a device
 	// (DELETE /me/devices/{deviceId})
 	RevokeDevice(ctx context.Context, request RevokeDeviceRequestObject) (RevokeDeviceResponseObject, error)
+	// ListMyGroups Groups the caller belongs to
+	// (GET /me/groups)
+	ListMyGroups(ctx context.Context, request ListMyGroupsRequestObject) (ListMyGroupsResponseObject, error)
 	// GetMyUsage Storage usage against the effective quota
 	// (GET /me/usage)
 	GetMyUsage(ctx context.Context, request GetMyUsageRequestObject) (GetMyUsageResponseObject, error)
 	// Readyz Readiness probe (database, object storage, identity provider reachable)
 	// (GET /readyz)
 	Readyz(ctx context.Context, request ReadyzRequestObject) (ReadyzResponseObject, error)
+	// ListSharedWithMe Accepted shares to mount, with the scope to sync them
+	// (GET /shared-with-me)
+	ListSharedWithMe(ctx context.Context, request ListSharedWithMeRequestObject) (ListSharedWithMeResponseObject, error)
+	// ListShares Shares the caller owns or manages (`owned`) or was invited to (`received`)
+	// (GET /shares)
+	ListShares(ctx context.Context, request ListSharesRequestObject) (ListSharesResponseObject, error)
+	// CreateShare Share a vault, a folder or a document (shared vaults only)
+	// (POST /shares)
+	CreateShare(ctx context.Context, request CreateShareRequestObject) (CreateShareResponseObject, error)
+	// RevokeShare Revoke a share (owner of the vault)
+	// (DELETE /shares/{shareId})
+	RevokeShare(ctx context.Context, request RevokeShareRequestObject) (RevokeShareResponseObject, error)
+	// GetShare A share, with its grants for managers and the owner
+	// (GET /shares/{shareId})
+	GetShare(ctx context.Context, request GetShareRequestObject) (GetShareResponseObject, error)
+	// UpdateShare Rename a share or change its expiry (manager or owner)
+	// (PATCH /shares/{shareId})
+	UpdateShare(ctx context.Context, request UpdateShareRequestObject) (UpdateShareResponseObject, error)
+	// DeleteGrant Remove a grant (manager or owner)
+	// (DELETE /shares/{shareId}/grants/{principalType}/{principalId})
+	DeleteGrant(ctx context.Context, request DeleteGrantRequestObject) (DeleteGrantResponseObject, error)
+	// PutGrant Add a grant or change its level (manager or owner)
+	// (PUT /shares/{shareId}/grants/{principalType}/{principalId})
+	PutGrant(ctx context.Context, request PutGrantRequestObject) (PutGrantResponseObject, error)
+	// AcceptShare Accept an invitation (a group grant is accepted for the whole group)
+	// (POST /shares/{shareId}:accept)
+	AcceptShare(ctx context.Context, request AcceptShareRequestObject) (AcceptShareResponseObject, error)
+	// DeclineShare Decline an invitation sent to the caller as a user
+	// (POST /shares/{shareId}:decline)
+	DeclineShare(ctx context.Context, request DeclineShareRequestObject) (DeclineShareResponseObject, error)
 	// ListVaults Own vaults (and, from M4, shared mounts)
 	// (GET /vaults)
 	ListVaults(ctx context.Context, request ListVaultsRequestObject) (ListVaultsResponseObject, error)
@@ -4122,6 +6145,58 @@ func (sh *strictHandler) GetEffectiveConfig(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// SearchDirectoryGroups operation middleware
+func (sh *strictHandler) SearchDirectoryGroups(w http.ResponseWriter, r *http.Request, params SearchDirectoryGroupsParams) {
+	var request SearchDirectoryGroupsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchDirectoryGroups(ctx, request.(SearchDirectoryGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchDirectoryGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchDirectoryGroupsResponseObject); ok {
+		if err := validResponse.VisitSearchDirectoryGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchDirectoryUsers operation middleware
+func (sh *strictHandler) SearchDirectoryUsers(w http.ResponseWriter, r *http.Request, params SearchDirectoryUsersParams) {
+	var request SearchDirectoryUsersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchDirectoryUsers(ctx, request.(SearchDirectoryUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchDirectoryUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchDirectoryUsersResponseObject); ok {
+		if err := validResponse.VisitSearchDirectoryUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Healthz operation middleware
 func (sh *strictHandler) Healthz(w http.ResponseWriter, r *http.Request) {
 	var request HealthzRequestObject
@@ -4253,6 +6328,30 @@ func (sh *strictHandler) RevokeDevice(w http.ResponseWriter, r *http.Request, de
 	}
 }
 
+// ListMyGroups operation middleware
+func (sh *strictHandler) ListMyGroups(w http.ResponseWriter, r *http.Request) {
+	var request ListMyGroupsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyGroups(ctx, request.(ListMyGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyGroupsResponseObject); ok {
+		if err := validResponse.VisitListMyGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMyUsage operation middleware
 func (sh *strictHandler) GetMyUsage(w http.ResponseWriter, r *http.Request) {
 	var request GetMyUsageRequestObject
@@ -4294,6 +6393,287 @@ func (sh *strictHandler) Readyz(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReadyzResponseObject); ok {
 		if err := validResponse.VisitReadyzResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSharedWithMe operation middleware
+func (sh *strictHandler) ListSharedWithMe(w http.ResponseWriter, r *http.Request) {
+	var request ListSharedWithMeRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSharedWithMe(ctx, request.(ListSharedWithMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSharedWithMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSharedWithMeResponseObject); ok {
+		if err := validResponse.VisitListSharedWithMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListShares operation middleware
+func (sh *strictHandler) ListShares(w http.ResponseWriter, r *http.Request, params ListSharesParams) {
+	var request ListSharesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListShares(ctx, request.(ListSharesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListShares")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSharesResponseObject); ok {
+		if err := validResponse.VisitListSharesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateShare operation middleware
+func (sh *strictHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
+	var request CreateShareRequestObject
+
+	var body CreateShareJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateShare(ctx, request.(CreateShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateShareResponseObject); ok {
+		if err := validResponse.VisitCreateShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeShare operation middleware
+func (sh *strictHandler) RevokeShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	var request RevokeShareRequestObject
+
+	request.ShareId = shareId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeShare(ctx, request.(RevokeShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeShareResponseObject); ok {
+		if err := validResponse.VisitRevokeShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetShare operation middleware
+func (sh *strictHandler) GetShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	var request GetShareRequestObject
+
+	request.ShareId = shareId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetShare(ctx, request.(GetShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetShareResponseObject); ok {
+		if err := validResponse.VisitGetShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateShare operation middleware
+func (sh *strictHandler) UpdateShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	var request UpdateShareRequestObject
+
+	request.ShareId = shareId
+
+	var body UpdateShareJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateShare(ctx, request.(UpdateShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateShareResponseObject); ok {
+		if err := validResponse.VisitUpdateShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteGrant operation middleware
+func (sh *strictHandler) DeleteGrant(w http.ResponseWriter, r *http.Request, shareId SharePathId, principalType PrincipalType, principalId PrincipalId) {
+	var request DeleteGrantRequestObject
+
+	request.ShareId = shareId
+	request.PrincipalType = principalType
+	request.PrincipalId = principalId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteGrant(ctx, request.(DeleteGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteGrantResponseObject); ok {
+		if err := validResponse.VisitDeleteGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutGrant operation middleware
+func (sh *strictHandler) PutGrant(w http.ResponseWriter, r *http.Request, shareId SharePathId, principalType PrincipalType, principalId PrincipalId) {
+	var request PutGrantRequestObject
+
+	request.ShareId = shareId
+	request.PrincipalType = principalType
+	request.PrincipalId = principalId
+
+	var body PutGrantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutGrant(ctx, request.(PutGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutGrantResponseObject); ok {
+		if err := validResponse.VisitPutGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AcceptShare operation middleware
+func (sh *strictHandler) AcceptShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	var request AcceptShareRequestObject
+
+	request.ShareId = shareId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AcceptShare(ctx, request.(AcceptShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AcceptShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AcceptShareResponseObject); ok {
+		if err := validResponse.VisitAcceptShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeclineShare operation middleware
+func (sh *strictHandler) DeclineShare(w http.ResponseWriter, r *http.Request, shareId SharePathId) {
+	var request DeclineShareRequestObject
+
+	request.ShareId = shareId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeclineShare(ctx, request.(DeclineShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeclineShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeclineShareResponseObject); ok {
+		if err := validResponse.VisitDeclineShareResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -4472,11 +6852,12 @@ func (sh *strictHandler) GetBlob(w http.ResponseWriter, r *http.Request, vaultId
 }
 
 // PutBlob operation middleware
-func (sh *strictHandler) PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256) {
+func (sh *strictHandler) PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params PutBlobParams) {
 	var request PutBlobRequestObject
 
 	request.VaultId = vaultId
 	request.Sha256 = sha256
+	request.Params = params
 
 	request.Body = r.Body
 
@@ -4501,10 +6882,11 @@ func (sh *strictHandler) PutBlob(w http.ResponseWriter, r *http.Request, vaultId
 }
 
 // CheckBlobs operation middleware
-func (sh *strictHandler) CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+func (sh *strictHandler) CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CheckBlobsParams) {
 	var request CheckBlobsRequestObject
 
 	request.VaultId = vaultId
+	request.Params = params
 
 	var body CheckBlobsJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -4623,12 +7005,13 @@ func (sh *strictHandler) ListRevisions(w http.ResponseWriter, r *http.Request, v
 }
 
 // GetRevisionContent operation middleware
-func (sh *strictHandler) GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev) {
+func (sh *strictHandler) GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params GetRevisionContentParams) {
 	var request GetRevisionContentRequestObject
 
 	request.VaultId = vaultId
 	request.FileId = fileId
 	request.Rev = rev
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetRevisionContent(ctx, request.(GetRevisionContentRequestObject))
@@ -4740,10 +7123,11 @@ func (sh *strictHandler) PutKeyEnvelope(w http.ResponseWriter, r *http.Request, 
 }
 
 // GetVaultTree operation middleware
-func (sh *strictHandler) GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+func (sh *strictHandler) GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetVaultTreeParams) {
 	var request GetVaultTreeRequestObject
 
 	request.VaultId = vaultId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetVaultTree(ctx, request.(GetVaultTreeRequestObject))
@@ -4796,99 +7180,124 @@ func (sh *strictHandler) RestoreVault(w http.ResponseWriter, r *http.Request, va
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"P800/Psv9/8TAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

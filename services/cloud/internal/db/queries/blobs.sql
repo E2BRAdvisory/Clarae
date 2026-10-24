@@ -56,3 +56,9 @@ DELETE FROM uploads WHERE id = $1;
 
 -- name: ListExpiredUploads :many
 SELECT id, chunks FROM uploads WHERE expires_at < now() LIMIT $1;
+
+-- name: ListBlobFiles :many
+-- The files (by current path) that have a revision with this blob: what a share read is checked against.
+SELECT DISTINCT f.id, f.path FROM file_revisions r JOIN files f ON f.id = r.file_id
+WHERE r.vault_id = $1 AND r.blob_hash = $2
+LIMIT 500;

@@ -361,6 +361,8 @@ paths:
       security:
         - bearerAuth: []
       summary: Complete manifest of current files plus the changelog position it reflects
+      parameters:
+        - $ref: '#/components/parameters/Scope'
       responses:
         '200':
           description: Manifest
@@ -370,6 +372,8 @@ paths:
                 $ref: '#/components/schemas/Tree'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -457,12 +461,7 @@ paths:
             minimum: 1
             maximum: 500
             default: 500
-        - name: scope
-          in: query
-          required: false
-          description: Reserved for shared mounts (`share:{id}`, M4)
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Scope'
       responses:
         '400':
           $ref: '#/components/responses/ValidationFailed'
@@ -474,6 +473,8 @@ paths:
                 $ref: '#/components/schemas/Changes'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
@@ -492,6 +493,8 @@ paths:
       security:
         - bearerAuth: []
       summary: Which of these blobs the server does not have yet
+      parameters:
+        - $ref: '#/components/parameters/Scope'
       requestBody:
         required: true
         content:
@@ -509,6 +512,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -522,6 +527,8 @@ paths:
       security:
         - bearerAuth: []
       summary: Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
+      parameters:
+        - $ref: '#/components/parameters/Scope'
       requestBody:
         required: false # an empty file is a valid blob (empty body)
         content:
@@ -536,6 +543,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '413':
@@ -551,6 +560,7 @@ paths:
         - bearerAuth: []
       summary: Download a blob (Range supported)
       parameters:
+        - $ref: '#/components/parameters/Scope'
         - name: Range
           in: header
           required: false
@@ -589,6 +599,8 @@ paths:
                 format: binary
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '416':
@@ -608,6 +620,7 @@ paths:
         - bearerAuth: []
       summary: Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
       parameters:
+        - $ref: '#/components/parameters/Scope'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -626,6 +639,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -640,6 +655,7 @@ paths:
         - bearerAuth: []
       summary: History of a file, newest first
       parameters:
+        - $ref: '#/components/parameters/Scope'
         - name: limit
           in: query
           required: false
@@ -662,6 +678,8 @@ paths:
                 $ref: '#/components/schemas/RevisionList'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -676,6 +694,8 @@ paths:
       security:
         - bearerAuth: []
       summary: Content of a revision (ciphertext for private vaults)
+      parameters:
+        - $ref: '#/components/parameters/Scope'
       responses:
         '200':
           description: Blob bytes
@@ -691,6 +711,8 @@ paths:
                 format: binary
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -706,6 +728,7 @@ paths:
         - bearerAuth: []
       summary: Restore a revision as a new revision that reuses its blob
       parameters:
+        - $ref: '#/components/parameters/Scope'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '400':
@@ -718,10 +741,302 @@ paths:
                 $ref: '#/components/schemas/OpResult'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /me/groups:
+    get:
+      tags: [directory]
+      operationId: listMyGroups
+      security:
+        - bearerAuth: []
+      summary: Groups the caller belongs to
+      responses:
+        '200':
+          description: Memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupMembership'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /directory/users:
+    get:
+      tags: [directory]
+      operationId: searchDirectoryUsers
+      security:
+        - bearerAuth: []
+      summary: Find users to share with (minimal fields)
+      parameters:
+        - $ref: '#/components/parameters/DirectoryQuery'
+      responses:
+        '200':
+          description: Matches, at most 20
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DirectoryUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /directory/groups:
+    get:
+      tags: [directory]
+      operationId: searchDirectoryGroups
+      security:
+        - bearerAuth: []
+      summary: Find groups to share with (minimal fields)
+      parameters:
+        - $ref: '#/components/parameters/DirectoryQuery'
+      responses:
+        '200':
+          description: Matches, at most 20
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DirectoryGroup'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /shares:
+    get:
+      tags: [sharing]
+      operationId: listShares
+      security:
+        - bearerAuth: []
+      summary: Shares the caller owns or manages (`owned`) or was invited to (`received`)
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [owned, received]
+      responses:
+        '200':
+          description: Shares
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [sharing]
+      operationId: createShare
+      security:
+        - bearerAuth: []
+      summary: Share a vault, a folder or a document (shared vaults only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShare'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /shares/{shareId}:
+    parameters:
+      - $ref: '#/components/parameters/SharePathId'
+    get:
+      tags: [sharing]
+      operationId: getShare
+      security:
+        - bearerAuth: []
+      summary: A share, with its grants for managers and the owner
+      responses:
+        '200':
+          description: Share
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [sharing]
+      operationId: updateShare
+      security:
+        - bearerAuth: []
+      summary: Rename a share or change its expiry (manager or owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateShare'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [sharing]
+      operationId: revokeShare
+      security:
+        - bearerAuth: []
+      summary: Revoke a share (owner of the vault)
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shares/{shareId}/grants/{principalType}/{principalId}:
+    parameters:
+      - $ref: '#/components/parameters/SharePathId'
+      - $ref: '#/components/parameters/PrincipalType'
+      - $ref: '#/components/parameters/PrincipalId'
+    put:
+      tags: [sharing]
+      operationId: putGrant
+      security:
+        - bearerAuth: []
+      summary: Add a grant or change its level (manager or owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantInput'
+      responses:
+        '200':
+          description: The grant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grant'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [sharing]
+      operationId: deleteGrant
+      security:
+        - bearerAuth: []
+      summary: Remove a grant (manager or owner)
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shares/{shareId}:accept:
+    parameters:
+      - $ref: '#/components/parameters/SharePathId'
+    post:
+      tags: [sharing]
+      operationId: acceptShare
+      security:
+        - bearerAuth: []
+      summary: Accept an invitation (a group grant is accepted for the whole group)
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shares/{shareId}:decline:
+    parameters:
+      - $ref: '#/components/parameters/SharePathId'
+    post:
+      tags: [sharing]
+      operationId: declineShare
+      security:
+        - bearerAuth: []
+      summary: Decline an invitation sent to the caller as a user
+      responses:
+        '200':
+          description: Declined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /shared-with-me:
+    get:
+      tags: [sharing]
+      operationId: listSharedWithMe
+      security:
+        - bearerAuth: []
+      summary: Accepted shares to mount, with the scope to sync them
+      responses:
+        '200':
+          description: Mounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Mount'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
 
 components:
   securitySchemes:
@@ -767,6 +1082,44 @@ components:
       schema:
         type: string
         format: uuid
+    Scope:
+      name: scope
+      in: query
+      required: false
+      description: >-
+        Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then
+        relative to the root of the share and every operation is checked against the caller's
+        permission on it.
+      schema:
+        type: string
+    SharePathId:
+      name: shareId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PrincipalType:
+      name: principalType
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [user, group]
+    PrincipalId:
+      name: principalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DirectoryQuery:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 100
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -821,7 +1174,7 @@ components:
   schemas:
     ClientConfig:
       type: object
-      required: [issuer, desktop_client_id, audience, grpc_endpoint, api_version]
+      required: [issuer, desktop_client_id, web_client_id, audience, grpc_endpoint, api_version]
       properties:
         issuer:
           type: string
@@ -829,6 +1182,9 @@ components:
           description: OIDC issuer (Keycloak realm URL)
         desktop_client_id:
           type: string
+        web_client_id:
+          type: string
+          description: Public OIDC client of the Web UI (Authorization Code + PKCE)
         audience:
           type: string
           description: Expected `aud` of access tokens
@@ -882,6 +1238,7 @@ components:
         - RATE_LIMITED
         - CURSOR_EXPIRED
         - NAME_IN_USE
+        - INVALID_STATE
         - INTERNAL
 
     Health:
@@ -1390,3 +1747,206 @@ components:
             $ref: '#/components/schemas/Revision'
         next_cursor:
           type: string
+
+    GroupMembership:
+      type: object
+      required: [id, name, member_role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        member_role:
+          type: string
+          enum: [member, manager]
+
+    DirectoryUser:
+      type: object
+      required: [id, username]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        display_name:
+          type: string
+
+    DirectoryGroup:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+
+    ResourceType:
+      type: string
+      enum: [vault, folder, file]
+
+    SharePermission:
+      type: string
+      enum: [viewer, editor, manager]
+
+    GrantStatus:
+      type: string
+      enum: [pending, accepted, declined]
+
+    Grant:
+      type: object
+      required: [principal_type, principal_id, principal_name, permission, status, created_at]
+      properties:
+        principal_type:
+          type: string
+          enum: [user, group]
+        principal_id:
+          type: string
+          format: uuid
+        principal_name:
+          type: string
+        permission:
+          $ref: '#/components/schemas/SharePermission'
+        status:
+          $ref: '#/components/schemas/GrantStatus'
+        granted_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    GrantInput:
+      type: object
+      required: [permission]
+      properties:
+        permission:
+          $ref: '#/components/schemas/SharePermission'
+
+    NewGrant:
+      type: object
+      required: [principal_type, principal_id, permission]
+      properties:
+        principal_type:
+          type: string
+          enum: [user, group]
+        principal_id:
+          type: string
+          format: uuid
+        permission:
+          $ref: '#/components/schemas/SharePermission'
+
+    Share:
+      type: object
+      required:
+        [id, vault_id, vault_name, resource_type, display_name, owner_id, owner_name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        vault_id:
+          type: string
+          format: uuid
+        vault_name:
+          type: string
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        path_prefix:
+          type: string
+          description: Folder shares; only shown to the owner and managers
+        file_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        owner_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        my_permission:
+          $ref: '#/components/schemas/SharePermission'
+        my_status:
+          $ref: '#/components/schemas/GrantStatus'
+        grants:
+          type: array
+          description: Only for the owner and managers
+          items:
+            $ref: '#/components/schemas/Grant'
+
+    CreateShare:
+      type: object
+      required: [vault_id, resource_type, display_name]
+      properties:
+        vault_id:
+          type: string
+          format: uuid
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        path_prefix:
+          type: string
+        file_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        expires_at:
+          type: string
+          format: date-time
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewGrant'
+
+    UpdateShare:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        expires_at:
+          type: string
+          format: date-time
+        clear_expiry:
+          type: boolean
+          description: Remove the expiry (instead of setting expires_at)
+
+    Mount:
+      type: object
+      required: [share_id, vault_id, display_name, resource_type, permission, scope, owner_name]
+      properties:
+        share_id:
+          type: string
+          format: uuid
+        vault_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+        permission:
+          $ref: '#/components/schemas/SharePermission'
+        scope:
+          type: string
+          description: Value of the `scope` parameter that syncs this mount (`share:{id}`)
+        owner_name:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
