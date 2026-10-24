@@ -1,0 +1,32 @@
+/* Page preview popover: a fixed overlay, so showing it never moves the layout. */
+.page-preview {
+  position: fixed;
+  z-index: 90;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 16px));
+  max-height: min(340px, calc(100vh - 16px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.page-preview:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.page-preview-title {
+  flex: none;
+  padding: 6px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.page-preview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px;
+}

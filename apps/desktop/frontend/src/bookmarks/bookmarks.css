@@ -1,0 +1,30 @@
+/* Bookmarks sidebar panel. */
+.bookmarks .node.bookmark {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.bookmarks .node.bookmark .icon-type {
+  width: 1.2em;
+  text-align: center;
+  flex: none;
+}
+.bookmarks .node.bookmark.missing .name {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.bookmarks .node.bookmark.drop-into {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.bookmarks .node.bookmark.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.bookmarks .node.bookmark.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.bookmarks .node.bookmark:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
