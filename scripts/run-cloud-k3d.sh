@@ -10,12 +10,12 @@
 #   scripts/run-cloud-k3d.sh --status        show pods
 #
 # Existing clusters are listed and a new cluster dedicated to Nodus is suggested: it keeps
-# the host ports (18081, 18082, 8080, 9000) and the DNS override away from your other work.
+# the host ports (18081, 18082, 18080, 9000) and the DNS override away from your other work.
 # On an existing cluster the script adds those ports to its load balancer, a CoreDNS
 # override and the namespace "nodus"; all other workloads are left alone.
 #
 # Endpoints on the host: API http://localhost:18081, notify gRPC localhost:18082,
-# Keycloak http://keycloak.localtest.me:8080 (admin/admin; users admin/user1/user2,
+# Keycloak http://keycloak.localtest.me:18080 (admin/admin; users admin/user1/user2,
 # password "nodus-dev-password"), S3 http://localhost:9000. localtest.me resolves to
 # 127.0.0.1 through public DNS, so the same issuer URL works in the browser and in pods.
 # Desktop: NODUS_DEFAULT_SERVER_URL=http://localhost:18081 (server URL in Settings > Cloud).
@@ -26,7 +26,7 @@ DEFAULT_CLUSTER=nodus
 NS=nodus
 KEYCLOAK_IP=10.43.0.50   # must match deploy/k3d/deps.yaml (inside the default k3s service CIDR)
 KEYCLOAK_HOST=keycloak.localtest.me
-PORTS=(18081 18082 8080 9000)
+PORTS=(18081 18082 18080 9000)
 
 CLUSTER="${NODUS_K3D_CLUSTER:-}"
 ACTION=up
@@ -111,44 +111,76 @@ else
     --servers 1 --agents 0 --wait \
     --k3s-arg "--disable=traefik@server:0" \
     -p "18081:18081@loadbalancer" -p "18082:18082@loadbalancer" \
-    -p "8080:8080@loadbalancer" -p "9000:9000@loadbalancer" >/dev/null \
-    || die "cluster creation failed (ports 18081, 18082, 8080, 9000 free?)"
+    -p "18080:18080@loadbalancer" -p "9000:9000@loadbalancer" >/dev/null \
+    || die "cluster creation failed (ports 18081, 18082, 18080, 9000 free?)"
 fi
 kubectl --context "$CTX" get ns "$NS" >/dev/null 2>&1 || kubectl --context "$CTX" create ns "$NS" >/dev/null
 
-# Pods resolve the public Keycloak host to its fixed ClusterIP (coredns-custom is
-# imported by k3s' CoreDNS), so browser and pods share one issuer URL.
+# Pods resolve the public Keycloak host to its fixed ClusterIP through a dedicated CoreDNS
+# server block (coredns-custom *.server is imported by k3s; the main block already uses the
+# hosts plugin, which may appear only once per block), so browser and pods share one issuer.
 log "Aliasing $KEYCLOAK_HOST to Keycloak inside the cluster"
 kubectl --context "$CTX" -n kube-system apply -f - >/dev/null <<DNS
 apiVersion: v1
 kind: ConfigMap
 metadata: { name: coredns-custom }
 data:
-  nodus.override: |
-    hosts {
-      $KEYCLOAK_IP $KEYCLOAK_HOST
-      fallthrough
+  nodus.server: |
+    $KEYCLOAK_HOST:53 {
+      hosts {
+        $KEYCLOAK_IP $KEYCLOAK_HOST
+      }
     }
 DNS
+# A broken override from an earlier run would keep CoreDNS crash-looping.
+kubectl --context "$CTX" -n kube-system patch cm coredns-custom --type=json \
+  -p '[{"op":"remove","path":"/data/nodus.override"}]' >/dev/null 2>&1 || true
 kubectl --context "$CTX" -n kube-system rollout restart deploy/coredns >/dev/null 2>&1 || true
+
+# Pods stay Pending when every node carries the disk-pressure taint (the Docker disk is full).
+pressure="$(kubectl --context "$CTX" get nodes -o jsonpath='{range .items[*]}{.spec.taints[?(@.key=="node.kubernetes.io/disk-pressure")].key}{"\n"}{end}' | grep -c disk-pressure || true)"
+total="$(kubectl --context "$CTX" get nodes --no-headers | wc -l | tr -d ' ')"
+if [ "$pressure" -ge "$total" ]; then
+  docker system df >&2 || true
+  die "all $total node(s) of '$CLUSTER' have disk pressure: the Docker disk is full, so nothing can be scheduled. Free space (e.g. 'docker builder prune', 'docker image prune -a', or 'docker volume prune' after checking what it removes) and run again."
+fi
+
+# Build and import the cloud image while the dependencies start (Keycloak is the slow one).
+BUILD_LOG="$(mktemp)"
+(
+  docker build -q -f "$ROOT/services/cloud/Dockerfile" -t nodus-cloud:dev "$ROOT" \
+    && k3d image import nodus-cloud:dev -c "$CLUSTER"
+) >"$BUILD_LOG" 2>&1 &
+BUILD_PID=$!
+log "Building the cloud image in the background (nodus-cloud:dev)"
+# Images already in the local Docker cache are copied in instead of pulled from the registries.
+for img in postgres:17 rustfs/rustfs:latest quay.io/keycloak/keycloak:26.7; do
+  docker image inspect "$img" >/dev/null 2>&1 && k3d image import "$img" -c "$CLUSTER" >/dev/null 2>&1 &
+done
 
 log "Deploying dependencies (PostgreSQL, S3, Keycloak)"
 k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-nodus.json" \
   --dry-run=client -o yaml | k apply -f - >/dev/null
 k apply -f "$ROOT/deploy/k3d/deps.yaml" >/dev/null
 
-log "Building the cloud image (nodus-cloud:dev)"
-run_quiet "docker build" docker build -q -f "$ROOT/services/cloud/Dockerfile" -t nodus-cloud:dev "$ROOT"
-k3d image import nodus-cloud:dev -c "$CLUSTER" >/dev/null
-
 log "Waiting for dependencies (Keycloak can take a minute)"
-for d in postgres s3 keycloak; do k rollout status "deploy/$d" --timeout=300s >/dev/null || die "$d did not become ready (kubectl --context $CTX -n $NS logs deploy/$d)"; done
+kubectl --context "$CTX" -n kube-system rollout status deploy/coredns --timeout=120s >/dev/null || die "CoreDNS is not ready (kubectl --context $CTX -n kube-system logs deploy/coredns)"
+dep_pids=()
+for d in postgres s3 keycloak; do
+  k rollout status "deploy/$d" --timeout=300s >/dev/null &
+  dep_pids+=("$!")
+done
+for pid in "${dep_pids[@]}"; do
+  wait "$pid" || die "a dependency did not become ready (kubectl --context $CTX -n $NS get pods)"
+done
+wait "$BUILD_PID" || { cat "$BUILD_LOG" >&2; die "cloud image build/import failed (output above)"; }
+rm -f "$BUILD_LOG"
 
 log "Installing the Helm release"
-# Force a rollout so a rebuilt image with the same tag is picked up.
+# The image id as annotation rolls the pods only when the image really changed.
 helm --kube-context "$CTX" -n "$NS" upgrade --install nodus "$ROOT/deploy/helm/nodus" \
   -f "$ROOT/deploy/helm/nodus/values-k3d.yaml" \
-  --set-string "podAnnotations.rebuilt=$(date +%s)" --wait --timeout 5m >/dev/null \
+  --set-string "podAnnotations.image=$(docker image inspect -f '{{.Id}}' nodus-cloud:dev)" --wait --timeout 5m >/dev/null \
   || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/nodus-api)"
 
 for _ in $(seq 1 30); do cloud_ready && break; sleep 2; done
@@ -157,7 +189,7 @@ ok "cloud is ready on $CLOUD_URL"
 cat <<MSG
 
   API        $CLOUD_URL   (gRPC localhost:18082)
-  Keycloak   http://$KEYCLOAK_HOST:8080   admin/admin; user1/nodus-dev-password
+  Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/nodus-dev-password
   Desktop    NODUS_DEFAULT_SERVER_URL=$CLOUD_URL yarn dev:desktop
   Logs       kubectl --context $CTX -n $NS logs -f deploy/nodus-api
   Stop       scripts/run-cloud-k3d.sh --down

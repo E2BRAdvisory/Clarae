@@ -12,10 +12,10 @@ worker:
   replicas: 1
 
 config:
-  OIDC_ISSUER: http://keycloak.localtest.me:8080/realms/nodus
+  OIDC_ISSUER: http://keycloak.localtest.me:18080/realms/nodus
   OIDC_AUDIENCE: nodus-api
   S3_ENDPOINT: http://s3:9000
-  KC_ADMIN_BASE_URL: http://keycloak:8080
+  KC_ADMIN_BASE_URL: http://keycloak:18080
   WEB_UI_ORIGIN: http://localhost:18081
   PUBLIC_GRPC_ADDR: localhost:18082
   LOG_LEVEL: debug
