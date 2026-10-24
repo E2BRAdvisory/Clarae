@@ -2,12 +2,16 @@
 # Full cloud session on a local k3d cluster: PostgreSQL, S3 (RustFS), Keycloak and the
 # Nodus Cloud Service deployed with Helm (deploy/helm/nodus + values-k3d.yaml).
 #
-#   scripts/run-cloud-k3d.sh                 choose the cluster (asked), build, deploy, wait
-#   scripts/run-cloud-k3d.sh --cluster NAME  use NAME without asking (created if missing);
-#                                            NODUS_K3D_CLUSTER does the same
-#   scripts/run-cloud-k3d.sh --down          remove Nodus (deletes the dedicated "nodus"
+#   yarn dev:cloud:k3d [up]                  choose the cluster (asked), build, deploy, wait;
+#                                            starts a stopped cluster
+#   yarn dev:cloud:k3d down                  switch Nodus off, keeping its data until the next
+#                                            "up": stops the dedicated "nodus" cluster; on any
+#                                            other cluster only scales Nodus down to zero pods
+#   yarn dev:cloud:k3d delete                remove Nodus for good (deletes the dedicated
 #                                            cluster; on other clusters only the namespace)
-#   scripts/run-cloud-k3d.sh --status        show pods
+#   yarn dev:cloud:k3d status                show pods
+#   --cluster NAME                           (any command) use NAME without asking; created by
+#                                            "up" if missing. NODUS_K3D_CLUSTER does the same
 #
 # Existing clusters are listed and a new cluster dedicated to Nodus is suggested: it keeps
 # the host ports (18081, 18082, 18080, 9000) and the DNS override away from your other work.
@@ -18,7 +22,7 @@
 # Keycloak http://keycloak.localtest.me:18080 (admin/admin; users admin/user1/user2,
 # password "nodus-dev-password"), S3 http://localhost:9000. localtest.me resolves to
 # 127.0.0.1 through public DNS, so the same issuer URL works in the browser and in pods.
-# Desktop: NODUS_DEFAULT_SERVER_URL=http://localhost:18081 (server URL in Settings > Cloud).
+# Desktop: yarn dev:desktop, then enter the server URL in Settings > Cloud.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -33,9 +37,8 @@ ACTION=up
 while [ $# -gt 0 ]; do
   case "$1" in
     --cluster) shift; CLUSTER="${1:?--cluster needs a name}" ;;
-    --down) ACTION=down ;;
-    --status) ACTION=status ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    up|down|delete|status) ACTION="$1" ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -82,6 +85,17 @@ k() { kubectl --context "$CTX" -n "$NS" "$@"; }
 case "$ACTION" in
   status) k get pods,svc; exit 0 ;;
   down)
+    cluster_exists "$CLUSTER" || die "cluster '$CLUSTER' does not exist"
+    if [ "$CLUSTER" = "$DEFAULT_CLUSTER" ]; then
+      k3d cluster stop "$CLUSTER" >/dev/null
+      ok "cluster '$CLUSTER' stopped (data is kept; 'up' starts it again)"
+    else
+      k scale deploy --all --replicas=0 >/dev/null 2>&1 || true
+      ok "Nodus scaled down on '$CLUSTER'; the cluster keeps running ('up' brings Nodus back)"
+    fi
+    exit 0 ;;
+  delete)
+    cluster_exists "$CLUSTER" || die "cluster '$CLUSTER' does not exist"
     if [ "$CLUSTER" = "$DEFAULT_CLUSTER" ]; then k3d cluster delete "$CLUSTER"
     else
       helm --kube-context "$CTX" -n "$NS" uninstall nodus >/dev/null 2>&1 || true
@@ -162,6 +176,9 @@ log "Deploying dependencies (PostgreSQL, S3, Keycloak)"
 k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-nodus.json" \
   --dry-run=client -o yaml | k apply -f - >/dev/null
 k apply -f "$ROOT/deploy/k3d/deps.yaml" >/dev/null
+# Keycloak imports the realm only on an empty database: restart it when the realm file changed.
+realm_hash="$(shasum -a 256 "$ROOT/deploy/keycloak/realm-nodus.json" | cut -c1-16)"
+k patch deploy keycloak -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"realm-hash\":\"$realm_hash\"}}}}}" >/dev/null
 
 log "Waiting for dependencies (Keycloak can take a minute)"
 kubectl --context "$CTX" -n kube-system rollout status deploy/coredns --timeout=120s >/dev/null || die "CoreDNS is not ready (kubectl --context $CTX -n kube-system logs deploy/coredns)"
@@ -190,7 +207,7 @@ cat <<MSG
 
   API        $CLOUD_URL   (gRPC localhost:18082)
   Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/nodus-dev-password
-  Desktop    NODUS_DEFAULT_SERVER_URL=$CLOUD_URL yarn dev:desktop
+  Desktop    yarn dev:desktop, then Settings > Cloud: server URL $CLOUD_URL
   Logs       kubectl --context $CTX -n $NS logs -f deploy/nodus-api
-  Stop       scripts/run-cloud-k3d.sh --down
+  Stop       yarn dev:cloud:k3d down   (or delete)
 MSG
