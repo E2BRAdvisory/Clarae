@@ -1,6 +1,7 @@
 // Package configprofiles distributes configuration to clients (§2.6.6).
-// M0 serves only the product defaults with version 0; profiles, group
-// assignments and locked keys arrive with M4.
+// The effective configuration is the product defaults overlaid with the global profile and
+// the profiles of the user's groups (service.go); the version is a revision that grows with
+// every change, and clients refetch with If-None-Match.
 package configprofiles
 
 import (
@@ -11,13 +12,14 @@ import (
 	"strconv"
 
 	"nodus/services/cloud/internal/api"
+	"nodus/services/cloud/internal/auth"
 )
 
 // HTTP implements GET /config/effective.
-type HTTP struct{}
+type HTTP struct{ svc *Service }
 
 // NewHTTP returns the handler.
-func NewHTTP() *HTTP { return &HTTP{} }
+func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
 // ProductDefaults are the built-in defaults every client starts from. Keys
 // are dotted; the schema (api/config-profile.schema.json) is defined in M4.
@@ -38,8 +40,12 @@ func ProductDefaults() map[string]any {
 }
 
 // GetEffectiveConfig implements GET /config/effective with ETag support.
-func (h *HTTP) GetEffectiveConfig(_ context.Context, req api.GetEffectiveConfigRequestObject) (api.GetEffectiveConfigResponseObject, error) {
-	cfg := api.EffectiveConfig{Version: 0, Config: ProductDefaults(), LockedKeys: []string{}}
+func (h *HTTP) GetEffectiveConfig(ctx context.Context, req api.GetEffectiveConfigRequestObject) (api.GetEffectiveConfigResponseObject, error) {
+	eff, err := h.svc.EffectiveFor(ctx, auth.MustPrincipal(ctx).UserID)
+	if err != nil {
+		return nil, err
+	}
+	cfg := api.EffectiveConfig{Version: int(eff.Version), Config: eff.Config, LockedKeys: eff.LockedKeys}
 	etag := etagOf(cfg)
 	if req.Params.IfNoneMatch != nil && *req.Params.IfNoneMatch == etag {
 		return api.GetEffectiveConfig304Response{}, nil
@@ -51,7 +57,7 @@ func (h *HTTP) GetEffectiveConfig(_ context.Context, req api.GetEffectiveConfigR
 }
 
 func etagOf(cfg api.EffectiveConfig) string {
-	b, _ := json.Marshal(cfg)
+	b, _ := json.Marshal(cfg) // map keys are sorted: the encoding is canonical
 	sum := sha256.Sum256(b)
 	return strconv.Quote("v" + strconv.Itoa(cfg.Version) + "-" + hex.EncodeToString(sum[:8]))
 }

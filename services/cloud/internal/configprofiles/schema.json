@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nodus.example/schemas/config-profile.schema.json",
+  "title": "Nodus Config Profile",
+  "description": "Configuration distributed by the cloud service (§2.6.6). A profile sets any subset of these keys; keys listed in locked_keys cannot be overridden by the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "features": {
+      "type": "object",
+      "description": "Feature flags: a false value hides the function in the client.",
+      "additionalProperties": { "type": "boolean" },
+      "properties": {
+        "audio_recorder": { "type": "boolean" },
+        "web_viewer": { "type": "boolean" },
+        "drawings": { "type": "boolean" },
+        "canvas": { "type": "boolean" },
+        "sharing": { "type": "boolean" }
+      }
+    },
+    "editor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fontSize": { "type": "integer", "minimum": 8, "maximum": 48 },
+        "lineWrap": { "type": "boolean" },
+        "readableWidth": { "type": "boolean" },
+        "spellcheck": { "type": "boolean" },
+        "newNoteFolder": { "type": "string", "maxLength": 512 },
+        "attachmentsFolder": { "type": "string", "maxLength": 512 },
+        "linkFormat": { "enum": ["shortest", "path", "relative"] },
+        "smartPaste": { "type": "boolean" }
+      }
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "theme": { "enum": ["system", "light", "dark"] },
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "zoom": { "type": "number", "minimum": 0.5, "maximum": 3 }
+      }
+    },
+    "hotkeys": {
+      "type": "object",
+      "description": "Default hotkeys: command id to combination.",
+      "additionalProperties": { "type": "string", "maxLength": 64 }
+    },
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interval_seconds": { "type": "integer", "minimum": 5, "maximum": 3600 },
+        "max_file_size_bytes": { "type": "integer", "minimum": 1024 }
+      }
+    },
+    "attachments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_size_bytes": { "type": "integer", "minimum": 1024 }
+      }
+    },
+    "daily_notes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "folder": { "type": "string", "maxLength": 512 },
+        "format": { "type": "string", "maxLength": 64 },
+        "template": { "type": "string", "maxLength": 512 }
+      }
+    },
+    "templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "library_share_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Share mounted read-only as the template library of the group"
+        }
+      }
+    },
+    "servers": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["name", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "url": { "type": "string", "format": "uri", "maxLength": 512 }
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "redirect_mode": { "enum": ["auto", "loopback", "custom_scheme"] }
+      }
+    }
+  }
+}
