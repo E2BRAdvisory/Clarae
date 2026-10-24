@@ -35,7 +35,7 @@ func (h *HTTP) ListRevisions(ctx context.Context, req api.ListRevisionsRequestOb
 	if req.Params.Cursor != nil {
 		cursor = *req.Params.Cursor
 	}
-	rows, next, err := h.svc.List(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.FileId, limit, cursor)
+	rows, next, err := h.svc.List(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.FileId, limit, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (h *HTTP) ListRevisions(ctx context.Context, req api.ListRevisionsRequestOb
 
 // GetRevisionContent implements GET .../revisions/{rev}/content.
 func (h *HTTP) GetRevisionContent(ctx context.Context, req api.GetRevisionContentRequestObject) (api.GetRevisionContentResponseObject, error) {
-	rc, size, err := h.svc.Content(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.FileId, clampInt32(req.Rev))
+	rc, size, err := h.svc.Content(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.FileId, clampInt32(req.Rev))
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (h *HTTP) RestoreRevision(ctx context.Context, req api.RestoreRevisionReque
 		// A retry with the same key must land on the same operation id.
 		opID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(req.VaultId.String()+req.FileId.String()+*k))
 	}
-	res, err := h.svc.Restore(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.FileId, clampInt32(req.Rev), opID)
+	res, err := h.svc.Restore(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.FileId, clampInt32(req.Rev), opID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,4 +86,11 @@ func clampInt32(n int) int32 {
 		return 0
 	}
 	return int32(n)
+}
+
+func scopeOf(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

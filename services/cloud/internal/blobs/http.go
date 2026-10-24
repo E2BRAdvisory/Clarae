@@ -23,7 +23,7 @@ func (h *HTTP) CheckBlobs(ctx context.Context, req api.CheckBlobsRequestObject) 
 	if req.Body == nil {
 		return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "body is required")
 	}
-	missing, err := h.svc.Check(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.Body.Hashes)
+	missing, err := h.svc.Check(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.Body.Hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (h *HTTP) PutBlob(ctx context.Context, req api.PutBlobRequestObject) (api.P
 	if body == nil { // empty file: the hash check below still applies
 		body = strings.NewReader("")
 	}
-	if err := h.svc.Put(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.Sha256, body); err != nil {
+	if err := h.svc.Put(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.Sha256, body); err != nil {
 		return nil, err
 	}
 	return api.PutBlob204Response{}, nil
@@ -48,7 +48,7 @@ func (h *HTTP) GetBlob(ctx context.Context, req api.GetBlobRequestObject) (api.G
 	// The size is needed to resolve the range: open the whole thing first when a range is asked.
 	var rng *Range
 	if hdr := req.Params.Range; hdr != nil && *hdr != "" {
-		size, err := h.svc.Size(ctx, userID, req.VaultId, req.Sha256)
+		size, err := h.svc.Size(ctx, userID, req.VaultId, scopeOf(req.Params.Scope), req.Sha256)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func (h *HTTP) GetBlob(ctx context.Context, req api.GetBlobRequestObject) (api.G
 			rng = &r
 		}
 	}
-	rc, size, err := h.svc.Open(ctx, userID, req.VaultId, req.Sha256, rng)
+	rc, size, err := h.svc.Open(ctx, userID, req.VaultId, scopeOf(req.Params.Scope), req.Sha256, rng)
 	if err != nil {
 		return nil, err
 	}
@@ -77,4 +77,11 @@ func (h *HTTP) GetBlob(ctx context.Context, req api.GetBlobRequestObject) (api.G
 	}
 	cr := fmt.Sprintf("bytes %d-%d/%d", rng.Start, rng.End, size)
 	return api.GetBlob206ApplicationoctetStreamResponse{Body: rc, ContentLength: rng.End - rng.Start + 1, Headers: api.GetBlob206ResponseHeaders{ContentRange: &cr}}, nil
+}
+
+func scopeOf(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

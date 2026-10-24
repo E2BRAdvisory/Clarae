@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -53,10 +55,19 @@ const (
 const defaultDeletedRetention = 30 * 24 * time.Hour
 
 // Service implements the vaults and vaultkeys modules.
-type Service struct{ db *db.DB }
+type Service struct {
+	db    *db.DB
+	authz access.Authorizer
+}
 
 // NewService binds the module to the database.
 func NewService(d *db.DB) *Service { return &Service{db: d} }
+
+// WithAuthorizer lets Tree serve share scopes (M4); without one only owners are served.
+func (s *Service) WithAuthorizer(a access.Authorizer) *Service {
+	s.authz = a
+	return s
+}
 
 // KDF is the "kdf" object of an envelope.
 type KDF struct {
@@ -306,6 +317,33 @@ func (s *Service) Tree(ctx context.Context, userID, vaultID uuid.UUID) (entries 
 		entries = append(entries, TreeEntry{ID: r.ID, Path: r.Path, Kind: r.Kind, Rev: r.CurrentRev, Hash: h, Size: r.Size})
 	}
 	return entries, v.LastSeq, nil
+}
+
+// TreeScoped is Tree through an optional share scope: the manifest of the files the share
+// covers, with paths relative to its root (§3.4.7). An empty scope is the owner's own tree.
+func (s *Service) TreeScoped(ctx context.Context, userID, vaultID uuid.UUID, scope string) ([]TreeEntry, int64, error) {
+	if scope == "" {
+		return s.Tree(ctx, userID, vaultID)
+	}
+	if s.authz == nil {
+		return nil, 0, httpproblem.Errorf(syncproto.CodeValidationFailed, "shares are not available")
+	}
+	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Viewer)
+	if err != nil {
+		return nil, 0, err
+	}
+	entries, asOf, err := s.Tree(ctx, acc.Vault.OwnerID, vaultID)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]TreeEntry, 0, len(entries))
+	for _, e := range entries {
+		if acc.Scope.ContainsFile(e.ID, e.Path) {
+			e.Path = acc.Scope.Rel(e.Path)
+			out = append(out, e)
+		}
+	}
+	return out, asOf, nil
 }
 
 // Envelope is a stored key envelope.

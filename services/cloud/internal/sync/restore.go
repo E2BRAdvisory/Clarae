@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -16,16 +18,17 @@ import (
 // reuses its blob (§3.5.2). History is never rewritten: restoring revision 3
 // of a file at revision 7 produces revision 8. A deleted file comes back at
 // its last path. opID makes retries idempotent.
-func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID, fileID uuid.UUID, rev int32, opID uuid.UUID) (syncproto.OpResult, error) {
-	vault, err := s.vaults.Open(ctx, userID, vaultID)
+func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, rev int32, opID uuid.UUID) (syncproto.OpResult, error) {
+	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Editor)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
+	vault := acc.Vault
 	quotaBytes, err := s.quota.QuotaOf(ctx, vault.OwnerID)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	env := commitEnv{vault: vault, userID: userID, quota: quotaBytes, maxFile: s.maxFileBytes(ctx)}
+	env := commitEnv{vault: vault, userID: userID, quota: quotaBytes, maxFile: s.maxFileBytes(ctx), scope: acc.Scope}
 	op := syncproto.Op{OpID: opID.String(), Op: syncproto.OpRestore, FileID: fileID.String()}
 
 	var res syncproto.OpResult
@@ -42,6 +45,9 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID, fileID u
 		}
 		if err != nil {
 			return err
+		}
+		if acc.Scope != nil && !acc.Scope.ContainsFile(f.ID, f.Path) {
+			return reject(syncproto.CodeNotFound, "file not found")
 		}
 		target, err := q.GetRevision(ctx, dbgen.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
 		if errors.Is(err, pgx.ErrNoRows) {

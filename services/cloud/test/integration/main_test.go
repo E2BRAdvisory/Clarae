@@ -28,7 +28,6 @@ import (
 	"nodus/services/cloud/internal/app"
 	"nodus/services/cloud/internal/auth"
 	"nodus/services/cloud/internal/auth/authtest"
-	"nodus/services/cloud/internal/configprofiles"
 	"nodus/services/cloud/internal/db"
 	"nodus/services/cloud/internal/httpserver"
 	"nodus/services/cloud/internal/storage"
@@ -148,7 +147,6 @@ func newEnv(t *testing.T) *env {
 		Logger: zerolog.Nop(),
 		Auth:   authn,
 		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "nodus-desktop", Audience: "nodus-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
-		Config: configprofiles.NewHTTP(),
 	}))
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)

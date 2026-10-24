@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -31,22 +33,16 @@ import (
 // MaxSingleUpload is the largest body accepted by PUT /blobs/{sha256} (§3.4.4).
 const MaxSingleUpload = 32 << 20
 
-// VaultOpener decides whether a user may use a vault (implemented by the
-// vaults module).
-type VaultOpener interface {
-	Open(ctx context.Context, userID, vaultID uuid.UUID) (dbgen.Vault, error)
-}
-
 // Service implements the blobs module.
 type Service struct {
-	db     *db.DB
-	store  storage.BlobStore
-	vaults VaultOpener
+	db    *db.DB
+	store storage.BlobStore
+	authz access.Authorizer
 }
 
 // NewService wires the module.
-func NewService(d *db.DB, store storage.BlobStore, v VaultOpener) *Service {
-	return &Service{db: d, store: store, vaults: v}
+func NewService(d *db.DB, store storage.BlobStore, a access.Authorizer) *Service {
+	return &Service{db: d, store: store, authz: a}
 }
 
 // Store exposes the object store to modules that stream blobs (revisions).
@@ -66,8 +62,8 @@ func IsHash(s string) bool {
 }
 
 // Check returns the hashes the vault does not have yet.
-func (s *Service) Check(ctx context.Context, userID, vaultID uuid.UUID, hashes []string) ([]string, error) {
-	if _, err := s.vaults.Open(ctx, userID, vaultID); err != nil {
+func (s *Service) Check(ctx context.Context, userID, vaultID uuid.UUID, scope string, hashes []string) ([]string, error) {
+	if _, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Editor); err != nil {
 		return nil, err
 	}
 	for _, h := range hashes {
@@ -119,8 +115,8 @@ func spool(r io.Reader, max int64) (path string, size int64, hash string, err er
 
 // Put stores a blob uploaded in a single request: the body is hashed while it
 // is read and the upload is rejected when the digest differs from the URL.
-func (s *Service) Put(ctx context.Context, userID, vaultID uuid.UUID, hash string, body io.Reader) error {
-	if _, err := s.vaults.Open(ctx, userID, vaultID); err != nil {
+func (s *Service) Put(ctx context.Context, userID, vaultID uuid.UUID, scope, hash string, body io.Reader) error {
+	if _, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Editor); err != nil {
 		return err
 	}
 	path, size, got, err := spool(body, MaxSingleUpload)
@@ -215,12 +211,35 @@ func ParseRange(header string, size int64) (r Range, ok bool, err error) {
 }
 
 // Open returns a reader for the blob (optionally a range of it) after
-// verifying the vault owns it.
-func (s *Service) Open(ctx context.Context, userID, vaultID uuid.UUID, hash string, rng *Range) (io.ReadCloser, int64, error) {
-	if _, err := s.vaults.Open(ctx, userID, vaultID); err != nil {
+// verifying the vault owns it and, through a share, that the blob belongs to
+// a file the share covers.
+func (s *Service) Open(ctx context.Context, userID, vaultID uuid.UUID, scope, hash string, rng *Range) (io.ReadCloser, int64, error) {
+	if err := s.authorizeRead(ctx, userID, vaultID, scope, hash); err != nil {
 		return nil, 0, err
 	}
 	return s.OpenForVault(ctx, vaultID, hash, rng)
+}
+
+// authorizeRead lets the owner read any blob of the vault and a share recipient only the
+// blobs of files inside the share (a hash learnt elsewhere gives nothing outside it).
+func (s *Service) authorizeRead(ctx context.Context, userID, vaultID uuid.UUID, scope, hash string) error {
+	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Viewer)
+	if err != nil {
+		return err
+	}
+	if acc.Scope == nil {
+		return nil
+	}
+	files, err := s.db.Queries().ListBlobFiles(ctx, dbgen.ListBlobFilesParams{VaultID: vaultID, BlobHash: &hash})
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if acc.Scope.ContainsFile(f.ID, f.Path) {
+			return nil
+		}
+	}
+	return httpproblem.NotFound("blob")
 }
 
 // OpenForVault is Open for callers that already authorized the vault.
@@ -252,8 +271,8 @@ func (s *Service) OpenForVault(ctx context.Context, vaultID uuid.UUID, hash stri
 }
 
 // Size returns the size of a blob the vault owns.
-func (s *Service) Size(ctx context.Context, userID, vaultID uuid.UUID, hash string) (int64, error) {
-	if _, err := s.vaults.Open(ctx, userID, vaultID); err != nil {
+func (s *Service) Size(ctx context.Context, userID, vaultID uuid.UUID, scope, hash string) (int64, error) {
+	if err := s.authorizeRead(ctx, userID, vaultID, scope, hash); err != nil {
 		return 0, err
 	}
 	size, ok, err := VaultBlob(ctx, s.db.Queries(), vaultID, hash)

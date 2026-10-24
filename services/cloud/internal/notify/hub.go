@@ -23,10 +23,25 @@ import (
 // Channel is the Postgres NOTIFY channel (mirrors sync.ChannelVaultChanged).
 const Channel = "vault_changed"
 
-// Event is "the vault reached this seq".
+// Kind tells what an Event is about.
+type Kind int
+
+// Event kinds; the zero value is a vault event.
+const (
+	KindVault Kind = iota
+	KindShare
+	KindConfig
+)
+
+// Event is one notification: "the vault reached this seq" (the default kind),
+// "a share was granted, revoked or updated", or "the configuration has a new revision".
 type Event struct {
-	VaultID uuid.UUID
-	Seq     int64
+	Kind      Kind
+	VaultID   uuid.UUID
+	Seq       int64
+	ShareID   uuid.UUID
+	ShareKind string
+	Revision  int64
 }
 
 // Hub fans events out to subscribers.
@@ -34,10 +49,19 @@ type Hub struct {
 	db  *db.DB
 	log zerolog.Logger
 
-	mu     sync.Mutex
-	subs   map[*Sub]struct{}
-	owners map[uuid.UUID]ownerEntry
+	mu         sync.Mutex
+	subs       map[*Sub]struct{}
+	owners     map[uuid.UUID]ownerEntry
+	recipients map[uuid.UUID]recipientEntry
 }
+
+// recipientEntry caches who can read a vault through shares; share events drop it.
+type recipientEntry struct {
+	users map[uuid.UUID]bool
+	until time.Time
+}
+
+const recipientTTL = 5 * time.Second
 
 type ownerEntry struct {
 	owner   uuid.UUID
@@ -47,7 +71,7 @@ type ownerEntry struct {
 
 // NewHub creates a hub; call Run to start listening.
 func NewHub(d *db.DB, log zerolog.Logger) *Hub {
-	return &Hub{db: d, log: log, subs: map[*Sub]struct{}{}, owners: map[uuid.UUID]ownerEntry{}}
+	return &Hub{db: d, log: log, subs: map[*Sub]struct{}{}, owners: map[uuid.UUID]ownerEntry{}, recipients: map[uuid.UUID]recipientEntry{}}
 }
 
 // Sub is one subscriber's coalescing mailbox.
@@ -55,6 +79,8 @@ type Sub struct {
 	user    uuid.UUID
 	mu      sync.Mutex
 	pending map[uuid.UUID]int64
+	shares  []Event // share events are not coalesced by value, only de-duplicated
+	config  int64
 	signal  chan struct{}
 }
 
@@ -76,8 +102,25 @@ func (h *Hub) Unsubscribe(s *Sub) {
 
 func (s *Sub) push(ev Event) {
 	s.mu.Lock()
-	if ev.Seq > s.pending[ev.VaultID] {
-		s.pending[ev.VaultID] = ev.Seq
+	switch ev.Kind {
+	case KindShare:
+		dup := false
+		for _, e := range s.shares {
+			if e.ShareID == ev.ShareID && e.ShareKind == ev.ShareKind {
+				dup = true
+			}
+		}
+		if !dup {
+			s.shares = append(s.shares, ev)
+		}
+	case KindConfig:
+		if ev.Revision > s.config {
+			s.config = ev.Revision
+		}
+	default:
+		if ev.Seq > s.pending[ev.VaultID] {
+			s.pending[ev.VaultID] = ev.Seq
+		}
 	}
 	s.mu.Unlock()
 	select {
@@ -94,12 +137,16 @@ func (s *Sub) Push(ev Event) { s.push(ev) }
 func (s *Sub) Next(ctx context.Context) ([]Event, error) {
 	for {
 		s.mu.Lock()
-		if len(s.pending) > 0 {
-			out := make([]Event, 0, len(s.pending))
+		if len(s.pending) > 0 || len(s.shares) > 0 || s.config > 0 {
+			out := make([]Event, 0, len(s.pending)+len(s.shares)+1)
 			for v, seq := range s.pending {
 				out = append(out, Event{VaultID: v, Seq: seq})
 			}
-			s.pending = map[uuid.UUID]int64{}
+			out = append(out, s.shares...)
+			if s.config > 0 {
+				out = append(out, Event{Kind: KindConfig, Revision: s.config})
+			}
+			s.pending, s.shares, s.config = map[uuid.UUID]int64{}, nil, 0
 			s.mu.Unlock()
 			return out, nil
 		}
@@ -146,16 +193,34 @@ func (h *Hub) owner(ctx context.Context, vault uuid.UUID) (uuid.UUID, bool) {
 	return e.owner, !e.deleted
 }
 
-// Dispatch delivers an event to the subscribers allowed to see the vault.
-func (h *Hub) Dispatch(ctx context.Context, ev Event) {
-	owner, ok := h.owner(ctx, ev.VaultID)
-	if !ok {
-		return
+// sharedReaders returns the users who read a vault through accepted grants on live shares.
+func (h *Hub) sharedReaders(ctx context.Context, vault uuid.UUID) map[uuid.UUID]bool {
+	h.mu.Lock()
+	e, ok := h.recipients[vault]
+	h.mu.Unlock()
+	if ok && time.Now().Before(e.until) {
+		return e.users
 	}
+	ids, err := h.db.Queries().ListVaultRecipients(ctx, vault)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("notify: cannot resolve share recipients")
+		return e.users
+	}
+	users := make(map[uuid.UUID]bool, len(ids))
+	for _, id := range ids {
+		users[id] = true
+	}
+	h.mu.Lock()
+	h.recipients[vault] = recipientEntry{users: users, until: time.Now().Add(recipientTTL)}
+	h.mu.Unlock()
+	return users
+}
+
+func (h *Hub) deliver(users map[uuid.UUID]bool, ev Event) {
 	h.mu.Lock()
 	targets := make([]*Sub, 0, 2)
 	for s := range h.subs {
-		if s.user == owner {
+		if users == nil || users[s.user] {
 			targets = append(targets, s)
 		}
 	}
@@ -165,18 +230,84 @@ func (h *Hub) Dispatch(ctx context.Context, ev Event) {
 	}
 }
 
-// Snapshot returns the vaults of a user whose seq is ahead of what the client
-// knows (replay after a reconnect, §3.6 known_seq).
-func (h *Hub) Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64) ([]Event, error) {
-	rows, err := h.db.Queries().ListVaultsOfOwners(ctx, user)
+// Dispatch delivers a vault event to the owner and to the users who reach the vault through a share.
+func (h *Hub) Dispatch(ctx context.Context, ev Event) {
+	owner, ok := h.owner(ctx, ev.VaultID)
+	if !ok {
+		return
+	}
+	users := map[uuid.UUID]bool{owner: true}
+	for u := range h.sharedReaders(ctx, ev.VaultID) {
+		users[u] = true
+	}
+	h.deliver(users, ev)
+}
+
+// DispatchShare delivers a share event: to the users it names, or to the owner and everyone
+// holding a grant on the share. The cached recipients of vaults are dropped, since who can
+// read what just changed.
+func (h *Hub) DispatchShare(ctx context.Context, se ShareEvent) {
+	h.mu.Lock()
+	h.recipients = map[uuid.UUID]recipientEntry{}
+	h.mu.Unlock()
+	users := map[uuid.UUID]bool{}
+	for _, u := range se.Users {
+		users[u] = true
+	}
+	if len(se.Users) == 0 {
+		q := h.db.Queries()
+		sh, err := q.GetShare(ctx, se.Share)
+		if err != nil {
+			return
+		}
+		if owner, ok := h.owner(ctx, sh.VaultID); ok {
+			users[owner] = true
+		}
+		ids, err := q.ListShareRecipients(ctx, se.Share)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("notify: cannot resolve share recipients")
+			return
+		}
+		for _, u := range ids {
+			users[u] = true
+		}
+	}
+	h.deliver(users, Event{Kind: KindShare, ShareID: se.Share, ShareKind: se.Kind})
+}
+
+// DispatchConfig tells every connected client that the configuration has a new revision.
+func (h *Hub) DispatchConfig(revision int64) {
+	h.deliver(nil, Event{Kind: KindConfig, Revision: revision})
+}
+
+// Snapshot returns what is ahead of what the client knows (replay after a reconnect, §3.6):
+// the vaults of the user, the ones shared with them, and the configuration revision.
+func (h *Hub) Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64, configVersion int64) ([]Event, error) {
+	q := h.db.Queries()
+	rows, err := q.ListVaultsOfOwners(ctx, user)
 	if err != nil {
 		return nil, err
 	}
 	var out []Event
+	seen := map[uuid.UUID]bool{}
 	for _, r := range rows {
+		seen[r.ID] = true
 		if r.LastSeq > known[r.ID.String()] {
 			out = append(out, Event{VaultID: r.ID, Seq: r.LastSeq})
 		}
+	}
+	shared, err := q.ListSharedVaultSeqs(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range shared {
+		if !seen[r.ID] && r.LastSeq > known[r.ID.String()] {
+			seen[r.ID] = true
+			out = append(out, Event{VaultID: r.ID, Seq: r.LastSeq})
+		}
+	}
+	if rev, err := q.GetConfigRevision(ctx); err == nil && rev > configVersion {
+		out = append(out, Event{Kind: KindConfig, Revision: rev})
 	}
 	return out, nil
 }
@@ -201,8 +332,10 @@ func (h *Hub) listen(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 	defer conn.Release()
-	if _, err := conn.Exec(ctx, "LISTEN "+Channel); err != nil {
-		return err
+	for _, ch := range []string{Channel, ChannelShare, ChannelConfig} {
+		if _, err := conn.Exec(ctx, "LISTEN "+ch); err != nil {
+			return err
+		}
 	}
 	h.log.Info().Msg("notify listener ready")
 	for {
@@ -210,8 +343,19 @@ func (h *Hub) listen(ctx context.Context, pool *pgxpool.Pool) error {
 		if err != nil {
 			return err
 		}
-		if ev, ok := ParseMessage(n.Payload); ok {
-			h.Dispatch(ctx, ev)
+		switch n.Channel {
+		case ChannelShare:
+			if se, ok := ParseShare(n.Payload); ok {
+				h.DispatchShare(ctx, se)
+			}
+		case ChannelConfig:
+			if rev, err := strconv.ParseInt(n.Payload, 10, 64); err == nil {
+				h.DispatchConfig(rev)
+			}
+		default:
+			if ev, ok := ParseMessage(n.Payload); ok {
+				h.Dispatch(ctx, ev)
+			}
 		}
 	}
 }

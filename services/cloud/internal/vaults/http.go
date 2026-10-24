@@ -104,7 +104,7 @@ func (h *HTTP) RestoreVault(ctx context.Context, req api.RestoreVaultRequestObje
 
 // GetVaultTree implements GET /vaults/{vaultId}/tree.
 func (h *HTTP) GetVaultTree(ctx context.Context, req api.GetVaultTreeRequestObject) (api.GetVaultTreeResponseObject, error) {
-	entries, asOf, err := h.svc.Tree(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId)
+	entries, asOf, err := h.svc.TreeScoped(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, deref(req.Params.Scope))
 	if err != nil {
 		return nil, err
 	}
@@ -172,3 +172,10 @@ func toAPIEnvelope(e Envelope) api.KeyEnvelope {
 }
 
 var _ = openapi_types.UUID{}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

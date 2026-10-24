@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -20,14 +22,9 @@ import (
 	"nodus/shared/syncproto"
 )
 
-// VaultOpener decides whether a user may use a vault.
-type VaultOpener interface {
-	Open(ctx context.Context, userID, vaultID uuid.UUID) (dbgen.Vault, error)
-}
-
 // Restorer creates the new revision (implemented by the sync module).
 type Restorer interface {
-	RestoreRevision(ctx context.Context, userID, vaultID, fileID uuid.UUID, rev int32, opID uuid.UUID) (syncproto.OpResult, error)
+	RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, rev int32, opID uuid.UUID) (syncproto.OpResult, error)
 }
 
 // BlobReader streams blob content (implemented by the blobs module).
@@ -38,27 +35,35 @@ type BlobReader interface {
 // Service implements the revisions module.
 type Service struct {
 	db       *db.DB
-	vaults   VaultOpener
+	authz    access.Authorizer
 	restorer Restorer
 	blobs    BlobReader
 }
 
 // NewService wires the module.
-func NewService(d *db.DB, v VaultOpener, r Restorer, b BlobReader) *Service {
-	return &Service{db: d, vaults: v, restorer: r, blobs: b}
+func NewService(d *db.DB, a access.Authorizer, r Restorer, b BlobReader) *Service {
+	return &Service{db: d, authz: a, restorer: r, blobs: b}
+}
+
+// readableFile authorizes a read of a file's history, through an optional share.
+func (s *Service) readableFile(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID) error {
+	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Viewer)
+	if err != nil {
+		return err
+	}
+	f, err := s.db.Queries().GetFile(ctx, dbgen.GetFileParams{ID: fileID, VaultID: vaultID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && acc.Scope != nil && !acc.Scope.ContainsFile(f.ID, f.Path)) {
+		return httpproblem.NotFound("file")
+	}
+	return err
 }
 
 // List returns revisions newest first, with a cursor for the next page.
-func (s *Service) List(ctx context.Context, userID, vaultID, fileID uuid.UUID, limit int, cursor string) ([]dbgen.FileRevision, string, error) {
-	if _, err := s.vaults.Open(ctx, userID, vaultID); err != nil {
+func (s *Service) List(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, limit int, cursor string) ([]dbgen.FileRevision, string, error) {
+	if err := s.readableFile(ctx, userID, vaultID, scope, fileID); err != nil {
 		return nil, "", err
 	}
 	q := s.db.Queries()
-	if _, err := q.GetFile(ctx, dbgen.GetFileParams{ID: fileID, VaultID: vaultID}); errors.Is(err, pgx.ErrNoRows) {
-		return nil, "", httpproblem.NotFound("file")
-	} else if err != nil {
-		return nil, "", err
-	}
 	before := int32(0)
 	if cursor != "" {
 		n, err := strconv.ParseInt(cursor, 10, 32)
@@ -83,8 +88,8 @@ func (s *Service) List(ctx context.Context, userID, vaultID, fileID uuid.UUID, l
 }
 
 // Content opens the blob of a revision.
-func (s *Service) Content(ctx context.Context, userID, vaultID, fileID uuid.UUID, rev int32) (io.ReadCloser, int64, error) {
-	if _, err := s.vaults.Open(ctx, userID, vaultID); err != nil {
+func (s *Service) Content(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, rev int32) (io.ReadCloser, int64, error) {
+	if err := s.readableFile(ctx, userID, vaultID, scope, fileID); err != nil {
 		return nil, 0, err
 	}
 	r, err := s.db.Queries().GetRevision(ctx, dbgen.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
@@ -101,8 +106,8 @@ func (s *Service) Content(ctx context.Context, userID, vaultID, fileID uuid.UUID
 }
 
 // Restore restores a revision as a new one.
-func (s *Service) Restore(ctx context.Context, userID, vaultID, fileID uuid.UUID, rev int32, opID uuid.UUID) (syncproto.OpResult, error) {
-	return s.restorer.RestoreRevision(ctx, userID, vaultID, fileID, rev, opID)
+func (s *Service) Restore(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, rev int32, opID uuid.UUID) (syncproto.OpResult, error) {
+	return s.restorer.RestoreRevision(ctx, userID, vaultID, scope, fileID, rev, opID)
 }
 
 // RetentionPolicy defines which revisions survive (§2.6.2): everything newer

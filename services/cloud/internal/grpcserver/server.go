@@ -6,6 +6,7 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 type Hub interface {
 	Subscribe(user uuid.UUID) *notify.Sub
 	Unsubscribe(s *notify.Sub)
-	Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64) ([]notify.Event, error)
+	Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64, configVersion int64) ([]notify.Event, error)
 }
 
 // New builds the gRPC server with the auth interceptors and NotifyService.
@@ -63,7 +64,7 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 	}
 	sub := n.hub.Subscribe(p.UserID)
 	defer n.hub.Unsubscribe(sub)
-	replay, err := n.hub.Snapshot(ctx, p.UserID, req.GetKnownSeq())
+	replay, err := n.hub.Snapshot(ctx, p.UserID, req.GetKnownSeq(), int64(req.GetConfigVersion()))
 	if err != nil {
 		return status.Error(codes.Internal, "replay failed")
 	}
@@ -79,7 +80,15 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 			return status.Error(codes.Unauthenticated, "token expired")
 		}
 		for _, ev := range batch {
-			msg := &notifyv1.Event{Payload: &notifyv1.Event_VaultChanged{VaultChanged: &notifyv1.VaultChanged{VaultId: ev.VaultID.String(), Seq: ev.Seq}}}
+			var msg *notifyv1.Event
+			switch ev.Kind {
+			case notify.KindShare:
+				msg = &notifyv1.Event{Payload: &notifyv1.Event_ShareChanged{ShareChanged: &notifyv1.ShareChanged{ShareId: ev.ShareID.String(), Kind: ev.ShareKind}}}
+			case notify.KindConfig:
+				msg = &notifyv1.Event{Payload: &notifyv1.Event_ConfigChanged{ConfigChanged: &notifyv1.ConfigChanged{Version: clampInt32(ev.Revision)}}}
+			default:
+				msg = &notifyv1.Event{Payload: &notifyv1.Event_VaultChanged{VaultChanged: &notifyv1.VaultChanged{VaultId: ev.VaultID.String(), Seq: ev.Seq}}}
+			}
 			if err := stream.Send(msg); err != nil {
 				return err
 			}
@@ -136,3 +145,13 @@ type wrappedStream struct {
 }
 
 func (w *wrappedStream) Context() context.Context { return w.ctx }
+
+func clampInt32(n int64) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < 0 {
+		return 0
+	}
+	return int32(n)
+}

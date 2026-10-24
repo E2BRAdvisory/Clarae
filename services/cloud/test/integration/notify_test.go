@@ -187,7 +187,7 @@ func TestStreamEndsWhenTokenExpires(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 	ctx, cancel := context.WithTimeout(metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer "+short), 15*time.Second)
 	defer cancel()
-	stream, err := notifyv1.NewNotifyServiceClient(conn).Subscribe(ctx, &notifyv1.SubscribeRequest{})
+	stream, err := notifyv1.NewNotifyServiceClient(conn).Subscribe(ctx, &notifyv1.SubscribeRequest{ConfigVersion: 1 << 30})
 	if err != nil {
 		t.Fatal(err)
 	}

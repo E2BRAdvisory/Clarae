@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -30,11 +32,6 @@ const ChannelVaultChanged = "vault_changed"
 // DefaultMaxFileBytes is used when the files.max_size_bytes setting is missing.
 const DefaultMaxFileBytes int64 = 100 << 20
 
-// VaultOpener decides whether a user may use a vault (vaults module).
-type VaultOpener interface {
-	Open(ctx context.Context, userID, vaultID uuid.UUID) (dbgen.Vault, error)
-}
-
 // QuotaSource resolves the effective quota of the vault owner.
 type QuotaSource interface {
 	QuotaOf(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -42,14 +39,14 @@ type QuotaSource interface {
 
 // Service implements the sync module.
 type Service struct {
-	db     *db.DB
-	vaults VaultOpener
-	quota  QuotaSource
+	db    *db.DB
+	authz access.Authorizer
+	quota QuotaSource
 }
 
 // NewService wires the module.
-func NewService(d *db.DB, v VaultOpener, q QuotaSource) *Service {
-	return &Service{db: d, vaults: v, quota: q}
+func NewService(d *db.DB, a access.Authorizer, q QuotaSource) *Service {
+	return &Service{db: d, authz: a, quota: q}
 }
 
 // opError is a rejection of one operation: it becomes a "rejected" result.
@@ -95,14 +92,17 @@ func (s *Service) MaxFileBytes(ctx context.Context) int64 { return s.maxFileByte
 // When a concurrent writer wins a race (unique violation, deadlock) the batch
 // is rolled back and replayed operation by operation, each in its own
 // transaction; operation ids make that replay idempotent.
-func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID, deviceID uuid.UUID, ops []syncproto.Op) (syncproto.CommitResponse, error) {
+func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUID, scope string, deviceID uuid.UUID, ops []syncproto.Op) (syncproto.CommitResponse, error) {
 	if len(ops) == 0 || len(ops) > syncproto.MaxOpsPerCommit {
 		return syncproto.CommitResponse{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "a commit carries 1..%d operations", syncproto.MaxOpsPerCommit)
 	}
-	vault, err := s.vaults.Open(ctx, userID, vaultID)
+	// Writing needs at least the editor level; through a share every path below is
+	// relative to its root and confined to it (§3.4.7).
+	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Editor)
 	if err != nil {
 		return syncproto.CommitResponse{}, err
 	}
+	vault := acc.Vault
 	q := s.db.Queries()
 	dev, err := q.GetDevice(ctx, dbgen.GetDeviceParams{ID: deviceID, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -121,7 +121,7 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID, deviceI
 	if err != nil {
 		return syncproto.CommitResponse{}, err
 	}
-	env := commitEnv{vault: vault, userID: userID, deviceID: deviceID, quota: quotaBytes, maxFile: s.maxFileBytes(ctx)}
+	env := commitEnv{vault: vault, userID: userID, deviceID: deviceID, quota: quotaBytes, maxFile: s.maxFileBytes(ctx), scope: acc.Scope}
 
 	resp, err := s.commitBatch(ctx, env, ops)
 	if isRace(err) {
@@ -142,6 +142,8 @@ type commitEnv struct {
 	deviceID uuid.UUID
 	quota    int64
 	maxFile  int64
+	// scope is set when the caller works through a share.
+	scope *access.Scope
 	// batch is set on the fast path: the writes that every operation of the
 	// batch would repeat on the same few rows (the owner's usage, blob
 	// reference counts) are accumulated and applied once, just before commit,
@@ -286,7 +288,56 @@ func (s *Service) execOp(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.OpResult{}, err
 	}
+	if env.scope != nil {
+		if op, err = scopeOp(env.scope, op); err != nil {
+			return syncproto.OpResult{}, err
+		}
+	}
 	return s.dispatch(ctx, q, env, op, opID)
+}
+
+// scopeOp turns the paths of an operation sent through a share (relative to its root)
+// into vault paths and refuses what the share cannot express.
+func scopeOp(sc *access.Scope, op syncproto.Op) (syncproto.Op, error) {
+	if sc.Type == access.ResourceFile {
+		// A shared document can be edited or removed, not moved, and nothing can be added beside it.
+		if op.Op != syncproto.OpModify && op.Op != syncproto.OpDelete {
+			return op, reject(syncproto.CodeForbidden, "a shared document can only be modified or deleted")
+		}
+		op.Path = ""
+		return op, nil
+	}
+	abs := func(rel string) (string, error) {
+		a, err := sc.Abs(rel)
+		if err != nil {
+			return "", reject(syncproto.CodePathInvalid, "%v", err)
+		}
+		return a, nil
+	}
+	var err error
+	switch op.Op {
+	case syncproto.OpCreate, syncproto.OpMove:
+		if op.Path, err = abs(op.Path); err != nil {
+			return op, err
+		}
+	case syncproto.OpModify:
+		if op.Path != "" {
+			if op.Path, err = abs(op.Path); err != nil {
+				return op, err
+			}
+		}
+	case syncproto.OpMovePrefix:
+		if strings.Trim(op.From, "/") == "" || strings.Trim(op.To, "/") == "" {
+			return op, reject(syncproto.CodeShareRootMove, "the root of a share cannot be renamed or moved from a mount")
+		}
+		if op.From, err = abs(op.From); err != nil {
+			return op, err
+		}
+		if op.To, err = abs(op.To); err != nil {
+			return op, err
+		}
+	}
+	return op, nil
 }
 
 // business converts a rejection or conflict into the operation's result.

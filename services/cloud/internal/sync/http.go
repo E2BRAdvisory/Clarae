@@ -20,14 +20,11 @@ func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
 // GetChanges implements GET /vaults/{vaultId}/changes.
 func (h *HTTP) GetChanges(ctx context.Context, req api.GetChangesRequestObject) (api.GetChangesResponseObject, error) {
-	if req.Params.Scope != nil && *req.Params.Scope != "" {
-		return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "scope is only available on shared mounts")
-	}
 	limit := 500
 	if req.Params.Limit != nil {
 		limit = *req.Params.Limit
 	}
-	items, next, more, err := h.svc.Changes(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.Params.Since, limit)
+	items, next, more, err := h.svc.Changes(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.Params.Since, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +47,7 @@ func (h *HTTP) Commit(ctx context.Context, req api.CommitRequestObject) (api.Com
 	for _, o := range req.Body.Ops {
 		ops = append(ops, fromAPIOp(o))
 	}
-	resp, err := h.svc.Commit(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, req.Body.DeviceId, ops)
+	resp, err := h.svc.Commit(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.Body.DeviceId, ops)
 	if err != nil {
 		return nil, err
 	}
@@ -127,3 +124,10 @@ func parseUUID(s string) (openapi_types.UUID, error) {
 }
 
 var _ = time.Time{}
+
+func scopeOf(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}

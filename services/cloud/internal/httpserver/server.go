@@ -20,10 +20,12 @@ import (
 	"nodus/services/cloud/internal/auth"
 	"nodus/services/cloud/internal/blobs"
 	"nodus/services/cloud/internal/configprofiles"
+	"nodus/services/cloud/internal/groups"
 	"nodus/services/cloud/internal/httpproblem"
 	"nodus/services/cloud/internal/observability"
 	"nodus/services/cloud/internal/quota"
 	"nodus/services/cloud/internal/revisions"
+	"nodus/services/cloud/internal/sharing"
 	"nodus/services/cloud/internal/sync"
 	"nodus/services/cloud/internal/system"
 	"nodus/services/cloud/internal/users"
@@ -46,10 +48,15 @@ type Deps struct {
 	Sync      *sync.HTTP
 	Revisions *revisions.HTTP
 	Quota     *quota.HTTP
+	Groups    *groups.HTTP
+	Sharing   *sharing.HTTP
 	// Tus serves resumable uploads; Events serves the SSE stream. Both live
 	// outside the generated router and are optional (nil in unit tests).
-	Tus         *blobs.TusHandler
-	Events      http.Handler
+	Tus    *blobs.TusHandler
+	Events http.Handler
+	// WebUI serves the embedded SPA for every path the API does not own
+	// (nil: plain 404).
+	WebUI       http.Handler
 	WebUIOrigin string
 	Metrics     *observability.Metrics
 }
@@ -68,6 +75,8 @@ type (
 	syncHTTP      = sync.HTTP
 	revisionsHTTP = revisions.HTTP
 	quotaHTTP     = quota.HTTP
+	groupsHTTP    = groups.HTTP
+	sharingHTTP   = sharing.HTTP
 )
 
 type handlers struct {
@@ -79,6 +88,8 @@ type handlers struct {
 	*syncHTTP
 	*revisionsHTTP
 	*quotaHTTP
+	*groupsHTTP
+	*sharingHTTP
 }
 
 var _ api.StrictServerInterface = handlers{}
@@ -123,7 +134,7 @@ func NewRouter(d Deps) http.Handler {
 	}
 
 	strict := api.NewStrictHandlerWithOptions(
-		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota},
+		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota, d.Groups, d.Sharing},
 		nil,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -149,7 +160,11 @@ func NewRouter(d Deps) http.Handler {
 			httpproblem.Write(w, r, syncproto.CodeNotFound, "no such endpoint", nil)
 			return
 		}
-		http.NotFound(w, r) // Web UI SPA fallback is mounted here in M4
+		if d.WebUI != nil {
+			d.WebUI.ServeHTTP(w, r)
+			return
+		}
+		http.NotFound(w, r)
 	})
 	return r
 }

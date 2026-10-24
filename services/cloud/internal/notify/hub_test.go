@@ -24,10 +24,10 @@ func TestParseMessage(t *testing.T) {
 func TestSubCoalescesPerVault(t *testing.T) {
 	s := &Sub{pending: map[uuid.UUID]int64{}, signal: make(chan struct{}, 1)}
 	a, b := uuid.New(), uuid.New()
-	s.push(Event{a, 1})
-	s.push(Event{a, 5})
-	s.push(Event{a, 3}) // an older event never lowers the position
-	s.push(Event{b, 2})
+	s.push(Event{VaultID: a, Seq: 1})
+	s.push(Event{VaultID: a, Seq: 5})
+	s.push(Event{VaultID: a, Seq: 3}) // an older event never lowers the position
+	s.push(Event{VaultID: b, Seq: 2})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	evs, err := s.Next(ctx)

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -128,7 +130,7 @@ func (h *TusHandler) create(w http.ResponseWriter, r *http.Request) {
 		httpproblem.Write(w, r, syncproto.CodeNotFound, "vault not found", nil)
 		return
 	}
-	if _, err := h.svc.vaults.Open(r.Context(), p.UserID, vid); err != nil {
+	if _, err := h.svc.authz.Authorize(r.Context(), p.UserID, vid, r.URL.Query().Get("scope"), access.Editor); err != nil {
 		problem(w, r, err)
 		return
 	}

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"nodus/services/cloud/internal/access"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -101,6 +103,10 @@ func (s *Service) lockFile(ctx context.Context, q *dbgen.Queries, env commitEnv,
 	if err != nil {
 		return dbgen.File{}, err
 	}
+	if env.scope != nil && !env.scope.ContainsFile(f.ID, f.Path) {
+		// Outside the share the file does not exist for the caller.
+		return dbgen.File{}, reject(syncproto.CodeNotFound, "file not found")
+	}
 	if op.BaseRev == nil {
 		return dbgen.File{}, reject(syncproto.CodeValidationFailed, "base_rev is required")
 	}
@@ -185,6 +191,9 @@ func (s *Service) move(ctx context.Context, q *dbgen.Queries, env commitEnv, op 
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.OpResult{}, err
 	}
+	if err := s.checkShareRoot(ctx, q, env, f, path); err != nil {
+		return syncproto.OpResult{}, err
+	}
 	nf := f
 	nf.Path, nf.PathKey, nf.Kind = path, key, string(kind)
 	rev := f.CurrentRev + 1
@@ -217,6 +226,37 @@ func (s *Service) remove(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
+}
+
+// checkShareRoot refuses a file-by-file rename that would move the last file out of a
+// folder share: to the recipients the whole root would vanish (SHARE_ROOT_MOVE, §3.4.7);
+// renaming the folder is a move_prefix, which carries the share along.
+func (s *Service) checkShareRoot(ctx context.Context, q *dbgen.Queries, env commitEnv, f dbgen.File, newPath string) error {
+	if env.private() || env.scope != nil {
+		return nil
+	}
+	shares, err := q.ListLiveSharesOfVault(ctx, env.vault.ID)
+	if err != nil {
+		return err
+	}
+	for _, sh := range shares {
+		if sh.ResourceType != access.ResourceFolder {
+			continue
+		}
+		sc := access.NewScope(sh)
+		if !sc.ContainsPath(f.Path) || sc.ContainsPath(newPath) {
+			continue
+		}
+		key := pathrules.Key(sc.Prefix)
+		n, err := q.CountFilesUnderPrefix(ctx, dbgen.CountFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: key, Descendants: likeEscape(key) + "/%"})
+		if err != nil {
+			return err
+		}
+		if n <= 1 {
+			return reject(syncproto.CodeShareRootMove, "moving %s would take the last file out of the shared folder %s: rename the folder instead", f.Path, sc.Prefix)
+		}
+	}
+	return nil
 }
 
 // likeEscape escapes LIKE metacharacters of a path key used as a prefix.
@@ -295,6 +335,14 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEn
 			return syncproto.OpResult{}, err
 		}
 		last, lastRev = seq, rev
+	}
+	// The shares rooted at or below the renamed folder follow it.
+	if env.scope == nil {
+		if err := q.RebasePrefixShares(ctx, dbgen.RebasePrefixSharesParams{
+			VaultID: env.vault.ID, ToPath: to, FromPath: from, LikeFrom: likeEscape(from) + "/%",
+		}); err != nil {
+			return syncproto.OpResult{}, err
+		}
 	}
 	return accepted(op.OpID, targets[len(targets)-1].f.ID, lastRev, last), nil
 }

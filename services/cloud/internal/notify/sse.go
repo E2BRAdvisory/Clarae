@@ -13,7 +13,7 @@ import (
 
 // SSEHandler serves GET /events, the fallback for networks that block gRPC
 // (§3.5.3). Authentication wraps it. Query "known" carries replay positions as
-// "vault_id:seq,vault_id:seq". The stream ends when the access token expires;
+// "vault_id:seq,vault_id:seq" and "config" the configuration revision the client holds. The stream ends when the access token expires;
 // the client refreshes it and reconnects.
 func (h *Hub) SSEHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +34,8 @@ func (h *Hub) SSEHandler() http.Handler {
 				}
 			}
 		}
-		replay, err := h.Snapshot(r.Context(), p.UserID, known)
+		cfgVersion, _ := strconv.ParseInt(r.URL.Query().Get("config"), 10, 64)
+		replay, err := h.Snapshot(r.Context(), p.UserID, known, cfgVersion)
 		if err != nil {
 			http.Error(w, "replay failed", http.StatusInternalServerError)
 			return
@@ -84,7 +85,14 @@ func (h *Hub) SSEHandler() http.Handler {
 					return
 				}
 				for _, ev := range batch {
-					_, _ = fmt.Fprintf(w, "event: vault_changed\ndata: {\"vault_id\":%q,\"seq\":%d}\n\n", ev.VaultID, ev.Seq)
+					switch ev.Kind {
+					case KindShare:
+						_, _ = fmt.Fprintf(w, "event: share_changed\ndata: {\"share_id\":%q,\"kind\":%q}\n\n", ev.ShareID, ev.ShareKind)
+					case KindConfig:
+						_, _ = fmt.Fprintf(w, "event: config_changed\ndata: {\"version\":%d}\n\n", ev.Revision)
+					default:
+						_, _ = fmt.Fprintf(w, "event: vault_changed\ndata: {\"vault_id\":%q,\"seq\":%d}\n\n", ev.VaultID, ev.Seq)
+					}
 				}
 				flusher.Flush()
 			case <-heartbeat.C:
