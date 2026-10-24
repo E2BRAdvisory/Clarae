@@ -17,7 +17,11 @@ export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: strin
       </h3>
       {linked.length === 0 && <div className="muted">{t('backlinks.none')}</div>}
       {linked.map((l, i) => (
-        <div key={`${l.path}:${l.line}:${i}`} className="item" onClick={() => openNote(l.path)}>
+        <div
+          key={`${l.path}:${l.line}:${i}`}
+          className="item"
+          onClick={() => openNote(l.path, { line: l.line })}
+        >
           {label(l.path)} <span className="muted">· {t('backlinks.line', { n: l.line })}</span>
         </div>
       ))}
