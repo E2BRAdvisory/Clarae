@@ -1,0 +1,56 @@
+{{- $root := . -}}
+{{- range $role := list "api" "worker" }}
+{{- $spec := index $root.Values $role }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nodus.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "nodus.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  replicas: {{ $spec.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "nodus.name" $root }}
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      app.kubernetes.io/component: {{ $role }}
+  template:
+    metadata:
+      labels:
+        {{- include "nodus.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $role }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+    spec:
+      securityContext: {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: nodus-cloud
+          image: {{ include "nodus.image" $root }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          args: ["--role={{ $role }}"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "nodus.fullname" $root }}
+            - secretRef:
+                name: {{ include "nodus.secretName" $root }}
+          {{- if eq $role "api" }}
+          ports:
+            - name: http
+              containerPort: {{ $root.Values.service.httpPort }}
+            - name: grpc
+              containerPort: {{ $root.Values.service.grpcPort }}
+          livenessProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            initialDelaySeconds: 5
+          readinessProbe:
+            httpGet: { path: /api/v1/readyz, port: http }
+            periodSeconds: 10
+          {{- end }}
+          resources: {{- toYaml $spec.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+{{- end }}
