@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
@@ -16,50 +17,75 @@ import (
 	"google.golang.org/grpc/status"
 
 	"nodus/services/cloud/internal/auth"
+	"nodus/services/cloud/internal/notify"
 	"nodus/shared/notifyv1"
 )
 
+// Hub is what the stream needs from the notify module.
+type Hub interface {
+	Subscribe(user uuid.UUID) *notify.Sub
+	Unsubscribe(s *notify.Sub)
+	Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64) ([]notify.Event, error)
+}
+
 // New builds the gRPC server with the auth interceptors and NotifyService.
-func New(authn *auth.Middleware) *grpc.Server {
+func New(authn *auth.Middleware, hub Hub) *grpc.Server {
 	s := grpc.NewServer(
 		grpc.UnaryInterceptor(unaryAuth(authn)),
 		grpc.StreamInterceptor(streamAuth(authn)),
 		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 10 * time.Second}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
 	)
-	notifyv1.RegisterNotifyServiceServer(s, &notifyServer{})
+	notifyv1.RegisterNotifyServiceServer(s, &notifyServer{hub: hub})
 	return s
 }
 
 type notifyServer struct {
 	notifyv1.UnimplementedNotifyServiceServer
+	hub Hub
 }
 
-// Subscribe keeps the stream open; events are published from M2 onwards.
-// The stream ends with UNAUTHENTICATED once the token used to open it expires.
-func (n *notifyServer) Subscribe(_ *notifyv1.SubscribeRequest, stream grpc.ServerStreamingServer[notifyv1.Event]) error {
+// Subscribe streams "vault X reached seq N" events for the caller's vaults,
+// first replaying every vault that is ahead of the client's known_seq. The
+// stream ends with UNAUTHENTICATED once the token used to open it expires.
+func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.ServerStreamingServer[notifyv1.Event]) error {
 	ctx := stream.Context()
 	p, ok := auth.PrincipalFrom(ctx)
 	if !ok {
 		return status.Error(codes.Unauthenticated, "no principal")
 	}
-	_ = p
-	exp, _ := ctx.Value(expiryKey{}).(time.Time)
-	var expired <-chan time.Time
-	if !exp.IsZero() {
-		t := time.NewTimer(time.Until(exp))
-		defer t.Stop()
-		expired = t.C
+	expired := false
+	if exp := auth.TokenExpiryFrom(ctx); !exp.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, exp)
+		defer cancel()
+		defer func() { _ = expired }()
 	}
-	select {
-	case <-ctx.Done():
-		return nil
-	case <-expired:
-		return status.Error(codes.Unauthenticated, "token expired")
+	sub := n.hub.Subscribe(p.UserID)
+	defer n.hub.Unsubscribe(sub)
+	replay, err := n.hub.Snapshot(ctx, p.UserID, req.GetKnownSeq())
+	if err != nil {
+		return status.Error(codes.Internal, "replay failed")
+	}
+	for _, ev := range replay {
+		sub.Push(ev)
+	}
+	for {
+		batch, err := sub.Next(ctx)
+		if err != nil {
+			if stream.Context().Err() != nil {
+				return nil // the client went away
+			}
+			return status.Error(codes.Unauthenticated, "token expired")
+		}
+		for _, ev := range batch {
+			msg := &notifyv1.Event{Payload: &notifyv1.Event_VaultChanged{VaultChanged: &notifyv1.VaultChanged{VaultId: ev.VaultID.String(), Seq: ev.Seq}}}
+			if err := stream.Send(msg); err != nil {
+				return err
+			}
+		}
 	}
 }
-
-type expiryKey struct{}
 
 func authenticate(ctx context.Context, authn *auth.Middleware) (context.Context, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
@@ -72,7 +98,7 @@ func authenticate(ctx context.Context, authn *auth.Middleware) (context.Context,
 	if raw == "" {
 		return nil, status.Error(codes.Unauthenticated, "missing bearer token")
 	}
-	p, err := authn.Authenticate(ctx, raw)
+	p, exp, err := authn.AuthenticateExp(ctx, raw)
 	switch {
 	case errors.Is(err, auth.ErrSuspended):
 		return nil, status.Error(codes.PermissionDenied, "account suspended")
@@ -81,7 +107,7 @@ func authenticate(ctx context.Context, authn *auth.Middleware) (context.Context,
 	case err != nil:
 		return nil, status.Error(codes.Internal, "authentication failed")
 	}
-	return auth.WithPrincipal(ctx, p), nil
+	return auth.WithTokenExpiry(auth.WithPrincipal(ctx, p), exp), nil
 }
 
 func unaryAuth(authn *auth.Middleware) grpc.UnaryServerInterceptor {
