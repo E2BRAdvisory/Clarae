@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOTOOLCHAIN: auto
+
+jobs:
+  go:
+    name: Go lint, vuln, test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: |
+            shared/go/go.sum
+            services/cloud/go.sum
+            apps/desktop/go.sum
+            tools/go.sum
+      - name: Linux desktop build deps (WebKitGTK 4.1 for Wails)
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install pinned tools
+        run: cd tools && GOWORK=off go install tool
+      - name: Lint
+        run: |
+          for m in shared/go services/cloud apps/desktop; do (cd $m && golangci-lint run --build-tags webkit2_41 ./...) || exit 1; done
+      - name: Vulnerabilities
+        run: for m in shared/go services/cloud apps/desktop; do (cd $m && govulncheck -tags webkit2_41 ./...) || exit 1; done
+      - name: Unit tests
+        run: |
+          (cd shared/go && go test -race -count=1 ./...)
+          (cd services/cloud && go test -race -count=1 ./...)
+          (cd apps/desktop && go test -race -count=1 -tags webkit2_41 ./internal/...)
+
+  ts:
+    name: TypeScript lint, typecheck, test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn run lint
+      - run: yarn typecheck
+      - run: yarn run test
+
+  conformance:
+    name: Conformance fixtures (Go + TS)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: |
+          (cd shared/go && go test -race -count=1 -run Conformance ./conformance/...)
+          (cd apps/desktop && go test -race -count=1 -tags webkit2_41 -run Conformance ./internal/parser/...)
+          yarn workspace @nodus/conformance run test
+
+  cloud-integration:
+    name: Cloud integration (testcontainers)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: cd services/cloud && go test -race -count=1 -tags integration ./test/...
+
+  gen-check:
+    name: Generated code is up to date
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      - run: cd tools && GOWORK=off go install tool
+      - run: |
+          (cd services/cloud && oapi-codegen -config ../../api/oapi-codegen.yaml ../../api/openapi.yaml && sqlc generate)
+          (cd api/proto && buf lint && buf generate)
+          yarn workspace @nodus/api-client run gen
+          git diff --exit-code -- services/cloud/internal/api services/cloud/internal/db/dbgen shared/go/notifyv1 packages/api-client/src/gen
+
+  desktop-build:
+    name: Desktop build (${{ matrix.os }})
+    needs: [go, ts]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            tags: '-tags webkit2_41'
+          - os: windows-latest
+            tags: ''
+          - os: macos-latest
+            tags: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+      - run: yarn install --immutable
+      - run: cd apps/desktop && wails build -clean ${{ matrix.tags }} -ldflags "-X main.Version=${{ github.sha }}"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nodus-desktop-${{ matrix.os }}
+          path: apps/desktop/build/bin/
+          retention-days: 7
+
+  cloud-image:
+    name: Cloud container image
+    needs: [go, cloud-integration]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (push only on tags, wired in M7)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/cloud/Dockerfile
+          push: false
+          tags: nodus-cloud:${{ github.sha }}
+          build-args: VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
