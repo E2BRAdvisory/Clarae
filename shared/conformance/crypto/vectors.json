@@ -1,0 +1,120 @@
+{
+  "passphrase": {
+    "passphrase": "correct horse battery staple",
+    "kdf": {
+      "alg": "argon2id",
+      "t": 3,
+      "m_kib": 65536,
+      "p": 4,
+      "salt": "EBESExQVFhcYGRobHB0eHw=="
+    },
+    "kek": "1cd84e588c72f1d0bb3041fdd8a32de5ec738487c23ac9c5d84f119e05858bf8"
+  },
+  "recovery": {
+    "key_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+    "encoded": "YDA4F-Q6EYX-DMPSG-JZLF4-ZTOOZ-7INDU-WT2TK-5NV6Y-3HNNX-XG533-PRPIY",
+    "kdf": {
+      "alg": "hkdf-sha256",
+      "salt": "ICEiIyQlJicoKSorLC0uLw=="
+    },
+    "kek": "d563b11d7da1d58a065fe14aff4795328113ff63888891e26feffe69e79218f1"
+  },
+  "wrap": {
+    "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "nonce": "303132333435363738393a3b",
+    "wrapped": "303132333435363738393a3bfe7b31ea914626e4283ddd63f2194cf8f100850c017c982c92cafca3636982cf7ddbbaa098c2ac375a40f556e35bee7e"
+  },
+  "subkeys": {
+    "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "path_enc": "a79b4fa67f02e02a3fbc4dac88b2f97e722c03d792c775a6b63381d5d63a2553",
+    "path_key": "a948548497f3b3553191b725d9d66caab8885ee47d9f7d4f19a346135e739bee",
+    "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+    "salt": "404142434445464748494a4b4c4d4e4f",
+    "file": "6c8d39c7097b1ac047b49e8cde5e0c68180d25cc017f94076827927e22cbbf32"
+  },
+  "blobs": [
+    {
+      "name": "empty",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "salt": "505152535455565758595a5b5c5d5e5f",
+      "chunk_size": 16,
+      "plaintext_len": 0,
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f00000010ca5f28d2befb95a40e705b32f4eb898a",
+      "blob_sha256": "b5733ea8f12c151b3afdeb92ac3cd3967cf374bcec52ccbd1229124ab7f070e0"
+    },
+    {
+      "name": "one chunk (partial)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "salt": "505152535455565758595a5b5c5d5e5f",
+      "chunk_size": 16,
+      "plaintext_len": 10,
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac4346ffe7558a5f8657ade91479e89bd1",
+      "blob_sha256": "327d0050da5851b1c193bb764da1b5b51a9ad33af8e9d57d1411b4b3e8a2c21e"
+    },
+    {
+      "name": "one chunk (exact)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "salt": "505152535455565758595a5b5c5d5e5f",
+      "chunk_size": 16,
+      "plaintext_len": 16,
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c62390dac3889a9447a13484bec6961",
+      "blob_sha256": "0e767f1aea08a976eabcc6c2a8e5b55a3c5e388a84ea9e1f5785bb211cc563e3"
+    },
+    {
+      "name": "two chunks",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "salt": "505152535455565758595a5b5c5d5e5f",
+      "chunk_size": 16,
+      "plaintext_len": 20,
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99349a20665f6884fe888c59939a21f2861",
+      "blob_sha256": "ec25b4a44fe4cd9950ffbd024831412d1d6e8209d0f1e24155a48983a823a8ab"
+    },
+    {
+      "name": "two chunks (exact)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "salt": "505152535455565758595a5b5c5d5e5f",
+      "chunk_size": 16,
+      "plaintext_len": 32,
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e11354e27a38003cc7b2ae9d6515c4b5893",
+      "blob_sha256": "b36f41baba679df3153519c759802fab48b35e7e92519b7d2a3248d3d1c18d8b"
+    },
+    {
+      "name": "default chunk size, two chunks",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "salt": "505152535455565758595a5b5c5d5e5f",
+      "chunk_size": 65536,
+      "plaintext_len": 65541,
+      "blob_sha256": "1ce0a28aca123065752052ddd1b8098b1de175fb5c7c9a8a9307f7dcd1511f22"
+    }
+  ],
+  "paths": [
+    {
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "path": "Projects/Alfa/riunione.md",
+      "nonce": "606060606060606060606060",
+      "enc": "enc1:YGBgYGBgYGBgYGBgZxpeifnJg0KbtPa5IY3usRW9vZxRj34YFTnmPFF78wn1h8OZiLbgiZY",
+      "key": "hmac1:1eabe01e7310e678b1bb0551d506a725e9bab2ca5ab6e029c61958612d011772"
+    },
+    {
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "path": "Notes/Straße.md",
+      "nonce": "616161616161616161616161",
+      "enc": "enc1:YWFhYWFhYWFhYWFhExYoOEXbL8QwrVpJNmxqZCXWFByYYcxibi41lXzvmTw",
+      "key": "hmac1:1fb5d8ae4495ed792a42541bef64f63f9754cc1819450797015c508a8c3eb295"
+    },
+    {
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "path": "a.md",
+      "nonce": "626262626262626262626262",
+      "enc": "enc1:YmJiYmJiYmJiYmJiaAhoJf7Rjk4Lpth3wyhv_kSSbDA",
+      "key": "hmac1:6c9660d8b7bcb4f801e56bf38431138ab61698e360a47a26c3110380fb5f2bb4"
+    }
+  ]
+}
