@@ -58,19 +58,29 @@ func NewMiddleware(v *Verifier, p Provisioner, limiter Limiter, cacheTTL time.Du
 
 // Handler is the api.MiddlewareFunc.
 func (m *Middleware) Handler(next http.Handler) http.Handler {
+	protected := m.Protect(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		if ctx.Value(api.BearerAuthScopes) == nil {
+		if r.Context().Value(api.BearerAuthScopes) == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
+		protected.ServeHTTP(w, r)
+	})
+}
+
+// Protect authenticates every request unconditionally. Routes that are not
+// part of the generated OpenAPI router (tus uploads, the SSE stream) wrap
+// themselves with it.
+func (m *Middleware) Protect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		raw, ok := bearerToken(r)
 		if !ok {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="nodus"`)
 			httpproblem.Write(w, r, syncproto.CodeUnauthenticated, "missing bearer token", nil)
 			return
 		}
-		p, err := m.Authenticate(ctx, raw)
+		p, exp, err := m.AuthenticateExp(ctx, raw)
 		switch {
 		case errors.Is(err, ErrSuspended):
 			httpproblem.Write(w, r, syncproto.CodeUserSuspended, "account suspended", nil)
@@ -89,7 +99,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 			return
 		}
 		l := zerolog.Ctx(ctx).With().Str("user_id", p.UserID.String()).Logger()
-		ctx = l.WithContext(WithPrincipal(ctx, p))
+		ctx = l.WithContext(WithTokenExpiry(WithPrincipal(ctx, p), exp))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -97,19 +107,26 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 // Authenticate verifies a raw token and resolves its Principal, using the
 // status cache. Shared by the HTTP middleware and the gRPC interceptor.
 func (m *Middleware) Authenticate(ctx context.Context, raw string) (Principal, error) {
+	p, _, err := m.AuthenticateExp(ctx, raw)
+	return p, err
+}
+
+// AuthenticateExp is Authenticate that also returns the token expiry, which
+// long-lived streams use to close themselves (§3.6).
+func (m *Middleware) AuthenticateExp(ctx context.Context, raw string) (Principal, time.Time, error) {
 	claims, err := m.verifier.Verify(ctx, raw)
 	if err != nil {
-		return Principal{}, err
+		return Principal{}, time.Time{}, err
 	}
 	if p, ok := m.cached(claims.Subject); ok {
-		return p, nil
+		return p, claims.Expiry, nil
 	}
 	p, err := m.provisioner.Provision(ctx, claims)
 	if err != nil {
-		return Principal{}, err
+		return Principal{}, time.Time{}, err
 	}
 	m.store(p)
-	return p, nil
+	return p, claims.Expiry, nil
 }
 
 // Invalidate drops the cached status of a user (called after suspension so

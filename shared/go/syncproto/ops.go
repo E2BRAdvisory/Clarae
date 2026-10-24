@@ -67,14 +67,18 @@ func KindOf(path string) FileKind {
 // Op is one operation inside a commit (§3.5.3). Which fields are required
 // depends on Op; Validate enforces the rules.
 type Op struct {
-	OpID        string     `json:"op_id"`
-	Op          OpKind     `json:"op"`
-	FileID      string     `json:"file_id,omitempty"`
-	Path        string     `json:"path,omitempty"`
+	OpID   string `json:"op_id"`
+	Op     OpKind `json:"op"`
+	FileID string `json:"file_id,omitempty"`
+	Path   string `json:"path,omitempty"`
+	// PathKey is the "hmac1:" identity of Path in private vaults (ADR-0009).
+	PathKey     string     `json:"path_key,omitempty"`
 	BaseRev     *int       `json:"base_rev,omitempty"`
 	BlobHash    string     `json:"blob_hash,omitempty"`
 	Size        int64      `json:"size,omitempty"`
 	ClientMtime *time.Time `json:"client_mtime,omitempty"`
+	// ConflictOf marks a conflict copy: the file it was derived from.
+	ConflictOf string `json:"conflict_of,omitempty"`
 	// From and To are used by move_prefix only.
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`

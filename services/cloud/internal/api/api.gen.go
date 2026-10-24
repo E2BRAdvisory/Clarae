@@ -9,7 +9,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -25,6 +27,63 @@ import (
 const (
 	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
 )
+
+// Defines values for ChangeOp.
+const (
+	ChangeOpCreate  ChangeOp = "create"
+	ChangeOpDelete  ChangeOp = "delete"
+	ChangeOpModify  ChangeOp = "modify"
+	ChangeOpMove    ChangeOp = "move"
+	ChangeOpRestore ChangeOp = "restore"
+)
+
+// Valid indicates whether the value is a known member of the ChangeOp enum.
+func (e ChangeOp) Valid() bool {
+	switch e {
+	case ChangeOpCreate:
+		return true
+	case ChangeOpDelete:
+		return true
+	case ChangeOpModify:
+		return true
+	case ChangeOpMove:
+		return true
+	case ChangeOpRestore:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CommitOpKind.
+const (
+	CommitOpKindCreate     CommitOpKind = "create"
+	CommitOpKindDelete     CommitOpKind = "delete"
+	CommitOpKindModify     CommitOpKind = "modify"
+	CommitOpKindMove       CommitOpKind = "move"
+	CommitOpKindMovePrefix CommitOpKind = "move_prefix"
+	CommitOpKindRestore    CommitOpKind = "restore"
+)
+
+// Valid indicates whether the value is a known member of the CommitOpKind enum.
+func (e CommitOpKind) Valid() bool {
+	switch e {
+	case CommitOpKindCreate:
+		return true
+	case CommitOpKindDelete:
+		return true
+	case CommitOpKindModify:
+		return true
+	case CommitOpKindMove:
+		return true
+	case CommitOpKindMovePrefix:
+		return true
+	case CommitOpKindRestore:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for DeviceRegistrationPlatform.
 const (
@@ -57,6 +116,7 @@ const (
 	FILETOOLARGE       ErrorCode = "FILE_TOO_LARGE"
 	FORBIDDEN          ErrorCode = "FORBIDDEN"
 	INTERNAL           ErrorCode = "INTERNAL"
+	NAMEINUSE          ErrorCode = "NAME_IN_USE"
 	NOTFOUND           ErrorCode = "NOT_FOUND"
 	PATHCOLLISION      ErrorCode = "PATH_COLLISION"
 	PATHINVALID        ErrorCode = "PATH_INVALID"
@@ -83,6 +143,8 @@ func (e ErrorCode) Valid() bool {
 	case FORBIDDEN:
 		return true
 	case INTERNAL:
+		return true
+	case NAMEINUSE:
 		return true
 	case NOTFOUND:
 		return true
@@ -115,19 +177,76 @@ func (e ErrorCode) Valid() bool {
 
 // Defines values for HealthStatus.
 const (
-	Degraded    HealthStatus = "degraded"
-	Ok          HealthStatus = "ok"
-	Unavailable HealthStatus = "unavailable"
+	HealthStatusDegraded    HealthStatus = "degraded"
+	HealthStatusOk          HealthStatus = "ok"
+	HealthStatusUnavailable HealthStatus = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the HealthStatus enum.
 func (e HealthStatus) Valid() bool {
 	switch e {
-	case Degraded:
+	case HealthStatusDegraded:
 		return true
-	case Ok:
+	case HealthStatusOk:
 		return true
-	case Unavailable:
+	case HealthStatusUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KdfParamsAlg.
+const (
+	Argon2id   KdfParamsAlg = "argon2id"
+	HkdfSha256 KdfParamsAlg = "hkdf-sha256"
+)
+
+// Valid indicates whether the value is a known member of the KdfParamsAlg enum.
+func (e KdfParamsAlg) Valid() bool {
+	switch e {
+	case Argon2id:
+		return true
+	case HkdfSha256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KeyEnvelopeKind.
+const (
+	Passphrase KeyEnvelopeKind = "passphrase"
+	Recovery   KeyEnvelopeKind = "recovery"
+)
+
+// Valid indicates whether the value is a known member of the KeyEnvelopeKind enum.
+func (e KeyEnvelopeKind) Valid() bool {
+	switch e {
+	case Passphrase:
+		return true
+	case Recovery:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpResultStatus.
+const (
+	OpResultStatusAccepted OpResultStatus = "accepted"
+	OpResultStatusConflict OpResultStatus = "conflict"
+	OpResultStatusRejected OpResultStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the OpResultStatus enum.
+func (e OpResultStatus) Valid() bool {
+	switch e {
+	case OpResultStatusAccepted:
+		return true
+	case OpResultStatusConflict:
+		return true
+	case OpResultStatusRejected:
 		return true
 	default:
 		return false
@@ -146,6 +265,30 @@ func (e Role) Valid() bool {
 	case Admin:
 		return true
 	case User:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UsageLevel.
+const (
+	UsageLevelCritical UsageLevel = "critical"
+	UsageLevelFull     UsageLevel = "full"
+	UsageLevelOk       UsageLevel = "ok"
+	UsageLevelWarning  UsageLevel = "warning"
+)
+
+// Valid indicates whether the value is a known member of the UsageLevel enum.
+func (e UsageLevel) Valid() bool {
+	switch e {
+	case UsageLevelCritical:
+		return true
+	case UsageLevelFull:
+		return true
+	case UsageLevelOk:
+		return true
+	case UsageLevelWarning:
 		return true
 	default:
 		return false
@@ -176,6 +319,62 @@ func (e UserStatus) Valid() bool {
 	}
 }
 
+// Defines values for VaultKind.
+const (
+	Private VaultKind = "private"
+	Shared  VaultKind = "shared"
+)
+
+// Valid indicates whether the value is a known member of the VaultKind enum.
+func (e VaultKind) Valid() bool {
+	switch e {
+	case Private:
+		return true
+	case Shared:
+		return true
+	default:
+		return false
+	}
+}
+
+// BlobCheck defines model for BlobCheck.
+type BlobCheck struct {
+	Hashes []string `json:"hashes"`
+}
+
+// BlobCheckResult defines model for BlobCheckResult.
+type BlobCheckResult struct {
+	Missing []string `json:"missing"`
+}
+
+// Change defines model for Change.
+type Change struct {
+	AuthorId openapi_types.UUID `json:"author_id"`
+	BlobHash *string            `json:"blob_hash,omitempty"`
+
+	// ConflictOf Set on a conflict copy: the file it was derived from
+	ConflictOf *openapi_types.UUID `json:"conflict_of,omitempty"`
+	DeviceId   *openapi_types.UUID `json:"device_id,omitempty"`
+	FileId     openapi_types.UUID  `json:"file_id"`
+	Op         ChangeOp            `json:"op"`
+	Path       string              `json:"path"`
+	PrevPath   *string             `json:"prev_path,omitempty"`
+	Rev        int                 `json:"rev"`
+	Seq        int64               `json:"seq"`
+	ServerTime time.Time           `json:"server_time"`
+	Size       int64               `json:"size"`
+}
+
+// ChangeOp defines model for ChangeOp.
+type ChangeOp string
+
+// Changes defines model for Changes.
+type Changes struct {
+	HasMore bool     `json:"has_more"`
+	Items   []Change `json:"items"`
+	NextSeq int64    `json:"next_seq"`
+}
+
 // ClientConfig defines model for ClientConfig.
 type ClientConfig struct {
 	// ApiVersion Server version
@@ -190,6 +389,49 @@ type ClientConfig struct {
 
 	// Issuer OIDC issuer (Keycloak realm URL)
 	Issuer string `json:"issuer"`
+}
+
+// CommitOp defines model for CommitOp.
+type CommitOp struct {
+	BaseRev     *int       `json:"base_rev,omitempty"`
+	BlobHash    *string    `json:"blob_hash,omitempty"`
+	ClientMtime *time.Time `json:"client_mtime,omitempty"`
+
+	// ConflictOf Marks a conflict copy (create only)
+	ConflictOf *openapi_types.UUID `json:"conflict_of,omitempty"`
+	FileId     *openapi_types.UUID `json:"file_id,omitempty"`
+	From       *string             `json:"from,omitempty"`
+	Op         CommitOpKind        `json:"op"`
+	OpId       openapi_types.UUID  `json:"op_id"`
+	Path       *string             `json:"path,omitempty"`
+
+	// PathKey Private vaults only: 'hmac1:<hex>' identity of the path, since the server cannot derive it from the opaque token (ADR-0009)
+	PathKey *string `json:"path_key,omitempty"`
+	Size    *int64  `json:"size,omitempty"`
+	To      *string `json:"to,omitempty"`
+}
+
+// CommitOpKind defines model for CommitOpKind.
+type CommitOpKind string
+
+// CommitRequest defines model for CommitRequest.
+type CommitRequest struct {
+	DeviceId openapi_types.UUID `json:"device_id"`
+	Ops      []CommitOp         `json:"ops"`
+}
+
+// CommitResponse defines model for CommitResponse.
+type CommitResponse struct {
+	LastSeq int64      `json:"last_seq"`
+	Results []OpResult `json:"results"`
+}
+
+// CreateVault defines model for CreateVault.
+type CreateVault struct {
+	// KeyEnvelopes Both the passphrase and the recovery envelope: required for private vaults, forbidden for shared ones
+	KeyEnvelopes *[]KeyEnvelopeInput `json:"key_envelopes,omitempty"`
+	Kind         VaultKind           `json:"kind"`
+	Name         string              `json:"name"`
 }
 
 // Device defines model for Device.
@@ -239,6 +481,47 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// KdfParams defines model for KdfParams.
+type KdfParams struct {
+	Alg  KdfParamsAlg `json:"alg"`
+	MKib *int         `json:"m_kib,omitempty"`
+	P    *int         `json:"p,omitempty"`
+
+	// Salt Standard base64
+	Salt string `json:"salt"`
+	T    *int   `json:"t,omitempty"`
+}
+
+// KdfParamsAlg defines model for KdfParams.Alg.
+type KdfParamsAlg string
+
+// KeyEnvelope defines model for KeyEnvelope.
+type KeyEnvelope struct {
+	CreatedAt time.Time       `json:"created_at"`
+	Kdf       KdfParams       `json:"kdf"`
+	Kind      KeyEnvelopeKind `json:"kind"`
+
+	// WrappedVmk nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag, standard base64 (60 bytes)
+	WrappedVmk []byte `json:"wrapped_vmk"`
+}
+
+// KeyEnvelopeInput defines model for KeyEnvelopeInput.
+type KeyEnvelopeInput struct {
+	Kdf  KdfParams       `json:"kdf"`
+	Kind KeyEnvelopeKind `json:"kind"`
+
+	// WrappedVmk nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag, standard base64 (60 bytes)
+	WrappedVmk []byte `json:"wrapped_vmk"`
+}
+
+// KeyEnvelopeKind defines model for KeyEnvelopeKind.
+type KeyEnvelopeKind string
+
+// KeyEnvelopes defines model for KeyEnvelopes.
+type KeyEnvelopes struct {
+	Items []KeyEnvelope `json:"items"`
+}
+
 // Me defines model for Me.
 type Me struct {
 	// ConfigVersion Version of the effective configuration (ETag of /config/effective)
@@ -257,6 +540,24 @@ type Me struct {
 	Username   string     `json:"username"`
 }
 
+// OpResult defines model for OpResult.
+type OpResult struct {
+	// Code Application error codes (§3.1); mirrored in shared/go/syncproto
+	Code        *ErrorCode          `json:"code,omitempty"`
+	CurrentHash *string             `json:"current_hash,omitempty"`
+	CurrentRev  *int                `json:"current_rev,omitempty"`
+	CurrentSeq  *int64              `json:"current_seq,omitempty"`
+	Detail      *string             `json:"detail,omitempty"`
+	FileId      *openapi_types.UUID `json:"file_id,omitempty"`
+	OpId        openapi_types.UUID  `json:"op_id"`
+	Rev         *int                `json:"rev,omitempty"`
+	Seq         *int64              `json:"seq,omitempty"`
+	Status      OpResultStatus      `json:"status"`
+}
+
+// OpResultStatus defines model for OpResult.Status.
+type OpResultStatus string
+
 // Problem RFC 9457 problem details with the Nodus application code
 type Problem struct {
 	// Code Application error codes (§3.1); mirrored in shared/go/syncproto
@@ -269,17 +570,112 @@ type Problem struct {
 	Type      string                  `json:"type"`
 }
 
+// Revision defines model for Revision.
+type Revision struct {
+	AuthorId   openapi_types.UUID  `json:"author_id"`
+	BlobHash   *string             `json:"blob_hash,omitempty"`
+	ConflictOf *openapi_types.UUID `json:"conflict_of,omitempty"`
+	DeviceId   *openapi_types.UUID `json:"device_id,omitempty"`
+	Op         ChangeOp            `json:"op"`
+	Path       string              `json:"path"`
+	PrevPath   *string             `json:"prev_path,omitempty"`
+	Rev        int                 `json:"rev"`
+	Seq        int64               `json:"seq"`
+	ServerTime time.Time           `json:"server_time"`
+	Size       int64               `json:"size"`
+}
+
+// RevisionList defines model for RevisionList.
+type RevisionList struct {
+	Items      []Revision `json:"items"`
+	NextCursor *string    `json:"next_cursor,omitempty"`
+}
+
 // Role defines model for Role.
 type Role string
+
+// Tree defines model for Tree.
+type Tree struct {
+	// AsOfSeq The changelog position the manifest reflects: continue with changes?since=as_of_seq
+	AsOfSeq int64       `json:"as_of_seq"`
+	Items   []TreeEntry `json:"items"`
+}
+
+// TreeEntry defines model for TreeEntry.
+type TreeEntry struct {
+	FileId openapi_types.UUID `json:"file_id"`
+	Hash   string             `json:"hash"`
+	Kind   string             `json:"kind"`
+	Path   string             `json:"path"`
+	Rev    int                `json:"rev"`
+	Size   int64              `json:"size"`
+}
+
+// UpdateVault defines model for UpdateVault.
+type UpdateVault struct {
+	Name string `json:"name"`
+}
+
+// Usage defines model for Usage.
+type Usage struct {
+	// Level ok below 80 %, warning from 80 %, critical from 95 %, full at 100 %
+	Level UsageLevel `json:"level"`
+
+	// QuotaBytes -1 means unlimited
+	QuotaBytes int64 `json:"quota_bytes"`
+	UsedBytes  int64 `json:"used_bytes"`
+}
+
+// UsageLevel ok below 80 %, warning from 80 %, critical from 95 %, full at 100 %
+type UsageLevel string
 
 // UserStatus defines model for UserStatus.
 type UserStatus string
 
+// Vault defines model for Vault.
+type Vault struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	DeletedAt  *time.Time         `json:"deleted_at,omitempty"`
+	FileCount  int                `json:"file_count"`
+	Id         openapi_types.UUID `json:"id"`
+	Kind       VaultKind          `json:"kind"`
+	LastSeq    int64              `json:"last_seq"`
+	Name       string             `json:"name"`
+	OwnerId    openapi_types.UUID `json:"owner_id"`
+	TotalBytes int64              `json:"total_bytes"`
+}
+
+// VaultKind defines model for VaultKind.
+type VaultKind string
+
+// VaultList defines model for VaultList.
+type VaultList struct {
+	Items []Vault `json:"items"`
+
+	// Mounts Shared mounts of other owners' vaults (empty until M4)
+	Mounts []Vault `json:"mounts"`
+}
+
 // DeviceId defines model for DeviceId.
 type DeviceId = openapi_types.UUID
 
+// FileId defines model for FileId.
+type FileId = openapi_types.UUID
+
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
+
+// Rev defines model for Rev.
+type Rev = int
+
+// Sha256 defines model for Sha256.
+type Sha256 = string
+
+// VaultId defines model for VaultId.
+type VaultId = openapi_types.UUID
+
+// Conflict RFC 9457 problem details with the Nodus application code
+type Conflict = Problem
 
 // Forbidden RFC 9457 problem details with the Nodus application code
 type Forbidden = Problem
@@ -310,8 +706,61 @@ type RegisterDeviceParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// CreateVaultParams defines parameters for CreateVault.
+type CreateVaultParams struct {
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// GetBlobParams defines parameters for GetBlob.
+type GetBlobParams struct {
+	Range *string `json:"Range,omitempty"`
+}
+
+// GetChangesParams defines parameters for GetChanges.
+type GetChangesParams struct {
+	Since int64 `form:"since" json:"since"`
+	Limit *int  `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Scope Reserved for shared mounts (`share:{id}`, M4)
+	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
+}
+
+// CommitParams defines parameters for Commit.
+type CommitParams struct {
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListRevisionsParams defines parameters for ListRevisions.
+type ListRevisionsParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// RestoreRevisionParams defines parameters for RestoreRevision.
+type RestoreRevisionParams struct {
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // RegisterDeviceJSONRequestBody defines body for RegisterDevice for application/json ContentType.
 type RegisterDeviceJSONRequestBody = DeviceRegistration
+
+// CreateVaultJSONRequestBody defines body for CreateVault for application/json ContentType.
+type CreateVaultJSONRequestBody = CreateVault
+
+// UpdateVaultJSONRequestBody defines body for UpdateVault for application/json ContentType.
+type UpdateVaultJSONRequestBody = UpdateVault
+
+// CheckBlobsJSONRequestBody defines body for CheckBlobs for application/json ContentType.
+type CheckBlobsJSONRequestBody = BlobCheck
+
+// CommitJSONRequestBody defines body for Commit for application/json ContentType.
+type CommitJSONRequestBody = CommitRequest
+
+// PutKeyEnvelopeJSONRequestBody defines body for PutKeyEnvelope for application/json ContentType.
+type PutKeyEnvelopeJSONRequestBody = KeyEnvelopeInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -336,9 +785,63 @@ type ServerInterface interface {
 	// RevokeDevice Revoke a device
 	// (DELETE /me/devices/{deviceId})
 	RevokeDevice(w http.ResponseWriter, r *http.Request, deviceId DeviceId)
+	// GetMyUsage Storage usage against the effective quota
+	// (GET /me/usage)
+	GetMyUsage(w http.ResponseWriter, r *http.Request)
 	// Readyz Readiness probe (database, object storage, identity provider reachable)
 	// (GET /readyz)
 	Readyz(w http.ResponseWriter, r *http.Request)
+	// ListVaults Own vaults (and, from M4, shared mounts)
+	// (GET /vaults)
+	ListVaults(w http.ResponseWriter, r *http.Request)
+	// CreateVault Create a vault; `kind` is immutable and private vaults require key envelopes
+	// (POST /vaults)
+	CreateVault(w http.ResponseWriter, r *http.Request, params CreateVaultParams)
+	// DeleteVault Soft delete (owner); purged after the retention period
+	// (DELETE /vaults/{vaultId})
+	DeleteVault(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// GetVault Vault detail (size, file count, last_seq)
+	// (GET /vaults/{vaultId})
+	GetVault(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// UpdateVault Rename a vault (owner)
+	// (PATCH /vaults/{vaultId})
+	UpdateVault(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// GetBlob Download a blob (Range supported)
+	// (GET /vaults/{vaultId}/blobs/{sha256})
+	GetBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params GetBlobParams)
+	// PutBlob Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
+	// (PUT /vaults/{vaultId}/blobs/{sha256})
+	PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256)
+	// CheckBlobs Which of these blobs the server does not have yet
+	// (POST /vaults/{vaultId}/blobs:check)
+	CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// GetChanges Changelog entries after a cursor (§3.4.4 B)
+	// (GET /vaults/{vaultId}/changes)
+	GetChanges(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetChangesParams)
+	// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
+	// (POST /vaults/{vaultId}/commit)
+	Commit(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CommitParams)
+	// ListRevisions History of a file, newest first
+	// (GET /vaults/{vaultId}/files/{fileId}/revisions)
+	ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams)
+	// GetRevisionContent Content of a revision (ciphertext for private vaults)
+	// (GET /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content)
+	GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev)
+	// RestoreRevision Restore a revision as a new revision that reuses its blob
+	// (POST /vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore)
+	RestoreRevision(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params RestoreRevisionParams)
+	// GetKeyEnvelopes Wrapped VMK envelopes of a private vault (owner)
+	// (GET /vaults/{vaultId}/key-envelopes)
+	GetKeyEnvelopes(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// PutKeyEnvelope Replace the passphrase or recovery envelope (change passphrase, new recovery key)
+	// (PUT /vaults/{vaultId}/key-envelopes/{kind})
+	PutKeyEnvelope(w http.ResponseWriter, r *http.Request, vaultId VaultId, kind KeyEnvelopeKind)
+	// GetVaultTree Complete manifest of current files plus the changelog position it reflects
+	// (GET /vaults/{vaultId}/tree)
+	GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId)
+	// RestoreVault Restore a soft-deleted vault within the retention period (owner)
+	// (POST /vaults/{vaultId}:restore)
+	RestoreVault(w http.ResponseWriter, r *http.Request, vaultId VaultId)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -387,9 +890,117 @@ func (_ Unimplemented) RevokeDevice(w http.ResponseWriter, r *http.Request, devi
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// GetMyUsage Storage usage against the effective quota
+// (GET /me/usage)
+func (_ Unimplemented) GetMyUsage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Readyz Readiness probe (database, object storage, identity provider reachable)
 // (GET /readyz)
 func (_ Unimplemented) Readyz(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListVaults Own vaults (and, from M4, shared mounts)
+// (GET /vaults)
+func (_ Unimplemented) ListVaults(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateVault Create a vault; `kind` is immutable and private vaults require key envelopes
+// (POST /vaults)
+func (_ Unimplemented) CreateVault(w http.ResponseWriter, r *http.Request, params CreateVaultParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteVault Soft delete (owner); purged after the retention period
+// (DELETE /vaults/{vaultId})
+func (_ Unimplemented) DeleteVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetVault Vault detail (size, file count, last_seq)
+// (GET /vaults/{vaultId})
+func (_ Unimplemented) GetVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateVault Rename a vault (owner)
+// (PATCH /vaults/{vaultId})
+func (_ Unimplemented) UpdateVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBlob Download a blob (Range supported)
+// (GET /vaults/{vaultId}/blobs/{sha256})
+func (_ Unimplemented) GetBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params GetBlobParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutBlob Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
+// (PUT /vaults/{vaultId}/blobs/{sha256})
+func (_ Unimplemented) PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CheckBlobs Which of these blobs the server does not have yet
+// (POST /vaults/{vaultId}/blobs:check)
+func (_ Unimplemented) CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetChanges Changelog entries after a cursor (§3.4.4 B)
+// (GET /vaults/{vaultId}/changes)
+func (_ Unimplemented) GetChanges(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetChangesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
+// (POST /vaults/{vaultId}/commit)
+func (_ Unimplemented) Commit(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CommitParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListRevisions History of a file, newest first
+// (GET /vaults/{vaultId}/files/{fileId}/revisions)
+func (_ Unimplemented) ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetRevisionContent Content of a revision (ciphertext for private vaults)
+// (GET /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content)
+func (_ Unimplemented) GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RestoreRevision Restore a revision as a new revision that reuses its blob
+// (POST /vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore)
+func (_ Unimplemented) RestoreRevision(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params RestoreRevisionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetKeyEnvelopes Wrapped VMK envelopes of a private vault (owner)
+// (GET /vaults/{vaultId}/key-envelopes)
+func (_ Unimplemented) GetKeyEnvelopes(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutKeyEnvelope Replace the passphrase or recovery envelope (change passphrase, new recovery key)
+// (PUT /vaults/{vaultId}/key-envelopes/{kind})
+func (_ Unimplemented) PutKeyEnvelope(w http.ResponseWriter, r *http.Request, vaultId VaultId, kind KeyEnvelopeKind) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetVaultTree Complete manifest of current files plus the changelog position it reflects
+// (GET /vaults/{vaultId}/tree)
+func (_ Unimplemented) GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RestoreVault Restore a soft-deleted vault within the retention period (owner)
+// (POST /vaults/{vaultId}:restore)
+func (_ Unimplemented) RestoreVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -596,11 +1207,793 @@ func (siw *ServerInterfaceWrapper) RevokeDevice(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetMyUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetMyUsage(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Readyz operation middleware
 func (siw *ServerInterfaceWrapper) Readyz(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Readyz(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListVaults operation middleware
+func (siw *ServerInterfaceWrapper) ListVaults(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListVaults(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateVault operation middleware
+func (siw *ServerInterfaceWrapper) CreateVault(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateVaultParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateVault(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteVault operation middleware
+func (siw *ServerInterfaceWrapper) DeleteVault(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteVault(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVault operation middleware
+func (siw *ServerInterfaceWrapper) GetVault(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVault(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateVault operation middleware
+func (siw *ServerInterfaceWrapper) UpdateVault(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateVault(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBlob operation middleware
+func (siw *ServerInterfaceWrapper) GetBlob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha256" -------------
+	var sha256 Sha256
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha256", chi.URLParam(r, "sha256"), &sha256, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha256", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBlobParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Range" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Range")]; found {
+		var Range string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Range", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Range", valueList[0], &Range, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Range", Err: err})
+			return
+		}
+
+		params.Range = &Range
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBlob(w, r, vaultId, sha256, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutBlob operation middleware
+func (siw *ServerInterfaceWrapper) PutBlob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha256" -------------
+	var sha256 Sha256
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha256", chi.URLParam(r, "sha256"), &sha256, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha256", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutBlob(w, r, vaultId, sha256)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckBlobs operation middleware
+func (siw *ServerInterfaceWrapper) CheckBlobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckBlobs(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetChanges operation middleware
+func (siw *ServerInterfaceWrapper) GetChanges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetChangesParams
+
+	// ------------- Required query parameter "since" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "since", r.URL.Query(), &params.Since, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "since"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "since", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChanges(w, r, vaultId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Commit operation middleware
+func (siw *ServerInterfaceWrapper) Commit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommitParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Commit(w, r, vaultId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRevisionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRevisions(w, r, vaultId, fileId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRevisionContent operation middleware
+func (siw *ServerInterfaceWrapper) GetRevisionContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "rev" -------------
+	var rev Rev
+
+	err = runtime.BindStyledParameterWithOptions("simple", "rev", chi.URLParam(r, "rev"), &rev, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rev", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRevisionContent(w, r, vaultId, fileId, rev)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreRevision operation middleware
+func (siw *ServerInterfaceWrapper) RestoreRevision(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "rev" -------------
+	var rev Rev
+
+	err = runtime.BindStyledParameterWithOptions("simple", "rev", chi.URLParam(r, "rev"), &rev, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rev", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreRevisionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreRevision(w, r, vaultId, fileId, rev, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetKeyEnvelopes operation middleware
+func (siw *ServerInterfaceWrapper) GetKeyEnvelopes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetKeyEnvelopes(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutKeyEnvelope operation middleware
+func (siw *ServerInterfaceWrapper) PutKeyEnvelope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind KeyEnvelopeKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutKeyEnvelope(w, r, vaultId, kind)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVaultTree operation middleware
+func (siw *ServerInterfaceWrapper) GetVaultTree(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVaultTree(w, r, vaultId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreVault operation middleware
+func (siw *ServerInterfaceWrapper) RestoreVault(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "vaultId" -------------
+	var vaultId VaultId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vaultId", chi.URLParam(r, "vaultId"), &vaultId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vaultId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreVault(w, r, vaultId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -747,9 +2140,65 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/config/effective", wrapper.GetEffectiveConfig)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/usage", wrapper.GetMyUsage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults", wrapper.ListVaults)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/vaults", wrapper.CreateVault)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/vaults/{vaultId}", wrapper.DeleteVault)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}", wrapper.GetVault)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/vaults/{vaultId}", wrapper.UpdateVault)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/vaults/{vaultId}:restore", wrapper.RestoreVault)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/tree", wrapper.GetVaultTree)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/key-envelopes", wrapper.GetKeyEnvelopes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/vaults/{vaultId}/key-envelopes/{kind}", wrapper.PutKeyEnvelope)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/changes", wrapper.GetChanges)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/vaults/{vaultId}/blobs:check", wrapper.CheckBlobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/blobs/{sha256}", wrapper.GetBlob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/vaults/{vaultId}/blobs/{sha256}", wrapper.PutBlob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/vaults/{vaultId}/commit", wrapper.Commit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/files/{fileId}/revisions", wrapper.ListRevisions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/vaults/{vaultId}/files/{fileId}/revisions/{rev}/content", wrapper.GetRevisionContent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore", wrapper.RestoreRevision)
+	})
 
 	return r
 }
+
+type ConflictApplicationProblemPlusJSONResponse Problem
 
 type ForbiddenApplicationProblemPlusJSONResponse Problem
 
@@ -1144,6 +2593,59 @@ func (response RevokeDevice404ApplicationProblemPlusJSONResponse) VisitRevokeDev
 	return err
 }
 
+type GetMyUsageRequestObject struct {
+}
+
+type GetMyUsageResponseObject interface {
+	VisitGetMyUsageResponse(w http.ResponseWriter) error
+}
+
+type GetMyUsage200JSONResponse Usage
+
+func (response GetMyUsage200JSONResponse) VisitGetMyUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyUsage401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetMyUsage401ApplicationProblemPlusJSONResponse) VisitGetMyUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyUsage403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetMyUsage403ApplicationProblemPlusJSONResponse) VisitGetMyUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReadyzRequestObject struct {
 }
 
@@ -1179,6 +2681,1276 @@ func (response Readyz503JSONResponse) VisitReadyzResponse(w http.ResponseWriter)
 	return err
 }
 
+type ListVaultsRequestObject struct {
+}
+
+type ListVaultsResponseObject interface {
+	VisitListVaultsResponse(w http.ResponseWriter) error
+}
+
+type ListVaults200JSONResponse VaultList
+
+func (response ListVaults200JSONResponse) VisitListVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListVaults401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListVaults401ApplicationProblemPlusJSONResponse) VisitListVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListVaults403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListVaults403ApplicationProblemPlusJSONResponse) VisitListVaultsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVaultRequestObject struct {
+	Params CreateVaultParams
+	Body   *CreateVaultJSONRequestBody
+}
+
+type CreateVaultResponseObject interface {
+	VisitCreateVaultResponse(w http.ResponseWriter) error
+}
+
+type CreateVault201JSONResponse Vault
+
+func (response CreateVault201JSONResponse) VisitCreateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVault400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVault400ApplicationProblemPlusJSONResponse) VisitCreateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVault401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVault401ApplicationProblemPlusJSONResponse) VisitCreateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVault403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVault403ApplicationProblemPlusJSONResponse) VisitCreateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVault409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVault409ApplicationProblemPlusJSONResponse) VisitCreateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteVaultRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type DeleteVaultResponseObject interface {
+	VisitDeleteVaultResponse(w http.ResponseWriter) error
+}
+
+type DeleteVault204Response struct {
+}
+
+func (response DeleteVault204Response) VisitDeleteVaultResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteVault401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteVault401ApplicationProblemPlusJSONResponse) VisitDeleteVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteVault404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteVault404ApplicationProblemPlusJSONResponse) VisitDeleteVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVaultRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type GetVaultResponseObject interface {
+	VisitGetVaultResponse(w http.ResponseWriter) error
+}
+
+type GetVault200JSONResponse Vault
+
+func (response GetVault200JSONResponse) VisitGetVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVault401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetVault401ApplicationProblemPlusJSONResponse) VisitGetVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVault404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetVault404ApplicationProblemPlusJSONResponse) VisitGetVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVaultRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	Body    *UpdateVaultJSONRequestBody
+}
+
+type UpdateVaultResponseObject interface {
+	VisitUpdateVaultResponse(w http.ResponseWriter) error
+}
+
+type UpdateVault200JSONResponse Vault
+
+func (response UpdateVault200JSONResponse) VisitUpdateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVault400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVault400ApplicationProblemPlusJSONResponse) VisitUpdateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVault401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVault401ApplicationProblemPlusJSONResponse) VisitUpdateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVault404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVault404ApplicationProblemPlusJSONResponse) VisitUpdateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVault409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVault409ApplicationProblemPlusJSONResponse) VisitUpdateVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlobRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	Sha256  Sha256  `json:"sha256"`
+	Params  GetBlobParams
+}
+
+type GetBlobResponseObject interface {
+	VisitGetBlobResponse(w http.ResponseWriter) error
+}
+
+type GetBlob200ResponseHeaders struct {
+	AcceptRanges  *string
+	ContentLength *int64
+}
+
+type GetBlob200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	Headers       GetBlob200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetBlob200ApplicationoctetStreamResponse) VisitGetBlobResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetBlob206ResponseHeaders struct {
+	ContentLength *int64
+	ContentRange  *string
+}
+
+type GetBlob206ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	Headers       GetBlob206ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetBlob206ApplicationoctetStreamResponse) VisitGetBlobResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	w.WriteHeader(206)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetBlob401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlob401ApplicationProblemPlusJSONResponse) VisitGetBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlob404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlob404ApplicationProblemPlusJSONResponse) VisitGetBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlob416ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBlob416ApplicationProblemPlusJSONResponse) VisitGetBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(416)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutBlobRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	Sha256  Sha256  `json:"sha256"`
+	Body    io.Reader
+}
+
+type PutBlobResponseObject interface {
+	VisitPutBlobResponse(w http.ResponseWriter) error
+}
+
+type PutBlob204Response struct {
+}
+
+func (response PutBlob204Response) VisitPutBlobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PutBlob400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response PutBlob400ApplicationProblemPlusJSONResponse) VisitPutBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutBlob401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PutBlob401ApplicationProblemPlusJSONResponse) VisitPutBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutBlob404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PutBlob404ApplicationProblemPlusJSONResponse) VisitPutBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutBlob413ApplicationProblemPlusJSONResponse Problem
+
+func (response PutBlob413ApplicationProblemPlusJSONResponse) VisitPutBlobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckBlobsRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	Body    *CheckBlobsJSONRequestBody
+}
+
+type CheckBlobsResponseObject interface {
+	VisitCheckBlobsResponse(w http.ResponseWriter) error
+}
+
+type CheckBlobs200JSONResponse BlobCheckResult
+
+func (response CheckBlobs200JSONResponse) VisitCheckBlobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckBlobs400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response CheckBlobs400ApplicationProblemPlusJSONResponse) VisitCheckBlobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckBlobs401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CheckBlobs401ApplicationProblemPlusJSONResponse) VisitCheckBlobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckBlobs404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CheckBlobs404ApplicationProblemPlusJSONResponse) VisitCheckBlobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChangesRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	Params  GetChangesParams
+}
+
+type GetChangesResponseObject interface {
+	VisitGetChangesResponse(w http.ResponseWriter) error
+}
+
+type GetChanges200JSONResponse Changes
+
+func (response GetChanges200JSONResponse) VisitGetChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChanges400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response GetChanges400ApplicationProblemPlusJSONResponse) VisitGetChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChanges401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetChanges401ApplicationProblemPlusJSONResponse) VisitGetChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChanges404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetChanges404ApplicationProblemPlusJSONResponse) VisitGetChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChanges410ApplicationProblemPlusJSONResponse Problem
+
+func (response GetChanges410ApplicationProblemPlusJSONResponse) VisitGetChangesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(410)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	Params  CommitParams
+	Body    *CommitJSONRequestBody
+}
+
+type CommitResponseObject interface {
+	VisitCommitResponse(w http.ResponseWriter) error
+}
+
+type Commit200JSONResponse CommitResponse
+
+func (response Commit200JSONResponse) VisitCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Commit400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response Commit400ApplicationProblemPlusJSONResponse) VisitCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Commit401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response Commit401ApplicationProblemPlusJSONResponse) VisitCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Commit404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response Commit404ApplicationProblemPlusJSONResponse) VisitCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRevisionsRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	FileId  FileId  `json:"fileId"`
+	Params  ListRevisionsParams
+}
+
+type ListRevisionsResponseObject interface {
+	VisitListRevisionsResponse(w http.ResponseWriter) error
+}
+
+type ListRevisions200JSONResponse RevisionList
+
+func (response ListRevisions200JSONResponse) VisitListRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRevisions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListRevisions401ApplicationProblemPlusJSONResponse) VisitListRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRevisions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListRevisions404ApplicationProblemPlusJSONResponse) VisitListRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRevisionContentRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	FileId  FileId  `json:"fileId"`
+	Rev     Rev     `json:"rev"`
+}
+
+type GetRevisionContentResponseObject interface {
+	VisitGetRevisionContentResponse(w http.ResponseWriter) error
+}
+
+type GetRevisionContent200ResponseHeaders struct {
+	ContentLength *int64
+}
+
+type GetRevisionContent200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	Headers       GetRevisionContent200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetRevisionContent200ApplicationoctetStreamResponse) VisitGetRevisionContentResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetRevisionContent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetRevisionContent401ApplicationProblemPlusJSONResponse) VisitGetRevisionContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRevisionContent404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetRevisionContent404ApplicationProblemPlusJSONResponse) VisitGetRevisionContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreRevisionRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+	FileId  FileId  `json:"fileId"`
+	Rev     Rev     `json:"rev"`
+	Params  RestoreRevisionParams
+}
+
+type RestoreRevisionResponseObject interface {
+	VisitRestoreRevisionResponse(w http.ResponseWriter) error
+}
+
+type RestoreRevision200JSONResponse OpResult
+
+func (response RestoreRevision200JSONResponse) VisitRestoreRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreRevision400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreRevision400ApplicationProblemPlusJSONResponse) VisitRestoreRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreRevision401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreRevision401ApplicationProblemPlusJSONResponse) VisitRestoreRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreRevision404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreRevision404ApplicationProblemPlusJSONResponse) VisitRestoreRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreRevision409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreRevision409ApplicationProblemPlusJSONResponse) VisitRestoreRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKeyEnvelopesRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type GetKeyEnvelopesResponseObject interface {
+	VisitGetKeyEnvelopesResponse(w http.ResponseWriter) error
+}
+
+type GetKeyEnvelopes200JSONResponse KeyEnvelopes
+
+func (response GetKeyEnvelopes200JSONResponse) VisitGetKeyEnvelopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKeyEnvelopes400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response GetKeyEnvelopes400ApplicationProblemPlusJSONResponse) VisitGetKeyEnvelopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKeyEnvelopes401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetKeyEnvelopes401ApplicationProblemPlusJSONResponse) VisitGetKeyEnvelopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKeyEnvelopes404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetKeyEnvelopes404ApplicationProblemPlusJSONResponse) VisitGetKeyEnvelopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKeyEnvelopeRequestObject struct {
+	VaultId VaultId         `json:"vaultId"`
+	Kind    KeyEnvelopeKind `json:"kind"`
+	Body    *PutKeyEnvelopeJSONRequestBody
+}
+
+type PutKeyEnvelopeResponseObject interface {
+	VisitPutKeyEnvelopeResponse(w http.ResponseWriter) error
+}
+
+type PutKeyEnvelope200JSONResponse KeyEnvelope
+
+func (response PutKeyEnvelope200JSONResponse) VisitPutKeyEnvelopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKeyEnvelope400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response PutKeyEnvelope400ApplicationProblemPlusJSONResponse) VisitPutKeyEnvelopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKeyEnvelope401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PutKeyEnvelope401ApplicationProblemPlusJSONResponse) VisitPutKeyEnvelopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKeyEnvelope404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PutKeyEnvelope404ApplicationProblemPlusJSONResponse) VisitPutKeyEnvelopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKeyEnvelope409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PutKeyEnvelope409ApplicationProblemPlusJSONResponse) VisitPutKeyEnvelopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVaultTreeRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type GetVaultTreeResponseObject interface {
+	VisitGetVaultTreeResponse(w http.ResponseWriter) error
+}
+
+type GetVaultTree200JSONResponse Tree
+
+func (response GetVaultTree200JSONResponse) VisitGetVaultTreeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVaultTree401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetVaultTree401ApplicationProblemPlusJSONResponse) VisitGetVaultTreeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVaultTree404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetVaultTree404ApplicationProblemPlusJSONResponse) VisitGetVaultTreeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreVaultRequestObject struct {
+	VaultId VaultId `json:"vaultId"`
+}
+
+type RestoreVaultResponseObject interface {
+	VisitRestoreVaultResponse(w http.ResponseWriter) error
+}
+
+type RestoreVault200JSONResponse Vault
+
+func (response RestoreVault200JSONResponse) VisitRestoreVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreVault400ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreVault400ApplicationProblemPlusJSONResponse) VisitRestoreVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreVault401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreVault401ApplicationProblemPlusJSONResponse) VisitRestoreVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreVault404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreVault404ApplicationProblemPlusJSONResponse) VisitRestoreVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreVault409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreVault409ApplicationProblemPlusJSONResponse) VisitRestoreVaultResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// GetClientConfig Public bootstrap information for clients (OIDC issuer and client id, notify endpoint)
@@ -1202,9 +3974,63 @@ type StrictServerInterface interface {
 	// RevokeDevice Revoke a device
 	// (DELETE /me/devices/{deviceId})
 	RevokeDevice(ctx context.Context, request RevokeDeviceRequestObject) (RevokeDeviceResponseObject, error)
+	// GetMyUsage Storage usage against the effective quota
+	// (GET /me/usage)
+	GetMyUsage(ctx context.Context, request GetMyUsageRequestObject) (GetMyUsageResponseObject, error)
 	// Readyz Readiness probe (database, object storage, identity provider reachable)
 	// (GET /readyz)
 	Readyz(ctx context.Context, request ReadyzRequestObject) (ReadyzResponseObject, error)
+	// ListVaults Own vaults (and, from M4, shared mounts)
+	// (GET /vaults)
+	ListVaults(ctx context.Context, request ListVaultsRequestObject) (ListVaultsResponseObject, error)
+	// CreateVault Create a vault; `kind` is immutable and private vaults require key envelopes
+	// (POST /vaults)
+	CreateVault(ctx context.Context, request CreateVaultRequestObject) (CreateVaultResponseObject, error)
+	// DeleteVault Soft delete (owner); purged after the retention period
+	// (DELETE /vaults/{vaultId})
+	DeleteVault(ctx context.Context, request DeleteVaultRequestObject) (DeleteVaultResponseObject, error)
+	// GetVault Vault detail (size, file count, last_seq)
+	// (GET /vaults/{vaultId})
+	GetVault(ctx context.Context, request GetVaultRequestObject) (GetVaultResponseObject, error)
+	// UpdateVault Rename a vault (owner)
+	// (PATCH /vaults/{vaultId})
+	UpdateVault(ctx context.Context, request UpdateVaultRequestObject) (UpdateVaultResponseObject, error)
+	// GetBlob Download a blob (Range supported)
+	// (GET /vaults/{vaultId}/blobs/{sha256})
+	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
+	// PutBlob Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
+	// (PUT /vaults/{vaultId}/blobs/{sha256})
+	PutBlob(ctx context.Context, request PutBlobRequestObject) (PutBlobResponseObject, error)
+	// CheckBlobs Which of these blobs the server does not have yet
+	// (POST /vaults/{vaultId}/blobs:check)
+	CheckBlobs(ctx context.Context, request CheckBlobsRequestObject) (CheckBlobsResponseObject, error)
+	// GetChanges Changelog entries after a cursor (§3.4.4 B)
+	// (GET /vaults/{vaultId}/changes)
+	GetChanges(ctx context.Context, request GetChangesRequestObject) (GetChangesResponseObject, error)
+	// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
+	// (POST /vaults/{vaultId}/commit)
+	Commit(ctx context.Context, request CommitRequestObject) (CommitResponseObject, error)
+	// ListRevisions History of a file, newest first
+	// (GET /vaults/{vaultId}/files/{fileId}/revisions)
+	ListRevisions(ctx context.Context, request ListRevisionsRequestObject) (ListRevisionsResponseObject, error)
+	// GetRevisionContent Content of a revision (ciphertext for private vaults)
+	// (GET /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content)
+	GetRevisionContent(ctx context.Context, request GetRevisionContentRequestObject) (GetRevisionContentResponseObject, error)
+	// RestoreRevision Restore a revision as a new revision that reuses its blob
+	// (POST /vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore)
+	RestoreRevision(ctx context.Context, request RestoreRevisionRequestObject) (RestoreRevisionResponseObject, error)
+	// GetKeyEnvelopes Wrapped VMK envelopes of a private vault (owner)
+	// (GET /vaults/{vaultId}/key-envelopes)
+	GetKeyEnvelopes(ctx context.Context, request GetKeyEnvelopesRequestObject) (GetKeyEnvelopesResponseObject, error)
+	// PutKeyEnvelope Replace the passphrase or recovery envelope (change passphrase, new recovery key)
+	// (PUT /vaults/{vaultId}/key-envelopes/{kind})
+	PutKeyEnvelope(ctx context.Context, request PutKeyEnvelopeRequestObject) (PutKeyEnvelopeResponseObject, error)
+	// GetVaultTree Complete manifest of current files plus the changelog position it reflects
+	// (GET /vaults/{vaultId}/tree)
+	GetVaultTree(ctx context.Context, request GetVaultTreeRequestObject) (GetVaultTreeResponseObject, error)
+	// RestoreVault Restore a soft-deleted vault within the retention period (owner)
+	// (POST /vaults/{vaultId}:restore)
+	RestoreVault(ctx context.Context, request RestoreVaultRequestObject) (RestoreVaultResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1427,6 +4253,30 @@ func (sh *strictHandler) RevokeDevice(w http.ResponseWriter, r *http.Request, de
 	}
 }
 
+// GetMyUsage operation middleware
+func (sh *strictHandler) GetMyUsage(w http.ResponseWriter, r *http.Request) {
+	var request GetMyUsageRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMyUsage(ctx, request.(GetMyUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMyUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMyUsageResponseObject); ok {
+		if err := validResponse.VisitGetMyUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Readyz operation middleware
 func (sh *strictHandler) Readyz(w http.ResponseWriter, r *http.Request) {
 	var request ReadyzRequestObject
@@ -1451,57 +4301,595 @@ func (sh *strictHandler) Readyz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListVaults operation middleware
+func (sh *strictHandler) ListVaults(w http.ResponseWriter, r *http.Request) {
+	var request ListVaultsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListVaults(ctx, request.(ListVaultsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListVaults")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListVaultsResponseObject); ok {
+		if err := validResponse.VisitListVaultsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateVault operation middleware
+func (sh *strictHandler) CreateVault(w http.ResponseWriter, r *http.Request, params CreateVaultParams) {
+	var request CreateVaultRequestObject
+
+	request.Params = params
+
+	var body CreateVaultJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateVault(ctx, request.(CreateVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateVaultResponseObject); ok {
+		if err := validResponse.VisitCreateVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteVault operation middleware
+func (sh *strictHandler) DeleteVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request DeleteVaultRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteVault(ctx, request.(DeleteVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteVaultResponseObject); ok {
+		if err := validResponse.VisitDeleteVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetVault operation middleware
+func (sh *strictHandler) GetVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request GetVaultRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetVault(ctx, request.(GetVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetVaultResponseObject); ok {
+		if err := validResponse.VisitGetVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateVault operation middleware
+func (sh *strictHandler) UpdateVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request UpdateVaultRequestObject
+
+	request.VaultId = vaultId
+
+	var body UpdateVaultJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateVault(ctx, request.(UpdateVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateVaultResponseObject); ok {
+		if err := validResponse.VisitUpdateVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBlob operation middleware
+func (sh *strictHandler) GetBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256, params GetBlobParams) {
+	var request GetBlobRequestObject
+
+	request.VaultId = vaultId
+	request.Sha256 = sha256
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBlob(ctx, request.(GetBlobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBlob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBlobResponseObject); ok {
+		if err := validResponse.VisitGetBlobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutBlob operation middleware
+func (sh *strictHandler) PutBlob(w http.ResponseWriter, r *http.Request, vaultId VaultId, sha256 Sha256) {
+	var request PutBlobRequestObject
+
+	request.VaultId = vaultId
+	request.Sha256 = sha256
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutBlob(ctx, request.(PutBlobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutBlob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutBlobResponseObject); ok {
+		if err := validResponse.VisitPutBlobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CheckBlobs operation middleware
+func (sh *strictHandler) CheckBlobs(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request CheckBlobsRequestObject
+
+	request.VaultId = vaultId
+
+	var body CheckBlobsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CheckBlobs(ctx, request.(CheckBlobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CheckBlobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CheckBlobsResponseObject); ok {
+		if err := validResponse.VisitCheckBlobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetChanges operation middleware
+func (sh *strictHandler) GetChanges(w http.ResponseWriter, r *http.Request, vaultId VaultId, params GetChangesParams) {
+	var request GetChangesRequestObject
+
+	request.VaultId = vaultId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetChanges(ctx, request.(GetChangesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetChanges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetChangesResponseObject); ok {
+		if err := validResponse.VisitGetChangesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Commit operation middleware
+func (sh *strictHandler) Commit(w http.ResponseWriter, r *http.Request, vaultId VaultId, params CommitParams) {
+	var request CommitRequestObject
+
+	request.VaultId = vaultId
+	request.Params = params
+
+	var body CommitJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Commit(ctx, request.(CommitRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Commit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CommitResponseObject); ok {
+		if err := validResponse.VisitCommitResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRevisions operation middleware
+func (sh *strictHandler) ListRevisions(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, params ListRevisionsParams) {
+	var request ListRevisionsRequestObject
+
+	request.VaultId = vaultId
+	request.FileId = fileId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRevisions(ctx, request.(ListRevisionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRevisions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRevisionsResponseObject); ok {
+		if err := validResponse.VisitListRevisionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRevisionContent operation middleware
+func (sh *strictHandler) GetRevisionContent(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev) {
+	var request GetRevisionContentRequestObject
+
+	request.VaultId = vaultId
+	request.FileId = fileId
+	request.Rev = rev
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRevisionContent(ctx, request.(GetRevisionContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRevisionContent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRevisionContentResponseObject); ok {
+		if err := validResponse.VisitGetRevisionContentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreRevision operation middleware
+func (sh *strictHandler) RestoreRevision(w http.ResponseWriter, r *http.Request, vaultId VaultId, fileId FileId, rev Rev, params RestoreRevisionParams) {
+	var request RestoreRevisionRequestObject
+
+	request.VaultId = vaultId
+	request.FileId = fileId
+	request.Rev = rev
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreRevision(ctx, request.(RestoreRevisionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreRevision")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreRevisionResponseObject); ok {
+		if err := validResponse.VisitRestoreRevisionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetKeyEnvelopes operation middleware
+func (sh *strictHandler) GetKeyEnvelopes(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request GetKeyEnvelopesRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetKeyEnvelopes(ctx, request.(GetKeyEnvelopesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetKeyEnvelopes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetKeyEnvelopesResponseObject); ok {
+		if err := validResponse.VisitGetKeyEnvelopesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutKeyEnvelope operation middleware
+func (sh *strictHandler) PutKeyEnvelope(w http.ResponseWriter, r *http.Request, vaultId VaultId, kind KeyEnvelopeKind) {
+	var request PutKeyEnvelopeRequestObject
+
+	request.VaultId = vaultId
+	request.Kind = kind
+
+	var body PutKeyEnvelopeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutKeyEnvelope(ctx, request.(PutKeyEnvelopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutKeyEnvelope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutKeyEnvelopeResponseObject); ok {
+		if err := validResponse.VisitPutKeyEnvelopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetVaultTree operation middleware
+func (sh *strictHandler) GetVaultTree(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request GetVaultTreeRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetVaultTree(ctx, request.(GetVaultTreeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetVaultTree")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetVaultTreeResponseObject); ok {
+		if err := validResponse.VisitGetVaultTreeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreVault operation middleware
+func (sh *strictHandler) RestoreVault(w http.ResponseWriter, r *http.Request, vaultId VaultId) {
+	var request RestoreVaultRequestObject
+
+	request.VaultId = vaultId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreVault(ctx, request.(RestoreVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreVaultResponseObject); ok {
+		if err := validResponse.VisitRestoreVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"ZdvHaFH4nwAAAP//",
+	"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",
+	"//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

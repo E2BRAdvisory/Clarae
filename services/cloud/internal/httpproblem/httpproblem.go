@@ -31,6 +31,7 @@ var titles = map[syncproto.Code]string{
 	syncproto.CodeVaultKindImmutable: "Vault kind is immutable",
 	syncproto.CodeRateLimited:        "Too many requests",
 	syncproto.CodeCursorExpired:      "Cursor expired",
+	syncproto.CodeNameInUse:          "Name already in use",
 	syncproto.CodeInternal:           "Internal error",
 }
 

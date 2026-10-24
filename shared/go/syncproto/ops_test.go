@@ -108,6 +108,7 @@ func TestHTTPStatus(t *testing.T) {
 		CodeBlobMissing:        http.StatusUnprocessableEntity,
 		CodeRateLimited:        http.StatusTooManyRequests,
 		CodeCursorExpired:      http.StatusGone,
+		CodeNameInUse:          http.StatusConflict,
 		CodeInternal:           http.StatusInternalServerError,
 		Code("whatever"):       http.StatusInternalServerError,
 	}

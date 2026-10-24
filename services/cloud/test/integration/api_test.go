@@ -127,14 +127,15 @@ func TestMeProvisionsAndReturnsProfile(t *testing.T) {
 
 func TestSuspendedUserIsRejected(t *testing.T) {
 	e := newEnv(t)
-	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-suspended", Username: "bob"})
+	sub := "sub-suspended-" + newID()
+	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: sub, Username: "bob", Email: sub + "@nodus.local"})
 	if resp := e.request(http.MethodGet, "/me", tok, nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("first call: %d", resp.StatusCode)
 	}
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET status='suspended' WHERE keycloak_sub='sub-suspended'`); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET status='suspended' WHERE keycloak_sub=$1`, sub); err != nil {
 		t.Fatal(err)
 	}
-	e.authn.Invalidate("sub-suspended")
+	e.authn.Invalidate(sub)
 
 	resp := e.request(http.MethodGet, "/me", tok, nil)
 	if resp.StatusCode != http.StatusForbidden {

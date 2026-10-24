@@ -35,6 +35,10 @@ type Config struct {
 
 	S3 S3Config
 
+	// StorageDir stores blobs on the local filesystem when S3_ENDPOINT is
+	// empty (single-node development and tests).
+	StorageDir string
+
 	OIDC OIDCConfig
 
 	Keycloak KeycloakConfig
@@ -89,6 +93,7 @@ func Load(role Role, version string) (Config, error) {
 		LogLevel:        env("LOG_LEVEL", "info"),
 		DatabaseURL:     env("DATABASE_URL", ""),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
+		StorageDir:      env("STORAGE_DIR", ""),
 		S3: S3Config{
 			Endpoint:      env("S3_ENDPOINT", ""),
 			AccessKey:     env("S3_ACCESS_KEY", ""),
@@ -128,6 +133,9 @@ func (c Config) validate() error {
 		if c.OIDC.Audience == "" {
 			errs = append(errs, errors.New("OIDC_AUDIENCE is required"))
 		}
+	}
+	if c.S3.Endpoint == "" && c.StorageDir == "" {
+		errs = append(errs, errors.New("S3_ENDPOINT (or STORAGE_DIR for a local directory) is required"))
 	}
 	switch c.Role {
 	case RoleAPI, RoleWorker, RoleAll:

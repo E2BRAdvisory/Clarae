@@ -51,7 +51,7 @@ func NewHTTP(version string, client ClientConfig, checkers ...Checker) *HTTP {
 // Healthz implements GET /healthz: the process is alive.
 func (h *HTTP) Healthz(_ context.Context, _ api.HealthzRequestObject) (api.HealthzResponseObject, error) {
 	v := h.version
-	return api.Healthz200JSONResponse{Status: api.Ok, Version: &v}, nil
+	return api.Healthz200JSONResponse{Status: api.HealthStatusOk, Version: &v}, nil
 }
 
 // Readyz implements GET /readyz: every dependency answers within 3 s.
@@ -82,9 +82,9 @@ func (h *HTTP) Readyz(ctx context.Context, _ api.ReadyzRequestObject) (api.Ready
 
 	v := h.version
 	if !healthy {
-		return api.Readyz503JSONResponse{Status: api.Unavailable, Checks: &checks, Version: &v}, nil
+		return api.Readyz503JSONResponse{Status: api.HealthStatusUnavailable, Checks: &checks, Version: &v}, nil
 	}
-	return api.Readyz200JSONResponse{Status: api.Ok, Checks: &checks, Version: &v}, nil
+	return api.Readyz200JSONResponse{Status: api.HealthStatusOk, Checks: &checks, Version: &v}, nil
 }
 
 // GetClientConfig implements GET /client-config.

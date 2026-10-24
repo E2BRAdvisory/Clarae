@@ -22,6 +22,15 @@ type AuditLog struct {
 	Ip         *netip.Addr
 }
 
+type Blob struct {
+	Hash              string
+	Size              int64
+	StorageKey        string
+	RefCount          int32
+	CreatedAt         time.Time
+	UnreferencedSince *time.Time
+}
+
 type Device struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
@@ -33,11 +42,57 @@ type Device struct {
 	RevokedAt  *time.Time
 }
 
+type File struct {
+	ID         uuid.UUID
+	VaultID    uuid.UUID
+	Path       string
+	PathKey    string
+	Kind       string
+	CurrentRev int32
+	CurrentSeq int64
+	BlobHash   *string
+	Size       int64
+	IsDeleted  bool
+	UpdatedAt  time.Time
+}
+
+type FileRevision struct {
+	ID          uuid.UUID
+	FileID      uuid.UUID
+	VaultID     uuid.UUID
+	Seq         int64
+	RevNo       int32
+	Op          string
+	Path        string
+	PrevPath    *string
+	BlobHash    *string
+	Size        int64
+	BaseRev     *int32
+	AuthorID    uuid.UUID
+	DeviceID    *uuid.UUID
+	OpID        *uuid.UUID
+	ClientMtime *time.Time
+	ServerTime  time.Time
+	ConflictOf  *uuid.UUID
+}
+
 type Setting struct {
 	Key       string
 	Value     []byte
 	UpdatedBy *uuid.UUID
 	UpdatedAt time.Time
+}
+
+type Upload struct {
+	ID           uuid.UUID
+	VaultID      uuid.UUID
+	UserID       uuid.UUID
+	ExpectedHash string
+	Length       int64
+	Received     int64
+	Chunks       int32
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
 }
 
 type User struct {
@@ -53,4 +108,32 @@ type User struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	LastLoginAt        *time.Time
+}
+
+type Vault struct {
+	ID            uuid.UUID
+	OwnerID       uuid.UUID
+	Name          string
+	Kind          string
+	LastSeq       int64
+	CompactionSeq int64
+	TotalBytes    int64
+	FileCount     int32
+	CreatedAt     time.Time
+	DeletedAt     *time.Time
+}
+
+type VaultBlob struct {
+	VaultID   uuid.UUID
+	Hash      string
+	CreatedAt time.Time
+}
+
+type VaultKeyEnvelope struct {
+	ID         uuid.UUID
+	VaultID    uuid.UUID
+	Kind       string
+	Kdf        []byte
+	WrappedVmk []byte
+	CreatedAt  time.Time
 }

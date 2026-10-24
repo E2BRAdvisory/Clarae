@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Nodus Cloud API
-  version: 1.0.0-m0
+  version: 1.0.0-m2
   description: |
     REST contract of the Nodus Cloud Service (Specifications.md §3.1, §3.5).
     This file is the single source of truth: Go server stubs and the TypeScript
@@ -19,6 +19,12 @@ tags:
     description: Health and readiness (no authentication)
   - name: me
     description: Profile, devices and configuration of the authenticated user
+  - name: vaults
+    description: Vault lifecycle, manifest and encryption key envelopes
+  - name: sync
+    description: Changelog, blob transfer and commit (§3.4)
+  - name: history
+    description: File revisions and restore
 
 paths:
   /healthz:
@@ -193,6 +199,530 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /me/usage:
+    get:
+      tags: [me]
+      operationId: getMyUsage
+      security:
+        - bearerAuth: []
+      summary: Storage usage against the effective quota
+      responses:
+        '200':
+          description: Usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /vaults:
+    get:
+      tags: [vaults]
+      operationId: listVaults
+      security:
+        - bearerAuth: []
+      summary: Own vaults (and, from M4, shared mounts)
+      responses:
+        '200':
+          description: Vaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [vaults]
+      operationId: createVault
+      security:
+        - bearerAuth: []
+      summary: Create a vault; `kind` is immutable and private vaults require key envelopes
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVault'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vault'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /vaults/{vaultId}:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    get:
+      tags: [vaults]
+      operationId: getVault
+      security:
+        - bearerAuth: []
+      summary: Vault detail (size, file count, last_seq)
+      responses:
+        '200':
+          description: Vault
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vault'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [vaults]
+      operationId: updateVault
+      security:
+        - bearerAuth: []
+      summary: Rename a vault (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVault'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vault'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [vaults]
+      operationId: deleteVault
+      security:
+        - bearerAuth: []
+      summary: Soft delete (owner); purged after the retention period
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}:restore:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    post:
+      tags: [vaults]
+      operationId: restoreVault
+      security:
+        - bearerAuth: []
+      summary: Restore a soft-deleted vault within the retention period (owner)
+      responses:
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vault'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /vaults/{vaultId}/tree:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    get:
+      tags: [vaults]
+      operationId: getVaultTree
+      security:
+        - bearerAuth: []
+      summary: Complete manifest of current files plus the changelog position it reflects
+      responses:
+        '200':
+          description: Manifest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tree'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/key-envelopes:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    get:
+      tags: [vaults]
+      operationId: getKeyEnvelopes
+      security:
+        - bearerAuth: []
+      summary: Wrapped VMK envelopes of a private vault (owner)
+      responses:
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '200':
+          description: Envelopes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyEnvelopes'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/key-envelopes/{kind}:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/KeyEnvelopeKind'
+    put:
+      tags: [vaults]
+      operationId: putKeyEnvelope
+      security:
+        - bearerAuth: []
+      summary: Replace the passphrase or recovery envelope (change passphrase, new recovery key)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyEnvelopeInput'
+      responses:
+        '200':
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /vaults/{vaultId}/changes:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    get:
+      tags: [sync]
+      operationId: getChanges
+      security:
+        - bearerAuth: []
+      summary: Changelog entries after a cursor (§3.4.4 B)
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 500
+        - name: scope
+          in: query
+          required: false
+          description: Reserved for shared mounts (`share:{id}`, M4)
+          schema:
+            type: string
+      responses:
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '200':
+          description: Changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Changes'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: 'The cursor predates the compaction window (code CURSOR_EXPIRED): bootstrap from /tree'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /vaults/{vaultId}/blobs:check:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    post:
+      tags: [sync]
+      operationId: checkBlobs
+      security:
+        - bearerAuth: []
+      summary: Which of these blobs the server does not have yet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlobCheck'
+      responses:
+        '200':
+          description: Missing hashes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlobCheckResult'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/blobs/{sha256}:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - $ref: '#/components/parameters/Sha256'
+    put:
+      tags: [sync]
+      operationId: putBlob
+      security:
+        - bearerAuth: []
+      summary: Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '204':
+          description: Stored (or already present)
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: 'Blob larger than 32 MB (code FILE_TOO_LARGE) or quota exceeded (QUOTA_EXCEEDED)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    get:
+      tags: [sync]
+      operationId: getBlob
+      security:
+        - bearerAuth: []
+      summary: Download a blob (Range supported)
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Blob bytes
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+                format: int64
+            Accept-Ranges:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial content
+          headers:
+            Content-Range:
+              schema:
+                type: string
+            Content-Length:
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '416':
+          description: Unsatisfiable range
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /vaults/{vaultId}/commit:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+    post:
+      tags: [sync]
+      operationId: commit
+      security:
+        - bearerAuth: []
+      summary: Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitRequest'
+      responses:
+        '200':
+          description: Per-operation outcomes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/files/{fileId}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [history]
+      operationId: listRevisions
+      security:
+        - bearerAuth: []
+      summary: History of a file, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Revisions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - $ref: '#/components/parameters/FileId'
+      - $ref: '#/components/parameters/Rev'
+    get:
+      tags: [history]
+      operationId: getRevisionContent
+      security:
+        - bearerAuth: []
+      summary: Content of a revision (ciphertext for private vaults)
+      responses:
+        '200':
+          description: Blob bytes
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore:
+    parameters:
+      - $ref: '#/components/parameters/VaultId'
+      - $ref: '#/components/parameters/FileId'
+      - $ref: '#/components/parameters/Rev'
+    post:
+      tags: [history]
+      operationId: restoreRevision
+      security:
+        - bearerAuth: []
+      summary: Restore a revision as a new revision that reuses its blob
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '200':
+          description: Restored; the result carries the new revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpResult'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -202,6 +732,34 @@ components:
       description: Keycloak access token with `aud=nodus-api`
 
   parameters:
+    VaultId:
+      name: vaultId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Rev:
+      name: rev
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    Sha256:
+      name: sha256
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
     DeviceId:
       name: deviceId
       in: path
@@ -239,6 +797,12 @@ components:
             $ref: '#/components/schemas/Problem'
     ValidationFailed:
       description: Request does not satisfy the schema (code VALIDATION_FAILED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: 'State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION or NAME_IN_USE)'
       content:
         application/problem+json:
           schema:
@@ -317,6 +881,7 @@ components:
         - VAULT_KIND_IMMUTABLE
         - RATE_LIMITED
         - CURSOR_EXPIRED
+        - NAME_IN_USE
         - INTERNAL
 
     Health:
@@ -431,3 +996,397 @@ components:
           items:
             type: string
           description: Dotted keys the user cannot override
+
+    Usage:
+      type: object
+      required: [used_bytes, quota_bytes, level]
+      properties:
+        used_bytes:
+          type: integer
+          format: int64
+        quota_bytes:
+          type: integer
+          format: int64
+          description: -1 means unlimited
+        level:
+          type: string
+          enum: [ok, warning, critical, full]
+          description: 'ok below 80 %, warning from 80 %, critical from 95 %, full at 100 %'
+
+    VaultKind:
+      type: string
+      enum: [private, shared]
+
+    Vault:
+      type: object
+      required: [id, owner_id, name, kind, last_seq, total_bytes, file_count, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/VaultKind'
+        last_seq:
+          type: integer
+          format: int64
+        total_bytes:
+          type: integer
+          format: int64
+        file_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+
+    VaultList:
+      type: object
+      required: [items, mounts]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vault'
+        mounts:
+          type: array
+          description: "Shared mounts of other owners' vaults (empty until M4)"
+          items:
+            $ref: '#/components/schemas/Vault'
+
+    CreateVault:
+      type: object
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          $ref: '#/components/schemas/VaultKind'
+        key_envelopes:
+          type: array
+          description: 'Both the passphrase and the recovery envelope: required for private vaults, forbidden for shared ones'
+          items:
+            $ref: '#/components/schemas/KeyEnvelopeInput'
+
+    UpdateVault:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+
+    KeyEnvelopeKind:
+      type: string
+      enum: [passphrase, recovery]
+
+    KdfParams:
+      type: object
+      required: [alg, salt]
+      properties:
+        alg:
+          type: string
+          enum: [argon2id, hkdf-sha256]
+        t:
+          type: integer
+        m_kib:
+          type: integer
+        p:
+          type: integer
+        salt:
+          type: string
+          description: Standard base64
+
+    KeyEnvelopeInput:
+      type: object
+      required: [kind, kdf, wrapped_vmk]
+      properties:
+        kind:
+          $ref: '#/components/schemas/KeyEnvelopeKind'
+        kdf:
+          $ref: '#/components/schemas/KdfParams'
+        wrapped_vmk:
+          type: string
+          format: byte
+          description: 'nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag, standard base64 (60 bytes)'
+
+    KeyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/KeyEnvelopeInput'
+        - type: object
+          required: [created_at]
+          properties:
+            created_at:
+              type: string
+              format: date-time
+
+    KeyEnvelopes:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyEnvelope'
+
+    TreeEntry:
+      type: object
+      required: [path, file_id, rev, hash, size, kind]
+      properties:
+        path:
+          type: string
+        file_id:
+          type: string
+          format: uuid
+        rev:
+          type: integer
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        size:
+          type: integer
+          format: int64
+        kind:
+          type: string
+
+    Tree:
+      type: object
+      required: [items, as_of_seq]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreeEntry'
+        as_of_seq:
+          type: integer
+          format: int64
+          description: 'The changelog position the manifest reflects: continue with changes?since=as_of_seq'
+
+    ChangeOp:
+      type: string
+      enum: [create, modify, move, delete, restore]
+
+    Change:
+      type: object
+      required: [seq, file_id, op, path, rev, size, author_id, server_time]
+      properties:
+        seq:
+          type: integer
+          format: int64
+        file_id:
+          type: string
+          format: uuid
+        op:
+          $ref: '#/components/schemas/ChangeOp'
+        path:
+          type: string
+        prev_path:
+          type: string
+        rev:
+          type: integer
+        blob_hash:
+          type: string
+        size:
+          type: integer
+          format: int64
+        author_id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          format: uuid
+        server_time:
+          type: string
+          format: date-time
+        conflict_of:
+          type: string
+          format: uuid
+          description: 'Set on a conflict copy: the file it was derived from'
+
+    Changes:
+      type: object
+      required: [items, next_seq, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+        next_seq:
+          type: integer
+          format: int64
+        has_more:
+          type: boolean
+
+    BlobCheck:
+      type: object
+      required: [hashes]
+      properties:
+        hashes:
+          type: array
+          maxItems: 1000
+          items:
+            type: string
+            pattern: '^[0-9a-f]{64}$'
+
+    BlobCheckResult:
+      type: object
+      required: [missing]
+      properties:
+        missing:
+          type: array
+          items:
+            type: string
+
+    CommitOpKind:
+      type: string
+      enum: [create, modify, move, delete, restore, move_prefix]
+
+    CommitOp:
+      type: object
+      required: [op_id, op]
+      properties:
+        op_id:
+          type: string
+          format: uuid
+        op:
+          $ref: '#/components/schemas/CommitOpKind'
+        file_id:
+          type: string
+          format: uuid
+        path:
+          type: string
+          maxLength: 1100
+        path_key:
+          type: string
+          maxLength: 128
+          description: "Private vaults only: 'hmac1:<hex>' identity of the path, since the server cannot derive it from the opaque token (ADR-0009)"
+        base_rev:
+          type: integer
+          minimum: 0
+        blob_hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        size:
+          type: integer
+          format: int64
+          minimum: 0
+        client_mtime:
+          type: string
+          format: date-time
+        conflict_of:
+          type: string
+          format: uuid
+          description: 'Marks a conflict copy (create only)'
+        from:
+          type: string
+        to:
+          type: string
+
+    CommitRequest:
+      type: object
+      required: [device_id, ops]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        ops:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/CommitOp'
+
+    OpResult:
+      type: object
+      required: [op_id, status]
+      properties:
+        op_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [accepted, conflict, rejected]
+        file_id:
+          type: string
+          format: uuid
+        rev:
+          type: integer
+        seq:
+          type: integer
+          format: int64
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        detail:
+          type: string
+        current_rev:
+          type: integer
+        current_hash:
+          type: string
+        current_seq:
+          type: integer
+          format: int64
+
+    CommitResponse:
+      type: object
+      required: [results, last_seq]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpResult'
+        last_seq:
+          type: integer
+          format: int64
+
+    Revision:
+      type: object
+      required: [rev, seq, op, path, size, author_id, server_time]
+      properties:
+        rev:
+          type: integer
+        seq:
+          type: integer
+          format: int64
+        op:
+          $ref: '#/components/schemas/ChangeOp'
+        path:
+          type: string
+        prev_path:
+          type: string
+        blob_hash:
+          type: string
+        size:
+          type: integer
+          format: int64
+        author_id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          format: uuid
+        server_time:
+          type: string
+          format: date-time
+        conflict_of:
+          type: string
+          format: uuid
+
+    RevisionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Revision'
+        next_cursor:
+          type: string

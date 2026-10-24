@@ -25,13 +25,14 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"nodus/services/cloud/internal/app"
 	"nodus/services/cloud/internal/auth"
 	"nodus/services/cloud/internal/auth/authtest"
 	"nodus/services/cloud/internal/configprofiles"
 	"nodus/services/cloud/internal/db"
 	"nodus/services/cloud/internal/httpserver"
+	"nodus/services/cloud/internal/storage"
 	"nodus/services/cloud/internal/system"
-	"nodus/services/cloud/internal/users"
 )
 
 var (
@@ -111,6 +112,7 @@ type env struct {
 	t       *testing.T
 	issuer  *authtest.Issuer
 	authn   *auth.Middleware
+	app     *app.App
 	db      *db.DB
 	server  *httptest.Server
 	baseURL string
@@ -133,18 +135,24 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	userSvc := users.NewService(database)
-	authn := auth.NewMiddleware(verifier, userSvc, nil, 30*time.Second)
-	router := httpserver.NewRouter(httpserver.Deps{
+	store, err := storage.NewFS(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	application := app.New(database, store, zerolog.Nop())
+	authn := auth.NewMiddleware(verifier, application.Users, nil, 30*time.Second)
+	hubCtx, stopHub := context.WithCancel(ctx)
+	t.Cleanup(stopHub)
+	go func() { _ = application.Hub.Run(hubCtx) }()
+	router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
 		Logger: zerolog.Nop(),
 		Auth:   authn,
-		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "nodus-desktop", Audience: "nodus-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}),
-		Users:  users.NewHTTP(userSvc),
+		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "nodus-desktop", Audience: "nodus-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
 		Config: configprofiles.NewHTTP(),
-	})
+	}))
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
-	return &env{t: t, issuer: issuer, authn: authn, db: database, server: srv, baseURL: srv.URL + httpserver.BasePath}
+	return &env{t: t, issuer: issuer, authn: authn, app: application, db: database, server: srv, baseURL: srv.URL + httpserver.BasePath}
 }
 
 // do performs a request and validates request and response against the spec.

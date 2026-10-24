@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -66,6 +67,19 @@ func WithPrincipal(ctx context.Context, p Principal) context.Context {
 func PrincipalFrom(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(principalKey{}).(Principal)
 	return p, ok
+}
+
+type expiryKey struct{}
+
+// WithTokenExpiry stores the expiry of the access token that authenticated the request.
+func WithTokenExpiry(ctx context.Context, t time.Time) context.Context {
+	return context.WithValue(ctx, expiryKey{}, t)
+}
+
+// TokenExpiryFrom returns the token expiry, or the zero time when unknown.
+func TokenExpiryFrom(ctx context.Context) time.Time {
+	t, _ := ctx.Value(expiryKey{}).(time.Time)
+	return t
 }
 
 // MustPrincipal returns the caller or panics: use only on routes that the
