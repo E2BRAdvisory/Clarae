@@ -411,6 +411,8 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 12. M7 — Hardening e rilascio 1.0
 
+> **Stato (2026-10-27):** WP1–WP4 implementati e verificati in locale (ADR-0020…0023): benchmark e ottimizzazioni (indice 50k ≈ 73 s, ricerca con cache), documenti per audit crittografico e pen test, GDPR (`GET /me/export`, `DELETE /me`, purge), scansioni in CI, resilienza (fault injection, drain, prova di ripristino con PITR, chaos sul chart), updater firmato, installer, pipeline di release, chart completo, compose on-premise, accessibilità (axe), i18n, guide utente e admin, dashboard Grafana. **WP5 (release) non è completabile da qui**: firma e notarizzazione, audit e pen test esterni, test manuale cross-OS con screen reader, misure su webview e infrastruttura reali, rebrand e tag. Tutto ciò che resta è in `docs/release/v1.0.0-checklist.md`; il codice è la candidata `1.0.0-rc.1` (`CHANGELOG.md`).
+
 ### M7-WP1 Prestazioni
 
 - Dataset sintetici (50k note, 10k nodi grafo) in CI nightly; benchmark avvio < 3 s, apertura nota < 150 ms, ricerca < 200 ms, indice 50k < 3 min; profiling Go/React; k6 su cloud (1.000 utenti attivi simulati: `changes`/`commit`).

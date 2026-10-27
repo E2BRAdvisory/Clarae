@@ -13,6 +13,9 @@ apps/desktop/build/bin/
 *.test
 *.out
 
+# Performance suite output (make perf)
+.perf/
+
 # Local data
 *.db
 *.db-journal

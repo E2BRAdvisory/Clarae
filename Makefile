@@ -149,6 +149,19 @@ build-cloud: ## Build the cloud binary into bin/ (embeds whatever is in web-embe
 build-desktop: ## Build the desktop app for the current OS
 	cd $(DESKTOP) && wails build -clean -ldflags "-X main.Version=$(VERSION)"
 
+## ---- release / distribution (M7-WP3, docs/release/README.md) --------------
+
+.PHONY: release-tool helm-check release-desktop
+release-tool: ## Build tools/release (gen-manifest, sign-manifest, verify-manifest) into bin/release
+	cd tools/release && GOWORK=off go build -o ../../bin/release .
+
+helm-check: ## helm lint + template for the chart with every values file
+	helm lint deploy/helm/nodus
+	@for f in deploy/helm/nodus/values-k3d.yaml deploy/helm/nodus/ci/*.yaml; do helm lint deploy/helm/nodus -f $$f >/dev/null && helm template ci deploy/helm/nodus -f $$f >/dev/null && echo "ok $$f" || exit 1; done
+
+release-desktop: ## Local installer build: make release-desktop OS=darwin|windows|linux V=1.0.0-rc.1
+	bash scripts/release/build-desktop.sh $(OS) $(V)
+
 ## ---- maintenance -----------------------------------------------------------
 
 .PHONY: rename-module
@@ -157,6 +170,30 @@ rename-module: ## Rename the Go module path placeholder: make rename-module NEW=
 	@git ls-files -z -- '*.go' 'go.mod' 'go.work' '*.yaml' '*.yml' '*.md' 'Makefile' \
 		| xargs -0 perl -pi -e 's{(?<![\w./-])nodus/(apps|services|shared)\b}{$(NEW)/$$1}g'
 	@echo "Module paths renamed to $(NEW)/...; run: go work sync && make gen"
+
+## ---- performance (M7-WP1; see docs/perf/README.md) ------------------------
+
+PERF_NOTES ?= 50000
+PERF_DIR   ?= $(CURDIR)/.perf
+PERF_OUT   ?= $(PERF_DIR)/results-$(PERF_NOTES).json
+
+.PHONY: perf perf-data perf-check perf-load-env
+perf-data: ## Generate the synthetic vault (cached): make perf-data PERF_NOTES=50000
+	cd $(DESKTOP) && go run ./internal/perf/cmd/perfdata -notes $(PERF_NOTES) -dir $(PERF_DIR)/vault-$(PERF_NOTES)
+
+perf: ## Desktop perf suite (index, search, note open, vault open, graph 10k): make perf PERF_NOTES=50000
+	@mkdir -p $(PERF_DIR)
+	cd $(DESKTOP) && NODUS_PERF_NOTES=$(PERF_NOTES) NODUS_PERF_DIR=$(PERF_DIR) NODUS_PERF_OUT=$(PERF_OUT) \
+		go test -run TestPerf -count=1 -timeout 90m -v ./internal/perf/
+
+perf-check: ## Fail on regressions vs the stored baseline: make perf-check PERF_NOTES=50000 [PERF_TOLERANCE=25]
+	cd $(DESKTOP) && go run ./internal/perf/cmd/perfcheck -baseline ../../docs/perf/baseline-$(PERF_NOTES).json \
+		-results $(PERF_OUT) -tolerance $(or $(PERF_TOLERANCE),25)
+
+perf-load-env: ## Cloud load env for k6 (needs Docker): make perf-load-env USERS=1000, then k6 run -e TOKENS=.perf/tokens.json services/cloud/test/load/k6/active-users.js
+	@mkdir -p $(PERF_DIR)
+	cd $(CLOUD) && NODUS_LOADENV_USERS=$(or $(USERS),1000) NODUS_LOADENV_OUT=$(PERF_DIR)/tokens.json \
+		go test -tags integration -run TestServeLoadEnv -count=1 -timeout 2h -v ./test/integration/
 
 .PHONY: help
 help: ## Show this help

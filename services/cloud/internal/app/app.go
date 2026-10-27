@@ -16,6 +16,7 @@ import (
 	"nodus/services/cloud/internal/jobs"
 	"nodus/services/cloud/internal/keycloak"
 	"nodus/services/cloud/internal/notify"
+	"nodus/services/cloud/internal/privacy"
 	"nodus/services/cloud/internal/quota"
 	"nodus/services/cloud/internal/revisions"
 	"nodus/services/cloud/internal/sharing"
@@ -44,6 +45,7 @@ type App struct {
 	// before FillDeps, tests substitute a fake.
 	Keycloak keycloak.Admin
 	Admin    *admin.Service
+	Privacy  *privacy.Service
 	// ExportStore holds finished export archives; New defaults it to the blob store
 	// (keys are prefixed, so they never collide), main points it at the exports bucket.
 	ExportStore storage.BlobStore
@@ -81,6 +83,8 @@ func (a *App) FillDeps(d httpserver.Deps) httpserver.Deps {
 	}
 	a.Admin = admin.NewService(a.DB, a.Keycloak, inv, a.Users, a.Log)
 	d.Admin = admin.NewHTTP(a.Admin, a.Groups, a.Config)
+	a.Privacy = privacy.NewService(a.DB, a.Keycloak, inv)
+	d.Privacy = privacy.NewHTTP(a.Privacy)
 	a.Exports = export.NewService(a.DB, a.Store, a.ExportStore, a.Sharing, a.Log)
 	d.Export = export.NewHTTP(a.Exports)
 	d.Users = users.NewHTTP(a.Users)

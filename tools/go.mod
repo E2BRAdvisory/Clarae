@@ -3,7 +3,7 @@
 // never leaks into the application modules. Install with `make tools`.
 module nodus/tools
 
-go 1.26.7
+go 1.26.10
 
 tool (
 	github.com/bufbuild/buf/cmd/buf
