@@ -6,7 +6,6 @@
     "title": "Open a vault",
     "subtitle": "A vault is a folder of Markdown notes on your computer.",
     "openFolder": "Open folder as vault",
-    "createVault": "Create new vault",
     "recent": "Recent vaults",
     "pickTitle": "Choose the vault folder"
   },
@@ -62,7 +61,8 @@
     "mode_live": "Live",
     "mode_source": "Source",
     "mode_reading": "Reading",
-    "saveError": "Could not save"
+    "saveError": "Could not save",
+    "ariaLabel": "Note editor"
   },
   "status": {
     "indexing": "Indexing {{done}}/{{total}}",
@@ -74,15 +74,12 @@
   },
   "settings": {
     "title": "Settings",
-    "general": "General",
     "language": "Language",
     "languageSystem": "System",
     "theme": "Theme",
     "themeSystem": "System",
     "themeLight": "Light",
     "themeDark": "Dark",
-    "cloud": "Cloud",
-    "about": "About",
     "version": "Version",
     "dataDir": "Data folder",
     "close": "Close",
@@ -160,7 +157,6 @@
     "signedOut": "Not signed in",
     "ready": "Signed in as {{name}}",
     "disconnected": "Offline — signed in as {{name}}",
-    "device": "Device",
     "role": "Role",
     "placeholder": "https://nodus.example.com",
     "storage": "Storage",
@@ -211,13 +207,15 @@
     "splitRight": "Split right",
     "splitDown": "Split down",
     "link": "Link with other panes",
-    "unlink": "Unlink pane"
+    "unlink": "Unlink pane",
+    "list": "Open notes"
   },
   "dialog": {
     "ok": "OK",
     "cancel": "Cancel",
     "filter": "Filter…",
-    "nothing": "Nothing matches"
+    "nothing": "Nothing matches",
+    "error": "Error"
   },
   "palette": {
     "title": "Command palette",
@@ -330,7 +328,8 @@
     "recovery_deleted": "Recover deleted files",
     "note_export_pdf": "Export to PDF",
     "note_export_html": "Export to HTML",
-    "import_open": "Import…"
+    "import_open": "Import…",
+    "update_check": "Check for updates"
   },
   "sync": {
     "title": "Sync",
@@ -340,7 +339,7 @@
     "needSignIn": "Sign in to your Nodus server first (Settings → Cloud).",
     "openCloudSettings": "Open cloud settings",
     "kindShared": "Shared vault",
-    "kindSharedText": "Notes are stored readable on the server. Can be shared with other people (coming later). Administrators can access the content.",
+    "kindSharedText": "Notes are stored readable on the server. Can be shared with other people and groups. Administrators can access the content.",
     "kindPrivate": "Private encrypted vault",
     "kindPrivateText": "End-to-end encrypted on this device: the server never sees your notes, file names or folders. Cannot be shared.",
     "kindExisting": "Connect to an existing cloud vault",
@@ -497,7 +496,6 @@
     "invalid": "This file is not a valid canvas: {{error}}"
   },
   "sharing": {
-    "title": "Sharing",
     "invitations": "Invitations",
     "noInvitations": "No invitations.",
     "invitedBy": "Shared by {{owner}}",
@@ -552,8 +550,7 @@
     "later": "Decide later",
     "keptTitle": "Copy kept",
     "keptAt": "The files are in {{path}}. Open that folder as a vault to use them.",
-    "menuShare": "Share…",
-    "readOnlyNote": "This folder was shared with you as a viewer: you can read it but not change it."
+    "menuShare": "Share…"
   },
   "graph": {
     "title": "Graph view",
@@ -856,5 +853,27 @@
         "how": "Choose the CSV file."
       }
     }
+  },
+  "updater": {
+    "title": "Software update",
+    "checking": "Checking for updates…",
+    "upToDate": "Nodus {{version}} is up to date.",
+    "available": "Nodus {{version}} is available",
+    "indicator": "Update {{version}}",
+    "current": "you have {{version}}",
+    "required": "This version is no longer supported: please update.",
+    "notes": "What is new",
+    "downloading": "Downloading the update",
+    "install": "Install and restart",
+    "later": "Later",
+    "skip": "Skip this version",
+    "close": "Close",
+    "auto": "Check for updates automatically",
+    "channel": "Update channel",
+    "stable": "Stable",
+    "beta": "Beta (release candidates)",
+    "checkNow": "Check for updates",
+    "disabled": "Updates are turned off: {{reason}}.",
+    "privacy": "The only request is the download of a signed manifest; no identifier is sent."
   }
 }

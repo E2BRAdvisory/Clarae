@@ -49,7 +49,7 @@ Segnare `[x]` con data e sistema operativo.
 
 ## Limiti noti
 
-- Ricerca su vault da 50k note: l'estrapolazione dei benchmark indica ≈ 0,9 s contro l'obiettivo di 200 ms; richiede una cache dei candidati (da pianificare, non bloccante per M1 su vault reali di migliaia di note).
+- Ricerca su vault da 50k note: risolto in M7-WP1 con la cache dei candidati (ADR-0020): 0,03-0,14 s misurati; le regex sull'intero vault restano ≈ 0,45 s (`docs/perf/README.md`).
 
 ## M6 — funzioni P1 residue
 

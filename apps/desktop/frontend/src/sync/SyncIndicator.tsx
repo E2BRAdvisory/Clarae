@@ -44,6 +44,10 @@ export function SyncIndicator() {
   };
   return (
     <>
+      {/* Announces sync state changes to screen readers; the button below is the visual control. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {`${t('sync.title')}: ${label}`}
+      </span>
       <button
         className={`icon sync-indicator ${phase}`}
         title={status?.error || label}

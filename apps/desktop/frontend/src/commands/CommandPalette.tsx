@@ -71,6 +71,11 @@ function PaletteBody() {
           value={query}
           placeholder={t('palette.placeholder')}
           aria-label={t('palette.placeholder')}
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="palette-results"
+          aria-autocomplete="list"
+          aria-activedescendant={items[index] ? `palette-opt-${index}` : undefined}
           onChange={(e) => {
             setQuery(e.target.value);
             setIndex(0);
@@ -92,10 +97,17 @@ function PaletteBody() {
             }
           }}
         />
-        <div className="results" role="listbox">
+        <div
+          className="results"
+          id="palette-results"
+          role="listbox"
+          tabIndex={-1}
+          aria-label={t('palette.title')}
+        >
           {items.map((it, i) => (
             <div
               key={it.c.id}
+              id={`palette-opt-${i}`}
               role="option"
               aria-selected={i === index}
               className={`result ${i === index ? 'selected' : ''}`}

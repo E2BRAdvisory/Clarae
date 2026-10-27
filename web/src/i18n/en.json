@@ -10,7 +10,8 @@
     "devices": "Devices",
     "shares": "Sharing",
     "admin": "Administration",
-    "main": "Main navigation"
+    "main": "Main navigation",
+    "account": "Account"
   },
   "shell": {
     "signOut": "Sign out",
@@ -23,11 +24,8 @@
   },
   "common": {
     "cancel": "Cancel",
-    "confirm": "Confirm",
     "retry": "Retry",
     "never": "Never",
-    "name": "Name",
-    "created": "Created",
     "unlimited": "unlimited",
     "errorGeneric": "Something went wrong.",
     "errorWithCode": "{{message}} ({{code}})"
@@ -44,8 +42,7 @@
   },
   "auth": {
     "callbackFailed": "Sign-in could not be completed.",
-    "backToStart": "Try again",
-    "configFailed": "The server configuration could not be loaded."
+    "backToStart": "Try again"
   },
   "usage": {
     "title": "Storage used",
@@ -71,8 +68,7 @@
     "colCreated": "Created",
     "kindPrivate": "Private (encrypted)",
     "kindShared": "Shared",
-    "mounts": "Shared with me",
-    "mountsEmpty": "No shared vaults mounted"
+    "mounts": "Shared with me"
   },
   "devices": {
     "title": "Devices",
@@ -509,5 +505,22 @@
     "reason_blob_missing": "Content not available on the server",
     "reason_blob_corrupt": "Content is corrupt",
     "reason_decrypt_failed": "Content could not be decrypted"
+  },
+  "account": {
+    "title": "Account",
+    "exportTitle": "Download my data",
+    "exportBody": "Get a JSON file with your profile, devices, groups, vault list, shares and the audit entries about you. Vault content is not included: private vaults are end-to-end encrypted and only your devices can read them; shared vaults can be downloaded from the vault list.",
+    "exportButton": "Download my data",
+    "exportDone": "Your data was downloaded.",
+    "deleteTitle": "Delete my account",
+    "deleteBody": "Deleting your account is permanent. Your personal data is erased at once, your vaults are removed after a retention period and you can no longer sign in.",
+    "deleteButton": "Delete my account",
+    "dialogTitle": "Delete your account?",
+    "dialogBody": "This cannot be undone. Shares you gave to others stop working and you leave all groups.",
+    "privateWarning_one": "You own {{count}} private vault. Its content is end-to-end encrypted and will be irrecoverable: nobody, not even an administrator, can restore it.",
+    "privateWarning_other": "You own {{count}} private vaults. Their content is end-to-end encrypted and will be irrecoverable: nobody, not even an administrator, can restore it.",
+    "privateAck": "I understand that my private vaults cannot be recovered.",
+    "confirmLabel": "Type your username ({{username}}) to confirm",
+    "dialogConfirm": "Delete permanently"
   }
 }

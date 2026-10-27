@@ -45,10 +45,45 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
     };
   }, [x, y, onClose]);
 
+  // Keyboard: the menu takes focus when it opens and gives it back to the opener on close.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    ref.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+    return () => opener?.focus?.();
+  }, []);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const buttons = [
+      ...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []),
+    ];
+    if (buttons.length === 0) return;
+    const at = buttons.indexOf(document.activeElement as HTMLElement);
+    let next = -1;
+    if (e.key === 'ArrowDown') next = (at + 1) % buttons.length;
+    else if (e.key === 'ArrowUp') next = (at - 1 + buttons.length) % buttons.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = buttons.length - 1;
+    else if (e.key === 'Tab') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (next >= 0) {
+      e.preventDefault();
+      buttons[next]?.focus();
+    }
+  };
+
   return (
-    <div className="context-menu" ref={ref} style={{ left: pos.x, top: pos.y }} role="menu">
+    <div
+      className="context-menu"
+      ref={ref}
+      style={{ left: pos.x, top: pos.y }}
+      role="menu"
+      onKeyDown={onKeyDown}
+    >
       {items.map((it, i) => (
-        <div key={i}>
+        <div key={i} role="none">
           {it.separator && <div className="separator" role="separator" />}
           <button
             role="menuitem"

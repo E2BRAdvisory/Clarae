@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { create } from 'zustand';
+import { i18next } from '../i18n';
 
 type Request =
   | {
@@ -62,7 +63,7 @@ export const dialog = {
     new Promise((resolve) => enqueue({ kind: 'pick', title, items, resolve })),
   /** Shows a failure from the backend. */
   error: (e: unknown): Promise<void> =>
-    dialog.alert('Error', e instanceof Error ? e.message : String(e)),
+    dialog.alert(i18next.t('dialog.error'), e instanceof Error ? e.message : String(e)),
 };
 
 function PickBody({

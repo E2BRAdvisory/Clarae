@@ -14,6 +14,7 @@ import { makeBasesAPI } from './bases';
 import { notesMock } from './notes';
 import { createHistoryAPI, newMockHistory, type MockHistory } from './history';
 import { createImporterMock } from '../../importer/mock';
+import { createUpdaterMock } from '../../updater/mock';
 import type {
   AppSettings,
   ConfigState,
@@ -1275,6 +1276,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         hash: hashOf,
       }),
       ImporterAPI: createImporterMock((name, payload) => mock.emit(name, payload)),
+      UpdaterAPI: createUpdaterMock((name, payload) => mock.emit(name, payload)),
     },
   };
   w['runtime'] = {

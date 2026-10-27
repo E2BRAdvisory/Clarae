@@ -1,0 +1,47 @@
+name: Accessibility
+
+# Blocking axe (WCAG 2.1 A/AA) and keyboard checks for the Web UI and the desktop UI (mocked
+# bindings). The same specs also run inside the generic `e2e` job of ci.yml; this workflow
+# exists so the accessibility gate can be required on its own and uploads the full axe report
+# (all impacts, not only the blocking ones) as an artifact.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'packages/ui/**'
+      - 'apps/desktop/frontend/**'
+      - '.github/workflows/a11y.yml'
+
+concurrency:
+  group: a11y-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  axe:
+    name: axe and keyboard flows
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn workspace @nodus/desktop-frontend exec playwright install --with-deps chromium
+      - name: Web UI (every route and dialog, light and dark; keyboard flows)
+        run: yarn workspace @nodus/web run e2e a11y keyboard
+      - name: Desktop UI (shell, palette, settings, sync, sharing, importer, graph, bases, recovery)
+        run: yarn workspace @nodus/desktop-frontend run e2e a11y keyboard
+        env:
+          AXE_REPORT: ${{ runner.temp }}/axe-desktop.jsonl
+      - name: Upload the full desktop axe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-desktop-report
+          path: ${{ runner.temp }}/axe-desktop.jsonl
+          if-no-files-found: ignore

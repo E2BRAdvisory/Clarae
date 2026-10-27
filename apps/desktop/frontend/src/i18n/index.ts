@@ -15,8 +15,16 @@ export function detectLanguage(): Language {
   return nav.startsWith('it') ? 'it' : 'en';
 }
 
+/** Keeps <html lang> in step with the UI language (screen readers pick the voice from it). */
+function syncHtmlLang(lng: string): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = lng;
+}
+
 export function initI18n(language?: string): typeof i18next {
   const lng: Language = isLanguage(language) ? language : detectLanguage();
+  syncHtmlLang(lng);
+  i18next.off('languageChanged', syncHtmlLang);
+  i18next.on('languageChanged', syncHtmlLang);
   if (!i18next.isInitialized) {
     void i18next.use(initReactI18next).init({
       resources: { en: { translation: en }, it: { translation: it } },

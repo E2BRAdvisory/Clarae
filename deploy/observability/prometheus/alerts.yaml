@@ -1,0 +1,124 @@
+# Esempio di regole di alerting per il servizio cloud (Prometheus / Alertmanager).
+# Le metriche sono quelle esposte da `GET /metrics` (services/cloud/internal/observability).
+# Adattare soglie, `for:` e label di routing al proprio ambiente; ogni alert rimanda al runbook
+# in docs/admin-guide/runbook.md (sezione indicata in `runbook`).
+# Validazione: promtool check rules deploy/observability/prometheus/alerts.yaml
+groups:
+  - name: nodus-availability
+    rules:
+      - alert: NodusDown
+        expr: up{job=~"nodus.*"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: 'Istanza {{ $labels.instance }} non raggiungibile'
+          description: 'Prometheus non riesce a leggere /metrics da {{ $labels.instance }} da 2 minuti.'
+          runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'
+
+      - alert: NodusHighErrorRate
+        expr: |
+          100 * sum(rate(nodus_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(nodus_http_requests_total[5m])), 1e-9) > 5
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: 'Più del 5% di risposte 5xx'
+          description: 'Il tasso di errori 5xx è {{ $value | printf "%.1f" }}% negli ultimi 5 minuti.'
+          runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'
+
+      - alert: NodusHighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(nodus_http_request_duration_seconds_bucket[5m]))) > 2
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Latenza p95 sopra 2 s'
+          description: 'La latenza p95 dell''API è {{ $value | printf "%.2f" }} s.'
+          runbook: 'docs/admin-guide/runbook.md#la-sincronizzazione-è-bloccata-o-lenta'
+
+      - alert: NodusAuthFailuresSpike
+        expr: |
+          sum(rate(nodus_http_requests_total{status=~"401|403"}[5m])) > 1
+            and
+          sum(rate(nodus_http_requests_total{status=~"401|403"}[5m]))
+            / clamp_min(sum(rate(nodus_http_requests_total[5m])), 1e-9) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Molte risposte 401/403'
+          description: 'Oltre il 20% delle richieste è rifiutato per autenticazione: controllare Keycloak, orologi e OIDC_ISSUER.'
+          runbook: 'docs/admin-guide/runbook.md#il-login-non-funziona'
+
+  - name: nodus-sync
+    rules:
+      - alert: NodusSyncCommitErrors
+        expr: |
+          sum(rate(nodus_sync_commits_total{outcome="error"}[10m])) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Commit di sync che falliscono'
+          description: 'Commit falliti per intero a {{ $value | printf "%.2f" }}/s: database o storage in difficoltà.'
+          runbook: 'docs/admin-guide/runbook.md#la-sincronizzazione-è-bloccata-o-lenta'
+
+      - alert: NodusSyncRejectedOps
+        expr: |
+          sum(rate(nodus_sync_ops_total{status="rejected"}[15m]))
+            / clamp_min(sum(rate(nodus_sync_ops_total[15m])), 1e-9) > 0.2
+        for: 30m
+        labels: { severity: info }
+        annotations:
+          summary: 'Molte operazioni di sync rifiutate'
+          description: 'Più del 20% delle operazioni è rifiutato (quota, path non validi, vault in sola lettura).'
+          runbook: 'docs/admin-guide/runbook.md#quota-esaurita'
+
+  - name: nodus-jobs
+    rules:
+      - alert: NodusJobFailing
+        expr: sum by (job) (increase(nodus_jobs_runs_total{result="error"}[1h])) >= 3
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Il job {{ $labels.job }} fallisce ripetutamente'
+          description: "{{ $value }} errori nell'ultima ora."
+          runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
+
+      - alert: NodusExportJobStale
+        expr: time() - max(nodus_jobs_last_success_timestamp_seconds{job="exports"}) > 600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Il job degli export non ha successi da oltre 10 minuti'
+          description: 'Controllare che almeno una replica con `--role=worker` o `--role=all` sia attiva.'
+          runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
+
+      - alert: NodusMaintenanceStale
+        expr: time() - max(nodus_jobs_last_success_timestamp_seconds{job="maintenance"}) > 2 * 86400
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Manutenzione giornaliera ferma da oltre 2 giorni'
+          description: 'Compattazione, purge dei vault eliminati e riconciliazione dei contatori non girano.'
+          runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
+
+  - name: nodus-database
+    rules:
+      - alert: NodusDbPoolSaturated
+        expr: |
+          100 * max(nodus_db_pool_connections{state="acquired"})
+            / max(nodus_db_pool_connections{state="max"}) > 90
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Pool di connessioni al database quasi esaurito'
+          description: 'Connessioni acquisite al {{ $value | printf "%.0f" }}% del massimo.'
+          runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'
+
+      - alert: NodusDbPoolWaiting
+        expr: rate(nodus_db_pool_empty_acquires_total[5m]) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Le richieste attendono una connessione al database'
+          description: 'Acquisizioni con pool vuoto: {{ $value | printf "%.1f" }}/s.'
+          runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'

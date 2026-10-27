@@ -503,6 +503,10 @@ select {
   overflow-x: auto;
   flex: none;
 }
+.tabbar .tablist {
+  display: flex;
+  align-items: stretch;
+}
 .tabbar .spacer {
   flex: 1;
 }
@@ -528,6 +532,12 @@ select {
 .tab .tab-title {
   overflow: hidden;
   text-overflow: ellipsis;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  max-width: 100%;
 }
 .tab .close {
   visibility: hidden;

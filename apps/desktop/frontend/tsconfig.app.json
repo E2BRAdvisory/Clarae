@@ -10,5 +10,5 @@
       "@excalidraw/utils/*": ["../../../node_modules/@excalidraw/excalidraw/dist/types/utils/*"]
     }
   },
-  "include": ["src", "wailsjs"]
+  "include": ["src", "wailsjs", "../../../packages/ui/src/i18nCheck.ts"]
 }

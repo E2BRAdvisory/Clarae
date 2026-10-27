@@ -9,6 +9,8 @@
 
   --accent: #6c5ce7;
   --accent-contrast: #ffffff;
+  /* accent used as text colour (links): needs 4.5:1 on the page background */
+  --accent-text: #5b4bd6;
 
   --bg: #ffffff;
   --bg-secondary: #f5f5f7;
@@ -16,8 +18,9 @@
   --bg-active: #e1e1ea;
   --border: #dcdce3;
   --text: #1d1d1f;
-  --text-muted: #6e6e73;
-  --text-faint: #a1a1a6;
+  /* WCAG 1.4.3: muted and faint text reach 4.5:1 on every surface token below (axe-checked) */
+  --text-muted: #55555b;
+  --text-faint: #63636a;
   --danger: #d0342c;
   --success: #2e8b57;
   --mark: #fff3a3;
@@ -31,8 +34,9 @@
     --bg-active: #3a3a3f;
     --border: #3c3c42;
     --text: #e6e6e6;
-    --text-muted: #9d9da3;
-    --text-faint: #6b6b72;
+    --text-muted: #b4b4ba;
+    --text-faint: #a4a4aa;
+    --accent-text: #a99ff7;
     --mark: #6b5e1a;
   }
 }
@@ -44,7 +48,66 @@
   --bg-active: #3a3a3f;
   --border: #3c3c42;
   --text: #e6e6e6;
-  --text-muted: #9d9da3;
-  --text-faint: #6b6b72;
+  --text-muted: #b4b4ba;
+  --text-faint: #a4a4aa;
+  --accent-text: #a99ff7;
   --mark: #6b5e1a;
+}
+
+/* Text for assistive technology only (live regions). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Keyboard focus is always visible (WCAG 2.4.7); mouse clicks do not draw the ring. */
+button:focus-visible,
+[role='treeitem']:focus-visible,
+[role='tab']:focus-visible,
+[role='menuitem']:focus-visible,
+a:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Windows high contrast / forced colors: let the system palette win, keep focus and state visible. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .tab.active,
+  .sidebar .tabs button.active,
+  .palette .result.selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+  .tab .close {
+    visibility: visible;
+  }
+}
+
+/* Honour the OS "reduce motion" setting: no transitions or animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

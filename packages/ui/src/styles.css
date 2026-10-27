@@ -198,6 +198,8 @@ a {
 
 /* Table: scrolls horizontally inside its wrapper on narrow screens */
 .nd-table-wrap {
+  /* containing block for absolutely positioned visually-hidden text, so it cannot widen the page */
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--nd-border);
   border-radius: var(--nd-radius);

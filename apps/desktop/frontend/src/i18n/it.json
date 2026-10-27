@@ -6,7 +6,6 @@
     "title": "Apri un vault",
     "subtitle": "Un vault è una cartella di note Markdown sul tuo computer.",
     "openFolder": "Apri cartella come vault",
-    "createVault": "Crea nuovo vault",
     "recent": "Vault recenti",
     "pickTitle": "Scegli la cartella del vault"
   },
@@ -62,7 +61,8 @@
     "mode_live": "Live",
     "mode_source": "Sorgente",
     "mode_reading": "Lettura",
-    "saveError": "Salvataggio non riuscito"
+    "saveError": "Salvataggio non riuscito",
+    "ariaLabel": "Editor della nota"
   },
   "status": {
     "indexing": "Indicizzazione {{done}}/{{total}}",
@@ -74,15 +74,12 @@
   },
   "settings": {
     "title": "Impostazioni",
-    "general": "Generale",
     "language": "Lingua",
     "languageSystem": "Sistema",
     "theme": "Tema",
     "themeSystem": "Sistema",
     "themeLight": "Chiaro",
     "themeDark": "Scuro",
-    "cloud": "Cloud",
-    "about": "Informazioni",
     "version": "Versione",
     "dataDir": "Cartella dati",
     "close": "Chiudi",
@@ -139,7 +136,7 @@
       "extractEmbed": "Sostituisci la selezione estratta con un'incorporazione (invece di un link)",
       "extractFrontmatter": "Copia le proprietà nella nota estratta",
       "editor": "Editor",
-      "slash": "Comandi slash (menu \"/\")"
+      "slash": "Comandi slash (menu «/»)"
     },
     "pagePreview": "Anteprima della pagina al passaggio sul link",
     "pagePreviewAlways": "Mostra l’anteprima senza tenere premuto Cmd/Ctrl",
@@ -160,7 +157,6 @@
     "signedOut": "Non connesso",
     "ready": "Connesso come {{name}}",
     "disconnected": "Offline — connesso come {{name}}",
-    "device": "Dispositivo",
     "role": "Ruolo",
     "placeholder": "https://nodus.example.com",
     "storage": "Spazio",
@@ -168,7 +164,7 @@
     "devices": "Dispositivi",
     "thisDevice": "questo dispositivo",
     "revoke": "Revoca dispositivo",
-    "revokeText": "Disconnettere “{{name}}” dal tuo account? Smetterà di sincronizzare."
+    "revokeText": "Disconnettere «{{name}}» dal tuo account? Smetterà di sincronizzare."
   },
   "backlinks": {
     "title": "Backlink",
@@ -211,13 +207,15 @@
     "splitRight": "Dividi a destra",
     "splitDown": "Dividi in basso",
     "link": "Collega agli altri pannelli",
-    "unlink": "Scollega pannello"
+    "unlink": "Scollega pannello",
+    "list": "Note aperte"
   },
   "dialog": {
     "ok": "OK",
     "cancel": "Annulla",
     "filter": "Filtra…",
-    "nothing": "Nessun risultato"
+    "nothing": "Nessun risultato",
+    "error": "Errore"
   },
   "palette": {
     "title": "Palette comandi",
@@ -227,7 +225,7 @@
   "switcher": {
     "title": "Selettore rapido",
     "placeholder": "Trova o crea una nota…",
-    "create": "Crea \"{{name}}\""
+    "create": "Crea «{{name}}»"
   },
   "hotkeys": {
     "filter": "Filtra comandi…",
@@ -330,7 +328,8 @@
     "recovery_deleted": "Recupera file eliminati",
     "note_export_pdf": "Esporta in PDF",
     "note_export_html": "Esporta in HTML",
-    "import_open": "Importa…"
+    "import_open": "Importa…",
+    "update_check": "Verifica aggiornamenti"
   },
   "sync": {
     "title": "Sync",
@@ -340,7 +339,7 @@
     "needSignIn": "Accedi prima al tuo server Nodus (Impostazioni → Cloud).",
     "openCloudSettings": "Apri impostazioni cloud",
     "kindShared": "Vault condiviso",
-    "kindSharedText": "Le note sono salvate in chiaro sul server. Si può condividere con altre persone (in arrivo). Gli amministratori possono accedere ai contenuti.",
+    "kindSharedText": "Le note sono salvate in chiaro sul server. Si può condividere con altre persone e gruppi. Gli amministratori possono accedere ai contenuti.",
     "kindPrivate": "Vault privato cifrato",
     "kindPrivateText": "Cifrato end-to-end su questo dispositivo: il server non vede mai note, nomi di file o cartelle. Non condivisibile.",
     "kindExisting": "Collega a un vault cloud esistente",
@@ -400,7 +399,7 @@
     "resolve": "Risolvi",
     "conflictsTitle": "Conflitti di sincronizzazione",
     "noConflicts": "Nessun conflitto.",
-    "conflictExplain": "{{path}} è stato modificato su un altro dispositivo nello stesso momento. La versione del server resta al suo posto; la tua versione è stata salvata come “{{copy}}”.",
+    "conflictExplain": "{{path}} è stato modificato su un altro dispositivo nello stesso momento. La versione del server resta al suo posto; la tua versione è stata salvata come «{{copy}}».",
     "currentVersion": "Attuale (server)",
     "yourVersion": "La tua versione",
     "sideBySide": "Confronto affiancato",
@@ -497,7 +496,6 @@
     "invalid": "Questo file non è una lavagna valida: {{error}}"
   },
   "sharing": {
-    "title": "Condivisione",
     "invitations": "Inviti",
     "noInvitations": "Nessun invito.",
     "invitedBy": "Condiviso da {{owner}}",
@@ -508,7 +506,7 @@
     "from": "Da {{owner}}",
     "open": "Apri",
     "removeMount": "Rimuovi da questo dispositivo",
-    "confirmRemoveMount": "Rimuovere “{{name}}” da questo dispositivo? I file qui vengono eliminati; il proprietario mantiene i suoi.",
+    "confirmRemoveMount": "Rimuovere «{{name}}» da questo dispositivo? I file qui vengono eliminati; il proprietario mantiene i suoi.",
     "keepCopyQuestion": "Conservare una copia dei file come vault normale, scollegato dalla condivisione? (Annulla li elimina.)",
     "revokedShort": "Condivisione terminata",
     "mine": "Le mie condivisioni",
@@ -526,7 +524,7 @@
     "status_pending": "In attesa",
     "status_accepted": "Accettato",
     "status_declined": "Rifiutato",
-    "shareTitle": "Condividi “{{name}}”",
+    "shareTitle": "Condividi «{{name}}»",
     "wholeVault": "L'intero vault",
     "newShare": "Nuova condivisione",
     "name": "Nome",
@@ -540,20 +538,19 @@
     "create": "Condividi",
     "existing": "Condivisioni esistenti",
     "revoke": "Revoca",
-    "confirmRevoke": "Interrompere la condivisione di “{{name}}”? I destinatari perdono subito l'accesso.",
+    "confirmRevoke": "Interrompere la condivisione di «{{name}}»? I destinatari perdono subito l'accesso.",
     "close": "Chiudi",
     "invitesN_one": "{{count}} invito",
     "invitesN_other": "{{count}} inviti",
     "readOnly": "sola lettura",
     "revokedTitle": "Condivisione terminata",
-    "revokedText": "Il proprietario ha smesso di condividere “{{name}}”. Cosa fare della tua copia dei file?",
+    "revokedText": "Il proprietario ha smesso di condividere «{{name}}». Cosa fare della tua copia dei file?",
     "deleteCopy": "Elimina la copia",
     "keepCopy": "Conserva una copia",
     "later": "Decidi dopo",
     "keptTitle": "Copia conservata",
     "keptAt": "I file sono in {{path}}. Apri quella cartella come vault per usarli.",
-    "menuShare": "Condividi…",
-    "readOnlyNote": "Questa cartella è stata condivisa con te come lettore: puoi leggerla ma non modificarla."
+    "menuShare": "Condividi…"
   },
   "graph": {
     "title": "Vista grafo",
@@ -608,13 +605,13 @@
     "loading": "Caricamento della base…",
     "loadError": "Impossibile caricare questa base: {{message}}",
     "noViews": "Questa base non ha viste.",
-    "unsupportedView": "La vista \"{{name}}\" (tipo {{type}}) non è ancora supportata. Apri lo YAML per modificarla.",
+    "unsupportedView": "La vista «{{name}}» (tipo {{type}}) non è ancora supportata. Apri lo YAML per modificarla.",
     "view": "Vista",
     "columns": "Colonne",
     "groupBy": "Raggruppa per",
     "none": "Nessuno",
     "noValue": "(nessun valore)",
-    "addFilter": "Aggiungi filtro, es. status != \"done\"",
+    "addFilter": "Aggiungi filtro, es. status != «done»",
     "removeFilter": "Rimuovi filtro",
     "baseFilter": "Filtro definito per l'intera base (modifica lo YAML per cambiarlo)",
     "editYaml": "Modifica YAML",
@@ -633,18 +630,18 @@
   "templates": {
     "title": "Template",
     "pick": "Scegli un template",
-    "none": "Nessun template nella cartella \"{{folder}}\".",
+    "none": "Nessun template nella cartella «{{folder}}».",
     "newName": "Nome della nuova nota",
     "library": "libreria"
   },
   "composer": {
     "mergeTitle": "Unisci nota",
-    "mergePick": "Unisci \"{{name}}\" in...",
-    "mergeConfirm": "Aggiungere \"{{source}}\" a \"{{target}}\", reindirizzare {{links}} link in {{notes}} note e spostare \"{{source}}\" nel cestino?",
+    "mergePick": "Unisci «{{name}}» in...",
+    "mergeConfirm": "Aggiungere «{{source}}» a «{{target}}», reindirizzare {{links}} link in {{notes}} note e spostare «{{source}}» nel cestino?",
     "extractTitle": "Estrai selezione",
     "noSelection": "Seleziona prima il testo da estrarre.",
     "extractPrompt": "Nome della nuova nota",
-    "selectionChanged": "La nota \"{{path}}\" è stata creata, ma la selezione è cambiata nel frattempo e non è stata sostituita."
+    "selectionChanged": "La nota «{{path}}» è stata creata, ma la selezione è cambiata nel frattempo e non è stata sostituita."
   },
   "random": {
     "title": "Nota casuale",
@@ -800,7 +797,7 @@
     "bodyColumn": "Colonna usata come corpo",
     "noBody": "(nessun corpo)",
     "csvOthers": "Le altre colonne diventano proprietà di ogni nota.",
-    "previewCounts": "Verranno create {{notes}} note e {{attachments}} allegati in \"{{folder}}\". Non è stato ancora scritto nulla.",
+    "previewCounts": "Verranno create {{notes}} note e {{attachments}} allegati in «{{folder}}». Non è stato ancora scritto nulla.",
     "sampleTitles": "Note di esempio",
     "warnings": "Avvisi",
     "progress": "Avanzamento dell'importazione",
@@ -856,5 +853,27 @@
         "how": "Scegli il file CSV."
       }
     }
+  },
+  "updater": {
+    "title": "Aggiornamento del software",
+    "checking": "Verifica degli aggiornamenti…",
+    "upToDate": "Nodus {{version}} è aggiornato.",
+    "available": "È disponibile Nodus {{version}}",
+    "indicator": "Aggiornamento {{version}}",
+    "current": "hai la {{version}}",
+    "required": "Questa versione non è più supportata: aggiorna.",
+    "notes": "Novità",
+    "downloading": "Download dell'aggiornamento",
+    "install": "Installa e riavvia",
+    "later": "Più tardi",
+    "skip": "Salta questa versione",
+    "close": "Chiudi",
+    "auto": "Verifica automaticamente gli aggiornamenti",
+    "channel": "Canale di aggiornamento",
+    "stable": "Stabile",
+    "beta": "Beta (release candidate)",
+    "checkNow": "Verifica aggiornamenti",
+    "disabled": "Gli aggiornamenti sono disattivati: {{reason}}.",
+    "privacy": "L'unica richiesta è il download di un manifest firmato; non viene inviato alcun identificativo."
   }
 }

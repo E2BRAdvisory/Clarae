@@ -17,6 +17,7 @@ import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
 import { useRecovery } from '../recovery/store';
 import { useImporter } from '../importer/store';
+import { useUpdater } from '../updater/store';
 import { useAppStore } from '../state/store';
 import { invalidateVault } from '../app/actions';
 import { notesCommands } from '../daily/commands';
@@ -227,6 +228,12 @@ export const commands: Command[] = [
     defaults: [],
     enabled: hasNote,
     run: exportNoteHtml,
+  },
+  {
+    id: 'update:check',
+    group: 'file',
+    defaults: [],
+    run: () => useUpdater.getState().check(),
   },
   {
     id: 'import:open',

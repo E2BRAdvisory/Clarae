@@ -113,8 +113,9 @@
 .base-cell.k-number {
   font-variant-numeric: tabular-nums;
 }
-.base-link {
-  color: var(--accent);
+.base-link,
+.base-title {
+  color: var(--accent-text);
   text-decoration: none;
 }
 .base-link:hover {

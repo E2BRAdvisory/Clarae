@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { i18next } from '../i18n';
 import {
   autocompletion,
   closeBrackets,
@@ -90,7 +91,7 @@ function settingsExtensions(s: EditorSettings): Extension[] {
     EditorView.contentAttributes.of({
       spellcheck: String(s.spellcheck),
       autocorrect: 'off',
-      'aria-label': 'Note editor',
+      'aria-label': i18next.t('editor.ariaLabel'),
     }),
     EditorView.theme({ '&': { fontSize: `${s.fontSize}px` } }),
   ];

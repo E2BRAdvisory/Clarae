@@ -24,6 +24,7 @@ import { LimitsPage } from './pages/admin/LimitsPage';
 import { StoragePage } from './pages/admin/StoragePage';
 import { UserDetailPage } from './pages/admin/UserDetailPage';
 import { UsersPage } from './pages/admin/UsersPage';
+import { AccountPage } from './pages/Account';
 import { CallbackPage } from './pages/Callback';
 import { DevicesPage } from './pages/Devices';
 import { SharesPage } from './pages/Shares';
@@ -46,6 +47,7 @@ export function AppRoutes() {
           <Route path="vaults" element={<VaultsPage />} />
           <Route path="devices" element={<DevicesPage />} />
           <Route path="shares" element={<SharesPage />} />
+          <Route path="account" element={<AccountPage />} />
           <Route element={<RequireRole role={ADMIN_ROLE} />}>
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="storage" replace />} />

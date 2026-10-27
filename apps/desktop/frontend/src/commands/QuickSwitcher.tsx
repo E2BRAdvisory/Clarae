@@ -66,6 +66,11 @@ function SwitcherBody({ vaultId }: { vaultId: string }) {
           value={query}
           placeholder={t('switcher.placeholder')}
           aria-label={t('switcher.placeholder')}
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="switcher-results"
+          aria-autocomplete="list"
+          aria-activedescendant={index < total ? `switcher-opt-${index}` : undefined}
           onChange={(e) => {
             setQuery(e.target.value);
             setIndex(0);
@@ -86,10 +91,17 @@ function SwitcherBody({ vaultId }: { vaultId: string }) {
             }
           }}
         />
-        <div className="results" role="listbox">
+        <div
+          className="results"
+          id="switcher-results"
+          role="listbox"
+          tabIndex={-1}
+          aria-label={t('switcher.title')}
+        >
           {items.map((it, i) => (
             <div
               key={`${it.path}:${it.label}`}
+              id={`switcher-opt-${i}`}
               role="option"
               aria-selected={i === index}
               className={`result ${i === index ? 'selected' : ''}`}
@@ -102,6 +114,7 @@ function SwitcherBody({ vaultId }: { vaultId: string }) {
           ))}
           {canCreate && (
             <div
+              id={`switcher-opt-${items.length}`}
               role="option"
               aria-selected={index === items.length}
               className={`result ${index === items.length ? 'selected' : ''}`}

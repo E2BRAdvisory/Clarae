@@ -20,6 +20,7 @@ import { DailySection } from './DailySection';
 import { HotkeysEditor } from './HotkeysEditor';
 import { HistorySettings } from './HistorySettings';
 import { FilesExtra } from './FilesExtra';
+import { UpdateSettings } from '../updater/UpdateSettings';
 
 const SECTIONS: SettingsSection[] = [
   'general',
@@ -364,6 +365,7 @@ export function SettingsPanel() {
                 {info['dataDir'] ?? '—'}
               </span>
             </Row>
+            <UpdateSettings />
           </>
         );
     }

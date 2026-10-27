@@ -10,7 +10,8 @@
     "devices": "Dispositivi",
     "shares": "Condivisioni",
     "admin": "Amministrazione",
-    "main": "Navigazione principale"
+    "main": "Navigazione principale",
+    "account": "Account"
   },
   "shell": {
     "signOut": "Esci",
@@ -23,11 +24,8 @@
   },
   "common": {
     "cancel": "Annulla",
-    "confirm": "Conferma",
     "retry": "Riprova",
     "never": "Mai",
-    "name": "Nome",
-    "created": "Creato",
     "unlimited": "illimitato",
     "errorGeneric": "Qualcosa è andato storto.",
     "errorWithCode": "{{message}} ({{code}})"
@@ -44,8 +42,7 @@
   },
   "auth": {
     "callbackFailed": "Non è stato possibile completare l'accesso.",
-    "backToStart": "Riprova",
-    "configFailed": "Impossibile caricare la configurazione del server."
+    "backToStart": "Riprova"
   },
   "usage": {
     "title": "Spazio utilizzato",
@@ -71,8 +68,7 @@
     "colCreated": "Creato",
     "kindPrivate": "Privato (cifrato)",
     "kindShared": "Condiviso",
-    "mounts": "Condivisi con me",
-    "mountsEmpty": "Nessun vault condiviso montato"
+    "mounts": "Condivisi con me"
   },
   "devices": {
     "title": "Dispositivi",
@@ -296,7 +292,7 @@
       "quotaSavedToast": "Quota aggiornata.",
       "delete": "Elimina utente",
       "deleteTitle": "Eliminare questo utente?",
-      "deleteBody": "{{name}} verrà rimosso. I suoi vault non vengono cancellati subito: entrano nel periodo di conservazione e si possono ancora recuperare fino alla sua fine.",
+      "deleteBody": "{{name}} verrà rimosso. I suoi vault non vengono eliminati subito: entrano nel periodo di conservazione e si possono ancora recuperare fino alla sua fine.",
       "deleteType": "Scrivi {{name}} per confermare",
       "deletedToast": "Utente {{name}} eliminato.",
       "vaults": "Vault",
@@ -509,5 +505,22 @@
     "reason_blob_missing": "Contenuto non disponibile sul server",
     "reason_blob_corrupt": "Contenuto corrotto",
     "reason_decrypt_failed": "Il contenuto non si è potuto decifrare"
+  },
+  "account": {
+    "title": "Account",
+    "exportTitle": "Scarica i miei dati",
+    "exportBody": "Ottieni un file JSON con profilo, dispositivi, gruppi, elenco dei vault, condivisioni e le voci del registro di audit che ti riguardano. Il contenuto dei vault non è incluso: i vault privati sono cifrati end-to-end e solo i tuoi dispositivi possono leggerli; i vault condivisi si scaricano dall'elenco dei vault.",
+    "exportButton": "Scarica i miei dati",
+    "exportDone": "I tuoi dati sono stati scaricati.",
+    "deleteTitle": "Elimina il mio account",
+    "deleteBody": "L'eliminazione dell'account è definitiva. I tuoi dati personali vengono cancellati subito, i vault sono rimossi dopo un periodo di conservazione e non potrai più accedere.",
+    "deleteButton": "Elimina il mio account",
+    "dialogTitle": "Eliminare l'account?",
+    "dialogBody": "L'operazione non è reversibile. Le condivisioni che hai concesso ad altri smettono di funzionare e esci da tutti i gruppi.",
+    "privateWarning_one": "Possiedi {{count}} vault privato. Il suo contenuto è cifrato end-to-end e sarà irrecuperabile: nessuno, nemmeno un amministratore, può ripristinarlo.",
+    "privateWarning_other": "Possiedi {{count}} vault privati. Il loro contenuto è cifrato end-to-end e sarà irrecuperabile: nessuno, nemmeno un amministratore, può ripristinarlo.",
+    "privateAck": "Capisco che i miei vault privati non potranno essere recuperati.",
+    "confirmLabel": "Scrivi il tuo nome utente ({{username}}) per confermare",
+    "dialogConfirm": "Elimina definitivamente"
   }
 }

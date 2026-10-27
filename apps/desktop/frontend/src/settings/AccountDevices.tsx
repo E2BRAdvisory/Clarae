@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api, type DeviceInfo } from '../app/api';
 import { dialog } from '../ui/dialogs';
+import { i18next } from '../i18n';
 
 const fmtBytes = (n: number): string => {
   if (n < 0) return '∞';
@@ -12,7 +13,10 @@ const fmtBytes = (n: number): string => {
     v /= 1024;
     i++;
   }
-  return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+  const num = new Intl.NumberFormat(i18next.language, {
+    maximumFractionDigits: v >= 10 || i === 0 ? 0 : 1,
+  }).format(v);
+  return `${num} ${units[i]}`;
 };
 
 /** Storage usage and the account's devices (list and revoke), shown under Settings > Cloud. */

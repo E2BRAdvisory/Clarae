@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { i18next } from '../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { api, type ConflictAction, type SyncConflict } from '../app/api';
 import { useSync } from '../state/sync';
@@ -125,7 +126,9 @@ export function ConflictsView({ vaultId }: { vaultId: string }) {
                   onClick={() => setSelected(c.id)}
                 >
                   <strong>{base(c.path)}</strong>
-                  <span className="muted small">{new Date(c.createdAt).toLocaleString()}</span>
+                  <span className="muted small">
+                    {new Date(c.createdAt).toLocaleString(i18next.language)}
+                  </span>
                 </li>
               ))}
             </ul>

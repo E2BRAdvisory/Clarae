@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { i18next } from '../i18n';
 import { api } from '../app/api';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
@@ -116,7 +117,7 @@ export function SyncSection() {
         <span aria-live="polite">
           {t(`sync.phase_${phase}`)}
           {status?.lastSync && status.lastSync !== '0001-01-01T00:00:00Z'
-            ? ` · ${t('sync.lastSync', { time: new Date(status.lastSync).toLocaleTimeString() })}`
+            ? ` · ${t('sync.lastSync', { time: new Date(status.lastSync).toLocaleTimeString(i18next.language) })}`
             : ''}
         </span>
       </div>

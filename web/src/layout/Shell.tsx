@@ -24,6 +24,7 @@ export function Shell() {
           <NavLink to="/vaults">{t('nav.vaults')}</NavLink>
           <NavLink to="/devices">{t('nav.devices')}</NavLink>
           <NavLink to="/shares">{t('nav.shares')}</NavLink>
+          <NavLink to="/account">{t('nav.account')}</NavLink>
           {isAdmin && <NavLink to="/admin">{t('nav.admin')}</NavLink>}
         </nav>
         <div className="app__tools">

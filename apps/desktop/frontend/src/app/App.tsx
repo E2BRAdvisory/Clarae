@@ -29,12 +29,14 @@ import { CommandPalette } from '../commands/CommandPalette';
 import { QuickSwitcher } from '../commands/QuickSwitcher';
 import { commandForEvent } from '../commands/registry';
 import { DialogHost, dialog } from '../ui/dialogs';
+import { installModalFocus } from '../ui/modalFocus';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
 import { RecoveryDialogs } from '../recovery/RecoveryDialog';
 import { SyncIndicator } from '../sync/SyncIndicator';
 import { SharingDialogs } from '../sharing/SharingDialogs';
 import { ImportWizard } from '../importer/ImportWizard';
+import { UpdateDialog, UpdateIndicator } from '../updater/UpdateDialog';
 import { InvitesIndicator, PermissionBadge } from '../sharing/StatusItems';
 import { followLinkPath } from './open';
 
@@ -62,6 +64,9 @@ export function App() {
   }, [setSettings]);
 
   useEffect(() => applyAppearance(appearance), [appearance]);
+
+  // Every aria-modal dialog traps Tab and gives focus back to its opener on close.
+  useEffect(() => installModalFocus(), []);
 
   // Cloud session: initial state, then pushed updates.
   useEffect(() => {
@@ -184,6 +189,7 @@ export function App() {
       <RecoveryDialogs />
       <SharingDialogs />
       <ImportWizard />
+      <UpdateDialog />
       <CommandPalette />
       <QuickSwitcher />
       <DialogHost />
@@ -312,15 +318,33 @@ function SidebarTabs<T extends string>({
   onChange: (t: T) => void;
   label: (t: T) => string;
 }) {
+  // Roving tabindex: one tab stop, arrows/Home/End move and activate.
+  const onKey = (e: React.KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const n = tabs.length;
+    let target = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') target = (i + 1) % n;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') target = (i - 1 + n) % n;
+    else if (e.key === 'Home') target = 0;
+    else if (e.key === 'End') target = n - 1;
+    if (target < 0) return;
+    e.preventDefault();
+    const next = tabs[target];
+    if (next === undefined) return;
+    onChange(next);
+    const all = e.currentTarget.parentElement?.querySelectorAll('[role="tab"]');
+    requestAnimationFrame(() => (all?.[target] as HTMLElement | undefined)?.focus());
+  };
   return (
     <div className="tabs" role="tablist">
-      {tabs.map((tab) => (
+      {tabs.map((tab, i) => (
         <button
           key={tab}
           role="tab"
           aria-selected={value === tab}
+          tabIndex={value === tab ? 0 : -1}
           className={value === tab ? 'active' : ''}
           onClick={() => onChange(tab)}
+          onKeyDown={(e) => onKey(e, i)}
         >
           {label(tab)}
         </button>
@@ -455,6 +479,7 @@ function StatusBar() {
         </>
       )}
       <PermissionBadge />
+      <UpdateIndicator />
       <SyncIndicator />
       <InvitesIndicator />
       {vault && (

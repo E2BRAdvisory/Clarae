@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { i18next } from '../i18n';
 import { api } from '../app/api';
 import { openOrCreate } from '../app/actions';
 import { Events, type FileChangedPayload } from '../app/events';
@@ -418,7 +419,9 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
             }}
           />
           {lapseTime !== null && (
-            <span className="graph-date">{new Date(lapseTime).toLocaleDateString()}</span>
+            <span className="graph-date">
+              {new Date(lapseTime).toLocaleDateString(i18next.language)}
+            </span>
           )}
           <button
             type="button"
