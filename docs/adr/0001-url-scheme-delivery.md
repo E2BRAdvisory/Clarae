@@ -1,4 +1,4 @@
-# ADR-0001 — Consegna degli URL `nodus://` per sistema operativo (SPIKE-01)
+# ADR-0001 — Consegna degli URL `memobrain://` per sistema operativo (SPIKE-01)
 
 |                       |                                                                                  |
 | --------------------- | -------------------------------------------------------------------------------- |
@@ -9,7 +9,7 @@
 
 ## Contesto
 
-Lo scheme `nodus://` serve ad aprire note (`nodus://open?vault=…&file=…`) e come fallback del redirect OIDC (`nodus://auth/callback`). Wails v2 (2.12) consegna l'URL in modo diverso per OS: su macOS tramite `Mac.OnUrlOpen` (anche ad app già in esecuzione, gestito dal sistema con l'handler di apertura URL); su Windows (solo installer NSIS) e Linux (`.desktop` con `x-scheme-handler`) il sistema avvia una **seconda istanza** con l'URL in `argv`, che il `SingleInstanceLock` inoltra all'istanza attiva tramite `OnSecondInstanceLaunch`.
+Lo scheme `memobrain://` serve ad aprire note (`memobrain://open?vault=…&file=…`) e come fallback del redirect OIDC (`memobrain://auth/callback`). Wails v2 (2.12) consegna l'URL in modo diverso per OS: su macOS tramite `Mac.OnUrlOpen` (anche ad app già in esecuzione, gestito dal sistema con l'handler di apertura URL); su Windows (solo installer NSIS) e Linux (`.desktop` con `x-scheme-handler`) il sistema avvia una **seconda istanza** con l'URL in `argv`, che il `SingleInstanceLock` inoltra all'istanza attiva tramite `OnSecondInstanceLaunch`.
 
 ## Decisione
 

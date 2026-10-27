@@ -11,8 +11,8 @@ make perf-data PERF_NOTES=10000 # solo il dataset (cache in .perf/vault-N, mai c
 ```
 
 - Dataset: `apps/desktop/internal/perf/dataset` (seed fisso, stesso vault a ogni esecuzione). Note con dimensioni log-normali (mediana ≈ 1,8 KB, coda fino a 600 KB), frontmatter, intestazioni, tag, wikilink con grado entrante a legge di potenza (hub e coda lunga), link fantasma, riferimenti ad allegati. 50.000 note = 168 MB, ≈ 395.000 link.
-- Variabili del test (`internal/perf/perf_test.go`): `NODUS_PERF_NOTES`, `NODUS_PERF_DIR`, `NODUS_PERF_GRAPH_NOTES`, `NODUS_PERF_OUT`, `NODUS_PERF_KEEP_INDEX`, `NODUS_PERF_CPUPROFILE`, `NODUS_PERF_INDEX_PROFILE`.
-- UI (Chromium headless su mock dei binding): `NODUS_UI_BENCH=1 yarn workspace @nodus/desktop-frontend exec playwright test e2e/ui-perf.spec.ts` (`NODUS_UI_BENCH_NOTES`, `NODUS_UI_BENCH_NOTE_KB`, `NODUS_UI_BENCH_OUT`).
+- Variabili del test (`internal/perf/perf_test.go`): `MEMOBRAIN_PERF_NOTES`, `MEMOBRAIN_PERF_DIR`, `MEMOBRAIN_PERF_GRAPH_NOTES`, `MEMOBRAIN_PERF_OUT`, `MEMOBRAIN_PERF_KEEP_INDEX`, `MEMOBRAIN_PERF_CPUPROFILE`, `MEMOBRAIN_PERF_INDEX_PROFILE`.
+- UI (Chromium headless su mock dei binding): `MEMOBRAIN_UI_BENCH=1 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/ui-perf.spec.ts` (`MEMOBRAIN_UI_BENCH_NOTES`, `MEMOBRAIN_UI_BENCH_NOTE_KB`, `MEMOBRAIN_UI_BENCH_OUT`).
 - Cloud: vedi la sezione sotto.
 - Nightly: `.github/workflows/nightly-perf.yml` (desktop + smoke k6), artifact dei risultati, budget con `perfcheck`. Le baseline di CI sono `docs/perf/baseline-ci-<note>.json`: vanno create dalla prima esecuzione verde (artifact "candidate baseline"), perché quella di questo repository è di un'altra macchina.
 
@@ -55,7 +55,7 @@ MacBook Apple M4 (10 core), 32 GB, macOS 27.0.1, SSD, Go 1.26.0; Chromium di Pla
   ```
 
 - **Non eseguito qui.** k6 non è installato; il binario scaricato non è stato eseguito (l'esecuzione di codice esterno scaricato è stata rifiutata dal sistema di permessi). Verificati: sintassi JS (`node --check`), avvio dell'ambiente (20 utenti creati in 0,2 s, token validi). Il nightly installa k6 con `grafana/setup-k6-action` e fa uno smoke da 200 utenti.
-- `TestLoadSmallOps` (`NODUS_LOAD=1`, anche con `NODUS_LOAD_CPUPROFILE`) è il corrispettivo Go del mix «changes + commit piccoli». Con 32 client a ciclo chiuso il test M2 esistente satura (commit da 50 op p95 811 ms, tutti sullo stesso PG in Docker su un portatile carico): è un test di saturazione, non di 1.000 utenti reali (≈ 100 richieste/s).
+- `TestLoadSmallOps` (`MEMOBRAIN_LOAD=1`, anche con `MEMOBRAIN_LOAD_CPUPROFILE`) è il corrispettivo Go del mix «changes + commit piccoli». Con 32 client a ciclo chiuso il test M2 esistente satura (commit da 50 op p95 811 ms, tutti sullo stesso PG in Docker su un portatile carico): è un test di saturazione, non di 1.000 utenti reali (≈ 100 richieste/s).
 - Profilo del server sotto `TestLoadSmallOps`: il tempo è nei round trip verso PostgreSQL e nel `PutBlob` su filesystem; la compilazione degli schemi JSON per ogni richiesta (15 % della CPU) è nel client di test (`env.do`), non nel server. Nessun N+1 o contention evidente nei percorsi `changes`/`commit`: non è stato modificato codice del cloud.
 
 ## Limiti noti

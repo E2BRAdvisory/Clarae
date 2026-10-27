@@ -15,7 +15,7 @@ Le immagini `minio/minio` e `quay.io/minio/minio` non sono più scaricabili senz
 
 - **RustFS** (`rustfs/rustfs`, Apache-2.0, API S3 compatibile con MinIO, console su 9001) come object store di sviluppo in `deploy/docker/compose.dev.yaml`; bucket creati da un init container `amazon/aws-cli`. Il servizio cloud parla S3 generico (`minio-go`/SDK), quindi nessun impatto sul codice.
 - Porte di sviluppo: PostgreSQL **5433** sull'host, API cloud **18081**, gRPC **18082** (default in `config.go` e `cloud.dev.env`); Keycloak 8080.
-- `make stack-reset` distrugge i volumi (necessario per re-importare `realm-nodus.json`, che Keycloak importa solo su realm inesistente).
+- `make stack-reset` distrugge i volumi (necessario per re-importare `realm-memobrain.json`, che Keycloak importa solo su realm inesistente).
 
 ## Alternative considerate
 

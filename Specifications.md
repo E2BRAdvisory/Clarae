@@ -1,4 +1,4 @@
-# Nodus — Specifiche Tecniche e Funzionali
+# MemoBrain Notes — Specifiche Tecniche e Funzionali
 
 **Applicazione desktop e cloud nativa per note e knowledge base (ispirata a Obsidian)**
 
@@ -6,7 +6,7 @@
 |---|---|
 | **Versione documento** | 1.1 — Decisioni D-01…D-08 recepite (vedi Appendice C) |
 | **Data** | 23 ottobre 2026 |
-| **Nome in codice** | *Nodus* (segnaposto, da sostituire) |
+| **Nome del prodotto** | *MemoBrain Notes* (identificatori `memobrain`; già "Nodus" come nome in codice) |
 | **Stack** | Wails (Go + React/TypeScript) · Cloud Service in Go · Keycloak · PostgreSQL · Object Storage S3-compatibile |
 | **Riferimento funzionale** | Obsidian Help — <https://obsidian.md/help/> |
 
@@ -29,7 +29,7 @@
 
 ### 0.1 Scopo
 
-Il documento definisce l'architettura e le specifiche di *Nodus*, un'applicazione di knowledge management **local-first** composta da:
+Il documento definisce l'architettura e le specifiche di *MemoBrain Notes*, un'applicazione di knowledge management **local-first** composta da:
 
 1. **Client desktop** (Windows, macOS, Linux) realizzato con Wails: backend nativo in Go, frontend React/TypeScript. Funziona interamente offline su vault locali (cartelle di file Markdown).
 2. **Cloud Service** in Go: sincronizzazione multi-dispositivo dei vault, condivisione, gruppi, quote, distribuzione centralizzata delle configurazioni.
@@ -161,7 +161,7 @@ sequenceDiagram
   U->>FE: "Accedi al cloud"
   FE->>BE: Auth.Login()
   BE->>BE: genera code_verifier/challenge, state, apre listener 127.0.0.1:porta-casuale
-  BE->>BR: apre /auth?client_id=nodus-desktop&code_challenge&redirect_uri=http://127.0.0.1:port/cb
+  BE->>BR: apre /auth?client_id=memobrain-desktop&code_challenge&redirect_uri=http://127.0.0.1:port/cb
   BR->>KC: login (password, MFA, SSO)
   KC-->>BR: redirect con code
   BR->>BE: GET /cb?code&state
@@ -178,10 +178,10 @@ sequenceDiagram
 **Regole chiave**
 
 - Access token vita breve (5 min); refresh con **rotation** e riuso rilevato da Keycloak.
-- Validazione JWT lato Cloud: firma (JWKS in cache con rotazione), `iss`, `aud` (= `nodus-api`), `exp`, `azp`.
+- Validazione JWT lato Cloud: firma (JWKS in cache con rotazione), `iss`, `aud` (= `memobrain-api`), `exp`, `azp`.
 - **Sospensione utente**: Keycloak `enabled=false` + revoca sessioni; in aggiunta il Cloud controlla `users.status` (cache 30 s) così l'accesso decade entro secondi e non alla scadenza del token.
-- **Redirect (D-08).** Modalità predefinita `auto`: il client prova il redirect **loopback** con porta variabile (RFC 8252 §7.3) e passa al **custom URI scheme** `nodus://auth/callback` se (a) non riesce ad aprire il listener, (b) Keycloak risponde `invalid_redirect_uri`, oppure (c) la modalità è forzata a `scheme` da Config Profile. Entrambi gli URI sono registrati sul client `nodus-desktop`.
-- Il callback via custom scheme arriva al sistema operativo come URL `nodus://…` e viene consegnato all'istanza già in esecuzione tramite il single-instance lock di Wails v2 (argomenti della seconda istanza; su macOS tramite l'handler di apertura URL, da verificare sulla versione v2 adottata). Registrazione dello scheme: installer Windows (chiave di registro), `Info.plist` su macOS, file `.desktop` con `x-scheme-handler/nodus` su Linux.
+- **Redirect (D-08).** Modalità predefinita `auto`: il client prova il redirect **loopback** con porta variabile (RFC 8252 §7.3) e passa al **custom URI scheme** `memobrain://auth/callback` se (a) non riesce ad aprire il listener, (b) Keycloak risponde `invalid_redirect_uri`, oppure (c) la modalità è forzata a `scheme` da Config Profile. Entrambi gli URI sono registrati sul client `memobrain-desktop`.
+- Il callback via custom scheme arriva al sistema operativo come URL `memobrain://…` e viene consegnato all'istanza già in esecuzione tramite il single-instance lock di Wails v2 (argomenti della seconda istanza; su macOS tramite l'handler di apertura URL, da verificare sulla versione v2 adottata). Registrazione dello scheme: installer Windows (chiave di registro), `Info.plist` su macOS, file `.desktop` con `x-scheme-handler/memobrain` su Linux.
 - Poiché uno scheme custom può essere rivendicato da altre applicazioni, la sicurezza si basa su PKCE (S256) e sul controllo di `state`; `code_verifier` e `state` restano solo in memoria dell'istanza che ha avviato il login.
 
 ### 1.4 Flusso di sincronizzazione
@@ -238,8 +238,8 @@ Il protocollo completo è definito al §3.4. Il merge è sempre eseguito dal cli
 | Livello | Componenti | Note |
 |---|---|---|
 | Edge | Reverse proxy / Ingress (TLS 1.2+) | HTTP/2 abilitato per gRPC |
-| Applicazione | `nodus-cloud` (N repliche stateless) + `nodus-cloud --role=worker` | Scalabilità orizzontale; stato solo in PG/S3 |
-| Identità | Keycloak (HA, DB dedicato) | Realm `nodus` |
+| Applicazione | `memobrain-cloud` (N repliche stateless) + `memobrain-cloud --role=worker` | Scalabilità orizzontale; stato solo in PG/S3 |
+| Identità | Keycloak (HA, DB dedicato) | Realm `memobrain` |
 | Dati | PostgreSQL (primary + replica), S3-compatibile (MinIO/AWS S3) | Backup PITR su PG; versioning/replica su bucket |
 | Osservabilità | OpenTelemetry → Prometheus/Grafana/Loki | `/healthz`, `/readyz`, `/metrics` |
 
@@ -253,7 +253,7 @@ Pacchetti: container OCI + Helm chart + `docker-compose` per sviluppo e piccole 
 
 - **Local-first**: ogni funzione di editing, ricerca, grafo e Excalidraw lavora senza rete. Il cloud è un livello opzionale di sync/condivisione.
 - Un utente può avere **più vault locali** (anche non sincronizzati) e collegare al cloud solo quelli scelti, scegliendone il tipo al momento del collegamento (§2.1.1).
-- **Configurazione vault** in `.nodus/` (analoga a `.obsidian/`), con scope di sync differenziato (§3.4.6).
+- **Configurazione vault** in `.memobrain/` (analoga a `.obsidian/`), con scope di sync differenziato (§3.4.6).
 
 ### 2.1.1 Tipologie di vault cloud (D-02)
 
@@ -281,7 +281,7 @@ Non esistono funzioni cross-vault. Link, embed, backlink, grafo, ricerca full-te
 
 Priorità: **P0** = MVP · **P1** = release 1.0 · **P2** = post-1.0.
 
-| Area Obsidian (help) | Modulo Nodus | Prio | Note di implementazione |
+| Area Obsidian (help) | Modulo MemoBrain Notes | Prio | Note di implementazione |
 |---|---|---|---|
 | Creare vault, aprire cartella come vault, più vault | `vault` | P0 | Vault manager, vault recenti, switch rapido |
 | Creare note, rinominare, spostare, eliminare (cestino) | `vault` | P0 | Cestino di sistema o `.trash/` per vault (impostazione) |
@@ -295,7 +295,7 @@ Priorità: **P0** = MVP · **P1** = release 1.0 · **P2** = post-1.0.
 | Outgoing links | `backlinks` | P0 | |
 | Aggiornamento automatico dei link al rename/move | `links` | P0 | Operazione atomica client-side |
 | Graph view globale e locale (filtri, gruppi, forze, timelapse) | `graph` | P1 | Canvas/WebGL, layout force-directed in Web Worker |
-| Properties (YAML frontmatter, tipi: testo, elenco, numero, checkbox, data, data/ora) + vista Properties | `properties` | P0 | Editor tipizzato; schema tipi per vault in `.nodus/types.json` |
+| Properties (YAML frontmatter, tipi: testo, elenco, numero, checkbox, data, data/ora) + vista Properties | `properties` | P0 | Editor tipizzato; schema tipi per vault in `.memobrain/types.json` |
 | Tag (annidati `#a/b`), vista Tags | `tags` | P0 | |
 | Outline (struttura heading) | `outline` | P0 | |
 | Ricerca full-text (operatori `file:`, `path:`, `content:`, `tag:`, `line:`, `section:`, `task:`, `[property:value]`, regex, `match-case`) | `search` | P0 | Vedi §2.4 |
@@ -315,7 +315,7 @@ Priorità: **P0** = MVP · **P1** = release 1.0 · **P2** = post-1.0.
 | Page preview (hover) | `render` | P1 | |
 | Random note | `navigation` | P2 | |
 | Word count | `statusbar` | P0 | Parole, caratteri, selezione |
-| File recovery (snapshot locali) | `history` | P1 | Snapshot in `.nodus/snapshots`; con cloud anche revisioni server |
+| File recovery (snapshot locali) | `history` | P1 | Snapshot in `.memobrain/snapshots`; con cloud anche revisioni server |
 | Canvas (formato JSON Canvas) | `canvas` | P1 | File `.canvas`, nodi testo/nota/media/link/gruppo |
 | Bases (viste tabella/card su properties, filtri, formule) | `bases` | P1 | File `.base` (YAML) |
 | Slides (presentazione da note) | `slides` | P2 | Separatore `---` |
@@ -326,8 +326,8 @@ Priorità: **P0** = MVP · **P1** = release 1.0 · **P2** = post-1.0.
 | Tema chiaro/scuro, colore accento, font, zoom, larghezza di lettura | `appearance` | P0 | Temi *integrati* (vedi §2.2.3) |
 | Hotkeys personalizzabili | `commands` | P0 | |
 | Impostazioni (editor, file e link, aspetto, lingua) | `settings` | P0 | Alcune chiavi bloccabili da config di gruppo |
-| URI scheme (`nodus://open?vault=…&file=…`) | `platform` | P0 | Registrato dall'installer; gestisce anche il callback OIDC di fallback (§1.3) |
-| Linea di comando (`nodus open <vault>`, `nodus new`) | `platform` | P2 | Sottoinsieme rispetto a Obsidian CLI |
+| URI scheme (`memobrain://open?vault=…&file=…`) | `platform` | P0 | Registrato dall'installer; gestisce anche il callback OIDC di fallback (§1.3) |
+| Linea di comando (`memobrain open <vault>`, `memobrain new`) | `platform` | P2 | Sottoinsieme rispetto a Obsidian CLI |
 | **Excalidraw nativo** | `drawing` | P0 | Vedi §2.7 |
 | **Sync** (servizio a pagamento di Obsidian) | Cloud Service | P0 | Sostituito dal servizio cloud (§2.5, §3) |
 
@@ -536,9 +536,9 @@ Il client conserva l'ultima config valida in cache locale (utilizzabile offline)
 | Formato file | `nome.excalidraw` = **JSON standard Excalidraw** (`type: "excalidraw"`, `elements`, `appState` ridotto, `files`). Apribile con qualsiasi tool Excalidraw. |
 | Posizione | Nella cartella allegati del vault (impostazione), creato da "Nuovo disegno" o "Inserisci disegno" |
 | Embed in nota | `![[nome.excalidraw]]` (opzioni: `![[nome.excalidraw\|600]]`) |
-| Anteprima | SVG generato con `exportToSvg` e cache `.nodus/cache/drawings/<hash>.svg` (non sincronizzata) |
+| Anteprima | SVG generato con `exportToSvg` e cache `.memobrain/cache/drawings/<hash>.svg` (non sincronizzata) |
 | Immagini nel disegno | Mantenute nel campo `files` (dataURL); soglia di 10 MB per disegno con avviso, oltre cui si suggerisce di spostare le immagini come allegati |
-| Libreria forme | `.nodus/excalidraw-library.json`, sincronizzata (strato "impostazioni utente") |
+| Libreria forme | `.memobrain/excalidraw-library.json`, sincronizzata (strato "impostazioni utente") |
 
 #### 2.7.2 Comportamento UI
 
@@ -581,7 +581,7 @@ Principio di riservatezza: gli amministratori gestiscono **metadati** (utenti, q
 |---|---|
 | **Spazio utilizzato** | Barra di utilizzo vs quota, dettaglio per vault, avvisi alle soglie. |
 | **I miei vault** | Elenco con tipo (privato cifrato / condiviso), dimensione, numero file, ultima sincronizzazione; **Download ZIP**. |
-| **Download ZIP** | Archivio dell'ultima revisione di tutti i file del vault (path originali, escluse le parti di `.nodus/` specifiche del dispositivo). **Vault condivisi:** lo ZIP è generato dal server (streaming immediato per i vault piccoli; job asincrono con link temporaneo, scadenza 24 h, per i grandi). **Vault privati:** il server non può leggere i contenuti, quindi i blob cifrati vengono scaricati e decifrati **nel browser** dopo l'inserimento della passphrase (o della recovery key) e lo ZIP è assemblato localmente in streaming; passphrase e chiavi non lasciano mai il browser. Per vault molto grandi si raccomanda l'esportazione dal client desktop ("Esporta vault come ZIP"). |
+| **Download ZIP** | Archivio dell'ultima revisione di tutti i file del vault (path originali, escluse le parti di `.memobrain/` specifiche del dispositivo). **Vault condivisi:** lo ZIP è generato dal server (streaming immediato per i vault piccoli; job asincrono con link temporaneo, scadenza 24 h, per i grandi). **Vault privati:** il server non può leggere i contenuti, quindi i blob cifrati vengono scaricati e decifrati **nel browser** dopo l'inserimento della passphrase (o della recovery key) e lo ZIP è assemblato localmente in streaming; passphrase e chiavi non lasciano mai il browser. Per vault molto grandi si raccomanda l'esportazione dal client desktop ("Esporta vault come ZIP"). |
 | **Dispositivi** | Elenco e revoca. |
 | **Condivisioni** | Cartelle condivise da me / con me. |
 
@@ -615,7 +615,7 @@ Principio di riservatezza: gli amministratori gestiscono **metadati** (utenti, q
 
 ```json
 {
-  "type": "https://nodus.example/errors/quota-exceeded",
+  "type": "https://memobrain.example/errors/quota-exceeded",
   "title": "Quota di archiviazione superata",
   "status": 413,
   "code": "QUOTA_EXCEEDED",
@@ -869,12 +869,12 @@ CREATE INDEX audit_log_at_ix ON audit_log (at DESC);
 
 | Elemento | Valore |
 |---|---|
-| Realm | `nodus` |
-| Client `nodus-desktop` | Public, Authorization Code + PKCE (S256), redirect URI: loopback `http://127.0.0.1/*` (primario) e `nodus://auth/callback` (fallback, D-08), scope `openid profile email offline_access` |
-| Client `nodus-web` | Public, Authorization Code + PKCE, redirect `https://<host>/*`, Web Origins = host |
-| Client `nodus-api` | Bearer-only / resource server (audience mapper → `aud=nodus-api`) |
-| Client `nodus-admin-svc` | Confidential, **service account** con soli ruoli `manage-users`, `view-users`, `query-users` della realm-management (Admin REST API) |
-| Realm roles | `nodus-admin`, `nodus-user` |
+| Realm | `memobrain` |
+| Client `memobrain-desktop` | Public, Authorization Code + PKCE (S256), redirect URI: loopback `http://127.0.0.1/*` (primario) e `memobrain://auth/callback` (fallback, D-08), scope `openid profile email offline_access` |
+| Client `memobrain-web` | Public, Authorization Code + PKCE, redirect `https://<host>/*`, Web Origins = host |
+| Client `memobrain-api` | Bearer-only / resource server (audience mapper → `aud=memobrain-api`) |
+| Client `memobrain-admin-svc` | Confidential, **service account** con soli ruoli `manage-users`, `view-users`, `query-users` della realm-management (Admin REST API) |
+| Realm roles | `memobrain-admin`, `memobrain-user` |
 | Token | Access 5 min; SSO session idle 8 h; refresh token rotation ON; offline token per il desktop |
 | Sicurezza | MFA/WebAuthn a livello realm; brute-force protection; password policy; federazione LDAP/SAML opzionale (solo utenti: i gruppi restano nel Cloud, D-05) |
 
@@ -927,7 +927,7 @@ L'enforcement avviene **lato server su ogni operazione** (changes, blob, commit)
 | Lunghezza / caratteri | ≤ 1024 byte totali, ≤ 255 byte per segmento; vietati `\0`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `\|`, segmenti `.`/`..`; segmenti riservati Windows (`CON`, `NUL`, …) e terminazioni `.`/spazio rifiutati (`PATH_INVALID`) |
 | Case | Unicità su `path_key` casefold (`PATH_COLLISION`) |
 | Contenuto `.md` | Byte inalterati (nessuna normalizzazione di newline/BOM); hash su byte grezzi |
-| Esclusi dal sync | `.DS_Store`, `Thumbs.db`, `*.tmp`, `.trash/` (opzionale), `.nodus/workspace*.json`, `.nodus/cache/`, `.nodus/snapshots/`, symlink |
+| Esclusi dal sync | `.DS_Store`, `Thumbs.db`, `*.tmp`, `.trash/` (opzionale), `.memobrain/workspace*.json`, `.memobrain/cache/`, `.memobrain/snapshots/`, symlink |
 | Dimensione massima | Default 100 MB/file (configurabile da Config Profile e da setting di sistema); `FILE_TOO_LARGE` |
 | Config sincronizzata | Strato "impostazioni" (§3.4.6) |
 | Vault privati | Validazione di path e dimensione eseguita dal client prima della cifratura; il server controlla solo formato e lunghezza dell'identificativo opaco (§3.8) |
@@ -989,7 +989,7 @@ Backoff esponenziale con jitter su errori di rete e `5xx`; `429` rispetta `Retry
 | **`.excalidraw`** | Merge per `element.id` (stesso utente; autori diversi → conflict copy) | Come la riconciliazione di Excalidraw: per ogni id vince l'elemento con `version` maggiore (a parità `versionNonce` più basso); unione degli id; unione della mappa `files`; elementi cancellati (`isDeleted`) rispettati. |
 | **`.canvas`** | Merge per id di nodo/arco (stesso utente; autori diversi → conflict copy) | Unione per id; stesso id modificato su entrambi i lati → vince la revisione più recente per tempo server; l'altra va in *conflict copy*. |
 | **`.base`** (YAML) | Come `.md` (3 vie su testo) se stesso utente; autori diversi → conflict copy | |
-| **Config JSON (`.nodus/*.json` sincronizzati)** | Last-Write-Wins **per chiave di primo livello** | Tempo server |
+| **Config JSON (`.memobrain/*.json` sincronizzati)** | Last-Write-Wins **per chiave di primo livello** | Tempo server |
 | **Allegati binari** (immagini, PDF, audio…) | Stesso utente: **Last-Write-Wins** (ultimo commit accettato vince); autori diversi: conflict copy | La versione perdente resta nello storico, con notifica |
 | **Cancellazione vs modifica** | **La modifica vince** (il file viene ripristinato) | Evita perdita di lavoro |
 | **Rename vs modifica** | Entrambe applicate | Garantito dall'identità `file_id` |
@@ -1022,14 +1022,14 @@ flowchart TD
 
 Il ciclo si ripete fino a convergenza (limite 5 tentativi, poi stato `conflict` con intervento manuale).
 
-#### 3.4.6 Scope di sincronizzazione della cartella `.nodus/`
+#### 3.4.6 Scope di sincronizzazione della cartella `.memobrain/`
 
 | Contenuto | Sincronizzato | Note |
 |---|---|---|
 | Note, allegati, `.canvas`, `.base`, `.excalidraw` | Sì | Contenuto del vault |
-| `.nodus/appearance.json`, `editor.json`, `hotkeys.json`, `types.json`, `templates/`, `excalidraw-library.json` | Sì (per utente) | Rispettando le chiavi `locked` della config di gruppo |
-| `.nodus/workspace.json`, `workspaces.json` (layout) | No | Specifico del dispositivo |
-| `.nodus/cache/`, `snapshots/`, `index.db`, `sync.db` | No | Derivati/locali |
+| `.memobrain/appearance.json`, `editor.json`, `hotkeys.json`, `types.json`, `templates/`, `excalidraw-library.json` | Sì (per utente) | Rispettando le chiavi `locked` della config di gruppo |
+| `.memobrain/workspace.json`, `workspaces.json` (layout) | No | Specifico del dispositivo |
+| `.memobrain/cache/`, `snapshots/`, `index.db`, `sync.db` | No | Derivati/locali |
 
 #### 3.4.7 Sincronizzazione di vault condivisi (scope)
 
@@ -1259,7 +1259,7 @@ REST è il contratto normativo; gRPC è usato per lo **streaming di notifiche** 
 
 ```proto
 syntax = "proto3";
-package nodus.v1;
+package memobrain.v1;
 
 service NotifyService {
   // Stream di eventi per tutti i vault/shared mount accessibili al token
@@ -1320,9 +1320,9 @@ Autenticazione: metadata `authorization: Bearer <JWT>`; a token scaduto lo strea
 passphrase ───Argon2id───► KEK_pass ─┐
                                      ├─ unwrap AES-256-GCM ─► VMK (256 bit casuali, una per vault)
 recovery key ──HKDF──────► KEK_rec ──┘                          │
-                                                                ├─ HKDF("nodus/v1/path-enc")        → K_path_enc
-                                                                ├─ HKDF("nodus/v1/path-key")        → K_path_key
-                                                                └─ HKDF("nodus/v1/file", file_id ‖ salt_file) → K_file (per file e per revisione)
+                                                                ├─ HKDF("memobrain/v1/path-enc")        → K_path_enc
+                                                                ├─ HKDF("memobrain/v1/path-key")        → K_path_key
+                                                                └─ HKDF("memobrain/v1/file", file_id ‖ salt_file) → K_file (per file e per revisione)
 ```
 
 | Elemento | Specifica |
@@ -1388,13 +1388,13 @@ Go: `crypto/aes`, `crypto/cipher`, `golang.org/x/crypto/argon2` e `hkdf`. Browse
 ### 4.1 Monorepo
 
 ```text
-nodus/
+memobrain/
 ├── go.work                         # workspace Go: apps/desktop, services/cloud, shared/go
 ├── package.json                    # workspace npm (Yarn): apps/*/frontend, web, packages/*
 ├── Makefile                        # make dev | test | lint | gen | build-desktop | build-cloud
 ├── api/
 │   ├── openapi.yaml                # contratto REST (fonte unica)
-│   └── proto/nodus/v1/notify.proto # gRPC
+│   └── proto/memobrain/v1/notify.proto # gRPC
 ├── shared/
 │   ├── go/                         # modulo Go condiviso client/server
 │   │   ├── syncproto/              # tipi di commit/changes, codici errore, hashing
@@ -1413,8 +1413,8 @@ nodus/
 ├── web/                            # Web UI del cloud (§4.4)
 ├── deploy/
 │   ├── docker/                     # Dockerfile cloud, compose di sviluppo
-│   ├── helm/nodus/                 # chart Kubernetes
-│   └── keycloak/realm-nodus.json   # export realm (client, ruoli, mapper) per bootstrap
+│   ├── helm/memobrain/                 # chart Kubernetes
+│   └── keycloak/realm-memobrain.json   # export realm (client, ruoli, mapper) per bootstrap
 ├── docs/                           # ADR, specifiche, runbook
 └── .github/workflows/              # CI: lint, test, conformance, build firmati
 ```
@@ -1494,7 +1494,7 @@ apps/desktop/
 ```text
 services/cloud/
 ├── cmd/
-│   └── nodus-cloud/
+│   └── memobrain-cloud/
 │       └── main.go                 # flag: --role=api|worker|all ; config da env/file
 ├── internal/
 │   ├── config/                     # caricamento e validazione configurazione servizio
@@ -1549,7 +1549,7 @@ web/
     └── test/
 ```
 
-La build produce asset statici incorporati nel binario `nodus-cloud` (`go:embed`) e serviti sotto `/` con fallback SPA; le API stanno sotto `/api/v1`.
+La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:embed`) e serviti sotto `/` con fallback SPA; le API stanno sotto `/api/v1`.
 
 ### 4.5 Convenzioni di sviluppo
 
@@ -1633,7 +1633,7 @@ La build produce asset statici incorporati nel binario `nodus-cloud` (`go:embed`
 | Perdita di passphrase e recovery key di un vault privato | Alto | Dati irrecuperabili per design: recovery key obbligatoria con conferma, testi espliciti nel wizard, promemoria periodico, nessuna promessa di recupero da parte dell'amministratore |
 | Errori nell'implementazione crittografica o nel formato blob | Alto | Primitive standard (AES-GCM, HKDF, Argon2id), nessun algoritmo custom, test vector condivisi Go/TS, audit esterno prima della 1.0 |
 | Web UI come anello debole dell'E2EE (JavaScript servito dal server) | Medio | Documentare il limite; export dal client desktop come percorso ad alta fiducia; CSP rigida e SRI sugli asset |
-| Registrazione dello scheme `nodus://` non riuscita (AppImage, installazioni portable, policy aziendali) | Medio | Loopback come percorso primario; diagnostica nel client; documentazione di installazione per Linux |
+| Registrazione dello scheme `memobrain://` non riuscita (AppImage, installazioni portable, policy aziendali) | Medio | Loopback come percorso primario; diagnostica nel client; documentazione di installazione per Linux |
 | Limiti di Wails v2 (finestra singola, API di piattaforma) | Basso | Pop-out rinviate (P2); test di single-instance lock e handler URL su ciascun OS |
 
 ### C.3 Tracciabilità vincoli → sezioni

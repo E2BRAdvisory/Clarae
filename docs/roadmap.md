@@ -1,4 +1,4 @@
-# Piano di sviluppo Nodus — da `Specifications.md` v1.1 al rilascio 1.0
+# Piano di sviluppo MemoBrain Notes — da `Specifications.md` v1.1 al rilascio 1.0
 
 ## Contesto
 
@@ -10,29 +10,29 @@ Regole ereditate da `CLAUDE.md`: non modificare `Specifications.md` in automatic
 
 ## 1. Decisioni di piano (vincolanti per l'esecuzione)
 
-| Tema           | Scelta                                                                                                           | Note                                                                                                                                                                                                                                                                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Module path Go | Segnaposto locale `nodus` (moduli `nodus/apps/desktop`, `nodus/services/cloud`, `nodus/shared`) in `go.work`     | Host non ancora deciso. Il rename futuro è un `find/sed` sugli import + `go.mod`; task **M0-00** lo prevede con `make rename-module NEW=…`.                                                                                                                                                                                                |
-| Go             | 1.26 (sqlc 1.31 e buf 1.75 richiedono ≥ 1.26; il toolchain si scarica via `GOTOOLCHAIN=auto`)                    | Tutti i tool (`oapi-codegen`, `sqlc`, `goose`, `buf`, `golangci-lint`, `govulncheck`, `protoc-gen-go*`) sono pinnati con `tool` directive in un modulo separato `tools/go.mod` **fuori da `go.work`** (installazione con `make tools` → `GOWORK=off go install tool`), così il loro albero di dipendenze non entra nei moduli applicativi. |
-| Wails          | v2.12.0 (installato) — D-07                                                                                      | `OnUrlOpen` (Mac) + `SingleInstanceLock`/`OnSecondInstanceLaunch` esistono in v2 ≥ 2.10; comportamento "URL verso istanza già attiva su macOS" da verificare nello **SPIKE-01**.                                                                                                                                                           |
-| Node / Yarn    | Node 24 LTS, Yarn 4 (corepack, `packageManager` bloccato)                                                        | Workspace Yarn: `apps/desktop/frontend`, `web`, `packages/*`.                                                                                                                                                                                                                                                                              |
-| React          | 19 (verifica peerDeps di `@excalidraw/excalidraw` 0.18.x nello **SPIKE-03**; fallback React 18.3)                | Vite 6, TypeScript 5 `strict`, ESLint flat config, Prettier, Vitest, Playwright.                                                                                                                                                                                                                                                           |
-| Stato/query FE | Zustand + TanStack Query (cache delle chiamate ai binding)                                                       | Spec §4.2 `state/`.                                                                                                                                                                                                                                                                                                                        |
-| Editor         | CodeMirror 6 + `@lezer/markdown`; reading view `unified` (remark/rehype) + plugin OFM custom                     | KaTeX, Mermaid (`securityLevel: strict`), DOMPurify.                                                                                                                                                                                                                                                                                       |
-| Cloud HTTP     | `chi` + `oapi-codegen` v2 (strict server, chi) ; errori RFC 9457                                                 | `api/openapi.yaml` fonte unica.                                                                                                                                                                                                                                                                                                            |
-| gRPC           | `buf` + `protoc-gen-go`/`protoc-gen-go-grpc`; SSE fallback in `httpserver`                                       | Solo `NotifyService`.                                                                                                                                                                                                                                                                                                                      |
-| DB             | PostgreSQL 17 (compose) — pgx v5, sqlc, goose (migrazioni SQL embedded)                                          | **Deviazione dichiarata dalla roadmap (App. B pone "schema DB" in M0):** lo schema §3.2.2 viene introdotto per migrazioni incrementali per milestone (`0001` M0, `0002`–`0003` M2, `0004` M4, `0005` M5), così ogni tabella arriva con il modulo che la usa e i suoi test.                                                                 |
-| Storage        | S3 via `minio-go` (MinIO in dev) + driver filesystem per test unit                                               | tus 1.0 con `tusd/v2` (handler embedded, store S3).                                                                                                                                                                                                                                                                                        |
-| JWT/OIDC       | `coreos/go-oidc/v3` + `golang.org/x/oauth2` (desktop PKCE e cloud JWKS)                                          | Keycloak 26.x (26.7 ultima nota) in compose; realm export in `deploy/keycloak/realm-nodus.json`.                                                                                                                                                                                                                                           |
-| Keychain       | `zalando/go-keyring`                                                                                             | macOS Keychain / Credential Manager / Secret Service.                                                                                                                                                                                                                                                                                      |
-| SQLite client  | `modernc.org/sqlite` (FTS5 + `trigram`): verifica **SPIKE-02**                                                   | Migrazioni `index.db`/`sync.db`/`app.db` con goose su `database/sql`.                                                                                                                                                                                                                                                                      |
-| Cripto         | `crypto/aes`, `crypto/cipher`, `x/crypto/argon2`, `x/crypto/hkdf`; browser WebCrypto + `hash-wasm` (Argon2id)    | Formato §3.8.3; test vector condivisi.                                                                                                                                                                                                                                                                                                     |
-| Diff/merge     | `sergi/go-diff` (diff-match-patch) + diff3 a righe custom in `shared/go/merge`                                   |                                                                                                                                                                                                                                                                                                                                            |
-| UUID           | `google/uuid` v7                                                                                                 |                                                                                                                                                                                                                                                                                                                                            |
-| Log            | `zerolog` (desktop e cloud), OpenTelemetry SDK + exporter Prometheus/OTLP                                        |                                                                                                                                                                                                                                                                                                                                            |
-| Lingua         | Codice, commit, log, messaggi API in inglese; `docs/`, ADR, runbook in italiano; UI via i18n `it`/`en`           |                                                                                                                                                                                                                                                                                                                                            |
-| CI             | Workflow GitHub Actions in `.github/workflows/` (come da §4.1); se l'host sarà diverso si portano gli stessi job |                                                                                                                                                                                                                                                                                                                                            |
-| Nome           | `nodus` resta il nome in codice ovunque (binari, scheme `nodus://`, client Keycloak); il rebrand è un task di M7 |                                                                                                                                                                                                                                                                                                                                            |
+| Tema           | Scelta                                                                                                                         | Note                                                                                                                                                                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Module path Go | Path locale `memobrain` (moduli `memobrain/apps/desktop`, `memobrain/services/cloud`, `memobrain/shared`) in `go.work`         | Host non ancora deciso. Il rename futuro è un `find/sed` sugli import + `go.mod`; task **M0-00** lo prevede con `make rename-module NEW=…`.                                                                                                                                                                                                |
+| Go             | 1.26 (sqlc 1.31 e buf 1.75 richiedono ≥ 1.26; il toolchain si scarica via `GOTOOLCHAIN=auto`)                                  | Tutti i tool (`oapi-codegen`, `sqlc`, `goose`, `buf`, `golangci-lint`, `govulncheck`, `protoc-gen-go*`) sono pinnati con `tool` directive in un modulo separato `tools/go.mod` **fuori da `go.work`** (installazione con `make tools` → `GOWORK=off go install tool`), così il loro albero di dipendenze non entra nei moduli applicativi. |
+| Wails          | v2.12.0 (installato) — D-07                                                                                                    | `OnUrlOpen` (Mac) + `SingleInstanceLock`/`OnSecondInstanceLaunch` esistono in v2 ≥ 2.10; comportamento "URL verso istanza già attiva su macOS" da verificare nello **SPIKE-01**.                                                                                                                                                           |
+| Node / Yarn    | Node 24 LTS, Yarn 4 (corepack, `packageManager` bloccato)                                                                      | Workspace Yarn: `apps/desktop/frontend`, `web`, `packages/*`.                                                                                                                                                                                                                                                                              |
+| React          | 19 (verifica peerDeps di `@excalidraw/excalidraw` 0.18.x nello **SPIKE-03**; fallback React 18.3)                              | Vite 6, TypeScript 5 `strict`, ESLint flat config, Prettier, Vitest, Playwright.                                                                                                                                                                                                                                                           |
+| Stato/query FE | Zustand + TanStack Query (cache delle chiamate ai binding)                                                                     | Spec §4.2 `state/`.                                                                                                                                                                                                                                                                                                                        |
+| Editor         | CodeMirror 6 + `@lezer/markdown`; reading view `unified` (remark/rehype) + plugin OFM custom                                   | KaTeX, Mermaid (`securityLevel: strict`), DOMPurify.                                                                                                                                                                                                                                                                                       |
+| Cloud HTTP     | `chi` + `oapi-codegen` v2 (strict server, chi) ; errori RFC 9457                                                               | `api/openapi.yaml` fonte unica.                                                                                                                                                                                                                                                                                                            |
+| gRPC           | `buf` + `protoc-gen-go`/`protoc-gen-go-grpc`; SSE fallback in `httpserver`                                                     | Solo `NotifyService`.                                                                                                                                                                                                                                                                                                                      |
+| DB             | PostgreSQL 17 (compose) — pgx v5, sqlc, goose (migrazioni SQL embedded)                                                        | **Deviazione dichiarata dalla roadmap (App. B pone "schema DB" in M0):** lo schema §3.2.2 viene introdotto per migrazioni incrementali per milestone (`0001` M0, `0002`–`0003` M2, `0004` M4, `0005` M5), così ogni tabella arriva con il modulo che la usa e i suoi test.                                                                 |
+| Storage        | S3 via `minio-go` (MinIO in dev) + driver filesystem per test unit                                                             | tus 1.0 con `tusd/v2` (handler embedded, store S3).                                                                                                                                                                                                                                                                                        |
+| JWT/OIDC       | `coreos/go-oidc/v3` + `golang.org/x/oauth2` (desktop PKCE e cloud JWKS)                                                        | Keycloak 26.x (26.7 ultima nota) in compose; realm export in `deploy/keycloak/realm-memobrain.json`.                                                                                                                                                                                                                                       |
+| Keychain       | `zalando/go-keyring`                                                                                                           | macOS Keychain / Credential Manager / Secret Service.                                                                                                                                                                                                                                                                                      |
+| SQLite client  | `modernc.org/sqlite` (FTS5 + `trigram`): verifica **SPIKE-02**                                                                 | Migrazioni `index.db`/`sync.db`/`app.db` con goose su `database/sql`.                                                                                                                                                                                                                                                                      |
+| Cripto         | `crypto/aes`, `crypto/cipher`, `x/crypto/argon2`, `x/crypto/hkdf`; browser WebCrypto + `hash-wasm` (Argon2id)                  | Formato §3.8.3; test vector condivisi.                                                                                                                                                                                                                                                                                                     |
+| Diff/merge     | `sergi/go-diff` (diff-match-patch) + diff3 a righe custom in `shared/go/merge`                                                 |                                                                                                                                                                                                                                                                                                                                            |
+| UUID           | `google/uuid` v7                                                                                                               |                                                                                                                                                                                                                                                                                                                                            |
+| Log            | `zerolog` (desktop e cloud), OpenTelemetry SDK + exporter Prometheus/OTLP                                                      |                                                                                                                                                                                                                                                                                                                                            |
+| Lingua         | Codice, commit, log, messaggi API in inglese; `docs/`, ADR, runbook in italiano; UI via i18n `it`/`en`                         |                                                                                                                                                                                                                                                                                                                                            |
+| CI             | Workflow GitHub Actions in `.github/workflows/` (come da §4.1); se l'host sarà diverso si portano gli stessi job               |                                                                                                                                                                                                                                                                                                                                            |
+| Nome           | Nome in codice `nodus` (segnaposto); nome ufficiale **MemoBrain Notes** (identificatori `memobrain`), rebrand eseguito dopo M7 |                                                                                                                                                                                                                                                                                                                                            |
 
 ---
 
@@ -65,13 +65,13 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 4. Spike tecnici (M0, time-boxed, ciascuno con ADR)
 
-| ID       | Domanda                                                                                                                                                                                             | Esito atteso / fallback                                                                                       |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| SPIKE-01 | Wails v2.12 su macOS: un URL `nodus://…` con app già aperta arriva a `OnUrlOpen` o a `OnSecondInstanceLaunch`? Su Windows (NSIS) e Linux (`.desktop`) l'URL arriva come argv della seconda istanza? | ADR-0001 "Consegna URL scheme per OS". Fallback: loopback resta primario (D-08), scheme solo dove verificato. |
-| SPIKE-02 | `modernc.org/sqlite`: `CREATE VIRTUAL TABLE … USING fts5(…, tokenize='trigram')` funziona? prestazioni su 50k documenti sintetici?                                                                  | ADR-0002. Fallback: tokenizer `unicode61` + indice LIKE su candidati (degrado documentato).                   |
-| SPIKE-03 | `@excalidraw/excalidraw` 0.18.x: peerDeps React, `EXCALIDRAW_ASSET_PATH` offline nel webview Wails (WKWebView/WebView2/WebKitGTK), bundle size con lazy import                                      | ADR-0003 "Versione React e strategia asset".                                                                  |
-| SPIKE-04 | Live Preview CodeMirror 6: prototipo con 3 elementi (heading, wikilink, bold) con decorations/widget e "sintassi riappare sulla riga del cursore"                                                   | ADR-0004 "Architettura Live Preview" (pattern di estensione riusato in M1-WP5).                               |
-| SPIKE-05 | CSP `default-src 'self'` senza `unsafe-eval` nel webview Wails: compatibilità con Vite dev server, KaTeX, Mermaid, WASM (`wasm-unsafe-eval`)                                                        | ADR-0005.                                                                                                     |
+| ID       | Domanda                                                                                                                                                                                                 | Esito atteso / fallback                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| SPIKE-01 | Wails v2.12 su macOS: un URL `memobrain://…` con app già aperta arriva a `OnUrlOpen` o a `OnSecondInstanceLaunch`? Su Windows (NSIS) e Linux (`.desktop`) l'URL arriva come argv della seconda istanza? | ADR-0001 "Consegna URL scheme per OS". Fallback: loopback resta primario (D-08), scheme solo dove verificato. |
+| SPIKE-02 | `modernc.org/sqlite`: `CREATE VIRTUAL TABLE … USING fts5(…, tokenize='trigram')` funziona? prestazioni su 50k documenti sintetici?                                                                      | ADR-0002. Fallback: tokenizer `unicode61` + indice LIKE su candidati (degrado documentato).                   |
+| SPIKE-03 | `@excalidraw/excalidraw` 0.18.x: peerDeps React, `EXCALIDRAW_ASSET_PATH` offline nel webview Wails (WKWebView/WebView2/WebKitGTK), bundle size con lazy import                                          | ADR-0003 "Versione React e strategia asset".                                                                  |
+| SPIKE-04 | Live Preview CodeMirror 6: prototipo con 3 elementi (heading, wikilink, bold) con decorations/widget e "sintassi riappare sulla riga del cursore"                                                       | ADR-0004 "Architettura Live Preview" (pattern di estensione riusato in M1-WP5).                               |
+| SPIKE-05 | CSP `default-src 'self'` senza `unsafe-eval` nel webview Wails: compatibilità con Vite dev server, KaTeX, Mermaid, WASM (`wasm-unsafe-eval`)                                                            | ADR-0005.                                                                                                     |
 
 ---
 
@@ -79,7 +79,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M0-WP0 Scaffolding monorepo
 
-- `go.work` con i tre moduli; `shared/go/go.mod` (`nodus/shared`), `apps/desktop/go.mod`, `services/cloud/go.mod`.
+- `go.work` con i tre moduli; `shared/go/go.mod` (`memobrain/shared`), `apps/desktop/go.mod`, `services/cloud/go.mod`.
 - `package.json` radice + `workspaces di package.json.yaml` (`apps/desktop/frontend`, `web`, `packages/*`); `tsconfig.base.json`; ESLint flat config + Prettier condivisi in `packages/config/` (o radice).
 - `Makefile`: `tools`, `gen`, `lint`, `test`, `test-integration`, `conformance`, `dev-cloud`, `dev-desktop`, `build-desktop`, `build-cloud`, `rename-module`.
 - `.gitignore`, `.editorconfig`, `.golangci.yml` (con `depguard` per le regole di modularità §4.3), `LICENSE` (MIT, deciso).
@@ -97,12 +97,12 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 ### M0-WP2 Contratti
 
 - `api/openapi.yaml` v0: `/healthz`, `/readyz`, `/me`, `/me/devices` (GET/POST/DELETE), `/config/effective` (stub che ritorna default), schema `Problem`. Componenti riusabili (`Pagination`, `Error`).
-- `api/proto/nodus/v1/notify.proto` (testo §3.6), `buf.yaml`, `buf.gen.yaml`.
+- `api/proto/memobrain/v1/notify.proto` (testo §3.6), `buf.yaml`, `buf.gen.yaml`.
 - `make gen`: `oapi-codegen` → `services/cloud/internal/api/{types,server}.gen.go`; client TS → `packages/api-client/src/gen/`; buf → Go in `services/cloud/internal/api/grpc/` e client gRPC in `apps/desktop/internal/sync/transport/pb/`; `sqlc` (da M0-WP3); `wails generate module` per `wailsjs/`.
 
 ### M0-WP3 Cloud skeleton (`services/cloud`)
 
-- `cmd/nodus-cloud/main.go`: flag `--role=api|worker|all`, config da env (`internal/config`: `DATABASE_URL`, `S3_*`, `OIDC_ISSUER`, `OIDC_AUDIENCE=nodus-api`, `KC_ADMIN_*`, `LISTEN_ADDR`), graceful shutdown.
+- `cmd/memobrain-cloud/main.go`: flag `--role=api|worker|all`, config da env (`internal/config`: `DATABASE_URL`, `S3_*`, `OIDC_ISSUER`, `OIDC_AUDIENCE=memobrain-api`, `KC_ADMIN_*`, `LISTEN_ADDR`), graceful shutdown.
 - `internal/db`: pool pgx, helper `WithTx`, goose embedded; migrazione `0001_core.sql` = `citext`, `users`, `devices`, `settings`, `audit_log`; seed in `0002_seed_settings.sql` (`storage.default_quota_bytes`, soglie 80/95, `history.retention_days`, `files.max_size_bytes`).
 - `internal/db/queries/*.sql` + `sqlc.yaml`.
 - `internal/httpserver`: router chi, middleware `request-id`, `recover`, `logging`, `otel`, `ratelimit` (token bucket per utente/IP, header `RateLimit-*`), `cors` (solo origine Web UI), `compress` (gzip/br solo su JSON, mai sui blob), helper `ETag`/`If-Match` per le risorse modificabili (usato da M2-WP1 e M4-WP2), handler `Problem` RFC 9457; `/healthz`, `/readyz`, `/metrics`.
@@ -111,23 +111,23 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 - `internal/audit`, `internal/observability` (metriche RED, tracing).
 - `internal/grpcserver`: `NotifyService.Subscribe` che per ora invia solo keepalive; interceptor auth.
 - `test/integration`: testcontainers PG (+ Keycloak solo per il test di login reale, tag `integration`); test contratto base (`test/contract`: validazione risposte contro `openapi.yaml` con `kin-openapi`).
-- `Dockerfile` multi-stage; `deploy/helm/nodus/` chart minimo (Deployment api/worker, Service, Ingress, ConfigMap/Secret).
+- `Dockerfile` multi-stage; `deploy/helm/memobrain/` chart minimo (Deployment api/worker, Service, Ingress, ConfigMap/Secret).
 
 ### M0-WP4 Keycloak
 
-- `deploy/keycloak/realm-nodus.json`: realm `nodus`, client `nodus-desktop` (public, PKCE S256, redirect `http://127.0.0.1/*` e `nodus://auth/callback`, scope `offline_access`), `nodus-web`, `nodus-api` (audience mapper), `nodus-admin-svc` (service account con `manage-users`,`view-users`,`query-users`), realm roles `nodus-admin`/`nodus-user`, token 5 min, SSO idle 8 h, refresh rotation, brute-force protection, password policy, WebAuthn/OTP abilitati come opzionali (§3.3.1), utenti di test `admin`/`user1`/`user2`.
+- `deploy/keycloak/realm-memobrain.json`: realm `memobrain`, client `memobrain-desktop` (public, PKCE S256, redirect `http://127.0.0.1/*` e `memobrain://auth/callback`, scope `offline_access`), `memobrain-web`, `memobrain-api` (audience mapper), `memobrain-admin-svc` (service account con `manage-users`,`view-users`,`query-users`), realm roles `memobrain-admin`/`memobrain-user`, token 5 min, SSO idle 8 h, refresh rotation, brute-force protection, password policy, WebAuthn/OTP abilitati come opzionali (§3.3.1), utenti di test `admin`/`user1`/`user2`.
 - Script `deploy/keycloak/dev-seed.sh`.
 
 ### M0-WP5 Desktop skeleton (`apps/desktop`)
 
-- `wails init -t react-ts` poi ristrutturazione secondo §4.2 (`internal/…`, `frontend/src/…`), `wails.json` con `info.protocols` per `nodus`.
-- `main.go`: finestra singola, `SingleInstanceLock{UniqueId, OnSecondInstanceLaunch}` con `UniqueId` derivato dalla directory dati (`NODUS_DATA_DIR`/flag `--data-dir`), così due istanze con dir dati distinte possono coesistere per i test multi-dispositivo (M2); `Mac.OnUrlOpen`, menu nativo base, assetserver con CSP (SPIKE-05).
+- `wails init -t react-ts` poi ristrutturazione secondo §4.2 (`internal/…`, `frontend/src/…`), `wails.json` con `info.protocols` per `memobrain`.
+- `main.go`: finestra singola, `SingleInstanceLock{UniqueId, OnSecondInstanceLaunch}` con `UniqueId` derivato dalla directory dati (`MEMOBRAIN_DATA_DIR`/flag `--data-dir`), così due istanze con dir dati distinte possono coesistere per i test multi-dispositivo (M2); `Mac.OnUrlOpen`, menu nativo base, assetserver con CSP (SPIKE-05).
 - `internal/app`: composizione (costruttori espliciti, niente DI framework), `bindings.go` (`VaultAPI`, `AuthAPI`, `SettingsAPI` iniziali), `events.go` (nomi evento come costanti condivise con TS in `frontend/src/app/events.ts`).
-- `internal/store`: apertura `app.db` (vault recenti, impostazioni app), `index.db`/`sync.db` per vault in `.nodus/`; migrazioni goose embedded.
+- `internal/store`: apertura `app.db` (vault recenti, impostazioni app), `index.db`/`sync.db` per vault in `.memobrain/`; migrazioni goose embedded.
 - `internal/vault`: `Manager` (vault recenti, apri/crea), `FS` con `ReadFile`, `WriteAtomic(tmp+fsync+rename)`, `Rename`, `Delete→.trash/`, guardie path traversal (`pathrules` + `filepath.EvalSymlinks` dentro la radice), `ListTree`.
 - `internal/watcher`: fsnotify ricorsivo + debounce 1.5 s + riconciliazione periodica (mtime/size) → evento `vault:file-changed`.
 - `internal/parser` v0: goldmark con estensione wikilink minima + heading + tag; `internal/indexer` v0: tabella `files` + `headings` + `links` + `tags` in `index.db`, scansione all'apertura (serve a M1 e a verificare l'ingranaggio).
-- `internal/platform`: parsing URL `nodus://open?vault=&file=` e `nodus://auth/callback`, registrazione scheme (Info.plist via `build/darwin`, NSIS script, `.desktop` Linux).
+- `internal/platform`: parsing URL `memobrain://open?vault=&file=` e `memobrain://auth/callback`, registrazione scheme (Info.plist via `build/darwin`, NSIS script, `.desktop` Linux).
 - `internal/telemetry`: zerolog su file rotante in dir dati app; crash report **opt-in** (consenso nelle impostazioni, invio rinviato a M7-WP4).
 - Frontend testabile fuori dal webview: shim dei binding (`frontend/src/test/wails-mock/` che implementa `window.go.*` e `runtime` con fixture) per far girare l'app in Chromium con Playwright; i test sul webview reale restano manuali (checklist per OS).
 - Frontend: `app/` (shell, tema chiaro/scuro con token CSS, provider), `workspace/` minimo (una tab), `sidebar/` file explorer (tree, apri nota), `editor/` CodeMirror 6 in **Source mode** (solo highlighting markdown base), `state/` Zustand store vault + TanStack Query sui binding, `i18n/` (it, en) con i18next, `settings/` pannello "Generale" (lingua, tema).
@@ -192,16 +192,16 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M1-WP7 Properties, tag, outline, word count
 
-- `internal/properties`: schema tipi in `.nodus/types.json`, validazione/coercizione (`text,list,number,checkbox,date,datetime`), binding `PropertiesAPI` (`GetTypes`, `SetType`, `Update(file, key, value)` che riscrive il frontmatter preservando ordine/commenti).
+- `internal/properties`: schema tipi in `.memobrain/types.json`, validazione/coercizione (`text,list,number,checkbox,date,datetime`), binding `PropertiesAPI` (`GetTypes`, `SetType`, `Update(file, key, value)` che riscrive il frontmatter preservando ordine/commenti).
 - Frontend: editor Properties tipizzato in cima alla nota, vista Properties nel sidebar; vista Tags (gerarchica, conteggi); Outline; `statusbar/` word/char count (anche selezione).
 
 ### M1-WP8 Workspace, navigazione, comandi, impostazioni
 
-- `workspace/`: tab, split orizzontale/verticale, linked panes, sidebar sx/dx, drag tab; persistenza `.nodus/workspace.json` (non sync); modalità per pannello (source/live/reading) ricordata.
-- `commands/`: registro comandi unico (id, titolo i18n, hotkey default, `when`), command palette, hotkey personalizzabili (`.nodus/hotkeys.json`), quick switcher (fuzzy su nome/alias/heading con `fuse.js` o algoritmo custom), vault switcher.
+- `workspace/`: tab, split orizzontale/verticale, linked panes, sidebar sx/dx, drag tab; persistenza `.memobrain/workspace.json` (non sync); modalità per pannello (source/live/reading) ricordata.
+- `commands/`: registro comandi unico (id, titolo i18n, hotkey default, `when`), command palette, hotkey personalizzabili (`.memobrain/hotkeys.json`), quick switcher (fuzzy su nome/alias/heading con `fuse.js` o algoritmo custom), vault switcher.
 - File explorer completo: crea nota/cartella, rinomina (usa `PlanRename`), sposta (drag), elimina (cestino di sistema via Wails/`.trash/` da impostazione), ordina, mostra allegati.
-- `settings/`: pannelli Editor, File e link, Aspetto (tema, accento, font, zoom, larghezza), Hotkeys, Lingua; persistenza `.nodus/{editor,appearance}.json` (per utente, sincronizzabili in M2) + `app.db` per preferenze app.
-- URI `nodus://open?vault=&file=` funzionante.
+- `settings/`: pannelli Editor, File e link, Aspetto (tema, accento, font, zoom, larghezza), Hotkeys, Lingua; persistenza `.memobrain/{editor,appearance}.json` (per utente, sincronizzabili in M2) + `app.db` per preferenze app.
+- URI `memobrain://open?vault=&file=` funzionante.
 
 ### M1-WP9 Qualità M1
 
@@ -253,7 +253,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M2-WP6 Sync engine desktop
 
-- `internal/sync`: schema `sync.db` (§3.4.3: `sync_files`, `sync_cursor`, `outbox`, `conflicts`), `detect.go` (stato da watcher + riconciliazione, rename per hash o `file_id` da `RenameWithLinkUpdate`), `engine.go` (ciclo: pull → applica → push → risolvi; scheduler, pause/resume, backoff con jitter, `Retry-After`), `resolve.go` (usa `merge`, conflict copy `<nome> (conflitto <device> <data>).<ext>` con `conflict_of`, limite 5 tentativi → stato `conflict`), scope `.nodus/` (§3.4.6), esclusioni, eco per `device_id`, bootstrap da `/tree` su `CURSOR_EXPIRED`, upload grandi via tus.
+- `internal/sync`: schema `sync.db` (§3.4.3: `sync_files`, `sync_cursor`, `outbox`, `conflicts`), `detect.go` (stato da watcher + riconciliazione, rename per hash o `file_id` da `RenameWithLinkUpdate`), `engine.go` (ciclo: pull → applica → push → risolvi; scheduler, pause/resume, backoff con jitter, `Retry-After`), `resolve.go` (usa `merge`, conflict copy `<nome> (conflitto <device> <data>).<ext>` con `conflict_of`, limite 5 tentativi → stato `conflict`), scope `.memobrain/` (§3.4.6), esclusioni, eco per `device_id`, bootstrap da `/tree` su `CURSOR_EXPIRED`, upload grandi via tus.
 - Vault privati: cifratura blob/path prima dell'upload, decifratura dopo il download, `kind=opaque`, nessun `move_prefix`; hash plaintext in `sync.db` per evitare re-upload.
 - Binding `SyncAPI` (§2.5) + eventi `sync:status`, `sync:conflict`, `vault:locked`.
 - Test: simulatore di 2 client contro cloud in testcontainers (test e2e Go in `apps/desktop/internal/sync/e2e_test.go`, tag `integration`): modifica concorrente `.md` non sovrapposta → merge; sovrapposta → conflict copy; rename vs modifica; delete vs modify; vault privato round-trip.
@@ -266,7 +266,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 ### M2-WP8 UI sync
 
 - `sync/` frontend: wizard "Collega al cloud" (tipo vault privato/condiviso con testi espliciti, passphrase + robustezza, recovery key con conferma per ri-digitazione, primo upload con progresso/ripresa), sblocco vault bloccato (con passphrase o recovery key; in quest'ultimo caso passo obbligatorio "imposta nuova passphrase" e opzione "rigenera recovery key"), indicatore stato per vault, vista "Risoluzione conflitti" (diff affiancato, Tieni locale/remoto/Unisci/Entrambi), "Cronologia nota" (lista revisioni, diff — decifrato sul client per i privati — e ripristino), dispositivi (lista/revoca via `/me/devices`), impostazioni sync (intervallo, pausa).
-- Sync delle impostazioni utente `.nodus/*.json` con LWW per chiave.
+- Sync delle impostazioni utente `.memobrain/*.json` con LWW per chiave.
 
 **Criteri di uscita M2:** scenario a 2 dispositivi (2 istanze desktop con dir dati distinte) converge in entrambi i tipi di vault; nessuna perdita silenziosa (test); p95 `changes` < 200 ms e `commit` ≤ 50 op < 500 ms in load test locale (k6 base in `services/cloud/test/load/`); test vector cripto verdi in Go e TS.
 
@@ -280,13 +280,13 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 - Wrapper `@excalidraw/excalidraw` con `React.lazy`, `EXCALIDRAW_ASSET_PATH` → asset copiati nel bundle (`vite` plugin di copia), tema app, i18n.
 - Tab "Disegno": apertura `.excalidraw`, autosave debounce 2 s via `WriteNote` binario con `expectedHash`, read-only se permesso `viewer` (M4) o vault bloccato.
-- Comandi: "Nuovo disegno" (palette, inserisce embed se invocato da una nota), "Inserisci disegno"; doppio clic su embed → editor (tab o overlay); export PNG 1x–3x con/senza sfondo, SVG, copia appunti; libreria `.nodus/excalidraw-library.json`; modalità presentazione/zen.
+- Comandi: "Nuovo disegno" (palette, inserisce embed se invocato da una nota), "Inserisci disegno"; doppio clic su embed → editor (tab o overlay); export PNG 1x–3x con/senza sfondo, SVG, copia appunti; libreria `.memobrain/excalidraw-library.json`; modalità presentazione/zen.
 - Soglia 10 MB per disegno con avviso.
 
 ### M3-WP2 Supporto backend disegni (`internal/drawing`)
 
 - Validazione JSON Excalidraw; estrattore per l'indexer: testo elementi `text` (FTS) e `link` degli elementi verso `[[Nota]]` (archi grafo/backlink con etichetta "Disegno X").
-- Anteprima SVG: generata dal frontend (`exportToSvg`) e salvata via binding in `.nodus/cache/drawings/<hash>.svg`; invalidazione per hash; embed `![[x.excalidraw|600]]` in Live Preview/Reading usa la cache (fallback: render lazy).
+- Anteprima SVG: generata dal frontend (`exportToSvg`) e salvata via binding in `.memobrain/cache/drawings/<hash>.svg`; invalidazione per hash; embed `![[x.excalidraw|600]]` in Live Preview/Reading usa la cache (fallback: render lazy).
 
 ### M3-WP3 Canvas (JSON Canvas)
 
@@ -332,7 +332,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M4-WP5 Web UI — base e area utente
 
-- `web/`: Vite + React, `oidc-client-ts` PKCE (`nodus-web`), guardie di ruolo, `packages/api-client`, `packages/ui` (design system: tokens, tabelle, form, barra quota).
+- `web/`: Vite + React, `oidc-client-ts` PKCE (`memobrain-web`), guardie di ruolo, `packages/api-client`, `packages/ui` (design system: tokens, tabelle, form, barra quota).
 - Route utente: Spazio utilizzato (`/me/usage`), I miei vault (tipo, dimensione, file, ultimo sync), Dispositivi, Condivisioni. Download ZIP rinviato a M5.
 - `services/cloud/web-embed` con `go:embed` + fallback SPA; CSP rigida e SRI.
 
@@ -355,7 +355,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M5-WP2 Export ZIP (cloud)
 
-- Migrazione `export_jobs`; `internal/exports`: `GET /vaults/{vid}/export.zip` streaming (`archive/zip` con `Store` per i blob, soglia 512 MB), `POST /vaults/{vid}/exports` → job (worker) che scrive ZIP su S3 e `download_url` presigned 24 h; `409 VAULT_ENCRYPTED` per i privati; esclusione `.nodus/` device-specific; job `expired`.
+- Migrazione `export_jobs`; `internal/exports`: `GET /vaults/{vid}/export.zip` streaming (`archive/zip` con `Store` per i blob, soglia 512 MB), `POST /vaults/{vid}/exports` → job (worker) che scrive ZIP su S3 e `download_url` presigned 24 h; `409 VAULT_ENCRYPTED` per i privati; esclusione `.memobrain/` device-specific; job `expired`.
 
 ### M5-WP3 Web UI admin
 
@@ -390,7 +390,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 - `internal/templates`: variabili `{{date:FORMAT}}`, `{{time}}`, `{{title}}`, cartella template (anche mount di gruppo), daily notes (formato, cartella, template, "apri oggi", navigazione giorni), unique note creator (prefisso timestamp).
 - `internal/composer`: unisci note (append + redirect link), estrai selezione in nuova nota (sostituisce con link).
-- Bookmarks (`.nodus/bookmarks.json`, gruppi, nota/heading/block/ricerca/grafo) con vista sidebar; Workspaces (layout salvati `.nodus/workspaces.json`).
+- Bookmarks (`.memobrain/bookmarks.json`, gruppi, nota/heading/block/ricerca/grafo) con vista sidebar; Workspaces (layout salvati `.memobrain/workspaces.json`).
 - Slash commands `/` nell'editor (riusa il registro comandi); Random note; Page preview (hover con render reading in popover).
 
 ### M6-WP4 Importer
@@ -399,7 +399,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M6-WP5 History locale e recovery
 
-- `internal/history`: snapshot in `.nodus/snapshots/` ogni 5 min se modificato, retention 7 gg (configurabile), UI "File recovery" (lista, diff, ripristino); integrazione con cronologia cloud (M2) in un'unica vista.
+- `internal/history`: snapshot in `.memobrain/snapshots/` ogni 5 min se modificato, retention 7 gg (configurabile), UI "File recovery" (lista, diff, ripristino); integrazione con cronologia cloud (M2) in un'unica vista.
 
 ### M6-WP6 Embedded search, export, varie
 
@@ -429,12 +429,12 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 ### M7-WP3 Distribuzione e aggiornamenti
 
 - `internal/updater`: canale di update firmato (manifest JSON firmato ed25519, verifica firma, download, applicazione per OS), UI "Aggiornamento disponibile".
-- Installer: NSIS (Windows, firma Authenticode), `.dmg` notarizzato (macOS), AppImage + `.deb` (Linux, `.desktop` con `x-scheme-handler/nodus`); pipeline release con tag semver; immagini OCI firmate (cosign) + Helm chart completo (HPA, PDB, secret, ingress gRPC/HTTP2) e `compose` per on-premise.
+- Installer: NSIS (Windows, firma Authenticode), `.dmg` notarizzato (macOS), AppImage + `.deb` (Linux, `.desktop` con `x-scheme-handler/memobrain`); pipeline release con tag semver; immagini OCI firmate (cosign) + Helm chart completo (HPA, PDB, secret, ingress gRPC/HTTP2) e `compose` per on-premise.
 
 ### M7-WP4 Accessibilità, i18n, documentazione
 
 - Audit WCAG 2.1 AA Web UI (axe in Playwright), navigazione tastiera/screen reader del client; revisione traduzioni it/en.
-- Docs: guida utente, guida amministratore (installazione, Keycloak, backup/PITR, runbook incidenti, osservabilità con dashboard Grafana), `docs/adr/` completo, rebrand del nome (task con l'utente).
+- Docs: guida utente, guida amministratore (installazione, Keycloak, backup/PITR, runbook incidenti, osservabilità con dashboard Grafana), `docs/adr/` completo, rebrand del nome (eseguito: MemoBrain Notes).
 
 ### M7-WP5 Release
 
@@ -466,4 +466,4 @@ Verifica end-to-end di ogni milestone = i "Criteri di uscita" sopra, eseguiti co
 1. M0-WP0 scaffolding + `docs/roadmap.md` (questo piano) + aggiornamento `CLAUDE.md` con i comandi.
 2. SPIKE-01, -02, -03, -05 (SPIKE-04 all'inizio di M1) con ADR.
 3. M0-WP1 → WP2 → WP3/WP4 (cloud+Keycloak) → WP5 → WP6 → WP7.
-4. Decisioni ancora aperte: hosting (il module path resta `nodus`, licenza MIT già decisa); scelta `op_id` persistito (M2-WP2); libreria rendering grafo (M6).
+4. Decisioni ancora aperte: hosting (il module path resta `memobrain`, licenza MIT già decisa); scelta `op_id` persistito (M2-WP2); libreria rendering grafo (M6).

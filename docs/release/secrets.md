@@ -37,7 +37,7 @@ Alternativa locale a `APPLE_API_*`: `NOTARY_KEYCHAIN_PROFILE` (profilo di `xcrun
 | `WINDOWS_CERT_PFX_BASE64` | Certificato di code signing (OV/EV) con chiave privata in `.pfx`, base64. |
 | `WINDOWS_CERT_PASSWORD`   | Password del `.pfx`.                                                      |
 
-Un certificato EV su token hardware non è utilizzabile da un runner ospitato da GitHub: serve un runner self-hosted o un servizio di firma in cloud (in quel caso definire direttamente `NODUS_SIGNTOOL_CMD`, vedi `build/windows/installer/project.nsi`).
+Un certificato EV su token hardware non è utilizzabile da un runner ospitato da GitHub: serve un runner self-hosted o un servizio di firma in cloud (in quel caso definire direttamente `MEMOBRAIN_SIGNTOOL_CMD`, vedi `build/windows/installer/project.nsi`).
 
 ### Immagini OCI e chart Helm
 
@@ -52,7 +52,7 @@ make release-tool
 bin/release gen-key      # private -> segreto UPDATE_SIGNING_KEY, public -> variabile UPDATE_PUBLIC_KEY
 ```
 
-Salvare la chiave privata in un password manager o in un HSM/vault e tenerne una copia offline cifrata. Per ricavare la pubblica da una privata esistente: `NODUS_UPDATE_SIGNING_KEY=... bin/release pubkey`. Prima di impostare i segreti verificare la coppia: `bin/release gen-manifest ... && bin/release sign-manifest -in manifest.json && bin/release verify-manifest -in manifest.json -pubkey <pubblica>`.
+Salvare la chiave privata in un password manager o in un HSM/vault e tenerne una copia offline cifrata. Per ricavare la pubblica da una privata esistente: `MEMOBRAIN_UPDATE_SIGNING_KEY=... bin/release pubkey`. Prima di impostare i segreti verificare la coppia: `bin/release gen-manifest ... && bin/release sign-manifest -in manifest.json && bin/release verify-manifest -in manifest.json -pubkey <pubblica>`.
 
 ## Chiave di sviluppo
 

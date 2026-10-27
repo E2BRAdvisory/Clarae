@@ -1,6 +1,6 @@
 # Checklist manuale — parità con Obsidian (M1)
 
-Da eseguire sul webview reale (macOS, Windows, Linux) con un vault Obsidian esistente, senza conversioni. Gli e2e automatici (`yarn workspace @nodus/desktop-frontend e2e`) coprono i flussi principali sul mock dei binding; qui si verifica ciò che solo il webview reale mostra.
+Da eseguire sul webview reale (macOS, Windows, Linux) con un vault Obsidian esistente, senza conversioni. Gli e2e automatici (`yarn workspace @memobrain/desktop-frontend e2e`) coprono i flussi principali sul mock dei binding; qui si verifica ciò che solo il webview reale mostra.
 
 Segnare `[x]` con data e sistema operativo.
 
@@ -8,7 +8,7 @@ Segnare `[x]` con data e sistema operativo.
 
 - [ ] "Apri cartella come vault" su un vault Obsidian reale: albero completo, `.obsidian/` non mostrato, nessuna modifica ai file all'apertura.
 - [ ] Indice iniziale con barra di avanzamento in basso; dopo il termine la ricerca restituisce risultati.
-- [ ] Chiusura e riapertura: tab, split e barre laterali ripristinati (`.nodus/workspace.json`); un file cancellato nel frattempo non lascia tab vuote.
+- [ ] Chiusura e riapertura: tab, split e barre laterali ripristinati (`.memobrain/workspace.json`); un file cancellato nel frattempo non lascia tab vuote.
 
 ## Link
 
@@ -45,7 +45,7 @@ Segnare `[x]` con data e sistema operativo.
 
 - [ ] Split orizzontale/verticale, trascinamento tab tra pannelli, pannelli collegati, ridimensionamento.
 - [ ] Palette comandi, selettore rapido (⌘⏎ nuova tab, crea se manca).
-- [ ] Impostazioni: editor, file e link, aspetto, hotkey (registrazione, conflitti, ripristino), cloud, informazioni; `nodus://open?vault=&file=` apre la nota.
+- [ ] Impostazioni: editor, file e link, aspetto, hotkey (registrazione, conflitti, ripristino), cloud, informazioni; `memobrain://open?vault=&file=` apre la nota.
 
 ## Limiti noti
 
@@ -61,7 +61,7 @@ Da eseguire sul webview reale (le parti automatiche sono coperte da Vitest, Go e
 - [ ] **Template**: inserisci template con `{{date:FORMAT}}`, `{{time}}`, `{{title}}`; con la libreria di gruppo montata compaiono anche i template di gruppo (sola lettura).
 - [ ] **Composer**: unisci note (anteprima "N link in M note", link reindirizzati, sorgente nel cestino); estrai selezione in nuova nota sostituendola con `[[link]]`.
 - [ ] **Slash `/`** in una riga vuota apre il menu; non compare in codice, frontmatter, URL; si disattiva nelle impostazioni. **Nota casuale** non riapre la corrente.
-- [ ] **Bookmarks**: nota, heading, blocco, ricerca, gruppi con trascinamento; rinominare un file aggiorna il segnalibro; un file cancellato resta barrato; `.nodus/bookmarks.json` si sincronizza, `workspaces.json` no.
+- [ ] **Bookmarks**: nota, heading, blocco, ricerca, gruppi con trascinamento; rinominare un file aggiorna il segnalibro; un file cancellato resta barrato; `.memobrain/bookmarks.json` si sincronizza, `workspaces.json` no.
 - [ ] **Workspaces**: salva, carica (le modifiche non salvate vengono scritte prima), elimina; le tab di file inesistenti vengono scartate.
 - [ ] **Page preview**: ⌘/Ctrl + passaggio sul wikilink (o sempre, da impostazione) mostra l'anteprima di nota/heading/blocco; Esc chiude; nessun contenuto remoto.
 - [ ] **Importer** (wizard "Importa…"): una cartella Markdown, un ENEX, uno zip Notion, un JSON Roam, un Bear, un Takeout Keep, un CSV — **con export reali**, annotando differenze rispetto ai fixture; il report finale e la nota "Import report" sono corretti; nessun file esistente viene sovrascritto.

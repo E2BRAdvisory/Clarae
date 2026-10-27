@@ -33,4 +33,4 @@ Candidata al rilascio 1.0: tutte le funzioni P0 e P1 del piano sono implementate
 - Accessibilità: scansioni axe pulite sulle schermate coperte, ma nessun test con screen reader reale; grafo, canvas e disegni non hanno alternativa testuale completa.
 - Importer: Google Keep in HTML e Apple Notes non supportati; provato solo con file di esempio, non con export reali.
 - Aggiornamento automatico: l'applicazione degli aggiornamenti è provata solo con processi simulati.
-- Il nome "Nodus" è provvisorio (vedi `docs/release/rebrand-inventory.md`).
+- Prodotto rinominato in "MemoBrain Notes" (identificatori `memobrain`), senza migrazioni: nessuna installazione precedente.

@@ -23,7 +23,7 @@ Supportati: titoli, elenchi, attività (`- [ ]`, con stati personalizzati), cita
 
 ## Tag e proprietà
 
-- **Tag:** `#idea`, `#progetto/nodus` (gerarchici). La scheda _Tag_ elenca i tag con i conteggi.
+- **Tag:** `#idea`, `#progetto/memobrain` (gerarchici). La scheda _Tag_ elenca i tag con i conteggi.
 - **Proprietà (frontmatter YAML):** in cima alla nota, tra `---`. Il pannello _Proprietà_ e l'editor in cima alla nota permettono di aggiungerle e modificarle con il tipo corretto (testo, numero, data, elenco, casella). Le proprietà `tags` e `aliases` hanno un significato speciale: gli alias diventano nomi alternativi per i link.
 
 ## Blocchi di ricerca incorporati

@@ -18,17 +18,17 @@ Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. **Stato*
 ## Tagliare un rilascio
 
 ```sh
-git tag -a v1.0.0 -m "Nodus 1.0.0" && git push origin v1.0.0     # azione dell'utente: gli agenti non fanno tag/push
+git tag -a v1.0.0 -m "MemoBrain Notes 1.0.0" && git push origin v1.0.0     # azione dell'utente: gli agenti non fanno tag/push
 ```
 
 Il push del tag avvia due workflow:
 
 - **Release**: test, build su macOS/Windows/Linux, firma e notarizzazione (su tag mancano segreti = errore), `SHA256SUMS`, SBOM, attestazione di provenienza, manifest di aggiornamento firmato, **GitHub Release in bozza** con tutti i file.
-- **Release images**: immagine cloud multi-arch su GHCR, firma cosign keyless, SBOM e provenienza BuildKit; chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/nodus`).
+- **Release images**: immagine cloud multi-arch su GHCR, firma cosign keyless, SBOM e provenienza BuildKit; chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/memobrain`).
 
 Poi, a mano:
 
-1. Scaricare gli artefatti della bozza e **verificarli** (sotto), eseguire la checklist cross-OS su macchine pulite (installazione, apertura `nodus://`, login, update dalla versione precedente).
+1. Scaricare gli artefatti della bozza e **verificarli** (sotto), eseguire la checklist cross-OS su macchine pulite (installazione, apertura `memobrain://`, login, update dalla versione precedente).
 2. Pubblicare la Release (toglie lo stato di bozza).
 3. **Attivare il canale di aggiornamento**: copiare `manifest.json` e `manifest.json.sig` nella cartella del canale (`stable/` o `beta/` sotto `UPDATE_BASE_URL`). Finché non lo si fa, nessun client riceve l'aggiornamento: è il passaggio di "go live" e va fatto per ultimo. Gli URL degli artefatti nel manifest puntano agli asset della Release.
 
@@ -45,14 +45,14 @@ sha256sum -c SHA256SUMS
 # manifest di aggiornamento
 bin/release verify-manifest -in manifest.json -pubkey "$UPDATE_PUBLIC_KEY"
 # immagine OCI
-cosign verify ghcr.io/ORG/nodus-cloud:1.0.0 \
+cosign verify ghcr.io/ORG/memobrain-cloud:1.0.0 \
   --certificate-identity-regexp '^https://github.com/ORG/REPO/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # attestazione di provenienza dei file
-gh attestation verify nodus-1.0.0-linux-amd64.deb --repo ORG/REPO
+gh attestation verify memobrain-1.0.0-linux-amd64.deb --repo ORG/REPO
 # macOS
-spctl --assess --type open --context context:primary-signature -v nodus-1.0.0-darwin-universal.dmg
-xcrun stapler validate nodus-1.0.0-darwin-universal.dmg
+spctl --assess --type open --context context:primary-signature -v memobrain-1.0.0-darwin-universal.dmg
+xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
 ```
 
 ## Build locali (senza segreti)

@@ -17,7 +17,7 @@ Vault reale su disco indicizzato dall'indexer (10 000 note, ~5 link ciascuna, ta
 
 ## 2. Layout (passo di simulazione)
 
-`NODUS_GRAPH_BENCH=10000 yarn workspace @nodus/desktop-frontend exec vitest run src/graph/layout.bench.test.ts` (d3-force in Node/V8, thread principale, quindi senza il costo del Worker):
+`MEMOBRAIN_GRAPH_BENCH=10000 yarn workspace @memobrain/desktop-frontend exec vitest run src/graph/layout.bench.test.ts` (d3-force in Node/V8, thread principale, quindi senza il costo del Worker):
 
 | nodi   | archi  | tick (mediana) | tick (p95) | tick fino a raffreddamento |
 | ------ | ------ | -------------- | ---------- | -------------------------- |
@@ -28,7 +28,7 @@ Nell'app il layout gira in un Web Worker e pubblica le posizioni circa a ogni fr
 
 ## 3. Rendering in Chromium reale
 
-`NODUS_GRAPH_BENCH=10000 yarn workspace @nodus/desktop-frontend exec playwright test e2e/graph-bench.spec.ts`
+`MEMOBRAIN_GRAPH_BENCH=10000 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/graph-bench.spec.ts`
 
 Il test usa il Worker vero e il renderer Canvas 2D vero; la durata di disegno include una lettura di 1 pixel (`getImageData`) per forzare la rasterizzazione, altrimenti il tempo JS nasconde il costo di raster. Due fasi:
 

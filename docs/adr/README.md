@@ -4,7 +4,7 @@ Le deviazioni e le precisazioni rispetto a `Specifications.md` si registrano com
 
 | ADR                                                  | Titolo                                                                               | Stato     |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------ | --------- |
-| [0001](0001-url-scheme-delivery.md)                  | Consegna degli URL `nodus://` per sistema operativo (SPIKE-01)                       | accettata |
+| [0001](0001-url-scheme-delivery.md)                  | Consegna degli URL `memobrain://` per sistema operativo (SPIKE-01)                   | accettata |
 | [0002](0002-sqlite-fts5-trigram.md)                  | SQLite pure-Go con FTS5 `trigram` per l'indice locale (SPIKE-02)                     | accettata |
 | [0003](0003-react-excalidraw.md)                     | React 19 e strategia per Excalidraw (SPIKE-03)                                       | accettata |
 | [0004](0004-live-preview.md)                         | Architettura Live Preview, una sola vista CodeMirror (SPIKE-04)                      | accettata |

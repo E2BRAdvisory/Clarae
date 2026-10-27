@@ -1,10 +1,10 @@
 # Cronologia e recupero
 
-Nodus non perde silenziosamente i vostri dati: ogni versione scartata resta recuperabile, in due modi.
+MemoBrain Notes non perde silenziosamente i vostri dati: ogni versione scartata resta recuperabile, in due modi.
 
 ## Versioni locali (snapshot)
 
-Mentre scrivete, l'app crea **snapshot** automatici sul vostro dispositivo, nella cartella `.nodus/snapshots` del vault, senza duplicare contenuti identici. Si fanno anche **prima di un ripristino** e **prima che la sincronizzazione sovrascriva** una nota. In _Impostazioni → Recupero file_ regolate l'intervallo tra gli snapshot, per quanti giorni conservarli, la dimensione massima del singolo file e il limite totale di spazio.
+Mentre scrivete, l'app crea **snapshot** automatici sul vostro dispositivo, nella cartella `.memobrain/snapshots` del vault, senza duplicare contenuti identici. Si fanno anche **prima di un ripristino** e **prima che la sincronizzazione sovrascriva** una nota. In _Impostazioni → Recupero file_ regolate l'intervallo tra gli snapshot, per quanti giorni conservarli, la dimensione massima del singolo file e il limite totale di spazio.
 
 ## Versioni del cloud
 

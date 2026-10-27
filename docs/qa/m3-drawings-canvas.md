@@ -1,6 +1,6 @@
 # Checklist manuale — disegni e canvas (M3)
 
-Da eseguire sul webview reale (macOS, Windows, Linux). Gli e2e automatici (`yarn workspace @nodus/desktop-frontend e2e`) coprono apertura, modifica, salvataggio, embed e l'assenza di richieste di rete sul mock dei binding; qui si verifica ciò che solo il webview reale mostra. **Eseguire con la rete scollegata.**
+Da eseguire sul webview reale (macOS, Windows, Linux). Gli e2e automatici (`yarn workspace @memobrain/desktop-frontend e2e`) coprono apertura, modifica, salvataggio, embed e l'assenza di richieste di rete sul mock dei binding; qui si verifica ciò che solo il webview reale mostra. **Eseguire con la rete scollegata.**
 
 Segnare `[x]` con data e sistema operativo.
 
@@ -12,7 +12,7 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Tema chiaro/scuro: l'editor segue il tema dell'app; lingua italiana/inglese.
 - [ ] Esporta → PNG 1×, 2×, 3× con e senza sfondo, SVG: i file compaiono accanto al disegno; "Copia negli appunti" incolla l'immagine in un'altra app.
 - [ ] Zen e Presenta (schermo intero in sola lettura; Esc per uscire).
-- [ ] Libreria: aggiungi un elemento, riapri il vault: presente; il file `.nodus/excalidraw-library.json` si sincronizza.
+- [ ] Libreria: aggiungi un elemento, riapri il vault: presente; il file `.memobrain/excalidraw-library.json` si sincronizza.
 - [ ] Disegno > 10 MB: banner di avviso, il salvataggio funziona.
 - [ ] Vault privato bloccato: il disegno è in sola lettura.
 - [ ] Modifica del file dall'esterno con la tab aperta e nessuna modifica locale: la tab mostra la nuova versione; con modifiche locali: banner di conflitto.
@@ -32,7 +32,7 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Trascina da una maniglia di una scheda su un'altra: nasce il collegamento; doppio clic sul collegamento per l'etichetta.
 - [ ] Colori preset 1–6 su nodi e collegamenti; Annulla/Ripristina (⌘/Ctrl+Z, ⌘/Ctrl+Shift+Z); Elimina.
 - [ ] Zoom con pizzico/⌘+rotella, pan con trascinamento o rotella; "Adatta al contenuto".
-- [ ] Un `.canvas` creato in Obsidian si apre e, riscritto da Nodus, si riapre in Obsidian senza perdite.
+- [ ] Un `.canvas` creato in Obsidian si apre e, riscritto da MemoBrain Notes, si riapre in Obsidian senza perdite.
 - [ ] `![[mappa.canvas]]` in una nota: immagine statica; doppio clic apre la lavagna.
 
 ## Due dispositivi

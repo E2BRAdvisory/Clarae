@@ -4,7 +4,7 @@ Obiettivo: WCAG 2.1 AA per la **chrome dell'app** (barre, pannelli, dialog, menu
 
 ## Copertura automatica
 
-Suite Playwright sul mock dei binding Wails (`make e2e`, oppure `yarn workspace @nodus/desktop-frontend e2e a11y keyboard`):
+Suite Playwright sul mock dei binding Wails (`make e2e`, oppure `yarn workspace @memobrain/desktop-frontend e2e a11y keyboard`):
 
 - `apps/desktop/frontend/e2e/a11y.spec.ts`: scansioni axe (`wcag2a, wcag2aa, wcag21a, wcag21aa`, blocca su `serious`/`critical`), in tema chiaro e scuro e con `prefers-reduced-motion: reduce`, di: schermata di benvenuto, shell con nota aperta e schede della barra laterale (File, Cerca, Tag, Struttura), palette comandi, selettore rapido, impostazioni, impostazioni scorciatoie, procedura di collegamento al cloud, condivisione e inviti, importer, vista grafo, nuova base, recupero file. `AXE_REPORT=<file>` salva tutte le violazioni (anche minori) in JSON lines.
 - `apps/desktop/frontend/e2e/keyboard.spec.ts`: schede della barra laterale (roving tabindex, frecce, `Home`), albero dei file (una sola sosta, frecce/`Home`/`End`, espandi/chiudi, `Invio`, `F2`, menu con tasto Menu, ritorno del focus), schede dei documenti (frecce, `Canc`), palette come combobox.

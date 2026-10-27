@@ -24,7 +24,7 @@ make dev-cloud       # API su 127.0.0.1:18081, gRPC su :18082 (variabili in depl
 make dev-desktop     # app Wails con hot reload del frontend
 ```
 
-Utenti di test nel realm `nodus` (importato da `deploy/keycloak/realm-nodus.json`): `admin`, `user1`, `user2`, tutti con password `nodus-dev-password`.
+Utenti di test nel realm `memobrain` (importato da `deploy/keycloak/realm-memobrain.json`): `admin`, `user1`, `user2`, tutti con password `memobrain-dev-password`.
 
 ## Script per verifiche e debug
 
@@ -42,7 +42,7 @@ Gli script stanno in `scripts/` (bash, macOS/Linux) e tengono tutto lo stato in 
 
 Opzioni comuni: `--fresh` (solo standalone) azzera la data dir; `--data-dir DIR` ne usa un'altra; `--keep` lascia cloud e stack attivi all'uscita. Ogni script ha `--help`.
 
-Accesso nel cloud: `user1` / `nodus-dev-password` (anche `user2`, e `admin` per il ruolo admin). Log: `.dev/logs/cloud.log` e `.dev/<istanza>/logs/nodus.log`. Keycloak: <http://localhost:8080> (admin/admin); console S3: <http://localhost:9001> (nodus/nodus-secret). Le istanze desktop usano `NODUS_DATA_DIR` per la data dir e `NODUS_AUTH_REDIRECT=scheme` forza il fallback `nodus://` del login.
+Accesso nel cloud: `user1` / `memobrain-dev-password` (anche `user2`, e `admin` per il ruolo admin). Log: `.dev/logs/cloud.log` e `.dev/<istanza>/logs/memobrain.log`. Keycloak: <http://localhost:8080> (admin/admin); console S3: <http://localhost:9001> (memobrain/memobrain-secret). Le istanze desktop usano `MEMOBRAIN_DATA_DIR` per la data dir e `MEMOBRAIN_AUTH_REDIRECT=scheme` forza il fallback `memobrain://` del login.
 
 ## Comandi quotidiani
 
@@ -50,16 +50,16 @@ Accesso nel cloud: `user1` / `nodus-dev-password` (anche `user2`, e `admin` per 
 make gen             # rigenera OpenAPI, proto, sqlc, binding Wails
 make lint            # golangci-lint + eslint + prettier
 make test            # go test -race, vitest, conformance
-make e2e             # Playwright (Chromium) sull'UI con i binding simulati (prima volta: yarn workspace @nodus/desktop-frontend exec playwright install chromium)
+make e2e             # Playwright (Chromium) sull'UI con i binding simulati (prima volta: yarn workspace @memobrain/desktop-frontend exec playwright install chromium)
 make test-integration
 make ci              # lint + vuln + test (lo stesso della CI)
 make help
 ```
 
 Per un singolo test Go: `cd services/cloud && go test -run 'TestNome' ./internal/sync/...`.
-Per un singolo test TS: `yarn workspace @nodus/desktop-frontend exec vitest run src/editor/foo.test.ts`.
+Per un singolo test TS: `yarn workspace @memobrain/desktop-frontend exec vitest run src/editor/foo.test.ts`.
 Gli e2e girano in un browser normale: `VITE_E2E=1` fa installare a `main.tsx` il mock dei binding (`src/test/wails-mock`), esposto come `window.__mock` per preparare note nei test.
 
 ## Struttura
 
-Vedi `Specifications.md` §4 e `docs/roadmap.md`. Il module path Go è il segnaposto `nodus/…`; quando l'hosting sarà deciso: `make rename-module NEW=github.com/org/nodus`.
+Vedi `Specifications.md` §4 e `docs/roadmap.md`. Il module path Go è locale (`memobrain/…`); quando l'hosting sarà deciso: `make rename-module NEW=github.com/org/memobrain`.

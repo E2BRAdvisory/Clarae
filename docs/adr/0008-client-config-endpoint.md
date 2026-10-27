@@ -9,7 +9,7 @@
 
 ## Contesto
 
-Per avviare il login PKCE il client desktop deve conoscere l'issuer OIDC (URL del realm Keycloak) e il `client_id` `nodus-desktop`, oltre all'endpoint gRPC delle notifiche. Lo spec prevede che il Config Profile contenga un "elenco server/URL", ma la config effettiva è disponibile solo **dopo** il login. Chiedere all'utente di inserire a mano issuer e client id è fragile.
+Per avviare il login PKCE il client desktop deve conoscere l'issuer OIDC (URL del realm Keycloak) e il `client_id` `memobrain-desktop`, oltre all'endpoint gRPC delle notifiche. Lo spec prevede che il Config Profile contenga un "elenco server/URL", ma la config effettiva è disponibile solo **dopo** il login. Chiedere all'utente di inserire a mano issuer e client id è fragile.
 
 ## Decisione
 
@@ -18,7 +18,7 @@ Il cloud espone `GET /api/v1/client-config` **senza autenticazione** con `{issue
 ## Alternative considerate
 
 - **Issuer e client id nelle impostazioni del client** — scartata: errori di configurazione frequenti, nessuna rotazione centralizzata.
-- **Documento statico `/.well-known/nodus`** — equivalente; si è preferito restare sotto `/api/v1` per versionamento e contratto OpenAPI.
+- **Documento statico `/.well-known/memobrain`** — equivalente; si è preferito restare sotto `/api/v1` per versionamento e contratto OpenAPI.
 
 ## Conseguenze
 

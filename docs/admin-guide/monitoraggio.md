@@ -12,21 +12,21 @@
 
 Oltre alle metriche standard di Go (`go_*`, `process_*`):
 
-| Metrica                                     | Tipo      | Etichette                                   | Significato                                                                       |
-| ------------------------------------------- | --------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
-| `nodus_http_requests_total`                 | counter   | `route`, `method`, `status`                 | Richieste HTTP. `route` è il pattern, non il path (cardinalità limitata).         |
-| `nodus_http_request_duration_seconds`       | histogram | `route`, `method`                           | Latenza delle richieste.                                                          |
-| `nodus_http_inflight_requests`              | gauge     | —                                           | Richieste in corso.                                                               |
-| `nodus_sync_commits_total`                  | counter   | `outcome` (`ok`/`error`)                    | Richieste di commit di sync.                                                      |
-| `nodus_sync_ops_total`                      | counter   | `status` (`accepted`/`conflict`/`rejected`) | Operazioni di sync per esito.                                                     |
-| `nodus_notify_streams_active`               | gauge     | —                                           | Stream di notifica aperti (gRPC + SSE) su questo processo.                        |
-| `nodus_jobs_runs_total`                     | counter   | `job`, `result`                             | Esecuzioni dei job (`blob-gc`, `uploads`, `retention`, `maintenance`, `exports`). |
-| `nodus_jobs_run_duration_seconds`           | histogram | `job`                                       | Durata dei job.                                                                   |
-| `nodus_jobs_last_success_timestamp_seconds` | gauge     | `job`                                       | Quando ogni job è riuscito l'ultima volta (solo processi worker).                 |
-| `nodus_db_pool_connections`                 | gauge     | `state` (`acquired`/`idle`/`total`/`max`)   | Connessioni del pool PostgreSQL.                                                  |
-| `nodus_db_pool_acquires_total`              | counter   | —                                           | Acquisizioni di connessione completate.                                           |
-| `nodus_db_pool_empty_acquires_total`        | counter   | —                                           | Acquisizioni che hanno dovuto attendere (pool esaurito).                          |
-| `nodus_db_pool_acquire_wait_seconds_total`  | counter   | —                                           | Tempo totale speso in attesa di una connessione.                                  |
+| Metrica                                         | Tipo      | Etichette                                   | Significato                                                                       |
+| ----------------------------------------------- | --------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `memobrain_http_requests_total`                 | counter   | `route`, `method`, `status`                 | Richieste HTTP. `route` è il pattern, non il path (cardinalità limitata).         |
+| `memobrain_http_request_duration_seconds`       | histogram | `route`, `method`                           | Latenza delle richieste.                                                          |
+| `memobrain_http_inflight_requests`              | gauge     | —                                           | Richieste in corso.                                                               |
+| `memobrain_sync_commits_total`                  | counter   | `outcome` (`ok`/`error`)                    | Richieste di commit di sync.                                                      |
+| `memobrain_sync_ops_total`                      | counter   | `status` (`accepted`/`conflict`/`rejected`) | Operazioni di sync per esito.                                                     |
+| `memobrain_notify_streams_active`               | gauge     | —                                           | Stream di notifica aperti (gRPC + SSE) su questo processo.                        |
+| `memobrain_jobs_runs_total`                     | counter   | `job`, `result`                             | Esecuzioni dei job (`blob-gc`, `uploads`, `retention`, `maintenance`, `exports`). |
+| `memobrain_jobs_run_duration_seconds`           | histogram | `job`                                       | Durata dei job.                                                                   |
+| `memobrain_jobs_last_success_timestamp_seconds` | gauge     | `job`                                       | Quando ogni job è riuscito l'ultima volta (solo processi worker).                 |
+| `memobrain_db_pool_connections`                 | gauge     | `state` (`acquired`/`idle`/`total`/`max`)   | Connessioni del pool PostgreSQL.                                                  |
+| `memobrain_db_pool_acquires_total`              | counter   | —                                           | Acquisizioni di connessione completate.                                           |
+| `memobrain_db_pool_empty_acquires_total`        | counter   | —                                           | Acquisizioni che hanno dovuto attendere (pool esaurito).                          |
+| `memobrain_db_pool_acquire_wait_seconds_total`  | counter   | —                                           | Tempo totale speso in attesa di una connessione.                                  |
 
 Il tracciamento distribuito (OpenTelemetry) non è incluso in questa versione.
 
@@ -34,7 +34,7 @@ Le metriche dei job compaiono solo sui processi che eseguono il worker (`--role=
 
 ## Dashboard Grafana
 
-File: `deploy/observability/grafana/nodus-overview.json` (Grafana 10+). Importarlo da _Dashboards → Import_, scegliendo il datasource Prometheus; la variabile `job` seleziona i job di scraping di Nodus. Sezioni: panoramica (richieste/s, 5xx, p95, stream, repliche), RED per route, sincronizzazione (commit, operazioni per esito, pull, blob), job in background (esecuzioni, durata, tempo dall'ultimo successo), pool del database, processo Go. Un test (`TestDeployAssetsUseExistingMetrics`) garantisce che dashboard e regole usino solo metriche realmente registrate dal servizio.
+File: `deploy/observability/grafana/memobrain-overview.json` (Grafana 10+). Importarlo da _Dashboards → Import_, scegliendo il datasource Prometheus; la variabile `job` seleziona i job di scraping di MemoBrain Notes. Sezioni: panoramica (richieste/s, 5xx, p95, stream, repliche), RED per route, sincronizzazione (commit, operazioni per esito, pull, blob), job in background (esecuzioni, durata, tempo dall'ultimo successo), pool del database, processo Go. Un test (`TestDeployAssetsUseExistingMetrics`) garantisce che dashboard e regole usino solo metriche realmente registrate dal servizio.
 
 ## Regole di alerting
 
@@ -45,9 +45,9 @@ Scraping con Prometheus Operator (esempio):
 ```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
-metadata: { name: nodus }
+metadata: { name: memobrain }
 spec:
-  selector: { matchLabels: { app.kubernetes.io/name: nodus } }
+  selector: { matchLabels: { app.kubernetes.io/name: memobrain } }
   endpoints: [{ port: http, path: /metrics, interval: 30s }]
 ```
 

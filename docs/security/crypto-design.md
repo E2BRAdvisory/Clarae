@@ -45,15 +45,15 @@ Avversari considerati: (A1) amministratore o operatore curioso, (A2) chi esfiltr
 passphrase ──Argon2id(t,m,p,salt)──► KEK_pass ─┐
                                                ├─ AES-256-GCM unwrap ─► VMK (256 bit CSPRNG, una per vault)
 recovery key ──HKDF-SHA256(salt)───► KEK_rec  ─┘                          │
-                                                                          ├─ HKDF("nodus/v1/path-enc") → K_path_enc
-                                                                          ├─ HKDF("nodus/v1/path-key") → K_path_key
-                                                                          └─ HKDF("nodus/v1/file" ‖ file_id ‖ salt_file) → K_file
+                                                                          ├─ HKDF("memobrain/v1/path-enc") → K_path_enc
+                                                                          ├─ HKDF("memobrain/v1/path-key") → K_path_key
+                                                                          └─ HKDF("memobrain/v1/file" ‖ file_id ‖ salt_file) → K_file
 ```
 
-Implementazione: `shared/go/vaultcrypto/keys.go` (Go), `packages/vaultcrypto-web/src/keys.ts` (TypeScript). Le etichette HKDF sono costanti con prefisso di versione (`nodus/v1/…`) per la separazione di dominio. HKDF-SHA256 senza salt per le sottochiavi: la VMK è già uniforme a 256 bit.
+Implementazione: `shared/go/vaultcrypto/keys.go` (Go), `packages/vaultcrypto-web/src/keys.ts` (TypeScript). Le etichette HKDF sono costanti con prefisso di versione (`memobrain/v1/…`) per la separazione di dominio. HKDF-SHA256 senza salt per le sottochiavi: la VMK è già uniforme a 256 bit.
 
 - **Envelope** (`wrap`): `nonce(12) ‖ AES-256-GCM(KEK, VMK) ‖ tag(16)` = 60 byte (`WrappedVMKSize` lato server). Nonce casuale: ogni KEK avvolge un solo valore, il rischio di collisione è trascurabile. Nessun AAD: l'envelope non è legato al `vault_id` (nota per il revisore, §9).
-- **Recovery key**: 256 bit CSPRNG; testo = Base32 (alfabeto RFC 4648) in gruppi da 5 con checksum SHA-256 troncato a 16 bit (`"nodus/v1/recovery-checksum" ‖ chiave`). Il checksum rileva refusi, non è un controllo di sicurezza. KEK_rec = HKDF(recovery key, salt dell'envelope): nessuno stretching, la chiave ha già piena entropia.
+- **Recovery key**: 256 bit CSPRNG; testo = Base32 (alfabeto RFC 4648) in gruppi da 5 con checksum SHA-256 troncato a 16 bit (`"memobrain/v1/recovery-checksum" ‖ chiave`). Il checksum rileva refusi, non è un controllo di sicurezza. KEK_rec = HKDF(recovery key, salt dell'envelope): nessuno stretching, la chiave ha già piena entropia.
 - **Passphrase**: minimo 12 caratteri e zxcvbn ≥ 3, imposti dal client desktop (`apps/desktop/frontend/src/sync/strength.ts`); il server non può verificarli.
 - **Cache locale della VMK**: keychain del sistema operativo (`apps/desktop/internal/crypto/keystore.go`); la Web UI non la persiste.
 - **Cambio passphrase / recovery key**: nuovo envelope della stessa VMK, nessuna ri-cifratura dei dati. Dopo un cambio, i vecchi envelope scaricati prima restano validi per chi conosceva la vecchia passphrase: senza rotazione della VMK una passphrase compromessa resta utile contro ciò che l'attaccante ha già copiato (§6).

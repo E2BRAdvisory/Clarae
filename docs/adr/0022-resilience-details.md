@@ -25,11 +25,11 @@ Appendice A richiede RPO ≤ 5 min, scritture client atomiche, nessuna perdita s
 ## Bug trovati e corretti
 
 1. **Shutdown senza drain**: la readiness non cambiava prima dello stop e le connessioni SSE bloccavano `Shutdown` fino al timeout. Ora `httpserver.Serve`: readiness → 503, drain `SHUTDOWN_DRAIN` (default 5 s), chiusura degli stream, poi `Shutdown`. Misura su k3d con 3 repliche: rolling restart con drain 0 s = 9 timeout su 130 richieste (93,1 %), con 5 s = 0 falliti.
-2. **File di staging mai esclusi**: `.nodus-tmp-*` non era in `pathrules.IsExcluded`, quindi un crash durante `WriteAtomic` lasciava un file che `Walk` (sync, indicizzatore) vedeva e sincronizzava. Ora escluso; `FS.CleanStaleTemp` lo rimuove (> 1 min) al primo sync dell'engine.
+2. **File di staging mai esclusi**: `.memobrain-tmp-*` non era in `pathrules.IsExcluded`, quindi un crash durante `WriteAtomic` lasciava un file che `Walk` (sync, indicizzatore) vedeva e sincronizzava. Ora escluso; `FS.CleanStaleTemp` lo rimuove (> 1 min) al primo sync dell'engine.
 3. **`changes` con cursore oltre `last_seq`** rispondeva una pagina vuota: dopo un PITR il client avrebbe saltato in silenzio i nuovi commit che riusano quei `seq`. Ora 410 `CURSOR_EXPIRED` (il client fa bootstrap; i file persi dal server vanno nel `.trash/` locale, non cancellati).
 4. `authtest.New` aveva una data race (letta da un processo esterno prima dell'assegnazione di `Server`).
 
-## Chaos sul chart Helm (k3d `nodus-chaos-*`, 3 repliche API, sonda 10 Hz `GET /me` autenticato con token Keycloak reale, finestra ~170 s)
+## Chaos sul chart Helm (k3d `memobrain-chaos-*`, 3 repliche API, sonda 10 Hz `GET /me` autenticato con token Keycloak reale, finestra ~170 s)
 
 Kill SIGKILL ×3, delete graceful ×2, rolling restart, crash di PostgreSQL (SIGKILL al checkpointer): **`/me` 100 % (0/1562) escludendo il crash di PG; 99,885 % complessivo** (2 × 500 in ~0,2 s di crash recovery). Senza drain (0 s): 99,36 % escludendo PG. Il 99,9 % è dunque raggiunto _in finestra_ con ≥ 2 repliche e drain; su 1500 campioni la risoluzione è 0,07 %: **non dimostra 99,9 % mensile**.
 

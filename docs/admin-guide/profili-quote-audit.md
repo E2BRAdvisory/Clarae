@@ -1,10 +1,10 @@
 # Config profile, quote, limiti e audit
 
-Tutte le funzioni di questa pagina stanno nella **console di amministrazione** della Web UI (visibile agli utenti con ruolo `nodus-admin`).
+Tutte le funzioni di questa pagina stanno nella **console di amministrazione** della Web UI (visibile agli utenti con ruolo `memobrain-admin`).
 
 ## Gruppi
 
-Un gruppo è un insieme di utenti usato per **condividere** cartelle/vault e per **assegnare config profile**. Si gestiscono in _Amministrazione → Gruppi_ (crea, rinomina, aggiungi/rimuovi membri). Eliminare un gruppo elimina anche le sue condivisioni e le assegnazioni dei profili. I gruppi esistono solo nel database di Nodus (non in Keycloak).
+Un gruppo è un insieme di utenti usato per **condividere** cartelle/vault e per **assegnare config profile**. Si gestiscono in _Amministrazione → Gruppi_ (crea, rinomina, aggiungi/rimuovi membri). Eliminare un gruppo elimina anche le sue condivisioni e le assegnazioni dei profili. I gruppi esistono solo nel database di MemoBrain Notes (non in Keycloak).
 
 ## Config profile
 

@@ -38,4 +38,4 @@ Segnare `[x]` con data e sistema operativo.
 ## Web UI utente
 
 - [ ] `http://localhost:18081/` (stesso host dei redirect URI del realm): login Keycloak, Spazio utilizzato, I miei vault, Dispositivi, Condivisioni (accetta/rifiuta, revoca, gestione destinatari).
-- [ ] `/admin` non è visibile all'utente normale; con ruolo `nodus-admin` mostra il segnaposto.
+- [ ] `/admin` non è visibile all'utente normale; con ruolo `memobrain-admin` mostra il segnaposto.

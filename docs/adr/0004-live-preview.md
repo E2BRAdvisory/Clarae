@@ -35,5 +35,5 @@ Live Preview è la modalità predefinita: il testo resta Markdown, ma la sintass
 
 ## Conseguenze
 
-- Ogni nuova sintassi OFM va aggiunta in tre punti con lo stesso comportamento: parser Go, estrattore TS (`@nodus/markdown`) e scanner di Live Preview, coperti dalle fixture di `shared/conformance/markdown`.
+- Ogni nuova sintassi OFM va aggiunta in tre punti con lo stesso comportamento: parser Go, estrattore TS (`@memobrain/markdown`) e scanner di Live Preview, coperti dalle fixture di `shared/conformance/markdown`.
 - Le prestazioni dipendono dal limitare il lavoro ai range visibili; `livePreview.test.ts` fissa il comportamento, la prova di digitazione su 1 MB è manuale (`docs/qa/obsidian-parity.md`).

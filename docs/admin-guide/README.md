@@ -1,11 +1,11 @@
 # Guida dell'amministratore
 
-Per chi installa, configura e gestisce il **Cloud Service** (API, worker, Web UI incorporata), PostgreSQL, l'archivio S3-compatibile e Keycloak. Il nome del prodotto ("Nodus") è un segnaposto: nei manifest e nei comandi compare come `nodus`.
+Per chi installa, configura e gestisce il **Cloud Service** (API, worker, Web UI incorporata), PostgreSQL, l'archivio S3-compatibile e Keycloak. Il prodotto si chiama "MemoBrain Notes"; nei manifest e nei comandi compare come `memobrain`.
 
 | Argomento                                       | Contenuto                                                                                        |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | [Installazione](installazione.md)               | Architettura, prerequisiti, Helm, compose di sviluppo, primo avvio e verifica.                   |
-| [Keycloak](keycloak.md)                         | Realm, client, ruoli, service account con i ruoli minimi (ADR-0012), ruolo `nodus-admin`.        |
+| [Keycloak](keycloak.md)                         | Realm, client, ruoli, service account con i ruoli minimi (ADR-0012), ruolo `memobrain-admin`.    |
 | [Configurazione](configurazione.md)             | Riferimento di **tutte** le variabili d'ambiente (verificato da un test) e impostazioni runtime. |
 | [Profili, quote, audit](profili-quote-audit.md) | Gruppi, config profile distribuiti ai client, limiti di archiviazione, registro di audit.        |
 | [Backup e upgrade](backup-upgrade.md)           | Cosa salvare, ripristino, aggiornamenti con migrazioni, rollback.                                |
