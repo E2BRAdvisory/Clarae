@@ -293,7 +293,7 @@ func (q *Queries) InsertProfileVersion(ctx context.Context, arg InsertProfileVer
 
 const insertProvisionedUser = `-- name: InsertProvisionedUser :one
 INSERT INTO users (id, keycloak_sub, username, email, display_name, role, status)
-VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at
+VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
 `
 
 type InsertProvisionedUserParams struct {
@@ -330,6 +330,8 @@ func (q *Queries) InsertProvisionedUser(ctx context.Context, arg InsertProvision
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -577,7 +579,7 @@ func (q *Queries) ListStorageSnapshots(ctx context.Context, days int32) ([]Stora
 }
 
 const listUsersAdmin = `-- name: ListUsersAdmin :many
-SELECT u.id, u.keycloak_sub, u.username, u.email, u.display_name, u.role, u.status, u.quota_bytes_override, u.used_bytes, u.created_at, u.updated_at, u.last_login_at, COUNT(*) OVER()::int AS total FROM users u
+SELECT u.id, u.keycloak_sub, u.username, u.email, u.display_name, u.role, u.status, u.quota_bytes_override, u.used_bytes, u.created_at, u.updated_at, u.last_login_at, u.deleted_at, u.purged_at, COUNT(*) OVER()::int AS total FROM users u
 WHERE u.status <> 'deleted'
   AND ($1::text = ''
        OR u.username ILIKE '%' || $1::text || '%'
@@ -617,6 +619,8 @@ type ListUsersAdminRow struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	LastLoginAt        *time.Time
+	DeletedAt          *time.Time
+	PurgedAt           *time.Time
 	Total              int32
 }
 
@@ -650,6 +654,8 @@ func (q *Queries) ListUsersAdmin(ctx context.Context, arg ListUsersAdminParams) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastLoginAt,
+			&i.DeletedAt,
+			&i.PurgedAt,
 			&i.Total,
 		); err != nil {
 			return nil, err
@@ -718,7 +724,7 @@ func (q *Queries) RequeueStaleExportJobs(ctx context.Context, before time.Time) 
 }
 
 const setUserQuotaOverride = `-- name: SetUserQuotaOverride :one
-UPDATE users SET quota_bytes_override = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at
+UPDATE users SET quota_bytes_override = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
 `
 
 type SetUserQuotaOverrideParams struct {
@@ -742,12 +748,14 @@ func (q *Queries) SetUserQuotaOverride(ctx context.Context, arg SetUserQuotaOver
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const setUserRole = `-- name: SetUserRole :one
-UPDATE users SET role = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at
+UPDATE users SET role = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
 `
 
 type SetUserRoleParams struct {
@@ -771,12 +779,14 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const setUserStatus = `-- name: SetUserStatus :one
-UPDATE users SET status = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at
+UPDATE users SET status = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
 `
 
 type SetUserStatusParams struct {
@@ -800,6 +810,8 @@ func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (U
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -880,7 +892,7 @@ func (q *Queries) TopConsumers(ctx context.Context, arg TopConsumersParams) ([]T
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users SET display_name = COALESCE($2, display_name),
                  email = COALESCE($3, email), updated_at = now()
-WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at
+WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
 `
 
 type UpdateUserProfileParams struct {
@@ -905,6 +917,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }

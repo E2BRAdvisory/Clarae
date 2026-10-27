@@ -27,7 +27,7 @@ func DataDir() (string, error) {
 		}
 		dir = filepath.Join(base, "Nodus")
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil { //nolint:gosec // the user chooses the data directory
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return dir, nil

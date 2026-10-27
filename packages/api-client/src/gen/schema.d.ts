@@ -72,7 +72,11 @@ export interface paths {
         get: operations["getMe"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete the caller's account (GDPR art. 17)
+         * @description Irreversible. `confirm` must equal the caller's username. When the caller owns private (end-to-end encrypted) vaults, `acknowledge_data_loss` must be true: their content cannot be recovered by anyone. The account is anonymised at once, vaults enter the retention period and are then purged by the worker. The last active administrator cannot delete the account (code INVALID_STATE). Not part of Specifications.md §3.5 (ADR-0021).
+         */
+        delete: operations["deleteMyAccount"];
         options?: never;
         head?: never;
         patch?: never;
@@ -141,6 +145,26 @@ export interface paths {
         };
         /** Storage usage against the effective quota */
         get: operations["getMyUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download all account data as JSON (GDPR art. 15/20)
+         * @description Profile, devices, groups, owned vaults (metadata only), shares and grants, received grants and audit entries about the caller. It never contains vault content: private vaults are end-to-end encrypted (the server cannot read them) and shared vaults are exported with the vault ZIP export. Not part of Specifications.md §3.5 (ADR-0021).
+         */
+        get: operations["exportMyData"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1226,6 +1250,38 @@ export interface components {
             /** @description Dotted keys the user cannot override */
             locked_keys: string[];
         };
+        AccountDeletionRequest: {
+            /** @description Must equal the caller's username */
+            confirm: string;
+            /** @description Required when the caller owns private (end-to-end encrypted) vaults */
+            acknowledge_data_loss?: boolean;
+        };
+        AccountExport: {
+            /** Format: date-time */
+            generated_at: string;
+            notice?: string;
+            profile: {
+                [key: string]: unknown;
+            };
+            devices: {
+                [key: string]: unknown;
+            }[];
+            groups: {
+                [key: string]: unknown;
+            }[];
+            vaults: {
+                [key: string]: unknown;
+            }[];
+            shares: {
+                [key: string]: unknown;
+            }[];
+            received_grants: {
+                [key: string]: unknown;
+            }[];
+            audit_log: {
+                [key: string]: unknown;
+            }[];
+        };
         Usage: {
             /** Format: int64 */
             used_bytes: number;
@@ -1947,6 +2003,33 @@ export interface operations {
             429: components["responses"]["RateLimited"];
         };
     };
+    deleteMyAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Account deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
     listMyDevices: {
         parameters: {
             query?: never;
@@ -2076,6 +2159,30 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    exportMyData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account data */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountExport"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
         };
     };
     listVaults: {

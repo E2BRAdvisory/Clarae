@@ -46,7 +46,7 @@ func files(t *testing.T, root string) map[string]string {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		b, err := os.ReadFile(p) //nolint:gosec // test helper over a temp dir
+		b, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func zipDir(t *testing.T, dir string) string {
 	m := map[string][]byte{}
 	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
-			b, _ := os.ReadFile(p) //nolint:gosec // test helper over a fixture dir
+			b, _ := os.ReadFile(p)
 			rel, _ := filepath.Rel(dir, p)
 			m[filepath.ToSlash(rel)] = b
 		}

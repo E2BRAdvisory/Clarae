@@ -19,6 +19,7 @@ import (
 	"nodus/services/cloud/internal/blobs"
 	"nodus/services/cloud/internal/db"
 	"nodus/services/cloud/internal/db/dbgen"
+	"nodus/services/cloud/internal/observability"
 	"nodus/services/cloud/internal/revisions"
 	"nodus/services/cloud/internal/storage"
 )
@@ -98,9 +99,11 @@ func (r *Runner) withLock(ctx context.Context, key int64, name string, fn func(c
 	defer func() { _, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", key) }()
 	start := time.Now()
 	if err := fn(ctx); err != nil && ctx.Err() == nil {
+		observability.JobRun(name, time.Since(start), err)
 		r.log.Error().Err(err).Str("job", name).Msg("job failed")
 		return
 	}
+	observability.JobRun(name, time.Since(start), nil)
 	r.log.Debug().Str("job", name).Dur("took", time.Since(start)).Msg("job done")
 }
 
@@ -218,6 +221,9 @@ func (r *Runner) Maintain(ctx context.Context) error {
 	}
 	if _, err := r.PurgeDeletedVaults(ctx); err != nil {
 		return fmt.Errorf("purge vaults: %w", err)
+	}
+	if _, err := r.PurgeDeletedAccounts(ctx); err != nil {
+		return fmt.Errorf("purge accounts: %w", err)
 	}
 	if err := r.ReconcileUsage(ctx); err != nil {
 		return fmt.Errorf("reconcile usage: %w", err)

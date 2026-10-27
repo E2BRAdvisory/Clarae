@@ -47,6 +47,9 @@ func CSP(issuer string) string {
 		"form-action 'self'; object-src 'none'"
 }
 
+// permissionsPolicy turns off every powerful browser feature the Web UI never uses.
+const permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()"
+
 // Handler serves the SPA. API-looking paths are never answered with the
 // index (they get a plain 404), and a missing path with a file extension is a
 // 404 too, so a mistyped asset never turns into HTML.
@@ -63,6 +66,7 @@ func Handler(o Options) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Permissions-Policy", permissionsPolicy)
 
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			h.Set("Allow", "GET, HEAD")

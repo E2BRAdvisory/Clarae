@@ -12,7 +12,7 @@ import (
 )
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at FROM users WHERE id = $1
+SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -31,12 +31,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const getUserBySub = `-- name: GetUserBySub :one
-SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at FROM users WHERE keycloak_sub = $1
+SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at FROM users WHERE keycloak_sub = $1
 `
 
 func (q *Queries) GetUserBySub(ctx context.Context, keycloakSub string) (User, error) {
@@ -55,6 +57,8 @@ func (q *Queries) GetUserBySub(ctx context.Context, keycloakSub string) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -74,13 +78,14 @@ const upsertUserFromToken = `-- name: UpsertUserFromToken :one
 INSERT INTO users (id, keycloak_sub, username, email, display_name, role, status, last_login_at)
 VALUES ($1, $2, $3, $4, $5, $6, 'active', now())
 ON CONFLICT (keycloak_sub) DO UPDATE SET
-  username      = EXCLUDED.username,
-  email         = EXCLUDED.email,
-  display_name  = EXCLUDED.display_name,
-  role          = EXCLUDED.role,
-  last_login_at = now(),
-  updated_at    = now()
-RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at
+  -- A deleted account keeps its tombstone: a token must never write personal data back.
+  username      = CASE WHEN users.status = 'deleted' THEN users.username      ELSE EXCLUDED.username     END,
+  email         = CASE WHEN users.status = 'deleted' THEN users.email         ELSE EXCLUDED.email        END,
+  display_name  = CASE WHEN users.status = 'deleted' THEN users.display_name  ELSE EXCLUDED.display_name END,
+  role          = CASE WHEN users.status = 'deleted' THEN users.role          ELSE EXCLUDED.role         END,
+  last_login_at = CASE WHEN users.status = 'deleted' THEN users.last_login_at ELSE now()                 END,
+  updated_at    = CASE WHEN users.status = 'deleted' THEN users.updated_at    ELSE now()                 END
+RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
 `
 
 type UpsertUserFromTokenParams struct {
@@ -117,6 +122,8 @@ func (q *Queries) UpsertUserFromToken(ctx context.Context, arg UpsertUserFromTok
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }

@@ -63,7 +63,10 @@ func New(t *testing.T) *Issuer {
 			Key: &key.PublicKey, KeyID: "test-key", Algorithm: "RS256", Use: "sig",
 		}}})
 	})
-	iss.Server = httptest.NewServer(mux)
+	// The handlers read iss.Server: publish it before the server starts serving
+	// (a separate process may fetch the discovery document immediately).
+	iss.Server = httptest.NewUnstartedServer(mux)
+	iss.Server.Start()
 	t.Cleanup(iss.Server.Close)
 	return iss
 }

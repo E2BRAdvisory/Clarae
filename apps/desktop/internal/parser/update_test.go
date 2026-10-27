@@ -35,7 +35,7 @@ func TestUpdateFixtures(t *testing.T) {
 			t.Fatal(err)
 		}
 		out, _ := json.MarshalIndent(toExpected(Parse(name, src)), "", "  ")
-		if err := os.WriteFile(expPath, append(out, '\n'), 0o644); err != nil { //nolint:gosec // test-only generator
+		if err := os.WriteFile(expPath, append(out, '\n'), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

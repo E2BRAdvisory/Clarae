@@ -31,6 +31,8 @@ linters:
     gosec:
       excludes:
         - G304 # file inclusion via variable: vault FS access is validated by pathrules
+        - G703 # path traversal by taint analysis: same rationale, every vault path goes through vault.FS.Resolve
+        - G122 # walk-callback TOCTOU: only unlinks our own staging files (a symlink is unlinked, never followed)
         - G301 # directory permissions: vault folders are ordinary user folders (0755)
         - G302 # chmod of atomic-write temporaries to 0644: same rationale
         - G306 # file permissions: notes are ordinary user files (0644), as in Obsidian

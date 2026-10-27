@@ -1,0 +1,379 @@
+{
+  "blobs": [
+    {
+      "name": "tampered tag of first chunk",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9d5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "tampered tag of last chunk",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5730",
+      "expect": "decrypt"
+    },
+    {
+      "name": "tampered ciphertext",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359fffe6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "tampered salt in header",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505052535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "chunk size field changed",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000202f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "last chunk dropped (truncation at chunk boundary)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e",
+      "expect": "decrypt"
+    },
+    {
+      "name": "first chunk dropped",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000105306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "truncated inside a chunk tag",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7",
+      "expect": "any"
+    },
+    {
+      "name": "header only",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f00000010",
+      "expect": "format"
+    },
+    {
+      "name": "truncated header",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e445331015051525354",
+      "expect": "format"
+    },
+    {
+      "name": "empty input",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "",
+      "expect": "format"
+    },
+    {
+      "name": "chunks 0 and 1 swapped",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000105306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e2f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "last chunk swapped with middle chunk",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d57315306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e",
+      "expect": "decrypt"
+    },
+    {
+      "name": "chunk duplicated",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "chunk appended after last",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d57315306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e",
+      "expect": "decrypt"
+    },
+    {
+      "name": "trailing garbage shorter than a tag",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731010203",
+      "expect": "any"
+    },
+    {
+      "name": "bad magic",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533201505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "format"
+    },
+    {
+      "name": "unsupported version",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533102505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "format"
+    },
+    {
+      "name": "chunk size zero",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000002f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "format"
+    },
+    {
+      "name": "chunk size above maximum",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f010000012f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "format"
+    },
+    {
+      "name": "wrong vault id in AAD",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000bbbb",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "wrong file id in AAD and key",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a11",
+      "vmk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    },
+    {
+      "name": "wrong vault master key",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "vmk": "abababababababababababababababababababababababababababababababab",
+      "blob": "4e44533101505152535455565758595a5b5c5d5e5f000000102f359ffee6dc650378ac6052644d4d361c7dab98d9e5b7e382796b41bb8dfa9c5306d99300d1964bee7c3f73817f4e113551b536f5def231eceaae58ac2acb6e82c23c0ee93ab54969ad0e937cf7fbec55440bb6981d5731",
+      "expect": "decrypt"
+    }
+  ],
+  "paths": [
+    {
+      "name": "tampered token",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc1:YGBgYGBgYGBgYGBgZxpeifnJg0KbtPa5IA3usRW9vZxRj34YFTnmPFF78wn1h8OZiLbgiZY",
+      "expect": "decrypt"
+    },
+    {
+      "name": "token bound to another vault (AAD)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000bbbb",
+      "token": "enc1:YGBgYGBgYGBgYGBgZxpeifnJg0KbtPa5IY3usRW9vZxRj34YFTnmPFF78wn1h8OZiLbgiZY",
+      "expect": "decrypt"
+    },
+    {
+      "name": "wrong prefix",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc2:YGBgYGBgYGBgYGBgZxpeifnJg0KbtPa5IY3usRW9vZxRj34YFTnmPFF78wn1h8OZiLbgiZY",
+      "expect": "format"
+    },
+    {
+      "name": "deterministic key used as token",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "hmac1:0000000000000000000000000000000000000000000000000000000000000000",
+      "expect": "format"
+    },
+    {
+      "name": "truncated below nonce and tag",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc1:AAAA",
+      "expect": "format"
+    },
+    {
+      "name": "not base64url",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc1:!!!!",
+      "expect": "format"
+    }
+  ],
+  "wrap": [
+    {
+      "name": "tampered wrapped key",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "303132333435363738393a3bfe7b31ea914626e4293ddd63f2194cf8f100850c017c982c92cafca3636982cf7ddbbaa098c2ac375a40f556e35bee7e",
+      "expect": "decrypt"
+    },
+    {
+      "name": "tampered nonce",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "313132333435363738393a3bfe7b31ea914626e4283ddd63f2194cf8f100850c017c982c92cafca3636982cf7ddbbaa098c2ac375a40f556e35bee7e",
+      "expect": "decrypt"
+    },
+    {
+      "name": "wrong KEK",
+      "kek": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "wrapped": "303132333435363738393a3bfe7b31ea914626e4283ddd63f2194cf8f100850c017c982c92cafca3636982cf7ddbbaa098c2ac375a40f556e35bee7e",
+      "expect": "decrypt"
+    },
+    {
+      "name": "wrong length",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "303132333435363738393a3bfe7b31ea914626e4283ddd63f2194cf8f100850c017c982c92cafca3636982cf7ddbbaa098c2ac375a40f556e35bee",
+      "expect": "decrypt"
+    },
+    {
+      "name": "empty",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "",
+      "expect": "decrypt"
+    }
+  ],
+  "kdf": [
+    {
+      "name": "iterations below minimum",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 2,
+        "m_kib": 65536,
+        "p": 4,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "memory below minimum",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 3,
+        "m_kib": 32768,
+        "p": 4,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "parallelism below minimum",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 3,
+        "m_kib": 65536,
+        "p": 3,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "iterations above maximum",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 13,
+        "m_kib": 65536,
+        "p": 4,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "memory above maximum",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 3,
+        "m_kib": 1048577,
+        "p": 4,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "parallelism above maximum",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 3,
+        "m_kib": 65536,
+        "p": 17,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "zero parameters",
+      "kdf": {
+        "alg": "argon2id",
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "other algorithm",
+      "kdf": {
+        "alg": "argon2i",
+        "t": 3,
+        "m_kib": 65536,
+        "p": 4,
+        "salt": "EBESExQVFhcYGRobHB0eHw=="
+      }
+    },
+    {
+      "name": "salt shorter than 8 bytes",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 3,
+        "m_kib": 65536,
+        "p": 4,
+        "salt": "AQIDBA=="
+      }
+    },
+    {
+      "name": "salt not base64",
+      "kdf": {
+        "alg": "argon2id",
+        "t": 3,
+        "m_kib": 65536,
+        "p": 4,
+        "salt": "***"
+      }
+    }
+  ],
+  "recovery": [
+    {
+      "name": "typo in first character",
+      "text": "ADA4F-Q6EYX-DMPSG-JZLF4-ZTOOZ-7INDU-WT2TK-5NV6Y-3HNNX-XG533-PRPIY"
+    },
+    {
+      "name": "checksum group truncated",
+      "text": "YDA4F-Q6EYX-DMPSG-JZLF4-ZTOOZ-7INDU-WT2TK-5NV6Y-3HNNX-XG533"
+    },
+    {
+      "name": "too short",
+      "text": "AAAAA-BBBBB"
+    },
+    {
+      "name": "characters outside the alphabet",
+      "text": "1DA4F-Q6EYX-DMPSG-JZLF4-ZTOOZ-7INDU-WT2TK-5NV6Y-3HNNX-XG533-PRPIY"
+    },
+    {
+      "name": "empty",
+      "text": ""
+    }
+  ]
+}

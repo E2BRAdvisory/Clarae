@@ -25,6 +25,7 @@ import (
 	"nodus/services/cloud/internal/groups"
 	"nodus/services/cloud/internal/httpproblem"
 	"nodus/services/cloud/internal/observability"
+	"nodus/services/cloud/internal/privacy"
 	"nodus/services/cloud/internal/quota"
 	"nodus/services/cloud/internal/revisions"
 	"nodus/services/cloud/internal/sharing"
@@ -54,6 +55,7 @@ type Deps struct {
 	Sharing   *sharing.HTTP
 	Admin     *admin.HTTP
 	Export    *export.HTTP
+	Privacy   *privacy.HTTP
 	// Tus serves resumable uploads; Events serves the SSE stream. Both live
 	// outside the generated router and are optional (nil in unit tests).
 	Tus    *blobs.TusHandler
@@ -63,6 +65,8 @@ type Deps struct {
 	WebUI       http.Handler
 	WebUIOrigin string
 	Metrics     *observability.Metrics
+	// Drain, when set, ends the SSE streams at shutdown (see Drain).
+	Drain *Drain
 }
 
 // handlers composes every module's strict handlers into the single
@@ -83,6 +87,7 @@ type (
 	sharingHTTP   = sharing.HTTP
 	adminHTTP     = admin.HTTP
 	exportHTTP    = export.HTTP
+	privacyHTTP   = privacy.HTTP
 )
 
 type handlers struct {
@@ -98,6 +103,7 @@ type handlers struct {
 	*sharingHTTP
 	*adminHTTP
 	*exportHTTP
+	*privacyHTTP
 }
 
 var _ api.StrictServerInterface = handlers{}
@@ -109,6 +115,7 @@ func NewRouter(d Deps) http.Handler {
 	// No RealIP middleware: trusting X-Forwarded-For blindly enables spoofing.
 	// Behind the ingress, r.RemoteAddr is the proxy; a trusted-proxy aware
 	// resolver is added with the deployment work (M7).
+	r.Use(SecurityHeaders)
 	r.Use(RequestLogger(d.Logger))
 	r.Use(Recoverer)
 	if d.Metrics != nil {
@@ -128,7 +135,7 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(NewRateLimiter(50, 100).ByIP)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Handle("/metrics", promhttp.Handler())
+	r.Handle("/metrics", internalOnly(promhttp.Handler()))
 
 	// Routes outside the OpenAPI contract: tus (own protocol) and SSE (streaming).
 	if d.Tus != nil {
@@ -138,11 +145,15 @@ func NewRouter(d Deps) http.Handler {
 		})
 	}
 	if d.Events != nil {
-		r.With(d.Auth.Protect).Method(http.MethodGet, BasePath+"/events", d.Events)
+		events := d.Events
+		if d.Drain != nil {
+			events = d.Drain.Streams(events)
+		}
+		r.With(d.Auth.Protect).Method(http.MethodGet, BasePath+"/events", events)
 	}
 
 	strict := api.NewStrictHandlerWithOptions(
-		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota, d.Groups, d.Sharing, d.Admin, d.Export},
+		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota, d.Groups, d.Sharing, d.Admin, d.Export, d.Privacy},
 		nil,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {

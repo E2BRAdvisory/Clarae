@@ -175,9 +175,28 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 	return Content{Path: normalized, Data: data, Hash: hashing.Sum(data).Hex(), Mtime: st.ModTime(), Size: st.Size()}, nil
 }
 
+// Steps of writeAtomic reported to crashHook (fault injection in tests).
+const (
+	stepTmpWritten = "tmp-written"   // temporary file holds the data, not yet fsynced
+	stepSynced     = "synced"        // data fsynced and closed
+	stepBeforeRen  = "before-rename" // mode set, rename not yet issued
+	stepRenamed    = "renamed"       // target replaced, directory not yet fsynced
+)
+
+// crashHook, when set (tests only), is called after each step of writeAtomic.
+// A hook that panics or exits simulates a crash at that point: the deferred
+// error cleanup does not run, exactly as after a power loss.
+var crashHook func(step string)
+
+func crashPoint(step string) {
+	if crashHook != nil {
+		crashHook(step)
+	}
+}
+
 func writeAtomic(abs string, data []byte) error {
 	dir := filepath.Dir(abs)
-	tmp, err := os.CreateTemp(dir, ".nodus-tmp-*")
+	tmp, err := os.CreateTemp(dir, tmpPrefix+"*")
 	if err != nil {
 		return err
 	}
@@ -188,6 +207,7 @@ func writeAtomic(abs string, data []byte) error {
 		cleanup()
 		return err
 	}
+	crashPoint(stepTmpWritten)
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		cleanup()
@@ -197,15 +217,44 @@ func writeAtomic(abs string, data []byte) error {
 		cleanup()
 		return err
 	}
+	crashPoint(stepSynced)
 	if err := os.Chmod(tmpName, 0o644); err != nil {
 		cleanup()
 		return err
 	}
+	crashPoint(stepBeforeRen)
 	if err := os.Rename(tmpName, abs); err != nil {
 		cleanup()
 		return err
 	}
+	crashPoint(stepRenamed)
 	return syncDir(dir)
+}
+
+// tmpPrefix names the staging files of atomic writes.
+const tmpPrefix = ".nodus-tmp-"
+
+// CleanStaleTemp removes staging files left by a crashed write. Only files
+// older than olderThan are removed, so a write in progress is never touched.
+// It returns the number of files removed.
+func (f *FS) CleanStaleTemp(olderThan time.Duration) (int, error) {
+	n := 0
+	cutoff := time.Now().Add(-olderThan)
+	err := filepath.WalkDir(f.root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil //nolint:nilerr // best effort: unreadable folders are skipped
+		}
+		if d.IsDir() || !strings.HasPrefix(d.Name(), tmpPrefix) {
+			return nil
+		}
+		if info, ierr := d.Info(); ierr == nil && info.ModTime().Before(cutoff) {
+			if os.Remove(p) == nil {
+				n++
+			}
+		}
+		return nil
+	})
+	return n, err
 }
 
 // syncDir flushes the directory entry; best effort on platforms where

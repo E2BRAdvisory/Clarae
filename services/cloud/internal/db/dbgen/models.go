@@ -195,6 +195,8 @@ type User struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	LastLoginAt        *time.Time
+	DeletedAt          *time.Time
+	PurgedAt           *time.Time
 }
 
 type Vault struct {

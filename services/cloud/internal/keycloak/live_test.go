@@ -21,7 +21,7 @@ func TestLiveKeycloak(t *testing.T) {
 	}
 	secret := os.Getenv("KC_LIVE_SECRET")
 	if secret == "" {
-		secret = "dev-admin-svc-secret"
+		secret = "dev-admin-svc-secret" //nolint:gosec // public development realm secret, see deploy/keycloak
 	}
 	kc := New(Config{BaseURL: base, Realm: "nodus", ClientID: "nodus-admin-svc", ClientSecret: secret})
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
