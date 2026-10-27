@@ -1,21 +1,84 @@
-image:
-  repository: ghcr.io/ORG/nodus-cloud # set when the registry is decided (M7)
-  tag: ''
-  pullPolicy: IfNotPresent
+# Nodus Cloud Service chart. PostgreSQL, S3-compatible storage and Keycloak are NOT part of the chart:
+# point `config` and `secret` at them. Two Deployments run the same image: --role=api (HTTP + gRPC)
+# and --role=worker (background jobs).
 
+image:
+  repository: ghcr.io/ORG/nodus-cloud # set to the registry of the release (release-images.yml publishes it)
+  tag: '' # defaults to the chart appVersion; release builds set it to the git tag
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ''
+  annotations: {}
+
+# Settings shared by the two roles are set per role below; anything not listed uses the chart defaults.
 api:
-  replicas: 2
+  replicas: 2 # ignored while autoscaling is enabled
   resources:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { cpu: '1', memory: 512Mi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null # e.g. 80; null = not used
+  # Voluntary disruptions (node drains): at least one API pod stays up. With replicas: 1 set enabled: false.
+  pdb:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: null # use instead of minAvailable when set
+  # Must exceed SHUTDOWN_TIMEOUT (default 15 s) + preStopSleepSeconds, or the pod is killed mid-drain.
+  terminationGracePeriodSeconds: 30
+  # Delays SIGTERM so the endpoint is removed from the Service first (Kubernetes sleep action, >= 1.30).
+  preStopSleepSeconds: 5
+  probes:
+    startup: { periodSeconds: 2, failureThreshold: 30 } # up to 60 s to reach /healthz (migrations run at start)
+    liveness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 }
+    readiness: { periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 } # /readyz checks PostgreSQL and S3
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+  antiAffinity: soft # soft | hard | none (spread over nodes)
+  nodeSelector: {}
+  tolerations: []
+  affinity: {} # full override: when set, antiAffinity is ignored
+  podAnnotations: {}
 
 worker:
+  # Keep 1 unless the worker jobs are known to be safe with several instances.
   replicas: 1
   resources:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
+  pdb:
+    enabled: false # a single replica with minAvailable 1 would block node drains
+    minAvailable: 1
+    maxUnavailable: null
+  terminationGracePeriodSeconds: 30
+  preStopSleepSeconds: 0
+  topologySpread:
+    enabled: false
+    maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+  antiAffinity: none
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
 
-# Non-secret configuration (environment variables of the binary).
+# Non-secret configuration (environment variables of the binary; see deploy/docker/cloud.dev.env).
 config:
   OIDC_ISSUER: https://auth.example.com/realms/nodus
   OIDC_AUDIENCE: nodus-api
@@ -32,9 +95,15 @@ config:
   KC_REALM: nodus
   KC_ADMIN_CLIENT_ID: nodus-admin-svc
   WEB_UI_ORIGIN: https://nodus.example.com
+  # Address desktop clients use for the notification stream (gRPC needs TLS + HTTP/2 end to end).
+  PUBLIC_GRPC_ADDR: notify.nodus.example.com:443
   LOG_LEVEL: info
 
-# Secrets: either reference an existing Secret (recommended) or let the chart create one.
+# Secrets. Three ways, in order of preference:
+#   1. secret.existingSecret: a Secret you manage (sealed-secrets, SOPS, Vault injector...).
+#   2. externalSecret.enabled: the chart renders an ExternalSecret (External Secrets Operator CRD).
+#   3. secret.values: the chart creates the Secret (development only: values end up in Helm history).
+# The Secret must hold DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, KC_ADMIN_CLIENT_SECRET.
 secret:
   existingSecret: ''
   values:
@@ -43,11 +112,28 @@ secret:
     S3_SECRET_KEY: ''
     KC_ADMIN_CLIENT_SECRET: ''
 
+externalSecret:
+  enabled: false
+  apiVersion: external-secrets.io/v1
+  refreshInterval: 1h
+  secretStoreRef:
+    name: ''
+    kind: ClusterSecretStore
+  # One entry per key of the Secret, e.g.
+  # - { secretKey: DATABASE_URL, remoteRef: { key: nodus/prod, property: database_url } }
+  data: []
+
 service:
   type: ClusterIP
   httpPort: 18081
   grpcPort: 18082
 
+# Two Ingress objects because the nginx backend-protocol annotation is per Ingress:
+#  - HTTP/1.1+2 for the REST API and the Web UI on `host`;
+#  - gRPC (HTTP/2 end to end) for the notification stream, either on its own host (mode: host,
+#    default) or on the main host under the service path (mode: path).
+# gRPC through an ingress REQUIRES TLS (HTTP/2 over cleartext is not negotiated by browsers or
+# nginx): keep ingress.tls.enabled=true and use a certificate valid for every host listed.
 ingress:
   enabled: true
   className: nginx
@@ -55,13 +141,35 @@ ingress:
   tls:
     enabled: true
     secretName: nodus-tls
-  annotations: {}
-  # gRPC needs HTTP/2 end to end; the notify stream is exposed on a dedicated host.
-  grpcHost: notify.nodus.example.com
+  annotations: {} # applied to both Ingress objects (cert-manager issuer, ...)
+  proxyBodySize: 64m
+  grpc:
+    mode: host # host | path
+    host: notify.nodus.example.com
+    path: /nodus.v1.NotifyService # gRPC services are routed by /<package>.<Service>
+    # Long-lived server-streaming RPC: keep the connection open (seconds).
+    streamTimeoutSeconds: 3600
+    annotations: {} # extra annotations for the gRPC Ingress only
 
-podAnnotations: {}
+networkPolicy:
+  enabled: false
+  # Who may reach the API pods; the default lets the whole namespace and any ingress controller
+  # namespace labelled name=ingress-nginx in. Adjust to your controller.
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    - podSelector: {}
+  # Restrict outbound traffic to DNS plus `egressTo` (PostgreSQL, S3, Keycloak); off = unrestricted.
+  restrictEgress: false
+  egressTo: []
 
+# Pod level security (the container context is fixed: read-only root, no capabilities, no privilege escalation).
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
   seccompProfile: { type: RuntimeDefault }
+
+podAnnotations: {}

@@ -104,6 +104,7 @@ func run() int {
 			app.NewTemplatesAPI(a),
 			app.NewComposerAPI(a),
 			app.NewImporterAPI(a),
+			app.NewUpdaterAPI(a),
 		},
 	})
 	if err != nil {

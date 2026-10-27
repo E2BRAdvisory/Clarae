@@ -9,7 +9,7 @@ data:
   {{- range $k, $v := .Values.config }}
   {{ $k }}: {{ $v | quote }}
   {{- end }}
-{{- if not .Values.secret.existingSecret }}
+{{- if and (not .Values.secret.existingSecret) (not .Values.externalSecret.enabled) }}
 ---
 apiVersion: v1
 kind: Secret

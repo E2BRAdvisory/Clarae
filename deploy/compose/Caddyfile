@@ -1,0 +1,36 @@
+# Reverse proxy of the on-premise stack.
+# NODUS_SITE / NOTIFY_SITE / AUTH_SITE are the site addresses (default: the host names, which makes
+# Caddy obtain public certificates automatically: ports 80/443 must be reachable and the DNS names
+# must point here). For an internal CA set CADDY_GLOBAL="local_certs" (clients must then trust that CA);
+# for a local test over plain HTTP use site addresses with the http:// prefix.
+{
+	{$CADDY_GLOBAL}
+}
+
+{$NODUS_SITE} {
+	request_body {
+		max_size 64MB
+	}
+	reverse_proxy cloud-api:18081 {
+		health_uri /api/v1/readyz
+		health_interval 10s
+		# Streaming responses (SSE) must not be buffered.
+		flush_interval -1
+	}
+}
+
+# gRPC (notification stream) needs HTTP/2 to the backend: "h2c://" is HTTP/2 without TLS inside the
+# private network. Clients reach this host over TLS (HTTP/2 via ALPN), which is mandatory for gRPC.
+{$NOTIFY_SITE} {
+	reverse_proxy h2c://cloud-api:18082 {
+		flush_interval -1
+		transport http {
+			versions h2c
+			read_timeout 1h
+		}
+	}
+}
+
+{$AUTH_SITE} {
+	reverse_proxy keycloak:8080
+}

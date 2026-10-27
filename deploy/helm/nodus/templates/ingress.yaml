@@ -1,17 +1,18 @@
 {{- if .Values.ingress.enabled }}
+{{- $grpcOnOwnHost := eq .Values.ingress.grpc.mode "host" }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "nodus.fullname" . }}
   labels: {{- include "nodus.labels" . | nindent 4 }}
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: 64m
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.proxyBodySize | quote }}
     {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
-    - hosts: [{{ .Values.ingress.host | quote }}, {{ .Values.ingress.grpcHost | quote }}]
+    - hosts: [{{ .Values.ingress.host | quote }}]
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
@@ -25,6 +26,7 @@ spec:
                 name: {{ include "nodus.fullname" . }}
                 port: { name: http }
 ---
+# gRPC (notification stream): nginx must speak HTTP/2 to the backend, hence its own Ingress object.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -32,19 +34,22 @@ metadata:
   labels: {{- include "nodus.labels" . | nindent 4 }}
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: GRPC
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.grpc.streamTimeoutSeconds | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.grpc.streamTimeoutSeconds | quote }}
     {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
+    {{- with .Values.ingress.grpc.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
-    - hosts: [{{ .Values.ingress.grpcHost | quote }}]
+    - hosts: [{{ if $grpcOnOwnHost }}{{ .Values.ingress.grpc.host | quote }}{{ else }}{{ .Values.ingress.host | quote }}{{ end }}]
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.grpcHost | quote }}
+    - host: {{ if $grpcOnOwnHost }}{{ .Values.ingress.grpc.host | quote }}{{ else }}{{ .Values.ingress.host | quote }}{{ end }}
       http:
         paths:
-          - path: /
+          - path: {{ if $grpcOnOwnHost }}/{{ else }}{{ .Values.ingress.grpc.path }}{{ end }}
             pathType: Prefix
             backend:
               service:

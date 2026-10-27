@@ -8,6 +8,10 @@ image:
 
 api:
   replicas: 1
+  pdb:
+    enabled: false # a single replica with a PDB would block node drains
+  topologySpread:
+    enabled: false
 worker:
   replicas: 1
 

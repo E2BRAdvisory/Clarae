@@ -1,0 +1,50 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nodus.fullname" . }}-api
+  labels: {{- include "nodus.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "nodus.selector" (dict "root" . "role" "api") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    {{- if .Values.networkPolicy.restrictEgress }}
+    - Egress
+    {{- end }}
+  ingress:
+    - from: {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.service.httpPort }} }
+        - { protocol: TCP, port: {{ .Values.service.grpcPort }} }
+  {{- if .Values.networkPolicy.restrictEgress }}
+  egress:
+    - ports: # DNS
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    {{- with .Values.networkPolicy.egressTo }}
+    - to: {{- toYaml . | nindent 8 }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.networkPolicy.restrictEgress }}
+---
+# The worker has no inbound traffic at all; outbound follows the same rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nodus.fullname" . }}-worker
+  labels: {{- include "nodus.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "nodus.selector" (dict "root" . "role" "worker") | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    {{- with .Values.networkPolicy.egressTo }}
+    - to: {{- toYaml . | nindent 8 }}
+    {{- end }}
+{{- end }}
+{{- end }}

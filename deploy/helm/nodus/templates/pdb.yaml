@@ -1,0 +1,23 @@
+{{- $root := . -}}
+{{- range $role := list "api" "worker" }}
+{{- $spec := index $root.Values $role }}
+{{- if $spec.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "nodus.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "nodus.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  {{- if $spec.pdb.maxUnavailable }}
+  maxUnavailable: {{ $spec.pdb.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ $spec.pdb.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nodus.selector" (dict "root" $root "role" $role) | nindent 6 }}
+{{- end }}
+{{- end }}

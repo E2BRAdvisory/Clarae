@@ -1,0 +1,302 @@
+name: Release
+
+# Desktop release pipeline (M7-WP3). NOT executed so far: it was only written and syntax-checked.
+#  - tag vX.Y.Z or vX.Y.Z-rc.N : test, build installers (macOS, Windows, Linux), sign/notarise when the
+#    secrets exist, checksums, signed update manifest, DRAFT GitHub Release.
+#  - workflow_dispatch         : dry run. Same builds, never a release, never signed with real secrets
+#    unless `use_secrets` is true; the output is the workflow artifacts only.
+# Secrets and variables: docs/release/secrets.md. Nothing is published on pull requests.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to stamp (semver, no leading v), e.g. 1.0.0-rc.1'
+        required: true
+        default: '0.0.0-dryrun.1'
+      use_secrets:
+        description: 'Sign with the real secrets (still no release is created)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: auto
+  WAILS_VERSION: v2.12.0
+  NFPM_VERSION: v2.43.0
+  APPIMAGETOOL_VERSION: '1.9.0'
+
+jobs:
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+      is_tag: ${{ steps.v.outputs.is_tag }}
+      sign: ${{ steps.v.outputs.sign }}
+    steps:
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          USE_SECRETS: ${{ inputs.use_secrets }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"; is_tag=true; sign=true
+          else
+            version="$INPUT_VERSION"; is_tag=false; sign="${USE_SECRETS:-false}"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::invalid semver '$version'"; exit 1; }
+          channel=stable; [[ "$version" == *-* ]] && channel=beta
+          { echo "version=$version"; echo "channel=$channel"; echo "is_tag=$is_tag"; echo "sign=$sign"; } >> "$GITHUB_OUTPUT"
+          echo "Version $version, channel $channel, tag=$is_tag, real signing=$sign"
+
+  test:
+    name: Tests before building
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: |
+            shared/go/go.sum
+            services/cloud/go.sum
+            apps/desktop/go.sum
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: yarn install --immutable
+      - name: Go tests
+        run: |
+          (cd shared/go && go test -race -count=1 ./...)
+          (cd services/cloud && go test -race -count=1 ./...)
+          (cd apps/desktop && go test -race -count=1 -tags webkit2_41 ./internal/...)
+          (cd tools/release && GOWORK=off go test -count=1 ./...)
+      - name: TypeScript tests
+        run: yarn run test
+
+  build:
+    name: Build ${{ matrix.os_name }}
+    needs: [meta, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os_name: darwin, runner: macos-14 }
+          - { os_name: windows, runner: windows-2022 }
+          - { os_name: linux, runner: ubuntu-24.04 }
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      SIGN: ${{ needs.meta.outputs.sign }}
+      # Compiled into the binary (scripts/release/build-desktop.sh). Public by nature, so repository variables.
+      UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
+      UPDATE_BASE_URL: ${{ vars.UPDATE_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+      - name: Release mode (a tag must carry the real update key)
+        shell: bash
+        run: |
+          if [[ "${{ needs.meta.outputs.is_tag }}" == "true" ]]; then
+            { echo "RELEASE_FLAG=--release"; echo "SIGNING_FLAG=--require-signing"; } >> "$GITHUB_ENV"
+          else
+            { echo "RELEASE_FLAG="; echo "SIGNING_FLAG="; } >> "$GITHUB_ENV"
+          fi
+
+      # ---------------------------------------------------------------- macOS
+      - name: macOS build
+        if: matrix.os_name == 'darwin'
+        run: bash scripts/release/build-desktop.sh darwin "$VERSION" "$RELEASE_FLAG"
+      - name: macOS signing material
+        if: matrix.os_name == 'darwin' && env.SIGN == 'true'
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_SIGNING_IDENTITY_S: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$APPLE_CERT_P12_BASE64" || -z "$APPLE_SIGNING_IDENTITY_S" ]]; then
+            if [[ "${{ needs.meta.outputs.is_tag }}" == "true" ]]; then echo "::error::Apple signing secrets are missing: refusing an unsigned release"; exit 1; fi
+            echo "::warning::Apple signing secrets missing: the dmg will be unsigned"; exit 0
+          fi
+          kc="$RUNNER_TEMP/build.keychain-db"; pw="$(openssl rand -base64 24)"
+          security create-keychain -p "$pw" "$kc"; security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc"
+          security list-keychains -d user -s "$kc" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY_S" >> "$GITHUB_ENV"
+          if [[ -n "$APPLE_API_KEY_P8_BASE64" ]]; then
+            echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+            {
+              echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+              echo "APPLE_API_KEY_ID=${{ secrets.APPLE_API_KEY_ID }}"
+              echo "APPLE_API_ISSUER=${{ secrets.APPLE_API_ISSUER }}"
+            } >> "$GITHUB_ENV"
+          fi
+      - name: macOS dmg (sign, notarise, staple when the secrets exist)
+        if: matrix.os_name == 'darwin'
+        run: bash scripts/release/package-macos.sh "$VERSION" "$SIGNING_FLAG"
+
+      # -------------------------------------------------------------- Windows
+      - name: Windows signing command
+        if: matrix.os_name == 'windows' && env.SIGN == 'true'
+        shell: bash
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$WINDOWS_CERT_PFX_BASE64" ]]; then
+            if [[ "${{ needs.meta.outputs.is_tag }}" == "true" ]]; then echo "::error::Authenticode certificate secret is missing: refusing an unsigned release"; exit 1; fi
+            echo "::warning::Authenticode secrets missing: the installer will be unsigned"; exit 0
+          fi
+          echo "$WINDOWS_CERT_PFX_BASE64" | base64 --decode > "$RUNNER_TEMP/codesign.pfx"
+          signtool="$(find "/c/Program Files (x86)/Windows Kits/10/bin" -name signtool.exe -path '*x64*' | sort | tail -n1)"
+          echo "NODUS_SIGNTOOL_CMD=\"$signtool\" sign /fd SHA256 /td SHA256 /tr ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }} /f $RUNNER_TEMP/codesign.pfx /p $WINDOWS_CERT_PASSWORD \"%1\"" >> "$GITHUB_ENV"
+      - name: Windows build (NSIS installer)
+        if: matrix.os_name == 'windows'
+        shell: bash
+        run: |
+          choco install nsis -y --no-progress
+          export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          bash scripts/release/build-desktop.sh windows "$VERSION" "$RELEASE_FLAG"
+          mkdir -p dist
+          cp apps/desktop/build/bin/nodus-amd64-installer.exe "dist/nodus-$VERSION-windows-amd64.exe"
+      - name: Windows verify signature
+        if: matrix.os_name == 'windows' && env.NODUS_SIGNTOOL_CMD != ''
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature "dist/nodus-$env:VERSION-windows-amd64.exe"
+          if ($sig.Status -ne 'Valid') { throw "installer signature status: $($sig.Status)" }
+
+      # ---------------------------------------------------------------- Linux
+      - name: Linux build and packages (.deb, AppImage)
+        if: matrix.os_name == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${{ env.NFPM_VERSION }}
+          curl -fsSL -o /usr/local/bin/appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          chmod +x /usr/local/bin/appimagetool
+          bash scripts/release/build-desktop.sh linux "$VERSION" "$RELEASE_FLAG"
+          bash scripts/release/package-linux.sh all "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os_name }}
+          path: dist/nodus-*
+          if-no-files-found: error
+
+  release:
+    name: Checksums, update manifest, draft release
+    needs: [meta, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # draft release
+      id-token: write # build provenance attestation
+      attestations: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      CHANNEL: ${{ needs.meta.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum nodus-* > SHA256SUMS && cat SHA256SUMS
+
+      - name: Update manifest (sequence = workflow run number)
+        env:
+          NODUS_UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          prev="$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          bash scripts/release/notes.sh "$VERSION" "$prev" > dist/RELEASE_NOTES.md
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}"
+          (cd tools/release && GOWORK=off go build -o ../../dist/release-tool .)
+          # Release workflow runs are monotonic, so the run number is a valid manifest sequence.
+          # Rule: never re-run an old tag after a newer one was published (docs/release/README.md).
+          dist/release-tool gen-manifest -channel "$CHANNEL" -version "$VERSION" -sequence "$GITHUB_RUN_NUMBER" \
+            -notes-file dist/RELEASE_NOTES.md -artifacts-dir dist -base-url "$base" -out dist/manifest.json
+          if [[ -n "$NODUS_UPDATE_SIGNING_KEY" ]]; then
+            dist/release-tool sign-manifest -in dist/manifest.json
+            [[ -n "$UPDATE_PUBLIC_KEY" ]] && dist/release-tool verify-manifest -in dist/manifest.json -pubkey "$UPDATE_PUBLIC_KEY"
+          elif [[ "${{ needs.meta.outputs.is_tag }}" == "true" ]]; then
+            echo "::error::UPDATE_SIGNING_KEY secret is missing: an unsigned update manifest is useless and must not ship"; exit 1
+          else
+            echo "::warning::UPDATE_SIGNING_KEY not available: manifest left unsigned (dry run)"
+          fi
+          rm dist/release-tool
+
+      - name: SBOM (source tree)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/nodus-${{ needs.meta.outputs.version }}-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Provenance attestation of the release files
+        if: needs.meta.outputs.is_tag == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/nodus-*
+            dist/SHA256SUMS
+            dist/manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Draft GitHub Release (tags only)
+        if: needs.meta.outputs.is_tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          flags=(--draft --title "Nodus ${VERSION}" --notes-file dist/RELEASE_NOTES.md)
+          [[ "$VERSION" == *-* ]] && flags+=(--prerelease)
+          # Draft: a human promotes it after the cross-OS checklist. The update manifest is attached but
+          # only becomes the live update channel when it is copied to UPDATE_BASE_URL (docs/release/README.md).
+          gh release create "v${VERSION}" "${flags[@]}" dist/nodus-* dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig

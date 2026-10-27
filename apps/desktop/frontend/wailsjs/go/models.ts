@@ -1796,6 +1796,105 @@ export namespace sync {
 
 }
 
+export namespace updater {
+	
+	export class Result {
+	    method: string;
+	    quit: boolean;
+	    path: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.method = source["method"];
+	        this.quit = source["quit"];
+	        this.path = source["path"];
+	        this.message = source["message"];
+	    }
+	}
+	export class Settings {
+	    enabled: boolean;
+	    channel: string;
+	    skippedVersion: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.channel = source["channel"];
+	        this.skippedVersion = source["skippedVersion"];
+	    }
+	}
+	export class Status {
+	    state: string;
+	    current: string;
+	    latest: string;
+	    channel: string;
+	    notes: string;
+	    notesUrl: string;
+	    // Go type: time
+	    released: any;
+	    required: boolean;
+	    skipped: boolean;
+	    kind: string;
+	    size: number;
+	    done: number;
+	    error: string;
+	    // Go type: time
+	    checkedAt: any;
+	    disabled: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.current = source["current"];
+	        this.latest = source["latest"];
+	        this.channel = source["channel"];
+	        this.notes = source["notes"];
+	        this.notesUrl = source["notesUrl"];
+	        this.released = this.convertValues(source["released"], null);
+	        this.required = source["required"];
+	        this.skipped = source["skipped"];
+	        this.kind = source["kind"];
+	        this.size = source["size"];
+	        this.done = source["done"];
+	        this.error = source["error"];
+	        this.checkedAt = this.convertValues(source["checkedAt"], null);
+	        this.disabled = source["disabled"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace vault {
 	
 	export class Entry {

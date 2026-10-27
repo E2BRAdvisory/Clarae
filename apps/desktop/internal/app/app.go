@@ -24,9 +24,11 @@ import (
 	"nodus/apps/desktop/internal/history"
 	"nodus/apps/desktop/internal/indexer"
 	"nodus/apps/desktop/internal/platform"
+	"nodus/apps/desktop/internal/search"
 	"nodus/apps/desktop/internal/store"
 	syncpkg "nodus/apps/desktop/internal/sync"
 	"nodus/apps/desktop/internal/sync/transport"
+	"nodus/apps/desktop/internal/updater"
 	"nodus/apps/desktop/internal/vault"
 	"nodus/apps/desktop/internal/watcher"
 	"nodus/shared/pathrules"
@@ -56,6 +58,8 @@ type App struct {
 	mu        sync.Mutex
 	vaults    map[string]*openVault
 	pending   []string // nodus:// URLs received before the frontend was ready
+	updater   *updater.Service
+	updaterMu sync.Mutex
 }
 
 // openVault is a vault currently open in this process.
@@ -144,6 +148,7 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	a.sync.Start(ctx)
 	a.auth.Restore(ctx)
+	a.startUpdater(ctx)
 	a.logger.Info().Str("version", a.opts.Version).Str("data_dir", a.opts.DataDir).Msg("started")
 }
 
@@ -293,6 +298,10 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 		if err := ix.Full(ctx); err != nil {
 			log.Error().Err(err).Msg("initial index")
 		}
+		// Load the search candidate cache now so the first search is fast.
+		if err := search.New(indexDB).Warm(ctx); err != nil && ctx.Err() == nil {
+			log.Warn().Err(err).Msg("search cache warm-up")
+		}
 	}()
 	go a.watchLoop(ctx, v)
 	return info, nil
@@ -329,6 +338,7 @@ func (a *App) closeVaultLocked(id string, v *openVault) {
 	v.cancel()
 	v.History.Close()
 	_ = v.Watcher.Close()
+	search.Forget(v.IndexDB)
 	_ = v.IndexDB.Close()
 	delete(a.vaults, id)
 }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the Developer ID signature (scripts/release/package-macos.sh).
+  The app is not sandboxed (it reads and writes user-chosen vault folders and talks to the cloud
+  service); WKWebView renders out of process, so no JIT or unsigned-memory exception is requested.
+  If notarisation or the first run on a clean machine shows a missing entitlement, add it here
+  and record why in ADR-0023.
+-->
+<plist version="1.0">
+  <dict/>
+</plist>

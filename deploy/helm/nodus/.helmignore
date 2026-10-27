@@ -1,0 +1,4 @@
+ci/
+values-k3d.yaml
+values-chaos.yaml
+*.swp

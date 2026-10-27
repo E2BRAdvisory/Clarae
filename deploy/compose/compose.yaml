@@ -1,0 +1,195 @@
+# Nodus Cloud on-premise (single host): reverse proxy with TLS, API + worker, PostgreSQL,
+# S3-compatible object store and Keycloak. See README.md for the first-run steps.
+#
+#   cp .env.example .env   # then edit: domain, passwords, image tag
+#   docker compose up -d
+#
+# Production notes: PostgreSQL and the object store hold all the data (volumes pgdata, s3data):
+# back them up (README, "Backup"). Only the reverse proxy publishes ports.
+name: ${COMPOSE_PROJECT_NAME:-nodus-onprem}
+
+x-cloud-env: &cloud-env
+  DATABASE_URL: postgres://nodus:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/nodus?sslmode=disable
+  S3_ENDPOINT: http://s3:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+  S3_BUCKET_BLOBS: nodus-blobs
+  S3_BUCKET_EXPORTS: nodus-exports
+  S3_USE_PATH_STYLE: 'true'
+  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/nodus
+  OIDC_AUDIENCE: nodus-api
+  KC_ADMIN_BASE_URL: http://keycloak:8080
+  KC_REALM: nodus
+  KC_ADMIN_CLIENT_ID: nodus-admin-svc
+  KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
+  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${NODUS_HOST:?set NODUS_HOST in .env}
+  PUBLIC_GRPC_ADDR: ${NOTIFY_HOST:?set NOTIFY_HOST in .env}:${PUBLIC_GRPC_PORT:-443}
+  LISTEN_ADDR: 0.0.0.0:18081
+  GRPC_LISTEN_ADDR: 0.0.0.0:18082
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+      - '${HTTPS_PORT:-443}:443/udp' # HTTP/3
+    environment:
+      NODUS_SITE: ${NODUS_SITE:-${NODUS_HOST}}
+      NOTIFY_SITE: ${NOTIFY_SITE:-${NOTIFY_HOST}}
+      AUTH_SITE: ${AUTH_SITE:-${AUTH_HOST}}
+      CADDY_GLOBAL: ${CADDY_GLOBAL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificates (keep!)
+      - caddy_config:/config
+    networks:
+      default:
+        # Containers reach the public names through the proxy (the cloud validates tokens against the issuer URL).
+        aliases:
+          - ${AUTH_HOST}
+          - ${NODUS_HOST}
+    depends_on:
+      cloud-api:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+
+  cloud-api:
+    image: ${NODUS_IMAGE:-ghcr.io/ORG/nodus-cloud}:${NODUS_VERSION:?set NODUS_VERSION in .env}
+    restart: unless-stopped
+    command: ['--role=api']
+    environment: *cloud-env
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    depends_on:
+      postgres: { condition: service_healthy }
+      s3-init: { condition: service_completed_successfully }
+      keycloak: { condition: service_healthy }
+    # The image is distroless (no shell, no curl): readiness is checked by the proxy and by
+    #   docker compose exec proxy wget -qO- http://cloud-api:18081/api/v1/readyz
+    expose: ['18081', '18082']
+
+  cloud-worker:
+    image: ${NODUS_IMAGE:-ghcr.io/ORG/nodus-cloud}:${NODUS_VERSION}
+    restart: unless-stopped
+    command: ['--role=worker']
+    environment: *cloud-env
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    depends_on:
+      cloud-api: { condition: service_started }
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nodus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: nodus
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro # creates the keycloak database on first start
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nodus -d nodus']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  s3:
+    image: rustfs/rustfs:latest # S3-compatible; any S3 service (AWS, Ceph, MinIO-compatible) can replace it
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ':9000'
+      RUSTFS_CONSOLE_ENABLE: 'false'
+    volumes:
+      - s3data:/data
+    healthcheck:
+      # The S3 root answers 403 without credentials: any HTTP answer means the server is up.
+      test:
+        [
+          'CMD-SHELL',
+          "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9000/ | grep -qE '^(200|403)$$'",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  s3-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      s3: { condition: service_healthy }
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: 'true'
+    entrypoint: >
+      /bin/sh -c "
+        for b in nodus-blobs nodus-exports; do
+          aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $$b >/dev/null 2>&1 ||
+          aws --endpoint-url http://s3:9000 s3 mb s3://$$b;
+        done && echo buckets ready
+      "
+    restart: 'no'
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7
+    restart: unless-stopped
+    command: ['start', '--import-realm']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD in .env}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: ${PUBLIC_SCHEME:-https}://${AUTH_HOST}
+      KC_HTTP_ENABLED: 'true' # TLS ends at the proxy
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: 'true'
+    volumes:
+      # First start only: creates the realm "nodus" (clients nodus-desktop, nodus-web, nodus-admin-svc,
+      # roles). It also carries DEVELOPMENT users and secrets: see README before going live.
+      - ../keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\n\r\n' >&3 && head -1 <&3 | grep -q 200",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  # On demand: docker compose --profile backup run --rm pg-backup   (dump into ./backups)
+  pg-backup:
+    profiles: [backup]
+    image: postgres:17
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      /bin/sh -c "pg_dump -h postgres -U nodus -Fc nodus > /backups/nodus-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  s3data:
+  caddy_data:
+  caddy_config:

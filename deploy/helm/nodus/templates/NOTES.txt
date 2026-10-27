@@ -1,0 +1,31 @@
+Nodus Cloud {{ .Values.image.tag | default .Chart.AppVersion }} installed as "{{ .Release.Name }}".
+
+Components
+  api     {{ .Values.api.autoscaling.enabled | ternary (printf "autoscaled %v-%v" .Values.api.autoscaling.minReplicas .Values.api.autoscaling.maxReplicas) (printf "%v replica(s)" .Values.api.replicas) }}   HTTP :{{ .Values.service.httpPort }}, gRPC :{{ .Values.service.grpcPort }}
+  worker  {{ .Values.worker.replicas }} replica(s)
+
+Check the rollout
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "nodus.fullname" . }}-api
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+{{- if .Values.ingress.enabled }}
+
+Endpoints
+  Web UI / REST   {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}
+  Notifications   {{ if eq .Values.ingress.grpc.mode "host" }}{{ .Values.ingress.grpc.host }}:443 (gRPC){{ else }}{{ .Values.ingress.host }}:443, path {{ .Values.ingress.grpc.path }} (gRPC){{ end }}
+{{- if not .Values.ingress.tls.enabled }}
+
+WARNING: ingress.tls.enabled is false. gRPC through an ingress needs TLS (HTTP/2 is negotiated by ALPN):
+the notification stream will not work, and the desktop clients refuse plain-HTTP servers outside localhost.
+{{- end }}
+{{- else }}
+
+No Ingress was created (ingress.enabled=false): reach the Service "{{ include "nodus.fullname" . }}" ({{ .Values.service.type }}) directly.
+{{- end }}
+{{- if and (not .Values.secret.existingSecret) (not .Values.externalSecret.enabled) }}
+
+NOTE: the chart created the Secret from secret.values. For production use secret.existingSecret or externalSecret.
+{{- end }}
+{{- if and .Values.api.pdb.enabled (le (int .Values.api.replicas) 1) (not .Values.api.autoscaling.enabled) }}
+
+WARNING: api.pdb.enabled with a single API replica blocks node drains: set api.pdb.enabled=false or run 2+ replicas.
+{{- end }}

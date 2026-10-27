@@ -66,9 +66,15 @@ ManifestDPIAware true
 
 !insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
 
-## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
-#!uninstfinalize 'signtool --file "%1"'
-#!finalize 'signtool --file "%1"'
+## Authenticode signing of the installer and the uninstaller (M7-WP3). Gated on the environment
+## variable NODUS_SIGNTOOL_CMD, a signtool command line in which %1 is replaced by the file to sign, e.g.
+##   signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 <thumbprint> "%1"
+## Without it the installer is built UNSIGNED (the release workflow decides whether that is acceptable).
+!define SIGNTOOL_CMD "$%NODUS_SIGNTOOL_CMD%"
+!if "${SIGNTOOL_CMD}" != ""
+  !uninstfinalize '${SIGNTOOL_CMD}'
+  !finalize '${SIGNTOOL_CMD}'
+!endif
 
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
