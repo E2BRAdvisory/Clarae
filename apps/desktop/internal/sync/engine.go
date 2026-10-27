@@ -10,10 +10,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/hashing"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/hashing"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 // Phase is what the engine is doing, for the status indicator.
@@ -60,7 +60,7 @@ type Config struct {
 	UserID     string
 	// ReadOnly makes the engine pull only (a viewer of a share): local edits are never sent.
 	ReadOnly bool
-	CacheDir string // where prepared ciphertext is kept (default <vault>/.nodus/cache/outbox)
+	CacheDir string // where prepared ciphertext is kept (default <vault>/.memobrain/cache/outbox)
 	Logger   zerolog.Logger
 	Now      func() time.Time
 	// OnStatus and OnConflict receive updates (may be nil).

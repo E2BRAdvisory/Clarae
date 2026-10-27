@@ -13,15 +13,15 @@ import (
 
 	tcminio "github.com/testcontainers/testcontainers-go/modules/minio"
 
-	"nodus/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/storage"
 )
 
 // TestS3Store runs the BlobStore contract against a real S3 server: the one in
-// NODUS_TEST_S3_ENDPOINT (credentials in NODUS_TEST_S3_KEY/SECRET) or a MinIO container.
+// MEMOBRAIN_TEST_S3_ENDPOINT (credentials in MEMOBRAIN_TEST_S3_KEY/SECRET) or a MinIO container.
 func TestS3Store(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	opts := storage.S3Options{Endpoint: os.Getenv("NODUS_TEST_S3_ENDPOINT"), AccessKey: os.Getenv("NODUS_TEST_S3_KEY"), SecretKey: os.Getenv("NODUS_TEST_S3_SECRET"), Region: "us-east-1", Bucket: "nodus-test-blobs", UsePathStyle: true}
+	opts := storage.S3Options{Endpoint: os.Getenv("MEMOBRAIN_TEST_S3_ENDPOINT"), AccessKey: os.Getenv("MEMOBRAIN_TEST_S3_KEY"), SecretKey: os.Getenv("MEMOBRAIN_TEST_S3_SECRET"), Region: "us-east-1", Bucket: "memobrain-test-blobs", UsePathStyle: true}
 	if opts.Endpoint == "" {
 		c, err := tcminio.Run(ctx, "minio/minio:latest")
 		if err != nil {

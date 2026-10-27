@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Badge, EmptyState, Table } from '@nodus/ui';
-import type { Schemas } from '@nodus/api-client';
+import { Badge, EmptyState, Table } from '@memobrain/ui';
+import type { Schemas } from '@memobrain/api-client';
 import { useVaults } from '../api/queries';
 import { formatBytes, formatDay } from '../format';
 import { QueryState } from './QueryState';

@@ -10,13 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"nodus/services/cloud/internal/access"
-	"nodus/services/cloud/internal/audit"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/services/cloud/internal/notify"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/notify"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 // NewGrant is a grant given while creating a share or adding one later.

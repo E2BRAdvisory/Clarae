@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/syncproto"
 )
 
 const (

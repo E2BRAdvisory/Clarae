@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"nodus/shared/updatemanifest"
+	"memobrain/shared/updatemanifest"
 )
 
 // Errors.
@@ -49,7 +49,7 @@ var (
 const (
 	maxManifestBytes = 256 << 10
 	maxSigBytes      = 1 << 10
-	userAgent        = "NodusUpdater"
+	userAgent        = "MemobrainUpdater"
 	// CheckInterval is the period of automatic checks (a random jitter is added).
 	CheckInterval = 24 * time.Hour
 )
@@ -445,7 +445,7 @@ func (s *Service) checkArtifactURL(raw string) error {
 // stageName is the file name of a staged artifact (never taken from the URL).
 func stageName(version string, a updatemanifest.Artifact) string {
 	ext := map[string]string{updatemanifest.KindDMG: ".dmg", updatemanifest.KindNSIS: ".exe", updatemanifest.KindAppImage: ".AppImage", updatemanifest.KindDeb: ".deb"}[a.Kind]
-	return fmt.Sprintf("nodus-%s-%s-%s%s", version, a.OS, a.Arch, ext)
+	return fmt.Sprintf("memobrain-%s-%s-%s%s", version, a.OS, a.Arch, ext)
 }
 
 // Download fetches the artifact of the last Check into <data dir>/updates,

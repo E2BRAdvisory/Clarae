@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"nodus/apps/desktop/internal/importer"
-	syncpkg "nodus/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/importer"
+	syncpkg "memobrain/apps/desktop/internal/sync"
 )
 
 func TestImporterRunEmitsEventsAndTheWatcherIndexesTheNotes(t *testing.T) {

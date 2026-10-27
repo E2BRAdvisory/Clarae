@@ -1,5 +1,5 @@
 #!/bin/sh
-# Refresh the desktop caches so the nodus:// scheme handler and the icon are picked up.
+# Refresh the desktop caches so the memobrain:// scheme handler and the icon are picked up.
 set -e
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database -q /usr/share/applications || true

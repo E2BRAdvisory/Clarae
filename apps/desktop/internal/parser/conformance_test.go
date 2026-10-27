@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"nodus/shared/conformance"
+	"memobrain/shared/conformance"
 )
 
 // TestConformance runs every shared Markdown fixture through the parser and

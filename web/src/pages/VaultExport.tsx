@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dialog, InlineError, SelectField, Table, TextField } from '@nodus/ui';
-import { exportPrivateVault, type ExportReport, type Secret } from '@nodus/vaultcrypto-web';
-import { ApiError } from '@nodus/api-client';
+import { Button, Dialog, InlineError, SelectField, Table, TextField } from '@memobrain/ui';
+import { exportPrivateVault, type ExportReport, type Secret } from '@memobrain/vaultcrypto-web';
+import { ApiError } from '@memobrain/api-client';
 import { useApi } from '../api/context';
 import { describeError } from '../api/errors';
 import { useAuth } from '../auth/AuthProvider';

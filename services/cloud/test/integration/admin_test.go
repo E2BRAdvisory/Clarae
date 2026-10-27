@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/auth/authtest"
-	"nodus/services/cloud/internal/keycloak"
-	"nodus/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/keycloak"
+	"memobrain/services/cloud/internal/notify"
 )
 
 // fakeKeycloak records the Admin API calls and stands in for the identity provider.
@@ -92,15 +92,15 @@ func (f *fakeKeycloak) isEnabled(sub string) bool {
 	return f.enabled[sub]
 }
 
-// admin is a user carrying the nodus-admin realm role.
+// admin is a user carrying the memobrain-admin realm role.
 func (e *env) admin(name string) *client {
 	e.t.Helper()
-	return e.userWith(name, "sub-"+name+"-"+uuid.NewString(), "nodus-admin", "nodus-user")
+	return e.userWith(name, "sub-"+name+"-"+uuid.NewString(), "memobrain-admin", "memobrain-user")
 }
 
 func (e *env) userWith(name, subject string, roles ...string) *client {
 	e.t.Helper()
-	c := &client{e: e, token: e.issuer.Token(e.t, authtest.TokenOptions{Subject: subject, Username: name, Email: name + "-" + uuid.NewString()[:8] + "@nodus.local", Roles: roles})}
+	c := &client{e: e, token: e.issuer.Token(e.t, authtest.TokenOptions{Subject: subject, Username: name, Email: name + "-" + uuid.NewString()[:8] + "@memobrain.local", Roles: roles})}
 	me := decode[map[string]any](e.t, c.json(http.MethodGet, "/me", nil))
 	c.userID, _ = me["id"].(string)
 	dev := decode[map[string]any](e.t, c.json(http.MethodPost, "/me/devices", map[string]any{"name": name + "-laptop", "platform": "linux"}))
@@ -148,7 +148,7 @@ func TestAdminCreatesSuspendsAndReactivatesAUser(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root")
 
-	u := root.createUser("nina", "nina@nodus.local", "user")
+	u := root.createUser("nina", "nina@memobrain.local", "user")
 	if u.Status != "active" || u.Role != "user" || u.QuotaBytes != 5<<30 {
 		t.Fatalf("created user: %+v", u)
 	}
@@ -164,12 +164,12 @@ func TestAdminCreatesSuspendsAndReactivatesAUser(t *testing.T) {
 		t.Fatal("the user was not created in Keycloak")
 	}
 	// A second account with the same username is refused.
-	expect(t, root.json(http.MethodPost, "/admin/users", map[string]any{"username": "nina", "email": "other@nodus.local"}), http.StatusConflict)
+	expect(t, root.json(http.MethodPost, "/admin/users", map[string]any{"username": "nina", "email": "other@memobrain.local"}), http.StatusConflict)
 	// Invalid e-mail.
 	expect(t, root.json(http.MethodPost, "/admin/users", map[string]any{"username": "x1", "email": "nope"}), http.StatusBadRequest)
 
 	// The new user logs in through Keycloak: the token subject links to the provisioned row.
-	nina := e.userWith("nina", sub, "nodus-user")
+	nina := e.userWith("nina", sub, "memobrain-user")
 	if nina.userID != u.ID {
 		t.Fatalf("login created another row: %s vs %s", nina.userID, u.ID)
 	}
@@ -227,7 +227,7 @@ func TestAdminCannotLockTheLastAdministratorOut(t *testing.T) {
 	expect(t, root.json(http.MethodPut, "/admin/users/"+root.userID+"/role", map[string]any{"role": "user"}), http.StatusConflict)
 
 	// A second administrator can be demoted by the first, but not the other way round by themselves.
-	second := root.createUser("second", "second@nodus.local", "admin")
+	second := root.createUser("second", "second@memobrain.local", "admin")
 	if second.Role != "admin" {
 		t.Fatalf("role %s", second.Role)
 	}
@@ -278,8 +278,8 @@ func TestAdminListsUsersWithFilters(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root")
 	tag := uuid.NewString()[:8]
-	a := root.createUser("zed-"+tag, "zed-"+tag+"@nodus.local", "user")
-	b := root.createUser("yan-"+tag, "yan-"+tag+"@nodus.local", "user")
+	a := root.createUser("zed-"+tag, "zed-"+tag+"@memobrain.local", "user")
+	b := root.createUser("yan-"+tag, "yan-"+tag+"@memobrain.local", "user")
 	expect(t, root.json(http.MethodPost, "/admin/users/"+b.ID+":suspend", nil), http.StatusOK)
 
 	list := func(q string) (items []adminUser, total int) {
@@ -311,7 +311,7 @@ func TestAdminListsUsersWithFilters(t *testing.T) {
 func TestAdminDeletesAUserAndTheirVaultsEnterRetention(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root")
-	u := root.createUser("gone", "gone-"+uuid.NewString()[:6]+"@nodus.local", "user")
+	u := root.createUser("gone", "gone-"+uuid.NewString()[:6]+"@memobrain.local", "user")
 	var sub string
 	e.kc.mu.Lock()
 	for s, spec := range e.kc.users {
@@ -320,7 +320,7 @@ func TestAdminDeletesAUserAndTheirVaultsEnterRetention(t *testing.T) {
 		}
 	}
 	e.kc.mu.Unlock()
-	gone := e.userWith("gone", sub, "nodus-user")
+	gone := e.userWith("gone", sub, "memobrain-user")
 	gone.createVault("Mine", "shared")
 
 	expect(t, root.json(http.MethodDelete, "/admin/users/"+u.ID, nil), http.StatusNoContent)
@@ -338,7 +338,7 @@ func TestAdminDeletesAUserAndTheirVaultsEnterRetention(t *testing.T) {
 func TestAdminResetPasswordSessionsAndDevices(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root")
-	u := root.createUser("rita", "rita-"+uuid.NewString()[:6]+"@nodus.local", "user")
+	u := root.createUser("rita", "rita-"+uuid.NewString()[:6]+"@memobrain.local", "user")
 	var sub string
 	e.kc.mu.Lock()
 	for s, spec := range e.kc.users {
@@ -346,9 +346,9 @@ func TestAdminResetPasswordSessionsAndDevices(t *testing.T) {
 			sub = s
 		}
 	}
-	e.kc.sessions[sub] = []keycloak.Session{{ID: "s1", IPAddress: "10.0.0.1", Started: time.Now().Add(-time.Hour), LastAccess: time.Now(), Clients: []string{"nodus-web"}}}
+	e.kc.sessions[sub] = []keycloak.Session{{ID: "s1", IPAddress: "10.0.0.1", Started: time.Now().Add(-time.Hour), LastAccess: time.Now(), Clients: []string{"memobrain-web"}}}
 	e.kc.mu.Unlock()
-	rita := e.userWith("rita", sub, "nodus-user")
+	rita := e.userWith("rita", sub, "memobrain-user")
 	_ = rita
 
 	resp := root.json(http.MethodPost, "/admin/users/"+u.ID+":reset-password", nil)
@@ -522,7 +522,7 @@ func TestAdminStorageSettingsAndOverview(t *testing.T) {
 func TestAdminAuditTrail(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root")
-	u := root.createUser("audited", "audited-"+uuid.NewString()[:6]+"@nodus.local", "user")
+	u := root.createUser("audited", "audited-"+uuid.NewString()[:6]+"@memobrain.local", "user")
 	expect(t, root.json(http.MethodPost, "/admin/users/"+u.ID+":suspend", nil), http.StatusOK)
 
 	type page struct {

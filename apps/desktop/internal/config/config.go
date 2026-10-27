@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"nodus/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 // Effective is the configuration as the application uses it.

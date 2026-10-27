@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Nodus"
+    "name": "MemoBrain Notes"
   },
   "welcome": {
     "title": "Open a vault",
@@ -158,7 +158,7 @@
     "ready": "Signed in as {{name}}",
     "disconnected": "Offline — signed in as {{name}}",
     "role": "Role",
-    "placeholder": "https://nodus.example.com",
+    "placeholder": "https://memobrain.example.com",
     "storage": "Storage",
     "usageOf": "{{used}} of {{quota}}",
     "devices": "Devices",
@@ -336,7 +336,7 @@
     "notConnected": "Not connected",
     "notConnectedText": "This vault lives only on this computer. Connect it to the cloud to sync it between your devices.",
     "connectTitle": "Connect to the cloud",
-    "needSignIn": "Sign in to your Nodus server first (Settings → Cloud).",
+    "needSignIn": "Sign in to your MemoBrain Notes server first (Settings → Cloud).",
     "openCloudSettings": "Open cloud settings",
     "kindShared": "Shared vault",
     "kindSharedText": "Notes are stored readable on the server. Can be shared with other people and groups. Administrators can access the content.",
@@ -857,8 +857,8 @@
   "updater": {
     "title": "Software update",
     "checking": "Checking for updates…",
-    "upToDate": "Nodus {{version}} is up to date.",
-    "available": "Nodus {{version}} is available",
+    "upToDate": "MemoBrain Notes {{version}} is up to date.",
+    "available": "MemoBrain Notes {{version}} is available",
     "indicator": "Update {{version}}",
     "current": "you have {{version}}",
     "required": "This version is no longer supported: please update.",

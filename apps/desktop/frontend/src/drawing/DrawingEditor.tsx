@@ -150,7 +150,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   const shownVersion = useRef(0);
   const libraryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // The library lives in the vault (.nodus/excalidraw-library.json) and syncs with it.
+  // The library lives in the vault (.memobrain/excalidraw-library.json) and syncs with it.
   useEffect(() => {
     void api.vault
       .readConfig(vaultId, LIBRARY_FILE)

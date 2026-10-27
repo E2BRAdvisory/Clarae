@@ -34,11 +34,11 @@ describe('role guard', () => {
     expect(screen.queryByRole('link', { name: 'Administration' })).not.toBeInTheDocument();
   });
 
-  it('shows the administration console to nodus-admin', async () => {
+  it('shows the administration console to memobrain-admin', async () => {
     renderApp({
       path: '/admin',
       routes: { ...usage, 'GET /admin/storage/overview': new Response(null, { status: 500 }) },
-      user: { roles: ['nodus-admin'] },
+      user: { roles: ['memobrain-admin'] },
     });
     expect(
       await screen.findByRole('navigation', { name: 'Administration sections' }),

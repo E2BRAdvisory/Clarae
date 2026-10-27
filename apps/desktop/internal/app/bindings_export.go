@@ -123,7 +123,7 @@ func writeExportHTML(vaultRoot, dest, html string) (ExportResult, error) {
 			return ExportResult{}, errors.New("choose a location outside the vault")
 		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dest), ".nodus-export-*.part")
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".memobrain-export-*.part")
 	if err != nil {
 		return ExportResult{}, err
 	}

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"nodus/apps/desktop/internal/composer"
-	syncpkg "nodus/apps/desktop/internal/sync"
-	"nodus/apps/desktop/internal/templates"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/composer"
+	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/templates"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 // dailySettingsFile holds the per-vault settings of daily notes, unique notes and

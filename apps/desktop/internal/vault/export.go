@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
 // ExportStats counts what an export wrote.

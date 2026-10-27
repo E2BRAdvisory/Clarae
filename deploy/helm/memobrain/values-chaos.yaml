@@ -2,7 +2,7 @@
 # of values-k3d.yaml. Chaos-run values only: it does not complete the chart (PDB, HPA,
 # anti-affinity, preStop and terminationGracePeriodSeconds belong to M7-WP3).
 image:
-  repository: nodus-cloud
+  repository: memobrain-cloud
   tag: chaos
   pullPolicy: Never
 

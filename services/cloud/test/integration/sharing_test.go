@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/access"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/notify"
 )
 
 // ---- helpers ----

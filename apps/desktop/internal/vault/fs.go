@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"nodus/shared/hashing"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/shared/hashing"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 // Errors returned by FS operations.
@@ -232,7 +232,7 @@ func writeAtomic(abs string, data []byte) error {
 }
 
 // tmpPrefix names the staging files of atomic writes.
-const tmpPrefix = ".nodus-tmp-"
+const tmpPrefix = ".memobrain-tmp-"
 
 // CleanStaleTemp removes staging files left by a crashed write. Only files
 // older than olderThan are removed, so a write in progress is never touched.
@@ -356,7 +356,7 @@ type Entry struct {
 
 // Walk visits every file and folder of the vault (depth first, sorted),
 // skipping excluded entries (.DS_Store, caches, …), symlinks and the
-// .nodus/ internals other than user settings. fn receives vault-relative
+// .memobrain/ internals other than user settings. fn receives vault-relative
 // paths. Returning fs.SkipDir from fn for a folder skips its contents.
 func (f *FS) Walk(fn func(e Entry) error) error {
 	return f.walk(f.root, "", fn)

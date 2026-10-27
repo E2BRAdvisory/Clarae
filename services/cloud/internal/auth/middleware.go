@@ -10,9 +10,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // ErrSuspended is returned by a Provisioner when the account may not use the
@@ -76,7 +76,7 @@ func (m *Middleware) Protect(next http.Handler) http.Handler {
 		ctx := r.Context()
 		raw, ok := bearerToken(r)
 		if !ok {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="nodus"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="memobrain"`)
 			httpproblem.Write(w, r, syncproto.CodeUnauthenticated, "missing bearer token", nil)
 			return
 		}
@@ -87,7 +87,7 @@ func (m *Middleware) Protect(next http.Handler) http.Handler {
 			return
 		case errors.Is(err, ErrInvalidToken):
 			zerolog.Ctx(ctx).Debug().Err(err).Msg("token rejected")
-			w.Header().Set("WWW-Authenticate", `Bearer realm="nodus", error="invalid_token"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="memobrain", error="invalid_token"`)
 			httpproblem.Write(w, r, syncproto.CodeUnauthenticated, "invalid token", nil)
 			return
 		case err != nil:

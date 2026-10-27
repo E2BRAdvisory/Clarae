@@ -20,13 +20,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
-	"nodus/services/cloud/internal/audit"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/services/cloud/internal/keycloak"
-	"nodus/services/cloud/internal/notify"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/keycloak"
+	"memobrain/services/cloud/internal/notify"
+	"memobrain/shared/syncproto"
 )
 
 // Settings keys edited by the console (seeded by migration 0002).

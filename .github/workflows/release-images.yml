@@ -46,7 +46,7 @@ jobs:
       - id: name
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "image=${REGISTRY}/${owner}/nodus-cloud" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${owner}/memobrain-cloud" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"; fi
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -119,10 +119,10 @@ jobs:
       - name: Lint and render every values file
         run: |
           set -euo pipefail
-          helm lint deploy/helm/nodus
-          for f in deploy/helm/nodus/values-k3d.yaml deploy/helm/nodus/ci/*.yaml; do
-            helm lint deploy/helm/nodus -f "$f"
-            helm template ci deploy/helm/nodus -f "$f" > /dev/null
+          helm lint deploy/helm/memobrain
+          for f in deploy/helm/memobrain/values-k3d.yaml deploy/helm/memobrain/ci/*.yaml; do
+            helm lint deploy/helm/memobrain -f "$f"
+            helm template ci deploy/helm/memobrain -f "$f" > /dev/null
           done
       - name: Install cosign
         if: github.ref_type == 'tag'
@@ -134,12 +134,12 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"; owner="${GITHUB_REPOSITORY_OWNER,,}"
-          work="$(mktemp -d)"; cp -R deploy/helm/nodus "$work/nodus"
+          work="$(mktemp -d)"; cp -R deploy/helm/memobrain "$work/memobrain"
           # The repository default is a placeholder: point it at the image published by this run.
-          sed -i "s#ghcr.io/ORG/nodus-cloud#${REGISTRY}/${owner}/nodus-cloud#" "$work/nodus/values.yaml"
-          helm package "$work/nodus" --version "$version" --app-version "$version" -d "$work"
+          sed -i "s#ghcr.io/ORG/memobrain-cloud#${REGISTRY}/${owner}/memobrain-cloud#" "$work/memobrain/values.yaml"
+          helm package "$work/memobrain" --version "$version" --app-version "$version" -d "$work"
           echo "$TOKEN" | helm registry login "$REGISTRY" -u "${GITHUB_ACTOR}" --password-stdin
-          out="$(helm push "$work/nodus-${version}.tgz" "oci://${REGISTRY}/${owner}/charts" 2>&1 | tee /dev/stderr)"
+          out="$(helm push "$work/memobrain-${version}.tgz" "oci://${REGISTRY}/${owner}/charts" 2>&1 | tee /dev/stderr)"
           digest="$(sed -n 's/^Digest: //p' <<<"$out" | tail -n1)"
           [[ -n "$digest" ]] || { echo "::error::cannot read the pushed chart digest"; exit 1; }
-          cosign sign --yes "${REGISTRY}/${owner}/charts/nodus@${digest}"
+          cosign sign --yes "${REGISTRY}/${owner}/charts/memobrain@${digest}"

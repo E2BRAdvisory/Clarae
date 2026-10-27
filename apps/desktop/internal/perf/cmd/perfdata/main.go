@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"nodus/apps/desktop/internal/perf/dataset"
+	"memobrain/apps/desktop/internal/perf/dataset"
 )
 
 func main() {

@@ -363,7 +363,7 @@ export const api = {
     refresh: (): Promise<ConfigState> => ConfigAPI.Refresh(),
   },
   templates: {
-    /** Settings of daily notes, unique notes and templates (.nodus/daily.json; "" when unset). */
+    /** Settings of daily notes, unique notes and templates (.memobrain/daily.json; "" when unset). */
     readSettings: (vaultId: string): Promise<string> => TemplatesAPI.ReadSettings(vaultId),
     writeSettings: (vaultId: string, content: string): Promise<void> =>
       TemplatesAPI.WriteSettings(vaultId, content),

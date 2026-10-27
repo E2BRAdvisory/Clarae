@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 // DefaultFolder is the template folder when none is configured.

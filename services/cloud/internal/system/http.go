@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"nodus/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/api"
 )
 
 // Checker reports the health of one dependency.

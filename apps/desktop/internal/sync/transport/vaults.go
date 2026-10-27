@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/shared/syncproto"
+	"memobrain/shared/syncproto"
 )
 
 // --- API types (mirror api/openapi.yaml) ----------------------------------

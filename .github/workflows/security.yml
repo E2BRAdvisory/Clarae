@@ -109,15 +109,15 @@ jobs:
         run: |
           make web-build
           mkdir -p sbom bin
-          (cd services/cloud && CGO_ENABLED=0 go build -trimpath -o ../../bin/nodus-cloud ./cmd/nodus-cloud)
+          (cd services/cloud && CGO_ENABLED=0 go build -trimpath -o ../../bin/memobrain-cloud ./cmd/memobrain-cloud)
       # Syft reads the Go build info of the binary (exact module versions linked in)
       # and yarn.lock for the JavaScript workspaces.
       - name: SBOM of the cloud binary (SPDX)
         uses: anchore/sbom-action@v0
         with:
-          file: bin/nodus-cloud
+          file: bin/memobrain-cloud
           format: spdx-json
-          output-file: sbom/nodus-cloud.spdx.json
+          output-file: sbom/memobrain-cloud.spdx.json
           upload-artifact: false
           upload-release-assets: false
       - name: SBOM of the repository (Go modules and JS workspaces, CycloneDX)
@@ -125,14 +125,14 @@ jobs:
         with:
           path: .
           format: cyclonedx-json
-          output-file: sbom/nodus-source.cdx.json
+          output-file: sbom/memobrain-source.cdx.json
           upload-artifact: false
           upload-release-assets: false
       - name: License report
         run: |
           jq -r '[.components[]? | {name, version, type, licenses: ([.licenses[]? | (.license.id // .license.name // .expression)] | unique)}]
                  | group_by(.licenses | join(" OR ")) | map({license: (.[0].licenses | join(" OR ") | if . == "" then "UNKNOWN" else . end), count: length, examples: ([.[].name] | .[0:5])})
-                 | sort_by(-.count)' sbom/nodus-source.cdx.json > sbom/licenses-summary.json
+                 | sort_by(-.count)' sbom/memobrain-source.cdx.json > sbom/licenses-summary.json
           cat sbom/licenses-summary.json
           # Strong copyleft in anything shipped to users must be reviewed by hand.
           if jq -e 'map(select(.license | test("(^|[^L])GPL|AGPL|SSPL"; "i"))) | length > 0' sbom/licenses-summary.json >/dev/null; then
@@ -176,15 +176,15 @@ jobs:
       - run: yarn install --immutable
       - run: make web-build
       - name: Embedded bundle, headers and CSP (Go)
-        run: cd services/cloud && NODUS_REQUIRE_WEB_BUILD=1 go test -race -count=1 ./web-embed ./internal/httpserver
+        run: cd services/cloud && MEMOBRAIN_REQUIRE_WEB_BUILD=1 go test -race -count=1 ./web-embed ./internal/httpserver
       - name: Desktop CSP (release policy)
         run: |
           sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
           cd apps/desktop && go test -count=1 -tags "production webkit2_41" -run 'TestContentSecurityPolicyInvariants|TestProductionPolicyIsStrict' ./internal/app
       - name: Browser checks (Playwright against the embedded handler)
         run: |
-          yarn workspace @nodus/web exec playwright install --with-deps chromium
-          yarn workspace @nodus/web run e2e:security
+          yarn workspace @memobrain/web exec playwright install --with-deps chromium
+          yarn workspace @memobrain/web run e2e:security
 
   crypto-vectors:
     name: Crypto vectors reproducible and Go/TS in agreement
@@ -207,7 +207,7 @@ jobs:
           (cd shared/go && UPDATE_VECTORS=1 go test -count=1 -run 'TestVectors|TestNegativeVectors' ./vaultcrypto/)
           git diff --exit-code -- shared/conformance/crypto
       - run: (cd shared/go && go test -race -count=1 ./vaultcrypto/)
-      - run: yarn workspace @nodus/vaultcrypto-web run test
+      - run: yarn workspace @memobrain/vaultcrypto-web run test
 
   docs-consistency:
     name: Security documents are up to date

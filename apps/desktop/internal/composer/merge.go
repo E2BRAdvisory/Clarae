@@ -11,10 +11,10 @@ import (
 	"path"
 	"strings"
 
-	"nodus/apps/desktop/internal/links"
-	"nodus/apps/desktop/internal/parser"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/links"
+	"memobrain/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 // Env is what the composer needs from the application.

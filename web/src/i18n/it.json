@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Nodus",
+    "name": "MemoBrain Notes",
     "loading": "Caricamento…",
     "redirecting": "Reindirizzamento all'accesso…"
   },
@@ -321,7 +321,7 @@
       "createTitle": "Crea un gruppo",
       "editTitle": "Modifica il gruppo",
       "save": "Salva",
-      "note": "I gruppi esistono solo in Nodus e servono per le condivisioni e per i profili di configurazione.",
+      "note": "I gruppi esistono solo in MemoBrain Notes e servono per le condivisioni e per i profili di configurazione.",
       "name": "Nome",
       "description": "Descrizione",
       "nameRequired": "Il nome è obbligatorio.",

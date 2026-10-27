@@ -2,7 +2,7 @@
 // reappears where the caret is. Built on decorations over the @lezer/markdown
 // tree (structure) plus a line scanner for Obsidian syntax (wikilinks, embeds,
 // ==highlight==, %%comments%%, #tags, ^block ids, $math$) that uses the SAME
-// rules as the indexer (@nodus/markdown), so what is rendered as a link is
+// rules as the indexer (@memobrain/markdown), so what is rendered as a link is
 // exactly what the index counts as one.
 //
 // `buildInline` is pure (state in, ranges out) and is unit tested; the plugin
@@ -22,7 +22,7 @@ import {
   scanSpans,
   stripInlineCode,
   type BlockState,
-} from '@nodus/markdown';
+} from '@memobrain/markdown';
 import { blockStateAt, blockStates } from './blockState';
 import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
 import { livePreviewContext, type LivePreviewContext } from './context';

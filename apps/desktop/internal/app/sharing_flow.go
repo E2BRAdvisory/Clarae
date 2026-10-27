@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"nodus/apps/desktop/internal/auth"
+	"memobrain/apps/desktop/internal/auth"
 )
 
 // Event the sharing flow adds to the application's set (config:updated, with the new

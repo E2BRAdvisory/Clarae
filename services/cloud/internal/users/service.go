@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
 )
 
 // QuotaUnlimited is the sentinel stored in quota_bytes_override and returned

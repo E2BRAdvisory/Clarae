@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dialog, InlineError, TextField, useToast } from '@nodus/ui';
+import { Button, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
 import { describeError } from '../api/errors';
 import { useDeleteMyAccount, useExportMyData } from '../api/account';
 import { useMe, useVaults } from '../api/queries';
@@ -36,7 +36,7 @@ export function AccountPage() {
     setExportError(null);
     exportData.mutate(undefined, {
       onSuccess: (blob) => {
-        downloadBlob(blob, `nodus-account-${new Date().toISOString().slice(0, 10)}.json`);
+        downloadBlob(blob, `memobrain-account-${new Date().toISOString().slice(0, 10)}.json`);
         toast.push(t('account.exportDone'));
       },
       onError: (e) => setExportError(describeError(e, t)),

@@ -21,10 +21,10 @@ func percentile(d []time.Duration, p float64) time.Duration {
 // TestLoadSyncLatency checks the M2 exit criteria against a local stack:
 // p95 of GET changes < 200 ms and p95 of a 50-operation commit < 500 ms with
 // concurrent clients on a vault holding thousands of files. It is skipped
-// unless NODUS_LOAD=1 (it takes a few seconds and prints the measurements).
+// unless MEMOBRAIN_LOAD=1 (it takes a few seconds and prints the measurements).
 func TestLoadSyncLatency(t *testing.T) {
-	if os.Getenv("NODUS_LOAD") == "" {
-		t.Skip("set NODUS_LOAD=1 to run the latency check")
+	if os.Getenv("MEMOBRAIN_LOAD") == "" {
+		t.Skip("set MEMOBRAIN_LOAD=1 to run the latency check")
 	}
 	e := newEnv(t)
 	ada := e.user("load")
@@ -44,7 +44,7 @@ func TestLoadSyncLatency(t *testing.T) {
 	}
 
 	clients, rounds := 8, 25
-	if n, err := strconv.Atoi(os.Getenv("NODUS_LOAD_CLIENTS")); err == nil && n > 0 {
+	if n, err := strconv.Atoi(os.Getenv("MEMOBRAIN_LOAD_CLIENTS")); err == nil && n > 0 {
 		clients = n
 	}
 	// Typical load: every device writes to its own vault; they only share the database.

@@ -41,11 +41,11 @@ func exportFixture(t *testing.T) (*env, *client, string, map[string]string) {
 	ada := e.user("ada")
 	v := ada.createVault("My Vault: é", "shared")
 	files := map[string]string{
-		"Home.md":              "# Home\nwith [[Projects/plan]]",
-		"Projects/plan.md":     "# plan",
-		"Projects/deep/x.json": `{"a":1}`,
-		"Attachments/blob.bin": strings.Repeat("\x00\x01", 1000),
-		".nodus/editor.json":   `{"fontSize":14}`, // synced user settings travel with the vault
+		"Home.md":                "# Home\nwith [[Projects/plan]]",
+		"Projects/plan.md":       "# plan",
+		"Projects/deep/x.json":   `{"a":1}`,
+		"Attachments/blob.bin":   strings.Repeat("\x00\x01", 1000),
+		".memobrain/editor.json": `{"fontSize":14}`, // synced user settings travel with the vault
 	}
 	ada.seed(v, files)
 	return e, ada, v, files

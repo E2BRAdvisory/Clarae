@@ -18,21 +18,21 @@ import (
 // committing one small file now and then. It reports throughput and
 // percentiles and can write a CPU profile of the server side:
 //
-//	NODUS_LOAD=1 NODUS_LOAD_USERS=200 NODUS_LOAD_SECONDS=15 NODUS_LOAD_CPUPROFILE=cpu.pprof \
+//	MEMOBRAIN_LOAD=1 MEMOBRAIN_LOAD_USERS=200 MEMOBRAIN_LOAD_SECONDS=15 MEMOBRAIN_LOAD_CPUPROFILE=cpu.pprof \
 //	  go test -tags integration -run TestLoadSmallOps -v ./test/integration/
 //
 // Closed loop without think time: the throughput it reaches is far above what
 // 1,000 real users generate (about 100 requests/s), so p95 here is a safe
 // upper bound. See docs/perf/README.md.
 func TestLoadSmallOps(t *testing.T) {
-	if os.Getenv("NODUS_LOAD") == "" {
-		t.Skip("set NODUS_LOAD=1 to run the small-operations load test")
+	if os.Getenv("MEMOBRAIN_LOAD") == "" {
+		t.Skip("set MEMOBRAIN_LOAD=1 to run the small-operations load test")
 	}
 	users, seconds := 200, 15
-	if n, err := strconv.Atoi(os.Getenv("NODUS_LOAD_USERS")); err == nil && n > 0 {
+	if n, err := strconv.Atoi(os.Getenv("MEMOBRAIN_LOAD_USERS")); err == nil && n > 0 {
 		users = n
 	}
-	if n, err := strconv.Atoi(os.Getenv("NODUS_LOAD_SECONDS")); err == nil && n > 0 {
+	if n, err := strconv.Atoi(os.Getenv("MEMOBRAIN_LOAD_SECONDS")); err == nil && n > 0 {
 		seconds = n
 	}
 	e := newEnv(t)
@@ -65,7 +65,7 @@ func TestLoadSmallOps(t *testing.T) {
 	}
 	setup.Wait()
 
-	if prof := os.Getenv("NODUS_LOAD_CPUPROFILE"); prof != "" {
+	if prof := os.Getenv("MEMOBRAIN_LOAD_CPUPROFILE"); prof != "" {
 		f, err := os.Create(prof) //nolint:gosec // developer-chosen output path
 		if err != nil {
 			t.Fatal(err)

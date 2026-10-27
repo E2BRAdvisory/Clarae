@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, unwrap } from '@nodus/api-client';
+import { ApiError, unwrap } from '@memobrain/api-client';
 
 describe('unwrap', () => {
   it('returns the data of a successful call', async () => {

@@ -9,7 +9,7 @@
 #   scripts/run-desktop.sh --data-dir DIR  use another application data directory
 #   scripts/run-desktop.sh --fresh         wipe the standalone data directory first
 #
-# State lives under .dev/standalone (git-ignored): app.db, logs/nodus.log, vaults/.
+# State lives under .dev/standalone (git-ignored): app.db, logs/memobrain.log, vaults/.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -32,18 +32,18 @@ need wails; need node; need yarn
 mkdir -p "$DATA_DIR/vaults"
 [ "$DEMO" = 1 ] && seed_demo_vault "$DATA_DIR/vaults/Demo"
 
-log "Standalone desktop (data: ${DATA_DIR#$ROOT/}, log: ${DATA_DIR#$ROOT/}/logs/nodus.log)"
+log "Standalone desktop (data: ${DATA_DIR#$ROOT/}, log: ${DATA_DIR#$ROOT/}/logs/memobrain.log)"
 log "Installing frontend dependencies"
 (cd "$ROOT" && run_quiet "yarn install" yarn install --immutable)
 
-export NODUS_DATA_DIR="$DATA_DIR"
-unset NODUS_DEFAULT_SERVER_URL
+export MEMOBRAIN_DATA_DIR="$DATA_DIR"
+unset MEMOBRAIN_DEFAULT_SERVER_URL
 if [ "$BUILD" = 1 ]; then
   log "Building (production)"
   (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -ldflags "-X main.Version=dev-standalone")
   case "$(uname -s)" in
-    Darwin) exec "$ROOT/apps/desktop/build/bin/nodus.app/Contents/MacOS/nodus" ;;
-    *) exec "$ROOT/apps/desktop/build/bin/nodus" ;;
+    Darwin) exec "$ROOT/apps/desktop/build/bin/memobrain.app/Contents/MacOS/memobrain" ;;
+    *) exec "$ROOT/apps/desktop/build/bin/memobrain" ;;
   esac
 else
   cd "$ROOT/apps/desktop" && exec wails dev

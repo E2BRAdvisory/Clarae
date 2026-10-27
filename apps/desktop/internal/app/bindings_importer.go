@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"nodus/apps/desktop/internal/importer"
+	"memobrain/apps/desktop/internal/importer"
 )
 
 // Events of the importer (mirrored in frontend/src/importer/events.ts).

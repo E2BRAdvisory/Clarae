@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/db/dbgen"
 )
 
 // HTTP implements the export endpoints of the generated strict server.

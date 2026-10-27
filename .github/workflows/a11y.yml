@@ -31,11 +31,11 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --immutable
-      - run: yarn workspace @nodus/desktop-frontend exec playwright install --with-deps chromium
+      - run: yarn workspace @memobrain/desktop-frontend exec playwright install --with-deps chromium
       - name: Web UI (every route and dialog, light and dark; keyboard flows)
-        run: yarn workspace @nodus/web run e2e a11y keyboard
+        run: yarn workspace @memobrain/web run e2e a11y keyboard
       - name: Desktop UI (shell, palette, settings, sync, sharing, importer, graph, bases, recovery)
-        run: yarn workspace @nodus/desktop-frontend run e2e a11y keyboard
+        run: yarn workspace @memobrain/desktop-frontend run e2e a11y keyboard
         env:
           AXE_REPORT: ${{ runner.temp }}/axe-desktop.jsonl
       - name: Upload the full desktop axe report

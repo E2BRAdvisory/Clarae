@@ -9,9 +9,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/links"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/links"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 func resolvedLinks(t *testing.T, ix *Indexer) []string {
@@ -43,7 +43,7 @@ func TestBatchesAndIncrementalResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, filepath.Join(root, ".nodus", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}

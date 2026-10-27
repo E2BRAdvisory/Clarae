@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
-import { ApiError, unwrap, type NodusClient, type Schemas } from '@nodus/api-client';
+import { ApiError, unwrap, type MemobrainClient, type Schemas } from '@memobrain/api-client';
 import { useApi } from './context';
 
 export type AdminUser = Schemas['AdminUser'];
@@ -495,7 +495,7 @@ export function useAuditLog(f: AuditFilters) {
 
 /** Fetches the CSV with the bearer token of the client (a plain link could not send it). */
 export async function fetchAuditCsv(
-  api: NodusClient,
+  api: MemobrainClient,
   f: AuditFilters,
   signal?: AbortSignal,
 ): Promise<Blob> {

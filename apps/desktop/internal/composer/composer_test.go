@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"nodus/apps/desktop/internal/indexer"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/indexer"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/vault"
 
 	"github.com/rs/zerolog"
 )

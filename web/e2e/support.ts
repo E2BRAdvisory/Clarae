@@ -43,7 +43,7 @@ export async function mockApi(page: Page, routes: Record<string, unknown>) {
 export async function signedIn(page: Page, roles: string[] = []) {
   await page.addInitScript(
     (user) => {
-      window.sessionStorage.setItem('nodus.e2e.user', JSON.stringify(user));
+      window.sessionStorage.setItem('memobrain.e2e.user', JSON.stringify(user));
     },
     { name: 'Alice', roles },
   );

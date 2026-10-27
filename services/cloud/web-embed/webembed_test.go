@@ -10,7 +10,7 @@ import (
 
 func testHandler() http.Handler {
 	return Handler(Options{
-		Issuer: "https://id.example.com:8443/realms/nodus",
+		Issuer: "https://id.example.com:8443/realms/memobrain",
 		FS: fstest.MapFS{
 			"index.html":      {Data: []byte("<html>app</html>")},
 			"assets/app-1.js": {Data: []byte("console.log(1)")},

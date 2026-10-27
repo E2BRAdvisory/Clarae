@@ -12,20 +12,20 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/indexer"
-	"nodus/apps/desktop/internal/search"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/indexer"
+	"memobrain/apps/desktop/internal/search"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 // BenchmarkQuery builds a synthetic vault and measures indexing and query
-// latency. Size via NODUS_BENCH_NOTES (default 2000; the target of Appendix A
+// latency. Size via MEMOBRAIN_BENCH_NOTES (default 2000; the target of Appendix A
 // is 50000: index < 3 min, query < 200 ms):
 //
-//	NODUS_BENCH_NOTES=50000 go test -run xxx -bench Query -benchtime 1x ./internal/search/
+//	MEMOBRAIN_BENCH_NOTES=50000 go test -run xxx -bench Query -benchtime 1x ./internal/search/
 func BenchmarkQuery(b *testing.B) {
 	n := 2000
-	if v := os.Getenv("NODUS_BENCH_NOTES"); v != "" {
+	if v := os.Getenv("MEMOBRAIN_BENCH_NOTES"); v != "" {
 		n, _ = strconv.Atoi(v)
 	}
 	ctx := context.Background()
@@ -49,7 +49,7 @@ func BenchmarkQuery(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	db, err := store.Open(ctx, filepath.Join(root, ".nodus", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
 	if err != nil {
 		b.Fatal(err)
 	}

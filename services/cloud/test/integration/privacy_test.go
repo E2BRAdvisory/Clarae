@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/auth/authtest"
 )
 
 func (e *env) count(sql string, args ...any) int {
@@ -154,7 +154,7 @@ func TestDeleteAccountFlowAndPurge(t *testing.T) {
 	if err := e.db.Pool.QueryRow(context.Background(), "SELECT status, username, email, display_name FROM users WHERE id=$1", ada.uid()).Scan(&status, &username, &email, &display); err != nil {
 		t.Fatal(err)
 	}
-	if status != "deleted" || username == "ada-del" || strings.Contains(email, "nodus.local") || display != nil {
+	if status != "deleted" || username == "ada-del" || strings.Contains(email, "memobrain.local") || display != nil {
 		t.Fatalf("not anonymised: %s %s %s %v", status, username, email, display)
 	}
 	if n := e.count("SELECT COUNT(*) FROM devices WHERE user_id=$1 AND (revoked_at IS NULL OR name <> 'deleted device')", ada.uid()); n != 0 {
@@ -285,5 +285,5 @@ func decodeString[T any](t *testing.T, s string) T {
 // userWithRaw builds a client whose token carries an existing Keycloak subject.
 func (e *env) userWithRaw(t *testing.T, name, subject string) *client {
 	t.Helper()
-	return &client{e: e, token: e.issuer.Token(t, authtest.TokenOptions{Subject: subject, Username: name, Email: name + "@nodus.local"})}
+	return &client{e: e, token: e.issuer.Token(t, authtest.TokenOptions{Subject: subject, Username: name, Email: name + "@memobrain.local"})}
 }

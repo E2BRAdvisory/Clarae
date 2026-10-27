@@ -18,8 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/observability"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/observability"
 )
 
 // Channel is the Postgres NOTIFY channel (mirrors sync.ChannelVaultChanged).

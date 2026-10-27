@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 // Sink receives the files of an import. Implementations choose collision-free paths.

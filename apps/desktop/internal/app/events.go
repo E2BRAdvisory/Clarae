@@ -12,7 +12,7 @@ const (
 	EventVaultLocked      = "vault:locked"
 	EventAuthState        = "auth:state"
 	EventConfigUpdated    = "config:updated"
-	EventOpenRequest      = "app:open-request" // nodus://open handled by the OS
+	EventOpenRequest      = "app:open-request" // memobrain://open handled by the OS
 )
 
 // FileChangedPayload accompanies EventVaultFileChanged.

@@ -13,12 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"nodus/apps/desktop/internal/properties"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/properties"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
-// vaultConfigFiles is the allow-list of settings files under .nodus/ that the
+// vaultConfigFiles is the allow-list of settings files under .memobrain/ that the
 // frontend may read and write (§3.4.6). Anything else is refused.
 var vaultConfigFiles = map[string]bool{
 	"editor.json": true, "appearance.json": true, "hotkeys.json": true, "types.json": true,
@@ -243,7 +243,7 @@ func (p *PropertiesAPI) Keys(vaultID string) ([]PropertyKey, error) {
 	return out, rows.Err()
 }
 
-// Schema returns the declared types (.nodus/types.json).
+// Schema returns the declared types (.memobrain/types.json).
 func (p *PropertiesAPI) Schema(vaultID string) (map[string]string, error) {
 	ov, err := p.app.vault(vaultID)
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 var now = time.Date(2026, time.March, 5, 14, 7, 9, 0, time.UTC)

@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/syncproto"
 )
 
 // Remote is the part of the cloud API the engine uses, for one vault.

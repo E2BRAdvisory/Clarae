@@ -181,7 +181,7 @@ jobs:
           fi
           echo "$WINDOWS_CERT_PFX_BASE64" | base64 --decode > "$RUNNER_TEMP/codesign.pfx"
           signtool="$(find "/c/Program Files (x86)/Windows Kits/10/bin" -name signtool.exe -path '*x64*' | sort | tail -n1)"
-          echo "NODUS_SIGNTOOL_CMD=\"$signtool\" sign /fd SHA256 /td SHA256 /tr ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }} /f $RUNNER_TEMP/codesign.pfx /p $WINDOWS_CERT_PASSWORD \"%1\"" >> "$GITHUB_ENV"
+          echo "MEMOBRAIN_SIGNTOOL_CMD=\"$signtool\" sign /fd SHA256 /td SHA256 /tr ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }} /f $RUNNER_TEMP/codesign.pfx /p $WINDOWS_CERT_PASSWORD \"%1\"" >> "$GITHUB_ENV"
       - name: Windows build (NSIS installer)
         if: matrix.os_name == 'windows'
         shell: bash
@@ -190,12 +190,12 @@ jobs:
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
           bash scripts/release/build-desktop.sh windows "$VERSION" "$RELEASE_FLAG"
           mkdir -p dist
-          cp apps/desktop/build/bin/nodus-amd64-installer.exe "dist/nodus-$VERSION-windows-amd64.exe"
+          cp apps/desktop/build/bin/memobrain-amd64-installer.exe "dist/memobrain-$VERSION-windows-amd64.exe"
       - name: Windows verify signature
-        if: matrix.os_name == 'windows' && env.NODUS_SIGNTOOL_CMD != ''
+        if: matrix.os_name == 'windows' && env.MEMOBRAIN_SIGNTOOL_CMD != ''
         shell: pwsh
         run: |
-          $sig = Get-AuthenticodeSignature "dist/nodus-$env:VERSION-windows-amd64.exe"
+          $sig = Get-AuthenticodeSignature "dist/memobrain-$env:VERSION-windows-amd64.exe"
           if ($sig.Status -ne 'Valid') { throw "installer signature status: $($sig.Status)" }
 
       # ---------------------------------------------------------------- Linux
@@ -212,7 +212,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os_name }}
-          path: dist/nodus-*
+          path: dist/memobrain-*
           if-no-files-found: error
 
   release:
@@ -240,11 +240,11 @@ jobs:
           merge-multiple: true
       - name: Checksums
         working-directory: dist
-        run: sha256sum nodus-* > SHA256SUMS && cat SHA256SUMS
+        run: sha256sum memobrain-* > SHA256SUMS && cat SHA256SUMS
 
       - name: Update manifest (sequence = workflow run number)
         env:
-          NODUS_UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          MEMOBRAIN_UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
         run: |
           set -euo pipefail
@@ -256,7 +256,7 @@ jobs:
           # Rule: never re-run an old tag after a newer one was published (docs/release/README.md).
           dist/release-tool gen-manifest -channel "$CHANNEL" -version "$VERSION" -sequence "$GITHUB_RUN_NUMBER" \
             -notes-file dist/RELEASE_NOTES.md -artifacts-dir dist -base-url "$base" -out dist/manifest.json
-          if [[ -n "$NODUS_UPDATE_SIGNING_KEY" ]]; then
+          if [[ -n "$MEMOBRAIN_UPDATE_SIGNING_KEY" ]]; then
             dist/release-tool sign-manifest -in dist/manifest.json
             [[ -n "$UPDATE_PUBLIC_KEY" ]] && dist/release-tool verify-manifest -in dist/manifest.json -pubkey "$UPDATE_PUBLIC_KEY"
           elif [[ "${{ needs.meta.outputs.is_tag }}" == "true" ]]; then
@@ -271,7 +271,7 @@ jobs:
         with:
           path: .
           format: spdx-json
-          output-file: dist/nodus-${{ needs.meta.outputs.version }}-sbom.spdx.json
+          output-file: dist/memobrain-${{ needs.meta.outputs.version }}-sbom.spdx.json
           upload-artifact: false
 
       - name: Provenance attestation of the release files
@@ -279,7 +279,7 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
-            dist/nodus-*
+            dist/memobrain-*
             dist/SHA256SUMS
             dist/manifest.json
 
@@ -295,8 +295,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          flags=(--draft --title "Nodus ${VERSION}" --notes-file dist/RELEASE_NOTES.md)
+          flags=(--draft --title "MemoBrain Notes ${VERSION}" --notes-file dist/RELEASE_NOTES.md)
           [[ "$VERSION" == *-* ]] && flags+=(--prerelease)
           # Draft: a human promotes it after the cross-OS checklist. The update manifest is attached but
           # only becomes the live update channel when it is copied to UPDATE_BASE_URL (docs/release/README.md).
-          gh release create "v${VERSION}" "${flags[@]}" dist/nodus-* dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig
+          gh release create "v${VERSION}" "${flags[@]}" dist/memobrain-* dist/SHA256SUMS dist/manifest.json dist/manifest.json.sig

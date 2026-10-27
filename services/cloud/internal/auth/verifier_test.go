@@ -6,24 +6,24 @@ import (
 	"testing"
 	"time"
 
-	"nodus/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/auth/authtest"
 )
 
 func TestVerifier(t *testing.T) {
 	iss := authtest.New(t)
 	ctx := context.Background()
-	v, err := NewVerifier(ctx, iss.URL(), "nodus-api", []string{"nodus-desktop", "nodus-web"})
+	v, err := NewVerifier(ctx, iss.URL(), "memobrain-api", []string{"memobrain-desktop", "memobrain-web"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("valid token", func(t *testing.T) {
-		raw := iss.Token(t, authtest.TokenOptions{Username: "ada", Name: "Ada Admin", Roles: []string{"nodus-admin", "nodus-user"}})
+		raw := iss.Token(t, authtest.TokenOptions{Username: "ada", Name: "Ada Admin", Roles: []string{"memobrain-admin", "memobrain-user"}})
 		c, err := v.Verify(ctx, raw)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.PreferredUsername != "ada" || c.Name != "Ada Admin" || c.AuthorizedParty != "nodus-desktop" {
+		if c.PreferredUsername != "ada" || c.Name != "Ada Admin" || c.AuthorizedParty != "memobrain-desktop" {
 			t.Fatalf("unexpected claims %+v", c)
 		}
 		if RoleFromRealmRoles(c.RealmRoles) != RoleAdmin {

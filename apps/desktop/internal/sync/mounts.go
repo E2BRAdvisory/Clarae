@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 // A mount is a share received from another user (§2.6.4): a folder of its own on this

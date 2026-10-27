@@ -2,9 +2,9 @@
 // contract; gRPC only pushes "something changed" events so that clients pull.
 syntax = "proto3";
 
-package nodus.v1;
+package memobrain.v1;
 
-option go_package = "nodus/shared/notifyv1;notifyv1";
+option go_package = "memobrain/shared/notifyv1;notifyv1";
 
 service NotifyService {
   // Stream of events for every vault and shared mount accessible to the token.

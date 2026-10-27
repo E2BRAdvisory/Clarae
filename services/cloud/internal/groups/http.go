@@ -3,8 +3,8 @@ package groups
 import (
 	"context"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/auth"
 )
 
 // HTTP implements the directory endpoints of the generated strict server.

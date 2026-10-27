@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/db/dbgen"
 )
 
 // Record writes one audit row through q, so it commits with the change it describes.

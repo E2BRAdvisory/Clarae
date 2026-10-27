@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { EmptyState } from '@nodus/ui';
+import { EmptyState } from '@memobrain/ui';
 import { useAuth } from './AuthProvider';
 
 /** Routes below this one need a signed-in user; anonymous visitors are sent to sign in. */

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"nodus/shared/updatemanifest"
+	"memobrain/shared/updatemanifest"
 )
 
 type fakeRunner struct {
@@ -47,7 +47,7 @@ type server struct {
 func newServer(t *testing.T) *server {
 	t.Helper()
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	s := &server{t: t, priv: priv, payload: []byte(strings.Repeat("nodus-binary", 100))}
+	s := &server{t: t, priv: priv, payload: []byte(strings.Repeat("memobrain-binary", 100))}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	t.Cleanup(s.srv.Close)
 	s.setManifest("1.1.0", 5)
@@ -116,7 +116,7 @@ func TestCheckDownloadEndToEnd(t *testing.T) {
 		t.Fatalf("check: %+v %v", st, err)
 	}
 	for _, ua := range s.agents {
-		if ua != "NodusUpdater" {
+		if ua != "MemobrainUpdater" {
 			t.Fatalf("user agent must not carry identifiers: %q", ua)
 		}
 	}
@@ -242,7 +242,7 @@ func TestHashMismatchAndOversizeArtifact(t *testing.T) {
 	if _, err := svc.Check(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	s.payload = []byte(strings.Repeat("evil-binary!", 100)) // same size, other content
+	s.payload = []byte(strings.Repeat("evil-binary!!!!!", 100)) // same size, other content
 	if _, err := svc.Download(context.Background()); !errors.Is(err, ErrHashMismatch) {
 		t.Fatalf("hash mismatch: %v", err)
 	}

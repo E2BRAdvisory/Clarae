@@ -1,6 +1,6 @@
 // Finding what is under the cursor: the heading a line belongs to and the block
 // (paragraph or list item) with its ^id, for "bookmark current heading/block".
-import { extract } from '@nodus/markdown';
+import { extract } from '@memobrain/markdown';
 
 /** The nearest heading at or above the 1-based line, or null. */
 export function headingAtLine(text: string, line: number): { text: string; level: number } | null {

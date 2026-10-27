@@ -31,10 +31,10 @@ const (
 
 // Domain-separation labels (HKDF info), §3.8.2.
 const (
-	infoPathEnc     = "nodus/v1/path-enc"
-	infoPathKey     = "nodus/v1/path-key"
-	infoFile        = "nodus/v1/file"
-	infoRecoveryKEK = "nodus/v1/recovery-kek"
+	infoPathEnc     = "memobrain/v1/path-enc"
+	infoPathKey     = "memobrain/v1/path-key"
+	infoFile        = "memobrain/v1/file"
+	infoRecoveryKEK = "memobrain/v1/recovery-kek"
 )
 
 // Errors.
@@ -149,7 +149,7 @@ func GenerateRecoveryKey() (RecoveryKey, error) {
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 func recoveryChecksum(k RecoveryKey) []byte {
-	h := sha256.Sum256(append([]byte("nodus/v1/recovery-checksum"), k[:]...))
+	h := sha256.Sum256(append([]byte("memobrain/v1/recovery-checksum"), k[:]...))
 	return h[:2]
 }
 

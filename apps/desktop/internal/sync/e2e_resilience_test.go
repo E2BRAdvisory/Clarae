@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	syncpkg "nodus/apps/desktop/internal/sync"
-	"nodus/apps/desktop/internal/sync/transport"
+	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 // faultTransport wraps the real transport. Once armed it fails every request

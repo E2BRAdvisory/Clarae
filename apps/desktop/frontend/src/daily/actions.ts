@@ -150,7 +150,7 @@ export async function openRandomNote(): Promise<void> {
   const tree = await api.vault.listTree(id);
   const notes = tree
     .filter((e) => !e.isDir && e.path.toLowerCase().endsWith('.md'))
-    .filter((e) => !e.path.startsWith('.trash/') && !e.path.startsWith('.nodus/'))
+    .filter((e) => !e.path.startsWith('.trash/') && !e.path.startsWith('.memobrain/'))
     .map((e) => e.path);
   const pick = pickRandom(notes, activePath());
   if (!pick) {

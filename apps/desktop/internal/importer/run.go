@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
 // source adapts an exec function to the Importer interface, so Preview and Run share it.

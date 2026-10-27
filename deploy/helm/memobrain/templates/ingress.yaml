@@ -3,8 +3,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "nodus.fullname" . }}
-  labels: {{- include "nodus.labels" . | nindent 4 }}
+  name: {{ include "memobrain.fullname" . }}
+  labels: {{- include "memobrain.labels" . | nindent 4 }}
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.proxyBodySize | quote }}
     {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
@@ -23,15 +23,15 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "nodus.fullname" . }}
+                name: {{ include "memobrain.fullname" . }}
                 port: { name: http }
 ---
 # gRPC (notification stream): nginx must speak HTTP/2 to the backend, hence its own Ingress object.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "nodus.fullname" . }}-grpc
-  labels: {{- include "nodus.labels" . | nindent 4 }}
+  name: {{ include "memobrain.fullname" . }}-grpc
+  labels: {{- include "memobrain.labels" . | nindent 4 }}
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: GRPC
     nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.grpc.streamTimeoutSeconds | quote }}
@@ -53,6 +53,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "nodus.fullname" . }}
+                name: {{ include "memobrain.fullname" . }}
                 port: { name: grpc }
 {{- end }}

@@ -4,7 +4,7 @@ import { mockApi, signedIn } from './support';
 
 // Keyboard-only flows: nothing here uses the mouse.
 test.beforeEach(async ({ page }) => {
-  await signedIn(page, ['nodus-admin']);
+  await signedIn(page, ['memobrain-admin']);
   await mockApi(page, allRoutes);
 });
 

@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "nodus.fullname" . }}
-  labels: {{- include "nodus.labels" . | nindent 4 }}
+  name: {{ include "memobrain.fullname" . }}
+  labels: {{- include "memobrain.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app.kubernetes.io/name: {{ include "nodus.name" . }}
+    app.kubernetes.io/name: {{ include "memobrain.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: api
   ports:

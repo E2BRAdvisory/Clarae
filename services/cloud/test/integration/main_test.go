@@ -25,13 +25,13 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"nodus/services/cloud/internal/app"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/auth/authtest"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/httpserver"
-	"nodus/services/cloud/internal/storage"
-	"nodus/services/cloud/internal/system"
+	"memobrain/services/cloud/internal/app"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/httpserver"
+	"memobrain/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/system"
 )
 
 var (
@@ -48,9 +48,9 @@ func run(m *testing.M) int {
 	defer cancel()
 
 	pg, err := tcpostgres.Run(ctx, "postgres:17",
-		tcpostgres.WithDatabase("nodus"),
-		tcpostgres.WithUsername("nodus"),
-		tcpostgres.WithPassword("nodus"),
+		tcpostgres.WithDatabase("memobrain"),
+		tcpostgres.WithUsername("memobrain"),
+		tcpostgres.WithPassword("memobrain"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
@@ -131,7 +131,7 @@ func newEnv(t *testing.T) *env {
 	}
 
 	issuer := authtest.New(t)
-	verifier, err := auth.NewVerifier(ctx, issuer.URL(), "nodus-api", []string{"nodus-desktop", "nodus-web"})
+	verifier, err := auth.NewVerifier(ctx, issuer.URL(), "memobrain-api", []string{"memobrain-desktop", "memobrain-web"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func newEnv(t *testing.T) *env {
 	router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
 		Logger: zerolog.Nop(),
 		Auth:   authn,
-		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "nodus-desktop", Audience: "nodus-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
+		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "memobrain-desktop", Audience: "memobrain-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
 	}))
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)

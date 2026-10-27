@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
-// Layout under <vault>/.nodus/snapshots (device-local, excluded from sync, index and tree
+// Layout under <vault>/.memobrain/snapshots (device-local, excluded from sync, index and tree
 // by pathrules.IsExcluded):
 //
 //	blobs/<hh>/<hash>        content, addressed by its hash (shared by identical versions)
@@ -76,7 +76,7 @@ func writeAtomic(abs string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".nodus-tmp-*")
+	tmp, err := os.CreateTemp(dir, ".memobrain-tmp-*")
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 # Reverse proxy of the on-premise stack.
-# NODUS_SITE / NOTIFY_SITE / AUTH_SITE are the site addresses (default: the host names, which makes
+# MEMOBRAIN_SITE / NOTIFY_SITE / AUTH_SITE are the site addresses (default: the host names, which makes
 # Caddy obtain public certificates automatically: ports 80/443 must be reachable and the DNS names
 # must point here). For an internal CA set CADDY_GLOBAL="local_certs" (clients must then trust that CA);
 # for a local test over plain HTTP use site addresses with the http:// prefix.
@@ -7,7 +7,7 @@
 	{$CADDY_GLOBAL}
 }
 
-{$NODUS_SITE} {
+{$MEMOBRAIN_SITE} {
 	request_body {
 		max_size 64MB
 	}

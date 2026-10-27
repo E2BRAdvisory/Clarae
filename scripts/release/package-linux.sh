@@ -3,8 +3,8 @@
 #
 #   scripts/release/package-linux.sh <deb|appimage|all> <version>
 #
-# Input : apps/desktop/build/bin/nodus (scripts/release/build-desktop.sh linux <version>)
-# Output: dist/nodus-<version>-linux-amd64.deb and dist/nodus-<version>-linux-amd64.AppImage
+# Input : apps/desktop/build/bin/memobrain (scripts/release/build-desktop.sh linux <version>)
+# Output: dist/memobrain-<version>-linux-amd64.deb and dist/memobrain-<version>-linux-amd64.AppImage
 #
 # Needs (Linux runner): nfpm for the deb, appimagetool (+ libfuse2 or --appimage-extract-and-run)
 # for the AppImage. Neither the .deb nor the AppImage bundles WebKitGTK: both rely on the system
@@ -19,44 +19,44 @@ KIND="${1:-}"; VERSION="${2:-}"
 case "$KIND" in deb|appimage|all) ;; *) die "usage: $0 <deb|appimage|all> <version>" ;; esac
 VERSION="${VERSION#v}"; [ -n "$VERSION" ] || die "version required"
 ARCH="${ARCH:-amd64}"; GO_ARCH="$ARCH"
-BIN="$ROOT/apps/desktop/build/bin/nodus"; LINUX="$ROOT/apps/desktop/build/linux"
+BIN="$ROOT/apps/desktop/build/bin/memobrain"; LINUX="$ROOT/apps/desktop/build/linux"
 [ -x "$BIN" ] || die "$BIN not found: run scripts/release/build-desktop.sh linux $VERSION first"
 OUT="$ROOT/dist"; mkdir -p "$OUT"
 
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
-cp "$BIN" "$STAGE/nodus"
-cp "$LINUX/nodus.desktop" "$STAGE/nodus.desktop"
+cp "$BIN" "$STAGE/memobrain"
+cp "$LINUX/memobrain.desktop" "$STAGE/memobrain.desktop"
 # Placeholder icon until the final artwork exists: the 1024 px appicon.png is used as it is.
-cp "$ROOT/apps/desktop/build/appicon.png" "$STAGE/nodus.png"
+cp "$ROOT/apps/desktop/build/appicon.png" "$STAGE/memobrain.png"
 sed -e "s/@VERSION@/$VERSION/" -e "s/@DATE@/$(date -u +%F)/" \
-  "$LINUX/dev.nodus.desktop.metainfo.xml" > "$STAGE/dev.nodus.desktop.metainfo.xml"
+  "$LINUX/dev.memobrain.desktop.metainfo.xml" > "$STAGE/dev.memobrain.desktop.metainfo.xml"
 
 if [ "$KIND" = deb ] || [ "$KIND" = all ]; then
   need nfpm
   log "Building the .deb"
   (cd "$ROOT" && VERSION="$VERSION" ARCH="$ARCH" STAGE="$STAGE" \
-    nfpm package -p deb -f "$LINUX/nfpm.yaml" -t "$OUT/nodus-$VERSION-linux-$ARCH.deb")
+    nfpm package -p deb -f "$LINUX/nfpm.yaml" -t "$OUT/memobrain-$VERSION-linux-$ARCH.deb")
 fi
 
 if [ "$KIND" = appimage ] || [ "$KIND" = all ]; then
   need appimagetool
   log "Building the AppImage"
-  APPDIR="$STAGE/Nodus.AppDir"
+  APPDIR="$STAGE/MemoBrain-Notes.AppDir"
   mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/metainfo"
-  cp "$STAGE/nodus" "$APPDIR/usr/bin/nodus"
-  cp "$STAGE/nodus.png" "$APPDIR/nodus.png"
+  cp "$STAGE/memobrain" "$APPDIR/usr/bin/memobrain"
+  cp "$STAGE/memobrain.png" "$APPDIR/memobrain.png"
   # Inside the AppImage Exec must be the bare command: AppRun puts usr/bin on PATH.
-  cp "$STAGE/nodus.desktop" "$APPDIR/nodus.desktop"
-  cp "$STAGE/dev.nodus.desktop.metainfo.xml" "$APPDIR/usr/share/metainfo/"
+  cp "$STAGE/memobrain.desktop" "$APPDIR/memobrain.desktop"
+  cp "$STAGE/dev.memobrain.desktop.metainfo.xml" "$APPDIR/usr/share/metainfo/"
   cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/usr/bin/nodus" "$@"
+exec "$HERE/usr/bin/memobrain" "$@"
 EOF
   chmod +x "$APPDIR/AppRun"
   # $APPIMAGE (set by the runtime) tells the updater it can replace the file in place.
   AI_ARCH=x86_64; [ "$ARCH" = arm64 ] && AI_ARCH=aarch64
-  ARCH="$AI_ARCH" appimagetool --appimage-extract-and-run "$APPDIR" "$OUT/nodus-$VERSION-linux-$GO_ARCH.AppImage"
+  ARCH="$AI_ARCH" appimagetool --appimage-extract-and-run "$APPDIR" "$OUT/memobrain-$VERSION-linux-$GO_ARCH.AppImage"
 fi
 ok "packages in $OUT"
 ls -la "$OUT"

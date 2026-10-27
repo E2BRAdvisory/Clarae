@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/db/dbgen"
 )
 
 func TestSelectDoomed(t *testing.T) {

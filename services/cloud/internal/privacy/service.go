@@ -14,13 +14,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"nodus/services/cloud/internal/audit"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/services/cloud/internal/keycloak"
-	"nodus/services/cloud/internal/notify"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/keycloak"
+	"memobrain/services/cloud/internal/notify"
+	"memobrain/shared/syncproto"
 )
 
 // SessionInvalidator drops the cached authentication state of a user (auth.Middleware).

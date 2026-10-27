@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { renderApp, type RecordedCall } from '../../test/utils';
 
-const ADMIN = { roles: ['nodus-admin'] };
+const ADMIN = { roles: ['memobrain-admin'] };
 const G = '33333333-aaaa-4333-8333-333333333333';
 const U1 = '11111111-aaaa-4111-8111-111111111111';
 const U2 = '22222222-aaaa-4222-8222-222222222222';

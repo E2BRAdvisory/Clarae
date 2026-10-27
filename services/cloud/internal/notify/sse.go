@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"nodus/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/auth"
 )
 
 // SSEHandler serves GET /events, the fallback for networks that block gRPC

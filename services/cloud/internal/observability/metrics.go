@@ -23,16 +23,16 @@ type Metrics struct {
 func New() *Metrics {
 	m := &Metrics{
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "nodus", Subsystem: "http", Name: "requests_total",
+			Namespace: "memobrain", Subsystem: "http", Name: "requests_total",
 			Help: "HTTP requests by route pattern, method and status.",
 		}, []string{"route", "method", "status"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: "nodus", Subsystem: "http", Name: "request_duration_seconds",
+			Namespace: "memobrain", Subsystem: "http", Name: "request_duration_seconds",
 			Help:    "HTTP request latency by route pattern and method.",
 			Buckets: []float64{.005, .01, .025, .05, .1, .2, .5, 1, 2.5, 5, 10},
 		}, []string{"route", "method"}),
 		inflight: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: "nodus", Subsystem: "http", Name: "inflight_requests",
+			Namespace: "memobrain", Subsystem: "http", Name: "inflight_requests",
 			Help: "HTTP requests currently being served.",
 		}),
 	}

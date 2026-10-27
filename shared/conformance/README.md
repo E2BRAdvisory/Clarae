@@ -7,7 +7,7 @@ shared/conformance/
 ├── markdown/        # <caso>.md + <caso>.expected.json   (parser OFM)
 ├── merge/           # <caso>/{base,ours,theirs,expected}.md (+ meta.json)  — da M2
 ├── crypto/          # vectors.json                        — da M2 (§3.8.7)
-└── ts/              # pacchetto @nodus/conformance: tipi e loader per i test TS
+└── ts/              # pacchetto @memobrain/conformance: tipi e loader per i test TS
 ```
 
 I loader Go stanno in `shared/go/conformance`.
@@ -55,5 +55,5 @@ Aggiungere un caso = aggiungere i due file. Nome del caso: `kebab-case` che desc
 ## Esecuzione
 
 ```sh
-make conformance   # Go (desktop parser) + TS (@nodus/conformance e frontend)
+make conformance   # Go (desktop parser) + TS (@memobrain/conformance e frontend)
 ```

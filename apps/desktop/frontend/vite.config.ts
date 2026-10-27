@@ -18,7 +18,7 @@ function excalidrawAssets(): Plugin {
   const require = createRequire(import.meta.url);
   const dir = dirname(require.resolve('@excalidraw/excalidraw')); // .../dist/prod
   return {
-    name: 'nodus-excalidraw-assets',
+    name: 'memobrain-excalidraw-assets',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = decodeURIComponent((req.url ?? '').split('?')[0] ?? '');

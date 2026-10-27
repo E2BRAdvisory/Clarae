@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // HTTP implements the GDPR endpoints of the generated strict server.
@@ -25,7 +25,7 @@ type exportResponse struct {
 
 func (r exportResponse) VisitExportMyDataResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="nodus-account-%s.json"`, r.data.GeneratedAt.Format("20060102")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="memobrain-account-%s.json"`, r.data.GeneratedAt.Format("20060102")))
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	enc := json.NewEncoder(w)

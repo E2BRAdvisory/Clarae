@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"time"
 
-	webembed "nodus/services/cloud/web-embed"
+	webembed "memobrain/services/cloud/web-embed"
 )
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:18095", "listen address")
-	issuer := flag.String("issuer", "https://id.example.invalid/realms/nodus", "OIDC issuer allowed in connect-src")
+	issuer := flag.String("issuer", "https://id.example.invalid/realms/memobrain", "OIDC issuer allowed in connect-src")
 	flag.Parse()
 	srv := &http.Server{
 		Addr:              *addr,

@@ -18,16 +18,16 @@ import (
 	"strconv"
 	"strings"
 
-	"nodus/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/services/cloud/internal/storage"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/storage"
+	"memobrain/shared/syncproto"
 )
 
 // MaxSingleUpload is the largest body accepted by PUT /blobs/{sha256} (§3.4.4).
@@ -92,7 +92,7 @@ func (s *Service) Check(ctx context.Context, userID, vaultID uuid.UUID, scope st
 
 // spool copies r to a temporary file while hashing it and enforcing max.
 func spool(r io.Reader, max int64) (path string, size int64, hash string, err error) {
-	f, err := os.CreateTemp("", "nodus-blob-*")
+	f, err := os.CreateTemp("", "memobrain-blob-*")
 	if err != nil {
 		return "", 0, "", err
 	}

@@ -14,12 +14,12 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/crypto"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/crypto"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 // SessionInfo describes the signed-in account.

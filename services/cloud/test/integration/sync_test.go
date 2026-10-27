@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"nodus/shared/syncproto"
+	"memobrain/shared/syncproto"
 )
 
 func TestVaultLifecycle(t *testing.T) {

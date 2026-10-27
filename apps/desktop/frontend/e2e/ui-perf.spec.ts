@@ -2,22 +2,22 @@
 //  - file explorer with a large vault tree (default 10 000 notes, all folders expanded;
 //    tree_dom_nodes is the number of mounted rows),
 //  - typing latency in a ~1 MB note (Appendix A: "digitazione senza lag su note <= 1 MB").
-// Skipped unless NODUS_UI_BENCH is set, so normal e2e runs are not slowed down:
+// Skipped unless MEMOBRAIN_UI_BENCH is set, so normal e2e runs are not slowed down:
 //
-//   NODUS_UI_BENCH=1 yarn workspace @nodus/desktop-frontend exec playwright test e2e/ui-perf.spec.ts
+//   MEMOBRAIN_UI_BENCH=1 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/ui-perf.spec.ts
 //
 // Numbers are for headless Chromium on the machine that runs them (software raster,
 // no GPU, mock instead of the Go backend); the real webview needs a manual check.
-// Options: NODUS_UI_BENCH_NOTES (tree size), NODUS_UI_BENCH_NOTE_KB (note size, default 1000),
-// NODUS_UI_BENCH_OUT (write the numbers as JSON).
+// Options: MEMOBRAIN_UI_BENCH_NOTES (tree size), MEMOBRAIN_UI_BENCH_NOTE_KB (note size, default 1000),
+// MEMOBRAIN_UI_BENCH_OUT (write the numbers as JSON).
 import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
-const ON = !!process.env['NODUS_UI_BENCH'];
-const NOTES = Number(process.env['NODUS_UI_BENCH_NOTES'] ?? 10000);
-const NOTE_KB = Number(process.env['NODUS_UI_BENCH_NOTE_KB'] ?? 1000);
+const ON = !!process.env['MEMOBRAIN_UI_BENCH'];
+const NOTES = Number(process.env['MEMOBRAIN_UI_BENCH_NOTES'] ?? 10000);
+const NOTE_KB = Number(process.env['MEMOBRAIN_UI_BENCH_NOTE_KB'] ?? 1000);
 
-test.skip(!ON, 'set NODUS_UI_BENCH=1 to run the UI performance harness');
+test.skip(!ON, 'set MEMOBRAIN_UI_BENCH=1 to run the UI performance harness');
 test.describe.configure({ mode: 'serial' });
 
 interface MockWindow {
@@ -41,7 +41,7 @@ async function openVault(page: Page): Promise<void> {
 
 test.afterAll(() => {
   console.log('UI perf:', JSON.stringify(results));
-  const out = process.env['NODUS_UI_BENCH_OUT'];
+  const out = process.env['MEMOBRAIN_UI_BENCH_OUT'];
   if (out) writeFileSync(out, JSON.stringify(results, null, 2) + '\n');
 });
 

@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dialog, InlineError } from '@nodus/ui';
+import { Button, Dialog, InlineError } from '@memobrain/ui';
 import { ByteField, type ByteFieldValue } from './ByteField';
 import { parseAmount, splitBytes, toBytes } from './bytes';
 

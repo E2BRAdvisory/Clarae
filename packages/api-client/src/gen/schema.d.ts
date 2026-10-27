@@ -1167,7 +1167,7 @@ export interface components {
             /** @description Server version */
             api_version: string;
         };
-        /** @description RFC 9457 problem details with the Nodus application code */
+        /** @description RFC 9457 problem details with the MemoBrain Notes application code */
         Problem: {
             /** Format: uri */
             type: string;

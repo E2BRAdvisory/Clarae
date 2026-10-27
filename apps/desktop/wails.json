@@ -1,22 +1,22 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "nodus",
-  "outputfilename": "nodus",
+  "name": "memobrain",
+  "outputfilename": "memobrain",
   "frontend:install": "yarn install",
   "frontend:build": "yarn run build",
   "frontend:dev:watcher": "yarn run dev",
   "frontend:dev:serverUrl": "auto",
   "wailsjsdir": "./frontend",
   "info": {
-    "companyName": "Nodus",
-    "productName": "Nodus",
-    "productIdentifier": "dev.nodus.desktop",
+    "companyName": "MemoBrain Notes",
+    "productName": "MemoBrain Notes",
+    "productIdentifier": "dev.memobrain.desktop",
     "copyright": "Copyright © 2026",
     "comments": "Local-first notes and knowledge base",
     "protocols": [
       {
-        "scheme": "nodus",
-        "description": "Nodus URL scheme (open notes, OIDC callback)",
+        "scheme": "memobrain",
+        "description": "MemoBrain Notes URL scheme (open notes, OIDC callback)",
         "role": "Editor"
       }
     ]

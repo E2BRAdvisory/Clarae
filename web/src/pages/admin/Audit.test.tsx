@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderApp, type RecordedCall } from '../../test/utils';
 
-const ADMIN = { roles: ['nodus-admin'] };
+const ADMIN = { roles: ['memobrain-admin'] };
 const U1 = '11111111-aaaa-4111-8111-111111111111';
 
 const entry = (id: number, over: Record<string, unknown> = {}) => ({

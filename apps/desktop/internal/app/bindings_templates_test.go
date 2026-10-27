@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"nodus/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 func TestDailyAndUniqueNotes(t *testing.T) {

@@ -34,7 +34,9 @@ test('the account page downloads the data and guards the deletion', async ({ pag
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download my data' }).click();
-  expect((await download).suggestedFilename()).toMatch(/^nodus-account-\d{4}-\d{2}-\d{2}\.json$/);
+  expect((await download).suggestedFilename()).toMatch(
+    /^memobrain-account-\d{4}-\d{2}-\d{2}\.json$/,
+  );
   expect(calls).toContain('GET /me/export');
 
   await page.getByRole('button', { name: 'Delete my account' }).click();

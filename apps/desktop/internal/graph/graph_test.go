@@ -13,10 +13,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/graph"
-	"nodus/apps/desktop/internal/indexer"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/graph"
+	"memobrain/apps/desktop/internal/indexer"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 func indexVault(t testing.TB, files map[string]string) *sql.DB {
@@ -32,7 +32,7 @@ func indexVault(t testing.TB, files map[string]string) *sql.DB {
 			t.Fatal(err)
 		}
 	}
-	db, err := store.Open(ctx, filepath.Join(root, ".nodus", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,10 +206,10 @@ func TestGroupsAndTruncation(t *testing.T) {
 // BenchmarkBuild10k builds a synthetic vault (default 10000 notes, ~5 links
 // each, tags, some ghosts) and measures Build with everything enabled:
 //
-//	NODUS_BENCH_NOTES=10000 go test -run xxx -bench Build -benchtime 3x ./internal/graph/
+//	MEMOBRAIN_BENCH_NOTES=10000 go test -run xxx -bench Build -benchtime 3x ./internal/graph/
 func BenchmarkBuild10k(b *testing.B) {
 	n := 10000
-	if v := os.Getenv("NODUS_BENCH_NOTES"); v != "" {
+	if v := os.Getenv("MEMOBRAIN_BENCH_NOTES"); v != "" {
 		n, _ = strconv.Atoi(v)
 	}
 	files := make(map[string]string, n)

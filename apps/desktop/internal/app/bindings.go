@@ -14,9 +14,9 @@ import (
 	"github.com/Bios-Marcel/wastebasket/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"nodus/apps/desktop/internal/links"
-	"nodus/apps/desktop/internal/search"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/links"
+	"memobrain/apps/desktop/internal/search"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 // The API structs below are bound to the frontend by Wails (see main.go);
@@ -129,7 +129,7 @@ func (a *App) exportZip(vaultID, dest string) (ExportResult, error) {
 			return ExportResult{}, errors.New("choose a location outside the vault")
 		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dest), ".nodus-export-*.part")
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".memobrain-export-*.part")
 	if err != nil {
 		return ExportResult{}, err
 	}
@@ -365,8 +365,8 @@ func (s *SettingsAPI) Info() map[string]string {
 	return map[string]string{
 		"version": s.app.opts.Version,
 		"dataDir": s.app.opts.DataDir,
-		// Convenience for development: NODUS_DEFAULT_SERVER_URL prefills the sign-in form.
-		"defaultServer": os.Getenv("NODUS_DEFAULT_SERVER_URL"),
+		// Convenience for development: MEMOBRAIN_DEFAULT_SERVER_URL prefills the sign-in form.
+		"defaultServer": os.Getenv("MEMOBRAIN_DEFAULT_SERVER_URL"),
 	}
 }
 

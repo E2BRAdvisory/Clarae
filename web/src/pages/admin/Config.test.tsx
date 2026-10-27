@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { problem, renderApp, type RecordedCall } from '../../test/utils';
 import { checkConfigText, checkLockedKeys } from './ConfigPage';
 
-const ADMIN = { roles: ['nodus-admin'] };
+const ADMIN = { roles: ['memobrain-admin'] };
 const P = '44444444-aaaa-4444-8444-444444444444';
 
 const profile = (over: Record<string, unknown> = {}) => ({

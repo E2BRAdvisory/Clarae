@@ -1,4 +1,4 @@
-module nodus/services/cloud
+module memobrain/services/cloud
 
 go 1.26.0
 

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"nodus/services/cloud/internal/auth/authtest"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/auth/authtest"
+	"memobrain/shared/syncproto"
 )
 
 func readAll(t *testing.T, resp *http.Response) io.ReadCloser {
@@ -76,7 +76,7 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("client-config: %d", resp.StatusCode)
 	}
 	cc := decode[map[string]any](t, resp)
-	if cc["issuer"] != e.issuer.URL() || cc["desktop_client_id"] != "nodus-desktop" || cc["audience"] != "nodus-api" {
+	if cc["issuer"] != e.issuer.URL() || cc["desktop_client_id"] != "memobrain-desktop" || cc["audience"] != "memobrain-api" {
 		t.Fatalf("client-config: %v", cc)
 	}
 }
@@ -103,7 +103,7 @@ func TestMeRequiresToken(t *testing.T) {
 
 func TestMeProvisionsAndReturnsProfile(t *testing.T) {
 	e := newEnv(t)
-	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-ada", Username: "ada", Email: "ada@nodus.local", Name: "Ada Admin", Roles: []string{"nodus-admin", "nodus-user"}})
+	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-ada", Username: "ada", Email: "ada@memobrain.local", Name: "Ada Admin", Roles: []string{"memobrain-admin", "memobrain-user"}})
 
 	resp := e.request(http.MethodGet, "/me", tok, nil)
 	if resp.StatusCode != http.StatusOK {
@@ -128,7 +128,7 @@ func TestMeProvisionsAndReturnsProfile(t *testing.T) {
 func TestSuspendedUserIsRejected(t *testing.T) {
 	e := newEnv(t)
 	sub := "sub-suspended-" + newID()
-	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: sub, Username: "bob", Email: sub + "@nodus.local"})
+	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: sub, Username: "bob", Email: sub + "@memobrain.local"})
 	if resp := e.request(http.MethodGet, "/me", tok, nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("first call: %d", resp.StatusCode)
 	}

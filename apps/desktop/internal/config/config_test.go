@@ -8,7 +8,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"nodus/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 func memDB(t *testing.T) *sql.DB {

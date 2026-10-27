@@ -1,15 +1,15 @@
 // Render benchmark of the graph view in real Chromium (headless). Skipped unless
-// NODUS_GRAPH_BENCH is set (a node count), so normal e2e runs are not slowed down:
+// MEMOBRAIN_GRAPH_BENCH is set (a node count), so normal e2e runs are not slowed down:
 //
-//   NODUS_GRAPH_BENCH=10000 yarn workspace @nodus/desktop-frontend exec playwright test e2e/graph-bench.spec.ts
+//   MEMOBRAIN_GRAPH_BENCH=10000 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/graph-bench.spec.ts
 //
-// The synthetic graph comes from the Wails mock (window.__NODUS_GRAPH_FIXTURE__); the
+// The synthetic graph comes from the Wails mock (window.__MEMOBRAIN_GRAPH_FIXTURE__); the
 // layout runs in the real Web Worker. See docs/qa/m6-graph-benchmark.md.
 import { expect, test } from '@playwright/test';
 
-const N = Number(process.env['NODUS_GRAPH_BENCH'] ?? 0);
+const N = Number(process.env['MEMOBRAIN_GRAPH_BENCH'] ?? 0);
 
-test.skip(!N, 'set NODUS_GRAPH_BENCH=<nodes> to run the graph benchmark');
+test.skip(!N, 'set MEMOBRAIN_GRAPH_BENCH=<nodes> to run the graph benchmark');
 
 interface Stats {
   frames: number[];
@@ -34,7 +34,7 @@ test(`graph of ${N} nodes: draw cost and frame rate`, async ({ page }) => {
   test.setTimeout(180_000);
   await page.addInitScript((n) => {
     const w = window as unknown as Record<string, unknown>;
-    w['__NODUS_GRAPH_FIXTURE__'] = n;
+    w['__MEMOBRAIN_GRAPH_FIXTURE__'] = n;
     w['__graphStats'] = { frames: [], layoutMs: 0, nodes: 0, edges: 0, ticks: 0 };
   }, N);
   await page.goto('/');

@@ -1,5 +1,5 @@
 {
-  "name": "@nodus/markdown",
+  "name": "@memobrain/markdown",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,7 +15,7 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "@nodus/conformance": "workspace:*",
+    "@memobrain/conformance": "workspace:*",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.6.5",
     "typescript": "^5.9.3",

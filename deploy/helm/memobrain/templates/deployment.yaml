@@ -5,9 +5,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nodus.fullname" $root }}-{{ $role }}
+  name: {{ include "memobrain.fullname" $root }}-{{ $role }}
   labels:
-    {{- include "nodus.labels" $root | nindent 4 }}
+    {{- include "memobrain.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $role }}
 spec:
   {{- if not $spec.autoscaling.enabled }}
@@ -20,35 +20,35 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      {{- include "nodus.selector" (dict "root" $root "role" $role) | nindent 6 }}
+      {{- include "memobrain.selector" (dict "root" $root "role" $role) | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "nodus.labels" $root | nindent 8 }}
+        {{- include "memobrain.labels" $root | nindent 8 }}
         app.kubernetes.io/component: {{ $role }}
       annotations:
         checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
         {{- with $root.Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
         {{- with $spec.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
     spec:
-      serviceAccountName: {{ include "nodus.serviceAccountName" $root }}
+      serviceAccountName: {{ include "memobrain.serviceAccountName" $root }}
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: {{ $spec.terminationGracePeriodSeconds }}
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext: {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
-      {{- include "nodus.scheduling" (dict "root" $root "role" $role "spec" $spec) | nindent 6 }}
+      {{- include "memobrain.scheduling" (dict "root" $root "role" $role "spec" $spec) | nindent 6 }}
       containers:
-        - name: nodus-cloud
-          image: {{ include "nodus.image" $root }}
+        - name: memobrain-cloud
+          image: {{ include "memobrain.image" $root }}
           imagePullPolicy: {{ $root.Values.image.pullPolicy }}
           args: ["--role={{ $role }}"]
           envFrom:
             - configMapRef:
-                name: {{ include "nodus.fullname" $root }}
+                name: {{ include "memobrain.fullname" $root }}
             - secretRef:
-                name: {{ include "nodus.secretName" $root }}
+                name: {{ include "memobrain.secretName" $root }}
           {{- if eq $role "api" }}
           ports:
             - name: http

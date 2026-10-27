@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, Card, Dialog, InlineError, TextField, useToast } from '@nodus/ui';
+import { Badge, Button, Card, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
 import {
   useDeleteProfile,
   useProfile,

@@ -134,7 +134,7 @@ describe('standalone document', () => {
 
   it('print stylesheet forces light colours and hides the application', () => {
     const css = printCss();
-    expect(css).toContain('body.printing > *:not(#nodus-print)');
+    expect(css).toContain('body.printing > *:not(#memobrain-print)');
     expect(css).toContain('color-scheme: light');
     expect(css).not.toContain('prefers-color-scheme: dark');
     expect(standaloneCss()).toContain('.export-doc h1');
@@ -152,7 +152,7 @@ describe('export commands', () => {
     useAppStore.getState().openNote('Home.md');
   });
   afterEach(() => {
-    document.getElementById('nodus-print')?.remove();
+    document.getElementById('memobrain-print')?.remove();
     document.body.classList.remove('printing');
   });
 
@@ -188,12 +188,12 @@ describe('export commands', () => {
   it('prints through a light print layer that carries the rendered note', async () => {
     await exportNotePdf();
     expect(mock.prints).toBe(1);
-    const layer = document.getElementById('nodus-print');
+    const layer = document.getElementById('memobrain-print');
     expect(layer?.querySelector('h1')?.textContent).toBe('Home');
     expect(document.body.classList.contains('printing')).toBe(true);
-    expect(document.getElementById('nodus-print-style')?.textContent).toContain('@media print');
+    expect(document.getElementById('memobrain-print-style')?.textContent).toContain('@media print');
     window.dispatchEvent(new Event('afterprint'));
-    expect(document.getElementById('nodus-print')).toBeNull();
+    expect(document.getElementById('memobrain-print')).toBeNull();
     expect(document.body.classList.contains('printing')).toBe(false);
   });
 });

@@ -164,7 +164,7 @@ describe('permission badge and read-only', () => {
 
 describe('Share dialog', () => {
   async function connectedVault() {
-    await api.auth.login('https://nodus.test');
+    await api.auth.login('https://memobrain.test');
     useSync.setState({
       info: {
         [vaultId]: linkInfo({

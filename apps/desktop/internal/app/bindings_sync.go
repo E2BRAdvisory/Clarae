@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"nodus/apps/desktop/internal/crypto"
-	syncpkg "nodus/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/crypto"
+	syncpkg "memobrain/apps/desktop/internal/sync"
 )
 
 // CloudVault is a cloud vault the account can connect a folder to.

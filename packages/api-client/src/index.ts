@@ -1,5 +1,5 @@
-// Typed client for the Nodus Cloud API, generated from api/openapi.yaml
-// (`yarn workspace @nodus/api-client run gen`). Used by the Web UI.
+// Typed client for the MemoBrain Notes Cloud API, generated from api/openapi.yaml
+// (`yarn workspace @memobrain/api-client run gen`). Used by the Web UI.
 import createOpenApiClient, { type ClientOptions, type Middleware } from 'openapi-fetch';
 import type { components, paths } from './gen/schema';
 
@@ -8,13 +8,13 @@ export type Schemas = components['schemas'];
 export type Problem = Schemas['Problem'];
 export type ErrorCode = Schemas['ErrorCode'];
 
-export interface NodusClientOptions extends ClientOptions {
+export interface MemobrainClientOptions extends ClientOptions {
   /** Returns the current bearer token, or undefined when signed out. */
   getAccessToken?: () => Promise<string | undefined> | string | undefined;
 }
 
 /** Creates a client bound to `/api/v1` with bearer authentication. */
-export function createClient(options: NodusClientOptions = {}) {
+export function createClient(options: MemobrainClientOptions = {}) {
   const { getAccessToken, baseUrl = '/api/v1', ...rest } = options;
   const client = createOpenApiClient<paths>({ baseUrl, ...rest });
   if (getAccessToken) {
@@ -30,7 +30,7 @@ export function createClient(options: NodusClientOptions = {}) {
   return client;
 }
 
-export type NodusClient = ReturnType<typeof createClient>;
+export type MemobrainClient = ReturnType<typeof createClient>;
 
 /** True when a response body is an RFC 9457 problem document from the API. */
 export function isProblem(body: unknown): body is Problem {

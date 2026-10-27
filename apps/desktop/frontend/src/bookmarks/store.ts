@@ -1,5 +1,5 @@
 // Bookmarks state for the open vault. Loaded and reset automatically when the
-// vault changes; persisted (debounced) to .nodus/bookmarks.json, which is
+// vault changes; persisted (debounced) to .memobrain/bookmarks.json, which is
 // synchronized user data (it is not excluded by shared/go/pathrules); an
 // external change of the file (another device through sync, a text editor)
 // reloads the list.
@@ -18,7 +18,7 @@ import {
 } from './model';
 
 export const BOOKMARKS_FILE = 'bookmarks.json';
-const FILE_PATH = '.nodus/' + BOOKMARKS_FILE;
+const FILE_PATH = '.memobrain/' + BOOKMARKS_FILE;
 const SAVE_DELAY_MS = 300;
 
 interface BookmarksState {

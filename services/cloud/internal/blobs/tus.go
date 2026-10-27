@@ -14,16 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"nodus/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/access"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // Resumable uploads (tus 1.0.0, creation and termination extensions) for
@@ -297,7 +297,7 @@ func (h *TusHandler) patch(w http.ResponseWriter, r *http.Request) {
 // finalize assembles the chunks into a temporary file, verifies the digest
 // and publishes the blob.
 func (h *TusHandler) finalize(ctx context.Context, u dbgen.Upload) error {
-	f, err := os.CreateTemp("", "nodus-upload-*")
+	f, err := os.CreateTemp("", "memobrain-upload-*")
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,7 @@ describe('CloudSection', () => {
     );
     expect(screen.getByText('Not signed in')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Server address'), {
-      target: { value: 'https://nodus.test' },
+      target: { value: 'https://memobrain.test' },
     });
     fireEvent.click(screen.getByText('Sign in'));
     expect(await screen.findByText('Signed in as Uno')).toBeInTheDocument();

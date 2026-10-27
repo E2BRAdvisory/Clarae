@@ -23,4 +23,4 @@ export interface AuthService {
 }
 
 /** Realm role that unlocks the administration area. */
-export const ADMIN_ROLE = 'nodus-admin';
+export const ADMIN_ROLE = 'memobrain-admin';

@@ -9,14 +9,14 @@ import (
 
 	"github.com/rs/zerolog"
 
-	webembed "nodus/services/cloud/web-embed"
+	webembed "memobrain/services/cloud/web-embed"
 )
 
 // The SPA is mounted behind the API: unknown non-API paths get the index, while
 // the API keeps answering its own problem documents and /metrics stays reachable.
 func TestRouterMountsWebUIBehindTheAPI(t *testing.T) {
 	ui := webembed.Handler(webembed.Options{
-		Issuer: "https://id.example.com/realms/nodus",
+		Issuer: "https://id.example.com/realms/memobrain",
 		FS:     fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
 	})
 	r := NewRouter(Deps{Logger: zerolog.Nop(), WebUI: ui})

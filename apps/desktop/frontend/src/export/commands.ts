@@ -14,8 +14,8 @@ import { renderExportBody, type ExportBody } from './render';
 const t = (key: string, opts: Record<string, unknown> = {}): string =>
   i18next.t(`exportNote.${key}`, opts);
 
-const PRINT_ID = 'nodus-print';
-const PRINT_STYLE_ID = 'nodus-print-style';
+const PRINT_ID = 'memobrain-print';
+const PRINT_STYLE_ID = 'memobrain-print-style';
 
 /** The note in focus, as the user sees it (unsaved edits included), or null. */
 async function currentNote(): Promise<{ vaultId: string; path: string; content: string } | null> {

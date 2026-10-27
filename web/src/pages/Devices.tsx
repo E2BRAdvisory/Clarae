@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, Dialog, EmptyState, InlineError, Table, useToast } from '@nodus/ui';
-import type { Schemas } from '@nodus/api-client';
+import { Badge, Button, Dialog, EmptyState, InlineError, Table, useToast } from '@memobrain/ui';
+import type { Schemas } from '@memobrain/api-client';
 import { describeError } from '../api/errors';
 import { useDevices, useRevokeDevice } from '../api/queries';
 import { formatDate } from '../format';

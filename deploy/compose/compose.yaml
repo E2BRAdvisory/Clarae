@@ -1,4 +1,4 @@
-# Nodus Cloud on-premise (single host): reverse proxy with TLS, API + worker, PostgreSQL,
+# MemoBrain Notes Cloud on-premise (single host): reverse proxy with TLS, API + worker, PostgreSQL,
 # S3-compatible object store and Keycloak. See README.md for the first-run steps.
 #
 #   cp .env.example .env   # then edit: domain, passwords, image tag
@@ -6,23 +6,23 @@
 #
 # Production notes: PostgreSQL and the object store hold all the data (volumes pgdata, s3data):
 # back them up (README, "Backup"). Only the reverse proxy publishes ports.
-name: ${COMPOSE_PROJECT_NAME:-nodus-onprem}
+name: ${COMPOSE_PROJECT_NAME:-memobrain-onprem}
 
 x-cloud-env: &cloud-env
-  DATABASE_URL: postgres://nodus:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/nodus?sslmode=disable
+  DATABASE_URL: postgres://memobrain:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/memobrain?sslmode=disable
   S3_ENDPOINT: http://s3:9000
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
   S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
-  S3_BUCKET_BLOBS: nodus-blobs
-  S3_BUCKET_EXPORTS: nodus-exports
+  S3_BUCKET_BLOBS: memobrain-blobs
+  S3_BUCKET_EXPORTS: memobrain-exports
   S3_USE_PATH_STYLE: 'true'
-  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/nodus
-  OIDC_AUDIENCE: nodus-api
+  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/memobrain
+  OIDC_AUDIENCE: memobrain-api
   KC_ADMIN_BASE_URL: http://keycloak:8080
-  KC_REALM: nodus
-  KC_ADMIN_CLIENT_ID: nodus-admin-svc
+  KC_REALM: memobrain
+  KC_ADMIN_CLIENT_ID: memobrain-admin-svc
   KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
-  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${NODUS_HOST:?set NODUS_HOST in .env}
+  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${MEMOBRAIN_HOST:?set MEMOBRAIN_HOST in .env}
   PUBLIC_GRPC_ADDR: ${NOTIFY_HOST:?set NOTIFY_HOST in .env}:${PUBLIC_GRPC_PORT:-443}
   LISTEN_ADDR: 0.0.0.0:18081
   GRPC_LISTEN_ADDR: 0.0.0.0:18082
@@ -37,7 +37,7 @@ services:
       - '${HTTPS_PORT:-443}:443'
       - '${HTTPS_PORT:-443}:443/udp' # HTTP/3
     environment:
-      NODUS_SITE: ${NODUS_SITE:-${NODUS_HOST}}
+      MEMOBRAIN_SITE: ${MEMOBRAIN_SITE:-${MEMOBRAIN_HOST}}
       NOTIFY_SITE: ${NOTIFY_SITE:-${NOTIFY_HOST}}
       AUTH_SITE: ${AUTH_SITE:-${AUTH_HOST}}
       CADDY_GLOBAL: ${CADDY_GLOBAL:-}
@@ -50,7 +50,7 @@ services:
         # Containers reach the public names through the proxy (the cloud validates tokens against the issuer URL).
         aliases:
           - ${AUTH_HOST}
-          - ${NODUS_HOST}
+          - ${MEMOBRAIN_HOST}
     depends_on:
       cloud-api:
         condition: service_started
@@ -58,7 +58,7 @@ services:
         condition: service_healthy
 
   cloud-api:
-    image: ${NODUS_IMAGE:-ghcr.io/ORG/nodus-cloud}:${NODUS_VERSION:?set NODUS_VERSION in .env}
+    image: ${MEMOBRAIN_IMAGE:-ghcr.io/ORG/memobrain-cloud}:${MEMOBRAIN_VERSION:?set MEMOBRAIN_VERSION in .env}
     restart: unless-stopped
     command: ['--role=api']
     environment: *cloud-env
@@ -75,7 +75,7 @@ services:
     expose: ['18081', '18082']
 
   cloud-worker:
-    image: ${NODUS_IMAGE:-ghcr.io/ORG/nodus-cloud}:${NODUS_VERSION}
+    image: ${MEMOBRAIN_IMAGE:-ghcr.io/ORG/memobrain-cloud}:${MEMOBRAIN_VERSION}
     restart: unless-stopped
     command: ['--role=worker']
     environment: *cloud-env
@@ -90,15 +90,15 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: nodus
+      POSTGRES_USER: memobrain
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: nodus
+      POSTGRES_DB: memobrain
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro # creates the keycloak database on first start
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U nodus -d nodus']
+      test: ['CMD-SHELL', 'pg_isready -U memobrain -d memobrain']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -136,7 +136,7 @@ services:
       AWS_EC2_METADATA_DISABLED: 'true'
     entrypoint: >
       /bin/sh -c "
-        for b in nodus-blobs nodus-exports; do
+        for b in memobrain-blobs memobrain-exports; do
           aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $$b >/dev/null 2>&1 ||
           aws --endpoint-url http://s3:9000 s3 mb s3://$$b;
         done && echo buckets ready
@@ -159,7 +159,7 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: 'true'
     volumes:
-      # First start only: creates the realm "nodus" (clients nodus-desktop, nodus-web, nodus-admin-svc,
+      # First start only: creates the realm "memobrain" (clients memobrain-desktop, memobrain-web, memobrain-admin-svc,
       # roles). It also carries DEVELOPMENT users and secrets: see README before going live.
       - ../keycloak:/opt/keycloak/data/import:ro
     depends_on:
@@ -184,7 +184,7 @@ services:
     volumes:
       - ./backups:/backups
     entrypoint: >
-      /bin/sh -c "pg_dump -h postgres -U nodus -Fc nodus > /backups/nodus-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
+      /bin/sh -c "pg_dump -h postgres -U memobrain -Fc memobrain > /backups/memobrain-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
     depends_on:
       postgres: { condition: service_healthy }
 

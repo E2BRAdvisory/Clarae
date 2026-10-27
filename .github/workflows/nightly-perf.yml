@@ -94,7 +94,7 @@ jobs:
       - name: Start the load environment (API + PostgreSQL in a container + fake OIDC issuer, test only)
         run: |
           mkdir -p .perf
-          (cd services/cloud && NODUS_LOADENV_USERS=$USERS NODUS_LOADENV_OUT=$PWD/../../.perf/tokens.json \
+          (cd services/cloud && MEMOBRAIN_LOADENV_USERS=$USERS MEMOBRAIN_LOADENV_OUT=$PWD/../../.perf/tokens.json \
             go test -tags integration -run TestServeLoadEnv -count=1 -timeout 1h -v ./test/integration/ > ../../.perf/loadenv.log 2>&1) &
           for i in $(seq 1 180); do [ -f .perf/tokens.json ] && break; sleep 2; done
           test -f .perf/tokens.json

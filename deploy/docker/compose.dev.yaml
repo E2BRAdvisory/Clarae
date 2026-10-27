@@ -1,22 +1,22 @@
-# Development stack for the Nodus Cloud Service: PostgreSQL, an S3-compatible
+# Development stack for the MemoBrain Notes Cloud Service: PostgreSQL, an S3-compatible
 # object store (RustFS: MinIO-compatible, Apache-2.0; MinIO images are no longer
 # publicly pullable) and Keycloak. The cloud service itself runs on the host
 # (`make dev-cloud`) with deploy/docker/cloud.dev.env.
-name: nodus-dev
+name: memobrain-dev
 
 services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_USER: nodus
-      POSTGRES_PASSWORD: nodus
-      POSTGRES_DB: nodus
+      POSTGRES_USER: memobrain
+      POSTGRES_PASSWORD: memobrain
+      POSTGRES_DB: memobrain
     ports:
       - '5433:5432' # 5433 on the host: 5432 is often taken by a local PostgreSQL
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U nodus -d nodus']
+      test: ['CMD-SHELL', 'pg_isready -U memobrain -d memobrain']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -24,8 +24,8 @@ services:
   s3:
     image: rustfs/rustfs:latest
     environment:
-      RUSTFS_ACCESS_KEY: nodus
-      RUSTFS_SECRET_KEY: nodus-secret
+      RUSTFS_ACCESS_KEY: memobrain
+      RUSTFS_SECRET_KEY: memobrain-secret
       RUSTFS_VOLUMES: /data
       RUSTFS_ADDRESS: ':9000'
       RUSTFS_CONSOLE_ENABLE: 'true'
@@ -52,13 +52,13 @@ services:
       s3:
         condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: nodus
-      AWS_SECRET_ACCESS_KEY: nodus-secret
+      AWS_ACCESS_KEY_ID: memobrain
+      AWS_SECRET_ACCESS_KEY: memobrain-secret
       AWS_DEFAULT_REGION: us-east-1
       AWS_EC2_METADATA_DISABLED: 'true'
     entrypoint: >
       /bin/sh -c "
-        for b in nodus-blobs nodus-exports; do
+        for b in memobrain-blobs memobrain-exports; do
           aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $$b >/dev/null 2>&1 ||
           aws --endpoint-url http://s3:9000 s3 mb s3://$$b;
         done && echo buckets ready

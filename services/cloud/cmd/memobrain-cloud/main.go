@@ -1,4 +1,4 @@
-// Command nodus-cloud is the Nodus Cloud Service binary. The same binary runs
+// Command memobrain-cloud is the MemoBrain Notes Cloud Service binary. The same binary runs
 // as API server, background worker, or both, selected with --role.
 package main
 
@@ -16,18 +16,18 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
-	"nodus/services/cloud/internal/app"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/config"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/grpcserver"
-	"nodus/services/cloud/internal/httpserver"
-	"nodus/services/cloud/internal/keycloak"
-	"nodus/services/cloud/internal/observability"
+	"memobrain/services/cloud/internal/app"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/config"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/grpcserver"
+	"memobrain/services/cloud/internal/httpserver"
+	"memobrain/services/cloud/internal/keycloak"
+	"memobrain/services/cloud/internal/observability"
 
-	"nodus/services/cloud/internal/storage"
-	"nodus/services/cloud/internal/system"
-	webembed "nodus/services/cloud/web-embed"
+	"memobrain/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/system"
+	webembed "memobrain/services/cloud/web-embed"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=...".
@@ -42,7 +42,7 @@ func main() {
 		return
 	}
 	if err := run(config.Role(*role)); err != nil {
-		fmt.Fprintln(os.Stderr, "nodus-cloud:", err)
+		fmt.Fprintln(os.Stderr, "memobrain-cloud:", err)
 		os.Exit(1)
 	}
 }

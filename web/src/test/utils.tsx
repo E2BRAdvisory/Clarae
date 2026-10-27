@@ -1,6 +1,6 @@
 import { render, type RenderResult } from '@testing-library/react';
 import { vi, type Mock } from 'vitest';
-import { createClient, type NodusClient } from '@nodus/api-client';
+import { createClient, type MemobrainClient } from '@memobrain/api-client';
 import { TestApp } from '../App';
 import type { AuthService, AuthUser } from '../auth/types';
 
@@ -23,7 +23,7 @@ export function problem(status: number, code: string, detail = ''): Response {
 }
 
 export interface MockApi {
-  client: NodusClient;
+  client: MemobrainClient;
   calls: RecordedCall[];
   routes: Routes;
   called: (method: string, path: string) => RecordedCall[];

@@ -7,7 +7,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"nodus/apps/desktop/internal/updater"
+	"memobrain/apps/desktop/internal/updater"
 )
 
 // EventUpdaterStatus carries an updater.Status to the frontend.
@@ -21,7 +21,7 @@ func (a *App) updaterService() (*updater.Service, error) {
 		return a.updater, nil
 	}
 	reason := ""
-	if os.Getenv("NODUS_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
+	if os.Getenv("MEMOBRAIN_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
 		reason = "updates are disabled by the administrator"
 	}
 	svc, err := updater.New(updater.Options{

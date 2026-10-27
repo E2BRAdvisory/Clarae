@@ -53,4 +53,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - nodus
+        - memobrain

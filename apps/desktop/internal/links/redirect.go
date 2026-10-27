@@ -7,9 +7,9 @@ import (
 	"path"
 	"strings"
 
-	"nodus/apps/desktop/internal/parser"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 // PlanRedirect computes the edits that make every link to the note `from` point at

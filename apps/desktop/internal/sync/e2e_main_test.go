@@ -26,7 +26,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// The end-to-end tests run the real cloud service (the nodus-cloud binary,
+// The end-to-end tests run the real cloud service (the memobrain-cloud binary,
 // built from this repository) against PostgreSQL in a container, with a local
 // OIDC issuer standing in for Keycloak. Two desktop engines then synchronize
 // through it, exactly as two devices would.
@@ -44,7 +44,7 @@ func run(m *testing.M) int {
 	defer cancel()
 
 	pg, err := tcpostgres.Run(ctx, "postgres:17",
-		tcpostgres.WithDatabase("nodus"), tcpostgres.WithUsername("nodus"), tcpostgres.WithPassword("nodus"),
+		tcpostgres.WithDatabase("memobrain"), tcpostgres.WithUsername("memobrain"), tcpostgres.WithPassword("memobrain"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
@@ -61,15 +61,15 @@ func run(m *testing.M) int {
 	issuer = newIssuer()
 	defer issuer.srv.Close()
 
-	tmp, err := os.MkdirTemp("", "nodus-e2e-")
+	tmp, err := os.MkdirTemp("", "memobrain-e2e-")
 	if err != nil {
 		log.Print(err)
 		return 1
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
-	bin := filepath.Join(tmp, "nodus-cloud")
-	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "nodus/services/cloud/cmd/nodus-cloud")
+	bin := filepath.Join(tmp, "memobrain-cloud")
+	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "memobrain/services/cloud/cmd/memobrain-cloud")
 	build.Stderr, build.Stdout = os.Stderr, os.Stdout
 	if err := build.Run(); err != nil {
 		log.Printf("build cloud service: %v", err)
@@ -80,7 +80,7 @@ func run(m *testing.M) int {
 	srv := exec.Command(bin, "--role=all")
 	srv.Env = append(os.Environ(),
 		"LISTEN_ADDR="+httpAddr, "GRPC_LISTEN_ADDR="+grpcAddr, "DATABASE_URL="+databaseURL,
-		"STORAGE_DIR="+filepath.Join(tmp, "blobs"), "OIDC_ISSUER="+issuer.srv.URL, "OIDC_AUDIENCE=nodus-api",
+		"STORAGE_DIR="+filepath.Join(tmp, "blobs"), "OIDC_ISSUER="+issuer.srv.URL, "OIDC_AUDIENCE=memobrain-api",
 		"OIDC_STATUS_CACHE_TTL=1s", "LOG_LEVEL=warn",
 	)
 	logFile, _ := os.Create(filepath.Join(tmp, "cloud.log"))
@@ -163,8 +163,8 @@ func newIssuer() *testIssuer {
 
 func (i *testIssuer) token(user string) string {
 	now := time.Now()
-	claims := jwt.Claims{Issuer: i.srv.URL, Subject: "e2e-" + user, Audience: jwt.Audience{"nodus-api"}, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)), Expiry: jwt.NewNumericDate(now.Add(time.Hour))}
-	private := map[string]any{"typ": "Bearer", "azp": "nodus-desktop", "preferred_username": user, "email": user + "@e2e.local", "realm_access": map[string]any{"roles": []string{"nodus-user"}}}
+	claims := jwt.Claims{Issuer: i.srv.URL, Subject: "e2e-" + user, Audience: jwt.Audience{"memobrain-api"}, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)), Expiry: jwt.NewNumericDate(now.Add(time.Hour))}
+	private := map[string]any{"typ": "Bearer", "azp": "memobrain-desktop", "preferred_username": user, "email": user + "@e2e.local", "realm_access": map[string]any{"roles": []string{"memobrain-user"}}}
 	raw, err := jwt.Signed(i.signer).Claims(claims).Claims(private).Serialize()
 	if err != nil {
 		panic(err)

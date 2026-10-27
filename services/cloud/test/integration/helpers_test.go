@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/auth/authtest"
 )
 
 // client is one authenticated user with a registered device.
@@ -29,7 +29,7 @@ type client struct {
 
 func (e *env) user(name string) *client {
 	e.t.Helper()
-	c := &client{e: e, token: e.issuer.Token(e.t, authtest.TokenOptions{Subject: "sub-" + name + "-" + uuid.NewString(), Username: name, Email: name + "-" + uuid.NewString()[:8] + "@nodus.local"})}
+	c := &client{e: e, token: e.issuer.Token(e.t, authtest.TokenOptions{Subject: "sub-" + name + "-" + uuid.NewString(), Username: name, Email: name + "-" + uuid.NewString()[:8] + "@memobrain.local"})}
 	me := decode[map[string]any](e.t, c.json(http.MethodGet, "/me", nil))
 	c.userID, _ = me["id"].(string)
 	dev := decode[map[string]any](e.t, c.json(http.MethodPost, "/me/devices", map[string]any{"name": name + "-laptop", "platform": "linux"}))

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"nodus/apps/desktop/internal/auth"
+	"memobrain/apps/desktop/internal/auth"
 )
 
 // AuthAPI exposes the cloud session to the frontend (§2.5 "auth").

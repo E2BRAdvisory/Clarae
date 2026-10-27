@@ -13,8 +13,8 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"golang.org/x/time/rate"
 
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // RequestLogger logs one line per request with the request id, status,

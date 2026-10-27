@@ -135,7 +135,7 @@ export function App() {
     if (syncInfo.linked && syncInfo.locked) useSync.getState().setUnlockOpen(true);
   }, [syncInfo.linked, syncInfo.kind, syncInfo.locked]);
 
-  // nodus://open?vault=…&file=… (from the OS or another instance).
+  // memobrain://open?vault=…&file=… (from the OS or another instance).
   useEffect(
     () =>
       api.on<OpenRequestPayload>(Events.openRequest, (p) => {

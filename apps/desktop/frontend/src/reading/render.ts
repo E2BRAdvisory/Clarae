@@ -14,7 +14,12 @@ import remarkRehype from 'remark-rehype';
 import { unified, type Plugin } from 'unified';
 import type { Element, Root as HastRoot, RootContent as HastContent } from 'hast';
 import type { Parent, PhrasingContent, Root, Text } from 'mdast';
-import { parseWikilinkInner, scanSpans, stripInlineCode, type BlockState } from '@nodus/markdown';
+import {
+  parseWikilinkInner,
+  scanSpans,
+  stripInlineCode,
+  type BlockState,
+} from '@memobrain/markdown';
 import { sanitizeHtml } from '../util/sanitize';
 import { stripFrontmatter } from './sections';
 

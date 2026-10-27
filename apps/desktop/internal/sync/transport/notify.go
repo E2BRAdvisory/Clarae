@@ -21,7 +21,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"nodus/shared/notifyv1"
+	"memobrain/shared/notifyv1"
 )
 
 // VaultEvent says "this vault reached this changelog position": pull now.

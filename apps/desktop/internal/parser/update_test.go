@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"nodus/shared/conformance"
+	"memobrain/shared/conformance"
 )
 
 // TestUpdateFixtures writes the expectation of every fixture whose

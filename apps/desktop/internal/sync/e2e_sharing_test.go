@@ -14,11 +14,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/crypto"
-	syncpkg "nodus/apps/desktop/internal/sync"
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/crypto"
+	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/syncproto"
 )
 
 // M4-WP4: shares between users, mounts, permissions and revocation, against the real cloud binary.

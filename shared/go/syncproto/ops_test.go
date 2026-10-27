@@ -70,18 +70,18 @@ func TestIsOpaquePath(t *testing.T) {
 
 func TestKindOf(t *testing.T) {
 	tests := map[string]FileKind{
-		"a.md":                      KindMarkdown,
-		"Notes/A.MD":                KindMarkdown,
-		"map.canvas":                KindCanvas,
-		"db.base":                   KindBase,
-		"d.excalidraw":              KindExcalidraw,
-		"img/x.png":                 KindAttachment,
-		"doc.pdf":                   KindAttachment,
-		"rec.m4a":                   KindAttachment,
-		".nodus/editor.json":        KindConfig,
-		".nodus/templates/daily.md": KindConfig,
-		"README":                    KindOther,
-		"data.csv":                  KindOther,
+		"a.md":                          KindMarkdown,
+		"Notes/A.MD":                    KindMarkdown,
+		"map.canvas":                    KindCanvas,
+		"db.base":                       KindBase,
+		"d.excalidraw":                  KindExcalidraw,
+		"img/x.png":                     KindAttachment,
+		"doc.pdf":                       KindAttachment,
+		"rec.m4a":                       KindAttachment,
+		".memobrain/editor.json":        KindConfig,
+		".memobrain/templates/daily.md": KindConfig,
+		"README":                        KindOther,
+		"data.csv":                      KindOther,
 	}
 	for p, want := range tests {
 		if got := KindOf(p); got != want {

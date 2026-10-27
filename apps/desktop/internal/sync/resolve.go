@@ -8,8 +8,8 @@ import (
 	"os"
 	"sort"
 
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/merge"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/merge"
 )
 
 // resolveCandidates settles every file that was changed both here and on the

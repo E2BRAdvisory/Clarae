@@ -18,20 +18,20 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"nodus/apps/desktop/internal/auth"
-	"nodus/apps/desktop/internal/config"
-	"nodus/apps/desktop/internal/crypto"
-	"nodus/apps/desktop/internal/history"
-	"nodus/apps/desktop/internal/indexer"
-	"nodus/apps/desktop/internal/platform"
-	"nodus/apps/desktop/internal/search"
-	"nodus/apps/desktop/internal/store"
-	syncpkg "nodus/apps/desktop/internal/sync"
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/apps/desktop/internal/updater"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/apps/desktop/internal/watcher"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/auth"
+	"memobrain/apps/desktop/internal/config"
+	"memobrain/apps/desktop/internal/crypto"
+	"memobrain/apps/desktop/internal/history"
+	"memobrain/apps/desktop/internal/indexer"
+	"memobrain/apps/desktop/internal/platform"
+	"memobrain/apps/desktop/internal/search"
+	"memobrain/apps/desktop/internal/store"
+	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/updater"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/watcher"
+	"memobrain/shared/pathrules"
 )
 
 // Options configure the application.
@@ -57,7 +57,7 @@ type App struct {
 	emitterMu sync.RWMutex                   // guards emitter (tests swap it while indexing runs)
 	mu        sync.Mutex
 	vaults    map[string]*openVault
-	pending   []string // nodus:// URLs received before the frontend was ready
+	pending   []string // memobrain:// URLs received before the frontend was ready
 	updater   *updater.Service
 	updaterMu sync.Mutex
 }
@@ -89,7 +89,7 @@ func New(opts Options) *App {
 		DataDir:      opts.DataDir,
 		Logger:       opts.Logger.With().Str("module", "auth").Logger(),
 		AppVersion:   opts.Version,
-		RedirectMode: auth.RedirectMode(os.Getenv("NODUS_AUTH_REDIRECT")), // "" = auto; "scheme" forces the fallback (checklist)
+		RedirectMode: auth.RedirectMode(os.Getenv("MEMOBRAIN_AUTH_REDIRECT")), // "" = auto; "scheme" forces the fallback (checklist)
 		OpenURL: func(u string) error {
 			if a.ctx == nil {
 				return errors.New("application not ready")
@@ -137,7 +137,7 @@ func (a *App) Startup(ctx context.Context) {
 	db, err := store.Open(ctx, filepath.Join(a.opts.DataDir, "app.db"), store.KindApp)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("open app.db")
-		_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.ErrorDialog, Title: "Nodus", Message: "Cannot open the application database: " + err.Error()})
+		_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.ErrorDialog, Title: "MemoBrain Notes", Message: "Cannot open the application database: " + err.Error()})
 		return
 	}
 	a.appDB = db
@@ -178,7 +178,7 @@ func (a *App) Shutdown(_ context.Context) {
 }
 
 // OnSecondInstance is the Wails single-instance callback: another instance
-// was launched with these arguments (Windows/Linux deliver nodus:// URLs
+// was launched with these arguments (Windows/Linux deliver memobrain:// URLs
 // this way). The running window is brought to the front.
 func (a *App) OnSecondInstance(data options.SecondInstanceData) {
 	a.logger.Info().Strs("args", data.Args).Msg("second instance launch")
@@ -191,7 +191,7 @@ func (a *App) OnSecondInstance(data options.SecondInstanceData) {
 	}
 }
 
-// HandleURL processes a nodus:// URL (macOS OnUrlOpen, second instance
+// HandleURL processes a memobrain:// URL (macOS OnUrlOpen, second instance
 // arguments, or the login flow's custom-scheme fallback).
 func (a *App) HandleURL(raw string) {
 	u, err := platform.ParseSchemeURL(raw)

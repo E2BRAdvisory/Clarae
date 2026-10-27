@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/shared/vaultcrypto"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/vaultcrypto"
 )
 
 // MinPassphraseLength is the shortest accepted passphrase (§3.8.2). The UI also

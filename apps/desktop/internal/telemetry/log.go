@@ -12,14 +12,14 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// NewLogger writes JSON lines to <dataDir>/logs/nodus.log (rotated at 10 MB,
+// NewLogger writes JSON lines to <dataDir>/logs/memobrain.log (rotated at 10 MB,
 // 5 files kept) and, when console is true, also to stderr for development.
 func NewLogger(dataDir, level string, console bool) (zerolog.Logger, io.Closer, error) {
 	if err := os.MkdirAll(filepath.Join(dataDir, "logs"), 0o700); err != nil {
 		return zerolog.Nop(), nil, err
 	}
 	file := &lumberjack.Logger{
-		Filename:   filepath.Join(dataDir, "logs", "nodus.log"),
+		Filename:   filepath.Join(dataDir, "logs", "memobrain.log"),
 		MaxSize:    10,
 		MaxBackups: 5,
 		MaxAge:     30,

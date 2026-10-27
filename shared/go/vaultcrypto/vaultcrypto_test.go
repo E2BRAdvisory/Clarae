@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"nodus/shared/vaultcrypto"
+	"memobrain/shared/vaultcrypto"
 )
 
 var (

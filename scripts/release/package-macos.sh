@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Turn the universal Nodus.app into a (signed, notarised, stapled) .dmg (M7-WP3).
+# Turn the universal MemoBrain Notes.app into a (signed, notarised, stapled) .dmg (M7-WP3).
 #
 #   scripts/release/package-macos.sh <version> [--require-signing]
 #
-# Input : apps/desktop/build/bin/nodus.app (scripts/release/build-desktop.sh darwin <version>)
-# Output: dist/nodus-<version>-darwin-universal.dmg
+# Input : apps/desktop/build/bin/memobrain.app (scripts/release/build-desktop.sh darwin <version>)
+# Output: dist/memobrain-<version>-darwin-universal.dmg
 #
 # Signing and notarisation run ONLY when their secrets are present; otherwise the dmg is built
 # unsigned with a loud warning. With --require-signing (release workflow on a tag) missing
@@ -21,9 +21,9 @@ set -euo pipefail
 VERSION="${1:-}"; REQUIRE="${2:-}"
 [ -n "$VERSION" ] || die "usage: $0 <version> [--require-signing]"
 VERSION="${VERSION#v}"
-APP="$ROOT/apps/desktop/build/bin/nodus.app"
+APP="$ROOT/apps/desktop/build/bin/memobrain.app"
 ENTITLEMENTS="$ROOT/apps/desktop/build/darwin/entitlements.plist"
-OUT_DIR="$ROOT/dist"; DMG="$OUT_DIR/nodus-$VERSION-darwin-universal.dmg"
+OUT_DIR="$ROOT/dist"; DMG="$OUT_DIR/memobrain-$VERSION-darwin-universal.dmg"
 [ -d "$APP" ] || die "$APP not found: run scripts/release/build-desktop.sh darwin $VERSION first"
 need hdiutil; need codesign; need xcrun
 mkdir -p "$OUT_DIR"
@@ -42,11 +42,11 @@ else
 fi
 
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
-cp -R "$APP" "$STAGE/Nodus.app"
+cp -R "$APP" "$STAGE/MemoBrain Notes.app"
 ln -s /Applications "$STAGE/Applications"
 log "Creating $DMG"
 rm -f "$DMG"
-hdiutil create -volname "Nodus $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+hdiutil create -volname "MemoBrain Notes $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
 
 if [ "$SIGNED" = 1 ]; then
   codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG"

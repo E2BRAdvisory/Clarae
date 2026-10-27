@@ -1,6 +1,6 @@
 // Pieces of a note used by embeds: a section under a heading, or the block
 // carrying a ^id (![[Note#Heading]], ![[Note#^id]]).
-import { extract, splitFrontmatter } from '@nodus/markdown';
+import { extract, splitFrontmatter } from '@memobrain/markdown';
 
 /** The note without its frontmatter. */
 export function stripFrontmatter(src: string): string {

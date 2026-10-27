@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { extract } from '@nodus/markdown';
+import { extract } from '@memobrain/markdown';
 import { api, type SearchSort } from '../app/api';
 
 export const queryKeys = {

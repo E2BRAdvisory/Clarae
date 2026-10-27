@@ -11,7 +11,7 @@ import type {
 } from '@codemirror/autocomplete';
 import type { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
-import { splitFrontmatter } from '@nodus/markdown';
+import { splitFrontmatter } from '@memobrain/markdown';
 import i18next from 'i18next';
 import { setHeading } from '../editor/commands';
 

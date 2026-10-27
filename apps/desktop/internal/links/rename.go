@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"nodus/apps/desktop/internal/parser"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 // Move is one file that changes path.

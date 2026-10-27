@@ -1,7 +1,7 @@
 // The workspace model (§2.2.1 "Pannelli, tab, split, linked panes"): a tree of
 // panes (each with tabs) and splits. Everything here is pure: functions take a
 // Layout and return a new one, so the model is easy to test and to persist
-// (.nodus/workspace.json).
+// (.memobrain/workspace.json).
 import type { NoteMode } from '../state/settings';
 
 export interface Tab {

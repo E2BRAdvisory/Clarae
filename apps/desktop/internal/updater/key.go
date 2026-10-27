@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 
-	"nodus/shared/updatemanifest"
+	"memobrain/shared/updatemanifest"
 )
 
-// Build-time configuration, set with -ldflags "-X nodus/apps/desktop/internal/updater.<name>=<value>".
+// Build-time configuration, set with -ldflags "-X memobrain/apps/desktop/internal/updater.<name>=<value>".
 // Release builds MUST set PublicKeyB64 (the release workflow refuses to build
 // a tag with the development key) and ManifestBaseURL.
 var (
@@ -17,14 +17,14 @@ var (
 	// public seed phrase below (see DevPrivateKey) and is therefore worthless.
 	PublicKeyB64 = ""
 	// ManifestBaseURL is where <channel>/manifest.json and <channel>/manifest.json.sig live.
-	ManifestBaseURL = "https://updates.nodus.example/desktop"
+	ManifestBaseURL = "https://updates.memobrain.example/desktop"
 	// DisabledByBuild ("1") turns the updater off entirely (distribution packages
 	// updated by a package manager, enterprise images).
 	DisabledByBuild = ""
 )
 
 // devSeedPhrase derives the development key pair. It is intentionally public.
-const devSeedPhrase = "nodus-development-update-key-NOT-FOR-PRODUCTION"
+const devSeedPhrase = "memobrain-development-update-key-NOT-FOR-PRODUCTION"
 
 // DevPrivateKey returns the development private key. It exists so tests and
 // local update servers can sign manifests; it must never sign a release.

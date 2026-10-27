@@ -73,7 +73,7 @@ type SecretStore interface {
 // Manager, freedesktop Secret Service) via go-keyring (§2.5 "auth").
 type KeychainStore struct{}
 
-const keychainService = "Nodus"
+const keychainService = "MemoBrain Notes"
 
 // Set implements SecretStore.
 func (KeychainStore) Set(server, refreshToken string) error {

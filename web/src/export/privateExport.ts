@@ -1,6 +1,6 @@
 // Browser-side export of a private (E2EE) vault: key envelopes, manifest and blobs come from
 // the API (ciphertext only); everything else happens in packages/vaultcrypto-web.
-import { ApiError, isProblem, type NodusClient } from '@nodus/api-client';
+import { ApiError, isProblem, type MemobrainClient } from '@memobrain/api-client';
 import {
   DecryptError,
   MissingEnvelopeError,
@@ -11,7 +11,7 @@ import {
   type TreeItem,
   type Unlocked,
   type VaultSource,
-} from '@nodus/vaultcrypto-web';
+} from '@memobrain/vaultcrypto-web';
 
 export interface PrivateSession {
   keys: Unlocked;
@@ -31,7 +31,7 @@ function apiError(res: Response, error: unknown): ApiError {
 
 /** Reads the manifest and blobs through the API client (bearer token, problem errors). */
 export function apiVaultSource(
-  api: NodusClient,
+  api: MemobrainClient,
   vaultId: string,
   prefetched?: TreeItem[],
 ): VaultSource {
@@ -62,7 +62,7 @@ export function apiVaultSource(
  * secret), then load the manifest. The caller owns `keys` and must `wipe()` them.
  */
 export async function openPrivateVault(
-  api: NodusClient,
+  api: MemobrainClient,
   vaultId: string,
   secret: Secret,
   signal?: AbortSignal,

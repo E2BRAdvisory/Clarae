@@ -7,7 +7,7 @@ import (
 )
 
 const sample = `{
-  "type": "excalidraw", "version": 2, "source": "nodus",
+  "type": "excalidraw", "version": 2, "source": "memobrain",
   "elements": [
     {"id": "a", "type": "rectangle", "link": "[[Projects/Alpha|the alpha]]"},
     {"id": "b", "type": "text", "text": "Hello world\nsecond line"},

@@ -1,38 +1,38 @@
 #!/usr/bin/env bash
 # Full cloud session on a local k3d cluster: PostgreSQL, S3 (RustFS), Keycloak and the
-# Nodus Cloud Service deployed with Helm (deploy/helm/nodus + values-k3d.yaml).
+# MemoBrain Notes Cloud Service deployed with Helm (deploy/helm/memobrain + values-k3d.yaml).
 #
 #   yarn dev:cloud:k3d [up]                  choose the cluster (asked), build, deploy, wait;
 #                                            starts a stopped cluster
-#   yarn dev:cloud:k3d down                  switch Nodus off, keeping its data until the next
-#                                            "up": stops the dedicated "nodus" cluster; on any
-#                                            other cluster only scales Nodus down to zero pods
-#   yarn dev:cloud:k3d delete                remove Nodus for good (deletes the dedicated
+#   yarn dev:cloud:k3d down                  switch MemoBrain Notes off, keeping its data until the next
+#                                            "up": stops the dedicated "memobrain" cluster; on any
+#                                            other cluster only scales MemoBrain Notes down to zero pods
+#   yarn dev:cloud:k3d delete                remove MemoBrain Notes for good (deletes the dedicated
 #                                            cluster; on other clusters only the namespace)
 #   yarn dev:cloud:k3d status                show pods
 #   --cluster NAME                           (any command) use NAME without asking; created by
-#                                            "up" if missing. NODUS_K3D_CLUSTER does the same
+#                                            "up" if missing. MEMOBRAIN_K3D_CLUSTER does the same
 #
-# Existing clusters are listed and a new cluster dedicated to Nodus is suggested: it keeps
+# Existing clusters are listed and a new cluster dedicated to MemoBrain Notes is suggested: it keeps
 # the host ports (18081, 18082, 18080, 9000) and the DNS override away from your other work.
 # On an existing cluster the script adds those ports to its load balancer, a CoreDNS
-# override and the namespace "nodus"; all other workloads are left alone.
+# override and the namespace "memobrain"; all other workloads are left alone.
 #
 # Endpoints on the host: API http://localhost:18081, notify gRPC localhost:18082,
 # Keycloak http://keycloak.localtest.me:18080 (admin/admin; users admin/user1/user2,
-# password "nodus-dev-password"), S3 http://localhost:9000. localtest.me resolves to
+# password "memobrain-dev-password"), S3 http://localhost:9000. localtest.me resolves to
 # 127.0.0.1 through public DNS, so the same issuer URL works in the browser and in pods.
 # Desktop: yarn dev:desktop, then enter the server URL in Settings > Cloud.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-DEFAULT_CLUSTER=nodus
-NS=nodus
+DEFAULT_CLUSTER=memobrain
+NS=memobrain
 KEYCLOAK_IP=10.43.0.50   # must match deploy/k3d/deps.yaml (inside the default k3s service CIDR)
 KEYCLOAK_HOST=keycloak.localtest.me
 PORTS=(18081 18082 18080 9000)
 
-CLUSTER="${NODUS_K3D_CLUSTER:-}"
+CLUSTER="${MEMOBRAIN_K3D_CLUSTER:-}"
 ACTION=up
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -55,11 +55,11 @@ cluster_exists() { cluster_names | grep -qx "$1"; }
 choose_cluster() {
   if [ ! -t 0 ]; then CLUSTER="$DEFAULT_CLUSTER"; return; fi
   local choices=("$DEFAULT_CLUSTER") n i=1 pick
-  echo "${C_BOLD}Which local k3d cluster should run Nodus?${C_OFF}"
+  echo "${C_BOLD}Which local k3d cluster should run MemoBrain Notes?${C_OFF}"
   if cluster_exists "$DEFAULT_CLUSTER"; then
-    echo "  [1] $DEFAULT_CLUSTER  (dedicated Nodus cluster, exists - recommended)"
+    echo "  [1] $DEFAULT_CLUSTER  (dedicated MemoBrain Notes cluster, exists - recommended)"
   else
-    echo "  [1] create a new cluster '$DEFAULT_CLUSTER' dedicated to Nodus (recommended)"
+    echo "  [1] create a new cluster '$DEFAULT_CLUSTER' dedicated to MemoBrain Notes (recommended)"
   fi
   while read -r n; do
     { [ -z "$n" ] || [ "$n" = "$DEFAULT_CLUSTER" ]; } && continue
@@ -91,14 +91,14 @@ case "$ACTION" in
       ok "cluster '$CLUSTER' stopped (data is kept; 'up' starts it again)"
     else
       k scale deploy --all --replicas=0 >/dev/null 2>&1 || true
-      ok "Nodus scaled down on '$CLUSTER'; the cluster keeps running ('up' brings Nodus back)"
+      ok "MemoBrain Notes scaled down on '$CLUSTER'; the cluster keeps running ('up' brings MemoBrain Notes back)"
     fi
     exit 0 ;;
   delete)
     cluster_exists "$CLUSTER" || die "cluster '$CLUSTER' does not exist"
     if [ "$CLUSTER" = "$DEFAULT_CLUSTER" ]; then k3d cluster delete "$CLUSTER"
     else
-      helm --kube-context "$CTX" -n "$NS" uninstall nodus >/dev/null 2>&1 || true
+      helm --kube-context "$CTX" -n "$NS" uninstall memobrain >/dev/null 2>&1 || true
       kubectl --context "$CTX" delete ns "$NS" --ignore-not-found >/dev/null
       ok "removed namespace '$NS' from '$CLUSTER' (ports and DNS override left in place)"
     fi
@@ -108,7 +108,7 @@ esac
 if cluster_exists "$CLUSTER"; then
   ok "cluster '$CLUSTER' exists"
   k3d cluster start "$CLUSTER" >/dev/null 2>&1 || true
-  # Publish the Nodus ports on the cluster's load balancer when they are not mapped yet.
+  # Publish the MemoBrain Notes ports on the cluster's load balancer when they are not mapped yet.
   mapped="$(docker inspect "k3d-$CLUSTER-serverlb" --format '{{json .HostConfig.PortBindings}}' 2>/dev/null || true)"
   for p in "${PORTS[@]}"; do
     case "$mapped" in
@@ -162,7 +162,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata: { name: coredns-custom }
 data:
-  nodus.server: |
+  memobrain.server: |
     $KEYCLOAK_HOST:53 {
       hosts {
         $KEYCLOAK_IP $KEYCLOAK_HOST
@@ -171,7 +171,7 @@ data:
 DNS
 # A broken override from an earlier run would keep CoreDNS crash-looping.
 kubectl --context "$CTX" -n kube-system patch cm coredns-custom --type=json \
-  -p '[{"op":"remove","path":"/data/nodus.override"}]' >/dev/null 2>&1 || true
+  -p '[{"op":"remove","path":"/data/memobrain.override"}]' >/dev/null 2>&1 || true
 kubectl --context "$CTX" -n kube-system rollout restart deploy/coredns >/dev/null 2>&1 || true
 
 # Pods stay Pending when every node carries the disk-pressure taint (the Docker disk is full).
@@ -185,22 +185,22 @@ fi
 # Build and import the cloud image while the dependencies start (Keycloak is the slow one).
 BUILD_LOG="$(mktemp)"
 (
-  docker build -q -f "$ROOT/services/cloud/Dockerfile" -t nodus-cloud:dev "$ROOT" \
-    && k3d image import nodus-cloud:dev -c "$CLUSTER"
+  docker build -q -f "$ROOT/services/cloud/Dockerfile" -t memobrain-cloud:dev "$ROOT" \
+    && k3d image import memobrain-cloud:dev -c "$CLUSTER"
 ) >"$BUILD_LOG" 2>&1 &
 BUILD_PID=$!
-log "Building the cloud image in the background (nodus-cloud:dev)"
+log "Building the cloud image in the background (memobrain-cloud:dev)"
 # Images already in the local Docker cache are copied in instead of pulled from the registries.
 for img in postgres:17 rustfs/rustfs:latest quay.io/keycloak/keycloak:26.7; do
   docker image inspect "$img" >/dev/null 2>&1 && k3d image import "$img" -c "$CLUSTER" >/dev/null 2>&1 &
 done
 
 log "Deploying dependencies (PostgreSQL, S3, Keycloak)"
-k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-nodus.json" \
+k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-memobrain.json" \
   --dry-run=client -o yaml | k apply -f - >/dev/null
 k apply -f "$ROOT/deploy/k3d/deps.yaml" >/dev/null
 # Keycloak imports the realm only on an empty database: restart it when the realm file changed.
-realm_hash="$(shasum -a 256 "$ROOT/deploy/keycloak/realm-nodus.json" | cut -c1-16)"
+realm_hash="$(shasum -a 256 "$ROOT/deploy/keycloak/realm-memobrain.json" | cut -c1-16)"
 k patch deploy keycloak -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"realm-hash\":\"$realm_hash\"}}}}}" >/dev/null
 
 log "Waiting for dependencies (Keycloak can take a minute)"
@@ -218,10 +218,10 @@ rm -f "$BUILD_LOG"
 
 log "Installing the Helm release"
 # The image id as annotation rolls the pods only when the image really changed.
-helm --kube-context "$CTX" -n "$NS" upgrade --install nodus "$ROOT/deploy/helm/nodus" \
-  -f "$ROOT/deploy/helm/nodus/values-k3d.yaml" \
-  --set-string "podAnnotations.image=$(docker image inspect -f '{{.Id}}' nodus-cloud:dev)" --wait --timeout 5m >/dev/null \
-  || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/nodus-api)"
+helm --kube-context "$CTX" -n "$NS" upgrade --install memobrain "$ROOT/deploy/helm/memobrain" \
+  -f "$ROOT/deploy/helm/memobrain/values-k3d.yaml" \
+  --set-string "podAnnotations.image=$(docker image inspect -f '{{.Id}}' memobrain-cloud:dev)" --wait --timeout 5m >/dev/null \
+  || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/memobrain-api)"
 
 for _ in $(seq 1 30); do cloud_ready && break; sleep 2; done
 cloud_ready || die "API does not answer on $CLOUD_URL"
@@ -229,8 +229,8 @@ ok "cloud is ready on $CLOUD_URL"
 cat <<MSG
 
   API        $CLOUD_URL   (gRPC localhost:18082)
-  Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/nodus-dev-password
+  Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/memobrain-dev-password
   Desktop    yarn dev:desktop, then Settings > Cloud: server URL $CLOUD_URL
-  Logs       kubectl --context $CTX -n $NS logs -f deploy/nodus-api
+  Logs       kubectl --context $CTX -n $NS logs -f deploy/memobrain-api
   Stop       yarn dev:cloud:k3d down   (or delete)
 MSG

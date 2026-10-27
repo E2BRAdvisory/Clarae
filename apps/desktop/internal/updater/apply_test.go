@@ -9,25 +9,25 @@ import (
 	"strings"
 	"testing"
 
-	"nodus/shared/updatemanifest"
+	"memobrain/shared/updatemanifest"
 )
 
 func TestApplyWindowsRunsInstallerSilentlyAfterExit(t *testing.T) {
 	fr := &fakeRunner{}
-	a := &SystemApplier{OS: "windows", Exe: `C:\Program Files\Nodus\nodus.exe`, Runner: fr}
-	res, err := a.Apply(context.Background(), `C:\data\updates\nodus-1.1.0.exe`, updatemanifest.Artifact{Kind: "nsis"})
+	a := &SystemApplier{OS: "windows", Exe: `C:\Program Files\MemoBrain Notes\memobrain.exe`, Runner: fr}
+	res, err := a.Apply(context.Background(), `C:\data\updates\memobrain-1.1.0.exe`, updatemanifest.Artifact{Kind: "nsis"})
 	if err != nil || res.Method != MethodInstallerOnExit || !res.Quit {
 		t.Fatalf("%+v %v", res, err)
 	}
 	c := fr.calls[0]
-	if c[0] != "cmd.exe" || !strings.Contains(c[2], `nodus-1.1.0.exe" /S`) || !strings.Contains(c[2], `start "" "C:\Program Files\Nodus\nodus.exe"`) {
+	if c[0] != "cmd.exe" || !strings.Contains(c[2], `memobrain-1.1.0.exe" /S`) || !strings.Contains(c[2], `start "" "C:\Program Files\MemoBrain Notes\memobrain.exe"`) {
 		t.Fatalf("command: %v", c)
 	}
 }
 
 func TestApplyAppImageReplacesInPlace(t *testing.T) {
 	dir := t.TempDir()
-	cur := filepath.Join(dir, "Nodus.AppImage")
+	cur := filepath.Join(dir, "MemoBrain-Notes.AppImage")
 	staged := filepath.Join(dir, "staged.AppImage")
 	if err := os.WriteFile(cur, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestApplyAppImageReplacesInPlace(t *testing.T) {
 	if string(got) != "new" || fi.Mode().Perm()&0o100 == 0 {
 		t.Fatalf("content %q mode %v", got, fi.Mode())
 	}
-	left, _ := filepath.Glob(filepath.Join(dir, ".nodus-update-*"))
+	left, _ := filepath.Glob(filepath.Join(dir, ".memobrain-update-*"))
 	if len(left) != 0 {
 		t.Fatalf("temp left: %v", left)
 	}
@@ -64,9 +64,9 @@ func TestApplyDebAndNonAppImageOnlyReveal(t *testing.T) {
 
 func TestApplyMacosHelperScript(t *testing.T) {
 	dir := t.TempDir()
-	app := filepath.Join(dir, "Nodus.app")
-	exe := filepath.Join(app, "Contents", "MacOS", "nodus")
-	staged := filepath.Join(dir, "nodus.dmg")
+	app := filepath.Join(dir, "MemoBrain Notes.app")
+	exe := filepath.Join(app, "Contents", "MacOS", "memobrain")
+	staged := filepath.Join(dir, "memobrain.dmg")
 	fr := &fakeRunner{}
 	a := &SystemApplier{OS: "darwin", Exe: exe, Runner: fr}
 	res, err := a.Apply(context.Background(), staged, updatemanifest.Artifact{Kind: "dmg"})
@@ -83,7 +83,7 @@ func TestApplyMacosHelperScript(t *testing.T) {
 		}
 	}
 	// Not running from a bundle (dev, `wails dev`): fall back to revealing the dmg.
-	b := &SystemApplier{OS: "darwin", Exe: "/usr/local/bin/nodus", Runner: &fakeRunner{}}
+	b := &SystemApplier{OS: "darwin", Exe: "/usr/local/bin/memobrain", Runner: &fakeRunner{}}
 	if res, _ := b.Apply(context.Background(), staged, updatemanifest.Artifact{Kind: "dmg"}); res.Method != MethodReveal {
 		t.Fatalf("%+v", res)
 	}

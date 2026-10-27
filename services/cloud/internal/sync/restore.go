@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 
-	"nodus/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/shared/syncproto"
 )
 
 // RestoreRevision makes an old revision current again as a *new* revision that

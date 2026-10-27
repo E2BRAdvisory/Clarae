@@ -21,7 +21,7 @@ VERSION="${VERSION#v}"
 # Windows/macOS numeric version resources need MAJOR.MINOR.PATCH only.
 NUMERIC="${VERSION%%-*}"
 
-UPDATER_PKG=nodus/apps/desktop/internal/updater
+UPDATER_PKG=memobrain/apps/desktop/internal/updater
 LDFLAGS="-s -w -X main.Version=$VERSION"
 if [ -n "${UPDATE_PUBLIC_KEY:-}" ]; then
   LDFLAGS="$LDFLAGS -X $UPDATER_PKG.PublicKeyB64=$UPDATE_PUBLIC_KEY"

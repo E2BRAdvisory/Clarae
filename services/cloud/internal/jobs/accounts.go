@@ -7,9 +7,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"nodus/services/cloud/internal/audit"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/privacy"
+	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/privacy"
 )
 
 // PurgeDeletedAccounts finishes the deletion of accounts that were deleted longer

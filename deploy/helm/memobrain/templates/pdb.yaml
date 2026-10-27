@@ -6,9 +6,9 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "nodus.fullname" $root }}-{{ $role }}
+  name: {{ include "memobrain.fullname" $root }}-{{ $role }}
   labels:
-    {{- include "nodus.labels" $root | nindent 4 }}
+    {{- include "memobrain.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $role }}
 spec:
   {{- if $spec.pdb.maxUnavailable }}
@@ -18,6 +18,6 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "nodus.selector" (dict "root" $root "role" $role) | nindent 6 }}
+      {{- include "memobrain.selector" (dict "root" $root "role" $role) | nindent 6 }}
 {{- end }}
 {{- end }}

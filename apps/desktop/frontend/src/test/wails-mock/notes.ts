@@ -1,7 +1,7 @@
 // Mock of TemplatesAPI and ComposerAPI (daily notes, templates, composer) for unit and UI tests.
 // It supports the date tokens YYYY, YY, MM, DD, HH, mm, ss and [literals]; the real formatter
 // (all Moment tokens, Italian names) lives in Go and is tested there.
-import { extract } from '@nodus/markdown';
+import { extract } from '@memobrain/markdown';
 import type {
   DailyOptions,
   ExtractOptions,
@@ -79,9 +79,9 @@ export function notesMock({ vaultOf, resolve, changed }: Ctx) {
 
   const TemplatesAPI = {
     ReadSettings: (id: string): Promise<string> =>
-      Promise.resolve(vaultOf(id).files.get('.nodus/daily.json') ?? ''),
+      Promise.resolve(vaultOf(id).files.get('.memobrain/daily.json') ?? ''),
     WriteSettings: (id: string, content: string): Promise<void> => {
-      vaultOf(id).files.set('.nodus/daily.json', content);
+      vaultOf(id).files.set('.memobrain/daily.json', content);
       return Promise.resolve();
     },
     List: (id: string, folder: string): Promise<TemplateInfo[]> => {

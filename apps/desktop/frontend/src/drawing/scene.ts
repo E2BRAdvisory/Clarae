@@ -8,7 +8,7 @@ export const EMPTY_DRAWING = JSON.stringify(
   {
     type: 'excalidraw',
     version: 2,
-    source: 'nodus',
+    source: 'memobrain',
     elements: [],
     appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
     files: {},

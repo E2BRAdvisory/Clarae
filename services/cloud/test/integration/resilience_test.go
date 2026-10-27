@@ -5,7 +5,7 @@ package integration
 // Fault injection for the cloud service (M7-WP2b, Appendice A "Affidabilita dati"
 // and "Disponibilita"). Every test asserts that the fault was really injected
 // before it checks the outcome. The cloud runs as a real process (the
-// nodus-cloud binary) against the shared PostgreSQL container, except for the
+// memobrain-cloud binary) against the shared PostgreSQL container, except for the
 // restart test, which owns a disposable database.
 
 import (
@@ -26,7 +26,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"nodus/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/auth/authtest"
 )
 
 const chaosBatch = 40 // ops per commit in the kill tests (limit is 50)
@@ -493,7 +493,7 @@ func pgConns(t *testing.T, url string) int {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 	var n int
-	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = 'nodus' AND pid <> pg_backend_pid() AND backend_type = 'client backend'`).Scan(&n); err != nil {
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = 'memobrain' AND pid <> pg_backend_pid() AND backend_type = 'client backend'`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n

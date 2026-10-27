@@ -1,8 +1,8 @@
 // Saved workspaces (§2.2.1 "Workspaces"): named snapshots of the layout (panes,
 // tabs, splits, link groups) and of the sidebars, stored in
-// .nodus/workspaces.json. Like .nodus/workspace.json this file is
+// .memobrain/workspaces.json. Like .memobrain/workspace.json this file is
 // device-specific and is NOT synchronized (shared/go/pathrules excludes every
-// ".nodus/workspace*.json"; §3.4.6). Everything here is pure.
+// ".memobrain/workspace*.json"; §3.4.6). Everything here is pure.
 //
 //   { "version": 1,
 //     "workspaces": [

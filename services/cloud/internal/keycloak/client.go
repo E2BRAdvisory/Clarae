@@ -31,7 +31,7 @@ var (
 )
 
 // AdminRole is the realm role that makes a user an administrator.
-const AdminRole = "nodus-admin"
+const AdminRole = "memobrain-admin"
 
 // UserSpec describes a user to create.
 type UserSpec struct {
@@ -291,7 +291,7 @@ func (c *Client) RequirePasswordReset(ctx context.Context, sub string) (bool, er
 	return err == nil, nil
 }
 
-// SetAdmin grants or removes the nodus-admin realm role. The role is looked up through the
+// SetAdmin grants or removes the memobrain-admin realm role. The role is looked up through the
 // user's own role mappings (available / current) rather than GET /roles/{name}: that way the
 // service account needs only manage-users, not view-realm.
 func (c *Client) SetAdmin(ctx context.Context, sub string, admin bool) error {

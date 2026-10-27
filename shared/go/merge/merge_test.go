@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"nodus/shared/merge"
-	"nodus/shared/syncproto"
+	"memobrain/shared/merge"
+	"memobrain/shared/syncproto"
 )
 
 type meta struct {

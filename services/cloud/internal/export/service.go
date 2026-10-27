@@ -20,14 +20,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
-	"nodus/services/cloud/internal/access"
-	"nodus/services/cloud/internal/audit"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/services/cloud/internal/storage"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/storage"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 const (
@@ -268,7 +268,7 @@ func (s *Service) ProcessPending(ctx context.Context) (int, error) {
 }
 
 func (s *Service) build(ctx context.Context, j dbgen.ExportJob) error {
-	tmp, err := os.CreateTemp("", "nodus-export-*.zip")
+	tmp, err := os.CreateTemp("", "memobrain-export-*.zip")
 	if err != nil {
 		return err
 	}

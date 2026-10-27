@@ -84,16 +84,16 @@ func (i *Issuer) Token(t *testing.T, o TokenOptions) string {
 		o.Username = "user1"
 	}
 	if o.Email == "" {
-		o.Email = o.Username + "@nodus.local"
+		o.Email = o.Username + "@memobrain.local"
 	}
 	if o.AZP == "" {
-		o.AZP = "nodus-desktop"
+		o.AZP = "memobrain-desktop"
 	}
 	if len(o.Audience) == 0 {
-		o.Audience = []string{"nodus-api"}
+		o.Audience = []string{"memobrain-api"}
 	}
 	if len(o.Roles) == 0 {
-		o.Roles = []string{"nodus-user"}
+		o.Roles = []string{"memobrain-user"}
 	}
 	if o.ExpiresIn == 0 {
 		o.ExpiresIn = 5 * time.Minute

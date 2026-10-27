@@ -119,8 +119,8 @@ func checkPinned(t *testing.T, root fs.FS, tag, ref string, a map[string]string)
 	data, err := fs.ReadFile(root, strings.TrimPrefix(ref, "/"))
 	if err != nil {
 		// The tracked dist/ holds only the placeholder index; CI builds the real SPA
-		// (make web-build) and sets NODUS_REQUIRE_WEB_BUILD=1 so a missing file is an error.
-		if os.Getenv("NODUS_REQUIRE_WEB_BUILD") != "" {
+		// (make web-build) and sets MEMOBRAIN_REQUIRE_WEB_BUILD=1 so a missing file is an error.
+		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
 			t.Errorf("<%s %s>: file is not embedded: %v", tag, ref, err)
 		}
 		return
@@ -164,7 +164,7 @@ func csp(v string) map[string][]string {
 }
 
 func TestCSPIsStrict(t *testing.T) {
-	p := csp(CSP("https://id.example.com/realms/nodus"))
+	p := csp(CSP("https://id.example.com/realms/memobrain"))
 	has := func(dir string, want ...string) {
 		t.Helper()
 		got := strings.Join(p[dir], " ")
@@ -194,7 +194,7 @@ func TestCSPIsStrict(t *testing.T) {
 
 // Every class of response (page, asset, 404, 405) carries the full header set.
 func TestSecurityHeadersOnEveryResponseClass(t *testing.T) {
-	h := Handler(Options{Issuer: "https://id.example.com/realms/nodus"})
+	h := Handler(Options{Issuer: "https://id.example.com/realms/memobrain"})
 	for _, c := range []struct {
 		method, path string
 		code         int
@@ -227,7 +227,7 @@ func TestSecurityHeadersOnEveryResponseClass(t *testing.T) {
 	// Embedded assets listed by the index are served with their immutable caching.
 	for _, m := range regexp.MustCompile(`(?:src|href)="(/assets/[^"]+)"`).FindAllStringSubmatch(indexHTML(t), -1) {
 		if _, err := fs.Stat(Dist(), strings.TrimPrefix(m[1], "/")); err != nil {
-			if os.Getenv("NODUS_REQUIRE_WEB_BUILD") != "" {
+			if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
 				t.Errorf("%s is not embedded", m[1])
 			}
 			continue

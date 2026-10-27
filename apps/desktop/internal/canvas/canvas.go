@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"nodus/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/parser"
 )
 
 // Node types of the JSON Canvas spec 1.0.

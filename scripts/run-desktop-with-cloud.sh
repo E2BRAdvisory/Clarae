@@ -14,8 +14,8 @@
 # On exit (Ctrl-C) the cloud process is stopped; add --keep to leave everything up,
 # stop it later with scripts/dev-stop.sh. Server URL is prefilled in Settings → Cloud.
 #
-# Sign in with:  user1 / nodus-dev-password   (also user2, and admin for the admin role)
-# Logs: .dev/logs/cloud.log   .dev/with-cloud*/logs/nodus.log   Keycloak admin: http://localhost:8080 (admin/admin)
+# Sign in with:  user1 / memobrain-dev-password   (also user2, and admin for the admin role)
+# Logs: .dev/logs/cloud.log   .dev/with-cloud*/logs/memobrain.log   Keycloak admin: http://localhost:8080 (admin/admin)
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -57,8 +57,8 @@ cloud_start
 echo
 echo "  Cloud API       $CLOUD_URL/api/v1   (client config: $CLOUD_URL/api/v1/client-config)"
 echo "  Keycloak        http://localhost:8080   admin / admin"
-echo "  S3 console      http://localhost:9001   nodus / nodus-secret"
-echo "  Sign in         user1 / nodus-dev-password   (user2, admin)"
+echo "  S3 console      http://localhost:9001   memobrain / memobrain-secret"
+echo "  Sign in         user1 / memobrain-dev-password   (user2, admin)"
 echo "  Cloud log       ${CLOUD_LOG#$ROOT/}"
 echo
 
@@ -72,20 +72,20 @@ fi
 log "Installing frontend dependencies"
 (cd "$ROOT" && run_quiet "yarn install" yarn install --immutable)
 
-export NODUS_DEFAULT_SERVER_URL="$CLOUD_URL"
+export MEMOBRAIN_DEFAULT_SERVER_URL="$CLOUD_URL"
 DESKTOP_PIDS=""
 if [ "$TWO" = 1 ]; then
   log "Building desktop (production) for two instances"
   (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -ldflags "-X main.Version=dev-cloud")
   case "$(uname -s)" in
-    Darwin) BIN="$ROOT/apps/desktop/build/bin/nodus.app/Contents/MacOS/nodus" ;;
-    *) BIN="$ROOT/apps/desktop/build/bin/nodus" ;;
+    Darwin) BIN="$ROOT/apps/desktop/build/bin/memobrain.app/Contents/MacOS/memobrain" ;;
+    *) BIN="$ROOT/apps/desktop/build/bin/memobrain" ;;
   esac
   for n in 1 2; do
     d="$DEV_DIR/with-cloud-$n"; mkdir -p "$d/vaults"
     [ "$DEMO" = 1 ] && seed_demo_vault "$d/vaults/Demo"
     log "Starting device $n (data: ${d#$ROOT/})"
-    NODUS_DATA_DIR="$d" "$BIN" --log-level debug >/dev/null 2>&1 &
+    MEMOBRAIN_DATA_DIR="$d" "$BIN" --log-level debug >/dev/null 2>&1 &
     DESKTOP_PIDS="$DESKTOP_PIDS $!"
   done
   log "Two devices running. Sign in with user1 on both; press Ctrl-C to stop"
@@ -95,5 +95,5 @@ else
   [ "$DEMO" = 1 ] && seed_demo_vault "$d/vaults/Demo"
   log "Starting desktop in dev mode (data: ${d#$ROOT/})"
   cd "$ROOT/apps/desktop"
-  NODUS_DATA_DIR="$d" wails dev
+  MEMOBRAIN_DATA_DIR="$d" wails dev
 fi

@@ -10,7 +10,7 @@ import {
 } from '@codemirror/view';
 import type { Range } from '@codemirror/state';
 import { tags as t } from '@lezer/highlight';
-import { isValidTag, scanSpans, stripInlineCode, type BlockState } from '@nodus/markdown';
+import { isValidTag, scanSpans, stripInlineCode, type BlockState } from '@memobrain/markdown';
 import { blockStateAt, blockStates } from './blockState';
 
 export const markdownHighlight = syntaxHighlighting(

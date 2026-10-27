@@ -1,5 +1,5 @@
 // Package platform holds OS integration that is not vault specific: the
-// application data directory, the nodus:// URL scheme and the single-instance
+// application data directory, the memobrain:// URL scheme and the single-instance
 // identity.
 package platform
 
@@ -13,11 +13,11 @@ import (
 // DataDirEnv overrides the application data directory. Two instances with
 // different data directories can run side by side (useful to simulate two
 // devices while developing sync).
-const DataDirEnv = "NODUS_DATA_DIR"
+const DataDirEnv = "MEMOBRAIN_DATA_DIR"
 
 // DataDir returns the application data directory, creating it if needed:
-// $NODUS_DATA_DIR, otherwise <user config dir>/Nodus
-// (~/Library/Application Support/Nodus, %AppData%\Nodus, ~/.config/Nodus).
+// $MEMOBRAIN_DATA_DIR, otherwise <user config dir>/MemoBrain Notes
+// (~/Library/Application Support/MemoBrain Notes, %AppData%\MemoBrain Notes, ~/.config/MemoBrain Notes).
 func DataDir() (string, error) {
 	dir := os.Getenv(DataDirEnv)
 	if dir == "" {
@@ -25,7 +25,7 @@ func DataDir() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		dir = filepath.Join(base, "Nodus")
+		dir = filepath.Join(base, "MemoBrain Notes")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
@@ -38,5 +38,5 @@ func DataDir() (string, error) {
 // other (Wails v2 SingleInstanceLock.UniqueId).
 func InstanceID(dataDir string) string {
 	sum := sha256.Sum256([]byte(filepath.Clean(dataDir)))
-	return "dev.nodus.desktop." + hex.EncodeToString(sum[:8])
+	return "dev.memobrain.desktop." + hex.EncodeToString(sum[:8])
 }

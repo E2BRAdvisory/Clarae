@@ -13,28 +13,28 @@ import (
 // has a small closed value set (cardinality stays bounded).
 var (
 	syncCommits = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "nodus", Subsystem: "sync", Name: "commits_total",
+		Namespace: "memobrain", Subsystem: "sync", Name: "commits_total",
 		Help: "Sync commit requests by outcome (ok = processed, error = failed as a whole).",
 	}, []string{"outcome"})
 	syncOps = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "nodus", Subsystem: "sync", Name: "ops_total",
+		Namespace: "memobrain", Subsystem: "sync", Name: "ops_total",
 		Help: "Sync operations by result status (accepted, conflict, rejected).",
 	}, []string{"status"})
 	streams = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "nodus", Subsystem: "notify", Name: "streams_active",
+		Namespace: "memobrain", Subsystem: "notify", Name: "streams_active",
 		Help: "Open notification streams (gRPC and SSE) on this process.",
 	})
 	jobRuns = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "nodus", Subsystem: "jobs", Name: "runs_total",
+		Namespace: "memobrain", Subsystem: "jobs", Name: "runs_total",
 		Help: "Background job runs by job and result (ok, error).",
 	}, []string{"job", "result"})
 	jobDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "nodus", Subsystem: "jobs", Name: "run_duration_seconds",
+		Namespace: "memobrain", Subsystem: "jobs", Name: "run_duration_seconds",
 		Help:    "Background job run time by job.",
 		Buckets: []float64{.1, .5, 1, 5, 15, 60, 300, 900, 3600},
 	}, []string{"job"})
 	jobLastSuccess = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "nodus", Subsystem: "jobs", Name: "last_success_timestamp_seconds",
+		Namespace: "memobrain", Subsystem: "jobs", Name: "last_success_timestamp_seconds",
 		Help: "Unix time of the last successful run of each job.",
 	}, []string{"job"})
 )
@@ -70,7 +70,7 @@ func JobRun(job string, took time.Duration, err error) {
 	jobDuration.WithLabelValues(job).Observe(took.Seconds())
 }
 
-// RegisterPool exposes the pgx pool statistics (nodus_db_pool_*).
+// RegisterPool exposes the pgx pool statistics (memobrain_db_pool_*).
 func RegisterPool(reg prometheus.Registerer, pool *pgxpool.Pool) {
 	reg.MustRegister(poolCollector{pool})
 }
@@ -78,10 +78,10 @@ func RegisterPool(reg prometheus.Registerer, pool *pgxpool.Pool) {
 type poolCollector struct{ pool *pgxpool.Pool }
 
 var (
-	descConns = prometheus.NewDesc("nodus_db_pool_connections", "Pool connections by state (acquired, idle, total, max).", []string{"state"}, nil)
-	descWait  = prometheus.NewDesc("nodus_db_pool_acquire_wait_seconds_total", "Total time callers waited for a connection.", nil, nil)
-	descAcq   = prometheus.NewDesc("nodus_db_pool_acquires_total", "Completed connection acquisitions.", nil, nil)
-	descEmpty = prometheus.NewDesc("nodus_db_pool_empty_acquires_total", "Acquisitions that had to wait because the pool was exhausted.", nil, nil)
+	descConns = prometheus.NewDesc("memobrain_db_pool_connections", "Pool connections by state (acquired, idle, total, max).", []string{"state"}, nil)
+	descWait  = prometheus.NewDesc("memobrain_db_pool_acquire_wait_seconds_total", "Total time callers waited for a connection.", nil, nil)
+	descAcq   = prometheus.NewDesc("memobrain_db_pool_acquires_total", "Completed connection acquisitions.", nil, nil)
+	descEmpty = prometheus.NewDesc("memobrain_db_pool_empty_acquires_total", "Acquisitions that had to wait because the pool was exhausted.", nil, nil)
 )
 
 func (poolCollector) Describe(ch chan<- *prometheus.Desc) {

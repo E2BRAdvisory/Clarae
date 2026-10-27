@@ -7,7 +7,7 @@ import type {
   CompletionResult,
   CompletionSource,
 } from '@codemirror/autocomplete';
-import { splitFrontmatter } from '@nodus/markdown';
+import { splitFrontmatter } from '@memobrain/markdown';
 import type { Suggestion, SuggestKind } from '../app/api';
 
 export type LinkFormat = 'shortest' | 'path' | 'relative';

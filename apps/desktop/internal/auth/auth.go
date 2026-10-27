@@ -1,7 +1,7 @@
 // Package auth signs the desktop in to the cloud with OpenID Connect
 // Authorization Code + PKCE in the system browser (§1.3, RFC 8252). The
 // redirect is a loopback listener on a random port, with the custom scheme
-// nodus://auth/callback as fallback (D-08). The refresh token lives in the OS
+// memobrain://auth/callback as fallback (D-08). The refresh token lives in the OS
 // keychain; the access token only in memory.
 package auth
 
@@ -24,7 +24,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 
-	"nodus/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 // Status of the session.
@@ -49,7 +49,7 @@ const (
 )
 
 // SchemeRedirectURI is the custom-scheme callback registered in Keycloak.
-const SchemeRedirectURI = "nodus://auth/callback"
+const SchemeRedirectURI = "memobrain://auth/callback"
 
 // Profile is the signed-in user as seen by the client.
 type Profile struct {
@@ -138,7 +138,7 @@ func New(opts Options) *Service {
 		if h, err := os.Hostname(); err == nil {
 			opts.DeviceName = h
 		} else {
-			opts.DeviceName = "Nodus desktop"
+			opts.DeviceName = "MemoBrain Notes desktop"
 		}
 	}
 	if opts.Platform == "" {
@@ -194,7 +194,7 @@ func (s *Service) Client() *transport.Client {
 	if sess == nil {
 		return nil
 	}
-	c, err := transport.New(sess.ServerURL, s, s.hc, "nodus-desktop/"+s.opts.AppVersion)
+	c, err := transport.New(sess.ServerURL, s, s.hc, "memobrain-desktop/"+s.opts.AppVersion)
 	if err != nil {
 		return nil
 	}
@@ -231,7 +231,7 @@ func (s *Service) Login(ctx context.Context, serverURL string) error {
 }
 
 func (s *Service) login(ctx context.Context, serverURL string) error {
-	client, err := transport.New(serverURL, nil, s.hc, "nodus-desktop/"+s.opts.AppVersion)
+	client, err := transport.New(serverURL, nil, s.hc, "memobrain-desktop/"+s.opts.AppVersion)
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ func (s *Service) serveLoopback(att *attempt) {
 	_ = srv.Serve(att.listener)
 }
 
-// HandleCallback delivers a nodus://auth/callback (custom scheme fallback).
+// HandleCallback delivers a memobrain://auth/callback (custom scheme fallback).
 func (s *Service) HandleCallback(params url.Values) bool {
 	s.mu.Lock()
 	att := s.pending
@@ -534,7 +534,7 @@ func randomString(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-const loopbackPage = `<!doctype html><html><head><meta charset="utf-8"><title>Nodus</title>
+const loopbackPage = `<!doctype html><html><head><meta charset="utf-8"><title>MemoBrain Notes</title>
 <style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:grid;place-items:center;height:100vh;margin:0;color:#1d1d1f}</style></head>
-<body><div><h2>Signed in to Nodus</h2><p>You can close this window and return to the app.</p></div>
+<body><div><h2>Signed in to MemoBrain Notes</h2><p>You can close this window and return to the app.</p></div>
 <script>setTimeout(function(){window.close()},1500)</script></body></html>`

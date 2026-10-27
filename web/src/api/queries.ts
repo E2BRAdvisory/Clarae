@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { unwrap, type Schemas } from '@nodus/api-client';
+import { unwrap, type Schemas } from '@memobrain/api-client';
 import { useApi } from './context';
 
 export type Share = Schemas['Share'];

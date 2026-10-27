@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"nodus/services/cloud/internal/configprofiles"
-	"nodus/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/configprofiles"
+	"memobrain/services/cloud/internal/notify"
 )
 
 type effective struct {

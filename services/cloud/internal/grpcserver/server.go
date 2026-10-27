@@ -17,9 +17,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/notify"
-	"nodus/shared/notifyv1"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/notify"
+	"memobrain/shared/notifyv1"
 )
 
 // Hub is what the stream needs from the notify module.

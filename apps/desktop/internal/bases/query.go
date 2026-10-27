@@ -55,7 +55,7 @@ type Result struct {
 type RunOptions struct {
 	This   *Note             // the note embedding the base (for "this"), may be nil
 	Now    time.Time         // zero = time.Now()
-	Schema map[string]string // declared property types (.nodus/types.json)
+	Schema map[string]string // declared property types (.memobrain/types.json)
 }
 
 type rowCtx struct {

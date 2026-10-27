@@ -17,4 +17,4 @@ networkPolicy:
 ingress:
   grpc: { mode: path }
 secret:
-  existingSecret: nodus-prod
+  existingSecret: memobrain-prod

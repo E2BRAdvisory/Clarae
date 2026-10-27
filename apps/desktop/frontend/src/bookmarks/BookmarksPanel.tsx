@@ -18,7 +18,7 @@ import {
 import { bookmarksReadOnly, useBookmarks } from './store';
 import './bookmarks.css';
 
-const DRAG_TYPE = 'application/x-nodus-bookmark';
+const DRAG_TYPE = 'application/x-memobrain-bookmark';
 
 type Drop = { key: string; zone: 'before' | 'after' | 'into' } | null;
 

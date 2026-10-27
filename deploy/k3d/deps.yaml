@@ -1,8 +1,8 @@
-# Dependencies of the Nodus Cloud Service for the local k3d session: PostgreSQL, an
+# Dependencies of the MemoBrain Notes Cloud Service for the local k3d session: PostgreSQL, an
 # S3-compatible store (RustFS) and Keycloak. Development values only.
 # Keycloak's Service has a fixed ClusterIP so the cluster can alias the public issuer
 # host to it (see scripts/run-cloud-k3d.sh). The realm comes from the `keycloak-realm`
-# ConfigMap, created from deploy/keycloak/realm-nodus.json.
+# ConfigMap, created from deploy/keycloak/realm-memobrain.json.
 apiVersion: v1
 kind: Service
 metadata: { name: postgres }
@@ -23,13 +23,13 @@ spec:
         - name: postgres
           image: postgres:17
           env:
-            - { name: POSTGRES_USER, value: nodus }
-            - { name: POSTGRES_PASSWORD, value: nodus }
-            - { name: POSTGRES_DB, value: nodus }
+            - { name: POSTGRES_USER, value: memobrain }
+            - { name: POSTGRES_PASSWORD, value: memobrain }
+            - { name: POSTGRES_DB, value: memobrain }
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
           ports: [{ containerPort: 5432 }]
           readinessProbe:
-            exec: { command: [pg_isready, -U, nodus, -d, nodus] }
+            exec: { command: [pg_isready, -U, memobrain, -d, memobrain] }
             periodSeconds: 3
           volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
       volumes: [{ name: data, emptyDir: {} }]
@@ -55,8 +55,8 @@ spec:
         - name: rustfs
           image: rustfs/rustfs:latest
           env:
-            - { name: RUSTFS_ACCESS_KEY, value: nodus }
-            - { name: RUSTFS_SECRET_KEY, value: nodus-secret }
+            - { name: RUSTFS_ACCESS_KEY, value: memobrain }
+            - { name: RUSTFS_SECRET_KEY, value: memobrain-secret }
             - { name: RUSTFS_VOLUMES, value: /data }
             - { name: RUSTFS_ADDRESS, value: ':9000' }
           ports: [{ containerPort: 9000 }]

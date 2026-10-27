@@ -21,7 +21,7 @@ import (
 // server history); delete-versus-modify has its own test.
 func TestRandomizedTwoDeviceConvergence(t *testing.T) {
 	seeds := uint64(12)
-	if n, err := strconv.Atoi(os.Getenv("NODUS_SEEDS")); err == nil && n > 0 {
+	if n, err := strconv.Atoi(os.Getenv("MEMOBRAIN_SEEDS")); err == nil && n > 0 {
 		seeds = uint64(n)
 	}
 	for seed := uint64(1); seed <= seeds; seed++ {

@@ -1,6 +1,6 @@
 package merge
 
-import "nodus/shared/syncproto"
+import "memobrain/shared/syncproto"
 
 // Strategy is what the sync engine does with a candidate conflict.
 type Strategy string

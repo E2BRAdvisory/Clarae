@@ -1,4 +1,4 @@
-module nodus/apps/desktop
+module memobrain/apps/desktop
 
 go 1.26.0
 

@@ -99,11 +99,11 @@ ${scoped()}
  */
 export function printCss(): string {
   return `${scoped()}
-@media screen { #nodus-print { display: none; } }
+@media screen { #memobrain-print { display: none; } }
 @media print {
   html, body { height: auto !important; overflow: visible !important; background: #fff !important; zoom: 1 !important; }
-  body.printing > *:not(#nodus-print) { display: none !important; }
-  #nodus-print { display: block; ${LIGHT} color-scheme: light; background: var(--bg); }
+  body.printing > *:not(#memobrain-print) { display: none !important; }
+  #memobrain-print { display: block; ${LIGHT} color-scheme: light; background: var(--bg); }
   @page { margin: 16mm 14mm; }
   .export-doc { max-width: none; padding: 0 6mm; font-size: 11pt; }
   .export-doc a { text-decoration: none; }

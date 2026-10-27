@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { problem, renderApp, type RecordedCall } from '../../test/utils';
 import { validateLimits } from './LimitsPage';
 
-const ADMIN = { roles: ['nodus-admin'] };
+const ADMIN = { roles: ['memobrain-admin'] };
 const GB = 1024 ** 3;
 const settings = {
   default_quota_bytes: 5 * GB,

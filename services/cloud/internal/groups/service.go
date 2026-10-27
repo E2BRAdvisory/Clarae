@@ -13,11 +13,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"nodus/services/cloud/internal/audit"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // DirectoryLimit caps the answers of the directory endpoints.

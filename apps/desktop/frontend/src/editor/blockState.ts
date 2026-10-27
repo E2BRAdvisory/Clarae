@@ -1,5 +1,5 @@
 import { StateField, type EditorState, type Text } from '@codemirror/state';
-import { scanSpans, splitFrontmatter, stripInlineCode, type BlockState } from '@nodus/markdown';
+import { scanSpans, splitFrontmatter, stripInlineCode, type BlockState } from '@memobrain/markdown';
 
 /** Block state (inside %%comment%% / $$math$$) at the START of each line. */
 export interface LineBlockState {

@@ -1,4 +1,4 @@
-/* Nodus UI design system: tokens, then components. Plain CSS, no runtime.
+/* MemoBrain Notes UI design system: tokens, then components. Plain CSS, no runtime.
    Dark mode follows the OS unless data-theme="light" | "dark" is set on <html>. */
 
 :root {

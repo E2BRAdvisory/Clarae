@@ -9,10 +9,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/indexer"
-	"nodus/apps/desktop/internal/search"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/indexer"
+	"memobrain/apps/desktop/internal/search"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 func newEngine(t *testing.T, files map[string]string) *search.Engine {
@@ -20,7 +20,7 @@ func newEngine(t *testing.T, files map[string]string) *search.Engine {
 	ctx := context.Background()
 	root := t.TempDir()
 	fsys, _ := vault.NewFS(root)
-	db, err := store.Open(ctx, filepath.Join(root, ".nodus", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}

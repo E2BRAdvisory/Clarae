@@ -46,10 +46,10 @@ export function TabBar({ pane }: { pane: Pane }) {
       className="tabbar"
       onMouseDown={() => focusPane(pane.id)}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('application/x-nodus-tab')) e.preventDefault();
+        if (e.dataTransfer.types.includes('application/x-memobrain-tab')) e.preventDefault();
       }}
       onDrop={(e) => {
-        const id = e.dataTransfer.getData('application/x-nodus-tab');
+        const id = e.dataTransfer.getData('application/x-memobrain-tab');
         if (id) moveTabTo(id, pane.id);
         setOver(null);
       }}
@@ -62,16 +62,16 @@ export function TabBar({ pane }: { pane: Pane }) {
             className={`tab ${pane.active === tab.id ? 'active' : ''} ${over === i ? 'over' : ''}`}
             draggable
             title={tab.path}
-            onDragStart={(e) => e.dataTransfer.setData('application/x-nodus-tab', tab.id)}
+            onDragStart={(e) => e.dataTransfer.setData('application/x-memobrain-tab', tab.id)}
             onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes('application/x-nodus-tab')) return;
+              if (!e.dataTransfer.types.includes('application/x-memobrain-tab')) return;
               e.preventDefault();
               e.stopPropagation();
               setOver(i);
             }}
             onDragLeave={() => setOver(null)}
             onDrop={(e) => {
-              const id = e.dataTransfer.getData('application/x-nodus-tab');
+              const id = e.dataTransfer.getData('application/x-memobrain-tab');
               e.stopPropagation();
               setOver(null);
               if (id) moveTabTo(id, pane.id, i);

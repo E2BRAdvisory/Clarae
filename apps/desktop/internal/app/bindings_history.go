@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"nodus/apps/desktop/internal/history"
+	"memobrain/apps/desktop/internal/history"
 )
 
 // HistoryAPI exposes the device-local file history ("File recovery"): snapshots of text files,

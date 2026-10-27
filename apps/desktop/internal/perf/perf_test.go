@@ -1,18 +1,18 @@
 // Package perf measures the non-functional targets of Appendix A that can be
 // checked headlessly on the Go side (indexing, search, note open path, vault
 // open, graph build, index memory). It is a test harness, not a unit test: it
-// only runs when NODUS_PERF_NOTES is set (see `make perf`).
+// only runs when MEMOBRAIN_PERF_NOTES is set (see `make perf`).
 //
-//	NODUS_PERF_NOTES=50000 NODUS_PERF_OUT=perf.json go test -run TestPerf -timeout 60m -v ./internal/perf/
+//	MEMOBRAIN_PERF_NOTES=50000 MEMOBRAIN_PERF_OUT=perf.json go test -run TestPerf -timeout 60m -v ./internal/perf/
 //
 // Environment:
 //
-//	NODUS_PERF_NOTES        notes of the main vault (required to run)
-//	NODUS_PERF_DIR          cache directory for generated vaults (default: <user cache>/nodus-perf)
-//	NODUS_PERF_GRAPH_NOTES  notes of the graph vault (default 10000, 0 = skip)
-//	NODUS_PERF_OUT          write the metrics as JSON to this file
-//	NODUS_PERF_CPUPROFILE   write a CPU profile of the search phase
-//	NODUS_PERF_KEEP_INDEX   reuse an existing index.db instead of rebuilding it
+//	MEMOBRAIN_PERF_NOTES        notes of the main vault (required to run)
+//	MEMOBRAIN_PERF_DIR          cache directory for generated vaults (default: <user cache>/memobrain-perf)
+//	MEMOBRAIN_PERF_GRAPH_NOTES  notes of the graph vault (default 10000, 0 = skip)
+//	MEMOBRAIN_PERF_OUT          write the metrics as JSON to this file
+//	MEMOBRAIN_PERF_CPUPROFILE   write a CPU profile of the search phase
+//	MEMOBRAIN_PERF_KEEP_INDEX   reuse an existing index.db instead of rebuilding it
 package perf_test
 
 import (
@@ -32,14 +32,14 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/graph"
-	"nodus/apps/desktop/internal/indexer"
-	"nodus/apps/desktop/internal/links"
-	"nodus/apps/desktop/internal/parser"
-	"nodus/apps/desktop/internal/perf/dataset"
-	"nodus/apps/desktop/internal/search"
-	"nodus/apps/desktop/internal/store"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/graph"
+	"memobrain/apps/desktop/internal/indexer"
+	"memobrain/apps/desktop/internal/links"
+	"memobrain/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/perf/dataset"
+	"memobrain/apps/desktop/internal/search"
+	"memobrain/apps/desktop/internal/store"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 type metrics map[string]float64
@@ -61,14 +61,14 @@ func quantiles(ds []time.Duration) (median, p95 time.Duration) {
 }
 
 func cacheDir(t *testing.T) string {
-	if d := os.Getenv("NODUS_PERF_DIR"); d != "" {
+	if d := os.Getenv("MEMOBRAIN_PERF_DIR"); d != "" {
 		return d
 	}
 	base, err := os.UserCacheDir()
 	if err != nil {
 		base = t.TempDir()
 	}
-	return filepath.Join(base, "nodus-perf")
+	return filepath.Join(base, "memobrain-perf")
 }
 
 // peakSampler tracks the maximum Go runtime footprint (Sys) while running.
@@ -99,9 +99,9 @@ func startPeak() *peakSampler {
 func (p *peakSampler) finish() float64 { close(p.stop); return float64(p.peak.Load()) / (1 << 20) }
 
 func TestPerf(t *testing.T) {
-	notesEnv := os.Getenv("NODUS_PERF_NOTES")
+	notesEnv := os.Getenv("MEMOBRAIN_PERF_NOTES")
 	if notesEnv == "" {
-		t.Skip("set NODUS_PERF_NOTES to run the performance suite")
+		t.Skip("set MEMOBRAIN_PERF_NOTES to run the performance suite")
 	}
 	notes, _ := strconv.Atoi(notesEnv)
 	ctx := context.Background()
@@ -117,8 +117,8 @@ func TestPerf(t *testing.T) {
 	out.set(t, "dataset_notes", float64(man.Notes), "notes")
 	out.set(t, "dataset_mb", float64(man.Bytes)/1e6, "MB")
 
-	indexPath := filepath.Join(root, ".nodus", "index.db")
-	if os.Getenv("NODUS_PERF_KEEP_INDEX") == "" {
+	indexPath := filepath.Join(root, ".memobrain", "index.db")
+	if os.Getenv("MEMOBRAIN_PERF_KEEP_INDEX") == "" {
 		if err := store.Reset(indexPath); err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +136,7 @@ func TestPerf(t *testing.T) {
 	// 1. Cold full index.
 	runtime.GC()
 	peak := startPeak()
-	if prof := os.Getenv("NODUS_PERF_INDEX_PROFILE"); prof != "" {
+	if prof := os.Getenv("MEMOBRAIN_PERF_INDEX_PROFILE"); prof != "" {
 		f, err := os.Create(prof)
 		if err != nil {
 			t.Fatal(err)
@@ -151,7 +151,7 @@ func TestPerf(t *testing.T) {
 		t.Fatal(err)
 	}
 	took := time.Since(start)
-	if os.Getenv("NODUS_PERF_INDEX_PROFILE") != "" {
+	if os.Getenv("MEMOBRAIN_PERF_INDEX_PROFILE") != "" {
 		pprof.StopCPUProfile()
 	}
 	out.set(t, "index_full_s", took.Seconds(), "s (target < 180 for 50k)")
@@ -235,7 +235,7 @@ func TestPerf(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// 5. Search.
-	if prof := os.Getenv("NODUS_PERF_CPUPROFILE"); prof != "" {
+	if prof := os.Getenv("MEMOBRAIN_PERF_CPUPROFILE"); prof != "" {
 		f, err := os.Create(prof)
 		if err != nil {
 			t.Fatal(err)
@@ -331,7 +331,7 @@ func TestPerf(t *testing.T) {
 		measureGraph(ctx, t, out, gn)
 	}
 
-	if dest := os.Getenv("NODUS_PERF_OUT"); dest != "" {
+	if dest := os.Getenv("MEMOBRAIN_PERF_OUT"); dest != "" {
 		out["notes"] = float64(notes)
 		raw, _ := json.MarshalIndent(out, "", "  ")
 		if err := os.WriteFile(dest, append(raw, '\n'), 0o600); err != nil {
@@ -352,7 +352,7 @@ func rarestTitleWord(p string) string {
 }
 
 func graphNotes() int {
-	if v := os.Getenv("NODUS_PERF_GRAPH_NOTES"); v != "" {
+	if v := os.Getenv("MEMOBRAIN_PERF_GRAPH_NOTES"); v != "" {
 		n, _ := strconv.Atoi(v)
 		return n
 	}
@@ -364,8 +364,8 @@ func measureGraph(ctx context.Context, t *testing.T, out metrics, n int) {
 	if _, err := dataset.Ensure(root, dataset.Config{Notes: n, Seed: 1}); err != nil {
 		t.Fatal(err)
 	}
-	indexPath := filepath.Join(root, ".nodus", "index.db")
-	if os.Getenv("NODUS_PERF_KEEP_INDEX") == "" {
+	indexPath := filepath.Join(root, ".memobrain", "index.db")
+	if os.Getenv("MEMOBRAIN_PERF_KEEP_INDEX") == "" {
 		if err := store.Reset(indexPath); err != nil {
 			t.Fatal(err)
 		}

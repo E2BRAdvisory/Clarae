@@ -28,8 +28,8 @@ const themes = ['light', 'dark'] as const;
 
 async function prepare(page: Page, theme: (typeof themes)[number]) {
   await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
-  await page.addInitScript((t) => window.localStorage.setItem('nodus.web.theme', t), theme);
-  await signedIn(page, ['nodus-admin']);
+  await page.addInitScript((t) => window.localStorage.setItem('memobrain.web.theme', t), theme);
+  await signedIn(page, ['memobrain-admin']);
   await mockApi(page, allRoutes);
 }
 

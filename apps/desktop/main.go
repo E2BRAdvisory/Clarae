@@ -1,4 +1,4 @@
-// Command nodus is the Nodus desktop client (Wails v2: Go backend + React
+// Command memobrain is the MemoBrain Notes desktop client (Wails v2: Go backend + React
 // frontend). See internal/app for the composition root.
 package main
 
@@ -14,9 +14,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 
-	"nodus/apps/desktop/internal/app"
-	"nodus/apps/desktop/internal/platform"
-	"nodus/apps/desktop/internal/telemetry"
+	"memobrain/apps/desktop/internal/app"
+	"memobrain/apps/desktop/internal/platform"
+	"memobrain/apps/desktop/internal/telemetry"
 )
 
 //go:embed all:frontend/dist
@@ -30,7 +30,7 @@ func main() {
 }
 
 func run() int {
-	dataDirFlag := flag.String("data-dir", "", "application data directory (default $NODUS_DATA_DIR or the OS config dir)")
+	dataDirFlag := flag.String("data-dir", "", "application data directory (default $MEMOBRAIN_DATA_DIR or the OS config dir)")
 	logLevel := flag.String("log-level", "info", "log level: debug|info|warn|error")
 	flag.Parse()
 
@@ -39,25 +39,25 @@ func run() int {
 	}
 	dataDir, err := platform.DataDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "nodus: data dir:", err)
+		fmt.Fprintln(os.Stderr, "memobrain: data dir:", err)
 		return 1
 	}
 	logger, closer, err := telemetry.NewLogger(dataDir, *logLevel, Version == "dev")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "nodus: logger:", err)
+		fmt.Fprintln(os.Stderr, "memobrain: logger:", err)
 		return 1
 	}
 	defer func() { _ = closer.Close() }()
 
 	a := app.New(app.Options{DataDir: dataDir, Logger: logger, Version: Version})
 
-	// A nodus:// URL on our own command line (first instance launched by the OS).
+	// A memobrain:// URL on our own command line (first instance launched by the OS).
 	if u, ok := platform.FindSchemeURL(os.Args[1:]); ok {
 		a.HandleURL(u)
 	}
 
 	err = wails.Run(&options.App{
-		Title:     "Nodus",
+		Title:     "MemoBrain Notes",
 		Width:     1280,
 		Height:    820,
 		MinWidth:  720,
@@ -80,7 +80,7 @@ func run() int {
 			Appearance:           mac.DefaultAppearance,
 			WebviewIsTransparent: false,
 			About: &mac.AboutInfo{
-				Title:   "Nodus",
+				Title:   "MemoBrain Notes",
 				Message: "Local-first notes and knowledge base\nVersion " + Version,
 			},
 		},

@@ -1,5 +1,5 @@
 export type Theme = 'auto' | 'light' | 'dark';
-const KEY = 'nodus.web.theme';
+const KEY = 'memobrain.web.theme';
 
 export function loadTheme(): Theme {
   try {

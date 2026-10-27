@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
 // Crash safety of WriteFile (Appendice A: "scritture client atomiche"). A child
@@ -17,7 +17,7 @@ import (
 // (no deferred cleanup, like a power loss or SIGKILL); the parent then
 // inspects the file system.
 
-const crashEnv = "NODUS_VAULT_CRASH_STEP"
+const crashEnv = "MEMOBRAIN_VAULT_CRASH_STEP"
 
 var crashSteps = []string{stepTmpWritten, stepSynced, stepBeforeRen, stepRenamed}
 
@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 				os.Exit(77)
 			}
 		}
-		fs, err := NewFS(os.Getenv("NODUS_VAULT_CRASH_ROOT"))
+		fs, err := NewFS(os.Getenv("MEMOBRAIN_VAULT_CRASH_ROOT"))
 		if err != nil {
 			os.Exit(2)
 		}
@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 func runCrashChild(t *testing.T, root, step string) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^$") //nolint:gosec // re-executes this test binary to crash on purpose
-	cmd.Env = append(os.Environ(), crashEnv+"="+step, "NODUS_VAULT_CRASH_ROOT="+root)
+	cmd.Env = append(os.Environ(), crashEnv+"="+step, "MEMOBRAIN_VAULT_CRASH_ROOT="+root)
 	err := cmd.Run()
 	var ee *exec.ExitError
 	if !errors.As(err, &ee) || ee.ExitCode() != 77 {

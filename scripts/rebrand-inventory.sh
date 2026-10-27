@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Lists where the placeholder product name ("Nodus") appears, by category, so the rebrand is a
-# mechanical job. Read-only: it never changes a file. Usage:
+# Lists where a product name appears by category (default: the former code name "nodus", to spot
+# leftovers after the rebrand to MemoBrain Notes). Read-only: it never changes a file. Usage:
 #   scripts/rebrand-inventory.sh            # counts per category
 #   scripts/rebrand-inventory.sh --files    # also list the files of each category
 #   scripts/rebrand-inventory.sh --name Foo # search another (case-insensitive) name

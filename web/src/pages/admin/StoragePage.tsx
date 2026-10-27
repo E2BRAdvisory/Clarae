@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Badge, Card, QuotaBar, Table, quotaLevel, quotaPercent } from '@nodus/ui';
+import { Badge, Card, QuotaBar, Table, quotaLevel, quotaPercent } from '@memobrain/ui';
 import { useStorageOverview } from '../../api/admin';
 import { formatBytes, formatDay } from '../../format';
 import { QueryState } from '../QueryState';

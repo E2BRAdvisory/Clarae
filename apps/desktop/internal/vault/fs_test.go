@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
 func newTestFS(t *testing.T) *FS {
@@ -93,7 +93,7 @@ func TestPathGuards(t *testing.T) {
 
 func TestRenameTrashWalk(t *testing.T) {
 	f := newTestFS(t)
-	for _, p := range []string{"a.md", "Dir/b.md", "Dir/Sub/c.png", ".nodus/editor.json", ".nodus/cache/x.svg", ".DS_Store"} {
+	for _, p := range []string{"a.md", "Dir/b.md", "Dir/Sub/c.png", ".memobrain/editor.json", ".memobrain/cache/x.svg", ".DS_Store"} {
 		if _, err := f.WriteFile(p, []byte(p), "", true); err != nil {
 			t.Fatal(err)
 		}
@@ -125,9 +125,9 @@ func TestRenameTrashWalk(t *testing.T) {
 	for _, e := range tree {
 		paths = append(paths, e.Path)
 	}
-	want := map[string]bool{"a.md": true, "Dir": true, "Dir/Sub": true, "Dir/Sub/c.png": true, ".nodus": true, ".nodus/editor.json": true, ".trash": true}
+	want := map[string]bool{"a.md": true, "Dir": true, "Dir/Sub": true, "Dir/Sub/c.png": true, ".memobrain": true, ".memobrain/editor.json": true, ".trash": true}
 	for _, p := range paths {
-		if p == ".DS_Store" || p == ".nodus/cache" || p == ".nodus/cache/x.svg" {
+		if p == ".DS_Store" || p == ".memobrain/cache" || p == ".memobrain/cache/x.svg" {
 			t.Fatalf("excluded entry listed: %s", p)
 		}
 	}

@@ -2,12 +2,12 @@
 # Shared helpers for the dev scripts. Source it; do not execute it.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEV_DIR="${NODUS_DEV_DIR:-$ROOT/.dev}"        # git-ignored scratch area: data dirs, logs, pids, binaries
+DEV_DIR="${MEMOBRAIN_DEV_DIR:-$ROOT/.dev}"        # git-ignored scratch area: data dirs, logs, pids, binaries
 COMPOSE_FILE="$ROOT/deploy/docker/compose.dev.yaml"
 CLOUD_ENV="$ROOT/deploy/docker/cloud.dev.env"
 CLOUD_PID="$DEV_DIR/cloud.pid"
 CLOUD_LOG="$DEV_DIR/logs/cloud.log"
-CLOUD_BIN="$DEV_DIR/bin/nodus-cloud"
+CLOUD_BIN="$DEV_DIR/bin/memobrain-cloud"
 CLOUD_URL="http://127.0.0.1:18081"
 
 if [ -t 1 ]; then
@@ -57,7 +57,7 @@ cloud_start() {
     die "something else already answers on $CLOUD_URL (not started by these scripts). Stop it first."
   fi
   log "Building cloud service"
-  (cd "$ROOT/services/cloud" && go build -o "$CLOUD_BIN" ./cmd/nodus-cloud) || die "cloud build failed"
+  (cd "$ROOT/services/cloud" && go build -o "$CLOUD_BIN" ./cmd/memobrain-cloud) || die "cloud build failed"
   log "Starting cloud service (log: ${CLOUD_LOG#$ROOT/})"
   (
     set -a; . "$CLOUD_ENV"; set +a
@@ -90,7 +90,7 @@ seed_demo_vault() {
   if [ -e "$dir/Welcome.md" ]; then return; fi
   mkdir -p "$dir/Projects" "$dir/Journal"
   cat >"$dir/Welcome.md" <<'MD'
-# Welcome to Nodus
+# Welcome to MemoBrain Notes
 
 This demo vault is for checks and debugging. Try these:
 

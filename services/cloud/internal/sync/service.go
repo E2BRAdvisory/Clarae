@@ -11,20 +11,20 @@ import (
 	"slices"
 	"strings"
 
-	"nodus/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"nodus/services/cloud/internal/blobs"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/services/cloud/internal/observability"
-	"nodus/services/cloud/internal/quota"
-	"nodus/shared/pathrules"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/blobs"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/observability"
+	"memobrain/services/cloud/internal/quota"
+	"memobrain/shared/pathrules"
+	"memobrain/shared/syncproto"
 )
 
 // recordCommit feeds the commit metrics.

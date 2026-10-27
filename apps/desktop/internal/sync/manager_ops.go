@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"nodus/apps/desktop/internal/crypto"
-	"nodus/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/crypto"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 // LinkResult is returned when a vault is connected to the cloud.

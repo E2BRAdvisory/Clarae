@@ -11,7 +11,7 @@ export function CloudSection() {
   const [server, setServer] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Development convenience: NODUS_DEFAULT_SERVER_URL prefills the address.
+  // Development convenience: MEMOBRAIN_DEFAULT_SERVER_URL prefills the address.
   useEffect(() => {
     void api.settings.info().then((i) => {
       if (i.defaultServer) setServer((cur) => cur || (i.defaultServer ?? ''));

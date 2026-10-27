@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/syncproto"
 )
 
 // MountState is a share received by the user, with what this device knows about it.

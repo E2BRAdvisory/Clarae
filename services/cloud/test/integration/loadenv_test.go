@@ -12,33 +12,33 @@ import (
 	"testing"
 	"time"
 
-	"nodus/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/auth/authtest"
 )
 
 // TestServeLoadEnv is TEST-ONLY scaffolding for the k6 scripts in
 // test/load/k6: it boots the whole API in this process (PostgreSQL in a
 // container, filesystem blob storage, the in-process fake OIDC issuer),
-// provisions NODUS_LOADENV_USERS users that each own a shared vault with a few
-// seeded files, writes their pre-minted tokens to NODUS_LOADENV_OUT and keeps
-// serving until the file "<out>.stop" appears or NODUS_LOADENV_SECONDS pass.
+// provisions MEMOBRAIN_LOADENV_USERS users that each own a shared vault with a few
+// seeded files, writes their pre-minted tokens to MEMOBRAIN_LOADENV_OUT and keeps
+// serving until the file "<out>.stop" appears or MEMOBRAIN_LOADENV_SECONDS pass.
 //
-//	NODUS_LOADENV_USERS=1000 NODUS_LOADENV_OUT=/tmp/tokens.json \
+//	MEMOBRAIN_LOADENV_USERS=1000 MEMOBRAIN_LOADENV_OUT=/tmp/tokens.json \
 //	  go test -tags integration -run TestServeLoadEnv -timeout 1h ./test/integration/
 //
 // The fake issuer exists only in test binaries (package authtest takes a
 // *testing.T); production builds and configurations cannot mint tokens.
 func TestServeLoadEnv(t *testing.T) {
-	out := os.Getenv("NODUS_LOADENV_OUT")
-	users, _ := strconv.Atoi(os.Getenv("NODUS_LOADENV_USERS"))
+	out := os.Getenv("MEMOBRAIN_LOADENV_OUT")
+	users, _ := strconv.Atoi(os.Getenv("MEMOBRAIN_LOADENV_USERS"))
 	if out == "" || users <= 0 {
-		t.Skip("set NODUS_LOADENV_USERS and NODUS_LOADENV_OUT to run the load environment")
+		t.Skip("set MEMOBRAIN_LOADENV_USERS and MEMOBRAIN_LOADENV_OUT to run the load environment")
 	}
 	seconds := 1800
-	if n, err := strconv.Atoi(os.Getenv("NODUS_LOADENV_SECONDS")); err == nil && n > 0 {
+	if n, err := strconv.Atoi(os.Getenv("MEMOBRAIN_LOADENV_SECONDS")); err == nil && n > 0 {
 		seconds = n
 	}
 	seedFiles := 20
-	if n, err := strconv.Atoi(os.Getenv("NODUS_LOADENV_SEED_FILES")); err == nil && n >= 0 {
+	if n, err := strconv.Atoi(os.Getenv("MEMOBRAIN_LOADENV_SEED_FILES")); err == nil && n >= 0 {
 		seedFiles = n
 	}
 	e := newEnv(t)
@@ -60,7 +60,7 @@ func TestServeLoadEnv(t *testing.T) {
 			defer func() { <-sem }()
 			name := fmt.Sprintf("load%04d", i)
 			c := &client{e: e, token: e.issuer.Token(t, authtest.TokenOptions{
-				Subject: "sub-" + name, Username: name, Email: name + "@nodus.local", ExpiresIn: 6 * time.Hour,
+				Subject: "sub-" + name, Username: name, Email: name + "@memobrain.local", ExpiresIn: 6 * time.Hour,
 			})}
 			expect(t, c.json(http.MethodGet, "/me", nil), http.StatusOK)
 			dev := decode[map[string]any](t, c.json(http.MethodPost, "/me/devices", map[string]any{"name": name, "platform": "linux"}))

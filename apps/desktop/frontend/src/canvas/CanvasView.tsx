@@ -278,7 +278,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
   };
   const addMedia = async () => {
     const files = (await api.vault.listTree(vaultId)).filter(
-      (e) => !e.isDir && !/\.(md|canvas|base)$/i.test(e.path) && !e.path.startsWith('.nodus/'),
+      (e) => !e.isDir && !/\.(md|canvas|base)$/i.test(e.path) && !e.path.startsWith('.memobrain/'),
     );
     const picked = await dialog.pick(
       t('canvas.addMedia'),

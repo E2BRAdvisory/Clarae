@@ -16,12 +16,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
-	"nodus/services/cloud/internal/blobs"
-	"nodus/services/cloud/internal/db"
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/observability"
-	"nodus/services/cloud/internal/revisions"
-	"nodus/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/blobs"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/observability"
+	"memobrain/services/cloud/internal/revisions"
+	"memobrain/services/cloud/internal/storage"
 )
 
 // Runner schedules the jobs.

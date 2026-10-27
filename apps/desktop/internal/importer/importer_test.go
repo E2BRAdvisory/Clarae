@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 var fixedNow = time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"nodus/apps/desktop/internal/bases"
-	"nodus/apps/desktop/internal/vault"
+	"memobrain/apps/desktop/internal/bases"
+	"memobrain/apps/desktop/internal/vault"
 )
 
 // BasesAPI exposes ".base" files (§2.2.1 "Bases"): load, run a view over the

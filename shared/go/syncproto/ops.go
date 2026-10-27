@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"nodus/shared/hashing"
-	"nodus/shared/pathrules"
+	"memobrain/shared/hashing"
+	"memobrain/shared/pathrules"
 )
 
 // OpKind is the kind of a commit operation or of a changelog entry.

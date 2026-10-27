@@ -13,10 +13,10 @@ const MAX_T = 12;
 const MAX_M_KIB = 1024 * 1024;
 const MAX_P = 16;
 
-const INFO_PATH_ENC = 'nodus/v1/path-enc';
-const INFO_PATH_KEY = 'nodus/v1/path-key';
-const INFO_FILE = 'nodus/v1/file';
-const INFO_RECOVERY_KEK = 'nodus/v1/recovery-kek';
+const INFO_PATH_ENC = 'memobrain/v1/path-enc';
+const INFO_PATH_KEY = 'memobrain/v1/path-key';
+const INFO_FILE = 'memobrain/v1/file';
+const INFO_RECOVERY_KEK = 'memobrain/v1/recovery-kek';
 
 export interface KdfParams {
   alg: string; // 'argon2id' | 'hkdf-sha256'
@@ -125,7 +125,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 async function recoveryChecksum(key: Uint8Array): Promise<Uint8Array> {
   const h = await subtle().digest(
     'SHA-256',
-    buf(concat(enc.encode('nodus/v1/recovery-checksum'), key)),
+    buf(concat(enc.encode('memobrain/v1/recovery-checksum'), key)),
   );
   return new Uint8Array(h).slice(0, 2);
 }

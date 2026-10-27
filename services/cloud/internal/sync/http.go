@@ -6,10 +6,10 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // HTTP implements GET changes and POST commit of the generated strict server.

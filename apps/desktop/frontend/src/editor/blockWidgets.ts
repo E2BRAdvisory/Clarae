@@ -6,7 +6,7 @@
 // Preview (the Properties sidebar edits it); only Source mode displays it.
 import { EditorState, RangeSet, StateField, Transaction, type Range } from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
-import { splitFrontmatter } from '@nodus/markdown';
+import { splitFrontmatter } from '@memobrain/markdown';
 import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
 import { QueryWidget } from '../query/widget';
 import { MathWidget, MermaidWidget } from './widgets';

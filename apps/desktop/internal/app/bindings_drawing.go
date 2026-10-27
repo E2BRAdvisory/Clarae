@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
 // DrawingAPI stores the SVG previews of drawings (§M3-WP2). The frontend renders

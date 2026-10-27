@@ -18,8 +18,8 @@ const (
 
 // Realm role names in Keycloak (§3.3.1).
 const (
-	RealmRoleAdmin = "nodus-admin"
-	RealmRoleUser  = "nodus-user"
+	RealmRoleAdmin = "memobrain-admin"
+	RealmRoleUser  = "memobrain-user"
 )
 
 // RoleFromRealmRoles maps Keycloak realm roles to the application role.

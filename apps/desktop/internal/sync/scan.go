@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/pathrules"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/pathrules"
 )
 
 type localFile struct {
@@ -19,7 +19,7 @@ type localFile struct {
 }
 
 // walkLocal lists the vault files that take part in synchronization
-// (§3.4.2: .DS_Store, *.tmp, the trash and device-local .nodus files are out).
+// (§3.4.2: .DS_Store, *.tmp, the trash and device-local .memobrain files are out).
 func (e *Engine) walkLocal() (map[string]localFile, error) {
 	out := map[string]localFile{}
 	err := e.cfg.FS.Walk(func(en vault.Entry) error {

@@ -1,5 +1,5 @@
 // Settings of daily notes, unique notes, templates, slash commands and the composer.
-// Stored per vault in .nodus/daily.json (only the keys the user set); the administrator's
+// Stored per vault in .memobrain/daily.json (only the keys the user set); the administrator's
 // configuration provides defaults for `daily_notes.{folder,format,template}` and may lock them
 // (§2.6.6), exactly like the editor settings: product defaults -> managed -> user -> locked.
 import { create } from 'zustand';

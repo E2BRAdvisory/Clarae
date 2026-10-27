@@ -6,7 +6,7 @@ import it from './it.json';
 export const supportedLanguages = ['en', 'it'] as const;
 export type Language = (typeof supportedLanguages)[number];
 
-const STORAGE_KEY = 'nodus.web.lang';
+const STORAGE_KEY = 'memobrain.web.lang';
 
 export function isLanguage(value: unknown): value is Language {
   return typeof value === 'string' && (supportedLanguages as readonly string[]).includes(value);

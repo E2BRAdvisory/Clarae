@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // HTTP implements the blob endpoints of the generated strict server.

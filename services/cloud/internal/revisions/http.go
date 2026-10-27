@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/api"
-	"nodus/services/cloud/internal/auth"
-	"nodus/services/cloud/internal/db/dbgen"
-	syncmod "nodus/services/cloud/internal/sync"
+	"memobrain/services/cloud/internal/api"
+	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/db/dbgen"
+	syncmod "memobrain/services/cloud/internal/sync"
 )
 
 // HTTP implements the history endpoints of the generated strict server.

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"nodus/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/parser"
 )
 
 func init() {

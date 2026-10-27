@@ -1,9 +1,9 @@
-# Nodus Cloud Service chart. PostgreSQL, S3-compatible storage and Keycloak are NOT part of the chart:
+# MemoBrain Notes Cloud Service chart. PostgreSQL, S3-compatible storage and Keycloak are NOT part of the chart:
 # point `config` and `secret` at them. Two Deployments run the same image: --role=api (HTTP + gRPC)
 # and --role=worker (background jobs).
 
 image:
-  repository: ghcr.io/ORG/nodus-cloud # set to the registry of the release (release-images.yml publishes it)
+  repository: ghcr.io/ORG/memobrain-cloud # set to the registry of the release (release-images.yml publishes it)
   tag: '' # defaults to the chart appVersion; release builds set it to the git tag
   pullPolicy: IfNotPresent
 imagePullSecrets: []
@@ -80,23 +80,23 @@ worker:
 
 # Non-secret configuration (environment variables of the binary; see deploy/docker/cloud.dev.env).
 config:
-  OIDC_ISSUER: https://auth.example.com/realms/nodus
-  OIDC_AUDIENCE: nodus-api
-  OIDC_ALLOWED_AZP: nodus-desktop,nodus-web
+  OIDC_ISSUER: https://auth.example.com/realms/memobrain
+  OIDC_AUDIENCE: memobrain-api
+  OIDC_ALLOWED_AZP: memobrain-desktop,memobrain-web
   S3_ENDPOINT: https://s3.example.com
   S3_REGION: us-east-1
-  S3_BUCKET_BLOBS: nodus-blobs
-  S3_BUCKET_EXPORTS: nodus-exports
+  S3_BUCKET_BLOBS: memobrain-blobs
+  S3_BUCKET_EXPORTS: memobrain-exports
   S3_USE_PATH_STYLE: 'true'
   # Where browsers reach the object store: when set, export downloads use presigned URLs
   # (the bucket then needs a CORS rule for the Web UI origin); empty = served through the API.
   # S3_PUBLIC_ENDPOINT: https://s3.example.com
   KC_ADMIN_BASE_URL: https://auth.example.com
-  KC_REALM: nodus
-  KC_ADMIN_CLIENT_ID: nodus-admin-svc
-  WEB_UI_ORIGIN: https://nodus.example.com
+  KC_REALM: memobrain
+  KC_ADMIN_CLIENT_ID: memobrain-admin-svc
+  WEB_UI_ORIGIN: https://memobrain.example.com
   # Address desktop clients use for the notification stream (gRPC needs TLS + HTTP/2 end to end).
-  PUBLIC_GRPC_ADDR: notify.nodus.example.com:443
+  PUBLIC_GRPC_ADDR: notify.memobrain.example.com:443
   LOG_LEVEL: info
 
 # Secrets. Three ways, in order of preference:
@@ -107,7 +107,7 @@ config:
 secret:
   existingSecret: ''
   values:
-    DATABASE_URL: postgres://nodus:change-me@postgres:5432/nodus?sslmode=require
+    DATABASE_URL: postgres://memobrain:change-me@postgres:5432/memobrain?sslmode=require
     S3_ACCESS_KEY: ''
     S3_SECRET_KEY: ''
     KC_ADMIN_CLIENT_SECRET: ''
@@ -120,7 +120,7 @@ externalSecret:
     name: ''
     kind: ClusterSecretStore
   # One entry per key of the Secret, e.g.
-  # - { secretKey: DATABASE_URL, remoteRef: { key: nodus/prod, property: database_url } }
+  # - { secretKey: DATABASE_URL, remoteRef: { key: memobrain/prod, property: database_url } }
   data: []
 
 service:
@@ -137,16 +137,16 @@ service:
 ingress:
   enabled: true
   className: nginx
-  host: nodus.example.com
+  host: memobrain.example.com
   tls:
     enabled: true
-    secretName: nodus-tls
+    secretName: memobrain-tls
   annotations: {} # applied to both Ingress objects (cert-manager issuer, ...)
   proxyBodySize: 64m
   grpc:
     mode: host # host | path
-    host: notify.nodus.example.com
-    path: /nodus.v1.NotifyService # gRPC services are routed by /<package>.<Service>
+    host: notify.memobrain.example.com
+    path: /memobrain.v1.NotifyService # gRPC services are routed by /<package>.<Service>
     # Long-lived server-streaming RPC: keep the connection open (seconds).
     streamTimeoutSeconds: 3600
     annotations: {} # extra annotations for the gRPC Ingress only

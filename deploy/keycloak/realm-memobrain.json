@@ -1,6 +1,6 @@
 {
-  "realm": "nodus",
-  "displayName": "Nodus",
+  "realm": "memobrain",
+  "displayName": "MemoBrain Notes",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -28,8 +28,8 @@
   "otpPolicyAlgorithm": "HmacSHA1",
   "otpPolicyDigits": 6,
   "otpPolicyPeriod": 30,
-  "webAuthnPolicyRpEntityName": "Nodus",
-  "webAuthnPolicyPasswordlessRpEntityName": "Nodus",
+  "webAuthnPolicyRpEntityName": "MemoBrain Notes",
+  "webAuthnPolicyPasswordlessRpEntityName": "MemoBrain Notes",
   "internationalizationEnabled": true,
   "supportedLocales": ["en", "it"],
   "defaultLocale": "en",
@@ -40,20 +40,20 @@
         "description": "${role_offline-access}"
       },
       {
-        "name": "nodus-admin",
-        "description": "Nodus administrator: users, groups, quotas, config profiles, audit. No access to vault content."
+        "name": "memobrain-admin",
+        "description": "MemoBrain Notes administrator: users, groups, quotas, config profiles, audit. No access to vault content."
       },
       {
-        "name": "nodus-user",
-        "description": "Nodus user: own vaults, shares, ZIP download."
+        "name": "memobrain-user",
+        "description": "MemoBrain Notes user: own vaults, shares, ZIP download."
       }
     ]
   },
   "defaultRole": {
-    "name": "default-roles-nodus",
+    "name": "default-roles-memobrain",
     "composite": true,
     "composites": {
-      "realm": ["nodus-user", "offline_access"]
+      "realm": ["memobrain-user", "offline_access"]
     }
   },
   "clientScopes": [
@@ -214,8 +214,8 @@
       ]
     },
     {
-      "name": "nodus-api-audience",
-      "description": "Adds aud=nodus-api to access tokens issued to Nodus clients",
+      "name": "memobrain-api-audience",
+      "description": "Adds aud=memobrain-api to access tokens issued to MemoBrain Notes clients",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "false",
@@ -223,12 +223,12 @@
       },
       "protocolMappers": [
         {
-          "name": "nodus-api audience",
+          "name": "memobrain-api audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "nodus-api",
+            "included.client.audience": "memobrain-api",
             "id.token.claim": "false",
             "access.token.claim": "true",
             "introspection.token.claim": "true"
@@ -239,8 +239,8 @@
   ],
   "clients": [
     {
-      "clientId": "nodus-desktop",
-      "name": "Nodus Desktop",
+      "clientId": "memobrain-desktop",
+      "name": "MemoBrain Notes Desktop",
       "description": "Wails desktop client: Authorization Code + PKCE via system browser (D-08: loopback primary, custom scheme fallback)",
       "enabled": true,
       "publicClient": true,
@@ -249,19 +249,26 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://127.0.0.1/*", "http://localhost/*", "nodus://auth/callback"],
+      "redirectUris": ["http://127.0.0.1/*", "http://localhost/*", "memobrain://auth/callback"],
       "webOrigins": ["+"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "nodus://auth/logout##http://127.0.0.1/*",
+        "post.logout.redirect.uris": "memobrain://auth/logout##http://127.0.0.1/*",
         "use.refresh.tokens": "true"
       },
-      "defaultClientScopes": ["basic", "openid", "profile", "email", "roles", "nodus-api-audience"],
+      "defaultClientScopes": [
+        "basic",
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "memobrain-api-audience"
+      ],
       "optionalClientScopes": ["offline_access"]
     },
     {
-      "clientId": "nodus-web",
-      "name": "Nodus Web UI",
+      "clientId": "memobrain-web",
+      "name": "MemoBrain Notes Web UI",
       "description": "Cloud Web UI SPA (admin console and user area): Authorization Code + PKCE",
       "enabled": true,
       "publicClient": true,
@@ -275,13 +282,20 @@
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:5174/*##http://localhost:18081/*"
       },
-      "defaultClientScopes": ["basic", "openid", "profile", "email", "roles", "nodus-api-audience"],
+      "defaultClientScopes": [
+        "basic",
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "memobrain-api-audience"
+      ],
       "optionalClientScopes": []
     },
     {
-      "clientId": "nodus-api",
-      "name": "Nodus Cloud API",
-      "description": "Resource server: validates bearer tokens with aud=nodus-api. Never issues tokens.",
+      "clientId": "memobrain-api",
+      "name": "MemoBrain Notes Cloud API",
+      "description": "Resource server: validates bearer tokens with aud=memobrain-api. Never issues tokens.",
       "enabled": true,
       "bearerOnly": true,
       "protocol": "openid-connect",
@@ -291,8 +305,8 @@
       "serviceAccountsEnabled": false
     },
     {
-      "clientId": "nodus-admin-svc",
-      "name": "Nodus Cloud admin service account",
+      "clientId": "memobrain-admin-svc",
+      "name": "MemoBrain Notes Cloud admin service account",
       "description": "Confidential client used by the cloud Admin Module to call the Keycloak Admin REST API",
       "enabled": true,
       "publicClient": false,
@@ -308,16 +322,16 @@
   ],
   "users": [
     {
-      "username": "service-account-nodus-admin-svc",
+      "username": "service-account-memobrain-admin-svc",
       "enabled": true,
-      "serviceAccountClientId": "nodus-admin-svc",
+      "serviceAccountClientId": "memobrain-admin-svc",
       "clientRoles": {
         "realm-management": ["manage-users", "view-users", "query-users"]
       }
     },
     {
       "username": "admin",
-      "email": "admin@nodus.local",
+      "email": "admin@memobrain.local",
       "firstName": "Ada",
       "lastName": "Admin",
       "enabled": true,
@@ -325,15 +339,15 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nodus-dev-password",
+          "value": "memobrain-dev-password",
           "temporary": false
         }
       ],
-      "realmRoles": ["nodus-admin", "nodus-user", "offline_access"]
+      "realmRoles": ["memobrain-admin", "memobrain-user", "offline_access"]
     },
     {
       "username": "user1",
-      "email": "user1@nodus.local",
+      "email": "user1@memobrain.local",
       "firstName": "Uno",
       "lastName": "Utente",
       "enabled": true,
@@ -341,15 +355,15 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nodus-dev-password",
+          "value": "memobrain-dev-password",
           "temporary": false
         }
       ],
-      "realmRoles": ["nodus-user", "offline_access"]
+      "realmRoles": ["memobrain-user", "offline_access"]
     },
     {
       "username": "user2",
-      "email": "user2@nodus.local",
+      "email": "user2@memobrain.local",
       "firstName": "Due",
       "lastName": "Utente",
       "enabled": true,
@@ -357,11 +371,11 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nodus-dev-password",
+          "value": "memobrain-dev-password",
           "temporary": false
         }
       ],
-      "realmRoles": ["nodus-user", "offline_access"]
+      "realmRoles": ["memobrain-user", "offline_access"]
     }
   ]
 }

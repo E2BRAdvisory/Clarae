@@ -28,7 +28,7 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view';
-import { extract } from '@nodus/markdown';
+import { extract } from '@memobrain/markdown';
 import type { Reveal } from '../reading/ReadingView';
 import type { EditorSettings } from '../state/settings';
 import { blockWidgets } from './blockWidgets';

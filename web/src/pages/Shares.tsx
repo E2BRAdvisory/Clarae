@@ -11,7 +11,7 @@ import {
   Table,
   TextField,
   useToast,
-} from '@nodus/ui';
+} from '@memobrain/ui';
 import { describeError } from '../api/errors';
 import {
   useAnswerInvitation,

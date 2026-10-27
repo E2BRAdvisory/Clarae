@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@nodus/ui';
+import { Button } from '@memobrain/ui';
 import { useAuth } from '../auth/AuthProvider';
 import { setLanguage, supportedLanguages, isLanguage } from '../i18n';
 import { applyTheme, loadTheme, type Theme } from './theme';

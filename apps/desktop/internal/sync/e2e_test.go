@@ -19,12 +19,12 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodus/apps/desktop/internal/crypto"
-	"nodus/apps/desktop/internal/store"
-	syncpkg "nodus/apps/desktop/internal/sync"
-	"nodus/apps/desktop/internal/sync/transport"
-	"nodus/apps/desktop/internal/vault"
-	"nodus/shared/syncproto"
+	"memobrain/apps/desktop/internal/crypto"
+	"memobrain/apps/desktop/internal/store"
+	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/syncproto"
 )
 
 type tokens struct{ user string }
@@ -89,7 +89,7 @@ func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, ciph
 	if err != nil {
 		t.Fatal(err)
 	}
-	sdb, err := store.Open(ctx, filepath.Join(dir, ".nodus", "sync.db"), store.KindSync)
+	sdb, err := store.Open(ctx, filepath.Join(dir, ".memobrain", "sync.db"), store.KindSync)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func (d *device) files() map[string]string {
 	out := map[string]string{}
 	_ = filepath.WalkDir(d.dir, func(p string, de os.DirEntry, err error) error {
 		if err != nil || de.IsDir() {
-			if de != nil && de.IsDir() && (de.Name() == ".nodus" || de.Name() == ".trash") && p != d.dir {
+			if de != nil && de.IsDir() && (de.Name() == ".memobrain" || de.Name() == ".trash") && p != d.dir {
 				return filepath.SkipDir
 			}
 			return nil
@@ -507,27 +507,27 @@ func TestSettingsMergePerKey(t *testing.T) {
 	v := createVault(t, "ada", "settings")
 	a := newDevice(t, "ada", "laptop", v, nil)
 	b := newDevice(t, "ada", "desktop", v, nil)
-	a.write(".nodus/editor.json", `{"fontSize":15,"wrap":true}`)
+	a.write(".memobrain/editor.json", `{"fontSize":15,"wrap":true}`)
 	a.sync()
 	b.sync()
-	if !b.exists(".nodus/editor.json") {
+	if !b.exists(".memobrain/editor.json") {
 		t.Fatal("settings did not sync")
 	}
 	// Device-local state never syncs.
-	a.write(".nodus/workspace.json", `{"layout":1}`)
+	a.write(".memobrain/workspace.json", `{"layout":1}`)
 	a.sync()
 	b.sync()
-	if b.exists(".nodus/workspace.json") {
+	if b.exists(".memobrain/workspace.json") {
 		t.Fatal("workspace.json must stay on the device")
 	}
 
-	a.write(".nodus/editor.json", `{"fontSize":18,"wrap":true}`)
-	b.write(".nodus/editor.json", `{"fontSize":15,"wrap":false}`)
+	a.write(".memobrain/editor.json", `{"fontSize":18,"wrap":true}`)
+	b.write(".memobrain/editor.json", `{"fontSize":15,"wrap":false}`)
 	a.sync()
 	b.sync()
 	a.sync()
 	for _, d := range []*device{a, b} {
-		got := d.read(".nodus/editor.json")
+		got := d.read(".memobrain/editor.json")
 		if !strings.Contains(got, `"fontSize": 18`) || !strings.Contains(got, `"wrap": false`) {
 			t.Errorf("%s: %s", d.name, got)
 		}

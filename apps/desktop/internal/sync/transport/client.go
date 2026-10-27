@@ -1,4 +1,4 @@
-// Package transport is the desktop's HTTP client for the Nodus Cloud API:
+// Package transport is the desktop's HTTP client for the MemoBrain Notes Cloud API:
 // bearer authentication, request ids, retries with backoff (5xx, 429 with
 // Retry-After, network errors) and RFC 9457 problem decoding (§3.1).
 package transport
@@ -18,7 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/shared/syncproto"
+	"memobrain/shared/syncproto"
 )
 
 // BasePath of the REST API.

@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { ApiError } from '@nodus/api-client';
+import { ApiError } from '@memobrain/api-client';
 
 /** User-facing text for an error: a translated message per RFC 9457 code when known. */
 export function describeError(err: unknown, t: TFunction): string {

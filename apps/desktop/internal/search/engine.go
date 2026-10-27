@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"nodus/apps/desktop/internal/parser"
+	"memobrain/apps/desktop/internal/parser"
 )
 
 // Options tune a query.

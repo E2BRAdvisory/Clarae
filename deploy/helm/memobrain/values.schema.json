@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Nodus Cloud chart values",
+  "title": "MemoBrain Notes Cloud chart values",
   "type": "object",
   "definitions": {
     "resources": {

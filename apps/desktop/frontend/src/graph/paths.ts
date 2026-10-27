@@ -1,5 +1,5 @@
 // The graph is not a file: its tab uses a pseudo path in the workspace layout, so it is
-// persisted in .nodus/workspace.json like any other tab. "graph://global" is the whole vault,
+// persisted in .memobrain/workspace.json like any other tab. "graph://global" is the whole vault,
 // "graph://local/<note path>" the neighbourhood of one note.
 const GLOBAL = 'graph://global';
 const LOCAL = 'graph://local/';

@@ -1,5 +1,5 @@
 // Command perfcheck compares a flat JSON map of measurements (as written by
-// the perf suite via NODUS_PERF_OUT) with a stored baseline and fails when a
+// the perf suite via MEMOBRAIN_PERF_OUT) with a stored baseline and fails when a
 // metric regressed by more than the allowed percentage. Every metric is "lower
 // is better" (milliseconds, seconds, megabytes).
 //

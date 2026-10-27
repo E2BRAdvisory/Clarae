@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { problem, renderApp, type RecordedCall } from '../../test/utils';
 
-const ADMIN = { roles: ['nodus-admin'] };
+const ADMIN = { roles: ['memobrain-admin'] };
 const U1 = '11111111-aaaa-4111-8111-111111111111';
 const U2 = '22222222-aaaa-4222-8222-222222222222';
 const G1 = '33333333-aaaa-4333-8333-333333333333';
@@ -227,7 +227,7 @@ describe('admin user detail', () => {
         ip_address: '10.0.0.1',
         started: '2026-01-15T10:00:00Z',
         last_access: '2026-01-15T11:00:00Z',
-        clients: ['nodus-desktop'],
+        clients: ['memobrain-desktop'],
       },
     ],
     [`GET /admin/users/${U1}/config/effective`]: {

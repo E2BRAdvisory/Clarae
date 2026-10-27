@@ -1,5 +1,5 @@
 {
-  "name": "@nodus/desktop-frontend",
+  "name": "@memobrain/desktop-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -24,7 +24,7 @@
     "@lezer/common": "^1.5.4",
     "@lezer/highlight": "^1.2.5",
     "@lezer/markdown": "^1.8.1",
-    "@nodus/markdown": "workspace:*",
+    "@memobrain/markdown": "workspace:*",
     "@tanstack/react-query": "^5.104.5",
     "@zxcvbn-ts/core": "^4.2.0",
     "@zxcvbn-ts/language-common": "^4.1.3",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { extract } from '@nodus/markdown';
+import { extract } from '@memobrain/markdown';
 import { api } from '../app/api';
 import { dialog } from '../ui/dialogs';
 

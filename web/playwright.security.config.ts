@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 // Browser-level security checks against the production build, served by the real
 // embedded-SPA handler (services/cloud/web-embed/cmd/webembed-serve) so the CSP and
 // headers are the ones the cloud binary sends. Prerequisite: `make web-build`.
-// Run with: yarn workspace @nodus/web e2e:security
+// Run with: yarn workspace @memobrain/web e2e:security
 export default defineConfig({
   testDir: './e2e-security',
   retries: process.env['CI'] ? 1 : 0,

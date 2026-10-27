@@ -5,13 +5,13 @@ import (
 	"path"
 	"time"
 
-	"nodus/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/services/cloud/internal/httpproblem"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // Change is one changelog entry (§3.5.3).

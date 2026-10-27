@@ -1,14 +1,14 @@
 [Desktop Entry]
 Type=Application
-Name=Nodus
+Name=MemoBrain Notes
 GenericName=Notes and knowledge base
 Comment=Local-first notes and knowledge base
-Exec=nodus %U
-Icon=nodus
+Exec=memobrain %U
+Icon=memobrain
 Terminal=false
 Categories=Office;Utility;TextEditor;
 Keywords=notes;markdown;knowledge;vault;
-StartupWMClass=nodus
-# nodus:// links (open a note, OIDC login callback): the second instance receives the URL in argv
+StartupWMClass=memobrain
+# memobrain:// links (open a note, OIDC login callback): the second instance receives the URL in argv
 # and forwards it to the running one (ADR-0001).
-MimeType=x-scheme-handler/nodus;
+MimeType=x-scheme-handler/memobrain;

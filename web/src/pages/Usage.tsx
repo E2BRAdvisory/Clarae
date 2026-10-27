@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Card, QuotaBar, quotaLevel, quotaPercent } from '@nodus/ui';
+import { Card, QuotaBar, quotaLevel, quotaPercent } from '@memobrain/ui';
 import { useUsage } from '../api/queries';
 import { formatBytes } from '../format';
 import { QueryState } from './QueryState';

@@ -16,7 +16,7 @@ type KeyStore interface {
 	Delete(account string) error
 }
 
-const keychainService = "Nodus vault keys"
+const keychainService = "MemoBrain Notes vault keys"
 
 // KeychainStore uses the OS keychain (macOS Keychain, Windows Credential
 // Manager, freedesktop Secret Service).

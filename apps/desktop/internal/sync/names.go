@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"nodus/shared/pathrules"
+	"memobrain/shared/pathrules"
 )
 
 // uniquePath returns "name (1).ext", "name (2).ext", … the first one for which

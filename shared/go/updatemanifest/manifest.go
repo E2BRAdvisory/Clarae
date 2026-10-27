@@ -24,7 +24,7 @@ import (
 const SchemaVersion = 1
 
 // signContext is prepended to the manifest bytes before signing (domain separation).
-const signContext = "nodus-update-manifest-v1\n"
+const signContext = "memobrain-update-manifest-v1\n"
 
 // MaxArtifactSize is a hard cap on any single artifact (2 GiB).
 const MaxArtifactSize int64 = 2 << 30

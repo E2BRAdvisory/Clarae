@@ -93,8 +93,8 @@ func issuer(args []string) {
 	mux.HandleFunc("/mint", func(w http.ResponseWriter, r *http.Request) {
 		user := r.URL.Query().Get("user")
 		now := time.Now()
-		claims := jwt.Claims{Issuer: base, Subject: "drill-" + user, Audience: jwt.Audience{"nodus-api"}, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)), Expiry: jwt.NewNumericDate(now.Add(time.Hour))}
-		priv := map[string]any{"typ": "Bearer", "azp": "nodus-desktop", "preferred_username": user, "email": user + "@drill.local", "realm_access": map[string]any{"roles": []string{"nodus-user"}}}
+		claims := jwt.Claims{Issuer: base, Subject: "drill-" + user, Audience: jwt.Audience{"memobrain-api"}, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)), Expiry: jwt.NewNumericDate(now.Add(time.Hour))}
+		priv := map[string]any{"typ": "Bearer", "azp": "memobrain-desktop", "preferred_username": user, "email": user + "@drill.local", "realm_access": map[string]any{"roles": []string{"memobrain-user"}}}
 		raw, err := jwt.Signed(signer).Claims(claims).Claims(priv).Serialize()
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -382,7 +382,7 @@ func verifyBlobs(args []string) {
 	ep := fs.String("s3", "", "S3 host:port")
 	ak := fs.String("ak", "", "access key")
 	sk := fs.String("sk", "", "secret key")
-	bucket := fs.String("bucket", "nodus-blobs", "bucket")
+	bucket := fs.String("bucket", "memobrain-blobs", "bucket")
 	_ = fs.Parse(args)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, *dbURL)
@@ -425,7 +425,7 @@ func s3cmd(args []string) {
 	ep := fs.String("s3", "", "S3 host:port")
 	ak := fs.String("ak", "", "access key")
 	sk := fs.String("sk", "", "secret key")
-	bucket := fs.String("bucket", "nodus-blobs", "bucket")
+	bucket := fs.String("bucket", "memobrain-blobs", "bucket")
 	key := fs.String("key", "", "object key")
 	_ = fs.Parse(args[1:])
 	ctx := context.Background()

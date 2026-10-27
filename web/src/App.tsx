@@ -9,8 +9,8 @@ import {
   type MemoryRouterProps,
 } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ApiError, createClient, type NodusClient } from '@nodus/api-client';
-import { EmptyState, ToastProvider } from '@nodus/ui';
+import { ApiError, createClient, type MemobrainClient } from '@memobrain/api-client';
+import { EmptyState, ToastProvider } from '@memobrain/ui';
 import { ApiProvider } from './api/context';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { RequireAuth, RequireRole } from './auth/guards';
@@ -75,7 +75,7 @@ export function DataLayer({
   client,
   children,
 }: {
-  client?: NodusClient;
+  client?: MemobrainClient;
   children: React.ReactNode;
 }) {
   const { getAccessToken, signIn } = useAuth();
@@ -109,7 +109,7 @@ export function DataLayer({
   );
 }
 
-export function App({ auth, client }: { auth: AuthService; client?: NodusClient }) {
+export function App({ auth, client }: { auth: AuthService; client?: MemobrainClient }) {
   return (
     <AuthProvider service={auth}>
       <DataLayer {...(client ? { client } : {})}>
@@ -128,7 +128,7 @@ export function TestApp({
   router,
 }: {
   auth: AuthService;
-  client: NodusClient;
+  client: MemobrainClient;
   router?: MemoryRouterProps;
 }) {
   return (

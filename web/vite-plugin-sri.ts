@@ -11,7 +11,7 @@ import type { Plugin, ResolvedConfig } from 'vite';
 export function sri(): Plugin {
   let config: ResolvedConfig;
   return {
-    name: 'nodus-sri',
+    name: 'memobrain-sri',
     apply: 'build',
     enforce: 'post',
     configResolved(c) {

@@ -1,4 +1,4 @@
-module nodus/shared
+module memobrain/shared
 
 go 1.26.0
 

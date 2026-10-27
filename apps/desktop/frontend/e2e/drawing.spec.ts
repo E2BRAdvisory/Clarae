@@ -10,7 +10,7 @@ interface MockWindow {
 const SKETCH = JSON.stringify({
   type: 'excalidraw',
   version: 2,
-  source: 'nodus',
+  source: 'memobrain',
   elements: [
     {
       id: 'box1',

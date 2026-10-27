@@ -65,7 +65,7 @@ func (c Code) HTTPStatus() int {
 }
 
 // ProblemTypeBase is the prefix of Problem.Type URIs.
-const ProblemTypeBase = "https://nodus.example/errors/"
+const ProblemTypeBase = "https://memobrain.example/errors/"
 
 // Problem is the application/problem+json body (RFC 9457) with the
 // application-specific Code and request id (§3.1).

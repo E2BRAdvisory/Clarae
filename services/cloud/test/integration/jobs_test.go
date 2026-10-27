@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"nodus/services/cloud/internal/jobs"
-	"nodus/shared/syncproto"
+	"memobrain/services/cloud/internal/jobs"
+	"memobrain/shared/syncproto"
 )
 
 func (e *env) jobs(now time.Time) *jobs.Runner {

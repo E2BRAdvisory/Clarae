@@ -2,11 +2,11 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "nodus.fullname" . }}-api
-  labels: {{- include "nodus.labels" . | nindent 4 }}
+  name: {{ include "memobrain.fullname" . }}-api
+  labels: {{- include "memobrain.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: {{- include "nodus.selector" (dict "root" . "role" "api") | nindent 6 }}
+    matchLabels: {{- include "memobrain.selector" (dict "root" . "role" "api") | nindent 6 }}
   policyTypes:
     - Ingress
     {{- if .Values.networkPolicy.restrictEgress }}
@@ -32,11 +32,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "nodus.fullname" . }}-worker
-  labels: {{- include "nodus.labels" . | nindent 4 }}
+  name: {{ include "memobrain.fullname" . }}-worker
+  labels: {{- include "memobrain.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: {{- include "nodus.selector" (dict "root" . "role" "worker") | nindent 6 }}
+    matchLabels: {{- include "memobrain.selector" (dict "root" . "role" "worker") | nindent 6 }}
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:

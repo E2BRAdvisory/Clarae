@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"nodus/shared/updatemanifest"
+	"memobrain/shared/updatemanifest"
 )
 
 // Methods reported in Result.Method.
@@ -108,7 +108,7 @@ func (a *SystemApplier) Apply(_ context.Context, staged string, art updatemanife
 			return a.reveal(staged, err)
 		}
 		return Result{Method: MethodInstallerOnExit, Quit: true, Path: staged,
-			Message: "The installer starts when Nodus has closed (Windows may ask for administrator approval)."}, nil
+			Message: "The installer starts when MemoBrain Notes has closed (Windows may ask for administrator approval)."}, nil
 	case a.OS == "darwin" && art.Kind == updatemanifest.KindDMG:
 		app := macAppBundle(a.Exe)
 		if app == "" || !dirWritable(filepath.Dir(app)) {
@@ -122,13 +122,13 @@ func (a *SystemApplier) Apply(_ context.Context, staged string, art updatemanife
 			return a.reveal(staged, err)
 		}
 		return Result{Method: MethodReplaceBundle, Quit: true, Path: staged,
-			Message: "Nodus will restart with the new version."}, nil
+			Message: "MemoBrain Notes will restart with the new version."}, nil
 	case a.OS == "linux" && art.Kind == updatemanifest.KindAppImage && a.AppImage != "":
 		if err := replaceFile(staged, a.AppImage); err != nil {
 			return a.reveal(staged, err)
 		}
 		return Result{Method: MethodReplaceFile, Quit: true, Path: a.AppImage,
-			Message: "The AppImage was replaced; start Nodus again."}, nil
+			Message: "The AppImage was replaced; start MemoBrain Notes again."}, nil
 	}
 	return a.reveal(staged, nil)
 }
@@ -161,7 +161,7 @@ func windowsInstallerCommand(installer, exe string) (string, []string) {
 	return "cmd.exe", []string{"/C", script}
 }
 
-// macAppBundle returns "/Applications/Nodus.app" for ".../Nodus.app/Contents/MacOS/nodus".
+// macAppBundle returns "/Applications/MemoBrain Notes.app" for ".../MemoBrain Notes.app/Contents/MacOS/memobrain".
 func macAppBundle(exe string) string {
 	i := strings.Index(exe, ".app/Contents/MacOS/")
 	if i < 0 {
@@ -171,7 +171,7 @@ func macAppBundle(exe string) string {
 }
 
 func dirWritable(dir string) bool {
-	f, err := os.CreateTemp(dir, ".nodus-write-test-*")
+	f, err := os.CreateTemp(dir, ".memobrain-write-test-*")
 	if err != nil {
 		return false
 	}
@@ -188,7 +188,7 @@ func replaceFile(src, dst string) error {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	tmp, err := os.CreateTemp(filepath.Dir(dst), ".nodus-update-*")
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".memobrain-update-*")
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ set -u
 PID="$1"; DMG="$2"; APP="$3"
 for _ in $(seq 1 60); do kill -0 "$PID" 2>/dev/null || break; sleep 0.5; done
 fallback() { /usr/bin/open "$DMG"; exit 1; }
-MNT="$(mktemp -d /tmp/nodus-update.XXXXXX)" || fallback
+MNT="$(mktemp -d /tmp/memobrain-update.XXXXXX)" || fallback
 /usr/bin/hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null || fallback
 cleanup() { /usr/bin/hdiutil detach "$MNT" >/dev/null 2>&1; rmdir "$MNT" 2>/dev/null; }
 NEW="$(find "$MNT" -maxdepth 1 -name '*.app' | head -n 1)"

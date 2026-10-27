@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"nodus/services/cloud/internal/db/dbgen"
-	"nodus/shared/pathrules"
+	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/shared/pathrules"
 )
 
 // Permission is a level of access to a resource.

@@ -1,7 +1,7 @@
 // Module tools pins the developer tools (code generators, linters) used by the
 // repository. It is intentionally outside go.work so its large dependency tree
 // never leaks into the application modules. Install with `make tools`.
-module nodus/tools
+module memobrain/tools
 
 go 1.26.10
 

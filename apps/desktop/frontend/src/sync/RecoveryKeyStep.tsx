@@ -26,11 +26,11 @@ export function RecoveryKeyStep({ recoveryKey, onConfirmed, confirmLabel }: Prop
   };
   const download = () => {
     const url = URL.createObjectURL(
-      new Blob([`Nodus recovery key\n\n${recoveryKey}\n`], { type: 'text/plain' }),
+      new Blob([`MemoBrain Notes recovery key\n\n${recoveryKey}\n`], { type: 'text/plain' }),
     );
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'nodus-recovery-key.txt';
+    a.download = 'memobrain-recovery-key.txt';
     a.click();
     URL.revokeObjectURL(url);
   };

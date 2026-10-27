@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"nodus/shared/syncproto"
+	"memobrain/shared/syncproto"
 )
 
 var titles = map[syncproto.Code]string{

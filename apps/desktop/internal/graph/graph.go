@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"nodus/apps/desktop/internal/search"
+	"memobrain/apps/desktop/internal/search"
 )
 
 // Node kinds.

@@ -26,7 +26,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"nodus/services/cloud/internal/auth/authtest"
+	"memobrain/services/cloud/internal/auth/authtest"
 )
 
 var (
@@ -35,17 +35,17 @@ var (
 	cloudBinErr  error
 )
 
-// cloudBinary builds cmd/nodus-cloud once per test run.
+// cloudBinary builds cmd/memobrain-cloud once per test run.
 func cloudBinary(t *testing.T) string {
 	t.Helper()
 	cloudBinOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "nodus-chaos-bin-")
+		dir, err := os.MkdirTemp("", "memobrain-chaos-bin-")
 		if err != nil {
 			cloudBinErr = err
 			return
 		}
-		cloudBinPath = filepath.Join(dir, "nodus-cloud")
-		out, err := exec.Command("go", "build", "-o", cloudBinPath, "nodus/services/cloud/cmd/nodus-cloud").CombinedOutput() //nolint:gosec // fixed arguments
+		cloudBinPath = filepath.Join(dir, "memobrain-cloud")
+		out, err := exec.Command("go", "build", "-o", cloudBinPath, "memobrain/services/cloud/cmd/memobrain-cloud").CombinedOutput() //nolint:gosec // fixed arguments
 		if err != nil {
 			cloudBinErr = fmt.Errorf("build: %w\n%s", err, out)
 		}
@@ -66,7 +66,7 @@ func freeAddr(t *testing.T) string {
 	return l.Addr().String()
 }
 
-// cloudProc is one running nodus-cloud process.
+// cloudProc is one running memobrain-cloud process.
 type cloudProc struct {
 	t       *testing.T
 	cmd     *exec.Cmd
@@ -88,7 +88,7 @@ func startCloud(t *testing.T, issuerURL, dbURL, storageDir string, extraEnv ...s
 	cmd := exec.Command(cloudBinary(t), "--role=all") //nolint:gosec // binary built by this test
 	cmd.Env = append(os.Environ(),
 		"LISTEN_ADDR="+addr, "GRPC_LISTEN_ADDR="+freeAddr(t), "DATABASE_URL="+dbURL,
-		"STORAGE_DIR="+storageDir, "OIDC_ISSUER="+issuerURL, "OIDC_AUDIENCE=nodus-api",
+		"STORAGE_DIR="+storageDir, "OIDC_ISSUER="+issuerURL, "OIDC_AUDIENCE=memobrain-api",
 		"OIDC_STATUS_CACHE_TTL=1s", "LOG_LEVEL=warn", "SHUTDOWN_DRAIN=0s",
 	)
 	cmd.Env = append(cmd.Env, extraEnv...)
@@ -178,7 +178,7 @@ type procUser struct {
 
 func (p *cloudProc) user(iss *authtest.Issuer, name string) procUser {
 	p.t.Helper()
-	tok := iss.Token(p.t, authtest.TokenOptions{Subject: "sub-" + name + "-" + newID(), Username: name, Email: name + "-" + newID()[24:] + "@nodus.local", ExpiresIn: 2 * time.Hour})
+	tok := iss.Token(p.t, authtest.TokenOptions{Subject: "sub-" + name + "-" + newID(), Username: name, Email: name + "-" + newID()[24:] + "@memobrain.local", ExpiresIn: 2 * time.Hour})
 	if st, b := p.get("/me", tok); st != http.StatusOK {
 		p.t.Fatalf("GET /me: %d %s\n%s", st, b, p.log())
 	}
