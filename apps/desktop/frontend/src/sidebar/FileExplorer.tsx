@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Entry } from '../app/api';
 import { featureOn, useManaged } from '../state/managed';
@@ -53,6 +53,35 @@ export function buildTree(entries: Entry[], sort: FileSort = 'name'): TreeNode[]
   return roots;
 }
 
+/** Fixed row height of the tree (px): rows are windowed, so every row must have the same height. */
+export const ROW_HEIGHT = 24;
+const OVERSCAN = 12;
+/** Viewport height assumed until the container is measured (and where layout does not exist, as in jsdom). */
+const FALLBACK_VIEWPORT = 800;
+
+export interface FlatRow {
+  node: TreeNode;
+  depth: number;
+  /** Path of the containing folder, null at the top level (keyboard navigation goes there with ←). */
+  parent: string | null;
+  /** A folder whose children are listed right below it. */
+  open: boolean;
+}
+
+/** The visible rows in display order; only the folders in `open` show their content. */
+export function flattenTree(nodes: TreeNode[], open: ReadonlySet<string>): FlatRow[] {
+  const out: FlatRow[] = [];
+  const walk = (list: TreeNode[], depth: number, parent: string | null): void => {
+    for (const node of list) {
+      const isOpen = node.entry.isDir && open.has(node.entry.path);
+      out.push({ node, depth, parent, open: isOpen });
+      if (isOpen) walk(node.children, depth + 1, node.entry.path);
+    }
+  };
+  walk(nodes, 0, null);
+  return out;
+}
+
 /** Dot-files and dot-folders (.nodus, .trash, .git) are not shown in the explorer. */
 export const isHidden = (path: string): boolean => path.split('/').some((s) => s.startsWith('.'));
 
@@ -77,6 +106,10 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const expanded = useExpanded((s) => s.open);
   const toggle = (path: string): void => useExpanded.getState().toggle(path);
   const [sort, setSort] = useState<FileSort>('name');
+  const scroller = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(FALLBACK_VIEWPORT);
+  const [focusPath, setFocusPath] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const info = useSync((st) => infoOf(st, vaultId));
@@ -93,6 +126,21 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
       ),
     [entries, sort],
   );
+
+  // Only the rows in (or near) the viewport are mounted: with tens of thousands of notes the
+  // full tree was 50,000 DOM nodes and seconds of render and toggle time.
+  const rows = useMemo(() => flattenTree(tree, expanded), [tree, expanded]);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const measure = (): void => setViewport(el.clientHeight || FALLBACK_VIEWPORT);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const dirForNew = (entry?: Entry): string =>
     entry ? (entry.isDir ? entry.path : parentDir(entry.path)) : parentDir(activePath);
@@ -225,46 +273,135 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           },
         ];
 
-  const renderNodes = (nodes: TreeNode[], depth: number) =>
-    nodes.map((node) => {
+  // The one row that is in the tab order (roving tabindex): the focused one, else the active note.
+  const tabbable =
+    rows.find((r) => r.node.entry.path === focusPath)?.node.entry.path ??
+    rows.find((r) => r.node.entry.path === activePath)?.node.entry.path ??
+    rows[0]?.node.entry.path;
+  const focusRow = (path: string) => {
+    const i = rows.findIndex((r) => r.node.entry.path === path);
+    if (i < 0) return;
+    setFocusPath(path);
+    // The row may be outside the mounted window: scroll it in before focusing it.
+    const el = scroller.current;
+    if (el) {
+      const top = i * ROW_HEIGHT;
+      let next = el.scrollTop;
+      if (top < next) next = top;
+      else if (top + ROW_HEIGHT > next + viewport) next = top + ROW_HEIGHT - viewport;
+      if (next !== el.scrollTop) {
+        el.scrollTop = next;
+        setScrollTop(next);
+      }
+    }
+    requestAnimationFrame(() => {
+      const items = [
+        ...(scroller.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? []),
+      ];
+      items.find((x) => x.dataset['path'] === path)?.focus();
+    });
+  };
+  // WAI-ARIA tree: arrows move/expand/collapse, Enter opens, F2 renames, Delete trashes,
+  // the context-menu key (or Shift+F10) opens the same menu as a right click.
+  const onTreeKey = (e: React.KeyboardEvent<HTMLElement>, entry: Entry) => {
+    const i = rows.findIndex((r) => r.node.entry.path === entry.path);
+    const row = rows[i];
+    if (!row) return;
+    const go = (to: number) => {
+      const target = rows[Math.max(0, Math.min(rows.length - 1, to))];
+      if (target) focusRow(target.node.entry.path);
+    };
+    switch (true) {
+      case e.key === 'ArrowDown':
+        go(i + 1);
+        break;
+      case e.key === 'ArrowUp':
+        go(i - 1);
+        break;
+      case e.key === 'Home':
+        go(0);
+        break;
+      case e.key === 'End':
+        go(rows.length - 1);
+        break;
+      case e.key === 'ArrowRight':
+        if (entry.isDir && !row.open) toggle(entry.path);
+        else if (entry.isDir) go(i + 1);
+        break;
+      case e.key === 'ArrowLeft':
+        if (entry.isDir && row.open) toggle(entry.path);
+        else if (row.parent !== null) focusRow(row.parent);
+        break;
+      case e.key === 'Enter' || e.key === ' ':
+        if (entry.isDir) toggle(entry.path);
+        else openNote(entry.path, { newTab: e.metaKey || e.ctrlKey });
+        break;
+      case e.key === 'F2' && !readOnly:
+        void rename(entry);
+        break;
+      case e.key === 'Delete' && !readOnly:
+        void trash(entry);
+        break;
+      case e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey): {
+        const r = e.currentTarget.getBoundingClientRect();
+        setMenu({ x: r.left + 24, y: r.bottom, items: contextFor(entry) });
+        break;
+      }
+      default:
+        return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const last = Math.min(rows.length, Math.ceil((scrollTop + viewport) / ROW_HEIGHT) + OVERSCAN);
+  const renderRows = () =>
+    rows.slice(first, last).map(({ node, depth, open }) => {
       const { entry } = node;
-      const isCollapsed = !expanded.has(entry.path);
       return (
-        <div key={entry.path}>
-          <div
-            className={`node ${entry.isDir ? 'folder' : 'file'} ${activePath === entry.path ? 'active' : ''} ${dropTarget === entry.path ? 'drop' : ''}`}
-            style={{ paddingLeft: 8 + depth * 14 }}
-            draggable={!readOnly}
-            onDragStart={(e) => e.dataTransfer.setData('application/x-nodus-path', entry.path)}
-            onDragOver={(e) => {
-              if (!entry.isDir || !e.dataTransfer.types.includes('application/x-nodus-path'))
-                return;
-              e.preventDefault();
-              setDropTarget(entry.path);
-            }}
-            onDragLeave={() => setDropTarget((d) => (d === entry.path ? null : d))}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDropTarget(null);
-              const from = e.dataTransfer.getData('application/x-nodus-path');
-              if (from && entry.isDir) void move(from, entry.path);
-            }}
-            onClick={(e) =>
-              entry.isDir
-                ? toggle(entry.path)
-                : openNote(entry.path, { newTab: e.metaKey || e.ctrlKey })
-            }
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setMenu({ x: e.clientX, y: e.clientY, items: contextFor(entry) });
-            }}
-            title={entry.path}
-          >
-            <span className="caret">{entry.isDir ? (isCollapsed ? '▸' : '▾') : ''}</span>
-            <span className="name">{display(entry)}</span>
-          </div>
-          {entry.isDir && !isCollapsed && renderNodes(node.children, depth + 1)}
+        <div
+          key={entry.path}
+          role="treeitem"
+          aria-level={depth + 1}
+          aria-expanded={entry.isDir ? open : undefined}
+          aria-selected={activePath === entry.path}
+          data-path={entry.path}
+          tabIndex={tabbable === entry.path ? 0 : -1}
+          onFocus={() => setFocusPath(entry.path)}
+          onKeyDown={(e) => onTreeKey(e, entry)}
+          className={`node ${entry.isDir ? 'folder' : 'file'} ${activePath === entry.path ? 'active' : ''} ${dropTarget === entry.path ? 'drop' : ''}`}
+          style={{ paddingLeft: 8 + depth * 14, height: ROW_HEIGHT, boxSizing: 'border-box' }}
+          draggable={!readOnly}
+          onDragStart={(e) => e.dataTransfer.setData('application/x-nodus-path', entry.path)}
+          onDragOver={(e) => {
+            if (!entry.isDir || !e.dataTransfer.types.includes('application/x-nodus-path')) return;
+            e.preventDefault();
+            setDropTarget(entry.path);
+          }}
+          onDragLeave={() => setDropTarget((d) => (d === entry.path ? null : d))}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDropTarget(null);
+            const from = e.dataTransfer.getData('application/x-nodus-path');
+            if (from && entry.isDir) void move(from, entry.path);
+          }}
+          onClick={(e) =>
+            entry.isDir
+              ? toggle(entry.path)
+              : openNote(entry.path, { newTab: e.metaKey || e.ctrlKey })
+          }
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setMenu({ x: e.clientX, y: e.clientY, items: contextFor(entry) });
+          }}
+          title={entry.path}
+        >
+          <span className="caret" aria-hidden="true">
+            {entry.isDir ? (open ? '▾' : '▸') : ''}
+          </span>
+          <span className="name">{display(entry)}</span>
         </div>
       );
     });
@@ -302,7 +439,11 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
         </select>
       </div>
       <div
+        ref={scroller}
+        role="tree"
+        aria-label={t('sidebar.files')}
         className={`content tree ${dropTarget === '' ? 'drop' : ''}`}
+        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
         onContextMenu={(e) => {
           e.preventDefault();
           if (readOnly) return;
@@ -335,7 +476,11 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           if (from) void move(from, '');
         }}
       >
-        {renderNodes(tree, 0)}
+        <div style={{ height: rows.length * ROW_HEIGHT, position: 'relative' }}>
+          <div style={{ position: 'absolute', top: first * ROW_HEIGHT, left: 0, right: 0 }}>
+            {renderRows()}
+          </div>
+        </div>
       </div>
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />

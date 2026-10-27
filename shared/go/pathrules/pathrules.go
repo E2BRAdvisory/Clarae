@@ -199,6 +199,11 @@ func IsExcluded(normalized string, excludeTrash bool) bool {
 	if strings.HasSuffix(strings.ToLower(base), ".tmp") {
 		return true
 	}
+	// Staging files of atomic writes (vault.WriteFile): a crash can leave one behind
+	// and it must never be synchronized, indexed or listed.
+	if strings.HasPrefix(base, ".nodus-tmp-") {
+		return true
+	}
 	if excludeTrash && (normalized == TrashDir || strings.HasPrefix(normalized, TrashDir+"/")) {
 		return true
 	}

@@ -36,10 +36,13 @@ type Results struct {
 }
 
 // Engine evaluates queries on one vault index.
-type Engine struct{ db *sql.DB }
+type Engine struct {
+	db *sql.DB
+	c  *cache // shared by every Engine of the same database (see cache.go)
+}
 
 // New binds an engine to index.db.
-func New(db *sql.DB) *Engine { return &Engine{db: db} }
+func New(db *sql.DB) *Engine { return &Engine{db: db, c: cacheFor(db)} }
 
 // Explain describes how a query is understood, without running it.
 func Explain(q string) ([]string, error) {
@@ -50,7 +53,22 @@ func Explain(q string) ([]string, error) {
 	return []string{n.String()}, nil
 }
 
+// queryer is what predicates need from the database: the read transaction of
+// the running query (one snapshot, one connection acquisition for the whole
+// query instead of one per file).
+type queryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // Query parses and runs q.
+//
+// Performance notes (M7-WP1, ADR-0020): candidates come from the in-memory
+// cache (cache.go) and are evaluated on all cores; above the cache budget the
+// query runs in a single read transaction streaming candidate rows (with the
+// body when a predicate needs it) out of one SQL statement. Loading each body
+// with its own statement cost one WAL read-lock round trip per file and made
+// 50,000 notes take seconds. Results and their order are unchanged.
 func (e *Engine) Query(ctx context.Context, q string, opts Options) (Results, error) {
 	node, err := Parse(q)
 	if err != nil {
@@ -63,50 +81,73 @@ func (e *Engine) Query(ctx context.Context, q string, opts Options) (Results, er
 	if and, ok := node.(And); ok && len(and.Items) == 0 {
 		return res, nil // empty query
 	}
-	cands, err := e.candidates(ctx, node)
+	var hits []found
+	snap, err := e.snapshot(ctx)
 	if err != nil {
 		return Results{}, err
 	}
-	var hits []Hit
-	for _, c := range cands {
-		if err := ctx.Err(); err != nil {
+	if snap != nil {
+		if hits, err = evalSnapshot(ctx, snap, node); err != nil {
 			return Results{}, err
 		}
-		f := &fileCtx{db: e.db, meta: c}
-		ok, err := eval(ctx, node, f)
-		if err != nil {
-			return Results{}, err
-		}
-		if !ok {
-			continue
-		}
-		h := Hit{Path: c.path, Title: c.title, Snippet: f.snippet, Line: f.snippetLine, Matches: f.matches}
-		h.Score = float64(f.matches)
-		hits = append(hits, h)
+	} else if hits, err = e.queryStreaming(ctx, node); err != nil {
+		return Results{}, err
 	}
 	switch opts.Sort {
 	case "name":
-		sort.Slice(hits, func(i, j int) bool { return strings.ToLower(hits[i].Title) < strings.ToLower(hits[j].Title) })
+		sort.Slice(hits, func(i, j int) bool { return strings.ToLower(hits[i].hit.Title) < strings.ToLower(hits[j].hit.Title) })
 	case "modified":
-		mt := map[string]int64{}
-		for _, c := range cands {
-			mt[c.path] = c.mtime
-		}
-		sort.Slice(hits, func(i, j int) bool { return mt[hits[i].Path] > mt[hits[j].Path] })
+		sort.Slice(hits, func(i, j int) bool { return hits[i].mtime > hits[j].mtime })
 	default:
 		sort.SliceStable(hits, func(i, j int) bool {
-			if hits[i].Score != hits[j].Score {
-				return hits[i].Score > hits[j].Score
+			if hits[i].hit.Score != hits[j].hit.Score {
+				return hits[i].hit.Score > hits[j].hit.Score
 			}
-			return hits[i].Path < hits[j].Path
+			return hits[i].hit.Path < hits[j].hit.Path
 		})
 	}
 	res.Total = len(hits)
 	if len(hits) > opts.Limit {
 		hits = hits[:opts.Limit]
 	}
-	res.Hits = hits
+	for _, h := range hits {
+		res.Hits = append(res.Hits, h.hit)
+	}
 	return res, nil
+}
+
+// found is a matching file with the data the sort orders need.
+type found struct {
+	hit   Hit
+	mtime int64
+}
+
+// queryStreaming evaluates the query reading candidates out of index.db (no cache).
+func (e *Engine) queryStreaming(ctx context.Context, node Node) ([]found, error) {
+	tx, err := e.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var hits []found
+	err = e.scan(ctx, tx, node, func(c fileMeta, body *string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		f := &fileCtx{db: tx, meta: c}
+		if body != nil {
+			f.body, f.bodyLoaded = *body, true
+		}
+		ok, err := eval(ctx, node, f)
+		if err != nil || !ok {
+			return err
+		}
+		h := Hit{Path: c.path, Title: c.title, Snippet: f.snippet, Line: f.snippetLine, Matches: f.matches}
+		h.Score = float64(f.matches)
+		hits = append(hits, found{hit: h, mtime: c.mtime})
+		return nil
+	})
+	return hits, err
 }
 
 type fileMeta struct {
@@ -114,10 +155,10 @@ type fileMeta struct {
 	mtime             int64
 }
 
-// candidates narrows the files to examine: when the query requires a text
-// term of 3+ characters (top-level AND, case-insensitive) the FTS index
-// provides the set; otherwise every file is a candidate.
-func (e *Engine) candidates(ctx context.Context, n Node) ([]fileMeta, error) {
+// requiredTerms are the text terms (3+ characters, case-insensitive) every
+// matching file must contain in its title or body: the FTS index narrows the
+// candidates to files containing all of them.
+func requiredTerms(n Node) []string {
 	var required []string
 	collect := func(items []Node) {
 		for _, it := range items {
@@ -136,41 +177,94 @@ func (e *Engine) candidates(ctx context.Context, n Node) ([]fileMeta, error) {
 	case Pred:
 		collect([]Node{v})
 	}
-	query := `SELECT path, title, kind, mtime_ns FROM files`
+	return required
+}
+
+// needsBody reports whether evaluating n may read the note text; queries on
+// file name, path and tags only never load it.
+func needsBody(n Node) bool {
+	switch v := n.(type) {
+	case And:
+		for _, it := range v.Items {
+			if needsBody(it) {
+				return true
+			}
+		}
+		return false
+	case Or:
+		for _, it := range v.Items {
+			if needsBody(it) {
+				return true
+			}
+		}
+		return false
+	case Not:
+		return needsBody(v.Item)
+	case Pred:
+		return v.Op != "file" && v.Op != "path" && v.Op != "tag"
+	}
+	return true
+}
+
+// scan streams the candidate files in path order: when the query requires a
+// text term of 3+ characters the FTS index provides the set, otherwise every
+// file is a candidate. body is nil when no predicate needs it.
+func (e *Engine) scan(ctx context.Context, q queryer, n Node, fn func(m fileMeta, body *string) error) error {
+	withBody := needsBody(n)
+	query := `SELECT f.path, f.title, f.kind, f.mtime_ns`
+	if withBody {
+		query += `, COALESCE(c.body, '')`
+	}
+	query += ` FROM files f`
+	if withBody {
+		query += ` LEFT JOIN fts_content c ON c.rowid = f.id`
+	}
 	var args []any
-	if len(required) > 0 {
+	if required := requiredTerms(n); len(required) > 0 {
 		// Each required term must occur in title or body (trigram substring match).
 		clauses := make([]string, len(required))
 		for i, t := range required {
-			clauses[i] = `path IN (SELECT path FROM fts_content WHERE fts_content MATCH ?)`
+			clauses[i] = `f.id IN (SELECT rowid FROM fts_content WHERE fts_content MATCH ?)`
 			args = append(args, `"`+strings.ReplaceAll(t, `"`, `""`)+`"`)
 		}
-		query += ` WHERE ` + strings.Join(clauses, " AND ") //nolint:gosec // clauses are constant fragments; user text is bound as parameters
+		query += ` WHERE ` + strings.Join(clauses, " AND ")
 	}
-	query += ` ORDER BY path`
-	rows, err := e.db.QueryContext(ctx, query, args...)
+	query += ` ORDER BY f.path`
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []fileMeta
 	for rows.Next() {
 		var m fileMeta
-		if err := rows.Scan(&m.path, &m.title, &m.kind, &m.mtime); err != nil {
-			return nil, err
+		var body string
+		dest := []any{&m.path, &m.title, &m.kind, &m.mtime}
+		if withBody {
+			dest = append(dest, &body)
 		}
-		out = append(out, m)
+		if err := rows.Scan(dest...); err != nil {
+			return err
+		}
+		var bp *string
+		if withBody {
+			bp = &body
+		}
+		if err := fn(m, bp); err != nil {
+			return err
+		}
 	}
-	return out, rows.Err()
+	return rows.Err()
 }
 
 // fileCtx lazily loads what predicates need about one file.
 type fileCtx struct {
-	db   *sql.DB
+	db   queryer
 	meta fileMeta
 
 	bodyLoaded bool
 	body       string
+	foldedBody string
+	foldDone   bool
 	lines      []string
 	tagsLoaded bool
 	tags       []string
@@ -192,8 +286,26 @@ func (f *fileCtx) loadBody(ctx context.Context) error {
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
-	f.lines = strings.Split(f.body, "\n")
 	return nil
+}
+
+// folded returns the body folded for a case-insensitive comparison, computed once per file.
+func (f *fileCtx) folded(caseSensitive bool) string {
+	if caseSensitive {
+		return f.body
+	}
+	if !f.foldDone {
+		f.foldedBody, f.foldDone = strings.ToLower(f.body), true
+	}
+	return f.foldedBody
+}
+
+// getLines splits the body once, on first use (most notes are rejected before it is needed).
+func (f *fileCtx) getLines() []string {
+	if f.lines == nil {
+		f.lines = strings.Split(f.body, "\n")
+	}
+	return f.lines
 }
 
 func (f *fileCtx) loadTags(ctx context.Context) error {
@@ -343,7 +455,7 @@ func evalPred(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 			return false, err
 		}
 		any := false
-		for i, l := range f.lines {
+		for i, l := range f.getLines() {
 			if n := len(p.Re.FindAllStringIndex(l, -1)); n > 0 {
 				f.note(i+1, l, n)
 				any = true
@@ -355,7 +467,7 @@ func evalPred(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 			return false, err
 		}
 		any := false
-		for i, l := range f.lines {
+		for i, l := range f.getLines() {
 			if allIn(fold(l, p.CaseSensitive), p.Terms) {
 				f.note(i+1, l, 1)
 				any = true
@@ -412,14 +524,27 @@ func matchBody(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 	if err := f.loadBody(ctx); err != nil {
 		return false, err
 	}
-	hay := fold(f.body, p.CaseSensitive)
+	hay := f.folded(p.CaseSensitive)
 	if !allIn(hay, p.Terms) {
 		return false, nil
 	}
 	// Report the first line containing the first term, and count occurrences.
-	for i, l := range f.lines {
-		if strings.Contains(fold(l, p.CaseSensitive), p.Terms[0]) {
-			f.note(i+1, l, strings.Count(hay, p.Terms[0]))
+	first := p.Terms[0]
+	if i := strings.Index(hay, first); i >= 0 && len(hay) == len(f.body) {
+		// Folding kept the byte length, so offsets in hay are offsets in the body: the line is
+		// cut out of it directly instead of folding and testing every line.
+		line := strings.Count(hay[:i], "\n") + 1
+		start := strings.LastIndexByte(f.body[:i], '\n') + 1
+		end := len(f.body)
+		if j := strings.IndexByte(f.body[i:], '\n'); j >= 0 {
+			end = i + j
+		}
+		f.note(line, f.body[start:end], strings.Count(hay, first))
+		return true, nil
+	}
+	for i, l := range f.getLines() {
+		if strings.Contains(fold(l, p.CaseSensitive), first) {
+			f.note(i+1, l, strings.Count(hay, first))
 			break
 		}
 	}
@@ -444,7 +569,7 @@ func matchGroups(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 		return ok
 	}
 	found := false
-	for i, l := range f.lines {
+	for i, l := range f.getLines() {
 		boundary := strings.TrimSpace(l) == ""
 		if p.Op == "section" {
 			boundary = strings.HasPrefix(strings.TrimLeft(l, " "), "#") && len(group) > 0
@@ -465,7 +590,7 @@ func matchGroups(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 		}
 		group = append(group, l)
 	}
-	found = flush(len(f.lines)) || found
+	found = flush(len(f.getLines())) || found
 	return found, nil
 }
 

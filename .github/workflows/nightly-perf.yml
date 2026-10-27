@@ -1,0 +1,115 @@
+name: Nightly performance
+
+# Synthetic datasets (50k notes, 10k graph nodes) and benchmarks of Appendix A,
+# plus a k6 smoke of the cloud API. Results are uploaded as artifacts and
+# compared with the baselines in docs/perf/. Budgets fail the job when a
+# metric regresses by more than `tolerance` percent.
+#
+# Baselines are machine specific: docs/perf/baseline-ci-<notes>.json must be
+# produced on this runner class (download the "candidate baseline" artifact of a
+# green run and commit it). Until it exists the comparison step only warns.
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Notes in the desktop vault
+        default: '50000'
+      tolerance:
+        description: Allowed regression in percent
+        default: '25'
+      users:
+        description: Virtual users of the cloud smoke
+        default: '200'
+
+env:
+  GOTOOLCHAIN: auto
+
+jobs:
+  desktop:
+    name: Desktop (index, search, open, graph)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      NOTES: ${{ inputs.notes || '50000' }}
+      TOLERANCE: ${{ inputs.tolerance || '25' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: |
+            shared/go/go.sum
+            apps/desktop/go.sum
+      - name: Linux desktop build deps (WebKitGTK 4.1 for Wails)
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Cache synthetic vaults
+        uses: actions/cache@v4
+        with:
+          path: .perf/vault-*
+          key: perf-vault-v1-${{ env.NOTES }}-${{ hashFiles('apps/desktop/internal/perf/dataset/**') }}
+      - name: Run the perf suite
+        run: make perf PERF_NOTES=$NOTES
+        env:
+          GOFLAGS: -tags=webkit2_41
+      - name: Compare with the baseline
+        run: |
+          base=docs/perf/baseline-ci-$NOTES.json
+          if [ -f "$base" ]; then
+            (cd apps/desktop && go run ./internal/perf/cmd/perfcheck -baseline "../../$base" -results "../../.perf/results-$NOTES.json" -tolerance "$TOLERANCE")
+          else
+            echo "::warning::no $base yet: commit the candidate baseline artifact of a green run"
+          fi
+      - name: Candidate baseline
+        if: always()
+        run: |
+          mkdir -p .perf/out
+          jq -n --arg m "github ubuntu-24.04" --arg d "$(date -u +%F)" --slurpfile r ".perf/results-$NOTES.json" \
+            '{meta:{machine:$m,date:$d,notes:($r[0].notes)},metrics:$r[0]}' > ".perf/out/baseline-ci-$NOTES.json" || true
+          cp ".perf/results-$NOTES.json" .perf/out/ || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-desktop
+          path: .perf/out/
+          if-no-files-found: warn
+
+  cloud:
+    name: Cloud (k6 smoke on changes/commit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      USERS: ${{ inputs.users || '200' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: |
+            shared/go/go.sum
+            services/cloud/go.sum
+      - uses: grafana/setup-k6-action@v1
+      - name: Start the load environment (API + PostgreSQL in a container + fake OIDC issuer, test only)
+        run: |
+          mkdir -p .perf
+          (cd services/cloud && NODUS_LOADENV_USERS=$USERS NODUS_LOADENV_OUT=$PWD/../../.perf/tokens.json \
+            go test -tags integration -run TestServeLoadEnv -count=1 -timeout 1h -v ./test/integration/ > ../../.perf/loadenv.log 2>&1) &
+          for i in $(seq 1 180); do [ -f .perf/tokens.json ] && break; sleep 2; done
+          test -f .perf/tokens.json
+      - name: k6
+        run: |
+          k6 run -e TOKENS=.perf/tokens.json -e USERS=$USERS -e DURATION=3m -e RAMP=30s \
+            --summary-export .perf/k6-summary.json services/cloud/test/load/k6/active-users.js
+      - name: Stop the environment
+        if: always()
+        run: touch .perf/tokens.json.stop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-cloud
+          path: |
+            .perf/k6-summary.json
+            .perf/loadenv.log
+          if-no-files-found: warn

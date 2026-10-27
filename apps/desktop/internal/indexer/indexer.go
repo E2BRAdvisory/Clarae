@@ -13,7 +13,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -42,6 +44,10 @@ type Indexer struct {
 	db       *sql.DB
 	logger   zerolog.Logger
 	progress func(Progress)
+
+	// res caches the link resolver of the current file set (see Update).
+	rmu sync.Mutex
+	res *links.Resolver
 }
 
 // New binds an indexer to a vault file system and its index database.
@@ -61,7 +67,30 @@ type fileRow struct {
 // DB returns the index database (read access for the links and search packages).
 func (ix *Indexer) DB() *sql.DB { return ix.db }
 
-// Full reconciles the whole vault with the index.
+// Batch sizing of the write side: a transaction groups notes until either bound
+// is reached. One transaction per note made the WAL commit dominate (about
+// half of the time of a 5,000 note index in the CPU profile).
+const (
+	batchMaxJobs  = 250
+	batchMaxBytes = 16 << 20
+)
+
+// job is a file read and parsed, ready to be written (no database access needed to build it).
+type job struct {
+	e     vault.Entry
+	hash  string
+	title string
+	doc   *parser.Document
+	body  string
+	touch bool // identical content: only the stat columns are refreshed
+	skip  bool // preparation failed (already logged): nothing to write
+}
+
+func (j job) weight() int { return len(j.body) + 512 }
+
+// Full reconciles the whole vault with the index. Files that changed are read
+// and parsed by a pool of workers while a single writer stores them in batched
+// transactions.
 func (ix *Indexer) Full(ctx context.Context) error {
 	start := time.Now()
 	known, err := ix.loadRows(ctx)
@@ -78,19 +107,16 @@ func (ix *Indexer) Full(ctx context.Context) error {
 		return err
 	}
 	seen := make(map[string]bool, len(entries))
-	changed := 0
-	for i, e := range entries {
+	var todo []vault.Entry
+	for _, e := range entries {
 		seen[e.Path] = true
 		if row, ok := known[e.Path]; ok && row.mtimeNs == e.Mtime.UnixNano() && row.size == e.Size {
 			continue
 		}
-		if err := ix.indexEntry(ctx, e, known[e.Path]); err != nil {
-			ix.logger.Warn().Err(err).Str("path", e.Path).Msg("index failed")
-		}
-		changed++
-		if changed%50 == 0 {
-			ix.progress(Progress{Done: i + 1, Total: len(entries), Path: e.Path})
-		}
+		todo = append(todo, e)
+	}
+	if _, err := ix.indexBatches(ctx, todo, known, len(entries)-len(todo), len(entries)); err != nil {
+		return err
 	}
 	removed := 0
 	for p := range known {
@@ -101,17 +127,90 @@ func (ix *Indexer) Full(ctx context.Context) error {
 			removed++
 		}
 	}
+	ix.setResolver(nil)
 	if err := links.ResolveAll(ctx, ix.db); err != nil {
 		return err
 	}
 	ix.progress(Progress{Done: len(entries), Total: len(entries), Finished: true})
-	ix.logger.Info().Int("files", len(entries)).Int("changed", changed).Int("removed", removed).Dur("took", time.Since(start)).Msg("index reconciled")
+	ix.logger.Info().Int("files", len(entries)).Int("changed", len(todo)).Int("removed", removed).Dur("took", time.Since(start)).Msg("index reconciled")
 	return nil
+}
+
+// indexBatches prepares the entries concurrently and writes them in batches.
+// It reports whether any write changed the set of files or aliases.
+func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known map[string]fileRow, doneBase, total int) (bool, error) {
+	if len(todo) == 0 {
+		return false, nil
+	}
+	workers := min(runtime.NumCPU(), 8)
+	in := make(chan vault.Entry)
+	out := make(chan job, workers*2)
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for e := range in {
+				j, err := ix.prepare(e, known[e.Path])
+				if err != nil {
+					ix.logger.Warn().Err(err).Str("path", e.Path).Msg("index failed")
+					out <- job{e: e, skip: true}
+					continue
+				}
+				out <- j
+			}
+		}()
+	}
+	go func() {
+		defer close(in)
+		for _, e := range todo {
+			select {
+			case in <- e:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go func() { wg.Wait(); close(out) }()
+
+	var batch []job
+	weight, processed, structural := 0, 0, false
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		st, err := ix.applyBatch(ctx, batch)
+		structural = structural || st
+		processed += len(batch)
+		batch, weight = batch[:0], 0
+		last := todo[min(processed, len(todo))-1]
+		ix.progress(Progress{Done: doneBase + processed, Total: total, Path: last.Path})
+		return err
+	}
+	for j := range out {
+		if j.skip {
+			processed++
+			continue
+		}
+		batch = append(batch, j)
+		weight += j.weight()
+		if len(batch) >= batchMaxJobs || weight >= batchMaxBytes {
+			if err := flush(); err != nil {
+				return structural, err
+			}
+		}
+	}
+	if err := flush(); err != nil {
+		return structural, err
+	}
+	return structural, ctx.Err()
 }
 
 // Update refreshes the given vault-relative paths after a watcher batch.
 // A path that no longer exists is removed; a folder is walked.
 func (ix *Indexer) Update(ctx context.Context, paths []string) error {
+	var entries []vault.Entry
+	structural := false
 	for _, p := range paths {
 		abs, normalized, err := ix.fs.Resolve(p)
 		if err != nil {
@@ -123,32 +222,63 @@ func (ix *Indexer) Update(ctx context.Context, paths []string) error {
 			if err := ix.removePrefix(ctx, normalized); err != nil {
 				return err
 			}
+			structural = true
 			continue
 		case err != nil:
 			return err
 		}
 		if st.IsDir() {
-			if err := ix.walkDir(ctx, normalized); err != nil {
+			if err := ix.fs.Walk(func(e vault.Entry) error {
+				if !e.IsDir && pathrules.HasPrefix(e.Path, normalized) {
+					entries = append(entries, e)
+				}
+				return nil
+			}); err != nil {
 				return err
 			}
 			continue
 		}
-		e := vault.Entry{Path: normalized, Name: filepath.Base(abs), Kind: syncproto.KindOf(normalized), Size: st.Size(), Mtime: st.ModTime()}
-		if err := ix.indexEntry(ctx, e, fileRow{}); err != nil {
-			ix.logger.Warn().Err(err).Str("path", normalized).Msg("index failed")
-		}
+		entries = append(entries, vault.Entry{Path: normalized, Name: filepath.Base(abs), Kind: syncproto.KindOf(normalized), Size: st.Size(), Mtime: st.ModTime()})
 	}
-	// Link targets depend on which files exist, so any change may re-resolve links.
-	return links.ResolveAll(ctx, ix.db)
+	st, err := ix.indexBatches(ctx, entries, map[string]fileRow{}, 0, len(entries))
+	if err != nil {
+		return err
+	}
+	// Link targets depend on which files and aliases exist: when that set changed every link may
+	// resolve differently. A plain edit only re-resolves the links of the notes it touched.
+	if structural || st {
+		ix.setResolver(nil)
+		return links.ResolveAll(ctx, ix.db)
+	}
+	r, err := ix.getResolver(ctx)
+	if err != nil {
+		return err
+	}
+	changed := make([]string, len(entries))
+	for i, e := range entries {
+		changed[i] = e.Path
+	}
+	return links.ResolvePaths(ctx, ix.db, r, changed)
 }
 
-func (ix *Indexer) walkDir(ctx context.Context, dir string) error {
-	return ix.fs.Walk(func(e vault.Entry) error {
-		if e.IsDir || !pathrules.HasPrefix(e.Path, dir) {
-			return nil
+func (ix *Indexer) setResolver(r *links.Resolver) {
+	ix.rmu.Lock()
+	ix.res = r
+	ix.rmu.Unlock()
+}
+
+// getResolver returns the cached resolver of the current file set, loading it on first use.
+func (ix *Indexer) getResolver(ctx context.Context) (*links.Resolver, error) {
+	ix.rmu.Lock()
+	defer ix.rmu.Unlock()
+	if ix.res == nil {
+		r, err := links.Load(ctx, ix.db)
+		if err != nil {
+			return nil, err
 		}
-		return ix.indexEntry(ctx, e, fileRow{})
-	})
+		ix.res = r
+	}
+	return ix.res, nil
 }
 
 // Rebuild clears every table and runs a full pass.
@@ -179,44 +309,40 @@ func (ix *Indexer) loadRows(ctx context.Context) (map[string]fileRow, error) {
 	return out, rows.Err()
 }
 
-func (ix *Indexer) indexEntry(ctx context.Context, e vault.Entry, prev fileRow) error {
+// prepare reads and parses one file without touching the database.
+func (ix *Indexer) prepare(e vault.Entry, prev fileRow) (job, error) {
 	title := strings.TrimSuffix(e.Name, pathrules.Ext(e.Path))
 	if e.Kind == syncproto.KindExcalidraw || e.Kind == syncproto.KindCanvas {
-		return ix.indexStructured(ctx, e, prev, title)
+		return ix.prepareStructured(e, prev, title)
 	}
 	if e.Kind != syncproto.KindMarkdown {
 		hash, _, err := ix.fs.HashFile(e.Path)
 		if err != nil {
-			return err
+			return job{}, err
 		}
-		return ix.write(ctx, e, hash, title, nil, "")
+		return job{e: e, hash: hash, title: title}, nil
 	}
 	content, err := ix.fs.ReadFile(e.Path)
 	if err != nil {
-		return err
+		return job{}, err
 	}
 	if prev.hash == content.Hash {
-		// Touched but identical: just refresh the stat columns.
-		_, err := ix.db.ExecContext(ctx, `UPDATE files SET mtime_ns=?, size=?, indexed_at=? WHERE path=?`,
-			e.Mtime.UnixNano(), e.Size, time.Now().UTC().Format(time.RFC3339Nano), e.Path)
-		return err
+		return job{e: e, touch: true}, nil // touched but identical
 	}
 	doc := parser.Parse(title, content.Data)
-	return ix.write(ctx, e, content.Hash, title, &doc, string(content.Data))
+	return job{e: e, hash: content.Hash, title: title, doc: &doc, body: string(content.Data)}, nil
 }
 
-// indexStructured indexes a drawing or a canvas: the text of its elements is searchable
+// prepareStructured handles a drawing or a canvas: the text of its elements is searchable
 // and the links they hold feed the graph and the backlinks. A file that does not
 // parse stays listed (and searchable by name) with a warning, never blocks the pass.
-func (ix *Indexer) indexStructured(ctx context.Context, e vault.Entry, prev fileRow, title string) error {
+func (ix *Indexer) prepareStructured(e vault.Entry, prev fileRow, title string) (job, error) {
 	content, err := ix.fs.ReadFile(e.Path)
 	if err != nil {
-		return err
+		return job{}, err
 	}
 	if prev.hash == content.Hash {
-		_, err := ix.db.ExecContext(ctx, `UPDATE files SET mtime_ns=?, size=?, indexed_at=? WHERE path=?`,
-			e.Mtime.UnixNano(), e.Size, time.Now().UTC().Format(time.RFC3339Nano), e.Path)
-		return err
+		return job{e: e, touch: true}, nil
 	}
 	var text string
 	var found []parser.Link
@@ -234,53 +360,185 @@ func (ix *Indexer) indexStructured(ctx context.Context, e vault.Entry, prev file
 		text, found = d.Text, d.Links
 	}
 	doc := parser.Document{Title: title, Links: found, WordCount: len(strings.Fields(text))}
-	return ix.write(ctx, e, content.Hash, title, &doc, text)
+	return job{e: e, hash: content.Hash, title: title, doc: &doc, body: text}, nil
 }
 
-func (ix *Indexer) write(ctx context.Context, e vault.Entry, hash, title string, doc *parser.Document, body string) error {
+// applyBatch writes the jobs in one transaction. If the batch fails as a whole
+// (one bad row must not lose the others) the jobs are retried one by one and
+// the failing ones are logged and skipped.
+func (ix *Indexer) applyBatch(ctx context.Context, jobs []job) (bool, error) {
+	structural, err := ix.applyTx(ctx, jobs)
+	if err == nil {
+		return structural, nil
+	}
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	structural = false
+	for _, j := range jobs {
+		st, err := ix.applyTx(ctx, []job{j})
+		if err != nil {
+			ix.logger.Warn().Err(err).Str("path", j.e.Path).Msg("index failed")
+			continue
+		}
+		structural = structural || st
+	}
+	return structural, nil
+}
+
+func (ix *Indexer) applyTx(ctx context.Context, jobs []job) (bool, error) {
 	tx, err := ix.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	w := &txWriter{tx: tx, stmts: map[string]*sql.Stmt{}}
+	defer w.close()
+	// The FTS rows are written after every other table of the batch: once a
+	// transaction has touched the FTS5 table, each later statement that opens a
+	// statement journal (all the foreign-key inserts do) makes FTS5 flush its
+	// in-memory segment to disk, which was most of the indexing time.
+	structural := false
+	ids := make([]int64, len(jobs))
+	exists := make([]bool, len(jobs))
+	for i, j := range jobs {
+		st, err := w.apply(ctx, j, &ids[i], &exists[i])
+		if err != nil {
+			return false, err
+		}
+		structural = structural || st
+	}
+	for i, j := range jobs {
+		if j.touch {
+			continue
+		}
+		if err := w.writeFTS(ctx, j, ids[i], exists[i]); err != nil {
+			return false, err
+		}
+	}
+	return structural, tx.Commit()
+}
+
+// txWriter caches prepared statements for the lifetime of one transaction.
+type txWriter struct {
+	tx    *sql.Tx
+	stmts map[string]*sql.Stmt
+}
+
+func (w *txWriter) stmt(ctx context.Context, q string) (*sql.Stmt, error) {
+	if s, ok := w.stmts[q]; ok {
+		return s, nil
+	}
+	s, err := w.tx.PrepareContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	w.stmts[q] = s
+	return s, nil
+}
+
+func (w *txWriter) exec(ctx context.Context, q string, args ...any) error {
+	s, err := w.stmt(ctx, q)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	_, err = s.ExecContext(ctx, args...)
+	return err
+}
 
-	for _, table := range []string{"headings", "links", "tags", "aliases", "properties", "tasks", "block_ids"} {
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE path = ?", table), e.Path); err != nil {
-			return err
+func (w *txWriter) close() {
+	for _, s := range w.stmts {
+		_ = s.Close()
+	}
+}
+
+// deleteDerived are the per-path tables rewritten on every change of a file.
+var deleteDerived = []string{
+	`DELETE FROM headings WHERE path = ?`, `DELETE FROM links WHERE path = ?`, `DELETE FROM tags WHERE path = ?`,
+	`DELETE FROM aliases WHERE path = ?`, `DELETE FROM properties WHERE path = ?`, `DELETE FROM tasks WHERE path = ?`,
+	`DELETE FROM block_ids WHERE path = ?`,
+}
+
+// apply stores one job. It reports whether the file is new or its aliases
+// changed, i.e. whether link resolution of the whole vault may be affected.
+func (w *txWriter) apply(ctx context.Context, j job, outID *int64, outExists *bool) (bool, error) {
+	e := j.e
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if j.touch {
+		return false, w.exec(ctx, `UPDATE files SET mtime_ns=?, size=?, indexed_at=? WHERE path=?`, e.Mtime.UnixNano(), e.Size, now, e.Path)
+	}
+	var id int64
+	exists := true
+	sel, err := w.stmt(ctx, `SELECT id FROM files WHERE path = ?`)
+	if err != nil {
+		return false, err
+	}
+	if err := sel.QueryRowContext(ctx, e.Path).Scan(&id); errors.Is(err, sql.ErrNoRows) {
+		exists = false
+	} else if err != nil {
+		return false, err
+	}
+	var oldAliases []string
+	if exists {
+		rows, err := w.tx.QueryContext(ctx, `SELECT name FROM aliases WHERE path = ?`, e.Path)
+		if err != nil {
+			return false, err
+		}
+		for rows.Next() {
+			var n string
+			if err := rows.Scan(&n); err != nil {
+				_ = rows.Close()
+				return false, err
+			}
+			oldAliases = append(oldAliases, n)
+		}
+		if err := rows.Close(); err != nil {
+			return false, err
+		}
+		for _, q := range deleteDerived {
+			if err := w.exec(ctx, q, e.Path); err != nil {
+				return false, err
+			}
 		}
 	}
 	wordCount := 0
-	if doc != nil {
-		wordCount = doc.WordCount
+	var newAliases []string
+	if j.doc != nil {
+		wordCount = j.doc.WordCount
+		newAliases = j.doc.Aliases
 	}
-	if _, err := tx.ExecContext(ctx, `
+	up, err := w.stmt(ctx, `
 		INSERT INTO files (path, kind, mtime_ns, size, hash, title, word_count, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET kind=excluded.kind, mtime_ns=excluded.mtime_ns, size=excluded.size,
-		  hash=excluded.hash, title=excluded.title, word_count=excluded.word_count, indexed_at=excluded.indexed_at`,
-		e.Path, string(e.Kind), e.Mtime.UnixNano(), e.Size, hash, title, wordCount, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-		return err
+		  hash=excluded.hash, title=excluded.title, word_count=excluded.word_count, indexed_at=excluded.indexed_at
+		RETURNING id`)
+	if err != nil {
+		return false, err
 	}
-	if doc != nil {
+	if err := up.QueryRowContext(ctx, e.Path, string(e.Kind), e.Mtime.UnixNano(), e.Size, j.hash, j.title, wordCount, now).Scan(&id); err != nil {
+		return false, err
+	}
+	if doc := j.doc; doc != nil {
 		for _, h := range doc.Headings {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO headings (path, level, text, line) VALUES (?, ?, ?, ?)`, e.Path, h.Level, h.Text, h.Line); err != nil {
-				return err
+			if err := w.exec(ctx, `INSERT INTO headings (path, level, text, line) VALUES (?, ?, ?, ?)`, e.Path, h.Level, h.Text, h.Line); err != nil {
+				return false, err
 			}
 		}
 		for _, l := range doc.Links {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO links (path, line, kind, target_raw, target_resolved, heading, block, alias, embed) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+			if err := w.exec(ctx, `INSERT INTO links (path, line, kind, target_raw, target_resolved, heading, block, alias, embed) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
 				e.Path, l.Line, string(l.Kind), l.Target, l.Heading, l.Block, l.Alias, l.Embed); err != nil {
-				return err
+				return false, err
 			}
 		}
 		for _, t := range doc.Tags {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO tags (path, line, name) VALUES (?, ?, ?)`, e.Path, t.Line, t.Name); err != nil {
-				return err
+			if err := w.exec(ctx, `INSERT INTO tags (path, line, name) VALUES (?, ?, ?)`, e.Path, t.Line, t.Name); err != nil {
+				return false, err
 			}
 		}
 		for _, a := range doc.Aliases {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO aliases (path, name) VALUES (?, ?)`, e.Path, a); err != nil {
-				return err
+			if err := w.exec(ctx, `INSERT INTO aliases (path, name) VALUES (?, ?)`, e.Path, a); err != nil {
+				return false, err
 			}
 		}
 		for k, v := range doc.Properties {
@@ -288,33 +546,52 @@ func (ix *Indexer) write(ctx context.Context, e vault.Entry, hash, title string,
 			if err != nil {
 				continue
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO properties (path, key, kind, value) VALUES (?, ?, ?, ?)`, e.Path, k, string(properties.Infer(v)), string(raw)); err != nil {
-				return err
+			if err := w.exec(ctx, `INSERT INTO properties (path, key, kind, value) VALUES (?, ?, ?, ?)`, e.Path, k, string(properties.Infer(v)), string(raw)); err != nil {
+				return false, err
 			}
 		}
 		for _, t := range doc.Tasks {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (path, line, state, text) VALUES (?, ?, ?, ?)`, e.Path, t.Line, t.State, t.Text); err != nil {
-				return err
+			if err := w.exec(ctx, `INSERT INTO tasks (path, line, state, text) VALUES (?, ?, ?, ?)`, e.Path, t.Line, t.State, t.Text); err != nil {
+				return false, err
 			}
 		}
 		for _, b := range doc.BlockIDs {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO block_ids (path, line, id) VALUES (?, ?, ?)`, e.Path, b.Line, b.ID); err != nil {
-				return err
+			if err := w.exec(ctx, `INSERT INTO block_ids (path, line, id) VALUES (?, ?, ?)`, e.Path, b.Line, b.ID); err != nil {
+				return false, err
 			}
 		}
 	}
-	var id int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM files WHERE path = ?`, e.Path).Scan(&id); err != nil {
-		return err
+	*outID, *outExists = id, exists
+	return !exists || !sameSet(oldAliases, newAliases), nil
+}
+
+// writeFTS stores the searchable text; its rowid is the id of the files row (see the schema comment).
+func (w *txWriter) writeFTS(ctx context.Context, j job, id int64, exists bool) error {
+	if exists {
+		if err := w.exec(ctx, `DELETE FROM fts_content WHERE rowid = ?`, id); err != nil {
+			return err
+		}
 	}
-	// The FTS row shares the id of its files row (see the schema comment).
-	if _, err := tx.ExecContext(ctx, `DELETE FROM fts_content WHERE rowid = ?`, id); err != nil {
-		return err
+	return w.exec(ctx, `INSERT INTO fts_content (rowid, path, title, body) VALUES (?, ?, ?, ?)`, id, j.e.Path, j.title, j.body)
+}
+
+func sameSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO fts_content (rowid, path, title, body) VALUES (?, ?, ?, ?)`, id, e.Path, title, body); err != nil {
-		return err
+	m := make(map[string]int, len(a))
+	for _, x := range a {
+		m[x]++
 	}
-	return tx.Commit()
+	for _, x := range b {
+		m[x]--
+	}
+	for _, n := range m {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (ix *Indexer) remove(ctx context.Context, path string) error {
