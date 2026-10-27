@@ -21,10 +21,20 @@ import (
 	"nodus/services/cloud/internal/db"
 	"nodus/services/cloud/internal/db/dbgen"
 	"nodus/services/cloud/internal/httpproblem"
+	"nodus/services/cloud/internal/observability"
 	"nodus/services/cloud/internal/quota"
 	"nodus/shared/pathrules"
 	"nodus/shared/syncproto"
 )
+
+// recordCommit feeds the commit metrics.
+func recordCommit(resp syncproto.CommitResponse, err error) {
+	statuses := make([]string, 0, len(resp.Results))
+	for _, r := range resp.Results {
+		statuses = append(statuses, string(r.Status))
+	}
+	observability.SyncCommit(err, statuses)
+}
 
 // ChannelVaultChanged is the Postgres NOTIFY channel carrying "vault_id:seq".
 const ChannelVaultChanged = "vault_changed"
@@ -92,7 +102,8 @@ func (s *Service) MaxFileBytes(ctx context.Context) int64 { return s.maxFileByte
 // When a concurrent writer wins a race (unique violation, deadlock) the batch
 // is rolled back and replayed operation by operation, each in its own
 // transaction; operation ids make that replay idempotent.
-func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUID, scope string, deviceID uuid.UUID, ops []syncproto.Op) (syncproto.CommitResponse, error) {
+func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUID, scope string, deviceID uuid.UUID, ops []syncproto.Op) (resp syncproto.CommitResponse, err error) {
+	defer func() { recordCommit(resp, err) }()
 	if len(ops) == 0 || len(ops) > syncproto.MaxOpsPerCommit {
 		return syncproto.CommitResponse{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "a commit carries 1..%d operations", syncproto.MaxOpsPerCommit)
 	}
@@ -123,7 +134,7 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 	}
 	env := commitEnv{vault: vault, userID: userID, deviceID: deviceID, quota: quotaBytes, maxFile: s.maxFileBytes(ctx), scope: acc.Scope}
 
-	resp, err := s.commitBatch(ctx, env, ops)
+	resp, err = s.commitBatch(ctx, env, ops)
 	if isRace(err) {
 		resp, err = s.commitEach(ctx, env, ops)
 	}

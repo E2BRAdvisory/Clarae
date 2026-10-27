@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"nodus/services/cloud/internal/db"
+	"nodus/services/cloud/internal/observability"
 )
 
 // Channel is the Postgres NOTIFY channel (mirrors sync.ChannelVaultChanged).
@@ -95,14 +96,19 @@ func (h *Hub) Subscribe(user uuid.UUID) *Sub {
 	h.mu.Lock()
 	h.subs[s] = struct{}{}
 	h.mu.Unlock()
+	observability.StreamOpened()
 	return s
 }
 
 // Unsubscribe removes the subscriber.
 func (h *Hub) Unsubscribe(s *Sub) {
 	h.mu.Lock()
+	_, was := h.subs[s]
 	delete(h.subs, s)
 	h.mu.Unlock()
+	if was {
+		observability.StreamClosed()
+	}
 }
 
 func (s *Sub) push(ev Event) {

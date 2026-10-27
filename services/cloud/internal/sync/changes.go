@@ -45,6 +45,16 @@ func (s *Service) Changes(ctx context.Context, userID, vaultID uuid.UUID, scope 
 			Extra: map[string]any{"compaction_seq": v.CompactionSeq},
 		}
 	}
+	if since > v.LastSeq {
+		// The client is ahead of the server: the database was restored to an earlier point
+		// in time (PITR), and new commits will reuse the sequence numbers the client
+		// already consumed. Serving an empty page would make it miss them silently, so it
+		// must bootstrap from /tree like for an expired cursor.
+		return nil, 0, false, &httpproblem.Error{
+			Code: syncproto.CodeCursorExpired, Detail: "the cursor is ahead of the server (restored backup?): bootstrap from /tree",
+			Extra: map[string]any{"last_seq": v.LastSeq},
+		}
+	}
 	if limit <= 0 || limit > 500 {
 		limit = 500
 	}

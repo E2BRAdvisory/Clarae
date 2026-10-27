@@ -77,8 +77,12 @@ func (h *Hub) SSEHandler() http.Handler {
 		for {
 			select {
 			case <-ctx.Done():
-				_, _ = fmt.Fprint(w, "event: token-expired\ndata: {}\n\n")
-				flusher.Flush()
+				// Only an expired token deserves the event; a closed request (client gone,
+				// server draining) just ends the stream and the client reconnects.
+				if r.Context().Err() == nil {
+					_, _ = fmt.Fprint(w, "event: token-expired\ndata: {}\n\n")
+					flusher.Flush()
+				}
 				return
 			case batch, ok := <-events:
 				if !ok {

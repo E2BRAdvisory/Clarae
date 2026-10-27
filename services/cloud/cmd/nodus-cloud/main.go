@@ -4,16 +4,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
@@ -25,6 +24,7 @@ import (
 	"nodus/services/cloud/internal/httpserver"
 	"nodus/services/cloud/internal/keycloak"
 	"nodus/services/cloud/internal/observability"
+
 	"nodus/services/cloud/internal/storage"
 	"nodus/services/cloud/internal/system"
 	webembed "nodus/services/cloud/web-embed"
@@ -63,6 +63,7 @@ func run(role config.Role) error {
 		return err
 	}
 	defer database.Close()
+	observability.RegisterPool(prometheus.DefaultRegisterer, database.Pool)
 	if cfg.ServesAPI() {
 		if err := database.Migrate(ctx); err != nil {
 			return err
@@ -98,6 +99,7 @@ func run(role config.Role) error {
 		}
 		authn := auth.NewMiddleware(verifier, application.Users, httpserver.NewRateLimiter(20, 60), cfg.OIDC.StatusCacheTTL)
 
+		drain := httpserver.NewDrain()
 		router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
 			Logger: logger,
 			Auth:   authn,
@@ -107,24 +109,21 @@ func run(role config.Role) error {
 				WebClientID:     cfg.OIDC.WebClientID,
 				Audience:        cfg.OIDC.Audience,
 				GRPCEndpoint:    cfg.OIDC.PublicGRPCAddr,
-			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
+			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}, system.CheckerFunc{N: "shutdown", F: drain.Check}),
 			WebUI:       webembed.Handler(webembed.Options{Issuer: cfg.OIDC.Issuer}),
 			WebUIOrigin: cfg.WebUIOrigin,
 			Metrics:     observability.New(),
+			Drain:       drain,
 		}))
 		httpSrv := httpserver.NewServer(cfg.ListenAddr, router)
 		g.Go(func() error {
 			logger.Info().Str("addr", cfg.ListenAddr).Msg("http listening")
-			if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// Readiness fails on the signal, the server keeps serving for the drain
+			// delay, then in-flight requests finish within the shutdown timeout.
+			if err := httpserver.Serve(ctx, httpSrv, drain, cfg.ShutdownDrain, cfg.ShutdownTimeout); err != nil {
 				return fmt.Errorf("http: %w", err)
 			}
 			return nil
-		})
-		g.Go(func() error {
-			<-ctx.Done()
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-			defer cancel()
-			return httpSrv.Shutdown(shutdownCtx)
 		})
 
 		g.Go(func() error { return application.Hub.Run(ctx) })

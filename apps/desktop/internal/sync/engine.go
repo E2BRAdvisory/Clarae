@@ -85,6 +85,8 @@ type Engine struct {
 	stop error
 	// active is true when the last cycle found something to do.
 	active bool
+	// tmpCleaned: stale atomic-write staging files were removed (once per run, under e.run).
+	tmpCleaned bool
 }
 
 // New creates the engine.
@@ -169,6 +171,13 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 	e.stop = nil
 	e.active = false
 	e.mu.Unlock()
+	if !e.tmpCleaned {
+		// Staging files of a write that crashed are never synced (pathrules); remove them once.
+		e.tmpCleaned = true
+		if n, err := e.cfg.FS.CleanStaleTemp(time.Minute); err == nil && n > 0 {
+			e.log.Info().Int("files", n).Msg("removed stale temporary files of interrupted writes")
+		}
+	}
 	for round := 0; round < 6; round++ {
 		if err := e.scan(ctx); err != nil {
 			return fmt.Errorf("scan: %w", err)

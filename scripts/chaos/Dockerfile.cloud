@@ -1,0 +1,26 @@
+# Image of the cloud service for the chaos run: the same Go build as services/cloud/Dockerfile
+# without the Web UI stage (the placeholder web-embed/dist/index.html is enough for an API test),
+# so it builds from a fresh checkout and without network access to the npm registry.
+#   docker build -f scripts/chaos/Dockerfile.cloud -t nodus-cloud:chaos .
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache git ca-certificates
+COPY go.work go.work.sum ./
+COPY shared/go/go.mod shared/go/go.sum shared/go/
+COPY services/cloud/go.mod services/cloud/go.sum services/cloud/
+COPY apps/desktop/go.mod apps/desktop/go.sum apps/desktop/
+RUN cd services/cloud && go mod download
+COPY shared/ shared/
+COPY services/cloud/ services/cloud/
+COPY apps/desktop/go.mod apps/desktop/go.sum apps/desktop/
+RUN mkdir -p services/cloud/web-embed/dist && echo '<!doctype html><title>chaos</title>' > services/cloud/web-embed/dist/index.html
+RUN cd services/cloud && CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags "-s -w -X main.Version=chaos" -o /out/nodus-cloud ./cmd/nodus-cloud
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/nodus-cloud /nodus-cloud
+USER nonroot:nonroot
+EXPOSE 18081 18082
+ENV LISTEN_ADDR=0.0.0.0:18081 GRPC_LISTEN_ADDR=0.0.0.0:18082
+ENTRYPOINT ["/nodus-cloud"]
+CMD ["--role=all"]

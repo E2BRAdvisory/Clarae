@@ -45,6 +45,9 @@ type Config struct {
 
 	// Shutdown bounds graceful shutdown.
 	ShutdownTimeout time.Duration
+	// ShutdownDrain is how long the API keeps serving after readiness turned
+	// unavailable, so the load balancer drops the pod before connections are refused.
+	ShutdownDrain time.Duration
 }
 
 // S3Config configures the object store.
@@ -99,6 +102,7 @@ func Load(role Role, version string) (Config, error) {
 		LogLevel:        env("LOG_LEVEL", "info"),
 		DatabaseURL:     env("DATABASE_URL", ""),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
+		ShutdownDrain:   envDuration("SHUTDOWN_DRAIN", 5*time.Second),
 		StorageDir:      env("STORAGE_DIR", ""),
 		S3: S3Config{
 			Endpoint:       env("S3_ENDPOINT", ""),

@@ -1,0 +1,81 @@
+name: Chaos
+
+# Fault injection and resilience checks (Appendice A, M7-WP2b). Not part of the blocking CI:
+# nightly and on demand. Every scenario asserts that its fault was really injected.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      helm_chaos:
+        description: 'Also run the Helm chaos test (k3d, ~10 min)'
+        type: boolean
+        default: false
+      restore_drill:
+        description: 'Also run the backup/PITR restore drill'
+        type: boolean
+        default: true
+
+env:
+  GOTOOLCHAIN: auto
+
+jobs:
+  fault-injection:
+    name: Fault injection (cloud + desktop)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: |
+            shared/go/go.sum
+            services/cloud/go.sum
+            apps/desktop/go.sum
+      - name: Cloud kill mid-commit, interrupted uploads, PostgreSQL restart, SIGTERM drain
+        run: cd services/cloud && go test -tags integration -race -count=1 -timeout 15m -run 'TestCommit(SIGKILL|Backend|Client)|TestBlobUpload|TestTus(Interrupted|Corrupted)|TestPostgresRestart|TestSIGTERM|TestChangesCursorAhead' ./test/integration
+      - name: Atomic write crash safety, drain, backoff
+        run: |
+          (cd apps/desktop && go test -race -count=1 ./internal/vault)
+          (cd services/cloud && go test -race -count=1 -run 'TestServeDrains' ./internal/httpserver)
+      - name: Network loss during pull (desktop engine against the real cloud)
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev && cd apps/desktop && go test -tags 'integration webkit2_41' -race -count=1 -timeout 15m -run 'TestPull|TestPushConnection' ./internal/sync
+
+  restore-drill:
+    name: Backup and PITR restore drill
+    if: github.event_name == 'schedule' || inputs.restore_drill
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: sudo apt-get install -y jq
+      - run: scripts/chaos/restore-drill.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restore-drill
+          path: .dev/chaos/drill-*/report.md
+
+  helm-chaos:
+    name: Helm chaos (pod kill, rolling restart, PostgreSQL crash)
+    if: inputs.helm_chaos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+      - run: sudo apt-get install -y jq
+      - run: scripts/chaos/run-helm-chaos.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: helm-chaos
+          path: .dev/chaos/*/report.*
