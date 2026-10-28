@@ -8,7 +8,7 @@ import { useAppStore } from '../../state/store';
 import { dialog } from '../../ui/dialogs';
 import { getSceneController } from '../actions/active';
 
-const t = (key: string, options?: Record<string, unknown>): string =>
+const t = (key: string, options: Record<string, unknown> = {}): string =>
   i18next.t(`drawing.library.${key}`, options);
 const LIBRARY_CONFIG = 'excalidraw-library.json';
 const MAX_LISTED = 2000;
