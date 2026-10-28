@@ -53,3 +53,4 @@ test-results/
 playwright-report/
 apps/desktop/build
 apps/desktop/frontend/wailsjs/
+apps/desktop/frontend/package.json.md5
