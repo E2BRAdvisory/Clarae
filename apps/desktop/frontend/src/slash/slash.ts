@@ -55,6 +55,7 @@ export const slashItems: readonly SlashItem[] = [
   { id: 'link', keywords: 'link collegamento', command: 'editor:link' },
   { id: 'wikilink', keywords: 'wikilink internal link', insert: '[[|]]' },
   { id: 'embed', keywords: 'embed incorpora transclusion', insert: '![[|]]' },
+  { id: 'drawing', keywords: 'drawing disegno lavagna sketch', command: 'drawing:new' },
   { id: 'template', keywords: 'template modello', command: 'template:insert' },
   { id: 'date', keywords: 'today date data oggi', insert: '' },
 ];

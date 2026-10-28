@@ -20,6 +20,7 @@ import { DailySection } from './DailySection';
 import { HotkeysEditor } from './HotkeysEditor';
 import { HistorySettings } from './HistorySettings';
 import { FilesExtra } from './FilesExtra';
+import { DrawingSection } from './DrawingSection';
 import { UpdateSettings } from '../updater/UpdateSettings';
 
 const SECTIONS: SettingsSection[] = [
@@ -27,6 +28,7 @@ const SECTIONS: SettingsSection[] = [
   'editor',
   'files',
   'daily',
+  'drawing',
   'appearance',
   'hotkeys',
   'cloud',
@@ -352,6 +354,8 @@ export function SettingsPanel() {
         return <SyncSection />;
       case 'daily':
         return <DailySection />;
+      case 'drawing':
+        return <DrawingSection />;
       case 'sharing':
         return <SharingPanel />;
       case 'about':

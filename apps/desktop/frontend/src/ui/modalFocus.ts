@@ -67,7 +67,9 @@ export function installModalFocus(doc: Document = document): () => void {
     for (const [m, opener] of openers) {
       if (!open.has(m)) {
         openers.delete(m);
-        if (opener !== doc.body && doc.contains(opener)) opener.focus();
+        // Focus goes back to the opener only when no modal is left: a command run from the palette
+        // opens its own dialog in the same instant, and that dialog must keep the focus.
+        if (open.size === 0 && opener !== doc.body && doc.contains(opener)) opener.focus();
       }
     }
   });

@@ -30,6 +30,7 @@ export type SettingsSection =
   | 'editor'
   | 'files'
   | 'daily'
+  | 'drawing'
   | 'appearance'
   | 'hotkeys'
   | 'cloud'

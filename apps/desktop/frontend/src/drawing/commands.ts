@@ -6,7 +6,9 @@ import { getActiveEditor } from '../editor/registry';
 import { useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
 import { activeTab } from '../workspace/layout';
-import { drawingBaseName, embedMarkdown, EMPTY_DRAWING, folderOf } from './scene';
+import { useSettings } from '../state/settings';
+import { embedMarkdown, EMPTY_DRAWING } from './scene';
+import { drawingDir, drawingName, useDrawingSettings } from './settings';
 
 /** Inserts text at the cursor of the note being edited; false when no editor is open. */
 export function insertIntoActiveNote(text: string): boolean {
@@ -26,13 +28,14 @@ export async function newDrawing(opts: { dir?: string } = {}): Promise<string> {
   const { vault, layout } = useAppStore.getState();
   if (!vault) throw new Error('no vault is open');
   const tab = activeTab(layout);
-  const dir = opts.dir ?? (tab ? folderOf(tab.path) : '');
+  const cfg = useDrawingSettings.getState().settings;
+  const dir = opts.dir ?? drawingDir(cfg, useSettings.getState().editor, tab ? tab.path : null);
   const tree = await api.vault.listTree(vault.id);
-  const path = uniqueName(tree, dir, drawingBaseName(new Date()), '.excalidraw');
+  const path = uniqueName(tree, dir, drawingName(cfg, new Date()), '.excalidraw');
   await api.vault.writeNote(vault.id, path, EMPTY_DRAWING, '');
   invalidateVault(vault.id);
   if (opts.dir === undefined && tab && tab.mode !== 'reading')
-    insertIntoActiveNote(embedMarkdown(path));
+    insertIntoActiveNote(embedMarkdown(path, cfg.embedWidth));
   useAppStore.getState().openNote(path, { newTab: true });
   return path;
 }
@@ -50,5 +53,6 @@ export async function insertDrawing(): Promise<void> {
     i18next.t('drawing.insert'),
     drawings.map((d) => ({ value: d.path, label: d.path.replace(/\.excalidraw$/i, '') })),
   );
-  if (picked) insertIntoActiveNote(embedMarkdown(picked));
+  if (picked)
+    insertIntoActiveNote(embedMarkdown(picked, useDrawingSettings.getState().settings.embedWidth));
 }
