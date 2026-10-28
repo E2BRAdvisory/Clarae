@@ -48,7 +48,7 @@ Candidata al rilascio 1.0: tutte le funzioni P0 e P1 del piano sono implementate
 ### Sicurezza e affidabilità
 
 - Vettori di test negativi per la cifratura, uguali in Go e TypeScript; CSP e SRI verificati da test; intestazioni di sicurezza su tutte le risposte dell'API; `/metrics` non raggiungibile tramite ingress.
-- Scansione `govulncheck` senza vulnerabilità raggiungibili (toolchain Go 1.26.10) e `yarn npm audit` senza avvisi di gravità alta.
+- Scansione `govulncheck` senza vulnerabilità raggiungibili (toolchain Go 1.27.3) e `yarn npm audit` senza avvisi di gravità alta.
 - Spegnimento ordinato con drain (`SHUTDOWN_DRAIN`), scritture atomiche a prova di crash, ripresa degli upload, convergenza dopo perdita di rete, ripristino point-in-time provato (`docs/runbook/backup-restore.md`).
 - **Cambiamento di comportamento**: un cursore di sync più avanti del server (dopo un ripristino a un istante passato) risponde ora `410 CURSOR_EXPIRED` e il client riparte dal manifest, invece di saltare in silenzio i nuovi commit.
 

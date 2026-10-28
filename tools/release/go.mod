@@ -3,7 +3,7 @@
 // the pinned-tools module; run it with GOWORK=off (see `make release-tool`).
 module memobrain/tools/release
 
-go 1.26.0
+go 1.27.3
 
 require memobrain/shared v0.0.0
 

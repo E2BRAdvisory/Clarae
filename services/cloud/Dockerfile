@@ -16,7 +16,7 @@ COPY shared/conformance/ts/package.json shared/conformance/ts/package.json
 RUN yarn workspaces focus @memobrain/web
 RUN yarn workspace @memobrain/web run build
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates
 COPY go.work go.work.sum ./

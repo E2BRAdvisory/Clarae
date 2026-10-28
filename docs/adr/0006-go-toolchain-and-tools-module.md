@@ -25,3 +25,7 @@ Lo spec chiede "Go ≥ versione stabile corrente" e `make gen` con oapi-codegen,
 ## Conseguenze
 
 La CI usa `tools/go.mod` come `go-version-file`. Aggiornare un tool = `cd tools && GOWORK=off go get -tool <pkg>@<ver>`.
+
+## Aggiornamento
+
+Il toolchain è passato a **Go 1.27.3** (`go.work`, i moduli, `tools/`, immagini Docker, CI), anche per le correzioni della libreria standard che `govulncheck` segnalava sulla 1.26.0; i test sono rimasti verdi. Le decisioni di questo ADR restano valide.

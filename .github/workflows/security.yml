@@ -25,7 +25,7 @@ env:
   GOTOOLCHAIN: auto
   # Latest patch of the pinned minor: the standard library is part of the attack
   # surface (govulncheck reports it), so scanning must not run on a stale patch.
-  GO_VERSION: 1.26.x
+  GO_VERSION: 1.27.x
 
 jobs:
   govulncheck:

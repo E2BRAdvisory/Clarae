@@ -3,7 +3,7 @@
 // never leaks into the application modules. Install with `make tools`.
 module memobrain/tools
 
-go 1.26.10
+go 1.27.3
 
 tool (
 	github.com/bufbuild/buf/cmd/buf

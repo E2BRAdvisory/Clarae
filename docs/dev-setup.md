@@ -4,7 +4,7 @@
 
 | Strumento | Versione       | Note                                                                                                              |
 | --------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Go        | 1.26.x         | `go.work` alla radice unisce i tre moduli; con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato          |
+| Go        | 1.27.x         | `go.work` alla radice unisce i tre moduli; con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato          |
 | Wails CLI | v2.12.x        | `wails doctor` deve riportare "ready" (Xcode CLT su macOS, WebView2 su Windows, `webkit2gtk-4.1` su Linux)        |
 | Node      | 24 LTS         | `.nvmrc`                                                                                                          |
 | Yarn      | 4.18.1         | via `corepack enable` (versione bloccata da `packageManager`); npm e pnpm sono bloccati dallo script `preinstall` |
