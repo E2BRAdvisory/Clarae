@@ -36,7 +36,7 @@ Totale dopo le correzioni: **0 violazioni** (di qualunque impatto) in 20 scansio
 
 ## Limiti noti / da fare
 
-- Grafo, lavagna e disegni sono superfici grafiche senza equivalente testuale completo (il grafo ha stato `aria-live`, ma non una navigazione per nodi). Da progettare dopo la 1.0.
+- Grafo e lavagna sono superfici grafiche senza equivalente testuale completo (il grafo ha stato `aria-live`, ma non una navigazione per nodi). Da progettare dopo la 1.0. Per i **disegni** il comando «Descrivi il disegno come testo» elenca contenuto, cornici, testi e link in un dialogo navigabile; la canvas di Excalidraw resta esclusa dalla scansione axe, ma barra, esportazione, pannello Strumenti, dialoghi LaTeX e Mermaid, descrizione e presentazione sono scansionati (`e2e/a11y.spec.ts`).
 - Dialog dell'app (`ui/dialogs.tsx`): il comportamento di focus è coperto dai test unitari esistenti; la verifica con screen reader è manuale.
 - Il pulsante "✕" di chiusura delle schede è nascosto agli screen reader (`aria-hidden`, `tabindex=-1`) per rispettare il pattern tab: la chiusura da tastiera è `Canc` e dal menu della scheda.
 - Nessuna verifica con VoiceOver/NVDA/Orca reali è stata fatta in questo ciclo; i webview reali (WKWebView, WebView2, WebKitGTK) differiscono da Chromium.

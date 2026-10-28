@@ -69,6 +69,23 @@ Da eseguire sul webview reale (le parti automatiche sono coperte da Vitest, Go e
 - [ ] **Blocco ```query**: risultati live in Live Preview e Reading, errore inline, "mostra altri".
 - [ ] **Export HTML/PDF**: l'HTML si apre offline, senza script né risorse remote; il PDF dal dialogo di stampa del sistema su macOS, Windows e Linux (limiti in ADR-0019).
 
+## Disegni: parità con i plugin Obsidian Excalidraw ed Excalidraw Extras (ADR-0024)
+
+| Funzione del plugin                                                                                               | Stato                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Formato `.excalidraw` in chiaro, link agli elementi, embed di parti, allineamento                                 | fatto                                                                                                    |
+| Esportazione PNG/SVG (selezione, cornice, scala, scena incorporata), PDF, auto-export                             | fatto                                                                                                    |
+| Inserimento di immagini, note e disegni; trascinamento dal vault                                                  | fatto (le note sono schede, non snapshot SVG)                                                            |
+| LaTeX (MathJax), Mermaid                                                                                          | fatto, offline                                                                                           |
+| Presentazione a diapositive, note del relatore, laser, penne                                                      | fatto                                                                                                    |
+| Script Library: layout, colore/stile, forme, frecce, testo, generatori, mappa mentale, calendari                  | fatto come azioni native (niente script utente, V-02/D-01)                                               |
+| Import `.excalidraw.md` e `.excalidrawlib`                                                                        | fatto (le formule LaTeX diventano immagini con il TeX in `customData`; l'editor le disegna all'apertura) |
+| Icon Library, Image Occlusion, LayerManager, Crop Vintage Mask, Capture Note, Folder Note, "Fixed inner distance" | non implementati nella 1.0.0                                                                             |
+| Collaboration Frame                                                                                               | escluso (D-04: niente collaborazione in tempo reale)                                                     |
+| Scribble Helper, Hardware Eraser / Auto Draw for Pen                                                              | esclusi (richiedono una penna fisica)                                                                    |
+| ExcaliAI, OCR, miniature YouTube, immagini da URL, Script Library da GitHub                                       | esclusi (rete: ADR-0005)                                                                                 |
+| Modalità per mancini                                                                                              | non disponibile in Excalidraw 0.18                                                                       |
+
 ## Limiti noti (aggiornati)
 
 - Embed `![[x.canvas]]` ed `.excalidraw` come in M3; `.base` ora supportato (sottoinsieme in ADR-0014).

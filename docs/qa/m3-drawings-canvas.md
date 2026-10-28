@@ -33,6 +33,11 @@ Da eseguire sul webview reale (gli e2e usano Chromium con i binding simulati).
 - [ ] Trascina dal file explorer sul canvas: immagine, nota (scheda) e altro disegno nel punto di rilascio.
 - [ ] Copia un `.excalidraw.md` di Obsidian (con un'immagine incorporata) nel vault → "Converti…": nasce `.excalidraw` accanto, apribile e con l'immagine; l'originale è intatto.
 - [ ] Importa un `.excalidrawlib` copiato nel vault: le forme compaiono nella libreria; "Esporta la libreria" crea `Library.excalidrawlib`.
+- [ ] Embed con `|left`, `|right-wrap` e `#frame=Nome`: allineamento e porzione corretti in Live Preview e Lettura.
+- [ ] Inserire un'immagine oltre 10 MB è rifiutato con un messaggio chiaro; la ricerca trova il nome di una cornice.
+- [ ] Sul **bundle di produzione** nel webview reale (CSP stretta): formule LaTeX, Mermaid, PDF incorporati, grafo e font di Excalidraw funzionano senza richieste di rete e senza errori in console.
+- [ ] Presentazione con note del relatore: le note compaiono sotto la diapositiva; "Descrivi il disegno come testo" è leggibile con VoiceOver/NVDA.
+- [ ] Un profilo di configurazione con `drawing_latex: false` nasconde formule (comandi, doppio clic) e pannello Strumenti; `drawing_auto_export: false` ferma l'esportazione automatica.
 - [ ] Rinomina una nota linkata da un elemento del disegno: il link nel `.excalidraw` è riscritto.
 
 ## Embed e ricerca

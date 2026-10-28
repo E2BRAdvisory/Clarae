@@ -6,7 +6,35 @@ _Nuova lavagna_ crea un file `.canvas` (formato JSON Canvas, compatibile con Obs
 
 ## Disegni
 
-_Nuovo disegno_ crea un file `.excalidraw`, modificabile con l'editor di disegno integrato (forme, frecce, testo, tratto libero, librerie). Funziona **offline**: gli asset sono inclusi nell'app. Un disegno si inserisce in una nota con _Inserisci disegno_ (`![[disegno.excalidraw]]`) e mostra un'anteprima.
+_Nuovo disegno_ crea un file `.excalidraw` (JSON standard in chiaro, apribile anche con excalidraw.com), modificabile con l'editor di disegno integrato (forme, frecce, testo, tratto libero, librerie). Funziona **offline**: gli asset sono inclusi nell'app. Dove nasce il file, come si chiama e come si apre (modifica, sola lettura, zen) si sceglie in _Impostazioni > Disegni_; lì si fissano anche i colori, il carattere e la dimensione predefiniti dei nuovi elementi e l'esportazione automatica. Le impostazioni stanno in `.memobrain/drawing.json` e viaggiano con il vault.
+
+### Nelle note
+
+- `![[disegno.excalidraw]]` mostra un'anteprima; `|400` ne fissa la larghezza e `|left`, `|right`, `|center`, `|left-wrap`, `|right-wrap` l'allineamento. Doppio clic apre il disegno.
+- Si incorpora anche **una parte**: `![[disegno.excalidraw#frame=Nome]]`, `#clippedframe=`, `#group=`, `#area=`.
+- Un elemento con un link `[[Nota]]` (o un indirizzo web) lo apre con un clic; ⌘/Ctrl+passaggio ne mostra l'anteprima. Il testo del disegno e i nomi delle cornici si trovano con la ricerca, i link compaiono nei backlink e, se rinomini la nota, il link nel disegno si aggiorna.
+- Dal comando `/disegno` o da _Inserisci disegno_ si aggiunge un disegno alla nota.
+
+### Dentro il disegno
+
+- **Inserisci** immagini, note (come schede) e altri disegni dal vault, anche trascinandoli dall'esplorazione file nel punto desiderato; _Crea una nota e aggiungi la scheda_; _Sposta la selezione in un nuovo disegno_.
+- **Formule LaTeX** (_Inserisci formula_, doppio clic per modificarla) e **diagrammi Mermaid** (testo → elementi modificabili): tutto locale, senza rete.
+- **Azioni sulla scena** (palette dei comandi o pannello _Strumenti del disegno_, con ricerca, preferiti e usati di recente): distribuzione e allineamento, Auto Layout, colore e stile, schemi di colori, forme (riquadri, Boolean Operations, ellisse divisa), frecce (collega, a gomito, passo successivo), testo, ripetizione, mappa mentale da un elenco indentato, calendari, vignette e nuvolette, linea organica. Ogni azione si può annullare e ha un comando assegnabile a una scorciatoia.
+- **Penne e puntatore laser**: penna fine, pennarello, evidenziatore e laser sono comandi con scorciatoia propria.
+- **Presentazione**: ogni cornice è una diapositiva (ordinate per numero, poi per nome, poi per posizione); frecce, Pagina su/giù, Spazio, Home/Fine navigano, Esc esce. Le _note del relatore_ si impostano con _Modifica le note del relatore_.
+- **Descrivi il disegno come testo**: elenco di contenuto, cornici, testi e link, per chi non può vedere la lavagna.
+
+### Esportare e importare
+
+- _Esporta_: PNG o SVG di tutto il disegno, della selezione o di una cornice, con scala, margine, tema e scena incorporata (si può poi trascinare di nuovo nell'editor); salva nel vault, con nome, copia o stampa/PDF.
+- **Esportazione automatica** accanto al file (`Disegno.excalidraw.png`, `.svg`, anche `.dark`/`.light`) a ogni salvataggio; si può scegliere per singolo disegno.
+- **Importa**: un `.excalidraw.md` del plugin Obsidian (_Converti un disegno di Obsidian_) diventa un `.excalidraw` accanto all'originale, che resta intatto (le immagini incorporate sono incluse e le formule LaTeX tornano formule modificabili, disegnate all'apertura); una libreria `.excalidrawlib` copiata nel vault si importa in libreria e la libreria si esporta come `Library.excalidrawlib`.
+
+### Limiti
+
+L'editor parla la lingua dell'app (inglese e italiano). Un'immagine oltre 10 MB non si inserisce dall'editor; se un file `.excalidraw` ne contiene già una (creata con un altro strumento) viene salvato lo stesso e l'indicizzazione ne scrive un avviso nel registro.
+
+Non ci sono le funzioni del plugin Obsidian che richiedono script utente, rete o una penna fisica (ExcaliAI, OCR, Scribble Helper, …) né alcune azioni minori (Icon Library, Image Occlusion, LayerManager, Crop Vintage Mask, Collaboration Frame, Capture Note, Folder Note); dettagli in `docs/qa/obsidian-parity.md`. Una modifica fatta in contemporanea sulla stessa forma da due dispositivi tiene la versione più recente; le modifiche a forme diverse si fondono. L'amministratore può disattivare separatamente formule, Mermaid, esportazione automatica e azioni (flag `drawing_*` del profilo di configurazione).
 
 ## Basi (Bases)
 
