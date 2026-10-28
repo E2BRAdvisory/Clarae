@@ -44,4 +44,4 @@ make e2e-web          # Playwright (Chromium), API mockata con page.route
 
 `dist/` è ignorato da git tranne il placeholder `services/cloud/web-embed/dist/index.html`, così `go build` funziona senza costruire la SPA (la pagina mostra solo un avviso). Dopo `make web-build` il placeholder risulta modificato: non committarlo.
 
-Sviluppo con login reale: `make stack-up`, `make dev-cloud` (WEB_UI_ORIGIN=http://localhost:5174), `make dev-web`, poi `http://localhost:5174` (utenti `user1`/`user2`/`admin`, password `memobrain-dev-password`). Per provare il binario con la SPA incorporata: `make web-build build-cloud` e aprire `http://127.0.0.1:18081`.
+Sviluppo con login reale: `make stack-up`, poi `make dev-cloud` (avvia anche la Web UI su :5174, `WEB=0` per saltarla; log in `.dev/logs/web.log`) oppure `yarn dev:cloud:k3d` (stessa cosa, `--no-web` per saltarla; la Web UI si ferma con `down`/`delete`); `make dev-web` serve solo per avviarla da sola, poi `http://localhost:5174` (utenti `user1`/`user2`/`admin`, password `memobrain-dev-password`). Per provare il binario con la SPA incorporata: `make web-build build-cloud` e aprire `http://127.0.0.1:18081`.

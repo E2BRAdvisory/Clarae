@@ -10,6 +10,7 @@
 #   yarn dev:cloud:k3d delete                remove MemoBrain Notes for good (deletes the dedicated
 #                                            cluster; on other clusters only the namespace)
 #   yarn dev:cloud:k3d status                show pods
+#   --no-web                                 (up) do not start the Web UI on http://localhost:5174
 #   --cluster NAME                           (any command) use NAME without asking; created by
 #                                            "up" if missing. MEMOBRAIN_K3D_CLUSTER does the same
 #
@@ -22,7 +23,8 @@
 # Keycloak http://keycloak.localtest.me:18080 (admin/admin; users admin/user1/user2,
 # password "memobrain-dev-password"), S3 http://localhost:9000. localtest.me resolves to
 # 127.0.0.1 through public DNS, so the same issuer URL works in the browser and in pods.
-# Desktop: yarn dev:desktop, then enter the server URL in Settings > Cloud.
+# The Web UI (admin console) runs on http://localhost:5174 (esbuild dev server, log .dev/logs/web.log)
+# until "down"/"delete"; sign in as admin. Desktop: yarn dev:desktop, then enter the server URL in Settings > Cloud.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -34,11 +36,13 @@ PORTS=(18081 18082 18080 9000)
 
 CLUSTER="${MEMOBRAIN_K3D_CLUSTER:-}"
 ACTION=up
+WEB=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --cluster) shift; CLUSTER="${1:?--cluster needs a name}" ;;
+    --no-web) WEB=0 ;;
     up|down|delete|status) ACTION="$1" ;;
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -85,6 +89,7 @@ k() { kubectl --context "$CTX" -n "$NS" "$@"; }
 case "$ACTION" in
   status) k get pods,svc; exit 0 ;;
   down)
+    web_stop
     cluster_exists "$CLUSTER" || die "cluster '$CLUSTER' does not exist"
     if [ "$CLUSTER" = "$DEFAULT_CLUSTER" ]; then
       k3d cluster stop "$CLUSTER" >/dev/null
@@ -95,6 +100,7 @@ case "$ACTION" in
     fi
     exit 0 ;;
   delete)
+    web_stop
     cluster_exists "$CLUSTER" || die "cluster '$CLUSTER' does not exist"
     if [ "$CLUSTER" = "$DEFAULT_CLUSTER" ]; then k3d cluster delete "$CLUSTER"
     else
@@ -226,10 +232,12 @@ helm --kube-context "$CTX" -n "$NS" upgrade --install memobrain "$ROOT/deploy/he
 for _ in $(seq 1 30); do cloud_ready && break; sleep 2; done
 cloud_ready || die "API does not answer on $CLOUD_URL"
 ok "cloud is ready on $CLOUD_URL"
+[ "$WEB" = 1 ] && web_start
 cat <<MSG
 
   API        $CLOUD_URL   (gRPC localhost:18082)
   Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/memobrain-dev-password
+  Web UI     $WEB_URL   (admin / memobrain-dev-password; log ${WEB_LOG#$ROOT/}; --no-web to skip)
   Desktop    yarn dev:desktop, then Settings > Cloud: server URL $CLOUD_URL
   Logs       kubectl --context $CTX -n $NS logs -f deploy/memobrain-api
   Stop       yarn dev:cloud:k3d down   (or delete)

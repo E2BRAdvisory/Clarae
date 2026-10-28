@@ -114,8 +114,8 @@ stack-reset: ## Destroy the stack volumes (re-imports the Keycloak realm, emptie
 	$(COMPOSE) up -d --wait
 
 .PHONY: dev-cloud dev-desktop dev-web
-dev-cloud: ## Run the cloud service against the local stack (role=all)
-	cd $(CLOUD) && set -a && source ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/memobrain-cloud --role=all
+dev-cloud: ## Run the cloud service against the local stack (role=all) with the Web UI on :5174 (WEB=0 to skip)
+	@bash -c '. scripts/lib.sh; if [ "$${WEB:-1}" != 0 ]; then trap web_stop EXIT; web_start; fi; cd $(CLOUD) && set -a && . ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/memobrain-cloud --role=all'
 
 dev-desktop: ## Run the desktop app with live reload (esbuild, no HMR)
 	cd $(DESKTOP) && wails dev

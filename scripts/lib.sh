@@ -9,6 +9,9 @@ CLOUD_PID="$DEV_DIR/cloud.pid"
 CLOUD_LOG="$DEV_DIR/logs/cloud.log"
 CLOUD_BIN="$DEV_DIR/bin/memobrain-cloud"
 CLOUD_URL="http://127.0.0.1:18081"
+WEB_PID="$DEV_DIR/web.pid"
+WEB_LOG="$DEV_DIR/logs/web.log"
+WEB_URL="http://localhost:5174"
 
 if [ -t 1 ]; then
   C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'; C_RED=$'\033[31m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_OFF=$'\033[0m'
@@ -82,6 +85,37 @@ cloud_stop() {
     ok "cloud stopped"
   fi
   rm -f "$CLOUD_PID"
+}
+
+web_running() { [ -f "$WEB_PID" ] && kill -0 "$(cat "$WEB_PID")" 2>/dev/null; }
+web_ready() { curl -fsS "http://127.0.0.1:5174/" >/dev/null 2>&1; }
+
+# web_start runs the Web UI (admin console and user area) on the esbuild dev server in the
+# background. It proxies /api to the cloud on :18081 and logs in through Keycloak: the dev realm
+# allows the redirect http://localhost:5174. A busy port is reported, never fatal.
+web_start() {
+  need node
+  mkdir -p "$DEV_DIR/logs"
+  if web_running; then ok "web UI already running (pid $(cat "$WEB_PID"))"; return; fi
+  if web_ready; then warn "something else already answers on $WEB_URL: web UI not started"; return; fi
+  [ -d "$ROOT/node_modules" ] || { warn "node_modules missing (run: yarn install): web UI not started"; return; }
+  log "Starting the web UI (log: ${WEB_LOG#$ROOT/})"
+  (cd "$ROOT/web" && exec node scripts/esbuild.mjs dev --port 5174) >"$WEB_LOG" 2>&1 &
+  echo $! >"$WEB_PID"
+  for _ in $(seq 1 30); do
+    web_ready && { ok "web UI is ready at $WEB_URL (admin: admin / memobrain-dev-password)"; return; }
+    web_running || { tail -n 20 "$WEB_LOG" >&2; warn "the web UI exited during startup"; rm -f "$WEB_PID"; return; }
+    sleep 1
+  done
+  warn "the web UI did not answer in 30 s (log: ${WEB_LOG#$ROOT/})"
+}
+
+web_stop() {
+  if web_running; then
+    kill "$(cat "$WEB_PID")" 2>/dev/null || true
+    ok "web UI stopped"
+  fi
+  rm -f "$WEB_PID"
 }
 
 # seed_demo_vault DIR creates a small vault exercising links, tags, properties and tasks.
