@@ -29,6 +29,7 @@ type element struct {
 	ID        string `json:"id"`
 	Type      string `json:"type"`
 	Text      string `json:"text"`
+	Name      string `json:"name"` // frames
 	Link      string `json:"link"`
 	IsDeleted bool   `json:"isDeleted"`
 }
@@ -81,6 +82,10 @@ func Parse(data []byte) (Document, error) {
 		if el.Type == "text" && strings.TrimSpace(el.Text) != "" {
 			texts = append(texts, el.Text)
 			linkSrc = append(linkSrc, el.Text)
+		}
+		// A frame's name is its title on the canvas (and the slide name in a presentation).
+		if (el.Type == "frame" || el.Type == "magicframe") && strings.TrimSpace(el.Name) != "" {
+			texts = append(texts, el.Name)
 		}
 		if l := strings.TrimSpace(el.Link); strings.HasPrefix(l, "[[") {
 			linkSrc = append(linkSrc, l)

@@ -4,4 +4,6 @@ import {app} from '../models';
 
 export function Print():Promise<void>;
 
+export function SaveFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.ExportResult>;
+
 export function SaveHTML(arg1:string,arg2:string,arg3:string):Promise<app.ExportResult>;

@@ -23,7 +23,7 @@ import (
 var vaultConfigFiles = map[string]bool{
 	"editor.json": true, "appearance.json": true, "hotkeys.json": true, "types.json": true,
 	"workspace.json": true, "workspaces.json": true, "bookmarks.json": true,
-	"excalidraw-library.json": true,
+	"excalidraw-library.json": true, "drawing.json": true,
 }
 
 // MaxBinaryBytes bounds ReadBinary/SaveAttachment payloads.

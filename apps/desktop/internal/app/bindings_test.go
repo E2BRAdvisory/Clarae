@@ -228,6 +228,38 @@ func TestDrawingPreviewCache(t *testing.T) {
 	}
 }
 
+func TestImportLegacyDrawing(t *testing.T) {
+	a, info, root := newTestApp(t)
+	d := NewDrawingAPI(a)
+	md := "# Excalidraw Data\n## Embedded Files\nf1: [[cat.png]]\n\n## Drawing\n```json\n" +
+		`{"type":"excalidraw","version":2,"elements":[{"id":"a","type":"rectangle"}],"appState":{},"files":{}}` + "\n```\n"
+	if err := os.MkdirAll(filepath.Join(root, "boards", "img"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for p, data := range map[string]string{"boards/Plan.excalidraw.md": md, "boards/img/cat.png": "PNG"} {
+		if err := os.WriteFile(filepath.Join(root, p), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := d.ImportLegacy(info.ID, "boards/Plan.excalidraw.md")
+	if err != nil || got != "boards/Plan.excalidraw" {
+		t.Fatalf("import: %q %v", got, err)
+	}
+	out, err := os.ReadFile(filepath.Join(root, "boards", "Plan.excalidraw"))
+	if err != nil || !strings.Contains(string(out), `"dataURL": "data:image/png;base64,UE5H"`) {
+		t.Fatalf("converted drawing (images are found by name anywhere in the vault): %s %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "boards", "Plan.excalidraw.md")); err != nil {
+		t.Error("the source note must be kept")
+	}
+	if again, _ := d.ImportLegacy(info.ID, "boards/Plan.excalidraw.md"); again != "boards/Plan 1.excalidraw" {
+		t.Errorf("a second import must not overwrite: %q", again)
+	}
+	if _, err := d.ImportLegacy(info.ID, "boards/img/cat.png"); err == nil {
+		t.Error("only .excalidraw.md files can be imported")
+	}
+}
+
 func TestViewerMountIsReadOnlyThroughTheBindings(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	ctx := context.Background()
@@ -323,6 +355,26 @@ func TestExportFilename(t *testing.T) {
 	} {
 		if got := exportFilename(in, now); got != want {
 			t.Errorf("exportFilename(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestExportTarget(t *testing.T) {
+	for _, c := range []struct {
+		path, variant, format, want string
+		ok                          bool
+	}{
+		{"Board.excalidraw", "", "png", "Board.excalidraw.png", true},
+		{"a/b/Board.excalidraw", "dark", "svg", "a/b/Board.excalidraw.dark.svg", true},
+		{"Board.EXCALIDRAW", "light", "png", "Board.EXCALIDRAW.light.png", true},
+		{"note.md", "", "png", "", false},
+		{"Board.excalidraw", "sepia", "png", "", false},
+		{"Board.excalidraw", "", "gif", "", false},
+		{"Board.excalidraw", "../x", "png", "", false},
+	} {
+		got, err := exportTarget(c.path, c.variant, c.format)
+		if (err == nil) != c.ok || got != c.want {
+			t.Errorf("exportTarget(%q,%q,%q) = %q, %v", c.path, c.variant, c.format, got, err)
 		}
 	}
 }

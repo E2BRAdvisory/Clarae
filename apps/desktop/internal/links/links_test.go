@@ -2,7 +2,9 @@ package links_test
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -215,5 +217,67 @@ func TestFuzzyScoreAndSuggest(t *testing.T) {
 	tags, _ := links.SuggestTags(ctx, db, "#tra", 10)
 	if len(tags) != 2 || tags[0].Label != "travel" || tags[1].Label != "travel/eu" {
 		t.Fatalf("tags: %+v", tags)
+	}
+}
+
+func TestRenameRewritesLinksInsideDrawings(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	fsys, _ := vault.NewFS(root)
+	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	put := func(p, c string) {
+		if _, err := fsys.WriteFile(p, []byte(c), "", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("Plan.md", "# Plan\n")
+	drawing := `{
+  "type": "excalidraw",
+  "elements": [
+    {"id": "a", "type": "rectangle", "link": "[[Plan]]"},
+    {"id": "b", "type": "text", "text": "see [[Plan#Goals|goals]] and [[Missing]]", "originalText": "see [[Plan#Goals|goals]] and [[Missing]]"},
+    {"id": "c", "type": "rectangle", "link": "https://example.com/[[Plan]]x"}
+  ],
+  "files": {}
+}`
+	put("Board.excalidraw", drawing)
+	ix := indexer.New(fsys, db, zerolog.Nop(), nil)
+	if err := ix.Full(ctx); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := links.PlanRename(ctx, db, fsys, "Plan.md", "Roadmap.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var edits int
+	for _, f := range plan.Files {
+		if f.Path == "Board.excalidraw" {
+			edits = len(f.Edits)
+		}
+	}
+	if edits != 3 { // element link, text and originalText; the one inside the URL is left alone
+		t.Fatalf("drawing edits = %d, plan: %+v", edits, plan)
+	}
+	if err := links.ApplyRename(fsys, plan); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := fsys.ReadFile("Board.excalidraw")
+	for _, want := range []string{`"link": "[[Roadmap]]"`, `see [[Roadmap#Goals|goals]] and [[Missing]]`} {
+		if !strings.Contains(string(got.Data), want) {
+			t.Errorf("missing %q in\n%s", want, got.Data)
+		}
+	}
+	if strings.Count(string(got.Data), "[[Plan") != 1 { // only the URL keeps the old text
+		t.Errorf("a link still points at the old name:\n%s", got.Data)
+	}
+	if !strings.Contains(string(got.Data), `https://example.com/[[Plan]]x`) {
+		t.Errorf("a URL was rewritten:\n%s", got.Data)
+	}
+	if !json.Valid(got.Data) {
+		t.Errorf("drawing is no longer valid JSON:\n%s", got.Data)
 	}
 }

@@ -1,6 +1,9 @@
 package app
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -93,6 +96,11 @@ func checkStandaloneHTML(html string) error {
 
 // htmlExportFilename proposes a file name, keeping only characters safe on every platform.
 func htmlExportFilename(noteName string, now time.Time) string {
+	return safeExportName(noteName, ".html", "note", now)
+}
+
+// safeExportName is "<safe name>-<yyyymmdd><ext>"; an empty name falls back to `fallback`.
+func safeExportName(noteName, ext, fallback string, now time.Time) string {
 	var b strings.Builder
 	for _, r := range noteName {
 		switch {
@@ -104,9 +112,9 @@ func htmlExportFilename(noteName string, now time.Time) string {
 	}
 	name := strings.Trim(b.String(), "._")
 	if name == "" {
-		name = "note"
+		name = fallback
 	}
-	return fmt.Sprintf("%s-%s.html", name, now.Format("20060102"))
+	return fmt.Sprintf("%s-%s%s", name, now.Format("20060102"), ext)
 }
 
 // writeExportHTML writes next to dest and renames into place (a failed export never leaves a
@@ -115,6 +123,11 @@ func writeExportHTML(vaultRoot, dest, html string) (ExportResult, error) {
 	if !strings.EqualFold(filepath.Ext(dest), ".html") && !strings.EqualFold(filepath.Ext(dest), ".htm") {
 		dest += ".html"
 	}
+	return writeExportData(vaultRoot, dest, []byte(html))
+}
+
+// writeExportData is the destination check and the atomic write shared by every export.
+func writeExportData(vaultRoot, dest string, data []byte) (ExportResult, error) {
 	if r, err := filepath.EvalSymlinks(vaultRoot); err == nil {
 		vaultRoot = r
 	}
@@ -128,7 +141,7 @@ func writeExportHTML(vaultRoot, dest, html string) (ExportResult, error) {
 		return ExportResult{}, err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
-	n, err := tmp.WriteString(html)
+	n, err := tmp.Write(data)
 	if err == nil {
 		err = tmp.Sync()
 	}
@@ -145,4 +158,89 @@ func writeExportHTML(vaultRoot, dest, html string) (ExportResult, error) {
 		return ExportResult{}, err
 	}
 	return ExportResult{Path: dest, Files: 1, Bytes: int64(n)}, nil
+}
+
+// exportFormats are the files SaveFile accepts: the MIME type decides the extension and what the
+// content must look like. Exports are written outside the vault, so this is the only place where
+// the frontend hands bytes to the disk through the system "save as" dialog.
+var exportFormats = map[string]struct {
+	ext, label string
+	check      func(data []byte) error
+}{
+	"image/png": {".png", "PNG image (*.png)", func(d []byte) error {
+		if !bytes.HasPrefix(d, []byte("\x89PNG\r\n\x1a\n")) {
+			return errors.New("not a PNG image")
+		}
+		return nil
+	}},
+	"image/svg+xml": {".svg", "SVG image (*.svg)", func(d []byte) error {
+		if !bytes.Contains(d[:min(len(d), 512)], []byte("<svg")) {
+			return errors.New("not an SVG image")
+		}
+		// An exported drawing must not carry scripts or remote references.
+		return checkStandaloneHTML(string(d))
+	}},
+	"application/pdf": {".pdf", "PDF document (*.pdf)", func(d []byte) error {
+		if !bytes.HasPrefix(d, []byte("%PDF-")) {
+			return errors.New("not a PDF document")
+		}
+		return nil
+	}},
+	"application/json": {".excalidraw", "Excalidraw drawing (*.excalidraw)", func(d []byte) error {
+		if !json.Valid(d) {
+			return errors.New("not valid JSON")
+		}
+		return nil
+	}},
+}
+
+// SaveFile asks where to save and writes base64-encoded `data` of the given MIME type (png, svg,
+// pdf or an excalidraw JSON). Cancelling the dialog is not an error. Like SaveHTML it refuses
+// destinations inside the vault.
+func (e *ExportAPI) SaveFile(vaultID, suggestedName, mime, dataBase64 string) (ExportResult, error) {
+	ov, err := e.app.vault(vaultID)
+	if err != nil {
+		return ExportResult{}, err
+	}
+	f, ok := exportFormats[mime]
+	if !ok {
+		return ExportResult{}, fmt.Errorf("invalid-export: unsupported type %q", mime)
+	}
+	data, err := decodeExport(f.check, dataBase64)
+	if err != nil {
+		return ExportResult{}, fmt.Errorf("invalid-export: %w", err)
+	}
+	dest, err := runtime.SaveFileDialog(e.app.ctx, runtime.SaveDialogOptions{
+		Title:           "Save export",
+		DefaultFilename: safeExportName(suggestedName, f.ext, "export", time.Now()),
+		Filters:         []runtime.FileFilter{{DisplayName: f.label, Pattern: "*" + f.ext}},
+	})
+	if err != nil {
+		return ExportResult{}, err
+	}
+	if dest == "" {
+		return ExportResult{Cancelled: true}, nil
+	}
+	if !strings.EqualFold(filepath.Ext(dest), f.ext) {
+		dest += f.ext
+	}
+	return writeExportData(ov.FS.Root(), dest, data)
+}
+
+// decodeExport decodes and validates the payload of SaveFile.
+func decodeExport(check func([]byte) error, b64 string) ([]byte, error) {
+	if base64.StdEncoding.DecodedLen(len(b64)) > MaxBinaryBytes {
+		return nil, errors.New("export too large")
+	}
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, errors.New("empty export")
+	}
+	if err := check(data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }

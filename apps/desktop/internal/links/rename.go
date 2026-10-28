@@ -92,7 +92,7 @@ func PlanRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string
 
 	oldR, newR := NewResolver(files), NewResolver(newFiles)
 	for _, f := range files {
-		if f.Kind != "md" {
+		if f.Kind != "md" && f.Kind != "excalidraw" {
 			continue
 		}
 		content, err := fsys.ReadFile(f.Path)
@@ -103,9 +103,14 @@ func PlanRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string
 		if np, ok := moves[f.Path]; ok {
 			newSelf = np
 		}
-		doc := parser.Parse(strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path)), content.Data)
+		var fileLinks []parser.Link
+		if f.Kind == "excalidraw" {
+			fileLinks = scanDrawingLinks(content.Data)
+		} else {
+			fileLinks = parser.Parse(strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path)), content.Data).Links
+		}
 		var edits []Edit
-		for _, l := range doc.Links {
+		for _, l := range fileLinks {
 			if l.Kind == parser.LinkExternal || l.Target == "" || l.TargetEnd <= l.TargetStart {
 				continue
 			}
@@ -129,6 +134,9 @@ func PlanRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string
 				text = escapeURL(text)
 			}
 			old := string(content.Data[l.TargetStart:l.TargetEnd])
+			if f.Kind == "excalidraw" && !jsonSafe(text) {
+				continue // would need escaping inside the JSON string: leave the link as it is
+			}
 			if text != old {
 				edits = append(edits, Edit{Line: l.Line, Start: l.TargetStart, End: l.TargetEnd, Old: old, New: text})
 			}

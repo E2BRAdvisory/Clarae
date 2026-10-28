@@ -62,3 +62,22 @@ func TestParseValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestParseIndexesFrameNames(t *testing.T) {
+	d, err := Parse([]byte(`{"elements":[
+		{"id":"f","type":"frame","name":"Slide one"},
+		{"id":"g","type":"frame","name":"  "},
+		{"id":"h","type":"frame","name":"Deleted","isDeleted":true},
+		{"id":"i","type":"image","fileId":"x"},
+		{"id":"j","type":"embeddable","link":"https://example.com"}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Text != "Slide one" {
+		t.Errorf("text = %q", d.Text)
+	}
+	if d.Elements != 4 {
+		t.Errorf("live elements = %d", d.Elements)
+	}
+}

@@ -179,6 +179,17 @@ export const api = {
       DrawingAPI.ReadPreview(vaultId, hash),
     savePreview: (vaultId: string, hash: string, svg: string): Promise<void> =>
       DrawingAPI.SavePreview(vaultId, hash, svg),
+    /** (Over)writes "<drawing>.[light.|dark.]png|svg" next to the drawing; returns its path. */
+    writeExport: (
+      vaultId: string,
+      drawingPath: string,
+      variant: '' | 'light' | 'dark',
+      format: 'png' | 'svg',
+      base64: string,
+    ): Promise<string> => DrawingAPI.WriteExport(vaultId, drawingPath, variant, format, base64),
+    /** Converts an Obsidian ".excalidraw.md" into a ".excalidraw" next to it; returns its path. */
+    importLegacy: (vaultId: string, path: string): Promise<string> =>
+      DrawingAPI.ImportLegacy(vaultId, path),
   },
   search: {
     query: (
@@ -195,6 +206,13 @@ export const api = {
       ExportAPI.SaveHTML(vaultId, name, html),
     /** Opens the system print dialog (PDF through "Save as PDF"). */
     print: (): Promise<void> => ExportAPI.Print(),
+    /** Asks where to save (native dialog) a PNG, SVG, PDF or excalidraw JSON given as base64. */
+    saveFile: (
+      vaultId: string,
+      name: string,
+      mime: string,
+      base64: string,
+    ): Promise<ExportResult> => ExportAPI.SaveFile(vaultId, name, mime, base64),
   },
   settings: {
     get: (): Promise<AppSettings> => SettingsAPI.Get(),

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,5 +78,44 @@ func TestWriteExportHTML(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "sub.html")); err == nil {
 		t.Error("file written into the vault")
+	}
+}
+
+func TestDecodeExportValidatesContent(t *testing.T) {
+	png := base64.StdEncoding.EncodeToString([]byte("\x89PNG\r\n\x1a\nrest"))
+	svg := func(body string) string { return base64.StdEncoding.EncodeToString([]byte(body)) }
+	cases := []struct {
+		name, mime, data string
+		ok               bool
+	}{
+		{"png", "image/png", png, true},
+		{"png with wrong magic", "image/png", svg("GIF89a"), false},
+		{"svg", "image/svg+xml", svg(`<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>`), true},
+		{"svg with script", "image/svg+xml", svg(`<svg><script>alert(1)</script></svg>`), false},
+		{"svg with handler", "image/svg+xml", svg(`<svg><rect onload="x()"/></svg>`), false},
+		{"svg with remote image", "image/svg+xml", svg(`<svg><image href="x" xlink:href="https://evil/x.png"/></svg>`), false},
+		{"not svg", "image/svg+xml", svg(`<html></html>`), false},
+		{"pdf", "application/pdf", svg("%PDF-1.7\n"), true},
+		{"not pdf", "application/pdf", svg("hello"), false},
+		{"json", "application/json", svg(`{"type":"excalidraw","elements":[]}`), true},
+		{"bad json", "application/json", svg(`{`), false},
+		{"empty", "image/png", "", false},
+		{"not base64", "image/png", "!!!", false},
+	}
+	for _, c := range cases {
+		_, err := decodeExport(exportFormats[c.mime].check, c.data)
+		if (err == nil) != c.ok {
+			t.Errorf("%s: err = %v, want ok=%v", c.name, err, c.ok)
+		}
+	}
+}
+
+func TestSafeExportName(t *testing.T) {
+	now := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
+	if got := safeExportName("My drawing/é", ".png", "export", now); got != "My_drawingé-20261027.png" {
+		t.Errorf("got %q", got)
+	}
+	if got := safeExportName("///", ".svg", "export", now); got != "export-20261027.svg" {
+		t.Errorf("got %q", got)
 	}
 }

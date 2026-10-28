@@ -108,6 +108,10 @@ export interface WailsMock {
   exportCancelled: boolean;
   /** ExportAPI: standalone HTML files "saved" (cancelled when `exportCancelled`) and print requests. */
   htmlExports: { vaultId: string; name: string; html: string }[];
+  /** ExportAPI.SaveFile: PNG/SVG/PDF/JSON files "saved" through the native dialog. */
+  fileExports: { vaultId: string; name: string; mime: string; base64: string }[];
+  /** DrawingAPI.WriteExport: auto-exported files by vault path. */
+  drawingExports: Map<string, string>;
   prints: number;
   recent: VaultInfo[];
   settings: AppSettings;
@@ -286,6 +290,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     exports: [],
     exportCancelled: false,
     htmlExports: [],
+    fileExports: [],
+    drawingExports: new Map<string, string>(),
     prints: 0,
     recent: seed?.recent ?? [],
     settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
@@ -462,6 +468,17 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         path: `/mock/exports/${name}.html`,
         files: 1,
         bytes: html.length,
+        cancelled: false,
+      });
+    },
+    SaveFile: (id: string, name: string, mime: string, base64: string): Promise<ExportResult> => {
+      if (mock.exportCancelled)
+        return Promise.resolve({ path: '', files: 0, bytes: 0, cancelled: true });
+      mock.fileExports.push({ vaultId: id, name, mime, base64 });
+      return Promise.resolve({
+        path: `/mock/exports/${name}`,
+        files: 1,
+        bytes: base64.length,
         cancelled: false,
       });
     },
@@ -1174,6 +1191,31 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     SavePreview: (_id: string, hash: string, svg: string): Promise<void> => {
       mock.previews.set(hash, svg);
       return Promise.resolve();
+    },
+    WriteExport: (
+      _id: string,
+      drawingPath: string,
+      variant: string,
+      format: string,
+      base64: string,
+    ): Promise<string> => {
+      const path = `${drawingPath}.${variant ? variant + '.' : ''}${format}`;
+      mock.drawingExports.set(path, base64);
+      return Promise.resolve(path);
+    },
+    /** Plain ```json blocks only (the real binding also reads LZ-string data and embedded files). */
+    ImportLegacy: (id: string, src: string): Promise<string> => {
+      const v = vaultOf(id);
+      const md = v.files.get(src);
+      if (md === undefined || !src.endsWith('.excalidraw.md'))
+        return reject('invalid: not a legacy drawing');
+      const block = /```json\s*\n([\s\S]*?)```/.exec(md)?.[1];
+      if (!block) return reject('invalid: no drawing data found');
+      const stem = src.slice(0, -'.excalidraw.md'.length);
+      let out = `${stem}.excalidraw`;
+      for (let i = 1; v.files.has(out); i++) out = `${stem} ${i}.excalidraw`;
+      v.files.set(out, block);
+      return Promise.resolve(out);
     },
   };
 

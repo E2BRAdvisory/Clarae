@@ -6,6 +6,10 @@ export function Print() {
   return window['go']['app']['ExportAPI']['Print']();
 }
 
+export function SaveFile(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['ExportAPI']['SaveFile'](arg1, arg2, arg3, arg4);
+}
+
 export function SaveHTML(arg1, arg2, arg3) {
   return window['go']['app']['ExportAPI']['SaveHTML'](arg1, arg2, arg3);
 }
