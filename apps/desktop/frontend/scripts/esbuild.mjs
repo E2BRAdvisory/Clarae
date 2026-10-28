@@ -1,6 +1,7 @@
 // Build and dev server of the desktop frontend (esbuild). Usage:
 //   node scripts/esbuild.mjs build            production bundle in dist/
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload (Wails dev, Playwright)
+//   node scripts/esbuild.mjs preview [--port N]   production bundle in node_modules/.preview/, served as is (Playwright)
 // MEMOBRAIN_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
 import * as esbuild from 'esbuild';
 import { createReadStream } from 'node:fs';
@@ -11,10 +12,11 @@ import { dirname, extname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url)) + '/..';
-const dist = join(root, 'dist');
-const require = createRequire(import.meta.url);
 const mode = process.argv[2] ?? 'build';
 const dev = mode === 'dev';
+// `preview` builds the production bundle somewhere else, so it never touches the embedded dist/.
+const dist = join(root, mode === 'preview' ? 'node_modules/.preview' : 'dist');
+const require = createRequire(import.meta.url);
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5173;
 const e2e = process.env['MEMOBRAIN_E2E'] === '1';
@@ -136,10 +138,13 @@ const options = {
   format: 'esm',
   target: ['es2022', 'chrome100', 'safari15'],
   tsconfig: join(root, 'tsconfig.app.json'),
-  sourcemap: dev ? 'inline' : 'linked',
+  // No source maps in production: dist/ is embedded in the binary (go:embed).
+  sourcemap: dev ? 'inline' : false,
   minify: !dev,
   conditions: [dev ? 'development' : 'production'],
   metafile: true,
+  // One KaTeX for the whole app: mermaid and Excalidraw each depend on their own copy.
+  alias: { katex: dirname(require.resolve('katex/package.json')) },
   legalComments: 'none',
   logLevel: 'info',
   loader: {
@@ -180,6 +185,34 @@ async function copyExcalidrawFonts() {
   await cp(join(dir, 'fonts'), join(dist, 'excalidraw-assets', 'fonts'), { recursive: true });
 }
 
+/**
+ * Bundle budget (ADR-0020): what the app loads at start (the entry and its static imports) and
+ * everything the build emits except the copied Excalidraw fonts. Raise a limit only on purpose.
+ */
+const BUDGET = { initialKB: 2000, totalKB: 23000 };
+
+function checkBudget(meta) {
+  const outputs = meta.outputs;
+  const entry = Object.entries(outputs).find(([, o]) => o.entryPoint === 'src/main.tsx')?.[0];
+  const seen = new Set();
+  const walk = (file) => {
+    if (!file || seen.has(file) || !outputs[file]) return;
+    seen.add(file);
+    for (const i of outputs[file].imports) if (i.kind === 'import-statement') walk(i.path);
+  };
+  walk(entry);
+  const kb = (n) => Math.round(n / 1024);
+  const initial = kb([...seen].reduce((n, f) => n + (outputs[f]?.bytes ?? 0), 0));
+  const total = kb(Object.values(outputs).reduce((n, o) => n + o.bytes, 0));
+  console.log(
+    `Bundle: initial ${initial} kB (limit ${BUDGET.initialKB}), total ${total} kB (limit ${BUDGET.totalKB})`,
+  );
+  if (initial > BUDGET.initialKB || total > BUDGET.totalKB) {
+    console.error('Bundle budget exceeded (see ADR-0020).');
+    process.exit(1);
+  }
+}
+
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await copyExcalidrawFonts();
@@ -196,6 +229,11 @@ if (dev) {
   await serve(port);
   console.log(`Local: http://127.0.0.1:${port}/`);
 } else {
-  await esbuild.build(options);
+  const result = await esbuild.build(options);
   await esbuild.build(workerOptions);
+  checkBudget(result.metafile);
+  if (mode === 'preview') {
+    await serve(port);
+    console.log(`Local: http://127.0.0.1:${port}/`);
+  }
 }

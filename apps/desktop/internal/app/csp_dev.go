@@ -2,8 +2,8 @@
 
 package app
 
-// ContentSecurityPolicy for `wails dev`: Vite injects inline styles and uses a
-// WebSocket for HMR, so the policy is relaxed. The production policy lives
+// ContentSecurityPolicy for `wails dev`: the dev frontend may use inline styles and uses a
+// WebSocket or EventSource for live reload, so the policy is relaxed. The production policy lives
 // in csp_prod.go (SPIKE-05).
 const ContentSecurityPolicy = "default-src 'self'; " +
 	"script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' http://localhost:* http://127.0.0.1:* http://wails.localhost:*; " +

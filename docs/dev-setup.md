@@ -58,7 +58,7 @@ make help
 
 Per un singolo test Go: `cd services/cloud && go test -run 'TestNome' ./internal/sync/...`.
 Per un singolo test TS: `yarn workspace @memobrain/desktop-frontend exec vitest run src/editor/foo.test.ts`.
-Gli e2e girano in un browser normale: `VITE_E2E=1` fa installare a `main.tsx` il mock dei binding (`src/test/wails-mock`), esposto come `window.__mock` per preparare note nei test.
+Gli e2e girano in un browser normale: `MEMOBRAIN_E2E=1` fa installare a `main.tsx` il mock dei binding (`src/test/wails-mock`), esposto come `window.__mock` per preparare note nei test.
 
 ## Struttura
 

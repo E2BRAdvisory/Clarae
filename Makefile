@@ -78,13 +78,16 @@ test-desktop-e2e: ## Two-device sync e2e (builds the cloud binary, PG via testco
 test-load: ## k6 load test (needs a running `make dev-cloud`; see services/cloud/test/load/README.md)
 	k6 run $(CLOUD)/test/load/sync.k6.js
 
-.PHONY: e2e e2e-desktop e2e-web
-e2e: e2e-desktop e2e-web ## Playwright (Chromium) for the desktop UI and the Web UI
+.PHONY: e2e e2e-desktop e2e-desktop-prod e2e-web
+e2e: e2e-desktop e2e-desktop-prod e2e-web ## Playwright (Chromium) for the desktop UI and the Web UI
 
 e2e-desktop: ## Desktop UI against the in-memory Wails mock
 	yarn workspace @memobrain/desktop-frontend run e2e
 
-e2e-web: ## Web UI on the Vite dev server with the API mocked (OIDC test double)
+e2e-desktop-prod: ## Drawing/graph/canvas specs on the minified production bundle (ADR-0025)
+	yarn workspace @memobrain/desktop-frontend run e2e:prod
+
+e2e-web: ## Web UI on the esbuild dev server with the API mocked (OIDC test double)
 	yarn workspace @memobrain/web run e2e
 
 .PHONY: ci
@@ -110,10 +113,10 @@ stack-reset: ## Destroy the stack volumes (re-imports the Keycloak realm, emptie
 dev-cloud: ## Run the cloud service against the local stack (role=all)
 	cd $(CLOUD) && set -a && source ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/memobrain-cloud --role=all
 
-dev-desktop: ## Run the desktop app with hot reload
+dev-desktop: ## Run the desktop app with live reload (esbuild, no HMR)
 	cd $(DESKTOP) && wails dev
 
-dev-web: ## Web UI on :5174 with hot reload, proxying /api to the cloud on :18081
+dev-web: ## Web UI on :5174 with live reload, proxying /api to the cloud on :18081
 	yarn workspace @memobrain/web run dev
 
 .PHONY: run-desktop run-desktop-cloud run-desktop-2devices dev-stop

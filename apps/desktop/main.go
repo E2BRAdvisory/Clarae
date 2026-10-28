@@ -115,7 +115,7 @@ func run() int {
 }
 
 // cspMiddleware sets the Content-Security-Policy on every asset response
-// (strict in production builds, relaxed for the Vite dev server; SPIKE-05).
+// (strict in production builds, relaxed for the dev server of the frontend build; SPIKE-05).
 func cspMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", app.ContentSecurityPolicy)
