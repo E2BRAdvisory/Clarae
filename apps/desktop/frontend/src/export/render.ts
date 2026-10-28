@@ -9,9 +9,10 @@
 //     anchors; links to other notes cannot work outside the vault and are plain text too; http(s)
 //     and mailto links stay links;
 //   - the final markup goes through the application sanitizer again: no scripts, no styles.
+import { parseDrawingRef } from '../drawing/embed/ref';
 import type { BinaryContent } from '../app/api';
 import type { EmbedBackend } from '../embeds/hydrate';
-import { classify, parseSize } from '../embeds/media';
+import { classify, embedOptions } from '../embeds/media';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
 import { sanitizeHtml } from '../util/sanitize';
@@ -117,7 +118,7 @@ function pictureOf(src: string, alt: string, alias: string): HTMLImageElement {
   const img = el('img');
   img.src = src;
   img.alt = alt;
-  const { width, height } = parseSize(alias);
+  const { width, height } = embedOptions(alias).size;
   if (width) img.width = width;
   if (height) img.height = height;
   return img;
@@ -154,9 +155,16 @@ async function inlineEmbed(
     case 'drawing':
     case 'canvas': {
       const kind = classify(path);
-      const url = await (kind === 'drawing'
-        ? ctx.backend.drawingPreview?.(path)
-        : ctx.backend.canvasPreview?.(path));
+      // A part of a drawing (#frame=…) is exported as that part; a part that does not exist
+      // leaves the usual placeholder.
+      let url: string | undefined;
+      try {
+        url = await (kind === 'drawing'
+          ? ctx.backend.drawingPreview?.(path, parseDrawingRef(heading, block))
+          : ctx.backend.canvasPreview?.(path));
+      } catch {
+        url = undefined;
+      }
       const uri = url ? await blobToDataUri(ctx, url, path) : null;
       node.replaceWith(uri ? pictureOf(uri, name, alias) : omit(ctx, path, name));
       return;
