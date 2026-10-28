@@ -158,10 +158,13 @@ services:
       KC_HTTP_ENABLED: 'true' # TLS ends at the proxy
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: 'true'
+      # Substituted into the imported realm (deploy/keycloak-prod): no secret or origin lives in the file.
+      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
+      WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${MEMOBRAIN_HOST:?set MEMOBRAIN_HOST in .env}
     volumes:
       # First start only: creates the realm "memobrain" (clients memobrain-desktop, memobrain-web, memobrain-admin-svc,
-      # roles). It also carries DEVELOPMENT users and secrets: see README before going live.
-      - ../keycloak:/opt/keycloak/data/import:ro
+      # roles). Production variant of deploy/keycloak: no test users, secret and web origin from the environment.
+      - ../keycloak-prod:/opt/keycloak/data/import:ro
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
