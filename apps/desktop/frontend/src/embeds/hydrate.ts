@@ -3,10 +3,11 @@
 import type { BinaryContent } from '../app/api';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
-import { blobUrl, classify, parseSize, pdfPage } from './media';
+import { blobUrl, classify, embedOptions, parseSize, pdfPage } from './media';
 import { renderPdf } from './pdf';
 import { renderMath, renderMermaid } from './typeset';
 import type { LinkSpec } from '../editor/context';
+import { parseDrawingRef, type DrawingRef } from '../drawing/embed/ref';
 
 /** What embeds need from the backend (a subset of `api`, so tests can fake it). */
 export interface EmbedBackend {
@@ -14,7 +15,7 @@ export interface EmbedBackend {
   readNote(path: string): Promise<string>;
   readBinary(path: string): Promise<BinaryContent>;
   /** Blob URL of the SVG preview of a drawing (cached by content hash). */
-  drawingPreview?(path: string): Promise<string>;
+  drawingPreview?(path: string, ref?: DrawingRef | null): Promise<string>;
   /** Blob URL of the static picture of a canvas. */
   canvasPreview?(path: string): Promise<string>;
   /** Mounts the live view of a `.base` file (optionally a named view) into el. */
@@ -125,20 +126,29 @@ export async function renderEmbedInto(
         return;
       }
       case 'drawing': {
-        const url = await deps.backend.drawingPreview?.(path);
+        const ref = parseDrawingRef(spec.heading, spec.block);
+        let url: string | undefined;
+        try {
+          url = await deps.backend.drawingPreview?.(path, ref);
+        } catch (e) {
+          if (ref && e instanceof Error && e.name === 'MissingPartError')
+            return notice(el, 'embed-missing', `${label} (${ref.kind}=${ref.value} not found)`);
+          throw e;
+        }
         if (!url) return notice(el, 'embed-other', path);
         const img = document.createElement('img');
         img.src = url;
         img.alt = path.split('/').pop() ?? path;
         img.className = 'embed-drawing';
-        const { width, height } = parseSize(spec.alias);
+        const { size, align } = embedOptions(spec.alias);
+        const { width, height } = size;
         if (width) img.width = width;
         if (height) img.height = height;
         // Double click opens the drawing in the editor.
         img.addEventListener('dblclick', () =>
           deps.openLink?.({ target: path, heading: '', block: '', alias: '', embed: false }, false),
         );
-        el.className = 'embed-drawing-wrap';
+        el.className = `embed-drawing-wrap${align ? ` align-${align}` : ''}`;
         el.replaceChildren(img);
         return;
       }
@@ -149,13 +159,14 @@ export async function renderEmbedInto(
         img.src = url;
         img.alt = path.split('/').pop() ?? path;
         img.className = 'embed-canvas';
-        const { width, height } = parseSize(spec.alias);
+        const { size, align } = embedOptions(spec.alias);
+        const { width, height } = size;
         if (width) img.width = width;
         if (height) img.height = height;
         img.addEventListener('dblclick', () =>
           deps.openLink?.({ target: path, heading: '', block: '', alias: '', embed: false }, false),
         );
-        el.className = 'embed-drawing-wrap';
+        el.className = `embed-drawing-wrap${align ? ` align-${align}` : ''}`;
         el.replaceChildren(img);
         return;
       }

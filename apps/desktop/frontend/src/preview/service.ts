@@ -62,7 +62,7 @@ export function previewBackend(vaultId: string): EmbedBackend {
     resolve: (from, target) => api.links.resolve(vaultId, from, target),
     readNote: async (p) => (await api.vault.readNote(vaultId, p)).content,
     readBinary: (p) => api.vault.readBinary(vaultId, p),
-    drawingPreview: (p) => drawingPreviewUrl(vaultId, p),
+    drawingPreview: (p, ref) => drawingPreviewUrl(vaultId, p, ref),
     canvasPreview: (p) => canvasPreviewUrl(vaultId, p),
   };
 }

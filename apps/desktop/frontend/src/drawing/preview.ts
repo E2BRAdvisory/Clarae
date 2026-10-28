@@ -4,13 +4,28 @@
 import { api } from '../app/api';
 import { loadExcalidraw } from './excalidraw';
 import { parseScene } from './scene';
+import { refElements, refKey, type DrawingRef } from './embed/ref';
 
-/** Renders the SVG of a drawing (loads Excalidraw on first use). */
-export async function renderSvg(text: string): Promise<string> {
+/** Thrown when an embed names a frame/group/area the drawing does not have. */
+export class MissingPartError extends Error {
+  override name = 'MissingPartError';
+}
+
+/** Renders the SVG of a drawing, or of one part of it (loads Excalidraw on first use). */
+export async function renderSvg(text: string, ref: DrawingRef | null = null): Promise<string> {
   const ex = await loadExcalidraw();
   const scene = parseScene(text);
+  let elements = ex.restoreElements(scene.elements as never, null);
+  let frame: (typeof elements)[number] | null = null;
+  if (ref) {
+    const part = refElements(elements as unknown as Parameters<typeof refElements>[0], ref);
+    if (!part) throw new MissingPartError(`${ref.kind}=${ref.value}`);
+    elements = part.elements as unknown as typeof elements;
+    frame = part.frame as unknown as typeof frame;
+  }
   const svg = await ex.exportToSvg({
-    elements: ex.restoreElements(scene.elements as never, null),
+    elements,
+    ...(frame ? { exportingFrame: frame } : {}),
     appState: {
       exportBackground: true,
       viewBackgroundColor:
@@ -30,16 +45,22 @@ const urls = new Map<string, string>();
  * Blob URL of the drawing's preview, for an <img>: in an image the SVG cannot run scripts or
  * load anything, and it keeps its own embedded fonts and styles.
  */
-export async function drawingPreviewUrl(vaultId: string, path: string): Promise<string> {
+export async function drawingPreviewUrl(
+  vaultId: string,
+  path: string,
+  ref: DrawingRef | null = null,
+): Promise<string> {
   const note = await api.vault.readNote(vaultId, path);
-  const hit = urls.get(note.hash);
+  const key = `${note.hash}:${refKey(ref)}`;
+  const hit = urls.get(key);
   if (hit) return hit;
-  let svg = await api.drawing.readPreview(vaultId, note.hash).catch(() => '');
+  // Only whole drawings use the on-disk cache (keyed by the content hash alone).
+  let svg = ref ? '' : await api.drawing.readPreview(vaultId, note.hash).catch(() => '');
   if (!svg) {
-    svg = await renderSvg(note.content);
-    void api.drawing.savePreview(vaultId, note.hash, svg).catch(() => undefined);
+    svg = await renderSvg(note.content, ref);
+    if (!ref) void api.drawing.savePreview(vaultId, note.hash, svg).catch(() => undefined);
   }
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  urls.set(note.hash, url);
+  urls.set(key, url);
   return url;
 }

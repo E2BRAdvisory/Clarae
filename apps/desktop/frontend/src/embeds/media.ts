@@ -43,6 +43,29 @@ export function parseSize(alias: string): { width?: number; height?: number } {
   return { width: Number(m[1]), ...(m[2] ? { height: Number(m[2]) } : {}) };
 }
 
+export type EmbedAlign = 'left' | 'right' | 'center' | 'left-wrap' | 'right-wrap';
+
+const ALIGNS: readonly string[] = ['left', 'right', 'center', 'left-wrap', 'right-wrap'];
+
+/**
+ * Size and alignment of an embed alias: "300", "300x200", "300|left", "right-wrap". The
+ * alignment keywords are the ones of the Obsidian Excalidraw plugin (`left`, `right`, `center`,
+ * and the `-wrap` forms that let the text flow around the picture).
+ */
+export function embedOptions(alias: string): {
+  size: { width?: number; height?: number };
+  align?: EmbedAlign;
+} {
+  let size: { width?: number; height?: number } = {};
+  let align: EmbedAlign | undefined;
+  for (const token of alias.split('|').map((t) => t.trim().toLowerCase())) {
+    const s = parseSize(token);
+    if (s.width) size = s;
+    else if (ALIGNS.includes(token)) align = token as EmbedAlign;
+  }
+  return { size, ...(align ? { align } : {}) };
+}
+
 export function pdfPage(heading: string): number {
   const m = /^page=(\d+)$/.exec(heading.trim());
   return m ? Number(m[1]) : 1;
