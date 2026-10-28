@@ -51,5 +51,5 @@ CLAUDE.md
 # Playwright output
 test-results/
 playwright-report/
-apps/desktop/frontend/wailsjs/runtime/
 apps/desktop/build
+apps/desktop/frontend/wailsjs/
