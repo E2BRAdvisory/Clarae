@@ -17,6 +17,24 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Vault privato bloccato: il disegno è in sola lettura.
 - [ ] Modifica del file dall'esterno con la tab aperta e nessuna modifica locale: la tab mostra la nuova versione; con modifiche locali: banner di conflitto.
 
+## Azioni sulla scena, esportazione e strumenti (ADR-0024)
+
+Da eseguire sul webview reale (gli e2e usano Chromium con i binding simulati).
+
+- [ ] Palette → "Disegno: apri il pannello strumenti": cerca, esegui un'azione, aggiungi ai preferiti, riapri il vault: il preferito resta.
+- [ ] Boolean Operations (unione, intersezione, differenza, xor) su due forme sovrapposte; Split Ellipse: il risultato è corretto anche dopo la riapertura.
+- [ ] Auto Layout su un diagramma con frecce legate: le frecce seguono le forme; ridimensiona una forma con "Imposta dimensioni": le frecce restano attaccate.
+- [ ] Mindmap da un testo-elenco indentato, calendario annuale e lineare, vignette, nuvolette, schema colori, linea organica.
+- [ ] Penne (fine, pennarello, evidenziatore) e puntatore laser: lo strumento cambia e il tratto ha stile e opacità attesi.
+- [ ] Presentazione con 3 cornici: frecce/Spazio/Pagina navigano con animazione, il selettore salta, Esc esce; in schermo intero la cornice si adatta. Senza cornici: presentazione semplice.
+- [ ] Esporta → PNG/SVG con selezione, cornice, scala e "incorpora scena"; "Stampa / PDF…" produce un PDF; "Salva con nome…" apre la finestra nativa.
+- [ ] Esportazione automatica (anche l'override per singolo disegno): `Disegno.excalidraw.png/.svg` accanto al file a ogni salvataggio.
+- [ ] LaTeX (inserisci, doppio clic per modificare, reimposta dimensione) e Mermaid (testo → diagramma) senza richieste di rete.
+- [ ] Trascina dal file explorer sul canvas: immagine, nota (scheda) e altro disegno nel punto di rilascio.
+- [ ] Copia un `.excalidraw.md` di Obsidian (con un'immagine incorporata) nel vault → "Converti…": nasce `.excalidraw` accanto, apribile e con l'immagine; l'originale è intatto.
+- [ ] Importa un `.excalidrawlib` copiato nel vault: le forme compaiono nella libreria; "Esporta la libreria" crea `Library.excalidrawlib`.
+- [ ] Rinomina una nota linkata da un elemento del disegno: il link nel `.excalidraw` è riscritto.
+
 ## Embed e ricerca
 
 - [ ] `![[disegno.excalidraw]]` e `![[disegno.excalidraw|400]]` in Live Preview e in Lettura: immagine con la larghezza richiesta; doppio clic apre il disegno.

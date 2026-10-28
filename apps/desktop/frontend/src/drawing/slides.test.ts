@@ -1,0 +1,67 @@
+import { describe, expect, it } from 'vitest';
+import type { SceneElement } from './actions/types';
+import { moveSlide, slideKey, slidesOf } from './slides';
+
+const frame = (
+  id: string,
+  name: string | null,
+  x: number,
+  y: number,
+  extra = {},
+): SceneElement => ({
+  id,
+  type: 'frame',
+  name,
+  x,
+  y,
+  version: 1,
+  versionNonce: 1,
+  ...extra,
+});
+
+describe('slidesOf', () => {
+  it('orders named frames naturally and ignores deleted ones and other elements', () => {
+    const els = [
+      frame('c', 'Slide 10', 0, 0),
+      frame('a', 'Slide 2', 0, 0),
+      frame('b', 'slide 1', 0, 0),
+      frame('d', 'Slide 3', 0, 0, { isDeleted: true }),
+      { id: 'r', type: 'rectangle', version: 1, versionNonce: 1 },
+    ];
+    expect(slidesOf(els).map((s) => s.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('falls back to reading order for unnamed frames', () => {
+    const els = [frame('c', null, 0, 500), frame('b', null, 400, 0), frame('a', null, 0, 0)];
+    expect(slidesOf(els)).toEqual([
+      { id: 'a', name: 'Frame 1' },
+      { id: 'b', name: 'Frame 2' },
+      { id: 'c', name: 'Frame 3' },
+    ]);
+  });
+
+  it('puts explicitly numbered slides first, in that order', () => {
+    const els = [
+      frame('x', 'A', 0, 0),
+      frame('b', 'Z', 0, 0, { customData: { memobrain: { slide: 2 } } }),
+      frame('a', 'Y', 0, 0, { customData: { memobrain: { slide: 1 } } }),
+    ];
+    expect(slidesOf(els).map((s) => s.id)).toEqual(['a', 'b', 'x']);
+  });
+});
+
+describe('navigation', () => {
+  it('clamps at both ends', () => {
+    expect(moveSlide(0, -1, 3)).toBe(0);
+    expect(moveSlide(2, 1, 3)).toBe(2);
+    expect(moveSlide(1, 1, 3)).toBe(2);
+  });
+
+  it('maps keys', () => {
+    expect(slideKey('ArrowRight')).toBe(1);
+    expect(slideKey('PageUp')).toBe(-1);
+    expect(slideKey('Home')).toBe('first');
+    expect(slideKey('End')).toBe('last');
+    expect(slideKey('a')).toBeUndefined();
+  });
+});

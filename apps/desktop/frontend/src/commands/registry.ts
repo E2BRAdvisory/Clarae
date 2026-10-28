@@ -12,6 +12,7 @@ import { newCanvas } from '../canvas/commands';
 import { openGraph, openLocalGraph } from '../graph/commands';
 import { newBase } from '../bases/commands';
 import { insertDrawing, newDrawing } from '../drawing/commands';
+import { sceneCommands, toolCommands } from '../drawing/sceneCommands';
 import { infoOf, useSync } from '../state/sync';
 import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
@@ -147,7 +148,7 @@ export const commands: Command[] = [
   {
     id: 'drawing:new',
     group: 'file',
-    defaults: [],
+    defaults: ['Mod-Alt-d'],
     enabled: () => canWrite() && feature('drawings'),
     run: () => guard(newDrawing()),
   },
@@ -588,7 +589,7 @@ export const commands: Command[] = [
   },
 ];
 
-commands.push(...notesCommands);
+commands.push(...notesCommands, ...sceneCommands, ...toolCommands);
 
 export const commandById = new Map(commands.map((c) => [c.id, c]));
 
