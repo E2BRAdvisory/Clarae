@@ -18,6 +18,10 @@ tools: ## Install pinned developer tools from tools/go.mod (into GOBIN) and JS d
 
 ## ---- code generation -------------------------------------------------------
 
+.PHONY: wails-cli
+wails-cli: ## Build the Wails CLI with the repo's Go and a current x/tools (v2.12.0 fails on Go 1.27)
+	scripts/install-wails.sh
+
 .PHONY: gen gen-openapi gen-proto gen-sqlc gen-wails
 gen: gen-openapi gen-proto gen-sqlc gen-wails ## Regenerate all generated code
 
