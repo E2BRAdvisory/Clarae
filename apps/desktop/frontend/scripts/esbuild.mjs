@@ -3,9 +3,11 @@
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload (Wails dev, Playwright)
 // MEMOBRAIN_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
 import * as esbuild from 'esbuild';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createServer } from 'node:http';
+import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, join, relative } from 'node:path';
+import { dirname, extname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url)) + '/..';
@@ -65,6 +67,63 @@ const html = {
   },
 };
 
+/** Tells the open pages to reload after each successful rebuild (dev only). */
+const clients = new Set();
+const reload = {
+  name: 'reload',
+  setup(build) {
+    build.onEnd((result) => {
+      if (result.errors.length) return;
+      for (const res of clients) res.write('event: change\ndata: {}\n\n');
+    });
+  },
+};
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.map': 'application/json',
+  '.json': 'application/json',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.ttf': 'font/ttf',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.wasm': 'application/wasm',
+};
+
+/**
+ * Static server for dist/. esbuild's own server refuses Host headers other than localhost/IPs, and
+ * Wails proxies the app as "wails.localhost".
+ */
+function serve(port) {
+  const server = createServer(async (req, res) => {
+    const path = decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/');
+    if (path === '/esbuild') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+      res.write(': connected\n\n');
+      clients.add(res);
+      req.on('close', () => clients.delete(res));
+      return;
+    }
+    let file = normalize(join(dist, path === '/' ? 'index.html' : path));
+    try {
+      if (!file.startsWith(dist) || !(await stat(file)).isFile()) throw new Error('not a file');
+    } catch {
+      res.writeHead(404).end('not found');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
+      'Cache-Control': 'no-store',
+    });
+    createReadStream(file).pipe(res);
+  });
+  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
+}
+
 const options = {
   entryPoints: { main: join(root, 'src/main.tsx') },
   outdir: dist,
@@ -95,7 +154,7 @@ const options = {
     'process.env.NODE_ENV': JSON.stringify(dev ? 'development' : 'production'),
     'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : ''),
   },
-  plugins: [urlImports, html],
+  plugins: dev ? [urlImports, html, reload] : [urlImports, html],
 };
 
 // The graph layout runs in a worker: a separate, self-contained bundle at a fixed URL.
@@ -134,8 +193,8 @@ if (dev) {
   const worker = await esbuild.context(workerOptions);
   await app.watch();
   await worker.watch();
-  const { hosts, port: p } = await app.serve({ servedir: dist, port, host: 'localhost' });
-  console.log(`Local: http://${hosts[0] ?? 'localhost'}:${p}/`);
+  await serve(port);
+  console.log(`Local: http://127.0.0.1:${port}/`);
 } else {
   await esbuild.build(options);
   await esbuild.build(workerOptions);
