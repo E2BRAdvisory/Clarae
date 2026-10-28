@@ -34,9 +34,7 @@ export function startLayout(
 ): LayoutHost {
   if (typeof Worker !== 'undefined') {
     try {
-      const worker = new Worker(new URL('./layout.worker.ts', import.meta.url), {
-        type: 'module',
-      });
+      const worker = new Worker('/assets/layout.worker.js', { type: 'module' });
       worker.onmessage = (e: MessageEvent<WorkerOut>) =>
         onPositions(e.data.positions, e.data.alpha, e.data.done);
       const send = (m: WorkerIn): void => worker.postMessage(m);

@@ -28,5 +28,6 @@ Le deviazioni e le precisazioni rispetto a `Specifications.md` si registrano com
 | [0022](0022-resilience-details.md)                   | Resilienza: garanzie verificate, bug trovati, prova di ripristino (M7-WP2b)          | proposta  |
 | [0023](0023-distribution-and-updates-details.md)     | Distribuzione e aggiornamenti: manifest firmato, installer, chart (M7-WP3)           | proposta  |
 | [0024](0024-excalidraw-feature-parity.md)            | Parità funzionale con i plugin Obsidian Excalidraw ed Excalidraw Extras              | proposta  |
+| [0025](0025-desktop-frontend-esbuild.md)             | Frontend desktop: build e dev server con esbuild al posto di Vite                    | proposta  |
 
 Nota: gli ADR 0015 e 0018 usano un'intestazione in forma di elenco invece della tabella del template; il contenuto resta valido, l'uniformazione del formato è un'attività di pulizia non bloccante. Le righe 0020–0023 vanno trasformate in link quando i file arrivano (i titoli riportati sono provvisori).

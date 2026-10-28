@@ -40,14 +40,20 @@ const PACKAGES = [
 type Convert = (tex: string, display: boolean) => string;
 let converter: Promise<Convert> | null = null;
 
-async function load(): Promise<Convert> {
+async function loadConverter(): Promise<Convert> {
+  // MathJax is CommonJS: when the bundle is split into chunks a dynamic import of it only has a
+  // `default` (the exports object), under the test runner it has named exports as well.
+  const load = async <T>(m: Promise<T & { default?: T }>): Promise<T> => {
+    const ns = await m;
+    return ns.default ?? ns;
+  };
   const [{ mathjax }, { TeX }, { SVG }, { liteAdaptor }, { RegisterHTMLHandler }] =
     await Promise.all([
-      import('mathjax-full/js/mathjax.js'),
-      import('mathjax-full/js/input/tex.js'),
-      import('mathjax-full/js/output/svg.js'),
-      import('mathjax-full/js/adaptors/liteAdaptor.js'),
-      import('mathjax-full/js/handlers/html.js'),
+      load(import('mathjax-full/js/mathjax.js')),
+      load(import('mathjax-full/js/input/tex.js')),
+      load(import('mathjax-full/js/output/svg.js')),
+      load(import('mathjax-full/js/adaptors/liteAdaptor.js')),
+      load(import('mathjax-full/js/handlers/html.js')),
     ]);
   // Importing a package's configuration is what registers it; AllPackages is avoided on purpose
   // (it would add `html`, `autoload` and `require`).
@@ -85,7 +91,7 @@ const HEX = /^#[0-9a-f]{6}$/i;
 export async function texToSvg(tex: string, o: LatexOptions = {}): Promise<LatexSvg> {
   const source = tex.trim();
   if (!source) throw new Error('empty formula');
-  converter ??= load();
+  converter ??= loadConverter();
   const html = (await converter)(source, o.display ?? true);
   const m = /<svg\b[^>]*>[\s\S]*<\/svg>/.exec(html);
   if (!m) throw new Error('MathJax produced no SVG');

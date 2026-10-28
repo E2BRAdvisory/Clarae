@@ -5,7 +5,7 @@
   "frontend:install": "yarn install",
   "frontend:build": "yarn run build",
   "frontend:dev:watcher": "yarn run dev",
-  "frontend:dev:serverUrl": "auto",
+  "frontend:dev:serverUrl": "http://127.0.0.1:5173",
   "wailsjsdir": "./frontend",
   "info": {
     "companyName": "MemoBrain Notes",

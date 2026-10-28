@@ -16,7 +16,7 @@ if (!container) {
 
 async function start(root: HTMLElement): Promise<void> {
   // Playwright runs the UI in a plain browser: swap the Wails bindings for the in-memory mock.
-  if (import.meta.env.VITE_E2E) {
+  if (import.meta.env.MEMOBRAIN_E2E) {
     const { installWailsMock } = await import('./test/wails-mock');
     (window as unknown as { __mock: unknown }).__mock = installWailsMock();
   }

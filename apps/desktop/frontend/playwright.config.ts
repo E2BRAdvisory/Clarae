@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-// The UI runs in plain Chromium against the in-memory Wails mock (VITE_E2E=1
+// The UI runs in plain Chromium against the in-memory Wails mock (MEMOBRAIN_E2E=1
 // makes main.tsx install it); the Go backend is covered by its own tests.
 export default defineConfig({
   testDir: './e2e',
@@ -10,9 +10,9 @@ export default defineConfig({
   use: { baseURL: 'http://localhost:5199', trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
   webServer: {
-    command: 'yarn vite --port 5199 --strictPort',
+    command: 'node scripts/esbuild.mjs dev --port 5199',
     url: 'http://localhost:5199',
     reuseExistingServer: !process.env['CI'],
-    env: { VITE_E2E: '1' },
+    env: { MEMOBRAIN_E2E: '1' },
   },
 });
