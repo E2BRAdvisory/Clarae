@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -376,5 +377,41 @@ func TestExportTarget(t *testing.T) {
 		if (err == nil) != c.ok || got != c.want {
 			t.Errorf("exportTarget(%q,%q,%q) = %q, %v", c.path, c.variant, c.format, got, err)
 		}
+	}
+}
+
+// The compressed block is what the Obsidian plugin writes by default (lz-string, base64).
+func TestImportLegacyDrawingCompressedAndImageCap(t *testing.T) {
+	a, info, root := newTestApp(t)
+	d := NewDrawingAPI(a)
+	compressed := "N4IgLgngDgpiBcIYA8DGBDANgSwCYCd0B3EAGhADcZ8BnbAewDsEAmcm+gV31TkQAswYKDXgB6MSgw4CxAHSp6AWzJJMMJTEZgaCANqg8CEOgCMqyLGP4YqMOkYBzdauQIADOQgfyRPGH4EU08QfhhsR0EgkLAUMGN+AEvMTHoAAkBgMjTAFg3APF2QAF8AXXJ0KCgAZXtYhFAKbBgiACF0VABrR3wuRlwAYXpU/GMAYgAzccLyUex1XXhgAoKgA"
+	md := "## Embedded Files\nbig1: [[a.png]]\nbig2: [[b.png]]\n\n## Drawing\n```compressed-json\n" + compressed + "\n```\n"
+	// Two images of 25 MB: only the first fits the 40 MB cap.
+	files := map[string][]byte{"n.excalidraw.md": []byte(md), "a.png": make([]byte, 25<<20), "b.png": make([]byte, 25<<20)}
+	for p, data := range files {
+		if err := os.WriteFile(filepath.Join(root, p), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := d.ImportLegacy(info.ID, "n.excalidraw.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := os.ReadFile(filepath.Join(root, got))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Elements []json.RawMessage          `json:"elements"`
+		Files    map[string]json.RawMessage `json:"files"`
+	}
+	if err := json.Unmarshal(out, &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Elements) == 0 || !strings.Contains(string(out), "héllo") {
+		t.Errorf("compressed scene not decoded: %.200s", out)
+	}
+	if len(s.Files) != 1 {
+		t.Errorf("the image cap must keep %d of 2 images, got %d", 1, len(s.Files))
 	}
 }

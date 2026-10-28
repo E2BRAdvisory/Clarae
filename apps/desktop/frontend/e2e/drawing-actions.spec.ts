@@ -8,7 +8,17 @@ import {
   selectAll,
   shape,
   waitSaved,
+  watchNetwork,
 } from './drawingHelpers';
+
+// Offline gate: nothing here may reach outside the app itself.
+let external: string[] = [];
+test.beforeEach(({ page }) => {
+  external = watchNetwork(page);
+});
+test.afterEach(() => {
+  expect(external).toEqual([]);
+});
 
 const text = (id: string, x: number, y: number) =>
   shape(

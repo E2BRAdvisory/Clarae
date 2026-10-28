@@ -1,10 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { appendFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 
 // Automated WCAG 2.1 A/AA scan of the app chrome on the Wails mock, light and dark.
 // CodeMirror's content DOM is excluded from the scan (documented in docs/qa/a11y-desktop.md);
-// the editor surface is covered by the manual screen reader checklist.
+// the editor surface is covered by the manual screen reader checklist. Excalidraw's own canvas
+// and toolbars are excluded too; MemoBrain's chrome around it (header, export dialog, tools
+// panel, slideshow bar, tool dialogs) is scanned.
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 async function scan(page: Page, label: string) {
@@ -99,6 +102,50 @@ for (const theme of ['light', 'dark'] as const) {
         await scan(page, name);
       });
     }
+
+    test('drawing: header, export dialog, tools panel, slideshow and formula dialog', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await openDrawing(
+        page,
+        scene([
+          shape('f1', 0, 0, 400, 300, { name: 'Slide 1' }, 'frame'),
+          shape('r', 20, 20, 80, 80),
+        ]),
+      );
+      await scan(page, 'drawing');
+
+      await page.getByRole('button', { name: 'Export' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await scan(page, 'drawing export dialog');
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+
+      await runCommand(page, 'open the tools panel');
+      await expect(page.getByRole('dialog', { name: 'Drawing tools' })).toBeVisible();
+      await scan(page, 'drawing tools panel');
+      await page.keyboard.press('Escape');
+
+      await runCommand(page, 'insert a LaTeX formula');
+      await expect(page.getByRole('dialog', { name: 'Insert a LaTeX formula' })).toBeVisible();
+      await scan(page, 'drawing formula dialog');
+      await page.keyboard.press('Escape');
+
+      await runCommand(page, 'insert a diagram from Mermaid text');
+      await expect(page.getByRole('dialog', { name: 'Text to diagram (Mermaid)' })).toBeVisible();
+      await scan(page, 'drawing mermaid dialog');
+      await page.keyboard.press('Escape');
+
+      await runCommand(page, 'describe the drawing as text');
+      await expect(page.getByRole('dialog', { name: 'Description of the drawing' })).toBeVisible();
+      await scan(page, 'drawing description');
+      await page.keyboard.press('Escape');
+
+      await runCommand(page, 'start the slideshow');
+      await expect(page.getByRole('toolbar', { name: 'Slideshow' })).toBeVisible();
+      await scan(page, 'drawing slideshow');
+    });
 
     test('recovery view and history for a note', async ({ page }) => {
       await openVault(page, theme);

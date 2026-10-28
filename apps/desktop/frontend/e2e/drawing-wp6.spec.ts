@@ -9,7 +9,17 @@ import {
   shape,
   waitSaved,
   type MockWindow,
+  watchNetwork,
 } from './drawingHelpers';
+
+// Offline gate: nothing here may reach outside the app itself.
+let external: string[] = [];
+test.beforeEach(({ page }) => {
+  external = watchNetwork(page);
+});
+test.afterEach(() => {
+  expect(external).toEqual([]);
+});
 
 const frame = (id: string, name: string, x: number) => shape(id, x, 0, 400, 300, { name }, 'frame');
 
@@ -17,12 +27,19 @@ const live = async (page: Parameters<typeof savedDrawing>[0]) =>
   (await savedDrawing(page)).elements.filter((e) => !e['isDeleted']);
 
 test('the slideshow plays the frames in order and Escape ends it', async ({ page }) => {
-  await openDrawing(page, scene([frame('f1', 'Slide 2', 600), frame('f2', 'Slide 1', 0)]));
+  await openDrawing(
+    page,
+    scene([
+      frame('f1', 'Slide 2', 600),
+      { ...frame('f2', 'Slide 1', 0), customData: { memobrain: { notes: 'Say hello' } } },
+    ]),
+  );
   await runCommand(page, 'start the slideshow');
   const bar = page.getByRole('toolbar', { name: 'Slideshow' });
   await expect(bar).toBeVisible();
   await expect(bar).toContainText('1 / 2');
   await expect(bar.getByRole('combobox', { name: 'Slide' })).toHaveValue('0');
+  await expect(bar).toContainText('Say hello'); // presenter notes of the first slide
   // Going full screen can swallow a key press in headless Chromium: retry (stopping at the last
   // slide makes the press idempotent).
   await expect(async () => {
@@ -172,4 +189,38 @@ test('a pen command switches to the freehand tool', async ({ page }) => {
   await openDrawing(page, scene([]));
   await runCommand(page, 'highlighter (yellow)');
   await expect(page.locator('[data-testid="toolbar-freedraw"]')).toBeChecked();
+});
+
+test('the drawing can be described as text', async ({ page }) => {
+  const label = shape(
+    't',
+    10,
+    10,
+    80,
+    25,
+    {
+      text: 'Hello board',
+      originalText: 'Hello board',
+      fontSize: 20,
+      fontFamily: 5,
+      textAlign: 'left',
+      verticalAlign: 'top',
+      containerId: null,
+      autoResize: true,
+      lineHeight: 1.25,
+    },
+    'text',
+  );
+  await openDrawing(page, scene([shape('f1', 0, 0, 400, 300, { name: 'Intro' }, 'frame'), label]));
+  await runCommand(page, 'describe the drawing as text');
+  const dialog = page.getByRole('dialog', { name: 'Description of the drawing' });
+  await expect(dialog).toContainText('1 frame(s)');
+  await expect(dialog.getByRole('region', { name: 'Frames (slides) in order' })).toContainText(
+    'Intro',
+  );
+  await expect(dialog.getByRole('region', { name: 'Texts, top to bottom' })).toContainText(
+    'Hello board',
+  );
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
 });
