@@ -2,9 +2,9 @@
 
 Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file: il workflow di release le allega alla release (`scripts/release/notes.sh`).
 
-## [1.0.0] - non rilasciata
+## [1.0.0] - 2026-10-28
 
-Tutto ciò che c'è nella `1.0.0-rc.1` (sotto) più i disegni completi e il nuovo build del client desktop. Il tag si crea solo dopo la checklist di `docs/release/v1.0.0-checklist.md`.
+Tutto ciò che c'è nella `1.0.0-rc.1` (sotto) più i disegni completi e il nuovo build del client desktop.
 
 ### Disegni (parità con i plugin Obsidian Excalidraw ed Excalidraw Extras, ADR-0024)
 
