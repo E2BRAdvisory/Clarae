@@ -120,3 +120,30 @@ export function setDrawingAutoExport(): Promise<void> {
     c.setFileSetting('autoExport', picked === 'default' ? null : picked);
   });
 }
+
+/** "Presenter notes": the notes of the selected frame, shown under the slide while presenting. */
+export function setSlideNotes(): Promise<void> {
+  return guard(async () => {
+    const c = getSceneController();
+    if (!c?.canEdit()) return;
+    const frames = selectedElements(c.context()).filter((e) => e.type === 'frame');
+    if (frames.length !== 1) return dialog.alert(t('notesTitle'), t('notesPickFrame'));
+    const frame = frames[0] as SceneElement;
+    const mb = (frame.customData as { memobrain?: Record<string, unknown> } | undefined)?.memobrain;
+    const raw = await dialog.prompt(t('notesTitle'), typeof mb?.notes === 'string' ? mb.notes : '');
+    if (raw === null) return;
+    const rest = { ...mb };
+    delete rest['notes'];
+    const memobrain = raw.trim() ? { ...rest, notes: raw.trim() } : rest;
+    c.apply({
+      update: {
+        [frame.id]: {
+          customData: {
+            ...(frame.customData as Record<string, unknown> | undefined),
+            memobrain,
+          },
+        },
+      },
+    });
+  });
+}

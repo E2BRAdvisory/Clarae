@@ -1768,16 +1768,14 @@ textarea.merge {
   gap: 8px;
   padding: 4px 10px;
   border-radius: 8px;
-  background: var(--bg-elevated, rgba(0, 0, 0, 0.7));
-  color: var(--text, #fff);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.2));
-  opacity: 0.35;
-  transition: opacity 0.2s;
+  background: var(--bg-secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
   z-index: 5;
 }
-.slideshow-bar:hover,
-.slideshow-bar:focus-within {
-  opacity: 1;
+.slideshow-bar button,
+.slideshow-bar select {
+  color: var(--text);
 }
 .tools-panel {
   width: min(520px, 92vw);
@@ -1799,7 +1797,7 @@ textarea.merge {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 10px 0 4px;
-  color: var(--text-muted, inherit);
+  color: var(--text-muted);
 }
 .tools-list ul {
   list-style: none;
@@ -1815,5 +1813,10 @@ textarea.merge {
   text-align: left;
 }
 .tools-list .tool-star.active {
-  color: var(--accent, gold);
+  color: var(--accent-text);
+}
+.slideshow-bar .slide-notes {
+  max-width: 40ch;
+  white-space: pre-wrap;
+  font-size: 0.85em;
 }

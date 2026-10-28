@@ -404,7 +404,9 @@
     "drawing_tools_panel": "Drawing: open the tools panel",
     "drawing_import_legacy": "Drawing: convert an Obsidian .excalidraw.md into a drawing",
     "drawing_import_library": "Drawing: import a shape library (.excalidrawlib)",
-    "drawing_export_library": "Drawing: export the shape library (.excalidrawlib)"
+    "drawing_export_library": "Drawing: export the shape library (.excalidrawlib)",
+    "drawing_set_slide_notes": "Drawing: edit the presenter notes of the selected frame",
+    "drawing_describe": "Drawing: describe the drawing as text"
   },
   "sync": {
     "title": "Sync",
@@ -539,7 +541,9 @@
       "refreshTitle": "Update note cards",
       "refreshNothing": "Nothing to update: select note cards whose notes changed.",
       "autoTitle": "Auto-export of this drawing",
-      "autoFollow": "Follow the vault setting"
+      "autoFollow": "Follow the vault setting",
+      "notesTitle": "Presenter notes",
+      "notesPickFrame": "Select exactly one frame first."
     },
     "invalid": "This file is not a valid Excalidraw drawing: {{error}}",
     "tooLarge": "This drawing is larger than 10 MB: saving and syncing may be slow. Consider splitting it.",
@@ -702,6 +706,28 @@
       "imported": "{{count}} shapes imported into the library.",
       "exported": "Library saved as {{path}}.",
       "emptyLibrary": "The library is empty."
+    },
+    "describe": {
+      "title": "Description of the drawing",
+      "empty": "The drawing is empty.",
+      "contents": "Contents",
+      "frames": "Frames (slides) in order",
+      "texts": "Texts, top to bottom",
+      "links": "Links",
+      "count_one": "{{count}} {{type}}",
+      "count_other": "{{count}} {{type}}",
+      "types": {
+        "rectangle": "rectangle(s)",
+        "ellipse": "ellipse(s)",
+        "diamond": "diamond(s)",
+        "arrow": "arrow(s)",
+        "line": "line(s)",
+        "freedraw": "freehand stroke(s)",
+        "text": "text(s)",
+        "image": "image(s)",
+        "frame": "frame(s)",
+        "embeddable": "embedded page(s)"
+      }
     }
   },
   "canvas": {

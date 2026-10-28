@@ -131,6 +131,71 @@ func TestExcalidrawDeletionStaysDeleted(t *testing.T) {
 	}
 }
 
+// ADR-0024: frames, images with customData, the per-drawing `memobrain` key, the derived
+// exports next to the drawing and the vault's drawing settings travel and merge like the rest.
+func TestExcalidrawExtraElementsAndDerivedFilesConverge(t *testing.T) {
+	v := createVault(t, "ada", "drawings-extra")
+	a := newDevice(t, "ada", "laptop", v, nil)
+	b := newDevice(t, "ada", "desktop", v, nil)
+
+	frame := func(version int, name string) obj {
+		return obj{"id": "f1", "type": "frame", "name": name, "x": 0, "y": 0, "width": 400, "height": 300,
+			"version": version, "versionNonce": version * 7, "isDeleted": false}
+	}
+	formula := func(version int, tex string) obj {
+		return obj{"id": "m1", "type": "image", "fileId": "F1", "x": 10, "y": 10, "width": 40, "height": 20,
+			"customData": obj{"memobrain": obj{"kind": "latex", "latex": tex}},
+			"version":    version, "versionNonce": version * 7, "isDeleted": false}
+	}
+	withKey := func(base string, key obj) string {
+		d := parse(t, base)
+		d["memobrain"] = key
+		return mustJSON(d)
+	}
+
+	a.write("Board.excalidraw", drawing(frame(1, "Slide 1"), formula(1, "a")))
+	a.write(".memobrain/drawing.json", `{"autoExport":"none"}`)
+	a.sync()
+	b.sync()
+
+	// A edits the formula and turns on auto-export for this drawing (and writes the PNG);
+	// B renames the frame and adds a shape inside it.
+	a.write("Board.excalidraw", withKey(drawing(frame(1, "Slide 1"), formula(2, "b")), obj{"autoExport": "png"}))
+	a.writeBytes("Board.excalidraw.png", []byte("\x89PNG fake"))
+	inside := el("r1", 1, 20)
+	inside["frameId"] = "f1"
+	b.write("Board.excalidraw", drawing(frame(2, "Intro"), formula(1, "a"), inside))
+	a.sync()
+	b.sync()
+	a.sync()
+
+	for _, d := range []*device{a, b} {
+		doc := d.read("Board.excalidraw")
+		parsed := parse(t, doc)
+		byID := map[string]obj{}
+		for _, raw := range parsed["elements"].([]any) {
+			e := raw.(obj)
+			byID[e["id"].(string)] = e
+		}
+		if len(byID) != 3 || byID["f1"]["name"] != "Intro" || byID["r1"]["frameId"] != "f1" {
+			t.Errorf("%s: frame and its shape not merged: %v", d.name, byID)
+		}
+		latex := byID["m1"]["customData"].(obj)["memobrain"].(obj)["latex"]
+		if latex != "b" {
+			t.Errorf("%s: formula source %v, want A's edit (b)", d.name, latex)
+		}
+		if key, _ := parsed["memobrain"].(obj); key["autoExport"] != "png" {
+			t.Errorf("%s: the per-drawing setting was lost: %v", d.name, parsed["memobrain"])
+		}
+		if !d.exists("Board.excalidraw.png") || d.read(".memobrain/drawing.json") != `{"autoExport":"none"}` {
+			t.Errorf("%s: derived export or drawing settings missing: %v", d.name, sortedKeys(d.files()))
+		}
+	}
+	if len(a.conflicts)+len(b.conflicts) != 0 {
+		t.Error("no conflict expected")
+	}
+}
+
 func node(id string, x int, text string) obj {
 	return obj{"id": id, "type": "text", "x": x, "y": 0, "width": 200, "height": 80, "text": text}
 }

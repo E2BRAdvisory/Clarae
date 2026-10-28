@@ -6,7 +6,8 @@ import { commands, commandTitle, isEnabled, runCommand } from '../commands/regis
 import { useAppStore } from '../state/store';
 import { SCENE_ACTIONS } from './actions/registry';
 import { useDrawingSettings } from './settings';
-import { toolIds } from './sceneCommands';
+import { featureOfCommand, toolIds } from './sceneCommands';
+import { drawingFeatureOn } from '../state/managed';
 
 const RECENT_MAX = 6;
 const recentKey = (vaultId: string): string => `memobrain.drawing.tools.recent.${vaultId}`;
@@ -43,7 +44,7 @@ const shortTitle = (id: string): string => commandTitle(id).replace(/^[^:]+:\s*/
 function allEntries(): Entry[] {
   const group = new Map<string, string>(SCENE_ACTIONS.map((a) => [`drawing:${a.id}`, a.group]));
   return commands
-    .filter((c) => toolIds.has(c.id))
+    .filter((c) => toolIds.has(c.id) && drawingFeatureOn(featureOfCommand(c.id)))
     .map((c) => ({
       id: c.id,
       group: group.get(c.id) ?? (c.id.startsWith('drawing:insert-') ? 'insert' : 'tools'),

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"memobrain/apps/desktop/internal/parser"
@@ -14,6 +15,10 @@ import (
 
 // MaxSize is the soft size limit of a drawing (§M3-WP1): the editor warns above it.
 const MaxSize = 10 << 20
+
+// MaxImageSize is the soft limit of one entry of `files` (the data URL of an image): the editor
+// refuses larger images, so a bigger one comes from another tool and only earns a warning.
+const MaxImageSize = 10 << 20
 
 // Document is what the index keeps of a drawing.
 type Document struct {
@@ -23,6 +28,8 @@ type Document struct {
 	Links []parser.Link
 	// Elements counts the live (not deleted) elements.
 	Elements int
+	// Warnings are problems that do not block saving: an image above MaxImageSize.
+	Warnings []string
 }
 
 type element struct {
@@ -90,6 +97,17 @@ func Parse(data []byte) (Document, error) {
 		if l := strings.TrimSpace(el.Link); strings.HasPrefix(l, "[[") {
 			linkSrc = append(linkSrc, l)
 		}
+	}
+	var files map[string]struct {
+		DataURL string `json:"dataURL"`
+	}
+	if len(f.Files) > 0 && json.Unmarshal(f.Files, &files) == nil {
+		for id, fl := range files {
+			if len(fl.DataURL) > MaxImageSize {
+				doc.Warnings = append(doc.Warnings, fmt.Sprintf("image %q is larger than %d MB", id, MaxImageSize>>20))
+			}
+		}
+		sort.Strings(doc.Warnings)
 	}
 	doc.Text = strings.Join(texts, "\n")
 	// The Markdown parser reads the wikilinks; each source gets its own line.

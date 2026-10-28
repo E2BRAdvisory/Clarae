@@ -130,3 +130,13 @@ export const useManaged = create<ManagedStore>((set, get) => ({
 export function featureOn(features: Record<string, boolean>, name: string): boolean {
   return features[name] ?? true;
 }
+
+/** The sub-flags of the drawing editor; each only applies while "drawings" is on. */
+export type DrawingFeature =
+  'drawing_latex' | 'drawing_mermaid' | 'drawing_auto_export' | 'drawing_actions';
+
+/** Whether a function of the drawing editor is available (the live flags of the open vault). */
+export function drawingFeatureOn(name?: DrawingFeature): boolean {
+  const f = useManaged.getState().features;
+  return featureOn(f, 'drawings') && (name === undefined || featureOn(f, name));
+}

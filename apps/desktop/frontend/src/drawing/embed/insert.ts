@@ -20,7 +20,7 @@ export const IMAGE_MIMES = [
 ] as const;
 
 /** Images above this size are refused: they would bloat the drawing (Spec §2.7.1: 10 MB). */
-export const MAX_IMAGE_BYTES = 8 << 20;
+export const MAX_IMAGE_BYTES = 10 << 20;
 const DEFAULT_WIDTH = 400;
 
 export const isImagePath = (path: string): boolean =>

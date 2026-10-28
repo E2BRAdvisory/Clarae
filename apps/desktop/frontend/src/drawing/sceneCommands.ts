@@ -3,7 +3,7 @@
 import i18next from 'i18next';
 import type { Command } from '../commands/registry';
 import { dialog } from '../ui/dialogs';
-import { featureOn, useManaged } from '../state/managed';
+import { drawingFeatureOn, type DrawingFeature } from '../state/managed';
 import { getSceneController } from './actions/active';
 import { SCENE_ACTIONS } from './actions/registry';
 import {
@@ -16,6 +16,7 @@ import {
   deconstructIntoNewDrawing,
   refreshNoteCards,
   setDrawingAutoExport,
+  setSlideNotes,
 } from './embed/tools';
 import { exportLibrary, importLegacyDrawing, importLibrary } from './library/commands';
 import { latexOf } from './latex/insert';
@@ -73,7 +74,7 @@ async function runAction(action: SceneAction): Promise<void> {
 
 function enabled(action: SceneAction): boolean {
   const c = getSceneController();
-  if (!c || !featureOn(useManaged.getState().features, 'drawings') || !c.canEdit()) return false;
+  if (!c || !drawingFeatureOn('drawing_actions') || !c.canEdit()) return false;
   return selectedElements(c.context()).length >= action.needs;
 }
 
@@ -85,10 +86,11 @@ export const sceneCommands: Command[] = SCENE_ACTIONS.map((a) => ({
   run: () => runAction(a),
 }));
 
-const drawingFeature = (): boolean => featureOn(useManaged.getState().features, 'drawings');
-const editable = (): boolean => {
+const drawingFeature = (): boolean => drawingFeatureOn();
+/** An editable drawing is open and the function (a sub-flag, or just "drawings") is available. */
+const editable = (flag?: DrawingFeature) => (): boolean => {
   const c = getSceneController();
-  return !!c && c.canEdit() && drawingFeature();
+  return !!c && c.canEdit() && drawingFeatureOn(flag);
 };
 
 /** The selected element when it is a LaTeX formula (and only it). */
@@ -107,63 +109,65 @@ export const toolCommands: Command[] = [
     id: 'drawing:insert-latex',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable('drawing_latex'),
     run: () => getSceneController()?.openTool('latex'),
   },
   {
     id: 'drawing:insert-mermaid',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable('drawing_mermaid'),
     run: () => getSceneController()?.openTool('mermaid'),
   },
   {
     id: 'drawing:insert-image',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable(),
     run: () => insertImageIntoDrawing(),
   },
   {
     id: 'drawing:insert-drawing',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable(),
     run: () => insertDrawingIntoDrawing(),
   },
   {
     id: 'drawing:insert-note',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable(),
     run: () => insertNoteIntoDrawing(),
   },
   {
     id: 'drawing:create-note-and-embed',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable('drawing_actions'),
     run: () => createNoteAndEmbed(),
   },
   {
     id: 'drawing:deconstruct-into-new-drawing',
     group: 'editor',
     defaults: [],
-    enabled: () => editable() && (getSceneController()?.context().selected.length ?? 0) > 0,
+    enabled: () =>
+      editable('drawing_actions') && (getSceneController()?.context().selected.length ?? 0) > 0,
     run: () => deconstructIntoNewDrawing(),
   },
   {
     id: 'drawing:refresh-note-cards',
     group: 'editor',
     defaults: [],
-    enabled: () => editable() && (getSceneController()?.context().selected.length ?? 0) > 0,
+    enabled: () =>
+      editable('drawing_actions') && (getSceneController()?.context().selected.length ?? 0) > 0,
     run: () => refreshNoteCards(),
   },
   {
     id: 'drawing:set-auto-export',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable('drawing_auto_export'),
     run: () => setDrawingAutoExport(),
   },
   {
@@ -174,17 +178,31 @@ export const toolCommands: Command[] = [
     run: () => getSceneController()?.startSlideshow(),
   },
   {
+    id: 'drawing:set-slide-notes',
+    group: 'editor',
+    defaults: [],
+    enabled: editable(),
+    run: () => setSlideNotes(),
+  },
+  {
+    id: 'drawing:describe',
+    group: 'editor',
+    defaults: [],
+    enabled: () => !!getSceneController() && drawingFeature(),
+    run: () => getSceneController()?.openTool('describe'),
+  },
+  {
     id: 'drawing:tools-panel',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable(),
     run: () => getSceneController()?.openTool('tools'),
   },
   {
     id: 'drawing:import-library',
     group: 'editor',
     defaults: [],
-    enabled: editable,
+    enabled: editable(),
     run: () => importLibrary(),
   },
   {
@@ -205,7 +223,7 @@ export const toolCommands: Command[] = [
     id: 'drawing:edit-latex',
     group: 'editor',
     defaults: [],
-    enabled: () => editable() && selectedFormula() !== null,
+    enabled: () => editable('drawing_latex') && selectedFormula() !== null,
     run: () => {
       const id = selectedFormula();
       if (id) getSceneController()?.openTool('latex', id);
@@ -217,3 +235,18 @@ export const toolCommands: Command[] = [
 export const toolIds: ReadonlySet<string> = new Set(
   [...sceneCommands, ...toolCommands].map((c) => c.id).filter((id) => id !== 'drawing:tools-panel'),
 );
+
+/** The sub-flag a command of the tools panel depends on (none: only "drawings"). */
+export function featureOfCommand(id: string): DrawingFeature | undefined {
+  if (id.endsWith('-latex')) return 'drawing_latex';
+  if (id.endsWith('-mermaid')) return 'drawing_mermaid';
+  if (id.endsWith('-auto-export')) return 'drawing_auto_export';
+  if (SCENE_ACTIONS.some((a) => `drawing:${a.id}` === id)) return 'drawing_actions';
+  if (
+    ['create-note-and-embed', 'deconstruct-into-new-drawing', 'refresh-note-cards'].some(
+      (x) => id === `drawing:${x}`,
+    )
+  )
+    return 'drawing_actions';
+  return undefined;
+}

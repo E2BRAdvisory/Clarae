@@ -18,3 +18,16 @@ func TestFlags(t *testing.T) {
 		t.Error("Enabled")
 	}
 }
+
+func TestDrawingSubFlags(t *testing.T) {
+	f := Flags(nil)
+	for _, k := range []string{"drawing_latex", "drawing_mermaid", "drawing_auto_export", "drawing_actions"} {
+		if !f[k] {
+			t.Errorf("%s must be on by default", k)
+		}
+	}
+	cfg := map[string]any{"features": map[string]any{"drawing_latex": false, "drawing_mermaid": false}}
+	if Enabled(cfg, "drawing_latex") || Enabled(cfg, "drawing_mermaid") || !Enabled(cfg, "drawing_actions") || !Enabled(cfg, "drawings") {
+		t.Error("a sub-flag switches off only its own function")
+	}
+}

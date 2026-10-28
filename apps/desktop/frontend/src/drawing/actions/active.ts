@@ -34,7 +34,7 @@ export interface SceneController {
   startSlideshow(): void;
 }
 
-export type ToolKind = 'latex' | 'mermaid' | 'tools';
+export type ToolKind = 'latex' | 'mermaid' | 'tools' | 'describe';
 
 let active: SceneController | null = null;
 

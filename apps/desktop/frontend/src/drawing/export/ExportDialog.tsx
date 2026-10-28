@@ -1,7 +1,7 @@
 // The export dialog of the drawing editor: format, scale, theme, padding, embedded scene and what
 // to export (everything, the selection or one frame). The result is copied, saved next to the
 // drawing in the vault, or saved anywhere through the native "save as" dialog.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ExportOptions, ExportScope } from './options';
 
@@ -16,6 +16,9 @@ interface Props {
 }
 
 export function ExportDialog({ initial, selectionCount, frames, onClose, onExport }: Props) {
+  const modal = useRef<HTMLDivElement>(null);
+  // Focus moves into the dialog (so Escape and Tab work from the first key press).
+  useEffect(() => modal.current?.focus(), []);
   const { t } = useTranslation();
   const [o, setO] = useState<ExportOptions>(initial);
   const patch = (p: Partial<ExportOptions>) => setO((cur) => ({ ...cur, ...p }));
@@ -35,7 +38,17 @@ export function ExportDialog({ initial, selectionCount, frames, onClose, onExpor
   };
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal" role="dialog" aria-modal="true" aria-label={t('drawing.export')}>
+      <div
+        ref={modal}
+        tabIndex={-1}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('drawing.export')}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+        }}
+      >
         <h2>{t('drawing.export')}</h2>
         <div className="row">
           <label htmlFor="export-scope">{t('drawing.exportScope')}</label>

@@ -34,10 +34,15 @@ describe('slidesOf', () => {
   it('falls back to reading order for unnamed frames', () => {
     const els = [frame('c', null, 0, 500), frame('b', null, 400, 0), frame('a', null, 0, 0)];
     expect(slidesOf(els)).toEqual([
-      { id: 'a', name: 'Frame 1' },
-      { id: 'b', name: 'Frame 2' },
-      { id: 'c', name: 'Frame 3' },
+      { id: 'a', name: 'Frame 1', notes: '' },
+      { id: 'b', name: 'Frame 2', notes: '' },
+      { id: 'c', name: 'Frame 3', notes: '' },
     ]);
+  });
+
+  it('carries the presenter notes of a frame', () => {
+    const els = [frame('a', 'A', 0, 0, { customData: { memobrain: { notes: 'say hello' } } })];
+    expect(slidesOf(els)[0]?.notes).toBe('say hello');
   });
 
   it('puts explicitly numbered slides first, in that order', () => {

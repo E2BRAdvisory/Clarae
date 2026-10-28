@@ -81,3 +81,14 @@ func TestParseIndexesFrameNames(t *testing.T) {
 		t.Errorf("live elements = %d", d.Elements)
 	}
 }
+
+func TestParseWarnsAboutOversizedImages(t *testing.T) {
+	big := strings.Repeat("A", MaxImageSize+1)
+	doc, err := Parse([]byte(`{"type":"excalidraw","elements":[],"files":{"big":{"dataURL":"` + big + `"},"ok":{"dataURL":"data:x"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 1 || !strings.Contains(doc.Warnings[0], `"big"`) {
+		t.Errorf("warnings = %v", doc.Warnings)
+	}
+}

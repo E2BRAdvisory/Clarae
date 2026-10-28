@@ -15,7 +15,11 @@
         "web_viewer": { "type": "boolean" },
         "drawings": { "type": "boolean" },
         "canvas": { "type": "boolean" },
-        "sharing": { "type": "boolean" }
+        "sharing": { "type": "boolean" },
+        "drawing_latex": { "type": "boolean" },
+        "drawing_mermaid": { "type": "boolean" },
+        "drawing_auto_export": { "type": "boolean" },
+        "drawing_actions": { "type": "boolean" }
       }
     },
     "editor": {

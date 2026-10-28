@@ -6,7 +6,15 @@ import type { SceneElement } from './actions/types';
 export interface Slide {
   id: string;
   name: string;
+  /** Presenter notes (`customData.memobrain.notes` of the frame). */
+  notes: string;
 }
+
+/** The presenter notes stored on a frame. */
+export const slideNotes = (e: SceneElement): string => {
+  const mb = (e.customData as { memobrain?: { notes?: unknown } } | undefined)?.memobrain;
+  return typeof mb?.notes === 'string' ? mb.notes : '';
+};
 
 const slideNumber = (e: SceneElement): number | null => {
   const mb = (e.customData as { memobrain?: { slide?: unknown } } | undefined)?.memobrain;
@@ -33,7 +41,11 @@ export function slidesOf(elements: readonly SceneElement[]): Slide[] {
       byPosition(a, b)
     );
   });
-  return sorted.map((e, i) => ({ id: e.id, name: name(e) || `Frame ${i + 1}` }));
+  return sorted.map((e, i) => ({
+    id: e.id,
+    name: name(e) || `Frame ${i + 1}`,
+    notes: slideNotes(e),
+  }));
 }
 
 /** The slide `step` away from `index`, stopping at the first and the last. */

@@ -1,0 +1,21 @@
+{
+ "type": "excalidraw",
+ "elements": [
+  {
+   "id": "ib",
+   "type": "image",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "B"
+  }
+ ],
+ "files": {
+  "B": {
+   "id": "B",
+   "mimeType": "image/png",
+   "dataURL": "data:image/png;base64,BBBB",
+   "created": 2
+  }
+ }
+}

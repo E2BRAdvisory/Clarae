@@ -87,3 +87,41 @@ func TestConvertObsidianMDErrors(t *testing.T) {
 		t.Error("broken JSON must be rejected")
 	}
 }
+
+func TestConvertObsidianMDFormulas(t *testing.T) {
+	plain := `{"type":"excalidraw","elements":[` +
+		`{"id":"f1","type":"image","fileId":"tex1","customData":{"keep":true},"versionNonce":2147483647},` +
+		`{"id":"f2","type":"image","fileId":"other"}],"appState":{},"files":{}}`
+	md := "## Embedded Files\ntex1: $$\\frac{a}{b}$$\n\n## Drawing\n```json\n" + plain + "\n```\n"
+	out, err := ConvertObsidianMD([]byte(md), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Elements []struct {
+			ID         string `json:"id"`
+			CustomData struct {
+				Keep      bool `json:"keep"`
+				Memobrain struct {
+					Kind  string `json:"kind"`
+					Latex string `json:"latex"`
+				} `json:"memobrain"`
+			} `json:"customData"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal(out, &s); err != nil {
+		t.Fatal(err)
+	}
+	if m := s.Elements[0].CustomData.Memobrain; m.Kind != "latex" || m.Latex != `\frac{a}{b}` {
+		t.Errorf("formula not tagged: %s", out)
+	}
+	if !s.Elements[0].CustomData.Keep {
+		t.Error("existing customData lost")
+	}
+	if s.Elements[1].CustomData.Memobrain.Kind != "" {
+		t.Error("an image that is not a formula was tagged")
+	}
+	if !strings.Contains(string(out), "2147483647") {
+		t.Error("numbers must round-trip unchanged")
+	}
+}

@@ -5,7 +5,14 @@
 package features
 
 // Known lists the flags the client understands.
-var Known = []string{"audio_recorder", "web_viewer", "drawings", "canvas", "sharing"}
+//
+// The drawing_* flags refine "drawings": each hides one family of functions of the drawing
+// editor (formulas, Mermaid diagrams, auto-export, the scene actions) and has no effect while
+// "drawings" itself is off.
+var Known = []string{
+	"audio_recorder", "web_viewer", "drawings", "canvas", "sharing",
+	"drawing_latex", "drawing_mermaid", "drawing_auto_export", "drawing_actions",
+}
 
 // Defaults are the flags of an unmanaged client: everything the product ships is on,
 // except what is off by default in the product defaults (audio recorder, web viewer).
@@ -15,6 +22,11 @@ var Defaults = map[string]bool{
 	"drawings":       true,
 	"canvas":         true,
 	"sharing":        true,
+
+	"drawing_latex":       true,
+	"drawing_mermaid":     true,
+	"drawing_auto_export": true,
+	"drawing_actions":     true,
 }
 
 // Flags resolves every known flag from the configuration.

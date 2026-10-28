@@ -72,9 +72,9 @@ func lzDecompress(length, reset int, next func(int) int) ([]uint16, error) {
 	var c []uint16
 	switch read(2) {
 	case 0:
-		c = []uint16{uint16(read(8))}
+		c = []uint16{uint16(read(8) & 0xFFFF)}
 	case 1:
-		c = []uint16{uint16(read(16))}
+		c = []uint16{uint16(read(16) & 0xFFFF)}
 	default:
 		return nil, nil
 	}
@@ -88,11 +88,11 @@ func lzDecompress(length, reset int, next func(int) int) ([]uint16, error) {
 		code := read(numBits)
 		switch code {
 		case 0:
-			dict = append(dict, []uint16{uint16(read(8))})
+			dict = append(dict, []uint16{uint16(read(8) & 0xFFFF)})
 			code = len(dict) - 1
 			enlargeIn--
 		case 1:
-			dict = append(dict, []uint16{uint16(read(16))})
+			dict = append(dict, []uint16{uint16(read(16) & 0xFFFF)})
 			code = len(dict) - 1
 			enlargeIn--
 		case 2:
@@ -127,7 +127,9 @@ func lzDecompress(length, reset int, next func(int) int) ([]uint16, error) {
 
 var (
 	drawingBlockRe = regexp.MustCompile("(?s)```(compressed-json|json)[ \t]*\r?\n(.*?)```")
-	embeddedRe     = regexp.MustCompile(`(?m)^([A-Za-z0-9_-]+):\s*!?\[\[([^\]]+)\]\]`)
+	// "id: $$\\frac{a}{b}$$" under "## Embedded Files": a formula of the plugin (its image is not stored).
+	formulaRe  = regexp.MustCompile(`(?ms)^([A-Za-z0-9_-]+):\s*\$\$(.+?)\$\$[ \t]*$`)
+	embeddedRe = regexp.MustCompile(`(?m)^([A-Za-z0-9_-]+):\s*!?\[\[([^\]]+)\]\]`)
 )
 
 // ImageReader returns the bytes of the vault file a "## Embedded Files" link names, and its MIME type.
@@ -214,6 +216,17 @@ func ConvertObsidianMD(md []byte, images ImageReader) ([]byte, error) {
 			scene.Files[id] = f
 		}
 	}
+	if formulas := formulaRe.FindAllStringSubmatch(text, -1); len(formulas) > 0 {
+		tex := make(map[string]string, len(formulas))
+		for _, m := range formulas {
+			tex[m[1]] = strings.TrimSpace(m[2])
+		}
+		els, err := tagFormulas(scene.Elements, tex)
+		if err != nil {
+			return nil, err
+		}
+		scene.Elements = els
+	}
 	if len(scene.AppState) == 0 {
 		scene.AppState = json.RawMessage(`{}`)
 	}
@@ -226,4 +239,30 @@ func ConvertObsidianMD(md []byte, images ImageReader) ([]byte, error) {
 		"files":    scene.Files,
 	}
 	return json.MarshalIndent(out, "", "  ")
+}
+
+// tagFormulas marks the image elements that show a formula with its TeX in
+// `customData.memobrain` ({kind: "latex"}), the way the editor's LaTeX command does. The rendered
+// image is not converted here: the editor draws it when it opens the drawing.
+func tagFormulas(elements json.RawMessage, tex map[string]string) (json.RawMessage, error) {
+	var els []map[string]any
+	dec := json.NewDecoder(strings.NewReader(string(elements)))
+	dec.UseNumber()
+	if err := dec.Decode(&els); err != nil {
+		return nil, fmt.Errorf("invalid: the drawing elements are not a list: %w", err)
+	}
+	for _, e := range els {
+		id, _ := e["fileId"].(string)
+		src, ok := tex[id]
+		if e["type"] != "image" || !ok {
+			continue
+		}
+		cd, _ := e["customData"].(map[string]any)
+		if cd == nil {
+			cd = map[string]any{}
+		}
+		cd["memobrain"] = map[string]any{"kind": "latex", "latex": src, "w0": 0, "color": "#000000"}
+		e["customData"] = cd
+	}
+	return json.Marshal(els)
 }

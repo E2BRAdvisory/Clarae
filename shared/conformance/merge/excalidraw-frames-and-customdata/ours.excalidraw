@@ -1,0 +1,30 @@
+{
+ "type": "excalidraw",
+ "elements": [
+  {
+   "id": "f",
+   "type": "frame",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "name": "Slide 1",
+   "x": 0,
+   "y": 0
+  },
+  {
+   "id": "i",
+   "type": "image",
+   "version": 2,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "F1",
+   "customData": {
+    "memobrain": {
+     "kind": "latex",
+     "latex": "b"
+    }
+   }
+  }
+ ],
+ "files": {}
+}

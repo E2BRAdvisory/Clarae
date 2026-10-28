@@ -1,0 +1,35 @@
+{
+ "type": "excalidraw",
+ "elements": [
+  {
+   "id": "ib",
+   "type": "image",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "B"
+  },
+  {
+   "id": "ia",
+   "type": "image",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "A"
+  }
+ ],
+ "files": {
+  "A": {
+   "id": "A",
+   "mimeType": "image/png",
+   "dataURL": "data:image/png;base64,AAAA",
+   "created": 1
+  },
+  "B": {
+   "id": "B",
+   "mimeType": "image/png",
+   "dataURL": "data:image/png;base64,BBBB",
+   "created": 2
+  }
+ }
+}

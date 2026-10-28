@@ -404,7 +404,9 @@
     "drawing_tools_panel": "Disegno: apri il pannello strumenti",
     "drawing_import_legacy": "Disegno: converti un .excalidraw.md di Obsidian in un disegno",
     "drawing_import_library": "Disegno: importa una libreria di forme (.excalidrawlib)",
-    "drawing_export_library": "Disegno: esporta la libreria di forme (.excalidrawlib)"
+    "drawing_export_library": "Disegno: esporta la libreria di forme (.excalidrawlib)",
+    "drawing_set_slide_notes": "Disegno: modifica le note del relatore della cornice selezionata",
+    "drawing_describe": "Disegno: descrivi il disegno come testo"
   },
   "sync": {
     "title": "Sync",
@@ -539,7 +541,9 @@
       "refreshTitle": "Aggiorna le schede",
       "refreshNothing": "Nulla da aggiornare: seleziona schede le cui note sono cambiate.",
       "autoTitle": "Esportazione automatica di questo disegno",
-      "autoFollow": "Segui l'impostazione del vault"
+      "autoFollow": "Segui l'impostazione del vault",
+      "notesTitle": "Note del relatore",
+      "notesPickFrame": "Seleziona prima una sola cornice."
     },
     "invalid": "Questo file non è un disegno Excalidraw valido: {{error}}",
     "tooLarge": "Questo disegno supera i 10 MB: salvataggio e sincronizzazione possono essere lenti. Valuta di dividerlo.",
@@ -702,6 +706,28 @@
       "imported": "{{count}} forme importate nella libreria.",
       "exported": "Libreria salvata come {{path}}.",
       "emptyLibrary": "La libreria è vuota."
+    },
+    "describe": {
+      "title": "Descrizione del disegno",
+      "empty": "Il disegno è vuoto.",
+      "contents": "Contenuto",
+      "frames": "Cornici (diapositive) in ordine",
+      "texts": "Testi, dall’alto in basso",
+      "links": "Collegamenti",
+      "count_one": "{{count}} {{type}}",
+      "count_other": "{{count}} {{type}}",
+      "types": {
+        "rectangle": "rettangolo/i",
+        "ellipse": "ellisse/i",
+        "diamond": "rombo/i",
+        "arrow": "freccia/e",
+        "line": "linea/e",
+        "freedraw": "tratto/i a mano libera",
+        "text": "testo/i",
+        "image": "immagine/i",
+        "frame": "cornice/i",
+        "embeddable": "pagina/e incorporata/e"
+      }
     }
   },
   "canvas": {

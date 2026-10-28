@@ -351,6 +351,9 @@ func (ix *Indexer) prepareStructured(e vault.Entry, prev fileRow, title string) 
 		if perr != nil {
 			ix.logger.Warn().Err(perr).Str("path", e.Path).Msg("drawing not indexed")
 		}
+		for _, w := range d.Warnings {
+			ix.logger.Warn().Str("path", e.Path).Msg("drawing: " + w)
+		}
 		text, found = d.Text, d.Links
 	} else {
 		d, perr := canvas.Extract(content.Data)

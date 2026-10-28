@@ -1,0 +1,40 @@
+{
+ "type": "excalidraw",
+ "elements": [
+  {
+   "id": "f",
+   "type": "frame",
+   "version": 2,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "name": "Slide 2",
+   "x": 0,
+   "y": 0
+  },
+  {
+   "id": "i",
+   "type": "image",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "F1",
+   "customData": {
+    "memobrain": {
+     "kind": "latex",
+     "latex": "a"
+    }
+   }
+  },
+  {
+   "id": "r",
+   "type": "rectangle",
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "frameId": "f",
+   "x": 10,
+   "y": 10
+  }
+ ],
+ "files": {}
+}

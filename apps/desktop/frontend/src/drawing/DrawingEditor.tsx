@@ -3,6 +3,7 @@
 // the last read as write precondition (same conflict handling as notes).
 import '@excalidraw/excalidraw/index.css';
 import * as ExcalidrawLib from '@excalidraw/excalidraw';
+import { excalidrawLang } from './lang';
 import { Excalidraw, restoreElements, serializeAsJSON } from '@excalidraw/excalidraw';
 import type { ExcalidrawImperativeAPI, LibraryItems } from '@excalidraw/excalidraw/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -18,6 +19,7 @@ import { previewWanted } from '../preview/hover';
 import { scheduleHidePreview, schedulePreview } from '../preview/popover';
 import { openExternal } from '../util/external';
 import { commandForEvent } from '../commands/registry';
+import { drawingFeatureOn } from '../state/managed';
 import { useSettings } from '../state/settings';
 import { defaultItemState, useDrawingSettings } from './settings';
 import { beginPrint, endPrint } from '../export/commands';
@@ -41,6 +43,8 @@ import { dropVaultFile } from './embed/commands';
 import { latexOf, latexPatch } from './latex/insert';
 import { mermaidPatch, parseMermaid } from './mermaid/insert';
 import { TextToolDialog } from './TextToolDialog';
+import { DescribeDialog } from './DescribeDialog';
+import { describeScene } from './describe';
 import { ToolsPanel } from './ToolsPanel';
 import { moveSlide, slideKey, slidesOf, type Slide } from './slides';
 import { applyPatch } from './actions/apply';
@@ -218,6 +222,36 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   useEffect(() => {
     canEdit.current = !locked && !present && !viewing;
   }, [locked, present, viewing]);
+  // Formulas imported from Obsidian (.excalidraw.md) carry their TeX but no rendered image: draw
+  // them once the drawing is open. The same heals a formula whose file went missing.
+  const healedFormulas = useRef('');
+  useEffect(() => {
+    if (!excalidraw || doc.status !== 'ready' || healedFormulas.current === path) return;
+    if (!drawingFeatureOn('drawing_latex')) return;
+    healedFormulas.current = path;
+    const files = excalidraw.getFiles();
+    const missing = excalidraw
+      .getSceneElements()
+      .filter((e) => e.type === 'image' && latexOf(e as never) && !files[String(e.fileId)]);
+    if (missing.length === 0 || !canEdit.current) return;
+    void (async () => {
+      try {
+        for (const e of missing) {
+          const patch = await latexPatch(latexOf(e)?.latex ?? '', {
+            center: { x: 0, y: 0 },
+            existing: e,
+          });
+          excalidraw.addFiles(Object.values(patch.files ?? {}) as never);
+          excalidraw.updateScene({
+            elements: applyPatch(excalidraw.getSceneElementsIncludingDeleted(), patch) as never,
+          });
+        }
+      } catch {
+        /* invalid TeX stays as the empty image: the LaTeX dialog shows MathJax's message */
+      }
+    })();
+  }, [excalidraw, doc.status, path]);
+
   /** Starts the presentation: the frames become the slides and the laser pointer the tool. */
   const startEvent = useRef<Event | null>(null);
   const startPresent = useCallback(() => {
@@ -436,7 +470,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   const onCanvasDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       const c = getSceneController();
-      if (!excalidraw || !c?.canEdit()) return;
+      if (!excalidraw || !c?.canEdit() || !drawingFeatureOn('drawing_latex')) return;
       const st = excalidraw.getAppState();
       const x = (e.clientX - st.offsetLeft) / st.zoom.value - st.scrollX;
       const y = (e.clientY - st.offsetTop) / st.zoom.value - st.scrollY;
@@ -600,6 +634,10 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   }, [doc.save]);
   useEffect(() => {
     if (doc.save !== 'saved' || !dirtySinceExport.current || locked) return;
+    if (!drawingFeatureOn('drawing_auto_export')) {
+      dirtySinceExport.current = false;
+      return;
+    }
     const cfg = useDrawingSettings.getState().settings;
     // A drawing can override the vault's auto-export choice (stored in the file itself).
     const own = (extra.current['memobrain'] as { autoExport?: unknown } | undefined)?.autoExport;
@@ -721,7 +759,10 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             scrollToContent: true,
           }}
           theme={theme}
-          langCode={i18n.language.startsWith('it') ? 'it-IT' : 'en'}
+          langCode={excalidrawLang(
+            i18n.language,
+            ExcalidrawLib.languages.map((l) => l.code),
+          )}
           viewModeEnabled={readOnly}
           zenModeEnabled={zen || present}
           onChange={onChange}
@@ -760,6 +801,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             <span aria-live="polite">
               {t('drawing.slideshow.of', { n: slide + 1, total: deck.length })}
             </span>
+            {deck[slide]?.notes && <span className="slide-notes">{deck[slide]?.notes}</span>}
             <button
               aria-label={t('drawing.slideshow.next')}
               disabled={slide === deck.length - 1}
@@ -771,6 +813,12 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         )}
       </div>
       {tool?.kind === 'tools' && <ToolsPanel onClose={() => setTool(null)} />}
+      {tool?.kind === 'describe' && excalidraw && (
+        <DescribeDialog
+          description={describeScene(excalidraw.getSceneElements())}
+          onClose={() => setTool(null)}
+        />
+      )}
       {tool?.kind === 'latex' && (
         <TextToolDialog
           title={t(tool.editId ? 'drawing.latex.editTitle' : 'drawing.latex.insertTitle')}
