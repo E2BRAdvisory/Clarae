@@ -14,9 +14,9 @@ async function start() {
   applyTheme(loadTheme());
 
   let auth: AuthService;
-  // `import.meta.env.VITE_E2E` is a build-time constant: in production this branch and
+  // `import.meta.env.MEMOBRAIN_E2E` is a build-time constant: in production this branch and
   // the e2e module are removed from the bundle.
-  if (import.meta.env.VITE_E2E) {
+  if (import.meta.env.MEMOBRAIN_E2E) {
     auth = (await import('./auth/e2e')).createE2EAuth();
   } else {
     auth = createOidcAuth();

@@ -1,6 +1,6 @@
 // Shared consistency checks for the i18n resource pairs (en/it) of the Web UI and the desktop
 // client. Pure functions with no Node dependency: the tests feed them the JSON resources and the
-// source files (read with Vite's `import.meta.glob(..., { query: '?raw' })`).
+// source files (read with the test runner's `import.meta.glob(..., { query: '?raw' })`).
 
 export type Resource = { [key: string]: string | Resource };
 

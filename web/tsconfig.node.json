@@ -12,5 +12,5 @@
     "allowSyntheticDefaultImports": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["vite.config.ts", "vite-plugin-sri.ts"]
+  "include": ["vitest.config.ts"]
 }

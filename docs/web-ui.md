@@ -1,6 +1,6 @@
 # Web UI (M4-WP5)
 
-Single page application React 19 + TypeScript (Vite), compilata e incorporata nel binario cloud. In M4 contiene solo l'**area utente**; la console admin arriva in M5 (`/admin` è un segnaposto visibile solo al ruolo realm `memobrain-admin`).
+Single page application React 19 + TypeScript (esbuild, ADR-0025), compilata e incorporata nel binario cloud. In M4 contiene solo l'**area utente**; la console admin arriva in M5 (`/admin` è un segnaposto visibile solo al ruolo realm `memobrain-admin`).
 
 ## Struttura
 
@@ -25,16 +25,16 @@ Rotte: `/usage` (Spazio utilizzato), `/vaults`, `/devices`, `/shares`, `/admin` 
 `web-embed` risponde con `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' <origine dell'issuer>; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'`, più `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy`. HSTS non è impostato dall'app (il TLS termina all'ingress).
 
 - Niente script o stile inline: la barra quota usa `<progress>` (nativo), il build non emette `<style>`/`style=`, `modulePreload.polyfill` è disattivato.
-- **SRI**: il plugin `web/vite-plugin-sri.ts` aggiunge `integrity="sha384-…"` e `crossorigin` a script e stylesheet di `index.html` dopo la scrittura del bundle.
+- **SRI**: lo script `web/scripts/esbuild.mjs` (plugin `index-html`) aggiunge `integrity="sha384-…"` e `crossorigin` a script e stylesheet di `index.html` dopo la scrittura del bundle.
 - Cache: `/assets/*` (nome con hash) `public, max-age=31536000, immutable`; `index.html` e gli altri file `no-cache`. Percorsi non-API senza estensione → `index.html` (fallback SPA); file mancante con estensione → 404; `/api/*` non è mai oscurato (404 `problem+json` dell'API).
 - Il router monta la SPA nel `NotFound` (`httpserver.Deps.WebUI`), quindi `/api/*`, `/metrics` e `/events` restano invariati.
 
-Hook di test OIDC: con `VITE_E2E=1` (solo `vite dev`/Playwright) `main.tsx` carica `auth/e2e.ts`, che legge l'utente da `sessionStorage['memobrain.e2e.user']`. `import.meta.env.VITE_E2E` è una costante di build: nei build di produzione il ramo e il modulo spariscono (verificabile con `grep -r "memobrain.e2e" web/dist`).
+Hook di test OIDC: con `MEMOBRAIN_E2E=1` (solo dev server/Playwright) `main.tsx` carica `auth/e2e.ts`, che legge l'utente da `sessionStorage['memobrain.e2e.user']`. `import.meta.env.MEMOBRAIN_E2E` è una costante (`define` di esbuild) di build: nei build di produzione il ramo e il modulo spariscono (verificabile con `grep -r "memobrain.e2e" web/dist`).
 
 ## Comandi
 
 ```sh
-make dev-web          # vite su :5174, proxy /api -> :18081 (serve make stack-up + make dev-cloud)
+make dev-web          # esbuild su :5174, proxy /api -> :18081 (serve make stack-up + make dev-cloud)
 make web-build        # build + copia in services/cloud/web-embed/dist (poi make build-cloud)
 make web-clean        # ripristina il placeholder index.html (richiede il file tracciato in git)
 yarn workspace @memobrain/web run test     # Vitest + Testing Library

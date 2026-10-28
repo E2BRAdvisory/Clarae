@@ -1,5 +1,5 @@
 // Test double for the identity layer. It is only reachable from main.tsx behind
-// `import.meta.env.VITE_E2E`, which Vite replaces with a constant: production
+// `import.meta.env.MEMOBRAIN_E2E`, which esbuild replaces with a constant: production
 // builds drop this module entirely (checked by scripts in docs/web-ui.md).
 import type { AuthService, AuthUser } from './types';
 
