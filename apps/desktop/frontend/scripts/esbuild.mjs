@@ -42,6 +42,52 @@ const urlImports = {
   },
 };
 
+/**
+ * Excalidraw is the zsviczian fork (the one behind the Obsidian plugin: lasso, bucket fill,
+ * draw-to-shape). Its only self-contained build is a classic script that reads React, ReactDOM and
+ * ReactJSXRuntime from globals and sets ExcalidrawLib. The virtual module below hands it the app's
+ * React, loads the script copied into dist/excalidraw-assets (same origin: script-src 'self') and
+ * re-exports the library by name, so `import { Excalidraw } from '@excalidraw/excalidraw'` works.
+ */
+const excalidrawDir = join(dirname(require.resolve('@excalidraw/excalidraw')), '..'); // .../dist
+const excalidrawExports = JSON.parse(
+  await readFile(join(root, 'scripts/excalidraw-exports.json'), 'utf8'),
+);
+const excalidrawFork = {
+  name: 'excalidraw-fork',
+  setup(build) {
+    build.onResolve({ filter: /^@excalidraw\/excalidraw$/ }, () => ({
+      path: 'excalidraw-fork',
+      namespace: 'excalidraw-fork',
+    }));
+    build.onResolve({ filter: /^@excalidraw\/excalidraw\/index\.css$/ }, () => ({
+      path: join(excalidrawDir, 'obsidian/excalidraw.production.min.css'),
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'excalidraw-fork' }, () => ({
+      resolveDir: root,
+      loader: 'js',
+      contents: `
+import * as React from 'react';
+import * as ReactDOM from 'react-dom';
+import * as ReactDOMClient from 'react-dom/client';
+import * as ReactJSXRuntime from 'react/jsx-runtime';
+Object.assign(globalThis, { React, ReactDOM: { ...ReactDOM, ...ReactDOMClient }, ReactJSXRuntime });
+if (!globalThis.ExcalidrawLib) {
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/excalidraw-assets/excalidraw.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('cannot load excalidraw.js'));
+    document.head.append(s);
+  });
+}
+const lib = globalThis.ExcalidrawLib;
+${excalidrawExports.map((k) => `export const ${k} = lib.${k};`).join('\n')}
+`,
+    }));
+  },
+};
+
 /** Writes dist/index.html with the hashed bundle and stylesheet, and copies Excalidraw's fonts. */
 const html = {
   name: 'index-html',
@@ -159,7 +205,7 @@ const options = {
     'process.env.NODE_ENV': JSON.stringify(dev ? 'development' : 'production'),
     'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : ''),
   },
-  plugins: dev ? [urlImports, html, reload] : [urlImports, html],
+  plugins: dev ? [urlImports, excalidrawFork, html, reload] : [urlImports, excalidrawFork, html],
 };
 
 // The graph layout runs in a worker: a separate, self-contained bundle at a fixed URL.
@@ -183,6 +229,10 @@ const workerOptions = {
 async function copyExcalidrawFonts() {
   const dir = dirname(require.resolve('@excalidraw/excalidraw')); // .../dist/prod
   await cp(join(dir, 'fonts'), join(dist, 'excalidraw-assets', 'fonts'), { recursive: true });
+  await cp(
+    join(excalidrawDir, 'obsidian/excalidraw.production.min.js'),
+    join(dist, 'excalidraw-assets', 'excalidraw.js'),
+  );
 }
 
 /**

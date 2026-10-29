@@ -7,7 +7,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@excalidraw/utils/*": ["../../../node_modules/@excalidraw/excalidraw/dist/types/utils/*"]
+      "@excalidraw/excalidraw": ["../../../node_modules/@excalidraw/excalidraw/types/excalidraw/index.d.ts"],
+      "@excalidraw/excalidraw/types": ["../../../node_modules/@excalidraw/excalidraw/types/excalidraw/types.d.ts"],
+      "@excalidraw/excalidraw/*": ["../../../node_modules/@excalidraw/excalidraw/types/excalidraw/*"],
+      "@excalidraw/utils/*": ["../../../node_modules/@excalidraw/excalidraw/types/utils/*"]
     }
   },
   "include": ["src", "wailsjs", "../../../packages/ui/src/i18nCheck.ts"]
