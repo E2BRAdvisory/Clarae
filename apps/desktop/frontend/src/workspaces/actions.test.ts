@@ -38,8 +38,8 @@ describe('workspaces', () => {
     layout = splitPane(layout, layout.activePane, 'row', 'live', 'C.md');
     useAppStore.setState({
       layout,
-      left: { open: true, tab: 'tags', width: 300 },
-      right: { open: true, tab: 'backlinks', width: 250 },
+      left: { open: true, tab: 'outline', width: 300 },
+      right: { open: true, tab: 'links', width: 250 },
     });
     const s = useAppStore.getState();
     await useWorkspaces
@@ -55,7 +55,7 @@ describe('workspaces', () => {
     useAppStore.setState({
       layout: emptyLayout(),
       left: { open: false, tab: 'files', width: 280 },
-      right: { open: false, tab: 'outline', width: 280 },
+      right: { open: false, tab: 'properties', width: 280 },
     });
     mock.vaults.get(vaultId)?.files.delete('C.md');
     await loadWorkspace(stored.workspaces[0]!);
@@ -65,8 +65,29 @@ describe('workspaces', () => {
       'A.md',
       'B.md',
     ]);
-    expect(after.left).toEqual({ open: true, tab: 'tags', width: 300 });
-    expect(after.right).toEqual({ open: true, tab: 'backlinks', width: 250 });
+    expect(after.left).toEqual({ open: true, tab: 'outline', width: 300 });
+    expect(after.right).toEqual({ open: true, tab: 'links', width: 250 });
+  });
+
+  it('maps the sidebar tabs of older workspaces to the current ones', async () => {
+    await openVault({ 'A.md': '' });
+    const legacy = (left: string, right: string) => ({
+      name: 'Old',
+      savedAt: 0,
+      layout: emptyLayout(),
+      left: { open: true, tab: left, width: 280 },
+      right: { open: true, tab: right, width: 280 },
+    });
+    await loadWorkspace(legacy('tags', 'outline'));
+    expect(useAppStore.getState().left.tab).toBe('files');
+    expect(useAppStore.getState().right.tab).toBe('properties');
+    await loadWorkspace(legacy('bookmarks', 'tags'));
+    expect(useAppStore.getState().left.tab).toBe('files');
+    expect(useAppStore.getState().right.tab).toBe('tags');
+    await loadWorkspace(legacy('files', 'backlinks'));
+    expect(useAppStore.getState().right.tab).toBe('links');
+    await loadWorkspace(legacy('files', 'bookmarks'));
+    expect(useAppStore.getState().right.tab).toBe('links');
   });
 
   it('writes pending edits before replacing the layout', async () => {

@@ -36,9 +36,9 @@ export const canEditBookmarks = (): boolean => {
   return !!v && !bookmarksReadOnly(v.id);
 };
 
-/** Shows the Bookmarks sidebar tab. */
+/** Shows the Links tab of the right sidebar, where the bookmarks are listed. */
 export function showBookmarks(): void {
-  store().setLeft({ open: true, tab: 'bookmarks' });
+  store().setRight({ open: true, tab: 'links' });
 }
 
 /** Adds an item unless the same target is already bookmarked; shows the list either way. */

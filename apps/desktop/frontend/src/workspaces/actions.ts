@@ -1,7 +1,7 @@
 // Save, load, rename, overwrite and delete workspaces (commands and dialogs).
 import i18next from 'i18next';
 import { api } from '../app/api';
-import { useAppStore, type LeftTab, type RightTab } from '../state/store';
+import { normalizeLeftTab, normalizeRightTab, useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
 import { flushAllNotes } from './flush';
 import {
@@ -56,8 +56,12 @@ export async function loadWorkspace(ws: SavedWorkspace): Promise<void> {
   const tree = await api.vault.listTree(vault.id);
   const layout = pruneMissing(ws.layout, new Set(tree.map((e) => e.path)));
   store().setLayout(layout);
-  store().setLeft({ open: ws.left.open, tab: ws.left.tab as LeftTab, width: ws.left.width });
-  store().setRight({ open: ws.right.open, tab: ws.right.tab as RightTab, width: ws.right.width });
+  store().setLeft({ open: ws.left.open, tab: normalizeLeftTab(ws.left.tab), width: ws.left.width });
+  store().setRight({
+    open: ws.right.open,
+    tab: normalizeRightTab(ws.right.tab),
+    width: ws.right.width,
+  });
 }
 
 async function chooseWorkspace(title: string): Promise<SavedWorkspace | null> {
