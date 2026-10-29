@@ -44,7 +44,7 @@ test('accept an invitation, open the mount as a viewer: named after the share an
   await page.getByRole('button', { name: 'Open' }).click();
 
   await expect(page.locator('.titlebar .title')).toHaveText('Team docs');
-  await expect(page.locator('.statusbar .badge.permission')).toHaveText('Viewer · read-only');
+  await expect(page.locator('.vault-status .badge.permission')).toHaveText('Viewer · read-only');
   await page.locator('.tree .node', { hasText: 'Plan' }).click();
   // Read-only: the editor refuses typing and the explorer offers no way to create anything.
   const editor = page.getByLabel('Note editor');
@@ -52,7 +52,13 @@ test('accept an invitation, open the mount as a viewer: named after the share an
   await editor.click();
   await page.keyboard.type('vandalism');
   await expect(editor).not.toContainText('vandalism');
-  await expect(page.getByRole('button', { name: 'New note' })).toBeDisabled();
+  // Both the ribbon button and the one of the file explorer are off on a read-only vault.
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Quick actions' })
+      .getByRole('button', { name: 'New note' }),
+  ).toBeDisabled();
+  await expect(page.locator('.sidebar').getByRole('button', { name: 'New note' })).toBeDisabled();
 });
 
 test('an administrator locks a setting: it is disabled and says so', async ({ page }) => {

@@ -168,3 +168,19 @@ export function toggleTask(view: EditorView): boolean {
   view.dispatch({ changes, userEvent: 'input' });
   return true;
 }
+
+/**
+ * Inserts a horizontal rule (`---`, also the slide delimiter) below the current line, with a blank
+ * line before it so that it never turns the line above into a setext heading.
+ */
+export function insertSeparator(view: EditorView): boolean {
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  // Always after the line: on an empty line the blank above is already there, and the first line
+  // is never `---` (that would open a frontmatter block).
+  const text = line.text.trim() === '' ? '\n---\n' : '\n\n---\n';
+  view.dispatch({
+    changes: { from: line.to, insert: text },
+    selection: { anchor: line.to + text.length },
+  });
+  return true;
+}

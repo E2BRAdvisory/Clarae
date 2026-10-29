@@ -7,7 +7,7 @@ import { backendFor } from '../reading/ReadingView';
 import { useActiveNote } from '../state/activeNote';
 import { selectActivePath, useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
-import { printCss } from './css';
+import { printCss, standaloneCss } from './css';
 import { buildHtmlDocument } from './html';
 import { renderExportBody, type ExportBody } from './render';
 
@@ -118,6 +118,74 @@ export async function exportNotePdf(): Promise<void> {
     if (warn) await dialog.alert(t('title'), warn);
   } catch (e) {
     endPrint();
+    await dialog.error(e);
+  }
+}
+
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const IMAGE_WIDTH = 800;
+/** Largest canvas side that every web view accepts. */
+const MAX_CANVAS_SIDE = 16384;
+
+/** Draws the rendered note (fixed width, light, paper-like) on a canvas and returns it as PNG. */
+async function renderPng(bodyHtml: string): Promise<string> {
+  const article = new DOMParser().parseFromString(
+    `<article class="export-doc">${bodyHtml}</article>`,
+    'text/html',
+  ).body.firstElementChild as HTMLElement;
+  const style = document.createElementNS(XHTML, 'style');
+  style.textContent = `${standaloneCss()}\n.export-doc { background: #fff; color: #1f2328; }`;
+  const wrap = document.createElementNS(XHTML, 'div');
+  wrap.setAttribute('style', `width:${IMAGE_WIDTH}px;background:#fff`);
+  wrap.append(style, article);
+
+  // Measure in the live document (same stylesheet, scoped to .export-doc), off screen.
+  const probe = document.createElement('div');
+  probe.style.cssText = `position:fixed;left:-10000px;top:0;width:${IMAGE_WIDTH}px`;
+  probe.append(wrap.cloneNode(true));
+  document.body.append(probe);
+  await Promise.all(
+    [...probe.querySelectorAll('img')].map((i) => i.decode().catch(() => undefined)),
+  );
+  const height = Math.ceil(probe.scrollHeight);
+  probe.remove();
+  if (height > MAX_CANVAS_SIDE) throw new Error(t('imageTooTall'));
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${IMAGE_WIDTH}" height="${height}">` +
+    `<foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(wrap)}</foreignObject></svg>`;
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  await img.decode();
+
+  const scale = Math.min(2, MAX_CANVAS_SIDE / height);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(IMAGE_WIDTH * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error(t('imageFailed'));
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(scale, scale);
+  ctx.drawImage(img, 0, 0);
+  const url = canvas.toDataURL('image/png'); // throws if the web view tainted the canvas
+  return url.slice(url.indexOf(',') + 1);
+}
+
+/** Saves the note as one PNG image chosen in the native "save as" dialog. */
+export async function exportNoteImage(): Promise<void> {
+  try {
+    const r = await render();
+    if (!r) return;
+    const png = await renderPng(r.body.html);
+    const res = await api.exporter.saveFile(r.vaultId, title(r.path), 'image/png', png);
+    if (res.cancelled) return;
+    const warn = warnings(r.body);
+    await dialog.alert(
+      t('title'),
+      t('imageDone', { path: res.path }) + (warn ? `\n\n${warn}` : ''),
+    );
+  } catch (e) {
     await dialog.error(e);
   }
 }

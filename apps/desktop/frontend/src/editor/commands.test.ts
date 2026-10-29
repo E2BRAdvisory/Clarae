@@ -3,6 +3,7 @@ import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import {
   insertLink,
+  insertSeparator,
   insertWikilink,
   setHeading,
   toggleBold,
@@ -106,5 +107,25 @@ describe('formatting commands', () => {
     expect(text(v)).toBe('- call Alice');
     toggleTask(v);
     expect(text(v)).toBe('- [ ] call Alice');
+  });
+});
+
+describe('insertSeparator', () => {
+  it('goes below the current line with a blank line before it', () => {
+    const v = make('Title\nBody', 2);
+    insertSeparator(v);
+    expect(v.state.doc.toString()).toBe('Title\n\n---\n\nBody');
+  });
+
+  it('uses an empty line as is, so the rule never turns text into a heading', () => {
+    const v = make('Text\n\nMore', 5);
+    insertSeparator(v);
+    expect(v.state.doc.toString()).toBe('Text\n\n---\n\nMore');
+  });
+
+  it('never opens a frontmatter block on the first line', () => {
+    const v = make('', 0);
+    insertSeparator(v);
+    expect(v.state.doc.toString().startsWith('---')).toBe(false);
   });
 });
