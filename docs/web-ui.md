@@ -31,6 +31,24 @@ Rotte: `/usage` (Spazio utilizzato), `/vaults`, `/devices`, `/shares`, `/admin` 
 
 Hook di test OIDC: con `MEMOBRAIN_E2E=1` (solo dev server/Playwright) `main.tsx` carica `auth/e2e.ts`, che legge l'utente da `sessionStorage['memobrain.e2e.user']`. `import.meta.env.MEMOBRAIN_E2E` è una costante (`define` di esbuild) di build: nei build di produzione il ramo e il modulo spariscono (verificabile con `grep -r "memobrain.e2e" web/dist`).
 
+## Workbench del vault (M9-WP5, ADR-0029/0030)
+
+Dalla Web UI si apre un vault nel browser con la stessa interfaccia del desktop. È una **pagina a sé** (`/vaults/:id/open`, con `?share=<id>` per un mount): ha un proprio HTML (`workbench.html`) e un proprio foglio di stile, perché lo stile globale della UI desktop non deve toccare la console. "Apri" nella tabella dei vault e nelle condivisioni accettate è un link, quindi un caricamento completo della pagina.
+
+| Pezzo          | Dove                                     | Cosa fa                                                                                                                                |
+| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Entry e lancio | `web/src/workbench/{main.tsx,launch.ts}` | login OIDC, blocco a una scheda (Web Locks), avvio del core, collegamento del vault (`OpenVault` + `LinkExisting`), montaggio della UI |
+| Worker         | `web/src/workbench/worker.ts`            | file system su OPFS, SQLite (`opfs-sahpool`), host, programma Go                                                                       |
+| `fs` su OPFS   | `web/src/workbench/opfs-fs.ts`           | fornisce a Go `fs`, `path` e `process`: il pacchetto `os` del core non cambia                                                          |
+| Bridge         | `web/src/workbench/bridge.ts`            | RPC verso il worker, installa `window.go` e `window.runtime` per i moduli Wails generati                                               |
+| Inattività     | `web/src/workbench/idle.ts`              | dopo 15 min senza input un vault **privato** si blocca, la copia in chiaro si cancella dal browser e si torna alla console             |
+
+- **Build:** `make web-build` costruisce prima il core (`make wasm-core`) e i binding Wails (`packages/workbench/wailsjs`, se mancano), poi la SPA. `web/scripts/esbuild.mjs` emette `index.html` e `workbench.html`, il worker (`assets/core-worker-<hash>.js`) e `core/*.wasm.gz` con il nome contenente l'hash; l'integrità SHA-384 dei WASM è nel bundle e il worker la verifica con `fetch(..., { integrity })`. Senza il core (nessuna toolchain Go) la pagina lo dice invece di fallire.
+- **Budget** (ADR-0020): console 700/1000 kB; workbench 2500/23000 kB; core ≤ 8 MB e sqlite ≤ 1,5 MB, misurati in gzip.
+- **Serving** (`services/cloud/web-embed`): `/vaults/:id/open` risponde con `workbench.html` e una CSP dedicata (`style-src 'unsafe-inline'` per CodeMirror/KaTeX/Excalidraw, `worker-src 'self'`, `img-src data: blob:`, `connect-src` con l'issuer e `blob:`; mai script inline, mai `eval`, mai altre origini). I `.wasm` si conservano come `.wasm.gz` e si servono così a chi accetta gzip, decompressi agli altri. La console mantiene la CSP stretta.
+- **Una scheda sola:** i file e i database del browser si tengono con handle sincroni esclusivi, quindi un solo workbench per browser (qualsiasi vault). La seconda scheda mostra "già aperto in un'altra scheda".
+- **Test:** `web/e2e/opfs-fs.spec.ts` (lo shim `fs`, in un worker vero), `web/e2e/workbench.spec.ts` (UI + core vero: scrittura, ricerca FTS, link, rinomina, storia, download ZIP, grafo, persistenza al reload, blocco e cancellazione), `web/e2e-security/workbench-csp.spec.ts` (build minificata servita dall'handler Go di produzione, senza violazioni CSP né richieste esterne). In build E2E `?local` apre una cartella del browser senza cloud.
+
 ## Comandi
 
 ```sh

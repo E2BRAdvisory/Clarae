@@ -54,7 +54,7 @@ Implementazione: `shared/go/vaultcrypto/keys.go` (Go), `packages/vaultcrypto-web
 
 - **Envelope** (`wrap`): `nonce(12) ‖ AES-256-GCM(KEK, VMK) ‖ tag(16)` = 60 byte (`WrappedVMKSize` lato server). Nonce casuale: ogni KEK avvolge un solo valore, il rischio di collisione è trascurabile. Nessun AAD: l'envelope non è legato al `vault_id` (nota per il revisore, §9).
 - **Recovery key**: 256 bit CSPRNG; testo = Base32 (alfabeto RFC 4648) in gruppi da 5 con checksum SHA-256 troncato a 16 bit (`"memobrain/v1/recovery-checksum" ‖ chiave`). Il checksum rileva refusi, non è un controllo di sicurezza. KEK_rec = HKDF(recovery key, salt dell'envelope): nessuno stretching, la chiave ha già piena entropia.
-- **Passphrase**: minimo 12 caratteri e zxcvbn ≥ 3, imposti dal client desktop (`apps/desktop/frontend/src/sync/strength.ts`); il server non può verificarli.
+- **Passphrase**: minimo 12 caratteri e zxcvbn ≥ 3, imposti dal client desktop (`packages/workbench/src/sync/strength.ts`); il server non può verificarli.
 - **Cache locale della VMK**: keychain del sistema operativo (`apps/desktop/internal/crypto/keystore.go`); la Web UI non la persiste.
 - **Cambio passphrase / recovery key**: nuovo envelope della stessa VMK, nessuna ri-cifratura dei dati. Dopo un cambio, i vecchi envelope scaricati prima restano validi per chi conosceva la vecchia passphrase: senza rotazione della VMK una passphrase compromessa resta utile contro ciò che l'attaccante ha già copiato (§6).
 
