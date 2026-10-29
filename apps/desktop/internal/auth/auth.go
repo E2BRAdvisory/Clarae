@@ -89,6 +89,18 @@ type Options struct {
 	AppVersion string
 	// LoginTimeout bounds how long the browser flow may take (default 5 min).
 	LoginTimeout time.Duration
+	// Hosted makes the page that runs the core the owner of the session (browser build, ADR-0029).
+	Hosted *Hosted
+}
+
+// Hosted describes a session owned by the host page. The page already signed in with OIDC, so there
+// is no browser flow, no refresh token and no keychain: the core asks the page for an access token
+// whenever it needs one.
+type Hosted struct {
+	// ServerURL is the cloud this session talks to (the origin that served the page).
+	ServerURL string
+	// Token returns a valid access token, renewed by the page when needed.
+	Token func(ctx context.Context) (string, error)
 }
 
 // Service is the session manager.
@@ -133,7 +145,11 @@ func New(opts Options) *Service {
 		opts.HTTPClient = &http.Client{Timeout: 30 * time.Second}
 	}
 	if opts.Secrets == nil {
-		opts.Secrets = KeychainStore{}
+		if opts.Hosted != nil {
+			opts.Secrets = NewMemoryStore() // nothing secret is kept: the page owns the tokens
+		} else {
+			opts.Secrets = KeychainStore{}
+		}
 	}
 	if opts.OnState == nil {
 		opts.OnState = func(State) {}
@@ -157,6 +173,8 @@ func platformName() string {
 		return "macos"
 	case "windows":
 		return "windows"
+	case "js":
+		return "web"
 	default:
 		return "linux"
 	}
@@ -208,6 +226,9 @@ func (s *Service) Client() *transport.Client {
 // Login runs the browser flow against serverURL and, on success, loads the
 // profile and registers the device. It blocks until the flow completes.
 func (s *Service) Login(ctx context.Context, serverURL string) error {
+	if s.opts.Hosted != nil {
+		return s.hostedLogin(ctx)
+	}
 	ctx, cancel := context.WithTimeout(ctx, s.opts.LoginTimeout)
 	defer cancel()
 
@@ -345,6 +366,9 @@ func (s *Service) completeSession(ctx context.Context) error {
 	if sess == nil {
 		return errors.New("not signed in")
 	}
+	if sess.Profile.UserID != "" && sess.Profile.UserID != me.ID {
+		sess.DeviceID = "" // the registered device belongs to the previous account
+	}
 	if sess.DeviceID == "" {
 		dev, err := client.RegisterDevice(ctx, transport.DeviceRegistration{Name: s.opts.DeviceName, Platform: s.opts.Platform, AppVersion: s.opts.AppVersion})
 		if err != nil {
@@ -398,6 +422,9 @@ func (s *Service) HandleCallback(params url.Values) bool {
 // Token implements transport.TokenSource: returns a valid access token,
 // refreshing it (with rotation) when it is about to expire.
 func (s *Service) Token(ctx context.Context) (string, error) {
+	if s.opts.Hosted != nil {
+		return s.hostedToken(ctx)
+	}
 	s.mu.Lock()
 	if s.session == nil {
 		s.mu.Unlock()
@@ -480,6 +507,10 @@ func (s *Service) ensureOAuthLocked(ctx context.Context) error {
 // Restore resumes a persisted session: the profile is shown immediately as
 // "disconnected" and a background refresh turns it into "ready".
 func (s *Service) Restore(ctx context.Context) {
+	if s.opts.Hosted != nil {
+		s.restoreHosted(ctx)
+		return
+	}
 	sess, err := loadSession(s.opts.DataDir)
 	if err != nil || sess == nil {
 		if err != nil {
@@ -519,7 +550,7 @@ func (s *Service) Logout(ctx context.Context) error {
 	if sess == nil {
 		return nil
 	}
-	if cfg != nil && refresh != "" {
+	if cfg != nil && refresh != "" && s.opts.Hosted == nil {
 		revoke := strings.TrimSuffix(sess.Issuer, "/") + "/protocol/openid-connect/revoke"
 		form := url.Values{"client_id": {cfg.ClientID}, "token": {refresh}, "token_type_hint": {"refresh_token"}}
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, revoke, strings.NewReader(form.Encode()))
@@ -548,7 +579,9 @@ func (s *Service) clearSession() {
 	if server != "" {
 		_ = s.secrets.Delete(server)
 	}
-	_ = deleteSession(s.opts.DataDir)
+	if s.opts.Hosted == nil { // a hosted session keeps its device registration across sign-ins
+		_ = deleteSession(s.opts.DataDir)
+	}
 	s.setState(func(st *State) { *st = State{Status: StatusSignedOut} })
 }
 

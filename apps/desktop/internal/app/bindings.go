@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/Bios-Marcel/wastebasket/v2"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"memobrain/apps/desktop/internal/links"
 	"memobrain/apps/desktop/internal/search"
@@ -61,7 +60,7 @@ func (v *VaultAPI) ListOpen() []VaultInfo {
 
 // PickFolder shows the native folder picker and returns the chosen path ("" when cancelled).
 func (v *VaultAPI) PickFolder(title string) (string, error) {
-	return runtime.OpenDirectoryDialog(v.app.ctx, runtime.OpenDialogOptions{Title: title, CanCreateDirectories: true})
+	return v.app.host.OpenDirectory(v.app.ctx, OpenDialog{Title: title, CanCreateDirectories: true})
 }
 
 // ExportResult reports an export of a vault to a ZIP file.
@@ -80,10 +79,10 @@ func (v *VaultAPI) ExportZip(vaultID string) (ExportResult, error) {
 	if err != nil {
 		return ExportResult{}, err
 	}
-	dest, err := runtime.SaveFileDialog(v.app.ctx, runtime.SaveDialogOptions{
+	dest, err := v.app.host.SaveFile(v.app.ctx, SaveDialog{
 		Title:           "Export vault as ZIP",
 		DefaultFilename: exportFilename(ov.Info.Name, time.Now()),
-		Filters:         []runtime.FileFilter{{DisplayName: "ZIP archive (*.zip)", Pattern: "*.zip"}},
+		Filters:         []FileFilter{{DisplayName: "ZIP archive (*.zip)", Pattern: "*.zip"}},
 	})
 	if err != nil {
 		return ExportResult{}, err
@@ -91,7 +90,11 @@ func (v *VaultAPI) ExportZip(vaultID string) (ExportResult, error) {
 	if dest == "" {
 		return ExportResult{Cancelled: true}, nil
 	}
-	return v.app.exportZip(vaultID, dest)
+	res, err := v.app.exportZip(vaultID, dest)
+	if err == nil {
+		v.app.host.Delivered(v.app.ctx, res.Path)
+	}
+	return res, err
 }
 
 // exportFilename proposes a file name for an export, keeping only characters safe on every platform.
@@ -259,6 +262,9 @@ func (v *VaultAPI) Trash(vaultID, relPath string) (string, error) {
 		mode = cur.TrashMode
 	}
 	var dest string
+	if mode == "system" && isWeb {
+		mode = "vault" // a browser has no OS trash
+	}
 	if mode == "system" {
 		abs, _, err := ov.FS.Resolve(relPath)
 		if err != nil {
@@ -362,9 +368,14 @@ func (s *SettingsAPI) Set(settings AppSettings) error {
 
 // Info returns build and environment facts for the About panel.
 func (s *SettingsAPI) Info() map[string]string {
+	platform := "desktop" // "web" when the core runs in the browser: the UI hides what only a desktop can do (ADR-0029)
+	if isWeb {
+		platform = "web"
+	}
 	return map[string]string{
-		"version": s.app.opts.Version,
-		"dataDir": s.app.opts.DataDir,
+		"platform": platform,
+		"version":  s.app.opts.Version,
+		"dataDir":  s.app.opts.DataDir,
 		// Convenience for development: MEMOBRAIN_DEFAULT_SERVER_URL prefills the sign-in form.
 		"defaultServer": os.Getenv("MEMOBRAIN_DEFAULT_SERVER_URL"),
 	}

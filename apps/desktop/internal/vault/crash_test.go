@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,9 @@ func runCrashChild(t *testing.T, root, step string) {
 }
 
 func TestWriteAtomicCrashAtEveryStep(t *testing.T) {
+	if runtime.GOOS == "js" {
+		t.Skip("spawns a child process, which GOOS=js cannot do")
+	}
 	oldContent := strings.Repeat("OLD CONTENT ", 20000)
 	newContent := strings.Repeat("NEW CONTENT ", 20000)
 	for _, step := range crashSteps {

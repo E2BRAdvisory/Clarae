@@ -38,11 +38,20 @@ type Options struct {
 	Logger            zerolog.Logger
 }
 
+// source delivers raw file system events: fsnotify on the desktop (notifier_native.go), nothing in
+// the browser build (notifier_js.go), where Notify reports the changes instead.
+type source interface {
+	Add(path string) error
+	Close() error
+	Events() <-chan fsnotify.Event
+	Errors() <-chan error
+}
+
 // Watcher watches one vault root.
 type Watcher struct {
 	root string
 	opts Options
-	fsw  *fsnotify.Watcher
+	fsw  source
 	out  chan Change
 	done chan struct{} // closed when the loop exits; the out channel is never closed
 
@@ -61,7 +70,7 @@ func New(ctx context.Context, root string, opts Options) (*Watcher, error) {
 	} else if opts.ReconcileInterval == 0 {
 		opts.ReconcileInterval = 5 * time.Minute
 	}
-	fsw, err := fsnotify.NewWatcher()
+	fsw, err := newSource()
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +129,12 @@ func (w *Watcher) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case ev, ok := <-w.fsw.Events:
+		case ev, ok := <-w.fsw.Events():
 			if !ok {
 				return
 			}
 			w.handle(ev)
-		case err, ok := <-w.fsw.Errors:
+		case err, ok := <-w.fsw.Errors():
 			if !ok {
 				return
 			}
@@ -162,11 +171,32 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 			existing = w.listBelow(ev.Name)
 		}
 	}
+	w.queue(append(existing, normalized))
+}
+
+// Notify reports vault-relative paths that changed without a file system event: the browser build,
+// which has no fsnotify, learns of its own writes this way (vault.FS.SetOnChange). Paths go through
+// the same filtering, debouncing and coalescing as events.
+func (w *Watcher) Notify(paths []string) {
+	var keep []string
+	for _, p := range paths {
+		if _, base := pathrules.Split(p); strings.HasPrefix(base, ".memobrain-tmp-") {
+			continue
+		}
+		if n, err := pathrules.Normalize(p); err == nil && !pathrules.IsExcluded(n, false) {
+			keep = append(keep, n)
+		}
+	}
+	if len(keep) > 0 {
+		w.queue(keep)
+	}
+}
+
+func (w *Watcher) queue(paths []string) {
 	w.mu.Lock()
-	for _, p := range existing {
+	for _, p := range paths {
 		w.pending[p] = struct{}{}
 	}
-	w.pending[normalized] = struct{}{}
 	if w.timer == nil {
 		w.timer = time.AfterFunc(w.opts.Debounce, w.flush)
 	} else {

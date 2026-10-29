@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"memobrain/apps/desktop/internal/importer"
 )
@@ -78,7 +77,7 @@ func (i *ImporterAPI) DefaultFolder(sourceID string) string {
 // PickFile shows the native file picker and returns the chosen path ("" when cancelled).
 // extensions are lower-case without the dot; empty means any file.
 func (i *ImporterAPI) PickFile(title string, extensions []string) (string, error) {
-	var filters []runtime.FileFilter
+	var filters []FileFilter
 	if len(extensions) > 0 {
 		pats := make([]string, 0, len(extensions))
 		for _, e := range extensions {
@@ -87,10 +86,10 @@ func (i *ImporterAPI) PickFile(title string, extensions []string) (string, error
 			}
 		}
 		if len(pats) > 0 {
-			filters = append(filters, runtime.FileFilter{DisplayName: strings.Join(pats, ", "), Pattern: strings.Join(pats, ";")})
+			filters = append(filters, FileFilter{DisplayName: strings.Join(pats, ", "), Pattern: strings.Join(pats, ";")})
 		}
 	}
-	return runtime.OpenFileDialog(i.app.ctx, runtime.OpenDialogOptions{Title: title, Filters: filters})
+	return i.app.host.OpenFile(i.app.ctx, OpenDialog{Title: title, Filters: filters})
 }
 
 func (i *ImporterAPI) baseCtx() context.Context {

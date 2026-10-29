@@ -415,3 +415,15 @@ func TestImportLegacyDrawingCompressedAndImageCap(t *testing.T) {
 		t.Errorf("the image cap must keep %d of 2 images, got %d", 1, len(s.Files))
 	}
 }
+
+func TestSettingsInfoReportsThePlatform(t *testing.T) {
+	a := New(Options{Version: "1.2.3"})
+	info := NewSettingsAPI(a).Info()
+	want := "desktop"
+	if isWeb {
+		want = "web"
+	}
+	if info["platform"] != want || info["version"] != "1.2.3" {
+		t.Fatalf("Info() = %v, want platform %q", info, want)
+	}
+}

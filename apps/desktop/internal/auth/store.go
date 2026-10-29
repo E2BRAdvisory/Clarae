@@ -36,7 +36,11 @@ func saveSession(dataDir string, p *persisted) error {
 	return os.Rename(tmp, sessionPath(dataDir))
 }
 
-func loadSession(dataDir string) (*persisted, error) {
+func loadSession(dataDir string) (*persisted, error) { return readSession(dataDir, true) }
+
+// readSession reads auth.json; oidc says whether the OIDC endpoints are required (a hosted session
+// keeps only the server and the device registration).
+func readSession(dataDir string, oidc bool) (*persisted, error) {
 	data, err := os.ReadFile(sessionPath(dataDir))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -48,7 +52,7 @@ func loadSession(dataDir string) (*persisted, error) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return nil, err
 	}
-	if p.ServerURL == "" || p.Issuer == "" || p.ClientID == "" {
+	if p.ServerURL == "" || oidc && (p.Issuer == "" || p.ClientID == "") {
 		return nil, errors.New("incomplete session file")
 	}
 	return &p, nil

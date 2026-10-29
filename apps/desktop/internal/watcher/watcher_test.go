@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -11,6 +12,9 @@ import (
 )
 
 func TestWatcherDebouncesAndCoalesces(t *testing.T) {
+	if runtime.GOOS == "js" {
+		t.Skip("the browser build has no fsnotify; see TestNotifyDebouncesAndCoalesces")
+	}
 	root := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -49,6 +53,41 @@ func TestWatcherDebouncesAndCoalesces(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("Dir/a.md not reported: %v", ch.Paths)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no change delivered")
+	}
+}
+
+// Notify is how the browser build learns of the core's own writes: same filtering, debouncing and
+// coalescing as fsnotify events, on every platform.
+func TestNotifyDebouncesAndCoalesces(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w, err := New(ctx, t.TempDir(), Options{Debounce: 50 * time.Millisecond, ReconcileInterval: -1, Logger: zerolog.Nop()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = w.Close() }()
+
+	for i := 0; i < 3; i++ {
+		w.Notify([]string{"Dir/a.md"})
+	}
+	w.Notify([]string{".DS_Store", ".memobrain-tmp-123", "Dir/b.md", "../escape.md"})
+
+	select {
+	case ch := <-w.C():
+		if ch.Reconcile {
+			t.Fatal("unexpected reconcile")
+		}
+		want := map[string]bool{"Dir/a.md": true, "Dir/b.md": true}
+		if len(ch.Paths) != len(want) {
+			t.Fatalf("paths = %v, want exactly %v", ch.Paths, want)
+		}
+		for _, p := range ch.Paths {
+			if !want[p] {
+				t.Fatalf("unexpected path %q in %v", p, ch.Paths)
+			}
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no change delivered")

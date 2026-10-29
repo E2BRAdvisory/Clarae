@@ -1,7 +1,5 @@
 package app
 
-import "github.com/wailsapp/wails/v2/pkg/runtime"
-
 // Event names emitted from Go to the frontend (§2.5). The TypeScript side
 // mirrors them in frontend/src/app/events.ts.
 const (
@@ -40,7 +38,7 @@ func (a *App) emit(name string, payload any) {
 	if a.ctx == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, name, payload)
+	a.host.Emit(a.ctx, name, payload)
 }
 
 // setEmitter swaps the emitter while background goroutines (indexer, watcher) may be emitting.

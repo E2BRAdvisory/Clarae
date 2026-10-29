@@ -11,8 +11,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // maxExportHTML bounds a standalone HTML export (images are inlined as data URIs).
@@ -38,10 +36,10 @@ func (e *ExportAPI) SaveHTML(vaultID, suggestedName, html string) (ExportResult,
 	if err := checkStandaloneHTML(html); err != nil {
 		return ExportResult{}, err
 	}
-	dest, err := runtime.SaveFileDialog(e.app.ctx, runtime.SaveDialogOptions{
+	dest, err := e.app.host.SaveFile(e.app.ctx, SaveDialog{
 		Title:           "Export note as HTML",
 		DefaultFilename: htmlExportFilename(suggestedName, time.Now()),
-		Filters:         []runtime.FileFilter{{DisplayName: "HTML document (*.html)", Pattern: "*.html"}},
+		Filters:         []FileFilter{{DisplayName: "HTML document (*.html)", Pattern: "*.html"}},
 	})
 	if err != nil {
 		return ExportResult{}, err
@@ -49,13 +47,17 @@ func (e *ExportAPI) SaveHTML(vaultID, suggestedName, html string) (ExportResult,
 	if dest == "" {
 		return ExportResult{Cancelled: true}, nil
 	}
-	return writeExportHTML(ov.FS.Root(), dest, html)
+	res, err := writeExportHTML(ov.FS.Root(), dest, html)
+	if err == nil {
+		e.app.host.Delivered(e.app.ctx, res.Path)
+	}
+	return res, err
 }
 
 // Print opens the system print dialog for the web view (the user picks "Save as PDF" there).
 // The frontend has already switched the page to its print layout.
 func (e *ExportAPI) Print() {
-	runtime.WindowPrint(e.app.ctx)
+	e.app.host.Print(e.app.ctx)
 }
 
 var (
@@ -210,10 +212,10 @@ func (e *ExportAPI) SaveFile(vaultID, suggestedName, mime, dataBase64 string) (E
 	if err != nil {
 		return ExportResult{}, fmt.Errorf("invalid-export: %w", err)
 	}
-	dest, err := runtime.SaveFileDialog(e.app.ctx, runtime.SaveDialogOptions{
+	dest, err := e.app.host.SaveFile(e.app.ctx, SaveDialog{
 		Title:           "Save export",
 		DefaultFilename: safeExportName(suggestedName, f.ext, "export", time.Now()),
-		Filters:         []runtime.FileFilter{{DisplayName: f.label, Pattern: "*" + f.ext}},
+		Filters:         []FileFilter{{DisplayName: f.label, Pattern: "*" + f.ext}},
 	})
 	if err != nil {
 		return ExportResult{}, err
@@ -224,7 +226,11 @@ func (e *ExportAPI) SaveFile(vaultID, suggestedName, mime, dataBase64 string) (E
 	if !strings.EqualFold(filepath.Ext(dest), f.ext) {
 		dest += f.ext
 	}
-	return writeExportData(ov.FS.Root(), dest, data)
+	res, err := writeExportData(ov.FS.Root(), dest, data)
+	if err == nil {
+		e.app.host.Delivered(e.app.ctx, res.Path)
+	}
+	return res, err
 }
 
 // decodeExport decodes and validates the payload of SaveFile.

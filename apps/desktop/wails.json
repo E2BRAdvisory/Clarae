@@ -6,7 +6,7 @@
   "frontend:build": "yarn run build",
   "frontend:dev:watcher": "yarn run dev",
   "frontend:dev:serverUrl": "http://127.0.0.1:5173",
-  "wailsjsdir": "./frontend",
+  "wailsjsdir": "../../packages/workbench",
   "info": {
     "companyName": "MemoBrain Notes",
     "productName": "MemoBrain Notes",

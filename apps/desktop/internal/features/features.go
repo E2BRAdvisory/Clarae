@@ -10,7 +10,7 @@ package features
 // editor (formulas, Mermaid diagrams, auto-export, the scene actions) and has no effect while
 // "drawings" itself is off.
 var Known = []string{
-	"audio_recorder", "web_viewer", "chat", "drawings", "canvas", "sharing",
+	"audio_recorder", "web_viewer", "chat", "web_workbench", "drawings", "canvas", "sharing",
 	"drawing_latex", "drawing_mermaid", "drawing_auto_export", "drawing_actions",
 }
 
@@ -21,9 +21,11 @@ var Defaults = map[string]bool{
 	"audio_recorder": false,
 	"web_viewer":     false,
 	"chat":           false,
-	"drawings":       true,
-	"canvas":         true,
-	"sharing":        true,
+	// web_workbench lets a user open vaults in the Web UI (ADR-0029). The desktop ignores it.
+	"web_workbench": true,
+	"drawings":      true,
+	"canvas":        true,
+	"sharing":       true,
 
 	"drawing_latex":       true,
 	"drawing_mermaid":     true,

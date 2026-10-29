@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"memobrain/shared/hashing"
@@ -34,7 +35,26 @@ var (
 
 // FS is a vault root on disk.
 type FS struct {
-	root string // absolute, symlinks resolved
+	root     string // absolute, symlinks resolved
+	onChange atomic.Pointer[func(paths []string)]
+}
+
+// SetOnChange registers a callback told, after every successful mutation made through this FS,
+// which vault-relative paths changed. The desktop does not use it (fsnotify reports changes,
+// including those made by other programs); the browser build has no file watcher, so there it is
+// the only source of change events.
+func (f *FS) SetOnChange(fn func(paths []string)) {
+	if fn == nil {
+		f.onChange.Store(nil)
+		return
+	}
+	f.onChange.Store(&fn)
+}
+
+func (f *FS) changed(paths ...string) {
+	if fn := f.onChange.Load(); fn != nil {
+		(*fn)(paths)
+	}
 }
 
 // NewFS validates that root exists and is a directory.
@@ -172,6 +192,7 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 	if err != nil {
 		return Content{}, err
 	}
+	f.changed(normalized)
 	return Content{Path: normalized, Data: data, Hash: hashing.Sum(data).Hex(), Mtime: st.ModTime(), Size: st.Size()}, nil
 }
 
@@ -271,20 +292,24 @@ func syncDir(dir string) error {
 
 // Mkdir creates a folder (and parents).
 func (f *FS) Mkdir(rel string) error {
-	abs, _, err := f.Resolve(rel)
+	abs, normalized, err := f.Resolve(rel)
 	if err != nil {
 		return err
 	}
-	return os.MkdirAll(abs, 0o755)
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return err
+	}
+	f.changed(normalized)
+	return nil
 }
 
 // Rename moves a file or folder; the destination must not exist.
 func (f *FS) Rename(fromRel, toRel string) error {
-	from, _, err := f.Resolve(fromRel)
+	from, fromNorm, err := f.Resolve(fromRel)
 	if err != nil {
 		return err
 	}
-	to, _, err := f.Resolve(toRel)
+	to, toNorm, err := f.Resolve(toRel)
 	if err != nil {
 		return err
 	}
@@ -301,7 +326,11 @@ func (f *FS) Rename(fromRel, toRel string) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
 	}
-	return os.Rename(from, to)
+	if err := os.Rename(from, to); err != nil {
+		return err
+	}
+	f.changed(fromNorm, toNorm)
+	return nil
 }
 
 // Trash moves a file or folder into the vault's .trash/ folder, keeping the
@@ -332,16 +361,24 @@ func (f *FS) Trash(rel string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return "", err
 	}
-	return dest, os.Rename(from, to)
+	if err := os.Rename(from, to); err != nil {
+		return "", err
+	}
+	f.changed(normalized, dest)
+	return dest, nil
 }
 
 // Delete removes a file or folder permanently.
 func (f *FS) Delete(rel string) error {
-	abs, _, err := f.Resolve(rel)
+	abs, normalized, err := f.Resolve(rel)
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(abs)
+	if err := os.RemoveAll(abs); err != nil {
+		return err
+	}
+	f.changed(normalized)
+	return nil
 }
 
 // Entry describes one file or folder in the vault tree.

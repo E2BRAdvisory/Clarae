@@ -5,8 +5,6 @@ import (
 	"errors"
 	"os"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"memobrain/apps/desktop/internal/updater"
 )
 
@@ -21,7 +19,9 @@ func (a *App) updaterService() (*updater.Service, error) {
 		return a.updater, nil
 	}
 	reason := ""
-	if os.Getenv("MEMOBRAIN_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
+	if isWeb {
+		reason = "the web application is always up to date: the cloud serves it"
+	} else if os.Getenv("MEMOBRAIN_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
 		reason = "updates are disabled by the administrator"
 	}
 	svc, err := updater.New(updater.Options{
@@ -113,7 +113,7 @@ func (u *UpdaterAPI) Install() (updater.Result, error) {
 		if u.app.ctx == nil {
 			return res, errors.New("application not ready")
 		}
-		runtime.Quit(u.app.ctx)
+		u.app.host.Quit(u.app.ctx)
 	}
 	return res, nil
 }

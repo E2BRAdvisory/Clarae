@@ -77,7 +77,7 @@ func TestApplyMacosHelperScript(t *testing.T) {
 	if c[0] != "/bin/bash" || c[3] != staged || c[4] != app {
 		t.Fatalf("call %v", c)
 	}
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != "windows" && runtime.GOOS != "js" { // js cannot start processes
 		if out, err := exec.Command("bash", "-n", c[1]).CombinedOutput(); err != nil { //nolint:gosec // syntax check of our own script
 			t.Fatalf("script syntax: %s", out)
 		}

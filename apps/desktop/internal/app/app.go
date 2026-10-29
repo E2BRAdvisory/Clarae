@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"memobrain/apps/desktop/internal/auth"
 	"memobrain/apps/desktop/internal/config"
@@ -41,12 +39,15 @@ type Options struct {
 	Version string
 	// KeyStore keeps the keys of private vaults (nil = OS keychain).
 	KeyStore crypto.KeyStore
+	// Host connects the application to its environment (nil = the Wails window).
+	Host Host
 }
 
 // App is the backend root. Bound API structs hold a pointer to it.
 type App struct {
 	ctx       context.Context
 	opts      Options
+	host      Host
 	logger    zerolog.Logger
 	appDB     *sql.DB
 	auth      *auth.Service
@@ -84,8 +85,19 @@ type VaultInfo struct {
 // New prepares the application; Startup finishes initialization once Wails
 // provides the context.
 func New(opts Options) *App {
-	a := &App{opts: opts, logger: opts.Logger, vaults: map[string]*openVault{}, config: config.New(nil)}
+	if opts.Host == nil {
+		opts.Host = defaultHost()
+	}
+	var hosted *auth.Hosted
+	if sh, ok := opts.Host.(SessionHost); ok {
+		hosted = sh.Session()
+		if opts.KeyStore == nil {
+			opts.KeyStore = crypto.NewMemoryStore() // no OS keychain in a browser: the VMK lives in memory
+		}
+	}
+	a := &App{opts: opts, host: opts.Host, logger: opts.Logger, vaults: map[string]*openVault{}, config: config.New(nil)}
 	a.auth = auth.New(auth.Options{
+		Hosted:       hosted,
 		DataDir:      opts.DataDir,
 		Logger:       opts.Logger.With().Str("module", "auth").Logger(),
 		AppVersion:   opts.Version,
@@ -94,7 +106,7 @@ func New(opts Options) *App {
 			if a.ctx == nil {
 				return errors.New("application not ready")
 			}
-			runtime.BrowserOpenURL(a.ctx, u)
+			a.host.OpenURL(a.ctx, u)
 			return nil
 		},
 		OnState: func(st auth.State) {
@@ -137,7 +149,7 @@ func (a *App) Startup(ctx context.Context) {
 	db, err := store.Open(ctx, filepath.Join(a.opts.DataDir, "app.db"), store.KindApp)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("open app.db")
-		_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.ErrorDialog, Title: "MemoBrain Notes", Message: "Cannot open the application database: " + err.Error()})
+		a.host.ErrorDialog(ctx, "MemoBrain Notes", "Cannot open the application database: "+err.Error())
 		return
 	}
 	a.appDB = db
@@ -175,20 +187,6 @@ func (a *App) Shutdown(_ context.Context) {
 		_ = a.appDB.Close()
 	}
 	a.logger.Info().Msg("stopped")
-}
-
-// OnSecondInstance is the Wails single-instance callback: another instance
-// was launched with these arguments (Windows/Linux deliver memobrain:// URLs
-// this way). The running window is brought to the front.
-func (a *App) OnSecondInstance(data options.SecondInstanceData) {
-	a.logger.Info().Strs("args", data.Args).Msg("second instance launch")
-	if a.ctx != nil {
-		runtime.WindowUnminimise(a.ctx)
-		runtime.Show(a.ctx)
-	}
-	if u, ok := platform.FindSchemeURL(data.Args); ok {
-		a.HandleURL(u)
-	}
 }
 
 // HandleURL processes a memobrain:// URL (macOS OnUrlOpen, second instance
@@ -267,6 +265,12 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 	if mm, ok, _ := syncpkg.ReadMount(a.ctx, abs); ok && mm.Name != "" {
 		info.Name = mm.Name // a mount lives in a folder named by the share id: show the share's name
 	}
+	if isWeb && info.Name == filepath.Base(abs) {
+		// A browser names its folders by cloud vault id; once linked, show the name the user gave the vault.
+		if n := syncpkg.ReadVaultName(a.ctx, abs); n != "" {
+			info.Name = n
+		}
+	}
 	log := a.logger.With().Str("vault", info.Name).Logger()
 	ix := indexer.New(fsys, indexDB, log, func(p indexer.Progress) {
 		a.emit(EventIndexProgress, map[string]any{"vaultId": id, "done": p.Done, "total": p.Total, "path": p.Path, "finished": p.Finished})
@@ -277,6 +281,9 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 		cancel()
 		_ = indexDB.Close()
 		return VaultInfo{}, err
+	}
+	if isWeb {
+		fsys.SetOnChange(w.Notify) // no fsnotify here: the core's own writes are the only changes
 	}
 	hist := history.New(history.Options{
 		FS: fsys, Logger: log,

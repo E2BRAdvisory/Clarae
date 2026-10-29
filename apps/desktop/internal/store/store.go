@@ -1,4 +1,5 @@
-// Package store opens the local SQLite databases (pure Go, modernc.org/sqlite)
+// Package store opens the local SQLite databases (pure Go, modernc.org/sqlite; sqlite-wasm in the
+// browser build, see driver_js.go)
 // and applies their embedded migrations:
 //
 //   - app.db   (data dir)        recent vaults, application preferences
@@ -17,7 +18,6 @@ import (
 	"path/filepath"
 
 	"github.com/pressly/goose/v3"
-	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
 
 //go:embed migrations/app/*.sql migrations/index/*.sql migrations/sync/*.sql
@@ -77,11 +77,4 @@ func migrate(ctx context.Context, db *sql.DB, kind Kind) error {
 
 // Reset deletes the database files (main, -wal, -shm). Used by "Rebuild
 // index": index.db is derived and may be thrown away at any time.
-func Reset(path string) error {
-	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
-		if err := os.Remove(path + suffix); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
+func Reset(path string) error { return removeDatabase(path) }

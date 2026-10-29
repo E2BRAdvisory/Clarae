@@ -31,3 +31,14 @@ func TestDrawingSubFlags(t *testing.T) {
 		t.Error("a sub-flag switches off only its own function")
 	}
 }
+
+// web_workbench is the administrator's switch for opening vaults in the Web UI: on unless turned off.
+func TestWebWorkbenchFlag(t *testing.T) {
+	if !Flags(nil)["web_workbench"] || !Enabled(nil, "web_workbench") {
+		t.Fatal("the web workbench must be on by default")
+	}
+	off := map[string]any{"features": map[string]any{"web_workbench": false}}
+	if Flags(off)["web_workbench"] || Enabled(off, "web_workbench") {
+		t.Fatal("the configuration must be able to turn it off")
+	}
+}

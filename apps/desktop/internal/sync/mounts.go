@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -101,11 +100,10 @@ func PrepareMount(ctx context.Context, root string, m MountMeta, info SessionInf
 
 // ReadMount reads the link of a mount folder; ok is false when the folder is not a mount.
 func ReadMount(ctx context.Context, root string) (m MountMeta, ok bool, err error) {
-	if _, err := os.Stat(filepath.Join(root, pathrules.ConfigDir, "sync.db")); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return MountMeta{}, false, nil
-		}
+	if exists, err := store.Exists(filepath.Join(root, pathrules.ConfigDir, "sync.db")); err != nil {
 		return MountMeta{}, false, err
+	} else if !exists {
+		return MountMeta{}, false, nil
 	}
 	db, closeDB, err := openSyncDB(ctx, root)
 	if err != nil {
@@ -125,6 +123,21 @@ func readMountMeta(ctx context.Context, db *DB) (MountMeta, bool, error) {
 		ShareID: get(MetaShareID), CloudVaultID: get(MetaCloudVault), Scope: scope, Permission: get(MetaPermission),
 		Name: get(MetaMountName), OwnerName: get(MetaOwnerName), ResourceType: get(MetaResourceType), Revoked: get(MetaRevoked) == "1",
 	}, true, nil
+}
+
+// ReadVaultName returns the name of the cloud vault a folder is linked to, or "" when it is not linked.
+// The browser names its folders by cloud vault id, so the UI shows this name instead (ADR-0029).
+func ReadVaultName(ctx context.Context, root string) string {
+	if exists, err := store.Exists(filepath.Join(root, pathrules.ConfigDir, "sync.db")); err != nil || !exists {
+		return ""
+	}
+	db, closeDB, err := openSyncDB(ctx, root)
+	if err != nil {
+		return ""
+	}
+	defer closeDB()
+	name, _ := db.Meta(ctx, MetaVaultName)
+	return name
 }
 
 // MountOfVault returns the mount link of an open vault.

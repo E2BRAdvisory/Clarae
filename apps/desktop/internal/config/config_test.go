@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	_ "memobrain/apps/desktop/internal/store" // registers the "sqlite" driver for the platform
 
 	"memobrain/apps/desktop/internal/sync/transport"
 )
