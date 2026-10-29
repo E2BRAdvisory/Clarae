@@ -4,7 +4,9 @@
 import '@excalidraw/excalidraw/index.css';
 import * as ExcalidrawLib from '@excalidraw/excalidraw';
 import { excalidrawLang } from './lang';
+import { ExcalidrawIsland } from './ExcalidrawIsland';
 import { Excalidraw, restoreElements, serializeAsJSON } from '@excalidraw/excalidraw';
+import type { SceneElement } from './actions/types';
 import type { ExcalidrawImperativeAPI, LibraryItems } from '@excalidraw/excalidraw/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -283,7 +285,9 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         // Brand new elements are completed by Excalidraw (seed, index, defaults) before joining.
         // refreshDimensions re-measures new text (labels of cards and diagrams) with the real fonts.
         const added = patch.add
-          ? restoreElements(patch.add as never, null, { refreshDimensions: true })
+          ? (restoreElements(patch.add as never, null, {
+              refreshDimensions: true,
+            }) as unknown as SceneElement[])
           : [];
         const elements = applyPatch(excalidraw.getSceneElementsIncludingDeleted(), {
           ...patch,
@@ -300,10 +304,11 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         );
         if (retext.length) {
           const fresh = new Map(
-            restoreElements(retext as never, null, { refreshDimensions: true }).map((e) => [
-              e.id,
-              e,
-            ]),
+            (
+              restoreElements(retext as never, null, {
+                refreshDimensions: true,
+              }) as unknown as readonly SceneElement[]
+            ).map((e) => [e.id, e]),
           );
           elements.forEach((e, i) => {
             const f = fresh.get(e.id);
@@ -333,7 +338,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           const ids = new Set(view.zoomTo);
           const targets = excalidraw.getSceneElements().filter((e) => ids.has(e.id));
           if (targets.length)
-            excalidraw.scrollToContent(targets, { fitToViewport: true, animate: true });
+            excalidraw.setViewport({ target: targets, fit: 'contain', animation: true });
         }
       },
       drawingPath: path,
@@ -529,7 +534,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     if (!excalidraw || !id) return;
     const frame = excalidraw.getSceneElements().find((e) => e.id === id);
     if (frame)
-      excalidraw.scrollToContent(frame, { fitToViewport: true, animate: true, duration: 400 });
+      excalidraw.setViewport({ target: frame, fit: 'contain', animation: { duration: 400 } });
   }, [excalidraw, deck, slide]);
   useEffect(() => {
     if (present) showSlide();
@@ -744,40 +749,41 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         onDragOverCapture={onCanvasDragOver}
         onMouseLeave={scheduleHidePreview}
       >
-        <Excalidraw
-          key={path}
-          excalidrawAPI={setApi}
-          initialData={{
-            elements: restoreElements(scene.elements as never, null),
-            appState: {
-              ...defaultItemState(useDrawingSettings.getState().settings),
-              ...scene.appState,
-              collaborators: new Map(),
-            },
-            files: scene.files as never,
-            libraryItems: library,
-            scrollToContent: true,
-          }}
-          theme={theme}
-          langCode={excalidrawLang(
-            i18n.language,
-            ExcalidrawLib.languages.map((l) => l.code),
-          )}
-          viewModeEnabled={readOnly}
-          zenModeEnabled={zen || present}
-          onChange={onChange}
-          onLibraryChange={onLibraryChange}
-          onLinkOpen={onLinkOpen}
-          UIOptions={{
-            canvasActions: {
-              loadScene: false,
-              export: false,
-              saveAsImage: false,
-              saveToActiveFile: false,
-              toggleTheme: false,
-            },
-          }}
-        />
+        <ExcalidrawIsland key={path}>
+          <Excalidraw
+            onExcalidrawAPI={setApi}
+            initialData={{
+              elements: restoreElements(scene.elements as never, null),
+              appState: {
+                ...defaultItemState(useDrawingSettings.getState().settings),
+                ...scene.appState,
+                collaborators: new Map(),
+              },
+              files: scene.files as never,
+              libraryItems: library,
+              scrollToContent: true,
+            }}
+            theme={theme}
+            langCode={excalidrawLang(
+              i18n.language,
+              ExcalidrawLib.languages.map((l) => l.code),
+            )}
+            viewModeEnabled={readOnly}
+            zenModeEnabled={zen || present}
+            onChange={onChange}
+            onLibraryChange={onLibraryChange}
+            onLinkOpen={onLinkOpen}
+            UIOptions={{
+              canvasActions: {
+                loadScene: false,
+                export: false,
+                saveAsImage: false,
+                saveToActiveFile: false,
+                toggleTheme: false,
+              },
+            }}
+          />
+        </ExcalidrawIsland>
         {present && deck.length > 0 && (
           <div className="slideshow-bar" role="toolbar" aria-label={t('drawing.slideshow.label')}>
             <button

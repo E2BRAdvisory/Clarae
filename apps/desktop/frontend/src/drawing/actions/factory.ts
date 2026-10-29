@@ -93,6 +93,16 @@ export function edgePoint(
 export const shapeKind = (e: SceneElement): 'rect' | 'ellipse' | 'diamond' =>
   e.type === 'ellipse' ? 'ellipse' : e.type === 'diamond' ? 'diamond' : 'rect';
 
+/** Excalidraw's binding of an arrow end: the point on the shape's outline as a ratio of its box. */
+function bindingAt(elementId: string, box: Box, p: { x: number; y: number }) {
+  const ratio = (v: number, size: number) => (size > 0 ? Math.min(1, Math.max(0, v / size)) : 0.5);
+  return {
+    elementId,
+    fixedPoint: [ratio(p.x - box.x, box.width), ratio(p.y - box.y, box.height)],
+    mode: 'orbit',
+  };
+}
+
 /**
  * An arrow from `a` to `b`, attached to both (the endpoints sit on the shapes' outlines), plus
  * the `boundElements` updates the two shapes need for Excalidraw to treat the arrow as bound.
@@ -119,8 +129,8 @@ export function arrowBetween(
         [dx, dy],
       ],
       lastCommittedPoint: null,
-      startBinding: { elementId: a.id, focus: 0, gap: 1 },
-      endBinding: { elementId: b.id, focus: 0, gap: 1 },
+      startBinding: bindingAt(a.id, ab, start),
+      endBinding: bindingAt(b.id, bb, end),
       startArrowhead: null,
       endArrowhead: 'arrow',
       elbowed: false,

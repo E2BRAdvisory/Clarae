@@ -1431,12 +1431,30 @@ textarea.merge {
   min-height: 0;
   position: relative;
 }
-.drawing-canvas.presenting .excalidraw .layer-ui__wrapper {
+.drawing-canvas.presenting .excalidraw .layer-ui__wrapper,
+.drawing-canvas.presenting .excalidraw .App-top-bar,
+.drawing-canvas.presenting .excalidraw .App-bottom-bar {
   /* Presentation: toolbar, menu, library, zoom, undo/redo and hints are all hidden. */
   display: none;
 }
+.drawing-island {
+  position: absolute;
+  inset: 0;
+}
 .drawing-canvas .excalidraw {
   height: 100%;
+  /* Toolbar, menus and buttons at 90% of Excalidraw's standard size (2.375/2.25/1.25 rem). */
+  --lg-button-size: 2.1375rem;
+  --lg-icon-size: 1.125rem;
+  --default-button-size: 2.025rem;
+  --default-icon-size: 1.125rem;
+}
+.drawing-canvas .excalidraw .dropdown-menu {
+  font-size: 0.9em;
+}
+/* No Excalidraw main menu (find, help, reset canvas, links, background): not part of the app. */
+.drawing-canvas .excalidraw .main-menu-trigger {
+  display: none;
 }
 .embed-drawing-wrap {
   display: block;
