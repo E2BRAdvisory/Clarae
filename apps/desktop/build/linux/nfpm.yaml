@@ -1,0 +1,32 @@
+# nfpm recipe for the .deb (scripts/release/package-linux.sh deb <version>).
+# Environment: VERSION (semver; nfpm turns "-rc.1" into "~rc.1"), ARCH (amd64|arm64), STAGE (directory
+# with memobrain, memobrain.desktop, dev.memobrain.desktop.metainfo.xml, memobrain.png prepared by the script).
+name: memobrain
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: MemoBrain Notes <efrem.ropelato@e2br-advisory.ch>
+description: |
+  Local-first notes and knowledge base.
+  Notes are ordinary Markdown files; optional cloud sync with end-to-end encryption.
+homepage: https://github.com/E2BR/MemoBrain
+license: Proprietary
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+contents:
+  - src: ${STAGE}/memobrain
+    dst: /usr/bin/memobrain
+    file_info:
+      mode: 0755
+  - src: ${STAGE}/memobrain.desktop
+    dst: /usr/share/applications/memobrain.desktop
+  - src: ${STAGE}/dev.memobrain.desktop.metainfo.xml
+    dst: /usr/share/metainfo/dev.memobrain.desktop.metainfo.xml
+  - src: ${STAGE}/memobrain.png
+    dst: /usr/share/icons/hicolor/512x512/apps/memobrain.png
+scripts:
+  postinstall: apps/desktop/build/linux/postinst.sh
+  postremove: apps/desktop/build/linux/postinst.sh

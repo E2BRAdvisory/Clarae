@@ -52,7 +52,7 @@ CLAUDE.md
 # Playwright output
 test-results/
 playwright-report/
-apps/desktop/build
+apps/desktop/build/bin/
 packages/workbench/wailsjs/
 apps/desktop/frontend/package.json.md5
 
