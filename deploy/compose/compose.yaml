@@ -58,7 +58,7 @@ services:
         condition: service_healthy
 
   cloud-api:
-    image: ${MEMOBRAIN_IMAGE:-ghcr.io/ORG/memobrain-cloud}:${MEMOBRAIN_VERSION:?set MEMOBRAIN_VERSION in .env}
+    image: ${MEMOBRAIN_IMAGE:-ghcr.io/e2br/memobrain-cloud}:${MEMOBRAIN_VERSION:?set MEMOBRAIN_VERSION in .env}
     restart: unless-stopped
     command: ['--role=api']
     environment: *cloud-env
@@ -75,7 +75,7 @@ services:
     expose: ['18081', '18082']
 
   cloud-worker:
-    image: ${MEMOBRAIN_IMAGE:-ghcr.io/ORG/memobrain-cloud}:${MEMOBRAIN_VERSION}
+    image: ${MEMOBRAIN_IMAGE:-ghcr.io/e2br/memobrain-cloud}:${MEMOBRAIN_VERSION}
     restart: unless-stopped
     command: ['--role=worker']
     environment: *cloud-env

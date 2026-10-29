@@ -39,6 +39,7 @@ M7 richiede installer firmati, aggiornamento automatico dal canale firmato, imma
 ## Verificato e non
 
 - **Verificato qui**: test Go (firma valida/invalida/manomessa/chiave errata, downgrade, replay, hash, dimensione, server `httptest` end to end, apply per OS con runner finti) e UI con mock; `wails build` universale macOS e `.dmg` non firmato; installer NSIS per Windows cross-compilato (non eseguito); `helm lint`/`template` e deploy su k3d usa e getta; `docker compose` con avvio completo e `/readyz`; `actionlint`.
+- **Aggiornamento M10 (ADR-0031):** i workflow sono stati riscritti (un solo workflow per tag, canale non firmato, matrice con Windows e Linux arm64); la validazione resta `actionlint` e prove locali, ancora **nessuna esecuzione su GitHub**.
 - **Non verificato**: esecuzione dei workflow; firma Authenticode, firma/notarizzazione Apple, cosign, attestazioni; build Linux, `.deb`, AppImage; l'applicazione reale dell'aggiornamento su Windows, macOS e Linux; TLS e gRPC attraverso il proxy; HPA con carico.
 
 ## Alternative considerate

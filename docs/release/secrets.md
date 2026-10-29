@@ -1,18 +1,35 @@
 # Segreti e variabili della pipeline di rilascio
 
-Elenco completo di ciò che va configurato nel repository GitHub (Settings, Secrets and variables, Actions) perché `release.yml` e `release-images.yml` firmino. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui. Senza questi valori le pipeline si comportano così: su un tag **falliscono con un errore esplicito**, nei dry-run (`workflow_dispatch`) producono artefatti non firmati con un `::warning::` ben visibile.
+Elenco completo di ciò che si può configurare nel repository GitHub (Settings, Secrets and variables, Actions) perché `release.yml` e `release-images.yml` firmino. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
+
+**Nessun segreto è obbligatorio** (ADR-0031): senza certificati la pipeline produce un canale **non firmato** (installer senza firma, updater disattivato, release segnata come prerelease con la nota "unsigned"). Per tornare al comportamento rigido, in cui un segreto mancante su un tag fa fallire la pipeline, impostare la variabile `REQUIRE_SIGNING=true`. La firma si attiva da sola quando i segreti compaiono: non serve toccare i workflow.
+
+## Cosa succede con o senza ciascun segreto
+
+| Manca                                                            | Effetto (`REQUIRE_SIGNING` non impostata)                                                                                      | Con `REQUIRE_SIGNING=true` su un tag |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `APPLE_CERT_P12_BASE64` o `APPLE_SIGNING_IDENTITY`               | `.dmg` non firmato né notarizzato: Gatekeeper avvisa (tasto destro, Apri).                                                      | La pipeline fallisce in `meta`.      |
+| `APPLE_API_KEY_*`                                                | `.dmg` firmato ma non notarizzato (se il resto c'è).                                                                            | Come sopra.                          |
+| `WINDOWS_CERT_PFX_BASE64`                                        | `memobrain.exe` e installer non firmati: SmartScreen avvisa (Ulteriori informazioni, Esegui comunque).                          | La pipeline fallisce in `meta`.      |
+| `UPDATE_SIGNING_KEY` o variabile `UPDATE_PUBLIC_KEY`             | Il desktop è compilato con l'updater **disattivato** (`updater.DisabledByBuild`) e non si pubblica nessun manifest.            | La pipeline fallisce in `meta`.      |
+| nessuno dei precedenti                                           | Release in prerelease "unsigned", bozza (vedi `RELEASE_AUTO_PUBLISH`). Le immagini Docker restano firmate (cosign è keyless).  | La pipeline fallisce in `meta`.      |
+
+Un `dry run` (`workflow_dispatch`) non firma con i segreti reali a meno di `use_secrets=true`, non pubblica immagini e non crea la release.
 
 ## Variabili (pubbliche, tab Variables)
 
 | Nome                    | Uso                                                                                                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `UPDATE_PUBLIC_KEY`     | Chiave pubblica ed25519 (base64) che i client usano per verificare il manifest di aggiornamento; compilata nel binario con ldflags. **Obbligatoria su tag**: `build-desktop.sh --release` rifiuta di compilare con la chiave di sviluppo. |
-| `UPDATE_BASE_URL`       | URL pubblico del canale di aggiornamento (contiene `stable/manifest.json` e `beta/manifest.json`, con i `.sig`). Obbligatoria su tag.                                                                                                     |
+| `UPDATE_PUBLIC_KEY`     | Chiave pubblica ed25519 (base64) che i client usano per verificare il manifest di aggiornamento; compilata nel binario con ldflags. Senza di essa l'updater è disattivato nella build: `build-desktop.sh --release` non compila mai con la chiave di sviluppo. |
+| `UPDATE_BASE_URL`       | URL pubblico del canale di aggiornamento (contiene `stable/manifest.json` e `beta/manifest.json`, con i `.sig`). Serve solo con l'updater attivo.                                                                                           |
+| `REQUIRE_SIGNING`       | (opzionale) `true`: un tag senza tutti i segreti di firma fallisce. Default: canale non firmato.                                                                                                                                            |
+| `RELEASE_AUTO_PUBLISH`  | (opzionale) `true`: la release è pubblicata subito. Default: bozza, che una persona promuove dopo la checklist su tre sistemi.                                                                                                              |
+| `LINUX_ARM64_RUNNER`    | (opzionale) etichetta di un runner arm64, es. `ubuntu-24.04-arm` (gratuito nei repository pubblici). Senza, nessun installer Linux arm64.                                                                                                   |
 | `WINDOWS_TIMESTAMP_URL` | (opzionale) server RFC 3161, default `http://timestamp.digicert.com`.                                                                                                                                                                     |
 
 ## Segreti (tab Secrets)
 
-### Manifest di aggiornamento (obbligatorio su tag)
+### Manifest di aggiornamento (opzionale: senza, niente aggiornamenti automatici)
 
 | Nome                 | Contenuto                                                                                                                                           |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,7 +58,7 @@ Un certificato EV su token hardware non è utilizzabile da un runner ospitato da
 
 ### Immagini OCI e chart Helm
 
-Nessun segreto aggiuntivo: la firma `cosign` è **keyless** (identità OIDC del workflow, permesso `id-token: write`) e il push su GHCR usa `GITHUB_TOKEN` (`packages: write`). Il pacchetto GHCR creato al primo push è privato: renderlo pubblico o concedere l'accesso al repository dalle impostazioni del pacchetto.
+Nessun segreto aggiuntivo: la firma `cosign` è **keyless** (identità OIDC del workflow, permesso `id-token: write`) e il push su GHCR usa `GITHUB_TOKEN` (`packages: write`). Il pacchetto GHCR creato al primo push è privato: renderlo pubblico (Package settings, Change visibility) o concedere l'accesso al repository dalle impostazioni del pacchetto. Il package del chart (`.../charts/memobrain`) è separato e va reso pubblico a parte.
 
 ## Generare la chiave del manifest
 
@@ -56,7 +73,7 @@ Salvare la chiave privata in un password manager o in un HSM/vault e tenerne una
 
 ## Chiave di sviluppo
 
-Senza `UPDATE_PUBLIC_KEY` i binari si fidano della chiave di sviluppo, derivata da una frase pubblica (`internal/updater/key.go`): **chiunque** può firmare manifest accettati da quei binari. Va bene per test locali, mai per build distribuite: per questo `--release` fallisce.
+Senza `UPDATE_PUBLIC_KEY` una build locale si fida della chiave di sviluppo, derivata da una frase pubblica (`internal/updater/key.go`): **chiunque** può firmare manifest accettati da quei binari. Va bene per test locali, mai per build distribuite: per questo `--release` fallisce, a meno di `ALLOW_UNSIGNED_UPDATES=1` (la pipeline lo imposta quando mancano le chiavi), che compila l'updater **fuori** dal binario.
 
 ## Rotazione e compromissione
 

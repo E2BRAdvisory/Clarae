@@ -1,9 +1,10 @@
 **/node_modules
 **/dist
+build
+web/dist-e2e
 apps/desktop/build/bin
-apps/desktop/frontend/src
 apps/desktop/frontend/e2e
-apps/desktop/frontend/wailsjs
+packages/workbench/wailsjs
 tools
 docs
 deploy

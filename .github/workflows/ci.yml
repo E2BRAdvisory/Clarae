@@ -4,10 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The release workflows call this one: nothing is published unless the whole suite passes (ADR-0031).
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # github.workflow is the CALLER's name in a reusable call, so a release never shares a group with a branch run.
+  group: ${{ github.workflow }}-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   GOTOOLCHAIN: auto
@@ -46,30 +49,43 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --immutable
+      # The workbench UI is typed against the Wails bindings generated from the Go API (not in the repository).
+      - run: make packages/workbench/wailsjs/go/models.ts
       - run: yarn run lint
       - run: yarn typecheck
       - run: yarn run test
 
   e2e:
-    name: UI end-to-end (Playwright, mocked bindings and API)
+    name: 'UI end-to-end (Playwright, desktop UI on mocked bindings, Web UI and workbench on the real core)'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --immutable
+      - run: make packages/workbench/wailsjs/go/models.ts
+      # The vault workbench runs the desktop core as WebAssembly in a worker (ADR-0030).
+      - run: make wasm-core
       - run: yarn workspace @memobrain/desktop-frontend exec playwright install --with-deps chromium
       - run: yarn workspace @memobrain/desktop-frontend run e2e
       - run: yarn workspace @memobrain/web run e2e
+      # The desktop's own user-flow specs, on the workbench in the browser (real core, OPFS, sqlite-wasm).
+      - run: yarn workspace @memobrain/web run e2e:workbench-ui
 
   conformance:
     name: Conformance fixtures (Go + TS)
@@ -112,6 +128,32 @@ jobs:
           go-version-file: tools/go.mod
       - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - run: cd apps/desktop && go test -race -count=1 -tags "integration webkit2_41" ./internal/sync/...
+
+  wasm-core:
+    name: Desktop core as WebAssembly (Go tests under Node + size)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --immutable
+      # The web parity matrix lists every command and binding: it must be regenerated when one is added.
+      - run: make packages/workbench/wailsjs/go/models.ts
+      - run: node scripts/parity.mjs --check
+      # Every package of the desktop core must keep compiling and passing with GOOS=js (sqlite-wasm bridge).
+      - run: make test-wasm
+      - run: make wasm-core
+      - name: The core stays small enough to ship (gzip, limit in web/scripts/esbuild.mjs)
+        run: |
+          size=$(gzip -9 -c build/wasm/memobrain-core.wasm | wc -c)
+          echo "memobrain-core.wasm: $size bytes gzip"
+          [ "$size" -le $((8192 * 1024)) ]
 
   gen-check:
     name: Generated code is up to date
@@ -161,7 +203,19 @@ jobs:
       - name: Linux deps
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+      # Wails v2.12.0 does not build with Go 1.27 as published: scripts/install-wails.sh links a current x/tools.
+      - name: Wails CLI (cached)
+        id: wails-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/wails*
+          key: wails-v2.12.0-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/go.mod', 'scripts/install-wails.sh') }}
+      - name: Wails CLI (build)
+        if: steps.wails-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash scripts/install-wails.sh
+      - run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
+        shell: bash
       - run: yarn install --immutable
       - run: cd apps/desktop && wails build -clean ${{ matrix.tags }} -ldflags "-X main.Version=${{ github.sha }}"
         shell: bash

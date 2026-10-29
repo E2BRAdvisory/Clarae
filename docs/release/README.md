@@ -1,6 +1,6 @@
 # Processo di rilascio
 
-Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. **Stato**: le pipeline GitHub (`release.yml`, `release-images.yml`) sono scritte e validate con `actionlint` ma **non sono mai state eseguite**; firma, notarizzazione, cosign e pubblicazione sono configurate e non verificate. Il primo giro reale è il release candidate (RC).
+Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline e canale non firmato: ADR-0031. **Stato**: le pipeline GitHub (`ci.yml`, `release.yml`, `release-images.yml`) sono scritte e validate con `actionlint` ma **non sono mai state eseguite su GitHub**; firma, notarizzazione, cosign, la build Windows arm64 e Linux arm64 e la pubblicazione sono configurate e non verificate. Il primo giro reale è un dry run e poi il release candidate (RC).
 
 ## Versioni e canali
 
@@ -11,7 +11,7 @@ Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. **Stato*
 ## Prima di tagliare
 
 1. `main` verde in CI (`make ci`), checklist cross-OS aggiornata (`docs/qa/`).
-2. Variabili e segreti configurati (`secrets.md`); `UPDATE_PUBLIC_KEY` corrisponde alla chiave privata in `UPDATE_SIGNING_KEY` (provare con `bin/release`).
+2. Variabili e segreti configurati (`secrets.md`), **se si vuole firmare**: senza, il rilascio esce non firmato (prerelease). Se ci sono, `UPDATE_PUBLIC_KEY` corrisponde alla chiave privata in `UPDATE_SIGNING_KEY` (provare con `bin/release`).
 3. (Consigliato) dry run: Actions, "Release", Run workflow, versione `0.0.0-dryrun.1`. Costruisce tutto senza creare release; con `use_secrets` firma davvero.
 4. Note di rilascio: sezione `## X.Y.Z` in `CHANGELOG.md` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
 
@@ -21,16 +21,21 @@ Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. **Stato*
 git tag -a v1.0.0 -m "MemoBrain Notes 1.0.0" && git push origin v1.0.0     # azione dell'utente: gli agenti non fanno tag/push
 ```
 
-Il push del tag avvia due workflow:
+Il push del tag avvia **un solo workflow**, `release.yml`, che nell'ordine:
 
-- **Release**: test, build su macOS/Windows/Linux, firma e notarizzazione (su tag mancano segreti = errore), `SHA256SUMS`, SBOM, attestazione di provenienza, manifest di aggiornamento firmato, **GitHub Release in bozza** con tutti i file.
-- **Release images**: immagine cloud multi-arch su GHCR, firma cosign keyless, SBOM e provenienza BuildKit; chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/memobrain`).
+1. richiama `ci.yml` (tutta la suite: se fallisce non si pubblica niente);
+2. costruisce e pubblica l'**immagine cloud** multi-arch su GHCR (`release-images.yml`, cross-compilata, firma cosign keyless, SBOM e provenienza BuildKit) e il chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/memobrain`);
+3. costruisce gli installer: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage) e, con la variabile `LINUX_ARM64_RUNNER`, Linux arm64;
+4. crea **una** GitHub Release con installer, `SHA256SUMS`, SBOM, attestazione di provenienza, riferimento all'immagine (con digest) e al chart, e (solo con le chiavi) il manifest di aggiornamento firmato. È una **bozza**, a meno di `RELEASE_AUTO_PUBLISH=true`, e una **prerelease** se la versione ha un suffisso o gli installer non sono firmati.
+
+Ogni push su `main` pubblica inoltre l'immagine `ghcr.io/<owner>/memobrain-cloud:edge` (e `sha-<commit>`), firmata: è il canale per provare il cloud senza un tag.
 
 Poi, a mano:
 
 1. Scaricare gli artefatti della bozza e **verificarli** (sotto), eseguire la checklist cross-OS su macchine pulite (installazione, apertura `memobrain://`, login, update dalla versione precedente).
 2. Pubblicare la Release (toglie lo stato di bozza).
-3. **Attivare il canale di aggiornamento**: copiare `manifest.json` e `manifest.json.sig` nella cartella del canale (`stable/` o `beta/` sotto `UPDATE_BASE_URL`). Finché non lo si fa, nessun client riceve l'aggiornamento: è il passaggio di "go live" e va fatto per ultimo. Gli URL degli artefatti nel manifest puntano agli asset della Release.
+3. **Rendere pubblici i pacchetti GHCR** (immagine e chart: la prima volta sono privati; Package settings, Change visibility) se non devono richiedere un login.
+4. **Attivare il canale di aggiornamento** (solo con le chiavi di aggiornamento; senza, l'updater è disattivato nei binari e non c'è nessun manifest): copiare `manifest.json` e `manifest.json.sig` nella cartella del canale (`stable/` o `beta/` sotto `UPDATE_BASE_URL`). Finché non lo si fa, nessun client riceve l'aggiornamento: è il passaggio di "go live" e va fatto per ultimo. Gli URL degli artefatti nel manifest puntano agli asset della Release.
 
 Regola sul `sequence` del manifest: è il numero di run del workflow, quindi cresce a ogni rilascio. **Non rieseguire il workflow di un tag vecchio dopo averne pubblicato uno più nuovo**: produrrebbe un manifest con sequence maggiore e versione minore, che i client rifiutano (revoca a monte) ma che sporcherebbe il canale.
 
@@ -45,11 +50,11 @@ sha256sum -c SHA256SUMS
 # manifest di aggiornamento
 bin/release verify-manifest -in manifest.json -pubkey "$UPDATE_PUBLIC_KEY"
 # immagine OCI
-cosign verify ghcr.io/ORG/memobrain-cloud:1.0.0 \
-  --certificate-identity-regexp '^https://github.com/ORG/REPO/' \
+cosign verify ghcr.io/e2br/memobrain-cloud:1.0.0 \
+  --certificate-identity-regexp '^https://github.com/E2BR/MemoBrain/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # attestazione di provenienza dei file
-gh attestation verify memobrain-1.0.0-linux-amd64.deb --repo ORG/REPO
+gh attestation verify memobrain-1.0.0-linux-amd64.deb --repo E2BR/MemoBrain
 # macOS
 spctl --assess --type open --context context:primary-signature -v memobrain-1.0.0-darwin-universal.dmg
 xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
@@ -57,7 +62,8 @@ xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
 
 ## Build locali (senza segreti)
 
-- `make release-desktop OS=darwin V=1.0.0-rc.1` (poi `scripts/release/package-macos.sh 1.0.0-rc.1`): `.app` universale e `.dmg` **non firmato**. Funziona su macOS; `OS=windows` produce l'installer NSIS anche da macOS con `makensis` installato (non firmato, non provato su Windows).
+- `make release-desktop OS=darwin V=1.0.0-rc.1` (poi `scripts/release/package-macos.sh 1.0.0-rc.1`): `.app` universale e `.dmg` **non firmato**. Funziona su macOS; `OS=windows` (`ARCH=amd64|arm64`) produce l'installer NSIS anche da macOS con `makensis` installato (non firmato, non provato su Windows). Lo script firma `memobrain.exe` prima di impacchettarlo quando `MEMOBRAIN_SIGNTOOL_CMD` è impostata, ed esegue `makensis` direttamente (il template `wails_tools.nsh` è reso da `scripts/release/nsis-render.go`).
+- Immagine cloud: `make docker-build` (architettura locale) e `make docker-push` (multi-arch, richiede `docker login` e un builder buildx).
 - `scripts/release/package-linux.sh` richiede `nfpm` e `appimagetool` su Linux.
 - Icone: l'app non ha ancora un'icona definitiva; si usa `apps/desktop/build/appicon.png` (1024 px, Wails ricava `icon.ico` e `iconfile.icns`). Sostituire quel file e `build/windows/icon.ico` quando c'è la grafica finale: nient'altro da toccare.
 

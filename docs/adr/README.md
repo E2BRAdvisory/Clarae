@@ -31,5 +31,9 @@ Le deviazioni e le precisazioni rispetto a `Specifications.md` si registrano com
 | [0025](0025-desktop-frontend-esbuild.md)             | Frontend desktop e Web UI: build e dev server con esbuild al posto di Vite           | accettata |
 | [0026](0026-shell-ui-revisione.md)                   | Revisione della shell UI desktop: ribbon, sidebar, footer, tab bloccabili (M8)       | proposta  |
 | [0027](0027-slides-note.md)                          | Slides: presentazione di note (M8-WP8)                                               | proposta  |
+| [0028](0028-excalidraw-fork-obsidian.md)             | Excalidraw: fork del plugin Obsidian (lazo, secchiello, disegna per la forma)        | proposta  |
+| [0029](0029-web-workbench.md)                        | Workbench del vault nella Web UI (M9)                                                | proposta  |
+| [0030](0030-desktop-core-wasm.md)                    | Core del desktop compilato in WebAssembly per il workbench web (M9)                  | proposta  |
+| [0031](0031-release-pipeline-unsigned-channel.md)    | Pipeline di rilascio: correzioni, canale non firmato, matrice estesa (M10)           | proposta  |
 
 Nota: gli ADR 0015 e 0018 usano un'intestazione in forma di elenco invece della tabella del template; il contenuto resta valido, l'uniformazione del formato è un'attività di pulizia non bloccante. Le righe 0020–0023 vanno trasformate in link quando i file arrivano (i titoli riportati sono provvisori).
