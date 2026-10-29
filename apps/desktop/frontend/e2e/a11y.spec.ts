@@ -64,13 +64,43 @@ for (const theme of ['light', 'dark'] as const) {
       await page.keyboard.press('ControlOrMeta+n');
       await expect(page.getByLabel('Note editor')).toBeVisible();
       await scan(page, 'shell');
-      for (const tab of ['Files', 'Search', 'Tags', 'Outline']) {
+      await page.keyboard.press('ControlOrMeta+Shift+r');
+      for (const tab of [
+        'Files',
+        'Outline',
+        'Properties',
+        'Tags',
+        'Links',
+        'Slides',
+        'Statistics',
+      ]) {
         const t = page.getByRole('tab', { name: tab });
         if (await t.count()) {
           await t.first().click();
           await scan(page, `sidebar ${tab}`);
         }
       }
+      // Search is opened from the header / hotkey and shows as a tab only while active.
+      await page.keyboard.press('ControlOrMeta+Shift+f');
+      await expect(page.getByRole('tab', { name: 'Search' })).toBeVisible();
+      await scan(page, 'sidebar Search');
+    });
+
+    test('tab menu with a locked tab, and the vault menu', async ({ page }) => {
+      await openVault(page, theme);
+      await page.keyboard.press('ControlOrMeta+n');
+      await expect(page.getByLabel('Note editor')).toBeVisible();
+      await page.getByRole('tab', { name: /Untitled/ }).click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Lock tab' }).click();
+      const locked = page.getByRole('tab', { name: /\(locked\)/ });
+      await expect(locked).toBeVisible();
+      await locked.click({ button: 'right' });
+      await expect(page.getByRole('menu')).toBeVisible();
+      await scan(page, 'tab menu (locked tab)');
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: /Switch vault/ }).click();
+      await expect(page.getByRole('menu')).toBeVisible();
+      await scan(page, 'vault menu');
     });
 
     test('command palette and quick switcher', async ({ page }) => {
@@ -116,7 +146,7 @@ for (const theme of ['light', 'dark'] as const) {
       );
       await scan(page, 'drawing');
 
-      await page.getByRole('button', { name: 'Export' }).click();
+      await page.getByRole('button', { name: 'Export', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await scan(page, 'drawing export dialog');
       await page.keyboard.press('Escape');
