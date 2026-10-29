@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +23,9 @@ type fakeIdP struct {
 	tokens   atomic.Int32
 	revoked  atomic.Int32
 	rejectRT atomic.Bool
+	// singleUse makes refresh tokens one-shot (rotation with reuse detection, as Keycloak does).
+	singleUse atomic.Bool
+	usedRT    sync.Map
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -68,6 +72,14 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		default:
 			http.Error(w, "unsupported", http.StatusBadRequest)
 			return
+		}
+		if r.Form.Get("grant_type") == "refresh_token" && f.singleUse.Load() {
+			if _, reused := f.usedRT.LoadOrStore(r.Form.Get("refresh_token"), true); reused {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"Token reuse detected"}`))
+				return
+			}
 		}
 		n := f.tokens.Add(1)
 		w.Header().Set("Content-Type", "application/json")
@@ -277,5 +289,49 @@ func TestStateMismatchRejected(t *testing.T) {
 	}
 	if svc.State().Status != StatusSignedOut {
 		t.Fatalf("expected signed_out, got %s", svc.State().Status)
+	}
+}
+
+// A session cleared while completeSession is about to run must not panic on a nil client.
+func TestCompleteSessionSignedOut(t *testing.T) {
+	svc, _ := newService(t, RedirectLoopback, &browser{})
+	if err := svc.completeSession(context.Background()); err == nil {
+		t.Fatal("expected an error when signed out")
+	}
+}
+
+// Concurrent callers (startup restore, the sync loops, the notifier) must not refresh with the same
+// single-use refresh token: the loser would be rejected and the whole session signed out.
+func TestConcurrentRefreshKeepsSession(t *testing.T) {
+	idp := newFakeIdP(t)
+	cloud := newFakeCloud(t, idp.srv.URL)
+	svc, _ := newService(t, RedirectAuto, &browser{t: t, follow: true})
+	ctx := context.Background()
+	if err := svc.Login(ctx, cloud.URL); err != nil {
+		t.Fatal(err)
+	}
+	idp.singleUse.Store(true)
+	svc.mu.Lock()
+	svc.expiry = time.Now()
+	svc.mu.Unlock()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := svc.Token(ctx); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent Token: %v", err)
+	}
+	if svc.State().Status == StatusSignedOut {
+		t.Fatal("the session was signed out by a concurrent refresh")
 	}
 }

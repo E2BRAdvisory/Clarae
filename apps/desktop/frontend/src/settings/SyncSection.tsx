@@ -62,6 +62,9 @@ export function SyncSection() {
   const disk = useSync((s) => s.diskWarning);
   const [form, setForm] = useState<'none' | 'passphrase' | 'recovery'>('none');
   const [newKey, setNewKey] = useState('');
+  const auth = useAppStore((s) => s.auth);
+  const setAuth = useAppStore((s) => s.setAuth);
+  const [signingIn, setSigningIn] = useState(false);
 
   if (!vault) return <p className="muted">{t('settings.needsVault')}</p>;
   const id = vault.id;
@@ -121,6 +124,25 @@ export function SyncSection() {
             : ''}
         </span>
       </div>
+      {(auth?.status ?? 'signed_out') === 'signed_out' && (
+        <div className="row">
+          <span className="muted">{t('sync.signedOutHint')}</span>
+          <button
+            className="primary"
+            disabled={signingIn}
+            onClick={() => {
+              setSigningIn(true);
+              void api.auth
+                .login(info.serverUrl)
+                .then(setAuth)
+                .catch(async () => setAuth(await api.auth.status()))
+                .finally(() => setSigningIn(false));
+            }}
+          >
+            {t('cloud.login')}
+          </button>
+        </div>
+      )}
       {status?.error && (
         <div className="error small" role="alert">
           {status.error}

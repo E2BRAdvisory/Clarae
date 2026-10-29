@@ -98,6 +98,10 @@ type Service struct {
 	secrets SecretStore
 	hc      *http.Client
 
+	// refreshMu serializes token refreshes: the refresh token rotates, so two concurrent
+	// refreshes with the same token make the second one fail (reuse detection) and sign out.
+	refreshMu sync.Mutex
+
 	mu       sync.Mutex
 	state    State
 	session  *persisted
@@ -327,6 +331,10 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 // persists the session, then goes to ready.
 func (s *Service) completeSession(ctx context.Context) error {
 	client := s.Client()
+	if client == nil {
+		// Signed out meanwhile (e.g. the refresh token was rejected by a concurrent call).
+		return errors.New("not signed in")
+	}
 	me, err := client.GetMe(ctx)
 	if err != nil {
 		return fmt.Errorf("profile: %w", err)
@@ -334,6 +342,9 @@ func (s *Service) completeSession(ctx context.Context) error {
 	s.mu.Lock()
 	sess := s.session
 	s.mu.Unlock()
+	if sess == nil {
+		return errors.New("not signed in")
+	}
 	if sess.DeviceID == "" {
 		dev, err := client.RegisterDevice(ctx, transport.DeviceRegistration{Name: s.opts.DeviceName, Platform: s.opts.Platform, AppVersion: s.opts.AppVersion})
 		if err != nil {
@@ -387,6 +398,21 @@ func (s *Service) HandleCallback(params url.Values) bool {
 // Token implements transport.TokenSource: returns a valid access token,
 // refreshing it (with rotation) when it is about to expire.
 func (s *Service) Token(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	if s.session == nil {
+		s.mu.Unlock()
+		return "", errors.New("not signed in")
+	}
+	if s.access != "" && time.Until(s.expiry) > 30*time.Second {
+		tok := s.access
+		s.mu.Unlock()
+		return tok, nil
+	}
+	s.mu.Unlock()
+
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	// Another caller may have refreshed (and rotated the token) while this one waited.
 	s.mu.Lock()
 	if s.session == nil {
 		s.mu.Unlock()
