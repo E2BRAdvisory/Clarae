@@ -21,6 +21,18 @@ export function useMe() {
   return useQuery({ queryKey: keys.me, queryFn: () => unwrap(api.GET('/me')) });
 }
 
+/** Whether the administrator allows opening vaults in the browser (feature `web_workbench`, on by default). */
+export function useWorkbenchAllowed(): boolean {
+  const api = useApi();
+  const q = useQuery({
+    queryKey: ['config', 'effective'],
+    queryFn: () => unwrap(api.GET('/config/effective')),
+    staleTime: 60_000,
+  });
+  const features = (q.data?.config as { features?: Record<string, unknown> } | undefined)?.features;
+  return features?.['web_workbench'] !== false;
+}
+
 export function useUsage() {
   const api = useApi();
   return useQuery({ queryKey: keys.usage, queryFn: () => unwrap(api.GET('/me/usage')) });

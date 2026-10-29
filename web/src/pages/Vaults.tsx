@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Badge, EmptyState, Table } from '@memobrain/ui';
 import type { Schemas } from '@memobrain/api-client';
-import { useVaults } from '../api/queries';
+import { useVaults, useWorkbenchAllowed } from '../api/queries';
 import { formatBytes, formatDay } from '../format';
 import { QueryState } from './QueryState';
 import { VaultExport } from './VaultExport';
@@ -18,6 +18,7 @@ function VaultsTable({
 }) {
   const { t, i18n } = useTranslation();
   const loc = i18n.language;
+  const canOpen = useWorkbenchAllowed();
   return (
     <Table caption={caption}>
       <thead>
@@ -34,6 +35,11 @@ function VaultsTable({
             {t('vaults.colSeq')}
           </th>
           <th scope="col">{t('vaults.colCreated')}</th>
+          {canOpen && (
+            <th scope="col">
+              <span className="nd-visually-hidden">{t('vaults.open')}</span>
+            </th>
+          )}
           {exportable && (
             <th scope="col">
               <span className="nd-visually-hidden">{t('vaultExport.column')}</span>
@@ -54,6 +60,18 @@ function VaultsTable({
             <td className="nd-num">{v.file_count.toLocaleString(loc)}</td>
             <td className="nd-num">{v.last_seq.toLocaleString(loc)}</td>
             <td>{formatDay(v.created_at, loc)}</td>
+            {canOpen && (
+              <td>
+                {/* A full page load: the workbench has its own HTML and style sheet (ADR-0029). */}
+                <a
+                  className="nd-button nd-button--small"
+                  href={`/vaults/${encodeURIComponent(v.id)}/open`}
+                  aria-label={t('vaults.openAria', { name: v.name })}
+                >
+                  {t('vaults.open')}
+                </a>
+              </td>
+            )}
             {exportable && (
               <td>
                 <VaultExport vault={{ id: v.id, name: v.name }} kind={v.kind} />

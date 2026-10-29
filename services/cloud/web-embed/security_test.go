@@ -46,7 +46,28 @@ func attrs(s string) map[string]string {
 }
 
 func TestBuiltIndexPinsEverySubresourceWithSRI(t *testing.T) {
-	html := indexHTML(t)
+	checkPagePinsEverySubresource(t, "index.html")
+}
+
+// The vault workbench page is held to the same rules: no inline code, nothing from another origin, and
+// every script and style sheet pinned by SRI to the bytes that are really embedded.
+func TestBuiltWorkbenchPinsEverySubresourceWithSRI(t *testing.T) {
+	if _, err := fs.Stat(Dist(), "workbench.html"); err != nil {
+		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
+			t.Fatal("workbench.html is not embedded: is dist/ built (make web-build)?")
+		}
+		t.Skip("dist/ holds only the placeholder index (run make web-build)")
+	}
+	checkPagePinsEverySubresource(t, "workbench.html")
+}
+
+func checkPagePinsEverySubresource(t *testing.T, page string) {
+	t.Helper()
+	b, err := fs.ReadFile(Dist(), page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
 	root := Dist()
 	pinned := 0
 	for _, m := range tagRe.FindAllStringSubmatch(html, -1) {
@@ -55,7 +76,7 @@ func TestBuiltIndexPinsEverySubresourceWithSRI(t *testing.T) {
 		case "script":
 			src := a["src"]
 			if src == "" {
-				t.Errorf("inline <script> in index.html: %q", m[0])
+				t.Errorf("inline <script> in %s: %q", page, m[0])
 				continue
 			}
 			checkPinned(t, root, name, src, a)
@@ -73,9 +94,9 @@ func TestBuiltIndexPinsEverySubresourceWithSRI(t *testing.T) {
 			checkPinned(t, root, name, a["href"], a)
 			pinned++
 		case "style":
-			t.Errorf("inline <style> in index.html")
+			t.Errorf("inline <style> in %s", page)
 		case "iframe", "object", "embed", "form", "base":
-			t.Errorf("unexpected <%s> in index.html", name)
+			t.Errorf("unexpected <%s> in %s", name, page)
 		case "img":
 			checkLocal(t, a["src"])
 		}
@@ -84,13 +105,13 @@ func TestBuiltIndexPinsEverySubresourceWithSRI(t *testing.T) {
 		t.Fatal("index.html references no script or stylesheet: is dist/ built?")
 	}
 	if inlineEvent.MatchString(html) {
-		t.Error("inline event handler attribute in index.html")
+		t.Errorf("inline event handler attribute in %s", page)
 	}
 	if regexp.MustCompile(`(?i)\sstyle\s*=`).MatchString(html) {
-		t.Error("inline style attribute in index.html")
+		t.Errorf("inline style attribute in %s", page)
 	}
 	if strings.Contains(strings.ToLower(html), "javascript:") {
-		t.Error("javascript: URL in index.html")
+		t.Errorf("javascript: URL in %s", page)
 	}
 }
 

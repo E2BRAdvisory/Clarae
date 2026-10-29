@@ -68,7 +68,9 @@
     "colCreated": "Creato",
     "kindPrivate": "Privato (cifrato)",
     "kindShared": "Condiviso",
-    "mounts": "Condivisi con me"
+    "mounts": "Condivisi con me",
+    "open": "Apri",
+    "openAria": "Apri {{name}} nel browser"
   },
   "devices": {
     "title": "Dispositivi",
@@ -139,7 +141,9 @@
     "noResults": "Nessun risultato.",
     "addPermission": "Permesso",
     "add": "Aggiungi",
-    "addAria": "Aggiungi {{name}}"
+    "addAria": "Aggiungi {{name}}",
+    "open": "Apri",
+    "openAria": "Apri {{name}} nel browser"
   },
   "admin": {
     "title": "Amministrazione",
@@ -521,6 +525,11 @@
     "privateWarning_other": "Possiedi {{count}} vault privati. Il loro contenuto è cifrato end-to-end e sarà irrecuperabile: nessuno, nemmeno un amministratore, può ripristinarlo.",
     "privateAck": "Capisco che i miei vault privati non potranno essere recuperati.",
     "confirmLabel": "Scrivi il tuo nome utente ({{username}}) per confermare",
-    "dialogConfirm": "Elimina definitivamente"
+    "dialogConfirm": "Elimina definitivamente",
+    "forgetTitle": "Questo browser",
+    "forgetBody": "I vault che apri nel browser restano su questo computer mentre lavori. Rimuovi quelle copie e i dati che le indicizzano: si scaricano di nuovo alla prossima apertura. Anche l'uscita dall'account lo fa.",
+    "forgetButton": "Dimentica questo browser",
+    "forgetDone": "Questo browser non conserva più nessun vault.",
+    "forgetBusy": "Un vault è aperto in un'altra scheda di questo browser. Chiudila e riprova."
   }
 }

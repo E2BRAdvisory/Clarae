@@ -6,6 +6,7 @@ import { useDeleteMyAccount, useExportMyData } from '../api/account';
 import { useMe, useVaults } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
 import { downloadBlob } from '../export/download';
+import { forgetThisBrowser } from '../workbench/forget';
 
 export function AccountPage() {
   const { t } = useTranslation();
@@ -20,6 +21,16 @@ export function AccountPage() {
   const [ack, setAck] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [forgetError, setForgetError] = useState<string | null>(null);
+
+  const forget = () => {
+    setForgetError(null);
+    forgetThisBrowser().then(
+      (r) =>
+        r.busy ? setForgetError(t('account.forgetBusy')) : toast.push(t('account.forgetDone')),
+      (e: unknown) => setForgetError(describeError(e, t)),
+    );
+  };
 
   const username = me.data?.username ?? '';
   const privateVaults = (vaults.data?.items ?? []).filter((v) => v.kind === 'private');
@@ -69,6 +80,15 @@ export function AccountPage() {
           </Button>
         </div>
         {exportError && <InlineError>{exportError}</InlineError>}
+      </section>
+
+      <section aria-labelledby="account-browser" className="nd-stack">
+        <h2 id="account-browser">{t('account.forgetTitle')}</h2>
+        <p>{t('account.forgetBody')}</p>
+        <div>
+          <Button onClick={forget}>{t('account.forgetButton')}</Button>
+        </div>
+        {forgetError && <InlineError>{forgetError}</InlineError>}
       </section>
 
       <section aria-labelledby="account-delete" className="nd-stack">

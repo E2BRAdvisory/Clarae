@@ -1,0 +1,22 @@
+/* The page around the workbench: only what shows before the UI is up. */
+#status {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 100vh;
+  padding: 24px;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+}
+#status[hidden] {
+  display: none;
+}
+#status.error p {
+  color: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  #status.error p {
+    color: #f2b8b5;
+  }
+}

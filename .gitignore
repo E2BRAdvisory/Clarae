@@ -3,6 +3,7 @@ node_modules/
 dist/
 !services/cloud/web-embed/dist/
 services/cloud/web-embed/dist/*
+web/dist-e2e/
 !services/cloud/web-embed/dist/index.html
 coverage/
 *.tsbuildinfo
@@ -52,5 +53,8 @@ CLAUDE.md
 test-results/
 playwright-report/
 apps/desktop/build
-apps/desktop/frontend/wailsjs/
+packages/workbench/wailsjs/
 apps/desktop/frontend/package.json.md5
+
+# Go core compiled to WebAssembly (make wasm-core)
+build/wasm/

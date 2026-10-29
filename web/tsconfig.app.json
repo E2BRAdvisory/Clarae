@@ -3,7 +3,11 @@
   "compilerOptions": {
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "types": ["vitest/globals"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+    "types": ["vitest/globals"],
+    "paths": {
+      "@memobrain/workbench": ["./src/workbench/workbench.d.ts"]
+    }
   },
   "include": [
     "src",

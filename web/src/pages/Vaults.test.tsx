@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from '../test/utils';
 
@@ -61,5 +61,50 @@ describe('vaults page', () => {
   it('shows an empty state without vaults', async () => {
     renderApp({ path: '/vaults', routes: { 'GET /vaults': { items: [], mounts: [] } } });
     expect(await screen.findByText('You have no vaults yet')).toBeInTheDocument();
+  });
+
+  const oneVault = {
+    items: [
+      {
+        ...base,
+        id: 'v1',
+        name: 'Notes',
+        kind: 'shared',
+        last_seq: 1,
+        total_bytes: 0,
+        file_count: 0,
+      },
+    ],
+    mounts: [],
+  };
+
+  it('offers to open a vault in the browser (the workbench is on by default)', async () => {
+    renderApp({
+      path: '/vaults',
+      routes: {
+        'GET /vaults': oneVault,
+        'GET /config/effective': { version: 1, config: {}, locked_keys: [] },
+      },
+    });
+    const link = await screen.findByRole('link', { name: 'Open Notes in the browser' });
+    expect(link).toHaveAttribute('href', '/vaults/v1/open');
+  });
+
+  it('hides it when the administrator turned the workbench off', async () => {
+    renderApp({
+      path: '/vaults',
+      routes: {
+        'GET /vaults': oneVault,
+        'GET /config/effective': {
+          version: 2,
+          config: { features: { web_workbench: false } },
+          locked_keys: [],
+        },
+      },
+    });
+    await screen.findByRole('rowheader', { name: 'Notes' });
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: /in the browser/ })).not.toBeInTheDocument(),
+    );
   });
 });

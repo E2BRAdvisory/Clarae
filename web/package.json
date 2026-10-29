@@ -10,12 +10,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "e2e:security": "playwright test -c playwright.security.config.ts"
+    "e2e:security": "playwright test -c playwright.security.config.ts",
+    "e2e:workbench-ui": "E2E_TARGET=web E2E_ORIGIN=http://localhost:5176 playwright test -c playwright.workbench-ui.config.ts",
+    "e2e:cloud": "playwright test -c playwright.cloud.config.ts"
   },
   "dependencies": {
     "@memobrain/api-client": "workspace:*",
+    "@memobrain/sqlite-bridge": "workspace:*",
     "@memobrain/ui": "workspace:*",
     "@memobrain/vaultcrypto-web": "workspace:*",
+    "@memobrain/workbench": "workspace:*",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
     "@tanstack/react-query": "^5.104.5",
     "i18next": "^26.5.2",
     "oidc-client-ts": "^3.5.0",

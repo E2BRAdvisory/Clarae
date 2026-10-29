@@ -68,7 +68,9 @@
     "colCreated": "Created",
     "kindPrivate": "Private (encrypted)",
     "kindShared": "Shared",
-    "mounts": "Shared with me"
+    "mounts": "Shared with me",
+    "open": "Open",
+    "openAria": "Open {{name}} in the browser"
   },
   "devices": {
     "title": "Devices",
@@ -139,7 +141,9 @@
     "noResults": "No match.",
     "addPermission": "Permission",
     "add": "Add",
-    "addAria": "Add {{name}}"
+    "addAria": "Add {{name}}",
+    "open": "Open",
+    "openAria": "Open {{name}} in the browser"
   },
   "admin": {
     "title": "Administration",
@@ -521,6 +525,11 @@
     "privateWarning_other": "You own {{count}} private vaults. Their content is end-to-end encrypted and will be irrecoverable: nobody, not even an administrator, can restore it.",
     "privateAck": "I understand that my private vaults cannot be recovered.",
     "confirmLabel": "Type your username ({{username}}) to confirm",
-    "dialogConfirm": "Delete permanently"
+    "dialogConfirm": "Delete permanently",
+    "forgetTitle": "This browser",
+    "forgetBody": "Vaults you open in the browser are kept on this computer while you work. Remove those copies and the data that indexes them: they are downloaded again the next time you open a vault. Signing out does this too.",
+    "forgetButton": "Forget this browser",
+    "forgetDone": "This browser no longer holds any vault.",
+    "forgetBusy": "A vault is open in another tab of this browser. Close it and try again."
   }
 }

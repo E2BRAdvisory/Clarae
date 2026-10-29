@@ -18,6 +18,7 @@ import {
   useDeleteGrant,
   useDirectorySearch,
   useMe,
+  useWorkbenchAllowed,
   usePutGrant,
   useRevokeShare,
   useShares,
@@ -331,6 +332,7 @@ function ReceivedRow({ share }: { share: Share }) {
   const answer = useAnswerInvitation();
   const [error, setError] = useState<string | null>(null);
   const expires = formatDay(share.expires_at, i18n.language);
+  const canOpen = useWorkbenchAllowed();
 
   const reply = (accept: boolean) => {
     setError(null);
@@ -358,6 +360,17 @@ function ReceivedRow({ share }: { share: Share }) {
         {expires ? ` · ${t('shares.expires', { date: expires })}` : ''}
       </p>
       {error && <InlineError>{error}</InlineError>}
+      {share.my_status === 'accepted' && canOpen && (
+        <div className="nd-row">
+          <a
+            className="nd-button nd-button--small"
+            href={`/vaults/${encodeURIComponent(share.vault_id)}/open?share=${encodeURIComponent(share.id)}`}
+            aria-label={t('shares.openAria', { name: share.display_name })}
+          >
+            {t('shares.open')}
+          </a>
+        </div>
+      )}
       {share.my_status === 'pending' && (
         <div className="nd-row">
           <Button

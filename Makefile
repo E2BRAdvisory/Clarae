@@ -38,8 +38,18 @@ gen-sqlc: ## SQL queries -> typed Go (sqlc)
 	@test -f $(CLOUD)/sqlc.yaml || { echo "$(CLOUD)/sqlc.yaml missing (M0-WP3)"; exit 0; }
 	cd $(CLOUD) && sqlc generate
 
-gen-wails: ## Wails Go bindings -> frontend/wailsjs
-	cd $(DESKTOP) && wails generate module
+WAILS ?= $(shell command -v wails 2>/dev/null || echo "$$(go env GOPATH)/bin/wails")
+
+gen-wails: ## Wails Go bindings -> packages/workbench/wailsjs
+	@mkdir -p $(DESKTOP)/frontend/dist
+	@[ -e $(DESKTOP)/frontend/dist/index.html ] || touch $(DESKTOP)/frontend/dist/index.html  # main.go embeds the frontend build
+	cd $(DESKTOP) && $(WAILS) generate module
+
+# The UI is typed against the generated bindings, which the repository does not hold: build them when they are
+# missing (a stale copy is refreshed by `make gen-wails`, or `make gen`).
+packages/workbench/wailsjs/go/models.ts:
+	@command -v wails >/dev/null 2>&1 || [ -x "$$(go env GOPATH)/bin/wails" ] || scripts/install-wails.sh
+	$(MAKE) gen-wails
 
 ## ---- quality ---------------------------------------------------------------
 
@@ -56,11 +66,21 @@ lint-ts: ## ESLint + Prettier
 vuln: ## govulncheck on all Go modules
 	@for m in $(GO_MODULES); do echo "==> $$m"; (cd $$m && govulncheck ./...) || exit 1; done
 
-.PHONY: test test-go test-ts test-integration conformance
+.PHONY: test test-go test-ts test-wasm wasm-core test-integration conformance
 test: test-go test-ts conformance ## Unit tests (Go + TS) and conformance suite
 
 test-go: ## go test -race on all Go modules
 	@for m in $(GO_MODULES); do echo "==> $$m"; (cd $$m && go test -race -count=1 ./...) || exit 1; done
+
+WASM_OUT ?= build/wasm
+
+wasm-core: ## The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core) + wasm_exec.js (ADR-0030)
+	mkdir -p $(WASM_OUT)
+	cd apps/desktop && GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w -X main.Version=$(VERSION)" -o $(CURDIR)/$(WASM_OUT)/memobrain-core.wasm ./cmd/memobrain-core
+	install -m 0644 "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(WASM_OUT)/wasm_exec.js
+
+test-wasm: ## Desktop Go core tests as WebAssembly under Node, with the sqlite-wasm bridge (ADR-0030)
+	cd apps/desktop && GOOS=js GOARCH=wasm go test -count=1 -exec "$(CURDIR)/scripts/go-js-exec.sh" ./internal/... ./cmd/...
 
 test-ts: ## Vitest in every workspace package
 	yarn run test
@@ -73,7 +93,7 @@ conformance: ## Shared Markdown/merge/crypto fixtures run by Go and TS
 	@if [ -d $(DESKTOP)/internal/parser ]; then cd $(DESKTOP) && go test -race -count=1 -run Conformance ./internal/parser/...; fi
 	yarn workspace @memobrain/conformance run test
 	yarn workspace @memobrain/markdown run test
-	@if [ -f $(DESKTOP)/frontend/src/test/conformance.test.ts ]; then yarn workspace @memobrain/desktop-frontend exec vitest run src/test/conformance.test.ts; fi
+	@if [ -f packages/workbench/src/test/conformance.test.ts ]; then yarn workspace @memobrain/workbench exec vitest run src/test/conformance.test.ts; fi
 
 .PHONY: test-desktop-e2e test-load
 test-desktop-e2e: ## Two-device sync e2e (builds the cloud binary, PG via testcontainers)
@@ -141,8 +161,8 @@ dev-stop: ## Stop the cloud process started by the run scripts (add ARGS=--stack
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: web-build web-clean build-cloud build-desktop
-web-build: ## Build the Web UI and copy it into the cloud binary's embed dir (then run build-cloud)
-	yarn workspace @memobrain/web run build
+web-build: wasm-core packages/workbench/wailsjs/go/models.ts ## Build the Web UI (with the WebAssembly core) and copy it into the cloud binary's embed dir (then run build-cloud)
+	MEMOBRAIN_VERSION=$(VERSION) yarn workspace @memobrain/web run build
 	rm -rf $(WEBEMBED)/dist && mkdir -p $(WEBEMBED)/dist
 	cp -R $(WEB)/dist/. $(WEBEMBED)/dist/
 
@@ -155,6 +175,16 @@ build-cloud: ## Build the cloud binary into bin/ (embeds whatever is in web-embe
 
 build-desktop: ## Build the desktop app for the current OS
 	cd $(DESKTOP) && wails build -clean -ldflags "-X main.Version=$(VERSION)"
+
+IMAGE     ?= ghcr.io/e2br/memobrain-cloud
+PLATFORMS ?= linux/amd64,linux/arm64
+
+.PHONY: docker-build docker-push
+docker-build: ## Build the cloud image (Web UI + workbench embedded) for this machine and load it as $(IMAGE):$(VERSION)
+	docker build -f services/cloud/Dockerfile --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) .
+
+docker-push: ## Build and push the multi-arch cloud image ($(PLATFORMS)); needs `docker login` and a buildx builder
+	docker buildx build -f services/cloud/Dockerfile --platform $(PLATFORMS) --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) --push .
 
 ## ---- release / distribution (M7-WP3, docs/release/README.md) --------------
 

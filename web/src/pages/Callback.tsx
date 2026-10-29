@@ -17,7 +17,11 @@ export function CallbackPage() {
     if (started.current) return;
     started.current = true;
     completeSignIn()
-      .then((to) => void navigate(to, { replace: true }))
+      .then((to) => {
+        // The workbench is a page of its own (not a route of this app): load it, do not navigate to it.
+        if (/^\/vaults\/[^/]+\/open\/?(\?|$)/.test(to)) window.location.replace(to);
+        else void navigate(to, { replace: true });
+      })
       .catch(() => setFailed(true));
   }, [completeSignIn, navigate]);
 

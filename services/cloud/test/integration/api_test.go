@@ -167,6 +167,20 @@ func TestDevices(t *testing.T) {
 		t.Fatalf("list: %v", list)
 	}
 
+	// The browser registers itself as a device of its own (the vault workbench, ADR-0029) and can be revoked like any other.
+	resp = e.request(http.MethodPost, "/me/devices", tok, map[string]any{"name": "Firefox on a laptop", "platform": "web"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("register a web device: %d", resp.StatusCode)
+	}
+	webDev := decode[map[string]any](t, resp)
+	if webDev["platform"] != "web" {
+		t.Fatalf("web device = %v", webDev)
+	}
+	resp = e.request(http.MethodDelete, "/me/devices/"+webDev["id"].(string), tok, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revoke the web device: %d", resp.StatusCode)
+	}
+
 	// Validation: platform must be one of the enum values.
 	resp = e.request(http.MethodPost, "/me/devices", tok, map[string]any{"name": "x", "platform": "amiga"})
 	if resp.StatusCode != http.StatusBadRequest {

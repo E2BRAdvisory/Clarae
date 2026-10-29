@@ -22,6 +22,7 @@ func TestValidate(t *testing.T) {
 		`{}`,
 		`{"features":{"audio_recorder":false,"anything_else":true},"sync":{"interval_seconds":60}}`,
 		`{"editor":{"fontSize":14,"linkFormat":"relative"},"hotkeys":{"palette:open":"Mod-p"},"servers":[{"name":"x","url":"https://x.example"}]}`,
+		`{"features":{"web_workbench":false}}`,
 		`{"appearance":{"accent":"#a1b2c3"},"templates":{"library_share_id":"0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10"}}`,
 	}
 	for _, s := range ok {
@@ -31,7 +32,7 @@ func TestValidate(t *testing.T) {
 	}
 	bad := []string{
 		`[]`, `{"unknown":1}`, `{"sync":{"interval_seconds":1}}`, `{"sync":{"interval_seconds":"30"}}`,
-		`{"features":{"x":"yes"}}`, `{"editor":{"linkFormat":"wikilink"}}`, `{"appearance":{"accent":"red"}}`,
+		`{"features":{"x":"yes"}}`, `{"features":{"web_workbench":"no"}}`, `{"editor":{"linkFormat":"wikilink"}}`, `{"appearance":{"accent":"red"}}`,
 		`{"servers":[{"name":"x"}]}`, `{"editor":{"fontSize":4}}`, `not json`,
 	}
 	for _, s := range bad {
