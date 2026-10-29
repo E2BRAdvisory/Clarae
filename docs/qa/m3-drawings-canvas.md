@@ -26,6 +26,7 @@ Da eseguire sul webview reale (gli e2e usano Chromium con i binding simulati).
 - [ ] Auto Layout su un diagramma con frecce legate: le frecce seguono le forme; ridimensiona una forma con "Imposta dimensioni": le frecce restano attaccate.
 - [ ] Mindmap da un testo-elenco indentato, calendario annuale e lineare, vignette, nuvolette, schema colori, linea organica.
 - [ ] Penne (fine, pennarello, evidenziatore) e puntatore laser: lo strumento cambia e il tratto ha stile e opacità attesi.
+- [ ] Menu ⋮ della barra: _Disegna per la forma_ (Maiusc+X: un tratto diventa una forma), _Secchiello riempimento_ (B: riempie forma/area cliccata), _Selezione a lazo_ (seleziona gli elementi circondati). Barra e menu al 90%, senza il pulsante del menu principale; popover dei colori allineati.
 - [ ] Presentazione con 3 cornici: frecce/Spazio/Pagina navigano con animazione, il selettore salta, Esc esce; in schermo intero la cornice si adatta. Senza cornici: presentazione semplice.
 - [ ] Esporta → PNG/SVG con selezione, cornice, scala e "incorpora scena"; "Stampa / PDF…" produce un PDF; "Salva con nome…" apre la finestra nativa.
 - [ ] Esportazione automatica (anche l'override per singolo disegno): `Disegno.excalidraw.png/.svg` accanto al file a ogni salvataggio.
