@@ -257,7 +257,7 @@ jobs:
           # appimagetool is itself an AppImage: run it extracted, so the runner needs no FUSE.
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
-          sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev desktop-file-utils
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${{ env.NFPM_VERSION }}
           case "$ARCH" in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
           sudo curl -fsSL -o /usr/local/bin/appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${ai}.AppImage"
