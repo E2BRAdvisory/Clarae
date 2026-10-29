@@ -30,10 +30,12 @@ import { SlideShow } from '../slides/SlideShow';
 import { Header } from '../shell/Header';
 import { VaultView } from '../shell/VaultView';
 import { Welcome } from '../shell/Welcome';
+import { useCan, usePlatform } from '../platform';
 import { followLinkPath } from './open';
 
 export function App() {
   const vault = useAppStore((s) => s.vault);
+  const updater = useCan('updater');
   const setSettings = useAppStore((s) => s.setSettings);
   const setAuth = useAppStore((s) => s.setAuth);
   const setIndexProgress = useAppStore((s) => s.setIndexProgress);
@@ -60,6 +62,12 @@ export function App() {
     void api.auth.status().then(setAuth);
     return api.on<AuthState>(Events.authState, setAuth);
   }, [setAuth]);
+
+  // The Web UI opens one vault per page: the host names it, the app opens it once it can listen.
+  useEffect(() => {
+    const path = usePlatform.getState().initialVault;
+    if (path) void openVaultAt(path);
+  }, []);
 
   // Backend events.
   useEffect(() => {
@@ -149,7 +157,7 @@ export function App() {
       <RecoveryDialogs />
       <SharingDialogs />
       <ImportWizard />
-      <UpdateDialog />
+      {updater && <UpdateDialog />}
       <CommandPalette />
       <QuickSwitcher />
       <SlideShow />

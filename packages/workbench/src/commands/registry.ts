@@ -30,6 +30,7 @@ import { startSlideshow } from '../slides/actions';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import type { EditorView } from '@codemirror/view';
+import { can } from '../platform';
 
 export type CommandGroup = 'file' | 'navigate' | 'view' | 'editor' | 'app';
 
@@ -250,6 +251,7 @@ export const commands: Command[] = [
     id: 'update:check',
     group: 'file',
     defaults: [],
+    enabled: () => can('updater'),
     run: () => useUpdater.getState().check(),
   },
   {

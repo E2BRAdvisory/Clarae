@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { openVaultAt } from '../app/actions';
 import { runCommand } from '../commands/registry';
+import { useCan } from '../platform';
 import { useRecentVaults, useTree } from '../state/queries';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
@@ -19,6 +20,7 @@ export function VaultSwitcher({ vaultId }: { vaultId: string }) {
   const info = useSync((s) => infoOf(s, vaultId));
   const { data: tree = [] } = useTree(vaultId);
   const { data: recent = [] } = useRecentVaults();
+  const localFolders = useCan('localFolders');
   const button = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -49,7 +51,9 @@ export function VaultSwitcher({ vaultId }: { vaultId: string }) {
       .filter((v) => v.path !== vault.path)
       .slice(0, 8)
       .map((v) => ({ label: v.name, onSelect: () => void openVaultAt(v.path) })),
-    { label: t('vaultSwitcher.open'), separator: true, onSelect: () => void pick() },
+    ...(localFolders
+      ? [{ label: t('vaultSwitcher.open'), separator: true, onSelect: () => void pick() }]
+      : []),
     { label: t('sidebar.closeVault'), onSelect: () => void runCommand('vault:close') },
   ];
 

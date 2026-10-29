@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 // The package hoists to the workspace root (or stays in the app's own node_modules).
 const here = dirname(fileURLToPath(import.meta.url));
-const muiDir = [join(here, '../node_modules'), join(here, '../../../../node_modules')]
+const muiDir = [join(here, '../node_modules'), join(here, '../../../node_modules')]
   .map((d) => join(d, '@mui/icons-material/esm'))
   .find((d) => existsSync(d));
 if (!muiDir) throw new Error('@mui/icons-material is not installed (yarn install)');

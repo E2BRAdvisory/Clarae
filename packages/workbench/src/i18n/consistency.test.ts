@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkUsage, comparePair } from '../../../../../packages/ui/src/i18nCheck';
+import { checkUsage, comparePair } from '../../../ui/src/i18nCheck';
 import en from './en.json';
 import it_ from './it.json';
 

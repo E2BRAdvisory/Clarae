@@ -1,12 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-
-interface MockWindow {
-  __mock: {
-    vaults: Map<string, { info: { id: string }; files: Map<string, string> }>;
-    emit(name: string, payload: unknown): void;
-  };
-}
+import { appOrigin, openVault } from './support';
 
 const DECK = [
   '---',
@@ -31,16 +25,7 @@ const DECK = [
 ].join('\n');
 
 async function openDeck(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open folder as vault' }).click();
-  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
-  await page.evaluate((deck) => {
-    const w = window as unknown as MockWindow;
-    const v = [...w.__mock.vaults.values()][0];
-    if (!v) throw new Error('vault not open');
-    v.files.set('Deck.md', deck);
-    w.__mock.emit('vault:file-changed', { vaultId: v.info.id, paths: ['Deck.md'] });
-  }, DECK);
+  await openVault(page, { 'Deck.md': DECK });
   await page.locator('.tree .node', { hasText: 'Deck' }).click();
   await expect(page.getByLabel('Note editor')).toContainText('Opening');
 }
@@ -51,7 +36,7 @@ test('present a note from the command palette: slides, presenter view, no networ
   const external: string[] = [];
   page.on('request', (r) => {
     const u = new URL(r.url());
-    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== 'http://localhost:5199')
+    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== appOrigin)
       external.push(r.url());
   });
   await openDeck(page);

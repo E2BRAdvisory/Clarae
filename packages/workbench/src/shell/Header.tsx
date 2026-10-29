@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { effectiveTheme, type Theme } from '../app/theme';
 import { commandTitle, runCommand } from '../commands/registry';
+import { usePlatform } from '../platform';
 import { useAppStore } from '../state/store';
 import { Icon, type IconName } from './icons';
 import { VaultStatus } from './VaultStatus';
@@ -35,8 +36,14 @@ export function Header() {
   const rightOpen = useAppStore((s) => s.right.open);
   const theme = useAppStore((s) => s.settings.theme);
   const dark = effectiveTheme((theme || 'system') as Theme) === 'dark';
+  const backToConsole = usePlatform((s) => s.backToConsole);
   return (
     <header className="titlebar">
+      {backToConsole && (
+        <button className="back-to-console" onClick={backToConsole}>
+          {t('app.backToConsole')}
+        </button>
+      )}
       {vault && (
         <div className="header-group">
           <HeaderButton command="sidebar:left" icon="sidebarLeft" pressed={leftOpen} />

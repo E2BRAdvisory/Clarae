@@ -10,6 +10,8 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      '**/dist-e2e/**',
+      'build/wasm/**',
       '**/build/bin/**',
       '**/wailsjs/**',
       '**/*.gen.ts',

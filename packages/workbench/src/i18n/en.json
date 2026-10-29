@@ -1,10 +1,12 @@
 {
   "app": {
-    "name": "MemoBrain Notes"
+    "name": "MemoBrain Notes",
+    "backToConsole": "Back to the console"
   },
   "welcome": {
     "title": "Open a vault",
     "subtitle": "A vault is a folder of Markdown notes on your computer.",
+    "subtitleWeb": "Open one of your cloud vaults from the console.",
     "openFolder": "Open folder as vault",
     "recent": "Recent vaults",
     "pickTitle": "Choose the vault folder"

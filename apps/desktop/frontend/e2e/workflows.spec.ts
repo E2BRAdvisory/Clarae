@@ -1,26 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-
-interface MockWindow {
-  __mock: {
-    vaults: Map<string, { info: { id: string }; files: Map<string, string> }>;
-    emit(name: string, payload: unknown): void;
-  };
-}
-
-/** Opens the (mock) vault from the welcome screen; optionally seeds notes first. */
-async function openVault(page: Page, files: Record<string, string> = {}): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open folder as vault' }).click();
-  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
-  if (Object.keys(files).length === 0) return;
-  await page.evaluate((seed) => {
-    const w = window as unknown as MockWindow;
-    const v = [...w.__mock.vaults.values()][0];
-    if (!v) throw new Error('vault not open');
-    for (const [p, c] of Object.entries(seed)) v.files.set(p, c);
-    w.__mock.emit('vault:file-changed', { vaultId: v.info.id, paths: Object.keys(seed) });
-  }, files);
-}
+import { expect, test } from '@playwright/test';
+import { openVault } from './support';
 
 test('create notes, link them, see the backlink, rename with link update', async ({ page }) => {
   await openVault(page);

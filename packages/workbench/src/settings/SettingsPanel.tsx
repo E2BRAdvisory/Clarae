@@ -22,6 +22,7 @@ import { HistorySettings } from './HistorySettings';
 import { FilesExtra } from './FilesExtra';
 import { DrawingSection } from './DrawingSection';
 import { UpdateSettings } from '../updater/UpdateSettings';
+import { can } from '../platform';
 import { Icon } from '../shell/icons';
 
 const SECTIONS: SettingsSection[] = [
@@ -372,7 +373,7 @@ export function SettingsPanel() {
                 {info['dataDir'] ?? '—'}
               </span>
             </Row>
-            <UpdateSettings />
+            {can('updater') && <UpdateSettings />}
           </>
         );
     }

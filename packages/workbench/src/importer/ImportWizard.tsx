@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { useSettings } from '../state/settings';
+import { useCan } from '../platform';
 import { useAppStore } from '../state/store';
 import {
   importerApi,
@@ -30,6 +31,7 @@ function Wizard() {
   const { t } = useTranslation();
   const hide = (): void => useImporter.getState().hide();
   const vault = useAppStore((s) => s.vault);
+  const localFolders = useCan('localFolders');
   const attachmentsFolder = useSettings((s) => s.editor.attachmentsFolder);
   const [step, setStep] = useState<Step>('source');
   const [sources, setSources] = useState<ImportSource[]>([]);
@@ -59,6 +61,8 @@ function Wizard() {
   const vaultId = vault?.id ?? '';
 
   const source = sources.find((s) => s.id === sourceId);
+  // Sources that need a folder of the computer are offered only where one can be opened.
+  const importable = localFolders ? sources : sources.filter((s) => s.input !== 'folder');
 
   useEffect(() => {
     void importerApi.listSources().then((list) => {
@@ -234,7 +238,7 @@ function Wizard() {
           <form onSubmit={toPath}>
             <fieldset>
               <legend>{t('importer.chooseSource')}</legend>
-              {sources.map((s) => (
+              {importable.map((s) => (
                 <label key={s.id} className="row">
                   <input
                     type="radio"
@@ -277,7 +281,7 @@ function Wizard() {
               style={{ width: '100%' }}
             />
             <div className="actions">
-              {source.input !== 'file' && (
+              {source.input !== 'file' && localFolders && (
                 <button type="button" onClick={() => void choose('folder')}>
                   {t('importer.chooseFolder')}
                 </button>

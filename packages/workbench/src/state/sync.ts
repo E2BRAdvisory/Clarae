@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { can } from '../platform';
 import { api, linkInfo, type SyncConflict, type SyncLinkInfo, type SyncStatus } from '../app/api';
 
 const unlinked: SyncLinkInfo = linkInfo();
@@ -67,6 +68,10 @@ export const useSync = create<SyncState>((set, get) => ({
   setConflictsOpen: (conflictsOpen) => set({ conflictsOpen }),
   openHistory: (historyPath) => set({ historyPath }),
   async checkDisk() {
+    if (!can('diskEncryptionCheck')) {
+      set({ diskWarning: false });
+      return;
+    }
     try {
       set({ diskWarning: (await api.crypto.diskEncryption()) === 'unencrypted' });
     } catch {

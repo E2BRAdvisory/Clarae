@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useCan } from '../platform';
 import { useAppStore } from '../state/store';
 import { SyncIndicator } from '../sync/SyncIndicator';
 import { UpdateIndicator } from '../updater/UpdateDialog';
@@ -12,10 +13,11 @@ export function VaultStatus() {
   const { t } = useTranslation();
   const progress = useAppStore((s) => s.indexProgress);
   const vault = useAppStore((s) => s.vault);
+  const updater = useCan('updater');
   return (
     <div className="vault-status">
       <PermissionBadge />
-      <UpdateIndicator />
+      {updater && <UpdateIndicator />}
       <SyncIndicator />
       <InvitesIndicator />
       {vault && (
