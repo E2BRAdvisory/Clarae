@@ -13,6 +13,7 @@
       "properties": {
         "audio_recorder": { "type": "boolean" },
         "web_viewer": { "type": "boolean" },
+        "chat": { "type": "boolean" },
         "drawings": { "type": "boolean" },
         "canvas": { "type": "boolean" },
         "sharing": { "type": "boolean" },

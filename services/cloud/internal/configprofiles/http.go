@@ -28,6 +28,7 @@ func ProductDefaults() map[string]any {
 		"features": map[string]any{
 			"audio_recorder": false,
 			"web_viewer":     false,
+			"chat":           false,
 		},
 		"sync": map[string]any{
 			"interval_seconds":    30,

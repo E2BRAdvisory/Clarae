@@ -10,15 +10,17 @@ package features
 // editor (formulas, Mermaid diagrams, auto-export, the scene actions) and has no effect while
 // "drawings" itself is off.
 var Known = []string{
-	"audio_recorder", "web_viewer", "drawings", "canvas", "sharing",
+	"audio_recorder", "web_viewer", "chat", "drawings", "canvas", "sharing",
 	"drawing_latex", "drawing_mermaid", "drawing_auto_export", "drawing_actions",
 }
 
 // Defaults are the flags of an unmanaged client: everything the product ships is on,
-// except what is off by default in the product defaults (audio recorder, web viewer).
+// except what is off by default in the product defaults (audio recorder, web viewer, chat: the
+// chat bar is a disabled placeholder until the ACP integration exists, ADR-0026).
 var Defaults = map[string]bool{
 	"audio_recorder": false,
 	"web_viewer":     false,
+	"chat":           false,
 	"drawings":       true,
 	"canvas":         true,
 	"sharing":        true,
