@@ -156,12 +156,14 @@ jobs:
         with:
           go-version-file: tools/go.mod
           cache-dependency-path: apps/desktop/go.sum
-      - run: corepack enable
+      # setup-node replaces the Node on PATH, so corepack is enabled after it (on Windows the shim is lost otherwise).
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: yarn
+      - run: corepack enable
+        shell: bash
       - run: yarn install --immutable
+        shell: bash
       # Wails v2.12.0 does not build with Go 1.27 as published: scripts/install-wails.sh links a current x/tools.
       - name: Wails CLI (cached)
         id: wails-cache

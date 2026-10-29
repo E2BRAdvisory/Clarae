@@ -34,8 +34,10 @@ sed -e "s/@VERSION@/$VERSION/" -e "s/@DATE@/$(date -u +%F)/" \
 if [ "$KIND" = deb ] || [ "$KIND" = all ]; then
   need nfpm
   log "Building the .deb"
+  # nfpm expands ${VERSION} and ${ARCH} but not ${STAGE} in the file sources: render that one here.
+  sed "s#\${STAGE}#$STAGE#g" "$LINUX/nfpm.yaml" > "$STAGE/nfpm.yaml"
   (cd "$ROOT" && VERSION="$VERSION" ARCH="$ARCH" STAGE="$STAGE" \
-    nfpm package -p deb -f "$LINUX/nfpm.yaml" -t "$OUT/memobrain-$VERSION-linux-$ARCH.deb")
+    nfpm package -p deb -f "$STAGE/nfpm.yaml" -t "$OUT/memobrain-$VERSION-linux-$ARCH.deb")
 fi
 
 if [ "$KIND" = appimage ] || [ "$KIND" = all ]; then
