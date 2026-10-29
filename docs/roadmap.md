@@ -440,11 +440,73 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 - Release candidate, test manuale cross-OS da checklist, fix, tag `v1.0.0`.
 
-**Post-1.0 (P2, fuori piano):** Slides, Audio recorder, Web viewer, Vim mode, CLI, finestre pop-out (processo secondario + IPC), rotazione VMK, Apple Notes importer, format converter.
+**Post-1.0 (P2, fuori piano):** Audio recorder, Web viewer, Vim mode, CLI, finestre pop-out (processo secondario + IPC), rotazione VMK, Apple Notes importer, format converter. Slides è stato anticipato in M8 (ADR-0027).
 
 ---
 
-## 13. Trasversale: test e verifica
+## 13. M8 — Revisione UI shell desktop (esito: shell conforme al mockup 28/10/2026)
+
+> **Stato (2026-10-29):** WP0–WP10 implementati e verificati in locale (`make test`, lint Go e TS, e2e su mock Wails, build, conformance Go e TS): milestone chiusa lato codice. Restano le verifiche manuali su webview e cloud reali di `docs/qa/m8-shell-ui.md` e l'aggiornamento dello spec da parte dell'owner (ADR-0026 e ADR-0027 in stato _proposta_). In WP2 la tab bar resta per pane (sotto l'header) e non nell'header, perché con gli split ogni pane ha le proprie tab. La tab «Segnalibri» del mockup si chiama _Link_ (link in uscita, backlink e bookmark del vault); _Statistiche_ è completa (WP7) e _Slide_ è completa (WP8). Gli indicatori di stato (permessi, aggiornamenti, sync, inviti, indicizzazione) stanno nel footer della sidebar destra e, a sidebar chiusa, nell'header. `note:export-image` non è verificato su una webview reale (WKWebView può marcare come «tainted» il canvas con `foreignObject`): voce da aggiungere a `docs/qa/m8-shell-ui.md`. Pianificata il 2026-10-28. ADR-0026 (shell) e ADR-0027 (Slides) in stato _proposta_: entrambi deviano dallo spec (`statusbar`, `sidebar/`, Slides da P2 a P1) e attendono l'aggiornamento di `Specifications.md` da parte dell'owner. Piano di dettaglio: `.claude/roadmap/progetta-e-pianifica-la-staged-dragon.md`. Solo frontend desktop, più un binding Go per le statistiche (WP7).
+
+Ordine: WP0 → WP1 → (WP2 ∥ WP3 ∥ WP4) → WP5 → (WP6 ∥ WP7) → WP8 → WP9 → WP10.
+
+### M8-WP0 ADR e documenti
+
+- ADR-0026 e ADR-0027; indice ADR; questa sezione di roadmap. `Specifications.md` non si modifica: le modifiche si propongono all'owner.
+
+### M8-WP1 Scomposizione della shell
+
+- Estrazione da `app/App.tsx` in `src/shell/` di `Header`, `LeftSidebar`, `RightSidebar`, `SidebarTabs`, `SidebarResizer`, `StatusBar` e `useVaultSession`, senza cambi funzionali né di DOM/CSS; `App.test.tsx`, `a11y.spec.ts` e `keyboard.spec.ts` restano verdi.
+
+### M8-WP2 Header e tema
+
+- Pulsanti sidebar sinistra/destra e ricerca; tab bar nell'header; switch chiaro/scuro (`theme:toggle`); set di icone SVG locali al posto dei glifi unicode.
+
+### M8-WP3 Ribbon comandi rapidi
+
+- Barra verticale: nuova cartella, nota, lavagna, disegno, base, separatore, esporta PDF, esporta immagine; nuovi comandi `folder:new`, `separator:insert`, `note:export-image`.
+
+### M8-WP4 Sidebar sinistra
+
+- Tab _File_ e _Struttura_; mappatura retrocompatibile dei valori legacy in `workspace.json`.
+
+### M8-WP5 Sidebar destra e footer di sync
+
+- Tab _Proprietà_, _Tag_, _Segnalibri_ (link, backlink, bookmark), _ShowSlide_, _Statistiche_; `SyncFooter` con stato di sync, permessi, aggiornamenti e inviti; eliminazione della status bar.
+
+### M8-WP6 Tab: blocco e menu contestuale
+
+- `Tab.pinned` (opzionale) in `workspace/layout.ts` con `parseNode` retrocompatibile. Una tab bloccata non si chiude con nessuna azione dell'utente (✕, click centrale, `Delete`, `tab:close`, chiusure di massa) e non viene sostituita dalla navigazione (la nota si apre in una tab nuova); si chiude solo se il suo file viene eliminato (`closeTab(…, { force: true })` in `removePath`). Le chiusure di massa operano sul pane della tab e non hanno conferma: il blocco è la protezione.
+- Menu contestuale: Blocca/Sblocca, Chiudi, Chiudi a destra, Chiudi a sinistra, Chiudi altre, Chiudi tutte (disabilitate se non chiuderebbero nulla), più le voci già presenti; comandi `tab:pin`, `tab:close-right|left|others|all`.
+
+### M8-WP7 Pannello Statistiche
+
+- Il pannello compone dati già esposti dai binding esistenti, quindi **non serve un nuovo binding Go** (scostamento dal piano iniziale): dimensione e ultima modifica dalla lista file; versioni locali (`HistoryAPI.List`) e cloud (`SyncAPI.History`); autore dell'ultima revisione cloud (nome da `Mine` o dai destinatari della condivisione); destinatari (`SharingAPI.VaultShares`, filtrati per le condivisioni che coprono la nota), oppure «condiviso da» su un mount e «vault privato» su un vault E2EE; parole, caratteri e titoli dal testo (frontmatter escluso), più cursore e selezione dell'editor. Calcoli puri in `sidebar/noteStats.ts`.
+- Data di creazione: come per il grafo (ADR-0013), proprietà `created` del frontmatter, altrimenti la prima revisione cloud, altrimenti l'ultima modifica (segnalata con «≈»): il file system non dà un tempo di creazione portabile e una copia sincronizzata mostrerebbe la data del download.
+- Sostituisce la vecchia riga di stato dell'editor: le chiavi `status.words|chars` sono state rimosse.
+
+### M8-WP8 ShowSlide
+
+- Parser delle slide in TS (`packages/markdown/src/slides.ts`) e in Go (`apps/desktop/internal/parser/slides.go`, oggi senza consumatori a runtime) verificati con le stesse fixture `shared/conformance/slides/` (12 casi: separatori, setext, code fence, math, note, configurazione, slide vuote). Separatore: `---` dopo una riga vuota; note: righe dopo `Note:`; configurazione in chiavi piatte `slide-transition|theme|progress|numbers|notes` (ADR-0027 aggiornato).
+- Tab _Slide_: opzioni scritte nel frontmatter con lo stesso percorso delle Proprietà (disabilitate su vault di sola lettura), pulsanti «Avvia» e «Dalla slide corrente», miniature cliccabili. Presentazione nella stessa finestra (overlay, `requestFullscreen` dove la webview lo permette): tastiera, transizioni (rispettano `prefers-reduced-motion`), barra di avanzamento e numeri, vista presentatore con slide successiva, note e timer; comandi `slides:start` e `slides:start-here`. Le slide usano la pipeline dell'export (immagini e diagrammi inclusi, nessuna richiesta di rete: verificato in e2e).
+- Da verificare su webview reale (checklist `docs/qa/m8-shell-ui.md`): schermo intero in WKWebView/WebView2/WebKitGTK.
+
+### M8-WP9 Footer sinistro e chat
+
+- **Selettore vault** in fondo alla sidebar sinistra: nome, numero di note, tipo (privato/condiviso, D-02) e menu con i vault recenti, «Apri un'altra cartella…» e «Chiudi vault»; comando `vault:switch` (apre la sidebar e il menu). Il cambio (`openVaultAt` in `app/actions.ts`) scrive subito note in sospeso e `workspace.json` del vault che lascia, apre il nuovo, chiude il precedente e azzera lo store solo dopo; riaprire il vault già aperto non fa nulla.
+- **Impostazioni e account** in fondo al ribbon (visibili anche a sidebar chiusa; senza vault restano nell'header): avatar con le iniziali e menu (account e dispositivi, esci) a sessione attiva, pulsante «Accedi» altrimenti (usa il server già noto o quello predefinito, altrimenti apre le impostazioni cloud; l'OIDC resta nel browser di sistema, D-08), stati «in attesa del browser» e «disconnesso» con «Riconnetti».
+- **Slot chat ACP** sotto l'editor: campo disabilitato con spiegazione, mostrato solo con la feature `chat` attiva nel Config Profile; la feature è **spenta per default** (`features.Defaults` in Go, `ProductDefaults` e schema del cloud). Nessun codice di protocollo: l'integrazione ACP richiede un ADR dedicato.
+
+### M8-WP10 Chiusura qualità
+
+- i18n it/en (la parità delle chiavi è un test bloccante), accessibilità: le scansioni axe coprono shell, schede a icona, menu della scheda bloccata e del vault, tab Slide e presentazione (hanno fatto emergere e correggere tre difetti: albero dei segnalibri vuoto, puntina della scheda bloccata dentro la `tablist`, collisione di classi con la slideshow dei disegni).
+- Guida utente: «Il primo vault» riscritto sulla nuova shell, nuovo capitolo «Presentazioni», scorciatoie, accessibilità, condivisione e sincronizzazione senza più la barra di stato; checklist manuale `docs/qa/m8-shell-ui.md` (export come immagine e schermo intero su webview reali, login OIDC, cloud).
+
+**Criteri di uscita M8:** layout conforme al mockup; comandi del ribbon operativi e presenti in palette; tab bloccabili con menu completo; cambio vault e login/avatar funzionanti; Statistiche e ShowSlide offline; chat visibile ma disabilitata; `make ci` e `make e2e` verdi.
+
+---
+
+## 14. Trasversale: test e verifica
 
 | Livello            | Strumento                                                                         | Dove                                                       |
 | ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -461,7 +523,7 @@ Verifica end-to-end di ogni milestone = i "Criteri di uscita" sopra, eseguiti co
 
 ---
 
-## 14. Primi passi operativi (subito dopo l'approvazione)
+## 15. Primi passi operativi (subito dopo l'approvazione)
 
 1. M0-WP0 scaffolding + `docs/roadmap.md` (questo piano) + aggiornamento `CLAUDE.md` con i comandi.
 2. SPIKE-01, -02, -03, -05 (SPIKE-04 all'inizio di M1) con ADR.
