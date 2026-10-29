@@ -11,6 +11,7 @@ yarn.lock
 deploy/helm/**/templates/**
 Specifications.md
 shared/conformance/markdown/**
+shared/conformance/slides/**
 
 # Playwright output
 **/test-results/

@@ -52,6 +52,30 @@ Regole di estrazione condivise:
 
 Aggiungere un caso = aggiungere i due file. Nome del caso: `kebab-case` che descrive l'elemento (`wikilink-alias`, `callout-nested`, `tag-in-code-fence`).
 
+## Fixture Slides
+
+`slides/<caso>.md` + `<caso>.expected.json` (ADR-0027): come una nota diventa una presentazione. Eseguite da `apps/desktop/internal/parser` (Go) e `packages/markdown` (TS). I file `.md` sono letti byte per byte (anche spazi finali, che contano nel caso `separator-forms`) e sono esclusi da Prettier.
+
+```jsonc
+{
+  "config": {
+    "transition": "slide",
+    "theme": "auto",
+    "progress": true,
+    "numbers": false,
+    "notes": true,
+  },
+  "slides": [{ "line": 1, "content": "# Titolo\n\ntesto", "notes": "" }], // [] se non c'è nulla da mostrare
+}
+```
+
+Regole condivise:
+
+- Una slide termina a una riga `---` (con soli spazi dopo) **preceduta da una riga vuota** o prima riga del corpo; `---` sotto un testo è un titolo setext, `----` e `--- x` non sono separatori. Frontmatter, code fence (` ``` ` e `~~~`, anche non chiusi) e blocchi `$$` non contengono separatori.
+- La prima riga `Note:` (maiuscole indifferenti, fuori da codice e math) apre le note, fino alla fine della slide; un secondo `Note:` fa parte delle note.
+- `line` è la riga 1-based del file (frontmatter incluso) della prima riga non vuota della slide; `content` non ha righe vuote ai bordi; `notes` è tagliato. Le slide senza contenuto sono scartate.
+- `config` legge le chiavi piatte `slide-transition` (`none|fade|slide|zoom`), `slide-theme` (`auto|light|dark`), `slide-progress`, `slide-numbers`, `slide-notes` (booleani); un valore non valido dà il default.
+
 ## Esecuzione
 
 ```sh

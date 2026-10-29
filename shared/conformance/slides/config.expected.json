@@ -1,0 +1,7 @@
+{
+  "config": { "transition": "fade", "theme": "dark", "progress": false, "numbers": true, "notes": false },
+  "slides": [
+    { "line": 10, "content": "# A", "notes": "" },
+    { "line": 14, "content": "# B", "notes": "" }
+  ]
+}

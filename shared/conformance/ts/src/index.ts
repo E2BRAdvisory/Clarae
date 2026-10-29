@@ -60,7 +60,7 @@ export interface MarkdownCase {
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Absolute path of a subdirectory of shared/conformance. */
-export function conformanceDir(sub: 'markdown' | 'merge' | 'crypto'): string {
+export function conformanceDir(sub: 'markdown' | 'slides' | 'merge' | 'crypto'): string {
   return resolve(here, '..', '..', sub);
 }
 
@@ -103,6 +103,60 @@ function check(name: string, e: Expected): void {
     if (t.line < 1 || t.state.length !== 1) fail(`invalid task ${JSON.stringify(t)}`);
   }
   if (e.wordCount < 0) fail('negative word count');
+}
+
+export interface ExpectedSlideConfig {
+  transition: 'none' | 'fade' | 'slide' | 'zoom';
+  theme: 'auto' | 'light' | 'dark';
+  progress: boolean;
+  numbers: boolean;
+  notes: boolean;
+}
+
+export interface ExpectedSlide {
+  line: number;
+  content: string;
+  notes: string;
+}
+
+/** Expectation of a slides fixture (ADR-0027). */
+export interface ExpectedSlides {
+  config: ExpectedSlideConfig;
+  slides: ExpectedSlide[];
+}
+
+export interface SlideCase {
+  name: string;
+  source: string;
+  expected: ExpectedSlides;
+}
+
+/** Loads every <case>.md with its <case>.expected.json from shared/conformance/slides. */
+export function loadSlideCases(dir = conformanceDir('slides')): SlideCase[] {
+  const entries = readdirSync(dir).sort();
+  const cases: SlideCase[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.endsWith('.md')) continue;
+    const name = entry.slice(0, -'.md'.length);
+    seen.add(name);
+    const source = readFileSync(join(dir, entry), 'utf8');
+    const expected = JSON.parse(
+      readFileSync(join(dir, `${name}.expected.json`), 'utf8'),
+    ) as ExpectedSlides;
+    if (!expected.config || !Array.isArray(expected.slides))
+      throw new Error(`fixture ${name}: config and slides are required`);
+    for (const s of expected.slides) {
+      if (s.line < 1 || s.content === '') throw new Error(`fixture ${name}: invalid slide`);
+    }
+    cases.push({ name, source, expected });
+  }
+  for (const entry of entries) {
+    if (entry.endsWith('.expected.json') && !seen.has(entry.slice(0, -'.expected.json'.length))) {
+      throw new Error(`expectation ${entry} has no .md input`);
+    }
+  }
+  return cases;
 }
 
 /** Loads every <case>.md with its <case>.expected.json, sorted by name. */

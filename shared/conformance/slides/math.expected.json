@@ -1,0 +1,7 @@
+{
+  "config": { "transition": "slide", "theme": "auto", "progress": true, "numbers": false, "notes": true },
+  "slides": [
+    { "line": 1, "content": "# Math\n\n$$\na\n\n---\n\nb\n$$", "notes": "" },
+    { "line": 13, "content": "Done", "notes": "" }
+  ]
+}

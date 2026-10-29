@@ -1,0 +1,11 @@
+{
+  "config": { "transition": "slide", "theme": "auto", "progress": true, "numbers": false, "notes": true },
+  "slides": [
+    {
+      "line": 1,
+      "content": "# Code\n\n```md\n---\n\nNote: not a marker\n---\n```\n\n~~~~\n---\n~~~\nstill inside\n~~~~",
+      "notes": ""
+    },
+    { "line": 18, "content": "After", "notes": "" }
+  ]
+}

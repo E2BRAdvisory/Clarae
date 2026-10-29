@@ -1,0 +1,11 @@
+{
+  "config": { "transition": "slide", "theme": "auto", "progress": true, "numbers": false, "notes": true },
+  "slides": [
+    { "line": 1, "content": "# Topic\n\nContent here.", "notes": "remember the demo\nand the numbers" },
+    {
+      "line": 10,
+      "content": "# Next",
+      "notes": "only notes, case-insensitive\n\nNote: second marker stays in the notes"
+    }
+  ]
+}
