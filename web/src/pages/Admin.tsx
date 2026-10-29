@@ -9,15 +9,17 @@ export function AdminLayout() {
   return (
     <>
       <h1>{t('admin.title')}</h1>
-      <nav aria-label={t('admin.nav')} className="admin-nav">
-        {SECTIONS.map((s) => (
-          <NavLink key={s} to={`/admin/${s}`}>
-            {t(`admin.sections.${s}`)}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="admin-body">
-        <Outlet />
+      <div className="admin-layout">
+        <nav aria-label={t('admin.nav')} className="admin-nav">
+          {SECTIONS.map((s) => (
+            <NavLink key={s} to={`/admin/${s}`}>
+              {t(`admin.sections.${s}`)}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="admin-body">
+          <Outlet />
+        </div>
       </div>
     </>
   );
