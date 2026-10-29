@@ -7,7 +7,7 @@ Segnare `[x]` con data e sistema operativo.
 ## Condivisione di una cartella
 
 - [ ] A collega un vault condiviso, tasto destro su una cartella → "Condividi…": cerca B (e un gruppo di cui B è membro), livello Editor, "Condividi".
-- [ ] B vede "✉ 1 invito" nella barra di stato e in Impostazioni → Condivisione: accetta; il mount compare in "Condivisi con me" e si apre con "Apri" (nome = nome dello share).
+- [ ] B vede "✉ 1 invito" nel footer della barra destra (o nell'intestazione a barra chiusa) e in Impostazioni → Condivisione: accetta; il mount compare in "Condivisi con me" e si apre con "Apri" (nome = nome dello share).
 - [ ] Il mount contiene solo la cartella condivisa, alla radice; B modifica una nota e ne crea un'altra: A le riceve entro pochi secondi nella cartella originale.
 - [ ] Modifiche a righe diverse della stessa nota (A e B) si fondono; sulla stessa riga nasce una copia di conflitto. Un `.canvas` modificato da entrambi produce sempre una copia di conflitto.
 - [ ] A sposta un file fuori dalla cartella condivisa: sparisce dal mount di B (nel cestino); lo rimette dentro: ricompare.
@@ -15,7 +15,7 @@ Segnare `[x]` con data e sistema operativo.
 
 ## Permessi
 
-- [ ] Con livello **Viewer**: nella barra di stato "Lettore · sola lettura"; l'editor non accetta digitazione, Excalidraw e canvas sono in sola lettura, l'explorer non offre nuovo/rinomina/elimina, le proprietà sono disabilitate.
+- [ ] Con livello **Viewer**: nel blocco di stato del vault "Lettore · sola lettura"; l'editor non accetta digitazione, Excalidraw e canvas sono in sola lettura, l'explorer non offre nuovo/rinomina/elimina, le proprietà sono disabilitate.
 - [ ] A porta B da Viewer a Editor (e viceversa): il livello cambia nel mount aperto senza riavviare.
 - [ ] Un grant a un gruppo: un membro accetta per tutti; un altro membro vede il mount senza un secondo invito; "Rifiuta" da un invito di gruppo mostra l'errore.
 - [ ] Documento singolo condiviso: B lo vede come mount con quel solo file; non può aggiungere altri file.

@@ -13,9 +13,9 @@ Le _Condivisioni esistenti_ si vedono e si modificano nella stessa finestra (cam
 
 ## Ricevere un invito
 
-Gli inviti compaiono nella barra di stato ("1 invito") e in _Impostazioni → Condivisione_, e nella Web UI alla pagina _Condivisioni_. **Accettate** o **rifiutate**. Un invito accettato diventa un **mount**: un vault separato, intitolato come la condivisione, che si apre con _Apri_. Il mount è a tutti gli effetti un altro vault: i link, i backlink, la ricerca e il grafo **non attraversano** il vostro vault personale e il mount.
+Gli inviti compaiono in fondo alla barra laterale destra, o nell'intestazione se la barra è chiusa ("1 invito"), e in _Impostazioni → Condivisione_, e nella Web UI alla pagina _Condivisioni_. **Accettate** o **rifiutate**. Un invito accettato diventa un **mount**: un vault separato, intitolato come la condivisione, che si apre con _Apri_. Il mount è a tutti gli effetti un altro vault: i link, i backlink, la ricerca e il grafo **non attraversano** il vostro vault personale e il mount.
 
-La barra di stato mostra il vostro permesso (es. "Lettore · sola lettura"); con il permesso di lettore l'editor non accetta modifiche e l'albero non offre di creare nulla.
+Lo stato del vault (in fondo alla barra laterale destra, o nell'intestazione se è chiusa) mostra il vostro permesso (es. "Lettore · sola lettura"), e la scheda _Statistiche_ elenca con chi è condivisa la nota; con il permesso di lettore l'editor non accetta modifiche e l'albero non offre di creare nulla.
 
 ## Quando la condivisione termina
 

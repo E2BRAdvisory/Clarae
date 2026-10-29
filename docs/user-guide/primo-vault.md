@@ -8,10 +8,11 @@ _Apri cartella come vault_ nella schermata iniziale; i vault recenti sono elenca
 
 ## L'interfaccia
 
-- **Barra laterale sinistra:** schede _File_, _Cerca_, _Tag_, _Segnalibri_. Nella scheda File: albero delle cartelle, nuova nota/cartella, ordinamento. Clic destro (o tasto Menu / `Maiusc+F10` sulla tastiera) per rinominare, spostare nel cestino, copiare il percorso, aggiungere ai segnalibri.
-- **Area centrale:** schede (tab) e pannelli divisibili (`Mod+\` a destra, `Mod+Maiusc+\` in basso). Si trascinano le schede tra i pannelli.
-- **Barra laterale destra:** _Struttura_ (titoli), _Backlink_, _Proprietà_.
-- **Barra di stato:** stato di salvataggio, sincronizzazione, inviti in attesa, permesso sul vault condiviso.
+- **Intestazione:** in alto a sinistra i pulsanti per mostrare/nascondere la barra sinistra e per cercare nel vault; a destra la palette comandi, il passaggio **chiaro/scuro** e il pulsante della barra destra. Il nome del vault è al centro.
+- **Azioni rapide** (colonna di icone a sinistra): nuova cartella, nota, lavagna, disegno, base, _separatore_ (inserisce una riga `---` nella nota), esporta in PDF, esporta come immagine. In fondo: le **impostazioni** e il vostro **account** (le iniziali se avete fatto l'accesso al cloud, altrimenti il pulsante _Accedi_).
+- **Barra laterale sinistra:** schede _File_ (albero delle cartelle, nuova nota/cartella, ordinamento; clic destro, o tasto Menu / `Maiusc+F10`, per rinominare, spostare nel cestino, copiare il percorso, aggiungere ai segnalibri) e _Struttura_ (i titoli della nota aperta). La ricerca si apre dalla lente in alto e compare come terza scheda finché la usate. In fondo: il **vault aperto** con il numero di note; un clic mostra i vault recenti e permette di cambiare vault senza tornare alla schermata iniziale (`Cambia vault` nella palette).
+- **Area centrale:** schede (tab) e pannelli divisibili (`Mod+\` a destra, `Mod+Maiusc+\` in basso). Si trascinano le schede tra i pannelli. Il clic destro su una scheda permette di **bloccarla** (non si chiude per errore e la navigazione si apre in una scheda nuova) e di chiudere le schede a destra, a sinistra, le altre o tutte (quelle bloccate restano).
+- **Barra laterale destra** (schede a icona): _Proprietà_, _Tag_, _Link_ (link in uscita, backlink e segnalibri del vault), _Slide_ ([presentazioni](presentazioni.md)) e _Statistiche_ (date, autore, versioni, con chi è condivisa, parole e titoli della nota). In fondo: lo **stato del vault** (indicizzazione, sincronizzazione, inviti in attesa, permesso sul vault condiviso, aggiornamenti); con la barra chiusa lo stesso blocco passa nell'intestazione.
 - **Palette comandi** (`Mod+P`): ogni azione dell'app, con la sua scorciatoia.
 
 ## Prime note

@@ -10,6 +10,7 @@ MemoBrain Notes (nome provvisorio) è un'app per appunti e conoscenza personale 
 | [Ricerca](ricerca.md)                                           | Selettore rapido, ricerca nel vault, operatori, ricerche incorporate.          |
 | [Lavagne, disegni, basi e grafo](canvas-disegni-bases-grafo.md) | Canvas, disegni Excalidraw, Bases, vista grafo.                                |
 | [Template e note giornaliere](template-note-giornaliere.md)     | Template, note giornaliere, note uniche, unire ed estrarre note.               |
+| [Presentazioni](presentazioni.md)                               | Trasformare una nota in slide, note del presentatore, vista presentatore.      |
 | [Sincronizzazione e cloud](sync-cloud.md)                       | Collegarsi al server, sincronizzare, conflitti, più dispositivi.               |
 | [Vault privati e condivisi](vault-privati-condivisi.md)         | Che cosa cambia, **che cosa significa E2EE**, passphrase e chiave di recupero. |
 | [Condivisione e gruppi](condivisione-gruppi.md)                 | Inviti, permessi, mount, gruppi.                                               |

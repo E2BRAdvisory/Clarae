@@ -30,7 +30,7 @@ Totale dopo le correzioni: **0 violazioni** (di qualunque impatto) in 20 scansio
 - **Schede** (barra laterale e documenti): roving tabindex e frecce; `Canc` chiude la scheda del documento.
 - **Menu contestuale:** il focus entra nel menu all'apertura, frecce/`Home`/`End`, `Esc`/`Tab` chiudono e il focus torna all'origine.
 - **Palette e selettore rapido:** pattern combobox/listbox.
-- **Stato di sincronizzazione:** regione `role=status` (`aria-live=polite`) nella barra di stato.
+- **Stato di sincronizzazione:** regione `role=status` (`aria-live=polite`) nel blocco di stato del vault (footer della barra destra, o intestazione a barra chiusa).
 - **Focus visibile** ovunque (`:focus-visible`), **colori forzati** (`forced-colors: active`: focus, scheda attiva e voce selezionata con i colori di sistema) e **movimento ridotto** (`prefers-reduced-motion`).
 - `<html lang>` segue la lingua scelta; stringhe prima fisse in inglese (titolo "Error", etichetta dell'editor) spostate in i18n.
 
@@ -49,14 +49,14 @@ Generale (tutti gli OS)
 
 - [ ] L'app si avvia e annuncia titolo della finestra e regione principale; la lingua di sintesi corrisponde alla lingua dell'interfaccia.
 - [ ] Schermata di benvenuto: pulsante "Apri cartella come vault" e vault recenti annunciati e attivabili.
-- [ ] Barra laterale: le schede (File/Cerca/Tag…) sono annunciate come "scheda, selezionata, n di m"; le frecce cambiano scheda.
+- [ ] Barra laterale: le schede (File/Struttura a sinistra; Proprietà/Tag/Link/Slide/Statistiche a destra, solo icona) sono annunciate col loro nome come "scheda, selezionata, n di m"; le frecce cambiano scheda.
 - [ ] Albero dei file: annuncia nome, livello, "espanso/compresso" e posizione; `→`/`←` espande/chiude; `Invio` apre la nota; `F2` apre la richiesta di nome; menu da tasto Menu/`Maiusc+F10` navigabile.
 - [ ] Schede dei documenti: annunciate con il nome della nota; frecce e `Canc` funzionano; la nota attiva è chiara.
 - [ ] Editor: il campo è annunciato come "Editor della nota, modifica, più righe"; si legge riga per riga; i caratteri digitati e le righe sono annunciati; le scorciatoie di formattazione non confliggono con quelle del screen reader.
 - [ ] Live Preview: elenchi, titoli, link, callout e tabelle sono comprensibili; il passaggio alla modalità sorgente e lettura è annunciato.
 - [ ] Palette comandi e selettore rapido: all'apertura il campo è annunciato come "casella combinata"; spostando la selezione con le frecce si legge la voce; `Invio` esegue; `Esc` chiude e il focus torna all'editor.
 - [ ] Dialog (conferme, richieste di nome, errori): titolo annunciato, focus dentro, `Esc` chiude, il focus torna all'origine.
-- [ ] Barra di stato: i cambi di sincronizzazione (sincronizzato → in corso → offline/errore) sono annunciati senza rubare il focus; il badge del permesso (lettore/editor) è letto.
+- [ ] Stato del vault (footer della barra destra): i cambi di sincronizzazione (sincronizzato → in corso → offline/errore) sono annunciati senza rubare il focus; il badge del permesso (lettore/editor) è letto.
 - [ ] Impostazioni: ogni controllo ha etichetta; le impostazioni bloccate dall'amministratore annunciano il motivo.
 - [ ] Procedure guidate (collega al cloud, importer): passi annunciati ("Passo n di m"), errori e avanzamento annunciati; passphrase, forza della passphrase e chiave di recupero comprensibili; il campo passphrase non rivela il contenuto.
 - [ ] Condivisione e inviti: elenco destinatari e livelli leggibili; accettare/rifiutare un invito è possibile da tastiera.

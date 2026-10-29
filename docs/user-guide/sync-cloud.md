@@ -19,7 +19,7 @@ Leggete [Vault privati e condivisi](vault-privati-condivisi.md) prima di sceglie
 
 ## Come funziona
 
-Il client elenca le modifiche del server, scarica quelle nuove, poi invia le proprie. L'indicatore nella barra di stato mostra: sincronizzato, in corso, offline, errore, conflitti, account sospeso, vault bloccato. _Sincronizza ora_ (`Mod+Maiusc+S`) forza un ciclo. Le notifiche dal server rendono la sincronizzazione quasi immediata; in assenza il client controlla periodicamente (intervallo configurabile in _Impostazioni → Sincronizzazione_, salvo diversa indicazione dell'amministratore).
+Il client elenca le modifiche del server, scarica quelle nuove, poi invia le proprie. L'indicatore in fondo alla barra laterale destra (nell'intestazione se la barra è chiusa) mostra: sincronizzato, in corso, offline, errore, conflitti, account sospeso, vault bloccato. _Sincronizza ora_ (`Mod+Maiusc+S`) forza un ciclo. Le notifiche dal server rendono la sincronizzazione quasi immediata; in assenza il client controlla periodicamente (intervallo configurabile in _Impostazioni → Sincronizzazione_, salvo diversa indicazione dell'amministratore).
 
 Si sincronizzano le note, gli allegati e i file di tipo `.canvas`, `.base`, `.excalidraw`, più alcune impostazioni (segnalibri, scorciatoie…). **Non** si sincronizzano l'indice di ricerca, i workspace e le impostazioni specifiche del dispositivo.
 

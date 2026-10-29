@@ -5,7 +5,8 @@ Lo stato dei controlli e le procedure di verifica sono in `docs/qa/a11y-desktop.
 ## Tastiera
 
 - Tutta l'interfaccia dell'app si può usare da tastiera; `Mod+P` apre la palette con ogni comando.
-- **Schede della barra laterale e dei documenti:** una sola sosta con `Tab`, poi frecce sinistra/destra, `Home`/`Fine`; `Canc` chiude una scheda del documento.
+- **Schede della barra laterale e dei documenti:** una sola sosta con `Tab`, poi frecce sinistra/destra, `Home`/`Fine`; `Canc` chiude una scheda del documento (non se è bloccata). I pulsanti della barra a icone (azioni rapide, intestazione, schede della barra destra) hanno un nome per gli screen reader e un suggerimento.
+- **Presentazioni:** `Frecce`, `Spazio`, `Home`/`Fine` per scorrere le slide, `P` per la vista presentatore, `Esc` per uscire; il numero della slide corrente è annunciato.
 - **Albero dei file:** frecce, `Invio`, `F2`, `Canc`, tasto Menu / `Maiusc+F10` (vedi [Impostazioni e scorciatoie](impostazioni-scorciatoie.md)).
 - **Finestre di dialogo e menu:** il focus resta dentro la finestra, `Esc` chiude e il focus torna all'elemento di partenza.
 - **Web UI:** primo `Tab` = "Vai al contenuto"; ogni tabella ha didascalia e intestazioni; gli errori dei moduli sono collegati ai campi.
@@ -18,4 +19,4 @@ Lo stato dei controlli e le procedure di verifica sono in `docs/qa/a11y-desktop.
 
 ## Screen reader
 
-L'editor di testo espone un campo di testo multiriga etichettato ("Editor della nota"); la barra di stato annuncia lo stato di salvataggio e sincronizzazione. Le superfici grafiche (grafo, lavagna, disegni) **non** hanno ancora un equivalente testuale completo: per il grafo usate backlink e struttura, per le lavagne le note incorporate. Segnalateci i problemi che incontrate.
+L'editor di testo espone un campo di testo multiriga etichettato ("Editor della nota"); lo stato di salvataggio e di sincronizzazione è annunciato senza spostare il focus. Le superfici grafiche (grafo, lavagna, disegni) **non** hanno ancora un equivalente testuale completo: per il grafo usate backlink e struttura, per le lavagne le note incorporate. Segnalateci i problemi che incontrate.

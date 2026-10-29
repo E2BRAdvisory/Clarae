@@ -33,4 +33,6 @@ Non sono previsti plugin, temi di terze parti né CSS personalizzato: l'aspetto 
 | Attiva attività                | `Mod+Invio`              | Sincronizza ora                       | `Mod+Maiusc+S`             |
 | Impostazioni                   | `Mod+,`                  |                                       |                            |
 
+Senza scorciatoia predefinita, ma nella palette e assegnabili da _Scorciatoie_: cambio vault, passaggio chiaro/scuro, blocca/sblocca scheda e chiusure delle schede (a destra, a sinistra, altre, tutte), nuova cartella, inserisci separatore, esporta come immagine, avvio della presentazione (dall'inizio o dalla slide corrente), mostra le schede della barra destra (proprietà, link, slide, statistiche).
+
 Nell'**albero dei file**: frecce per muoversi, `→`/`←` per espandere/chiudere, `Invio` per aprire, `F2` per rinominare, `Canc` per spostare nel cestino, tasto Menu o `Maiusc+F10` per il menu contestuale. Vedi anche [Accessibilità](accessibilita.md).
