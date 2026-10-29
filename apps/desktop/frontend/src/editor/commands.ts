@@ -184,3 +184,44 @@ export function insertSeparator(view: EditorView): boolean {
   });
   return true;
 }
+
+export const toggleUnderline = toggleWrap('<u>', '</u>');
+export const toggleSubscript = toggleWrap('<sub>', '</sub>');
+export const toggleSuperscript = toggleWrap('<sup>', '</sup>');
+
+/** Inserts a block of text at the selection; "|" marks where the cursor goes. */
+export function insertSnippet(snippet: string) {
+  return (view: EditorView): boolean => {
+    const r = view.state.selection.main;
+    const at = snippet.indexOf('|');
+    const text = snippet.replace('|', '');
+    // Block snippets start on their own line.
+    const line = view.state.doc.lineAt(r.from);
+    const lead = /^[>`|$-]/.test(snippet) && r.from > line.from ? '\n' : '';
+    view.dispatch({
+      changes: { from: r.from, to: r.to, insert: lead + text },
+      selection: EditorSelection.cursor(r.from + lead.length + (at < 0 ? text.length : at)),
+      userEvent: 'input',
+    });
+    return true;
+  };
+}
+
+/** Removes inline marks from the selection (or the current line) and block prefixes of its lines. */
+export function clearFormatting(view: EditorView): boolean {
+  const { state } = view;
+  const changes: ChangeSpec[] = [];
+  for (const l of eachSelectedLine(view)) {
+    const cleaned = l.text
+      .replace(/^([ \t]*)(#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+(\[.\][ \t]+)?|\d+[.)][ \t]+)/, '$1')
+      .replace(/\*\*(.+?)\*\*|__(.+?)__/g, '$1$2')
+      .replace(/(?<![*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1')
+      .replace(/~~(.+?)~~|==(.+?)==|%%(.+?)%%/g, '$1$2$3')
+      .replace(/<\/?(u|sub|sup)>/g, '')
+      .replace(/`([^`]+)`/g, '$1');
+    if (cleaned !== l.text) changes.push({ from: l.from, to: l.to, insert: cleaned });
+  }
+  if (changes.length === 0) return false;
+  view.dispatch(state.update({ changes, userEvent: 'input' }));
+  return true;
+}

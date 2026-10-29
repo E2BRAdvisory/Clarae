@@ -4,6 +4,7 @@ import { api } from '../app/api';
 import { followLink } from '../app/actions';
 import { Events, type FileChangedPayload } from '../app/events';
 import { Editor, type LinkResolver } from '../editor/Editor';
+import { EditorToolbar } from '../editor/EditorToolbar';
 import type { LinkSpec, LivePreviewContext } from '../editor/context';
 import { useNoteDocument } from '../editor/useNoteDocument';
 import { renderEmbedInto } from '../embeds/hydrate';
@@ -275,31 +276,39 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
           />
         </div>
       ) : (
-        <Editor
-          id={pane.id}
-          doc={text}
-          version={doc.version}
-          mode={tab.mode}
-          settings={editorSettings}
-          context={context}
-          completion={completion}
-          paste={paste}
-          resolver={link.resolver}
-          hotkey={(e) => {
-            const c = commandForEvent(e, useSettings.getState().hotkeys);
-            if (!c) return false;
-            e.preventDefault();
-            void c.run();
-            return true;
-          }}
-          reveal={revealHere}
-          readOnly={readOnly}
-          onChange={(v) => {
-            doc.edit(v);
-            rerender((n) => n + 1);
-          }}
-          onStats={(s) => isActive && setStats(s)}
-        />
+        <>
+          <EditorToolbar
+            vaultId={vaultId}
+            paneId={pane.id}
+            disabled={readOnly}
+            attachmentDir={attachmentDir(editorSettings, path)}
+          />
+          <Editor
+            id={pane.id}
+            doc={text}
+            version={doc.version}
+            mode={tab.mode}
+            settings={editorSettings}
+            context={context}
+            completion={completion}
+            paste={paste}
+            resolver={link.resolver}
+            hotkey={(e) => {
+              const c = commandForEvent(e, useSettings.getState().hotkeys);
+              if (!c) return false;
+              e.preventDefault();
+              void c.run();
+              return true;
+            }}
+            reveal={revealHere}
+            readOnly={readOnly}
+            onChange={(v) => {
+              doc.edit(v);
+              rerender((n) => n + 1);
+            }}
+            onStats={(s) => isActive && setStats(s)}
+          />
+        </>
       )}
     </div>
   );

@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import {
+  clearFormatting,
   insertLink,
+  insertSnippet,
+  toggleUnderline,
   insertSeparator,
   insertWikilink,
   setHeading,
@@ -127,5 +130,26 @@ describe('insertSeparator', () => {
     const v = make('', 0);
     insertSeparator(v);
     expect(v.state.doc.toString().startsWith('---')).toBe(false);
+  });
+});
+
+describe('toolbar helpers', () => {
+  it('underlines the selection', () => {
+    const v = make('abc', 0, 3);
+    toggleUnderline(v);
+    expect(v.state.doc.toString()).toBe('<u>abc</u>');
+  });
+
+  it('inserts a snippet with the cursor at the marker', () => {
+    const v = make('', 0);
+    insertSnippet('> [!note] |\n> ')(v);
+    expect(v.state.doc.toString()).toBe('> [!note] \n> ');
+    expect(v.state.selection.main.head).toBe(10);
+  });
+
+  it('clears inline marks and the block prefix', () => {
+    const v = make('## **bold** and ==hi== `c`', 0, 0);
+    expect(clearFormatting(v)).toBe(true);
+    expect(v.state.doc.toString()).toBe('bold and hi c');
   });
 });
