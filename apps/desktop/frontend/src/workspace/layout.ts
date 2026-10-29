@@ -8,6 +8,11 @@ export interface Tab {
   id: string;
   path: string;
   mode: NoteMode;
+  /**
+   * A locked tab keeps its note (navigation opens a new tab instead of replacing it) and is
+   * skipped by every "close" the user triggers; only a deleted file closes it.
+   */
+  pinned?: boolean;
 }
 
 export interface Pane {
@@ -134,7 +139,7 @@ function openIn(
   let active = pane.active;
   if (existing) {
     active = existing.id;
-  } else if (newTab || !pane.active) {
+  } else if (newTab || !pane.active || pane.tabs.find((t) => t.id === pane.active)?.pinned) {
     const tab: Tab = { id: idFactory('t'), path, mode };
     tabs = [...pane.tabs, tab];
     active = tab.id;
@@ -197,18 +202,76 @@ function removePane(layout: Layout, paneId: string): Layout {
   return { root: normalized, activePane };
 }
 
-/** Closes a tab; an emptied pane disappears unless it is the last one. */
-export function closeTab(layout: Layout, tabId: string): Layout {
-  const pane = paneOfTab(layout, tabId);
-  if (!pane) return layout;
-  const idx = pane.tabs.findIndex((t) => t.id === tabId);
-  const tabs = pane.tabs.filter((t) => t.id !== tabId);
+/**
+ * Closes the tabs of a pane for which `shouldClose(tab, index)` holds, except locked ones
+ * (unless `force`). An emptied pane disappears unless it is the last one; when the active tab
+ * goes, the nearest remaining one becomes active.
+ */
+function closeMatching(
+  layout: Layout,
+  pane: Pane,
+  shouldClose: (tab: Tab, index: number) => boolean,
+  force = false,
+): Layout {
+  const tabs = pane.tabs.filter((t, i) => !shouldClose(t, i) || (t.pinned && !force));
+  if (tabs.length === pane.tabs.length) return layout;
   if (tabs.length === 0 && allPanes(layout.root).length > 1) return removePane(layout, pane.id);
-  const active =
-    pane.active === tabId ? (tabs[Math.min(idx, tabs.length - 1)]?.id ?? null) : pane.active;
+  let active = pane.active;
+  if (!tabs.some((t) => t.id === active)) {
+    const from = pane.tabs.findIndex((t) => t.id === active);
+    const next = tabs.find((t) => pane.tabs.indexOf(t) > from) ?? tabs[tabs.length - 1];
+    active = next?.id ?? null;
+  }
   return {
     ...layout,
     root: mapPanes(layout.root, (p) => (p.id === pane.id ? { ...p, tabs, active } : p)),
+  };
+}
+
+/** Closes a tab; a locked one stays unless `force` (its file is gone). */
+export function closeTab(layout: Layout, tabId: string, opts: { force?: boolean } = {}): Layout {
+  const pane = paneOfTab(layout, tabId);
+  return pane ? closeMatching(layout, pane, (t) => t.id === tabId, opts.force) : layout;
+}
+
+/** Closes the tabs to the right of `tabId` in its pane. */
+export function closeTabsRight(layout: Layout, tabId: string): Layout {
+  const pane = paneOfTab(layout, tabId);
+  const at = pane?.tabs.findIndex((t) => t.id === tabId) ?? -1;
+  return pane ? closeMatching(layout, pane, (_, i) => i > at) : layout;
+}
+
+/** Closes the tabs to the left of `tabId` in its pane. */
+export function closeTabsLeft(layout: Layout, tabId: string): Layout {
+  const pane = paneOfTab(layout, tabId);
+  const at = pane?.tabs.findIndex((t) => t.id === tabId) ?? -1;
+  return pane ? closeMatching(layout, pane, (_, i) => i < at) : layout;
+}
+
+/** Closes every other tab of the pane of `tabId`. */
+export function closeOtherTabs(layout: Layout, tabId: string): Layout {
+  const pane = paneOfTab(layout, tabId);
+  return pane ? closeMatching(layout, pane, (t) => t.id !== tabId) : layout;
+}
+
+/** Closes every tab of a pane. */
+export function closeAllTabs(layout: Layout, paneId: string): Layout {
+  const pane = findPane(layout, paneId);
+  return pane ? closeMatching(layout, pane, () => true) : layout;
+}
+
+/** Locks or unlocks a tab. */
+export function togglePin(layout: Layout, tabId: string): Layout {
+  return {
+    ...layout,
+    root: mapPanes(layout.root, (p) => ({
+      ...p,
+      tabs: p.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const { pinned, ...rest } = t;
+        return pinned ? rest : { ...rest, pinned: true };
+      }),
+    })),
   };
 }
 
@@ -348,7 +411,8 @@ export function removePath(layout: Layout, path: string): Layout {
   let next = layout;
   for (const p of allPanes(layout.root)) {
     for (const t of p.tabs)
-      if (t.path === path || t.path.startsWith(path + '/')) next = closeTab(next, t.id);
+      if (t.path === path || t.path.startsWith(path + '/'))
+        next = closeTab(next, t.id, { force: true });
   }
   return next;
 }
@@ -371,7 +435,12 @@ function parseNode(raw: unknown, depth = 0): LayoutNode | null {
         typeof o['path'] === 'string' &&
         MODES.includes(o['mode'] as NoteMode)
       ) {
-        tabs.push({ id: o['id'], path: o['path'], mode: o['mode'] as NoteMode });
+        tabs.push({
+          id: o['id'],
+          path: o['path'],
+          mode: o['mode'] as NoteMode,
+          ...(o['pinned'] === true ? { pinned: true } : {}),
+        });
       }
     }
     const active =

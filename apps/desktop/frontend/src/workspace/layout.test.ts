@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   activeTab,
   allPanes,
+  closeAllTabs,
+  closeOtherTabs,
   closePane,
   closeTab,
+  closeTabsLeft,
+  closeTabsRight,
   cycleTab,
   emptyLayout,
   findPane,
@@ -19,6 +23,7 @@ import {
   setSizes,
   splitPane,
   toggleLink,
+  togglePin,
   type Layout,
 } from './layout';
 
@@ -70,6 +75,80 @@ describe('tabs', () => {
     l = setMode(l, activeTab(l)?.id ?? '', 'reading');
     expect(activeTab(l)?.mode).toBe('reading');
     expect(findPane(l, l.activePane)?.tabs[0]?.mode).toBe('live');
+  });
+});
+
+describe('locked tabs and bulk close', () => {
+  // a b c d e, with the id of each tab by path
+  const five = (): { l: Layout; id: Record<string, string> } => {
+    let l = open(emptyLayout(), 'a.md');
+    for (const p of ['b.md', 'c.md', 'd.md', 'e.md']) l = open(l, p, true);
+    const id = Object.fromEntries(
+      (findPane(l, l.activePane)?.tabs ?? []).map((t) => [t.path[0] as string, t.id]),
+    );
+    return { l, id };
+  };
+
+  it('closes to the right, to the left, the others, and all', () => {
+    const { l, id } = five();
+    expect(paths(closeTabsRight(l, id['c'] ?? ''))).toEqual(['a.md', 'b.md', 'c.md']);
+    expect(paths(closeTabsLeft(l, id['c'] ?? ''))).toEqual(['c.md', 'd.md', 'e.md']);
+    expect(paths(closeOtherTabs(l, id['c'] ?? ''))).toEqual(['c.md']);
+    expect(paths(closeAllTabs(l, l.activePane))).toEqual([]);
+  });
+
+  it('activates the nearest remaining tab when the active one is closed', () => {
+    const { l, id } = five();
+    // e is active; closing everything left of it keeps it
+    expect(activeTab(closeTabsLeft(l, id['e'] ?? ''))?.path).toBe('e.md');
+    // c active, close the others but a: the next one to the right is gone, so the last remains
+    const c = open(l, 'c.md');
+    const kept = closeTabsRight(c, id['b'] ?? '');
+    expect(paths(kept)).toEqual(['a.md', 'b.md']);
+    expect(activeTab(kept)?.path).toBe('b.md');
+  });
+
+  it('never closes a locked tab by a user action, but does when its file is deleted', () => {
+    const { l, id } = five();
+    let p = togglePin(l, id['b'] ?? '');
+    p = togglePin(p, id['d'] ?? '');
+    expect(closeTab(p, id['b'] ?? '')).toBe(p);
+    expect(paths(closeOtherTabs(p, id['a'] ?? ''))).toEqual(['a.md', 'b.md', 'd.md']);
+    expect(paths(closeAllTabs(p, p.activePane))).toEqual(['b.md', 'd.md']);
+    expect(paths(closeTabsRight(p, id['a'] ?? ''))).toEqual(['a.md', 'b.md', 'd.md']);
+    expect(paths(removePath(p, 'b.md'))).toEqual(['a.md', 'c.md', 'd.md', 'e.md']);
+    // unlocking makes it closable again
+    expect(paths(closeTab(togglePin(p, id['b'] ?? ''), id['b'] ?? ''))).not.toContain('b.md');
+  });
+
+  it('opens a note in a new tab when the active tab is locked', () => {
+    let l = open(emptyLayout(), 'a.md');
+    l = togglePin(l, activeTab(l)?.id ?? '');
+    l = open(l, 'b.md'); // plain open would replace the active tab
+    expect(paths(l)).toEqual(['a.md', 'b.md']);
+    expect(activeTab(l)?.path).toBe('b.md');
+  });
+
+  it('keeps a pane with only locked tabs when closing everything, and removes an emptied one', () => {
+    let l = open(open(emptyLayout(), 'a.md'), 'b.md', true);
+    const first = l.activePane;
+    l = togglePin(l, findPane(l, first)?.tabs[0]?.id ?? '');
+    l = splitPane(l, first, 'row', 'live', 'c.md');
+    expect(allPanes(l.root)).toHaveLength(2);
+    expect(paths(closeAllTabs(l, first), first)).toEqual(['a.md']);
+    const second = l.activePane;
+    expect(allPanes(closeAllTabs(l, second).root)).toHaveLength(1);
+  });
+
+  it('persists the lock and reads layouts saved without it', () => {
+    const { l, id } = five();
+    const p = togglePin(l, id['c'] ?? '');
+    expect(parseLayout(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    const tab = findPane(p, p.activePane)?.tabs.find((t) => t.id === id['c']);
+    expect(tab?.pinned).toBe(true);
+    expect(findPane(l, l.activePane)?.tabs.every((t) => !('pinned' in t))).toBe(true);
+    expect(parseLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+    expect(togglePin(p, id['c'] ?? '')).toEqual(l);
   });
 });
 
