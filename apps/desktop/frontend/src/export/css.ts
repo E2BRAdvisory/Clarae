@@ -83,6 +83,24 @@ function scoped(): string {
   }).join('\n');
 }
 
+/**
+ * CSS of the slides (ADR-0027): the typography of the exports on a 1280×720 surface, in the
+ * built-in light or dark palette. "auto" follows the application theme (data-theme on the root,
+ * else the system setting). Written by the application: no user CSS (D-01).
+ */
+export function slidesCss(): string {
+  const dark = `${DARK} color-scheme: dark;`;
+  return `.slide-surface { ${LIGHT} color-scheme: light; }
+.slide-surface[data-theme='dark'] { ${dark} }
+:root[data-theme='dark'] .slide-surface[data-theme='auto'] { ${dark} }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) .slide-surface[data-theme='auto'] { ${dark} } }
+${scoped()}
+.slide-surface .export-doc { max-width: none; margin: 0; padding: 56px 80px; font-size: 30px; line-height: 1.4; overflow: hidden; }
+.slide-surface .export-doc h1 { font-size: 1.9em; margin-top: 0; }
+.slide-surface .export-doc h2 { font-size: 1.5em; margin-top: 0; }
+.slide-surface .export-doc > :first-child { margin-top: 0; }`;
+}
+
 /** CSS of the standalone HTML file: light, switching to dark with the reader's system setting. */
 export function standaloneCss(): string {
   return `:root { color-scheme: light dark; ${LIGHT} }
