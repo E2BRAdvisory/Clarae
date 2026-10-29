@@ -86,7 +86,7 @@ test('a drawing opens, saves edits and makes no request outside the app', async 
 
   // Draw a second rectangle: R is the rectangle tool.
   const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: 5, y: 5 } });
+  await canvas.click({ position: { x: 300, y: 450 } });
   await page.keyboard.press('r');
   await page.mouse.move(box.x + 400, box.y + 300);
   await page.mouse.down();
@@ -171,7 +171,7 @@ test('Present toggles: it hides Excalidraw’s icons and a second click shows th
   await expect(page.locator('.drawing-canvas .excalidraw canvas.interactive')).toBeVisible({
     timeout: 60_000,
   });
-  const chrome = page.locator('.drawing-canvas .excalidraw .layer-ui__wrapper');
+  const chrome = page.locator('.drawing-canvas .excalidraw .App-top-bar');
   const present = page.getByRole('button', { name: 'Present' });
 
   await expect(chrome).toBeVisible();

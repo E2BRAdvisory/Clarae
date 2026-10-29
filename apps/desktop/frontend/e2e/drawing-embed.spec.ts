@@ -185,7 +185,7 @@ test('the default style of the vault applies to new drawings', async ({ page }) 
   const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
   await expect(canvas).toBeVisible({ timeout: 60_000 });
   const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: 5, y: 5 } });
+  await canvas.click({ position: { x: 300, y: 450 } });
   await page.keyboard.press('r');
   await page.mouse.move(box.x + 300, box.y + 300);
   await page.mouse.down();

@@ -147,7 +147,7 @@ test('auto-export writes the PNG and SVG variants next to the drawing after a sa
   // Draw a rectangle: the save that follows triggers the export.
   const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
   const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: 5, y: 5 } });
+  await canvas.click({ position: { x: 300, y: 450 } });
   await page.keyboard.press('r');
   await page.mouse.move(box.x + 400, box.y + 300);
   await page.mouse.down();

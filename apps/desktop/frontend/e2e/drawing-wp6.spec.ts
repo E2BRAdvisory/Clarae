@@ -188,7 +188,10 @@ test('importing a .excalidrawlib merges its shapes into the library', async ({ p
 test('a pen command switches to the freehand tool', async ({ page }) => {
   await openDrawing(page, scene([]));
   await runCommand(page, 'highlighter (yellow)');
-  await expect(page.locator('[data-testid="toolbar-freedraw"]')).toBeChecked();
+  await expect(page.locator('[data-testid="toolbar-freedraw"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });
 
 test('the drawing can be described as text', async ({ page }) => {
