@@ -506,6 +506,158 @@ Ordine: WP0 → WP1 → (WP2 ∥ WP3 ∥ WP4) → WP5 → (WP6 ∥ WP7) → WP8 
 
 ---
 
+## 13-bis. M9 — Workbench del vault nella Web UI (esito: parità web/desktop)
+
+> **Stato (2026-10-29):** pianificata. ADR-0029 (workbench web, deviazione da A-03) e ADR-0030 (core Go in WASM) in stato _proposta_: in attesa dello spike WP1 e dell'aggiornamento di `Specifications.md` da parte dell'owner. Piano di dettaglio: `.claude/roadmap/progetta-e-pianifica-gli-glistening-kahan.md`.
+
+Decisioni dell'owner:
+
+- la logica del desktop gira nel browser come **core Go compilato in WASM** in un Web Worker, con SQLite-wasm e OPFS;
+- i vault privati E2EE sono modificabili anche dal web;
+- il web è **online-first con cache locale**, senza PWA.
+
+Il browser registra un dispositivo `web` e usa il protocollo di sync esistente: il server resta cieco al contenuto.
+
+Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → WP7. WP0 e WP1 possono procedere in parallelo con M10.
+
+### M9-WP0 ADR e documenti
+
+- ADR-0029 e ADR-0030; questa sezione; budget separato del chunk workbench (revisione di ADR-0020); testo proposto per lo spec (A-03, §0.1, §2.8, §4.4, §3.8.1, tabella rischi), che l'owner riporta in `Specifications.md`.
+
+### M9-WP1 Spike core WASM (time-boxed)
+
+- `GOOS=js` build di `cmd/memobrain-core` con `indexer`, `search`, `links`, `bases`, `sync` e `shared/go`.
+- Driver `database/sql` su `@sqlite.org/sqlite-wasm` (`opfs-sahpool`, FTS5 `trigram`, migrazioni goose) e VFS OPFS.
+- Misure riportate in ADR-0030: dimensione, avvio, indicizzazione 5k note, latenza ricerca, memoria.
+- Se un modulo non rientra negli obiettivi, fallback mirato per quel modulo.
+
+> **Stato (2026-10-29):** spike eseguito **in parte**, con via libera provvisorio (esito in ADR-0030, comandi in `docs/perf/wasm-spike.md`). Verificato: il core compila per `js/wasm` (solo `modernc.org/sqlite` e `updater` bloccano), 6,4 MB con brotli, SQLite-wasm applica le migrazioni reali con FTS5 `trigram` (5k note in 1,7 s, ricerca p95 4,4 ms), il parser Go è 4,5× più lento del nativo. **Non verificato**: driver `database/sql` su sqlite-wasm, VFS OPFS, indicizzazione end-to-end, memoria del core, confronto con il desktop nativo. Questi punti restano in WP2/WP3 e possono ancora cambiare il go/no-go.
+
+### M9-WP2 Portabilità del core Go
+
+> **Stato (2026-10-29):** implementato e provato in Node (ADR-0030, "Esito dell'implementazione"). Tutti i 27 pacchetti di `apps/desktop/internal/...` passano sotto `GOOS=js GOARCH=wasm` (`make test-wasm`, scritto solo in WP3: vedi lì) e il desktop nativo resta verde (`go test ./...`, `golangci-lint`). **Deviazione dal piano:** niente interfaccia `vfs` in Go. Su `js` il pacchetto `os` passa da `globalThis.fs`, che la pagina fornirà sopra OPFS (WP5): evita di migrare circa 60 chiamate in otto pacchetti. **Non verificato:** OPFS e `opfs-sahpool` in un browser vero, lo stream SSE nel browser, `cmd/memobrain-core` (WP3).
+
+- Driver SQL scelto con build tag in `internal/store`; nuovo `internal/sqlitejs` (driver `database/sql` sincrono verso `globalThis.__memobrainSQLite`) e `packages/sqlite-bridge`; `store.Exists`/`Reset` perché i database non stanno nel file system.
+- Interfaccia `Host` in `internal/app` (`host_wails.go` / `host_web.go`); nessun binding importa Wails; `isWeb` spegne updater, cestino di sistema e watcher.
+- Cambi di file senza fsnotify: `vault.FS.SetOnChange` → `watcher.Notify`.
+- Sessione ospitata in `auth` (`Hosted`: token dalla pagina, niente keychain), chiavi dei vault privati in memoria, SSE come canale di notifica (nessun endpoint gRPC annunciato).
+- `SettingsAPI.Info` espone `platform`. Bug trovati dai test su WASM e corretti: `sync.ReadMount`, colonne `TIMESTAMP`, `updater` per `js`.
+- Resta per WP5: blocco per inattività della VMK, shim `fs` su OPFS, lettura dello stream SSE nel browser.
+- Il desktop resta verde a ogni passo.
+
+### M9-WP3 Host RPC WASM
+
+> **Stato (2026-10-29):** implementato e provato (ADR-0030, "Esito dell'implementazione (M9-WP3)"). `internal/rpc` (dispatcher con la semantica di Wails), `App.Services()` come elenco unico dei servizi (usato anche da `main.go`), `cmd/memobrain-core` con `globalThis.__memobrainCore`, `make wasm-core` (**6,44 MB con brotli**) e `make test-wasm`. La parità con `wailsjs/go/app/*.d.ts` è verificata: 20 servizi, 122 metodi, nessuna eccezione (le funzioni non applicabili al web restano esposte e rispondono con un errore o con lo stato «disattivato»; le nasconde la UI in WP4). **Non verificato:** caricamento in un Web Worker vero. **Correzione:** il target `make test-wasm`, dato per esistente alla chiusura del WP2, è stato scritto solo ora.
+
+- `cmd/memobrain-core`: stessi struct dei binding Wails, dispatcher JSON via reflection con la semantica di Wails; gli eventi escono dall'`Emit` dell'host (`__memobrainHost.emit`), che la pagina inoltra con `postMessage`.
+- Test che ogni metodo di `wailsjs/go/app/*.d.ts` sia esposto (si salta se i binding non sono generati).
+
+### M9-WP4 Frontend condiviso `packages/workbench`
+
+> **Stato (2026-10-29):** implementato e verificato (ADR-0029, ADR-0030). Verificati: typecheck dei due pacchetti, 562 test unitari del workbench (554 prima dello spostamento + 8 nuovi), build di produzione (iniziale 1962 kB su 2000 di budget), e2e Playwright del desktop (104 passati, 3 saltati) e della build minificata (42), `wails generate module` (binding identici, ora in `packages/workbench/wailsjs`) e `make build-desktop`. **Non verificato:** il workbench in un browser vero (WP5) e in modalità `web` dentro Playwright (WP7): la modalità `web` è coperta solo da test unitari.
+
+- `apps/desktop/frontend/src` è ora `packages/workbench/src` (`@memobrain/workbench`, spostato con `git mv`: cronologia conservata); `wailsjsdir` punta a `packages/workbench`. `apps/desktop/frontend` ha solo `src/main.tsx` (chiama `mountWorkbench`), `index.html`, lo script di build e gli e2e.
+- `mountWorkbench(root, { kind, onBackToConsole })`: l'host dice di che tipo è. `kind` (`desktop` per default, `web`) imposta le capability.
+- **Build condivisa:** `@memobrain/workbench/build` (`packages/workbench/build/esbuild.mjs`) esporta plugin, loader, alias e la copia degli asset di Excalidraw; il frontend desktop ci aggiunge entry, HTML, dev server e budget. In WP5 lo userà anche la Web UI.
+- **Tipi:** `workbench` e `desktop-frontend` si controllano ciascuno con il proprio `tsc -b`; il desktop vede solo la firma pubblica del workbench (`src/workbench.d.ts`) e non ricompila i sorgenti.
+- **Capability** (`platform/`): `localFolders`, `updater`, `diskEncryptionCheck`, `nativeWindow`. Sul web: niente "Apri cartella" (schermata iniziale, menu del vault), niente sorgenti d'importazione che richiedono una cartella, niente aggiornamenti (dialogo, indicatore, impostazioni, comando), niente avviso sul disco; i link esterni si aprono in una nuova scheda con `noopener`; lo schermo intero usa solo la Fullscreen API; "Torna alla console" compare nell'intestazione e nella schermata iniziale se l'host lo fornisce.
+- **Scostamento dal piano:** i dialoghi nativi (salvataggio, stampa, scelta di un file) **non** hanno una sostituzione nel frontend. Passano dai binding Go, e l'`Host` web (WP2) li trasforma in download, `window.print()` e selettore di file: la UI non cambia. Resta aperta la scelta di una cartella per l'importer (`localFolders` falso: sorgenti a cartella nascoste); si potrà riattivare con `showDirectoryPicker` in WP5.
+
+### M9-WP5 Integrazione in `web/`
+
+> **Stato (2026-10-29):** implementato e verificato in un Chromium vero (ADR-0029/0030, `docs/web-ui.md`). Verificati: lo shim `fs` su OPFS (9 test in un worker vero), il workbench con il **core WASM reale** (10 test: scrittura, ricerca FTS5 su SQLite `opfs-sahpool`, backlink, rinomina con riscrittura dei link, storia locale, download dello ZIP, grafo, persistenza al reload, blocco + cancellazione della copia, una scheda sola), la build minificata servita dall'handler Go di produzione con la sua CSP (nessuna violazione, nessuna richiesta esterna, WASM in gzip), 16 test unitari di bridge e inattività, test Go di `web-embed`, e un'immagine Docker completa (114 MB). Budget: console 611/1000 kB, workbench 2416/2500 kB iniziale e 12774/23000 kB totale, core 7841 kB gzip (limite 8192). **Non verificato:** il flusso con un cloud vero (login OIDC, `LinkExisting`, sync web ↔ desktop, vault privato con passphrase), l'apertura di un mount (`?share=`), e Safari/Firefox (solo Chromium).
+
+**Deviazioni dal piano** (da confermare):
+
+- Il workbench è una **pagina a sé** (`workbench.html`), non una route lazy della SPA: l'esbuild non separa il CSS dei chunk dinamici e lo stile globale della UI desktop avrebbe toccato la console. Il server la serve per `/vaults/:id/open` con una CSP dedicata.
+- Il blocco è **uno per browser**, non uno per vault: gli handle sincroni di OPFS e il pool di SQLite sono esclusivi per tutta l'origine.
+- Il budget WASM si misura in **gzip** (7,8 MB), non in brotli (6,4 MB): niente nuove dipendenze Go per il serving; il file `.wasm.gz` si serve com'è o si decomprime con la libreria standard.
+- Il worker non ha `tokens.ts`: il token passa dal protocollo dell'host (`bridge.ts`).
+- Cancellazione della copia in chiaro: **fatta** per blocco e inattività; **non fatta** per il logout e per un "Dimentica questo browser" (resta in WP7).
+- Il blocco per inattività è fisso a 15 minuti: non legge ancora il Config Profile.
+
+- Pagina `workbench.html` e `web/src/workbench/{main.tsx,launch.ts,bridge.ts,worker.ts,opfs-fs.ts,idle.ts}`; "Apri" nella tabella dei vault e nelle condivisioni accettate.
+- esbuild: due pagine, worker a sé, `core/*.wasm.gz` con hash e SRI verificata dal worker, budget separati; `make wasm-core`, `make web-build` (core e binding generati se mancano).
+- `web-embed`: route, CSP del workbench, servizio dei `.wasm` da `.wasm.gz`; `webembed-serve -dir` per provare una build E2E.
+- Dockerfile con gli stage `bindings` e `wasm`; CI con binding, core e job `wasm-core`.
+
+### M9-WP6 Cloud
+
+> **Stato (2026-10-29):** implementato. **Scostamento:** il flag si chiama `web_workbench` (non `web.workbench.enabled`): le feature del Config Profile sono booleani piatti con underscore (`features.*`), le chiavi con il punto sono le impostazioni. Il valore predefinito è _acceso_. Verificati: test di integrazione con PostgreSQL vero (un dispositivo `web` si registra e si revoca; l'enum OpenAPI e la colonna lo ammettevano già, nessuna migrazione), test dello schema (le due copie identiche, il flag accettato e il tipo errato rifiutato), test Go di `features` (acceso di default, spegnibile), 2 test web (il pulsante «Apri» c'è e sparisce con il flag spento). **Non verificato:** il rifiuto dell'indirizzo digitato a mano con il flag spento, che richiede un cloud vero (il lancio lo chiede al core con `ConfigAPI.Effective` e mostra «disattivato dall'amministratore»), e l'effetto per gruppo in un'istanza reale.
+
+- Dispositivi con `platform: "web"`: già previsti dal contratto; coperti da un test di integrazione.
+- Feature `web_workbench` nel Config Profile: `api/config-profile.schema.json` e la sua copia nel cloud (test di parità), `features.Known`/`Defaults` del desktop (che la ignora), console web (`useWorkbenchAllowed`, nasconde «Apri» in Vault e nelle condivisioni) e lancio del workbench (rifiuta anche l'indirizzo digitato).
+- Nessuna nuova API di contenuto.
+
+### M9-WP7 Parità e qualità
+
+> **Stato (2026-10-29):** implementato; **i criteri di uscita di M9 sono soddisfatti solo in parte** (vedi sotto). Dettaglio e matrice in [web-workbench-parity.md](web-workbench-parity.md) (tabelle generate da `scripts/parity.mjs`, verificate in CI).
+>
+> Verificato: 14 spec dei flussi utente del desktop (`workflows`, `keyboard`, `editor-toolbar`, `slides`, `graph`) eseguiti **sul workbench web contro il core vero** (`e2e:workbench-ui`, `E2E_TARGET=web`, lo stesso `apps/desktop/frontend/e2e/support.ts`); e2e contro un **cloud vero** (Keycloak, PostgreSQL, S3: `e2e:cloud`): login, dispositivo `web`, una nota passa da un browser all'altro e due modifiche concorrenti alla stessa nota `.md` si fondono sul client; «Dimentica questo browser» e logout cancellano le copie e i database (`forgetThisBrowser`, 1 test); un test di regressione dello shim; 81 test e2e web e 14 workbench-ui stabili su più esecuzioni, 104 e2e desktop invariati; sicurezza (build minificata, CSP di produzione).
+>
+> **Bug veri trovati dalla parità:** (1) due `open` concorrenti dello stesso file sullo shim OPFS davano EBUSY e il tab restava vuoto (corretto: acquisizione serializzata); (2) il nome del vault mostrava l'id del cloud (ora il core usa il nome del cloud, `sync.ReadVaultName`).
+>
+> **Non verificato** (resta in elenco, nessuno è nascosto): desktop nativo ↔ web contro lo stesso cloud (provato web ↔ web: stesso core); copie di conflitto `.canvas`/`.excalidraw` dal browser; vault privato nel browser (sblocco, sync cifrata); mount `?share=`; flag `web_workbench` spento con un cloud vero; spec di disegno, canvas, condivisione, accessibilità (axe) e prestazioni sul web (usano dati del mock); Safari e Firefox; indicizzazione di vault grandi.
+
+- Matrice di parità `docs/web-workbench-parity.md`: eccezioni dichiarate, cosa è verificato e cosa no, e tabelle generate di 72 comandi (71 sul web) e 122 binding (13 chiamati da un test web contro il core vero: gli altri sono provati solo sotto WASM dai test del core).
+- Spec del desktop eseguiti anche sul web con un helper comune (`openVault` apre un vault sul mock o su una cartella del browser).
+- E2E web ↔ cloud vero in `web/e2e-cloud` (richiede `scripts/run-desktop-with-cloud.sh --cloud-only --keep` dopo `make web-build`; non è in CI).
+- Test Go del core sotto `GOOS=js` (`make test-wasm`, job CI `wasm-core`), con `scripts/parity.mjs --check`.
+- Sicurezza: blocco e cancellazione (`lockAndForget`), «Dimentica questo browser» e logout (`forgetThisBrowser`), CSP e SRI (`web/e2e-security`).
+
+**Criteri di uscita M9:**
+
+- un vault condiviso e uno privato si aprono, si modificano e si sincronizzano dal browser con tutte le funzioni della matrice di parità;
+- le modifiche web ↔ desktop si propagano in entrambi i sensi;
+- `make ci` verde, con desktop invariato.
+
+---
+
+## 13-ter. M10 — Pipeline di rilascio (esito: installer e immagini pubblicati da CI)
+
+> **Stato (2026-10-29):** WP1-WP3 implementati (ADR-0031); **WP4 solo in parte**: `actionlint`, build Docker multi-arch e prove locali dell'installer Windows sono fatti, **nessuna esecuzione su GitHub** (serve `gh auth` dell'owner), quindi i criteri di uscita **non sono soddisfatti**. Mancano i certificati di firma: il canale non firmato è attivo, e la firma si accende quando arrivano i segreti. Dettaglio di cosa è verificato e no in ADR-0031.
+
+### M10-WP1 Correzioni bloccanti
+
+- `services/cloud/Dockerfile`:
+  - niente `COPY .yarn`, che è ignorato da git;
+  - cross-compilazione da `$BUILDPLATFORM` invece di QEMU;
+  - stage `wasm` per M9.
+- Wails CLI installata con `scripts/install-wails.sh` in `ci.yml` e `release.yml` (incompatibilità con Go 1.27).
+- `make build-desktop` con `-tags webkit2_41` su Linux; target `docker-build` e `docker-push`.
+
+### M10-WP2 Canale non firmato
+
+- Variabile `REQUIRE_SIGNING`, default `false`. Senza segreti, prerelease "unsigned" con avviso nel job summary e nelle note.
+- Senza le chiavi del manifest: `updater.DisabledByBuild=1` e nessun manifest pubblicato.
+- Con il certificato Authenticode si firma anche `memobrain.exe`.
+- Aggiornamento di `docs/release/secrets.md` e `docs/release/README.md`.
+
+### M10-WP3 Matrice e pubblicazione
+
+- Desktop: macOS universal, Windows amd64 e arm64, Linux amd64 e arm64 (`.deb` + AppImage).
+- Immagini GHCR: `edge` e `sha-<short>` da `main`, semver e `latest` dai tag; cosign, SBOM e provenance.
+- `ci.yml` riusabile (`workflow_call`) come gate dei workflow di rilascio.
+- Una sola GitHub Release per tag, in bozza salvo `RELEASE_AUTO_PUBLISH=true`.
+- Placeholder: `ghcr.io/ORG` → `ghcr.io/e2br`; `memobrain.example` → variabili `HOMEPAGE_URL` e `UPDATE_BASE_URL`.
+
+### M10-WP4 Verifica reale
+
+- `actionlint` sui workflow.
+- Build multi-arch dell'immagine da un clone pulito.
+- Dry run `workflow_dispatch` su GitHub (serve un `gh` autenticato).
+- Tag `v1.1.0-rc.1`, poi verifiche: installer avviati sui cinque target; `docker run … --version`; `deploy/compose` con `/api/v1/readyz`.
+- Package GHCR reso pubblico.
+- Aggiornamento di ADR-0023 ("Verificato e non").
+
+**Criteri di uscita M10:**
+
+- un tag produce in automatico installer per i cinque target e un'immagine multi-arch firmata su GHCR;
+- una push su `main` pubblica l'immagine `edge`;
+- tutto è verificato su una run reale.
+
+---
+
 ## 14. Trasversale: test e verifica
 
 | Livello            | Strumento                                                                         | Dove                                                       |
