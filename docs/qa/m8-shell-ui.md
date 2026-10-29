@@ -14,6 +14,7 @@ Segnare `[x]` con data e sistema operativo.
 
 ## Azioni rapide
 
+- [ ] Esplora file: niente pulsanti «nuova nota/cartella» sopra l'albero (restano nel menu contestuale e nelle azioni rapide); le cartelle hanno l'icona chiusa/aperta.
 - [ ] Nuova cartella, nota, lavagna, disegno e base creano il file dove ci si aspetta (cartella configurata o cartella della nota aperta) e lo aprono.
 - [ ] _Separatore_ inserisce `---` sotto la riga corrente con una riga vuota prima, e non trasforma il testo sopra in titolo; è disabilitato in vista lettura e su un vault di sola lettura.
 - [ ] _Esporta in PDF_ apre il dialogo di stampa; _Esporta come immagine_ salva un PNG leggibile (formule, immagini, diagrammi inclusi). **Verifica in WKWebView, WebView2 e WebKitGTK**: se il canvas risulta «tainted» il comando mostra un errore invece del file.

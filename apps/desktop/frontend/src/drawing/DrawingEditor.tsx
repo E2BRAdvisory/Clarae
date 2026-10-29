@@ -34,7 +34,9 @@ import {
   type ExportEl,
   type ExportOptions,
 } from './export/options';
-import { copyExport, renderExport, type ExportInput } from './export/render';
+import { Icon } from '../shell/icons';
+import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
+import { bytesToBase64, copyExport, renderExport, type ExportInput } from './export/render';
 import {
   getSceneController,
   registerSceneController,
@@ -48,7 +50,8 @@ import { TextToolDialog } from './TextToolDialog';
 import { DescribeDialog } from './DescribeDialog';
 import { describeScene } from './describe';
 import { ToolsPanel } from './ToolsPanel';
-import { moveSlide, slideKey, slidesOf, type Slide } from './slides';
+import { moveSlide, playable, slideKey, slidesOf, type Slide } from './slides';
+import { useDrawingSlides } from './slidesStore';
 import { applyPatch } from './actions/apply';
 import {
   folderOf,
@@ -117,6 +120,8 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // The frames played as slides while presenting (empty: plain presentation), and the current one.
   const [deck, setDeck] = useState<Slide[]>([]);
   const [slide, setSlide] = useState(0);
+  // Presentation settings of this drawing (Slideshow tab): loop, slide counter, notes.
+  const [slideOpts, setSlideOpts] = useState({ loop: false, numbers: true, notes: true });
   const [exporting, setExporting] = useState(false);
   const host = useRef<HTMLDivElement>(null);
   const signature = useRef('');
@@ -202,11 +207,19 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       if (sig === signature.current) return; // selection, scroll, zoom: not an edit
       const first = signature.current === '';
       signature.current = sig;
+      // The Slideshow tab of the right sidebar lists the frames.
+      useDrawingSlides.getState().publish(path, slidesOf(elements as unknown as SceneElement[]));
       if (first) return; // the initial render of the loaded file
       doc.edit(serialize(elements, appState, files));
     },
-    [doc],
+    [doc, path],
   );
+  useEffect(() => () => useDrawingSlides.getState().clear(path), [path]);
+  // The frames of a freshly opened drawing (Excalidraw reports no change for the loaded scene).
+  useEffect(() => {
+    if (excalidraw)
+      useDrawingSlides.getState().publish(path, slidesOf(excalidraw.getSceneElements()));
+  }, [excalidraw, path]);
 
   const onLibraryChange = useCallback(
     (items: LibraryItems) => {
@@ -256,15 +269,30 @@ export default function DrawingEditor({ vaultId, path }: Props) {
 
   /** Starts the presentation: the frames become the slides and the laser pointer the tool. */
   const startEvent = useRef<Event | null>(null);
-  const startPresent = useCallback(() => {
-    startEvent.current = window.event ?? null;
-    if (excalidraw) {
-      setDeck(slidesOf(excalidraw.getSceneElements()));
-      setSlide(0);
-      excalidraw.setActiveTool({ type: 'laser' });
-    }
-    setPresent(true);
-  }, [excalidraw]);
+  const startPresent = useCallback(
+    (fromId?: string) => {
+      startEvent.current = window.event ?? null;
+      if (excalidraw) {
+        const mb = (extra.current['memobrain'] as Record<string, unknown> | undefined) ?? {};
+        setSlideOpts({
+          loop: mb['slideLoop'] === 'true',
+          numbers: mb['slideNumbers'] !== 'false',
+          notes: mb['slideNotes'] !== 'false',
+        });
+        const slides = playable(slidesOf(excalidraw.getSceneElements()));
+        setDeck(slides);
+        setSlide(
+          Math.max(
+            0,
+            slides.findIndex((s) => s.id === fromId),
+          ),
+        );
+        excalidraw.setActiveTool({ type: 'laser' });
+      }
+      setPresent(true);
+    },
+    [excalidraw],
+  );
   useEffect(() => {
     if (!excalidraw) return;
     const controller: SceneController = {
@@ -386,7 +414,64 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         await excalidraw.updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: true });
         return items.length;
       },
-      startSlideshow: startPresent,
+      startSlideshow: (fromId) => startPresent(fromId),
+      fileSettings: () => ({
+        ...((extra.current['memobrain'] as Record<string, unknown> | undefined) ?? {}),
+      }),
+      showFrame: (id) => {
+        const frame = excalidraw.getSceneElements().find((e) => e.id === id);
+        if (frame) excalidraw.setViewport({ target: frame, fit: 'contain', animation: true });
+      },
+      slideThumbnail: async (id, width = 320) => {
+        const els = excalidraw.getSceneElements();
+        const frame = els.find((e) => e.id === id);
+        if (!frame) return '';
+        const st = excalidraw.getAppState();
+        const svg = await ExcalidrawLib.exportToSvg({
+          elements: els,
+          files: excalidraw.getFiles(),
+          exportPadding: 0,
+          exportingFrame: frame as never,
+          appState: {
+            exportBackground: true,
+            viewBackgroundColor: st.viewBackgroundColor,
+            exportWithDarkMode: false,
+          },
+          maxWidthOrHeight: width,
+        });
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+      },
+      printSlides: async () => {
+        const els = excalidraw.getSceneElements();
+        const pages: string[] = [];
+        for (const sl of playable(slidesOf(els))) {
+          const frame = els.find((e) => e.id === sl.id);
+          if (!frame) continue;
+          const svg = await ExcalidrawLib.exportToSvg({
+            elements: els,
+            files: excalidraw.getFiles(),
+            exportPadding: 0,
+            exportingFrame: frame as never,
+            appState: { exportBackground: true },
+          });
+          const b64 = bytesToBase64(
+            new TextEncoder().encode(new XMLSerializer().serializeToString(svg)),
+          );
+          pages.push(
+            `<section style="break-after:page"><img alt="" style="max-width:100%" src="data:image/svg+xml;base64,${b64}"></section>`,
+          );
+        }
+        if (pages.length === 0) return;
+        beginPrint(pages.join(''));
+        const imgs = [...document.querySelectorAll<HTMLImageElement>('#memobrain-print img')];
+        await Promise.all(imgs.map((i) => i.decode().catch(() => undefined)));
+        window.addEventListener('afterprint', endPrint, { once: true });
+        try {
+          await api.exporter.print();
+        } catch {
+          window.print();
+        }
+      },
     };
     registerSceneController(controller);
     return () => unregisterSceneController(controller);
@@ -511,13 +596,20 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   }, [excalidraw]);
 
   // Presentation mode: read-only, zen and full screen.
+  const fullscreenOn = useRef(false);
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    if (present && !document.fullscreenElement)
-      void el.requestFullscreen?.().catch(() => undefined);
-    if (!present && document.fullscreenElement === el) void document.exitFullscreen?.();
+    if (present) void enterFullscreen(el);
+    else if (fullscreenOn.current) void leaveFullscreen();
+    fullscreenOn.current = present;
   }, [present]);
+  useEffect(
+    () => () => {
+      if (fullscreenOn.current) void leaveFullscreen();
+    },
+    [],
+  );
   // Slideshow: with frames in the drawing each one is a slide; the laser pointer is the tool while
   // presenting. Escape ends the presentation (also where the webview has no element full screen).
   const wasPresenting = useRef(false);
@@ -569,12 +661,18 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       if (k === undefined) return;
       e.preventDefault();
       setSlide((i) =>
-        k === 'first' ? 0 : k === 'last' ? deck.length - 1 : moveSlide(i, k, deck.length),
+        k === 'first'
+          ? 0
+          : k === 'last'
+            ? deck.length - 1
+            : slideOpts.loop
+              ? (i + k + deck.length) % deck.length
+              : moveSlide(i, k, deck.length),
       );
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [present, deck]);
+  }, [present, deck, slideOpts]);
   useEffect(() => {
     const off = () => {
       if (!document.fullscreenElement) setPresent(false);
@@ -774,6 +872,8 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             onLibraryChange={onLibraryChange}
             onLinkOpen={onLinkOpen}
             UIOptions={{
+              // Always the desktop layout: the toolbar stays at the top, centred, at any width.
+              getFormFactor: () => 'desktop',
               canvasActions: {
                 loadScene: false,
                 export: false,
@@ -788,10 +888,16 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           <div className="slideshow-bar" role="toolbar" aria-label={t('drawing.slideshow.label')}>
             <button
               aria-label={t('drawing.slideshow.previous')}
-              disabled={slide === 0}
-              onClick={() => setSlide((i) => moveSlide(i, -1, deck.length))}
+              disabled={slide === 0 && !slideOpts.loop}
+              onClick={() =>
+                setSlide((i) =>
+                  slideOpts.loop
+                    ? (i - 1 + deck.length) % deck.length
+                    : moveSlide(i, -1, deck.length),
+                )
+              }
             >
-              ‹
+              <Icon name="prev" />
             </button>
             <select
               aria-label={t('drawing.slideshow.slide')}
@@ -804,16 +910,24 @@ export default function DrawingEditor({ vaultId, path }: Props) {
                 </option>
               ))}
             </select>
-            <span aria-live="polite">
-              {t('drawing.slideshow.of', { n: slide + 1, total: deck.length })}
-            </span>
-            {deck[slide]?.notes && <span className="slide-notes">{deck[slide]?.notes}</span>}
+            {slideOpts.numbers && (
+              <span aria-live="polite">
+                {t('drawing.slideshow.of', { n: slide + 1, total: deck.length })}
+              </span>
+            )}
+            {slideOpts.notes && deck[slide]?.notes && (
+              <span className="slide-notes">{deck[slide]?.notes}</span>
+            )}
             <button
               aria-label={t('drawing.slideshow.next')}
-              disabled={slide === deck.length - 1}
-              onClick={() => setSlide((i) => moveSlide(i, 1, deck.length))}
+              disabled={slide === deck.length - 1 && !slideOpts.loop}
+              onClick={() =>
+                setSlide((i) =>
+                  slideOpts.loop ? (i + 1) % deck.length : moveSlide(i, 1, deck.length),
+                )
+              }
             >
-              ›
+              <Icon name="chevronRight" />
             </button>
           </div>
         )}

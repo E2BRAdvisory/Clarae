@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { SlideView } from './SlideView';
 import { useDeck, useSlideHtml } from './useDeck';
 import { useSlideshow } from './store';
+import { Icon } from '../shell/icons';
+import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 const clock = (ms: number): string => {
@@ -44,19 +46,17 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
     const el = root.current;
     el?.focus();
     let entered = false;
-    void el
-      ?.requestFullscreen?.()
-      .then(() => {
-        entered = true;
-      })
-      .catch(() => undefined);
+    if (el)
+      void enterFullscreen(el).then(() => {
+        entered = document.fullscreenElement === el;
+      });
     const onFullscreen = (): void => {
       if (entered && !document.fullscreenElement) useSlideshow.getState().close();
     };
     document.addEventListener('fullscreenchange', onFullscreen);
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreen);
-      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      void leaveFullscreen();
     };
   }, []);
 
@@ -129,7 +129,7 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
           aria-label={t('slides.previous')}
           title={t('slides.previous')}
         >
-          ‹
+          <Icon name="prev" />
         </button>
         <button
           type="button"
@@ -138,7 +138,7 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
           aria-label={t('slides.next')}
           title={t('slides.next')}
         >
-          ›
+          <Icon name="chevronRight" />
         </button>
         <button
           type="button"
@@ -147,7 +147,7 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
           title={t('slides.presenterView')}
           aria-label={t('slides.presenterView')}
         >
-          ▦
+          <Icon name="grid" />
         </button>
         <button
           type="button"
@@ -155,7 +155,7 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
           aria-label={t('slides.exit')}
           title={t('slides.exit')}
         >
-          ✕
+          <Icon name="close" size={16} />
         </button>
       </div>
 

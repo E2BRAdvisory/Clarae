@@ -10,7 +10,13 @@
       "@excalidraw/excalidraw": ["../../../node_modules/@excalidraw/excalidraw/types/excalidraw/index.d.ts"],
       "@excalidraw/excalidraw/types": ["../../../node_modules/@excalidraw/excalidraw/types/excalidraw/types.d.ts"],
       "@excalidraw/excalidraw/*": ["../../../node_modules/@excalidraw/excalidraw/types/excalidraw/*"],
-      "@excalidraw/utils/*": ["../../../node_modules/@excalidraw/excalidraw/types/utils/*"]
+      "@excalidraw/common": ["../../../node_modules/@excalidraw/excalidraw/types/common/src/index.d.ts"],
+      "@excalidraw/common/*": ["../../../node_modules/@excalidraw/excalidraw/types/common/src/*"],
+      "@excalidraw/element": ["../../../node_modules/@excalidraw/excalidraw/types/element/src/index.d.ts"],
+      "@excalidraw/element/*": ["../../../node_modules/@excalidraw/excalidraw/types/element/src/*"],
+      "@excalidraw/math": ["../../../node_modules/@excalidraw/excalidraw/types/math/src/index.d.ts"],
+      "@excalidraw/math/*": ["../../../node_modules/@excalidraw/excalidraw/types/math/src/*"],
+      "@excalidraw/utils/*": ["../../../node_modules/@excalidraw/excalidraw/types/utils/src/*"]
     }
   },
   "include": ["src", "wailsjs", "../../../packages/ui/src/i18nCheck.ts"]

@@ -8,7 +8,48 @@ export interface Slide {
   name: string;
   /** Presenter notes (`customData.memobrain.notes` of the frame). */
   notes: string;
+  /** False when the frame is left out of the presentation (`customData.memobrain.slideHidden`). */
+  included: boolean;
+  /** The frame's version, to know when its thumbnail is stale. */
+  version: number;
 }
+
+type Meta = Record<string, unknown>;
+const metaOf = (e: SceneElement): Meta =>
+  (e.customData as { memobrain?: Meta } | undefined)?.memobrain ?? {};
+
+/**
+ * The property changes that set (or, with `undefined`, clear) keys of a frame's `memobrain`
+ * custom data, keeping the rest of `customData`.
+ */
+export function slideMetaUpdate(
+  e: SceneElement,
+  changes: Record<string, unknown>,
+): Record<string, unknown> {
+  const memobrain: Meta = { ...metaOf(e) };
+  for (const [k, v] of Object.entries(changes)) {
+    if (v === undefined || v === '' || v === false) delete memobrain[k];
+    else memobrain[k] = v;
+  }
+  return { customData: { ...(e.customData as Meta | undefined), memobrain } };
+}
+
+/** Patch that numbers the frames 1..n in the given order (only those whose number changes). */
+export function reorderUpdate(
+  elements: readonly SceneElement[],
+  order: readonly string[],
+): Record<string, Record<string, unknown>> {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const update: Record<string, Record<string, unknown>> = {};
+  order.forEach((id, i) => {
+    const e = byId.get(id);
+    if (e && slideNumber(e) !== i + 1) update[id] = slideMetaUpdate(e, { slide: i + 1 });
+  });
+  return update;
+}
+
+/** The slides that are played (the others stay on the board and in the panel). */
+export const playable = (slides: readonly Slide[]): Slide[] => slides.filter((s) => s.included);
 
 /** The presenter notes stored on a frame. */
 export const slideNotes = (e: SceneElement): string => {
@@ -45,6 +86,8 @@ export function slidesOf(elements: readonly SceneElement[]): Slide[] {
     id: e.id,
     name: name(e) || `Frame ${i + 1}`,
     notes: slideNotes(e),
+    included: metaOf(e)['slideHidden'] !== true,
+    version: e.version,
   }));
 }
 

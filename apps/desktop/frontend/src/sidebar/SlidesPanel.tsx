@@ -7,14 +7,21 @@ import { infoOf, useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
 import { slideTitle } from '../slides/model';
 import { startSlideshow } from '../slides/actions';
+import { DrawingSlidesPanel } from './DrawingSlidesPanel';
 import { SlideView } from '../slides/SlideView';
 import { useSlideshow } from '../slides/store';
 import { useDeck, useSlideHtml } from '../slides/useDeck';
 
 type Key = keyof SlideConfig;
 
-/** Right sidebar, "Slides" tab: options of the presentation of the note in focus, and its slides. */
+/** Right sidebar, "Slides" tab: a note's presentation, or a drawing's slideshow (its frames). */
 export function SlidesPanel({ vaultId }: { vaultId: string }) {
+  const path = useAppStore(selectActivePath);
+  if (path && /\.excalidraw$/i.test(path)) return <DrawingSlidesPanel path={path} />;
+  return <NoteSlidesPanel vaultId={vaultId} />;
+}
+
+function NoteSlidesPanel({ vaultId }: { vaultId: string }) {
   const { t } = useTranslation();
   const path = useAppStore(selectActivePath);
   const note = useActiveNote((s) => s.note);

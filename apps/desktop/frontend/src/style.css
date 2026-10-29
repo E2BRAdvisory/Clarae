@@ -104,7 +104,15 @@ select {
   gap: 2px;
 }
 .svg-icon {
-  display: block;
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.25em;
+}
+.cm-lp-callout-icon,
+.cm-lp-callout-chevron,
+.cm-foldGutter span {
+  display: inline-flex;
+  align-items: center;
 }
 button.icon[aria-pressed='true'] {
   color: var(--accent);
@@ -191,9 +199,12 @@ button.icon[aria-pressed='true'] {
   background: var(--bg-active);
 }
 .tree .node .caret {
-  width: 12px;
+  display: inline-flex;
+  width: 16px;
   color: var(--text-faint);
-  font-size: 10px;
+}
+.tree .node.folder .caret {
+  color: var(--accent);
 }
 .tree .node .name {
   overflow: hidden;
@@ -1456,6 +1467,17 @@ textarea.merge {
 .drawing-canvas .excalidraw .main-menu-trigger {
   display: none;
 }
+/* The toolbar stays centred at the top, whatever the width of the canvas. */
+.drawing-canvas .excalidraw .App-top-bar {
+  left: 0;
+  right: 0;
+  width: 100%;
+  justify-content: center;
+}
+.drawing-canvas .excalidraw .App-top-bar > section {
+  width: auto;
+  margin: 0 auto;
+}
 .embed-drawing-wrap {
   display: block;
 }
@@ -2209,4 +2231,161 @@ textarea.merge {
     animation: none !important;
     transition: none;
   }
+}
+
+/* Slideshow tab of a drawing (the Excalidraw plugin's slideshow panel) */
+.drawing-slides .slides-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+}
+.drawing-slides .slides-toolbar button[aria-pressed='true'] {
+  background: var(--bg-active);
+}
+.drawing-slides .slides-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.drawing-slides .slides-toolbar .slides-more {
+  margin-left: auto;
+}
+.slide-cards {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.slide-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.slide-card.selected {
+  border-color: var(--accent);
+}
+.slide-card.excluded .slide-thumb-box {
+  opacity: 0.4;
+}
+.slide-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-weight: 600;
+}
+.slide-card .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.slide-thumb-box {
+  margin: 6px 0;
+  min-height: 48px;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.slide-thumb-box img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.slide-thumb-box .thumb-wait {
+  display: block;
+  height: 80px;
+}
+.slide-card-actions {
+  display: flex;
+  gap: 4px;
+}
+.slide-notes-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.slide-notes-box textarea {
+  min-height: 80px;
+  resize: vertical;
+  font: inherit;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- editing toolbar (notes) ---- */
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 3px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary, transparent);
+}
+.editor-toolbar .tb-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  position: relative;
+}
+.editor-toolbar .tb-group + .tb-group {
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.editor-toolbar .tb-btn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+}
+.editor-toolbar .tb-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.editor-toolbar .tb-menu {
+  position: relative;
+}
+.editor-toolbar .tb-pop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+.editor-toolbar .tb-pop button {
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+.editor-toolbar .tb-pop button:hover {
+  background: var(--bg-hover);
+}
+
+/* ---- full screen: presentations and the canvas cover the whole window ---- */
+.canvas-view.fullscreen,
+.drawing-canvas.presenting {
+  position: fixed;
+  inset: 0;
+  z-index: 150; /* above the workspace and menus, below the dialogs (200) */
+  background: var(--bg);
 }

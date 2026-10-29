@@ -602,7 +602,8 @@
     "currentPassphrase": "Passphrase attuale",
     "diskUnencrypted": "Il disco di questo computer non sembra cifrato. Le note sono salvate in chiaro: attiva FileVault / BitLocker / la cifratura del disco.",
     "kind_private": "privato",
-    "kind_shared": "condiviso"
+    "kind_shared": "condiviso",
+    "signedOutHint": "Sessione cloud scaduta: accedi di nuovo per riprendere. Il collegamento del vault è mantenuto, non va rifatto."
   },
   "drawing": {
     "loading": "Caricamento dell'editor di disegni…",
@@ -807,6 +808,31 @@
         "frame": "cornice/i",
         "embeddable": "pagina/e incorporata/e"
       }
+    },
+    "slidePanel": {
+      "label": "Slideshow",
+      "print": "Stampa / salva come PDF",
+      "describe": "Descrivi il disegno come testo",
+      "settings": "Impostazioni di presentazione",
+      "settingsTitle": "Impostazioni di presentazione",
+      "slideLoop": "Ricomincia alla fine",
+      "slideNumbers": "Mostra il contatore delle slide",
+      "slideNotes": "Mostra le note del relatore",
+      "empty": "Questo disegno non ha cornici. Ogni cornice diventa una diapositiva.",
+      "summary": "Slideshow delle cornici · {{n}} di {{total}} incluse",
+      "more": "Altre azioni",
+      "includeAll": "Includi tutte le diapositive",
+      "excludeAll": "Escludi tutte le diapositive",
+      "resetOrder": "Ripristina l'ordine (per nome, poi posizione)",
+      "rename": "Rinomina la cornice",
+      "up": "Sposta su",
+      "down": "Sposta giù",
+      "include": "Includi nella presentazione",
+      "exclude": "Escludi dalla presentazione",
+      "playFrom": "Avvia da questa diapositiva",
+      "notes": "Note del relatore",
+      "notesPlaceholder": "Aggiungi le note del relatore per questa diapositiva…",
+      "notesHint": "Le note supportano Markdown e si salvano da sole."
     }
   },
   "canvas": {
@@ -838,7 +864,9 @@
     "editText": "Testo della scheda",
     "empty": "Doppio clic per scrivere",
     "hint": "Doppio clic sulla lavagna per aggiungere una scheda",
-    "invalid": "Questo file non è una lavagna valida: {{error}}"
+    "invalid": "Questo file non è una lavagna valida: {{error}}",
+    "fullscreen": "Schermo intero",
+    "exitFullscreen": "Esci da schermo intero"
   },
   "sharing": {
     "invitations": "Inviti",
@@ -1246,5 +1274,37 @@
     "checkNow": "Verifica aggiornamenti",
     "disabled": "Gli aggiornamenti sono disattivati: {{reason}}.",
     "privacy": "L'unica richiesta è il download di un manifest firmato; non viene inviato alcun identificativo."
+  },
+  "toolbar": {
+    "label": "Barra di modifica",
+    "undo": "Annulla",
+    "redo": "Ripeti",
+    "clear": "Cancella formattazione",
+    "h1": "Titolo 1",
+    "h2": "Titolo 2",
+    "h3": "Titolo 3",
+    "moreHeadings": "Altri titoli",
+    "bold": "Grassetto",
+    "italic": "Corsivo",
+    "strike": "Barrato",
+    "underline": "Sottolineato",
+    "highlight": "Evidenziato",
+    "code": "Codice in linea",
+    "sub": "Pedice",
+    "sup": "Apice",
+    "link": "Collegamento",
+    "wikilink": "Link interno",
+    "embed": "Incorpora",
+    "attachment": "Inserisci allegato",
+    "task": "Attività",
+    "bullet": "Elenco puntato",
+    "numbered": "Elenco numerato",
+    "quote": "Citazione",
+    "callout": "Callout",
+    "codeBlock": "Blocco di codice",
+    "table": "Tabella",
+    "math": "Blocco matematico",
+    "divider": "Linea orizzontale",
+    "comment": "Commento"
   }
 }

@@ -147,3 +147,19 @@ test('New canvas from the palette creates the file and embeds it in the open not
     }),
   ).toBe(1);
 });
+
+test('a canvas goes full screen and Escape leaves it', async ({ page }) => {
+  await openVault(page, { 'Map.canvas': MAP, 'Plan.md': '# Plan\n' });
+  await page.locator('.tree .node', { hasText: 'Map' }).click();
+  await page.getByRole('button', { name: 'Full screen' }).click();
+  const vp = page.viewportSize()!;
+  await expect(page.locator('.canvas-view.fullscreen')).toBeVisible();
+  expect(await page.locator('.canvas-view.fullscreen').boundingBox()).toMatchObject({
+    x: 0,
+    y: 0,
+    width: vp.width,
+    height: vp.height,
+  });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.canvas-view.fullscreen')).toHaveCount(0);
+});

@@ -24,7 +24,7 @@ export async function renderSvg(text: string, ref: DrawingRef | null = null): Pr
     frame = part.frame as unknown as typeof frame;
   }
   const svg = await ex.exportToSvg({
-    elements,
+    elements: elements as never,
     ...(frame ? { exportingFrame: frame } : {}),
     appState: {
       exportBackground: true,

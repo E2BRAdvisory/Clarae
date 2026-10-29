@@ -602,7 +602,8 @@
     "currentPassphrase": "Current passphrase",
     "diskUnencrypted": "The disk of this computer does not look encrypted. Your notes are stored in clear text here: turn on FileVault / BitLocker / disk encryption.",
     "kind_private": "private",
-    "kind_shared": "shared"
+    "kind_shared": "shared",
+    "signedOutHint": "Signed out of the cloud: sign in again to resume. The link of the vault is kept, do not reconnect it."
   },
   "drawing": {
     "loading": "Loading the drawing editor…",
@@ -807,6 +808,31 @@
         "frame": "frame(s)",
         "embeddable": "embedded page(s)"
       }
+    },
+    "slidePanel": {
+      "label": "Slideshow",
+      "print": "Print / save as PDF",
+      "describe": "Describe the drawing as text",
+      "settings": "Presentation settings",
+      "settingsTitle": "Presentation settings",
+      "slideLoop": "Loop at the end",
+      "slideNumbers": "Show the slide counter",
+      "slideNotes": "Show presenter notes",
+      "empty": "This drawing has no frames. Each frame becomes a slide.",
+      "summary": "Frame slideshow · {{n}} of {{total}} included",
+      "more": "More actions",
+      "includeAll": "Include all slides",
+      "excludeAll": "Exclude all slides",
+      "resetOrder": "Reset the order (by name, then position)",
+      "rename": "Rename the frame",
+      "up": "Move up",
+      "down": "Move down",
+      "include": "Include in the presentation",
+      "exclude": "Leave out of the presentation",
+      "playFrom": "Start from this slide",
+      "notes": "Presenter notes",
+      "notesPlaceholder": "Add presenter notes for this slide…",
+      "notesHint": "Notes support Markdown and are saved automatically."
     }
   },
   "canvas": {
@@ -838,7 +864,9 @@
     "editText": "Card text",
     "empty": "Double-click to write",
     "hint": "Double-click the board to add a card",
-    "invalid": "This file is not a valid canvas: {{error}}"
+    "invalid": "This file is not a valid canvas: {{error}}",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen"
   },
   "sharing": {
     "invitations": "Invitations",
@@ -1246,5 +1274,37 @@
     "checkNow": "Check for updates",
     "disabled": "Updates are turned off: {{reason}}.",
     "privacy": "The only request is the download of a signed manifest; no identifier is sent."
+  },
+  "toolbar": {
+    "label": "Editing toolbar",
+    "undo": "Undo",
+    "redo": "Redo",
+    "clear": "Clear formatting",
+    "h1": "Heading 1",
+    "h2": "Heading 2",
+    "h3": "Heading 3",
+    "moreHeadings": "More headings",
+    "bold": "Bold",
+    "italic": "Italic",
+    "strike": "Strikethrough",
+    "underline": "Underline",
+    "highlight": "Highlight",
+    "code": "Inline code",
+    "sub": "Subscript",
+    "sup": "Superscript",
+    "link": "Link",
+    "wikilink": "Internal link",
+    "embed": "Embed",
+    "attachment": "Insert attachment",
+    "task": "Task",
+    "bullet": "Bulleted list",
+    "numbered": "Numbered list",
+    "quote": "Quote",
+    "callout": "Callout",
+    "codeBlock": "Code block",
+    "table": "Table",
+    "math": "Math block",
+    "divider": "Horizontal rule",
+    "comment": "Comment"
   }
 }

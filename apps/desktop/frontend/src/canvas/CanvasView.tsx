@@ -36,6 +36,8 @@ import {
   type NodeInit,
   type Side,
 } from './model';
+import { Icon } from '../shell/icons';
+import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 
 const AUTOSAVE_MS = 1000;
 const MIN_ZOOM = 0.1;
@@ -160,6 +162,27 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
   };
   const drag = useRef<Drag | null>(null);
   const board = useRef<HTMLDivElement>(null);
+  // Full screen: the view covers the window (and the window itself goes full screen where it can).
+  const frame = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    const el = frame.current;
+    if (!full || !el) return;
+    void enterFullscreen(el);
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setFull(false);
+    };
+    const onChange = (): void => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onChange);
+      void leaveFullscreen();
+    };
+  }, [full]);
   const dataRef = useRef(data);
   const viewRef = useRef(view);
   useEffect(() => {
@@ -488,7 +511,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
   const linkFrom = link ? data.nodes.find((n) => n.id === link.from) : undefined;
 
   return (
-    <div className="note-view canvas-view">
+    <div className={`note-view canvas-view${full ? ' fullscreen' : ''}`} ref={frame}>
       <div className="note-header">
         <span className="path" title={path}>
           {path.replace(/\.canvas$/, '')}
@@ -513,40 +536,40 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
           onClick={() => void addNoteNode()}
           disabled={readOnly}
         >
-          ▤ {t('canvas.note')}
+          <Icon name="note" size={16} /> {t('canvas.note')}
         </ToolButton>
         <ToolButton
           label={t('canvas.addMedia')}
           onClick={() => void addMedia()}
           disabled={readOnly}
         >
-          ▣ {t('canvas.media')}
+          <Icon name="media" size={16} /> {t('canvas.media')}
         </ToolButton>
         <ToolButton label={t('canvas.addLink')} onClick={() => void addLink()} disabled={readOnly}>
-          ↗ {t('canvas.link')}
+          <Icon name="arrowOut" size={16} /> {t('canvas.link')}
         </ToolButton>
         <ToolButton label={t('canvas.addGroup')} onClick={addGroup} disabled={readOnly}>
-          ▭ {t('canvas.group')}
+          <Icon name="groupBox" size={16} /> {t('canvas.group')}
         </ToolButton>
         <span className="cv-sep" />
         <ToolButton label={t('canvas.undo')} onClick={undo} disabled={!canUndo || readOnly}>
-          ↶
+          <Icon name="undo" />
         </ToolButton>
         <ToolButton label={t('canvas.redo')} onClick={redo} disabled={!canRedo || readOnly}>
-          ↷
+          <Icon name="redo" />
         </ToolButton>
         <span className="cv-sep" />
         <ToolButton label={t('canvas.zoomOut')} onClick={() => zoomCenter(1 / 1.25)}>
-          −
+          <Icon name="zoomOut" />
         </ToolButton>
         <span className="cv-zoom" aria-live="off">
           {Math.round(view.k * 100)}%
         </span>
         <ToolButton label={t('canvas.zoomIn')} onClick={() => zoomCenter(1.25)}>
-          ＋
+          <Icon name="zoomIn" />
         </ToolButton>
         <ToolButton label={t('canvas.fit')} onClick={fit}>
-          ⤢
+          <Icon name="fit" />
         </ToolButton>
         <span className="cv-sep" />
         <span className="cv-colors" role="group" aria-label={t('canvas.color')}>
@@ -568,15 +591,21 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
             disabled={selection.size === 0 || readOnly}
             onClick={() => recolor(undefined)}
           >
-            ⌀
+            <Icon name="noColor" />
           </button>
         </span>
+        <ToolButton
+          label={full ? t('canvas.exitFullscreen') : t('canvas.fullscreen')}
+          onClick={() => setFull((f) => !f)}
+        >
+          <Icon name={full ? 'fullscreenExit' : 'fullscreen'} size={16} />
+        </ToolButton>
         <ToolButton
           label={t('canvas.delete')}
           onClick={removeSelected}
           disabled={selection.size === 0 || readOnly}
         >
-          ✕
+          <Icon name="close" size={16} />
         </ToolButton>
       </div>
       <div

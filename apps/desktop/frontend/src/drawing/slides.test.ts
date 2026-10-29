@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneElement } from './actions/types';
-import { moveSlide, slideKey, slidesOf } from './slides';
+import { moveSlide, playable, reorderUpdate, slideKey, slideMetaUpdate, slidesOf } from './slides';
 
 const frame = (
   id: string,
@@ -34,9 +34,9 @@ describe('slidesOf', () => {
   it('falls back to reading order for unnamed frames', () => {
     const els = [frame('c', null, 0, 500), frame('b', null, 400, 0), frame('a', null, 0, 0)];
     expect(slidesOf(els)).toEqual([
-      { id: 'a', name: 'Frame 1', notes: '' },
-      { id: 'b', name: 'Frame 2', notes: '' },
-      { id: 'c', name: 'Frame 3', notes: '' },
+      { id: 'a', name: 'Frame 1', notes: '', included: true, version: 1 },
+      { id: 'b', name: 'Frame 2', notes: '', included: true, version: 1 },
+      { id: 'c', name: 'Frame 3', notes: '', included: true, version: 1 },
     ]);
   });
 
@@ -68,5 +68,29 @@ describe('navigation', () => {
     expect(slideKey('Home')).toBe('first');
     expect(slideKey('End')).toBe('last');
     expect(slideKey('a')).toBeUndefined();
+  });
+});
+
+describe('slide panel helpers', () => {
+  it('keeps the other custom data when it sets or clears a key', () => {
+    const f = frame('a', 'A', 0, 0, { customData: { other: 1, memobrain: { notes: 'n' } } });
+    expect(slideMetaUpdate(f, { slideHidden: true })).toEqual({
+      customData: { other: 1, memobrain: { notes: 'n', slideHidden: true } },
+    });
+    expect(slideMetaUpdate(f, { notes: '' })).toEqual({
+      customData: { other: 1, memobrain: {} },
+    });
+  });
+
+  it('numbers frames in the new order and flags the hidden ones', () => {
+    const els = [
+      frame('a', 'A', 0, 0),
+      frame('b', 'B', 0, 0, { customData: { memobrain: { slide: 2, slideHidden: true } } }),
+    ];
+    const upd = reorderUpdate(els, ['b', 'a']);
+    expect(Object.keys(upd).sort()).toEqual(['a', 'b']);
+    expect(upd['a']).toEqual({ customData: { memobrain: { slide: 2 } } });
+    expect(upd['b']).toEqual({ customData: { memobrain: { slide: 1, slideHidden: true } } });
+    expect(playable(slidesOf(els)).map((s) => s.id)).toEqual(['a']);
   });
 });

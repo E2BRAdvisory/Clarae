@@ -163,7 +163,7 @@ test('app dialogs stay above an open drawing', async ({ page }) => {
   expect(leftOnTop).toBe(true);
 });
 
-test('Present toggles: it hides Excalidraw’s icons and a second click shows them again', async ({
+test('Present toggles: it hides Excalidraw’s icons and Escape shows them again', async ({
   page,
 }) => {
   await openVault(page, { 'Sketch.excalidraw': SKETCH });
@@ -181,7 +181,8 @@ test('Present toggles: it hides Excalidraw’s icons and a second click shows th
   await expect(present).toHaveAttribute('aria-pressed', 'true');
   await expect(chrome).toBeHidden();
 
-  await present.click();
+  // The presentation covers the window (header included): Escape ends it.
+  await page.keyboard.press('Escape');
   await expect(present).toHaveAttribute('aria-pressed', 'false');
   await expect(chrome).toBeVisible();
 

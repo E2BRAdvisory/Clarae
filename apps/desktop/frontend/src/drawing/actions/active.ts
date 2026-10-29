@@ -30,8 +30,16 @@ export interface SceneController {
   openTool(kind: ToolKind, editId?: string): void;
   /** Merges the shapes of a ".excalidrawlib" (its JSON text) into the library; returns how many. */
   importLibrary(json: string): Promise<number>;
-  /** Starts the presentation; with frames it plays them as slides. */
-  startSlideshow(): void;
+  /** Starts the presentation; with frames it plays them as slides, from `fromId` if given. */
+  startSlideshow(fromId?: string): void;
+  /** SVG data URL of one frame (a slide thumbnail); empty when the frame is gone. */
+  slideThumbnail(id: string, width?: number): Promise<string>;
+  /** Brings a frame into view. */
+  showFrame(id: string): void;
+  /** Prints the included slides, one per page (the system dialog offers "Save as PDF"). */
+  printSlides(): Promise<void>;
+  /** The drawing's own settings (`memobrain` key of the file). */
+  fileSettings(): Record<string, unknown>;
 }
 
 export type ToolKind = 'latex' | 'mermaid' | 'tools' | 'describe';
