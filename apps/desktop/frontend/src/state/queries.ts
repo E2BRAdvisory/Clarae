@@ -66,11 +66,12 @@ export function useBacklinks(vaultId: string | undefined, path: string | null) {
     queryFn: async () => {
       const id = vaultId ?? '';
       const p = path ?? '';
-      const [linked, mentions] = await Promise.all([
+      const [linked, mentions, outgoing] = await Promise.all([
         api.links.backlinks(id, p),
         api.links.mentions(id, p),
+        api.links.outgoing(id, p),
       ]);
-      return { linked, mentions };
+      return { linked, mentions, outgoing };
     },
     enabled: !!vaultId && !!path,
   });

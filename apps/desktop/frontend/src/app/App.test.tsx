@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
 import { api } from './api';
@@ -82,6 +82,32 @@ describe('App shell', () => {
       expect(screen.getByDisplayValue('draft')).toBeInTheDocument();
     });
 
+    it('lists the links of the note in the Links tab, and the headings in Statistics', async () => {
+      await openDemo();
+      useAppStore.getState().openNote('Home.md');
+      useAppStore.getState().setRight({ open: true, tab: 'links' });
+      renderApp();
+      const section = await screen.findByRole('region', { name: 'Links' });
+      expect(await within(section).findByText('Ideas')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Statistics' }));
+      expect(await screen.findByText('Headings')).toBeInTheDocument();
+    });
+
+    it('shows the vault status in the header only while the right sidebar is closed', async () => {
+      await openDemo();
+      useAppStore.getState().setRight({ open: false });
+      renderApp();
+      await screen.findByRole('tab', { name: 'Files' });
+      expect(document.querySelector('.titlebar .vault-status')).not.toBeNull();
+      expect(document.querySelector('.sidebar.right')).toBeNull();
+      useAppStore.getState().setRight({ open: true });
+      await waitFor(() =>
+        expect(document.querySelector('.sidebar.right .vault-status')).not.toBeNull(),
+      );
+      expect(document.querySelector('.titlebar .vault-status')).toBeNull();
+    });
+
     it('switches a note to reading view with the mode toggle', async () => {
       await openDemo();
       useAppStore.getState().openNote('Home.md');
@@ -123,7 +149,7 @@ describe('App shell', () => {
 
     it('lists tags and filters the vault by tag when clicked', async () => {
       await openDemo();
-      useAppStore.getState().setLeft({ tab: 'tags' });
+      useAppStore.getState().setRight({ open: true, tab: 'tags' });
       renderApp();
       fireEvent.click(await screen.findByText('#seed'));
       await waitFor(() => expect(useAppStore.getState().searchQuery).toBe('tag:#seed'));

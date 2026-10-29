@@ -219,8 +219,8 @@ export function BookmarksPanel({ vaultId }: { vaultId: string }) {
       </div>
       <div
         className="content tree bookmarks"
-        role="tree"
-        aria-label={t('bookmarks.title')}
+        // An empty tree would have no treeitem (only the hint): it is a plain region then.
+        {...(items.length > 0 ? { role: 'tree', 'aria-label': t('bookmarks.title') } : {})}
         onDragOver={(e) => {
           if (!readOnly && e.dataTransfer.types.includes(DRAG_TYPE)) e.preventDefault();
         }}

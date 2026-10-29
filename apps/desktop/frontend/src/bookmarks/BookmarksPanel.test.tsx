@@ -82,7 +82,7 @@ describe('bookmarks', () => {
       mock.vaults.get(vaultId)?.files.get('.memobrain/bookmarks.json') ?? '',
     );
     expect(saved.items.map((i) => i.path)).toEqual(['A.md']);
-    expect(useAppStore.getState().left.tab).toBe('bookmarks');
+    expect(useAppStore.getState().right.tab).toBe('links');
   });
 
   it('follows renames done through renameEntry, even inside groups', async () => {
