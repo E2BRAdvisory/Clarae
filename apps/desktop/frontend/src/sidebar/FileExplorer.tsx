@@ -16,6 +16,7 @@ import { useSettings } from '../state/settings';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { dialog } from '../ui/dialogs';
 import { useExpanded } from './expanded';
+import { Icon } from '../shell/icons';
 
 interface TreeNode {
   entry: Entry;
@@ -400,7 +401,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           title={entry.path}
         >
           <span className="caret" aria-hidden="true">
-            {entry.isDir ? (open ? '▾' : '▸') : ''}
+            {entry.isDir ? <Icon name={open ? 'folderOpen' : 'folderClosed'} /> : ''}
           </span>
           <span className="name">{display(entry)}</span>
         </div>
@@ -410,24 +411,6 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   return (
     <>
       <div className="toolbar">
-        <button
-          className="icon"
-          disabled={readOnly}
-          onClick={() => void newNote(dirForNew())}
-          title={t('sidebar.newNote')}
-          aria-label={t('sidebar.newNote')}
-        >
-          ＋📝
-        </button>
-        <button
-          className="icon"
-          disabled={readOnly}
-          onClick={() => void newFolder(dirForNew())}
-          title={t('sidebar.newFolder')}
-          aria-label={t('sidebar.newFolder')}
-        >
-          ＋📁
-        </button>
         <span className="spacer" />
         <select
           aria-label={t('sidebar.sort')}

@@ -181,7 +181,7 @@ export function TabBar({ pane }: { pane: Pane }) {
                   closeTabById(tab.id);
                 }}
               >
-                ✕
+                <Icon name="close" size={16} />
               </button>
             )}
           </div>
@@ -195,7 +195,7 @@ export function TabBar({ pane }: { pane: Pane }) {
           aria-label={t('tabs.unlink')}
           onClick={() => toggleLinkedPane(pane.id)}
         >
-          🔗
+          <Icon name="link" />
         </button>
       )}
       {menu && (

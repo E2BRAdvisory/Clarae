@@ -8,6 +8,7 @@ import { SCENE_ACTIONS } from './actions/registry';
 import { useDrawingSettings } from './settings';
 import { featureOfCommand, toolIds } from './sceneCommands';
 import { drawingFeatureOn } from '../state/managed';
+import { Icon } from '../shell/icons';
 
 const RECENT_MAX = 6;
 const recentKey = (vaultId: string): string => `memobrain.drawing.tools.recent.${vaultId}`;
@@ -143,7 +144,7 @@ export function ToolsPanel({ onClose }: { onClose: () => void }) {
                         )}
                         onClick={() => toggleFavorite(e.id)}
                       >
-                        {starred ? '★' : '☆'}
+                        <Icon name={starred ? 'star' : 'starOff'} />
                       </button>
                     </li>
                   );

@@ -154,7 +154,7 @@ describe('permission badge and read-only', () => {
       },
     });
     render(wrap(<FileExplorer vaultId={vaultId} />));
-    expect(screen.getByRole('button', { name: 'New note' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'New note' })).toBeNull();
     fireEvent.contextMenu(await screen.findByText('Plan'));
     expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: 'Move to trash' })).toBeNull();

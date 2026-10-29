@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api, type DeviceInfo } from '../app/api';
 import { dialog } from '../ui/dialogs';
 import { i18next } from '../i18n';
+import { Icon } from '../shell/icons';
 
 const fmtBytes = (n: number): string => {
   if (n < 0) return '∞';
@@ -90,7 +91,7 @@ export function AccountDevices() {
                 aria-label={`${t('cloud.revoke')} ${d.name}`}
                 onClick={() => void revoke(d)}
               >
-                ✕
+                <Icon name="close" size={16} />
               </button>
             )}
           </li>

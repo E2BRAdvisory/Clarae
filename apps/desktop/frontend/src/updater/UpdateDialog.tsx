@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { announced, connectUpdater, useUpdater } from './store';
+import { Icon } from '../shell/icons';
 
 /** Status-bar item: shown while a (not skipped) update is waiting. */
 export function UpdateIndicator() {
@@ -14,7 +15,7 @@ export function UpdateIndicator() {
       title={t('updater.available', { version: status?.latest })}
       onClick={() => useUpdater.getState().showDialog()}
     >
-      ⬆ {t('updater.indicator', { version: status?.latest })}
+      <Icon name="upgrade" size={16} /> {t('updater.indicator', { version: status?.latest })}
     </button>
   );
 }

@@ -197,7 +197,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/runtime@npm:^7.12.5, @babel/runtime@npm:^7.29.7":
+"@babel/runtime@npm:^7.12.5, @babel/runtime@npm:^7.28.4, @babel/runtime@npm:^7.29.7":
   version: 7.29.10
   resolution: "@babel/runtime@npm:7.29.10"
   checksum: 10c0/32f975da8e9c2cae6b33e1a477f8fe8bbff6722c982b5ce35f99affaf3a7a1b612c8272b43afa0e51d3000928d6f3ba38f9296301115db5640264907c027b0cd
@@ -1167,6 +1167,7 @@ __metadata:
     "@lezer/highlight": "npm:^1.2.5"
     "@lezer/markdown": "npm:^1.8.1"
     "@memobrain/markdown": "workspace:*"
+    "@mui/icons-material": "npm:7.3.5"
     "@playwright/test": "npm:^1.64.1"
     "@tanstack/react-query": "npm:^5.104.5"
     "@testing-library/dom": "npm:^10.4.2"
@@ -1303,6 +1304,22 @@ __metadata:
   version: 2.2.0
   resolution: "@mixmark-io/domino@npm:2.2.0"
   checksum: 10c0/aa468a15f9217d425220fe6a4b3f9416cbe8e566ee14efc191c6d5cc04fe39338b16a90bbac190f28d44e69465db5f2cf95f479c621ce38060ca6b2a3d346e9d
+  languageName: node
+  linkType: hard
+
+"@mui/icons-material@npm:7.3.5":
+  version: 7.3.5
+  resolution: "@mui/icons-material@npm:7.3.5"
+  dependencies:
+    "@babel/runtime": "npm:^7.28.4"
+  peerDependencies:
+    "@mui/material": ^7.3.5
+    "@types/react": ^17.0.0 || ^18.0.0 || ^19.0.0
+    react: ^17.0.0 || ^18.0.0 || ^19.0.0
+  peerDependenciesMeta:
+    "@types/react":
+      optional: true
+  checksum: 10c0/5fa551acabc8eddf30113a45a7c7b9923ec0f520608442cb914345493208aaa5b4ba852ad4b766ab58c547a2eb498ab4d6c1a3ebf5d4055a006c2327e397f88c
   languageName: node
   linkType: hard
 

@@ -22,6 +22,7 @@ import { HistorySettings } from './HistorySettings';
 import { FilesExtra } from './FilesExtra';
 import { DrawingSection } from './DrawingSection';
 import { UpdateSettings } from '../updater/UpdateSettings';
+import { Icon } from '../shell/icons';
 
 const SECTIONS: SettingsSection[] = [
   'general',
@@ -61,7 +62,9 @@ function Row({
         {children}
       </fieldset>
       {locked && (
-        <span className="muted small managed-note">🔒 {t('settings.managedByAdmin')}</span>
+        <span className="muted small managed-note">
+          <Icon name="lock" size={14} /> {t('settings.managedByAdmin')}
+        </span>
       )}
     </div>
   );

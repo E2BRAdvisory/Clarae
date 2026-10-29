@@ -12,6 +12,7 @@ import {
 import { useSharing, type ShareTarget } from '../state/sharing';
 import { dialog } from '../ui/dialogs';
 import { sharingKeys, useVaultShares } from './queries';
+import { Icon } from '../shell/icons';
 
 const LEVELS: PermissionLevel[] = ['viewer', 'editor', 'manager'];
 
@@ -77,8 +78,7 @@ function RecipientSearch({
                   setQ('');
                 }}
               >
-                {d.type === 'group' ? '👥 ' : '👤 '}
-                {d.label}
+                <Icon name={d.type === 'group' ? 'group' : 'user'} size={14} /> {d.label}
               </button>
             </li>
           ))}
@@ -132,7 +132,7 @@ function ExistingShare({ share, vaultId }: { share: ShareInfo; vaultId: string }
         {share.grants.map((g) => (
           <li key={`${g.principalType}:${g.principalId}`}>
             <span>
-              {g.principalType === 'group' ? '👥 ' : '👤 '}
+              <Icon name={g.principalType === 'group' ? 'group' : 'user'} size={14} />{' '}
               {g.principalName}
             </span>
             <span className={`badge status-${g.status}`}>{t(`sharing.status_${g.status}`)}</span>
@@ -151,7 +151,7 @@ function ExistingShare({ share, vaultId }: { share: ShareInfo; vaultId: string }
                 void guard(api.sharing.removeGrant(share.id, g.principalType, g.principalId))
               }
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
           </li>
         ))}
@@ -219,15 +219,14 @@ function NewShare({
         {picked.map((p) => (
           <li key={`${p.type}:${p.id}`}>
             <span>
-              {p.type === 'group' ? '👥 ' : '👤 '}
-              {p.label}
+              <Icon name={p.type === 'group' ? 'group' : 'user'} size={14} /> {p.label}
             </span>
             <button
               className="icon"
               aria-label={t('sharing.removeRecipient', { name: p.name })}
               onClick={() => setPicked((prev) => prev.filter((x) => x !== p))}
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
           </li>
         ))}

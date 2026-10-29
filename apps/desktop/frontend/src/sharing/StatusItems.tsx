@@ -3,6 +3,7 @@ import { useAppStore } from '../state/store';
 import { featureOn, useManaged } from '../state/managed';
 import { infoOf, useSync } from '../state/sync';
 import { useInvitations } from './queries';
+import { Icon } from '../shell/icons';
 
 /** Status bar: how many invitations wait for an answer. */
 export function InvitesIndicator() {
@@ -16,7 +17,7 @@ export function InvitesIndicator() {
       title={t('sharing.invitations')}
       onClick={() => useAppStore.getState().openSettings('sharing')}
     >
-      ✉ {t('sharing.invitesN', { count: data.length })}
+      <Icon name="mail" size={14} /> {t('sharing.invitesN', { count: data.length })}
     </button>
   );
 }

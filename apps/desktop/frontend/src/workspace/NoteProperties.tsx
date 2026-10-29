@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { extract } from '@memobrain/markdown';
 import { api } from '../app/api';
 import { dialog } from '../ui/dialogs';
+import { Icon } from '../shell/icons';
 
 export type PropKind = 'text' | 'list' | 'number' | 'checkbox' | 'date' | 'datetime';
 export const propKinds: readonly PropKind[] = [
@@ -137,8 +138,10 @@ export function NoteProperties({ vaultId, path, text, prepare, onChanged }: Prop
   return (
     <section className="note-properties" aria-label={t('properties.title')}>
       <header onClick={() => setOpen(!open)}>
-        <span className="caret">{open ? '▾' : '▸'}</span> {t('properties.title')}{' '}
-        <span className="muted">({entries.length})</span>
+        <span className="caret">
+          <Icon name={open ? 'chevronDown' : 'chevronRight'} />
+        </span>{' '}
+        {t('properties.title')} <span className="muted">({entries.length})</span>
       </header>
       {open && (
         <div className="props">
@@ -184,7 +187,7 @@ export function NoteProperties({ vaultId, path, text, prepare, onChanged }: Prop
                     void run((hash) => api.properties.remove(vaultId, path, key, hash))
                   }
                 >
-                  ✕
+                  <Icon name="close" size={16} />
                 </button>
               </div>
             );

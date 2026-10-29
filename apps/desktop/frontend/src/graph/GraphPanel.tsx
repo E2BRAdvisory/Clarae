@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next';
 import { GROUP_COLORS, type GraphSettings } from './settings';
 import { forceRanges, type Forces } from './types';
+import { Icon } from '../shell/icons';
 
 const list = (s: string): string[] =>
   s
@@ -163,7 +164,7 @@ export function GraphPanel({ settings: s, local, update }: Props) {
               aria-label={t('graph.removeGroup')}
               onClick={() => update({ groups: s.groups.filter((_, j) => j !== i) })}
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
           </div>
         ))}

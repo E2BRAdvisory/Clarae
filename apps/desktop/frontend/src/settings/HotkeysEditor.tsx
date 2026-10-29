@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { commands, commandTitle, currentCombos } from '../commands/registry';
 import { comboFromEvent, comboIndex, formatCombo } from '../commands/hotkeys';
 import { useSettings } from '../state/settings';
+import { Icon } from '../shell/icons';
 
 /** Lists every command with its hotkeys; click a hotkey to record a new one. Conflicts are flagged. */
 export function HotkeysEditor() {
@@ -66,7 +67,7 @@ export function HotkeysEditor() {
                         )
                       }
                     >
-                      ✕
+                      <Icon name="close" size={16} />
                     </button>
                   </span>
                 ))}
@@ -98,7 +99,7 @@ export function HotkeysEditor() {
                       setHotkeys(next);
                     }}
                   >
-                    ↺
+                    <Icon name="reset" />
                   </button>
                 )}
               </span>

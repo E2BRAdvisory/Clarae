@@ -15,6 +15,7 @@ import {
   type BookmarkItem,
   type ItemPath,
 } from './model';
+import { Icon, type IconName } from '../shell/icons';
 import { bookmarksReadOnly, useBookmarks } from './store';
 import './bookmarks.css';
 
@@ -22,20 +23,19 @@ const DRAG_TYPE = 'application/x-memobrain-bookmark';
 
 type Drop = { key: string; zone: 'before' | 'after' | 'into' } | null;
 
-const ICONS: Record<string, string> = {
-  file: '📄',
-  folder: '📁',
-  search: '🔍',
-  graph: '🕸',
+const ICONS: Record<string, IconName> = {
+  file: 'note',
+  folder: 'folderClosed',
+  search: 'search',
+  graph: 'graph',
 };
 
-function iconOf(item: BookmarkItem): string {
+function iconOf(item: BookmarkItem): IconName {
   if (item.type === 'file') {
     const sub = item.subpath ?? '';
-    if (sub.startsWith('#^')) return '¶';
-    if (sub.startsWith('#')) return '#';
+    if (sub.startsWith('#')) return 'tag';
   }
-  return ICONS[item.type] ?? '•';
+  return ICONS[item.type] ?? 'note';
 }
 
 /** The Bookmarks sidebar tab: a tree of groups and bookmarks, draggable and keyboard operable. */
@@ -191,9 +191,11 @@ export function BookmarksPanel({ vaultId }: { vaultId: string }) {
               setMenu({ x: e.clientX, y: e.clientY, items: contextFor(path, item) });
             }}
           >
-            <span className="caret">{group ? (open ? '▾' : '▸') : ''}</span>
+            <span className="caret">
+              {group ? <Icon name={open ? 'chevronDown' : 'chevronRight'} /> : null}
+            </span>
             <span className="icon-type" aria-hidden="true">
-              {group ? '' : iconOf(item)}
+              {group ? null : <Icon name={iconOf(item)} size={16} />}
             </span>
             <span className="name">{label}</span>
           </div>
@@ -212,7 +214,7 @@ export function BookmarksPanel({ vaultId }: { vaultId: string }) {
           title={t('bookmarks.newGroup')}
           aria-label={t('bookmarks.newGroup')}
         >
-          ＋📁
+          <Icon name="folderPlus" />
         </button>
         <span className="spacer" />
         {readOnly && <span className="muted">{t('bookmarks.readOnly')}</span>}

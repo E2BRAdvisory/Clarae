@@ -52,13 +52,12 @@ test('accept an invitation, open the mount as a viewer: named after the share an
   await editor.click();
   await page.keyboard.type('vandalism');
   await expect(editor).not.toContainText('vandalism');
-  // Both the ribbon button and the one of the file explorer are off on a read-only vault.
+  // The ribbon button is off on a read-only vault.
   await expect(
     page
       .getByRole('navigation', { name: 'Quick actions' })
       .getByRole('button', { name: 'New note' }),
   ).toBeDisabled();
-  await expect(page.locator('.sidebar').getByRole('button', { name: 'New note' })).toBeDisabled();
 });
 
 test('an administrator locks a setting: it is disabled and says so', async ({ page }) => {

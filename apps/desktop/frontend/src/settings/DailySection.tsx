@@ -12,6 +12,7 @@ import {
 } from '../daily/settings';
 import { isLocked, useManaged } from '../state/managed';
 import { useAppStore } from '../state/store';
+import { Icon } from '../shell/icons';
 
 function Row({
   label,
@@ -34,7 +35,9 @@ function Row({
         {children}
       </fieldset>
       {locked && (
-        <span className="muted small managed-note">🔒 {t('settings.managedByAdmin')}</span>
+        <span className="muted small managed-note">
+          <Icon name="lock" size={14} /> {t('settings.managedByAdmin')}
+        </span>
       )}
     </div>
   );

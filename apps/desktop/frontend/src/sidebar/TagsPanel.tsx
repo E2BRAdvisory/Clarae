@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TagCount } from '../app/api';
 import { useAppStore } from '../state/store';
 import { useTags } from '../state/queries';
+import { Icon } from '../shell/icons';
 
 interface TagNode {
   name: string;
@@ -67,7 +68,9 @@ export function TagsPanel({ vaultId }: { vaultId: string }) {
               });
             }}
           >
-            {n.children.length ? (open.has(n.full) ? '▾' : '▸') : ''}
+            {n.children.length ? (
+              <Icon name={open.has(n.full) ? 'chevronDown' : 'chevronRight'} />
+            ) : null}
           </span>
           <span className="name">#{n.name}</span>
           <span className="count">{n.count}</span>

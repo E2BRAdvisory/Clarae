@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
 import { useBacklinks } from '../state/queries';
 import { openLocalGraph } from '../graph/commands';
+import { Icon } from '../shell/icons';
 
 export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: string }) {
   const { t } = useTranslation();
@@ -31,7 +32,7 @@ export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: strin
             aria-label={t('backlinks.localGraph')}
             onClick={() => openLocalGraph(path)}
           >
-            ⌖
+            <Icon name="locate" />
           </button>
         )}
       </h3>

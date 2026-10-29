@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { editorKeyOf, isLocked, useManaged } from '../state/managed';
 import { useSettings, type EditorSettings } from '../state/settings';
 import type { AttachmentLocation, NoteLocation } from './locations';
+import { Icon } from '../shell/icons';
 
 function Row({
   field,
@@ -28,7 +29,9 @@ function Row({
         {children}
       </fieldset>
       {locked && (
-        <span className="muted small managed-note">🔒 {t('settings.managedByAdmin')}</span>
+        <span className="muted small managed-note">
+          <Icon name="lock" size={14} /> {t('settings.managedByAdmin')}
+        </span>
       )}
     </div>
   );

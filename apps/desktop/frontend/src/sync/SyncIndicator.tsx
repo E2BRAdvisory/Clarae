@@ -1,14 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
+import { Icon, type IconName } from '../shell/icons';
 import { infoOf, useSync } from '../state/sync';
 
-const ICON: Record<string, string> = {
-  idle: '☁',
-  syncing: '⟳',
-  paused: '⏸',
-  offline: '⚠',
-  error: '⚠',
-  locked: '🔒',
+const ICON: Record<string, IconName> = {
+  idle: 'cloud',
+  syncing: 'sync',
+  paused: 'pause',
+  offline: 'cloudOff',
+  error: 'warning',
+  locked: 'lock',
 };
 
 /** Status bar indicator of the vault's cloud synchronization (M2-WP8). */
@@ -27,7 +28,7 @@ export function SyncIndicator() {
         title={t('sync.connectTitle')}
         onClick={() => useSync.getState().setWizardOpen(true)}
       >
-        ☁ {t('sync.notConnected')}
+        <Icon name="cloudOff" size={16} /> {t('sync.notConnected')}
       </button>
     );
   }
@@ -54,7 +55,7 @@ export function SyncIndicator() {
         aria-label={`${t('sync.title')}: ${label}`}
         onClick={open}
       >
-        {ICON[phase]} {label}
+        <Icon name={ICON[phase] ?? 'cloud'} size={16} /> {label}
       </button>
       {conflicts > 0 && (
         <button
@@ -62,7 +63,7 @@ export function SyncIndicator() {
           title={t('sync.conflictsTitle')}
           onClick={() => useSync.getState().setConflictsOpen(true)}
         >
-          ⚡ {t('sync.conflictsN', { count: conflicts })}
+          <Icon name="bolt" size={16} /> {t('sync.conflictsN', { count: conflicts })}
         </button>
       )}
     </>

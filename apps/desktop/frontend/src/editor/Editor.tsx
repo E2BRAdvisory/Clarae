@@ -37,6 +37,7 @@ import { livePreviewContext, type LivePreviewContext } from './context';
 import { linkStatusChanged, livePreview } from './livePreview';
 import { pagePreviewHover } from '../preview/hover';
 import { smartPaste, type PasteDeps } from './paste';
+import { iconElement } from '../shell/icons';
 import { registerEditor, setActiveEditor, unregisterEditor } from './registry';
 import { sourceMode } from './sourceMode';
 import { slashCompletionSource } from '../slash/slash';
@@ -84,7 +85,18 @@ function settingsExtensions(s: EditorSettings): Extension[] {
   return [
     s.lineNumbers ? lineNumbers() : [],
     s.wrap ? EditorView.lineWrapping : [],
-    s.foldHeadings ? [codeFolding(), foldGutter({ openText: '▾', closedText: '▸' })] : [],
+    s.foldHeadings
+      ? [
+          codeFolding(),
+          foldGutter({
+            markerDOM: (open) => {
+              const el = document.createElement('span');
+              el.append(iconElement(open ? 'chevronDown' : 'chevronRight', 16));
+              return el;
+            },
+          }),
+        ]
+      : [],
     EditorState.tabSize.of(s.tabSize),
     indentUnit.of(' '.repeat(s.tabSize)),
     s.autoPair ? closeBrackets() : [],

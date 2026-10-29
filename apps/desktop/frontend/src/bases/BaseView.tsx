@@ -21,6 +21,7 @@ import {
 import { useBase, type BaseState } from './useBase';
 import type { BaseCell, BaseColumn, BaseInfo, BaseResult, BaseRow, BaseViewInfo } from './types';
 import './bases.css';
+import { Icon } from '../shell/icons';
 
 interface BodyProps {
   vaultId: string;
@@ -146,7 +147,11 @@ function BaseTable({ state, readOnly, embedded }: BodyProps) {
                 }
               >
                 {c.name}
-                {dir && <span className="sort-ind">{dir === 'ASC' ? ' ▲' : ' ▼'}</span>}
+                {dir && (
+                  <span className="sort-ind">
+                    <Icon name={dir === 'ASC' ? 'sortUp' : 'sortDown'} size={16} />
+                  </span>
+                )}
               </th>
             );
           })}
@@ -264,7 +269,7 @@ function Filters({
               aria-label={t('bases.removeFilter')}
               onClick={() => void state.patchView({ removeFilter: c.index })}
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
           )}
         </span>

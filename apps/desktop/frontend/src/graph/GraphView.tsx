@@ -16,6 +16,7 @@ import { GraphRenderer, readPalette } from './renderer';
 import { useGraphSettings, type GraphSettings } from './settings';
 import type { GraphData, GraphOptions } from './types';
 import { fitView, panBy, zoomAt } from './view';
+import { Icon } from '../shell/icons';
 
 /** Options sent to GraphAPI.Build for the current settings. */
 export function optionsFor(s: GraphSettings, center: string | null): GraphOptions {
@@ -405,7 +406,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
             aria-label={playing ? t('graph.pause') : t('graph.play')}
             onClick={() => setPlaying((p) => !p)}
           >
-            {playing ? '⏸' : '▶'}
+            <Icon name={playing ? 'pause' : 'play'} />
           </button>
           <input
             type="range"
@@ -435,7 +436,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
               dirty.current = true;
             }}
           >
-            ⤢
+            <Icon name="fit" />
           </button>
           <button
             type="button"
@@ -444,7 +445,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
             aria-expanded={panel}
             onClick={() => setPanel((p) => !p)}
           >
-            ⚙
+            <Icon name="settings" />
           </button>
         </div>
         <div className="graph-status" aria-live="polite">

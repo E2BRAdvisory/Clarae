@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useManaged } from '../state/managed';
+import { Icon } from './icons';
 
 /**
  * Slot for the chat with models through ACP (ADR-0026). Nothing behind it yet: the field is
@@ -25,7 +26,7 @@ export function ChatBar() {
         aria-label={t('chat.placeholder')}
       />
       <button type="submit" disabled aria-label={t('chat.send')}>
-        ↵
+        <Icon name="enter" />
       </button>
     </form>
   );
