@@ -1,11 +1,15 @@
 // High-level operations used by both the UI and the command registry.
 import { api, errorCode, type Entry } from './api';
+import { applyTheme, effectiveTheme, type Theme } from './theme';
 import { useBookmarks } from '../bookmarks/store';
 import { queryClient } from '../state/queryClient';
 import { queryKeys } from '../state/queries';
 import { useSettings } from '../state/settings';
 import { newNoteDir } from '../settings/locations';
 import { selectActivePath, useAppStore } from '../state/store';
+import { saveWorkspaceNow } from '../shell/useVaultSession';
+import { dialog } from '../ui/dialogs';
+import { flushAllNotes } from '../workspaces/flush';
 
 function vaultId(): string {
   const v = useAppStore.getState().vault;
@@ -56,6 +60,53 @@ export async function createFolder(dir: string): Promise<void> {
   const id = vaultId();
   await api.vault.createFolder(id, dir);
   invalidateVault(id);
+}
+
+/** Asks for a name and creates a folder next to where a new note would go. */
+export async function promptNewFolder(
+  prompt: (title: string) => Promise<string | null>,
+  title: string,
+): Promise<void> {
+  const name = (await prompt(title))?.trim();
+  if (!name) return;
+  const dir = newNoteDir(
+    useSettings.getState().editor,
+    selectActivePath(useAppStore.getState()),
+  ).replace(/^\/+|\/+$/g, '');
+  await createFolder((dir ? dir + '/' : '') + name);
+}
+
+/** Switches between the light and the dark theme (the stored value stops being "system"). */
+export async function toggleTheme(): Promise<void> {
+  const st = useAppStore.getState();
+  const next: Theme =
+    effectiveTheme((st.settings.theme || 'system') as Theme) === 'dark' ? 'light' : 'dark';
+  const settings = { ...st.settings, theme: next };
+  st.setSettings(settings);
+  applyTheme(next);
+  await api.settings.set(settings);
+}
+
+/**
+ * Opens the vault at `path`, replacing the one that is open: pending edits and the workspace are
+ * written first, and the previous vault is closed once the new one is open. Opening the vault that
+ * is already open does nothing. Errors are shown in a dialog.
+ */
+export async function openVaultAt(path: string): Promise<void> {
+  const prev = useAppStore.getState().vault;
+  try {
+    if (prev) {
+      await flushAllNotes();
+      await saveWorkspaceNow(prev.id);
+    }
+    const info = await api.vault.open(path);
+    if (prev && prev.id === info.id) return;
+    if (prev) await api.vault.close(prev.id).catch(() => undefined);
+    useAppStore.getState().setVault(info);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.recentVaults });
+  } catch (e) {
+    await dialog.error(e);
+  }
 }
 
 export interface RenameResult {

@@ -3,7 +3,7 @@
 // "commands.<id>"; hotkeys are defaults that Settings > Hotkeys can override.
 import { useSettings, type NoteMode } from '../state/settings';
 import { activeTab, findPane } from '../workspace/layout';
-import { createNote, deleteEntry, renameEntry } from '../app/actions';
+import { createNote, deleteEntry, promptNewFolder, renameEntry, toggleTheme } from '../app/actions';
 import { api } from '../app/api';
 import { getActiveEditor } from '../editor/registry';
 import * as fmt from '../editor/commands';
@@ -25,7 +25,8 @@ import { notesCommands } from '../daily/commands';
 import { bookmarkCommands } from '../bookmarks/commands';
 import { workspaceCommands } from '../workspaces/commands';
 import { previewCommands } from '../preview/commands';
-import { exportNoteHtml, exportNotePdf } from '../export/commands';
+import { exportNoteHtml, exportNoteImage, exportNotePdf } from '../export/commands';
+import { startSlideshow } from '../slides/actions';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import type { EditorView } from '@codemirror/view';
@@ -146,6 +147,14 @@ export const commands: Command[] = [
     run: () => guard(createNote({ newTab: true })),
   },
   {
+    id: 'folder:new',
+    group: 'file',
+    defaults: [],
+    enabled: canWrite,
+    run: () =>
+      guard(promptNewFolder((title) => dialog.prompt(title), t('sidebar.promptFolderName'))),
+  },
+  {
     id: 'drawing:new',
     group: 'file',
     defaults: ['Mod-Alt-d'],
@@ -224,6 +233,13 @@ export const commands: Command[] = [
     run: exportNotePdf,
   },
   {
+    id: 'note:export-image',
+    group: 'file',
+    defaults: [],
+    enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
+    run: exportNoteImage,
+  },
+  {
     id: 'note:export-html',
     group: 'file',
     defaults: [],
@@ -242,6 +258,16 @@ export const commands: Command[] = [
     defaults: [],
     enabled: canWrite,
     run: () => useImporter.getState().show(),
+  },
+  {
+    id: 'vault:switch',
+    group: 'file',
+    defaults: [],
+    enabled: hasVault,
+    run: () => {
+      store().setLeft({ open: true });
+      store().setVaultMenuOpen(true);
+    },
   },
   {
     id: 'vault:close',
@@ -314,6 +340,53 @@ export const commands: Command[] = [
     },
   },
   {
+    id: 'tab:pin',
+    group: 'navigate',
+    defaults: [],
+    enabled: hasNote,
+    run: () => {
+      const tab = activeTab(store().layout);
+      if (tab) store().togglePinTab(tab.id);
+    },
+  },
+  {
+    id: 'tab:close-right',
+    group: 'navigate',
+    defaults: [],
+    enabled: hasNote,
+    run: () => {
+      const tab = activeTab(store().layout);
+      if (tab) store().closeTabsRightOf(tab.id);
+    },
+  },
+  {
+    id: 'tab:close-left',
+    group: 'navigate',
+    defaults: [],
+    enabled: hasNote,
+    run: () => {
+      const tab = activeTab(store().layout);
+      if (tab) store().closeTabsLeftOf(tab.id);
+    },
+  },
+  {
+    id: 'tab:close-others',
+    group: 'navigate',
+    defaults: [],
+    enabled: hasNote,
+    run: () => {
+      const tab = activeTab(store().layout);
+      if (tab) store().closeOtherTabsOf(tab.id);
+    },
+  },
+  {
+    id: 'tab:close-all',
+    group: 'navigate',
+    defaults: [],
+    enabled: hasNote,
+    run: () => store().closeAllTabsIn(store().layout.activePane),
+  },
+  {
     id: 'pane:close',
     group: 'navigate',
     defaults: ['Mod-Shift-w'],
@@ -384,11 +457,24 @@ export const commands: Command[] = [
     run: () => store().setRight({ open: !store().right.open }),
   },
   {
+    id: 'theme:toggle',
+    group: 'view',
+    defaults: [],
+    run: toggleTheme,
+  },
+  {
+    id: 'separator:insert',
+    group: 'editor',
+    defaults: [],
+    enabled: () => editorMode() && !readOnlyVault(),
+    run: withEditor(fmt.insertSeparator),
+  },
+  {
     id: 'sidebar:outline',
     group: 'view',
     defaults: [],
     enabled: hasNote,
-    run: () => store().setRight({ open: true, tab: 'outline' }),
+    run: () => store().setLeft({ open: true, tab: 'outline' }),
   },
   {
     id: 'graph:open',
@@ -405,18 +491,53 @@ export const commands: Command[] = [
     run: () => void openLocalGraph(),
   },
   {
+    id: 'sidebar:properties',
+    group: 'view',
+    defaults: [],
+    enabled: hasVault,
+    run: () => store().setRight({ open: true, tab: 'properties' }),
+  },
+  {
+    id: 'slides:start',
+    group: 'view',
+    defaults: [],
+    enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
+    run: () => startSlideshow(false),
+  },
+  {
+    id: 'slides:start-here',
+    group: 'view',
+    defaults: [],
+    enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
+    run: () => startSlideshow(true),
+  },
+  {
+    id: 'sidebar:slides',
+    group: 'view',
+    defaults: [],
+    enabled: hasNote,
+    run: () => store().setRight({ open: true, tab: 'slides' }),
+  },
+  {
+    id: 'sidebar:stats',
+    group: 'view',
+    defaults: [],
+    enabled: hasNote,
+    run: () => store().setRight({ open: true, tab: 'stats' }),
+  },
+  {
     id: 'sidebar:backlinks',
     group: 'view',
     defaults: [],
     enabled: hasNote,
-    run: () => store().setRight({ open: true, tab: 'backlinks' }),
+    run: () => store().setRight({ open: true, tab: 'links' }),
   },
   {
     id: 'sidebar:tags',
     group: 'view',
     defaults: [],
     enabled: hasVault,
-    run: () => store().setLeft({ open: true, tab: 'tags' }),
+    run: () => store().setRight({ open: true, tab: 'tags' }),
   },
   {
     id: 'sidebar:files',

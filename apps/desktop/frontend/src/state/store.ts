@@ -6,7 +6,12 @@ import type { Reveal } from '../reading/ReadingView';
 import {
   activeTab,
   closePane,
+  closeAllTabs,
+  closeOtherTabs,
   closeTab,
+  closeTabsLeft,
+  closeTabsRight,
+  togglePin,
   cycleTab,
   emptyLayout,
   openPath,
@@ -23,8 +28,27 @@ import {
 } from '../workspace/layout';
 import { useSettings, type NoteMode } from './settings';
 
-export type LeftTab = 'files' | 'search' | 'tags' | 'bookmarks';
-export type RightTab = 'outline' | 'backlinks' | 'properties';
+export type LeftTab = 'files' | 'outline' | 'search';
+export type RightTab = 'properties' | 'tags' | 'links' | 'slides' | 'stats';
+
+/**
+ * Maps a saved left tab to the current ones. Tags and Bookmarks moved to the right sidebar
+ * (ADR-0026): a workspace saved before that shows the file tree.
+ */
+export function normalizeLeftTab(tab: unknown): LeftTab {
+  return tab === 'outline' || tab === 'search' ? tab : 'files';
+}
+
+/**
+ * Maps a saved right tab to the current ones: the old Outline tab moved to the left sidebar, and
+ * Backlinks and Bookmarks are sections of the Links tab.
+ */
+export function normalizeRightTab(tab: unknown): RightTab {
+  if (tab === 'backlinks' || tab === 'bookmarks') return 'links';
+  return tab === 'tags' || tab === 'links' || tab === 'slides' || tab === 'stats'
+    ? tab
+    : 'properties';
+}
 export type SettingsSection =
   | 'general'
   | 'editor'
@@ -77,6 +101,8 @@ interface AppState {
   reveal: PaneReveal | null;
   /** Bumped to ask the search panel to take focus. */
   searchFocus: number;
+  /** The vault menu at the bottom of the left sidebar is asked to open (command `vault:switch`). */
+  vaultMenuOpen: boolean;
 
   setSettings: (s: AppSettings) => void;
   setAuth: (a: AuthState) => void;
@@ -89,6 +115,11 @@ interface AppState {
   activateTab: (paneId: string, tabId: string) => void;
   focusPane: (paneId: string) => void;
   closeTabById: (tabId: string) => void;
+  togglePinTab: (tabId: string) => void;
+  closeTabsRightOf: (tabId: string) => void;
+  closeTabsLeftOf: (tabId: string) => void;
+  closeOtherTabsOf: (tabId: string) => void;
+  closeAllTabsIn: (paneId: string) => void;
   closeActivePane: () => void;
   split: (dir: 'row' | 'column') => void;
   setTabMode: (tabId: string, mode: NoteMode) => void;
@@ -105,6 +136,7 @@ interface AppState {
   closeSettings: () => void;
   setPaletteOpen: (open: boolean) => void;
   setSwitcherOpen: (open: boolean) => void;
+  setVaultMenuOpen: (open: boolean) => void;
   search: (query: string) => void;
 }
 
@@ -116,7 +148,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   vault: null,
   layout: emptyLayout(),
   left: { open: true, tab: 'files', width: 280 },
-  right: { open: false, tab: 'outline', width: 280 },
+  right: { open: false, tab: 'properties', width: 280 },
   settingsOpen: false,
   settingsSection: 'general',
   paletteOpen: false,
@@ -126,6 +158,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   stats: null,
   reveal: null,
   searchFocus: 0,
+  vaultMenuOpen: false,
 
   setSettings: (settings) => set({ settings }),
   setAuth: (auth) => set({ auth }),
@@ -170,6 +203,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   activateTab: (paneId, tabId) => set({ layout: setActiveTab(get().layout, paneId, tabId) }),
   focusPane: (paneId) => set({ layout: setActivePane(get().layout, paneId) }),
   closeTabById: (tabId) => set({ layout: closeTab(get().layout, tabId) }),
+  togglePinTab: (tabId) => set({ layout: togglePin(get().layout, tabId) }),
+  closeTabsRightOf: (tabId) => set({ layout: closeTabsRight(get().layout, tabId) }),
+  closeTabsLeftOf: (tabId) => set({ layout: closeTabsLeft(get().layout, tabId) }),
+  closeOtherTabsOf: (tabId) => set({ layout: closeOtherTabs(get().layout, tabId) }),
+  closeAllTabsIn: (paneId) => set({ layout: closeAllTabs(get().layout, paneId) }),
   closeActivePane: () => set({ layout: closePane(get().layout, get().layout.activePane) }),
   split(dir) {
     const l = get().layout;
@@ -192,6 +230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ paletteOpen, ...(paletteOpen ? { switcherOpen: false } : {}) }),
   setSwitcherOpen: (switcherOpen) =>
     set({ switcherOpen, ...(switcherOpen ? { paletteOpen: false } : {}) }),
+  setVaultMenuOpen: (vaultMenuOpen) => set({ vaultMenuOpen }),
   search: (query) =>
     set({
       searchQuery: query,
