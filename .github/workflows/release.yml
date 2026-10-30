@@ -466,8 +466,9 @@ jobs:
           output-file: dist/memobrain-${{ needs.meta.outputs.version }}-sbom.spdx.json
           upload-artifact: false
 
+      # GitHub attestations need a public repository or a plan that includes them (variable ENABLE_ATTESTATIONS=true).
       - name: Provenance attestation of the release files
-        if: needs.meta.outputs.is_tag == 'true'
+        if: needs.meta.outputs.is_tag == 'true' && vars.ENABLE_ATTESTATIONS == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
