@@ -63,10 +63,10 @@
 
 ## Semplificazione dei workflow (2026-10-30)
 
-Dopo i primi run reali i workflow sono ridotti a due, più `security.yml` (invariato). Una verifica iniziale separata (lint, tipi e test unitari, `verify.yml`) era stata introdotta e poi **tolta dall'owner**: né la CI né il rilascio eseguono più lint o test.
+Dopo i primi run reali i workflow sono ridotti a due, più `security.yml` (invariato). Una verifica iniziale separata (`verify.yml`) era stata introdotta e poi tolta dall'owner; l'owner ha poi chiesto che **build e pubblicazione avvengano solo da un tag** e che la CI non costruisca nulla:
 
-- `ci.yml` (PR e `main`): build dell'app desktop su Linux, Windows e macOS, build dell'immagine cloud multi-arch senza pubblicazione.
-- `release.yml` (tag, o dry run da `workflow_dispatch`): installer, immagine e chart Helm pubblicati su GHCR e firmati, una sola GitHub Release.
+- `ci.yml` (ogni commit, su qualsiasi branch): lint, tipi e test unitari Go e TypeScript, controllo del codice generato e della matrice di parità. Nessuna build.
+- `release.yml` (solo tag `vX.Y.Z[-pre]`): installer macOS, Windows e Linux, immagine e chart Helm pubblicati su GHCR e firmati, una sola GitHub Release. Non esiste più il dry run da `workflow_dispatch`.
 
 `release-images.yml` è stato rimosso, e con esso l'immagine `edge` da `main`. Fuori dalla CI automatica restano, da lanciare a mano, le suite lente: Playwright (`make e2e`), integrazione con testcontainers (`make test-integration`), sync e2e a due dispositivi, test del core sotto WASM (`make test-wasm`) e il budget di dimensione del core (applicato comunque dalla build dell'immagine). Si perde quindi la copertura continua di quelle suite: è il prezzo scelto per avere una CI veloce e leggibile.
 

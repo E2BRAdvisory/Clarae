@@ -5,22 +5,12 @@ name: Release
 #   (macOS universal, Windows amd64 + arm64, Linux amd64 [+ arm64]) -> ONE GitHub Release.
 # Signing is optional: without the certificates the installers are built UNSIGNED and the release is marked
 # a prerelease saying so; set the repository variable REQUIRE_SIGNING=true to make missing secrets fatal.
-#  - workflow_dispatch: dry run. Same builds (the image is built, not pushed), no release; the output is the workflow artifacts.
-# Secrets and variables: docs/release/secrets.md. Nothing is published on pull requests.
+# Builds and publishes only from a tag: nothing is built or published on branches or pull requests.
+# Secrets and variables: docs/release/secrets.md.
 
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to stamp (semver, no leading v), e.g. 1.0.0-rc.1'
-        required: true
-        default: '0.0.0-dryrun.1'
-      use_secrets:
-        description: 'Sign with the real secrets (still no release is created)'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -42,7 +32,6 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       channel: ${{ steps.v.outputs.channel }}
-      is_tag: ${{ steps.v.outputs.is_tag }}
       apple: ${{ steps.v.outputs.apple }}
       windows: ${{ steps.v.outputs.windows }}
       updates: ${{ steps.v.outputs.updates }}
@@ -51,8 +40,6 @@ jobs:
     steps:
       - id: v
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          USE_SECRETS: ${{ inputs.use_secrets }}
           REQUIRE_SIGNING: ${{ vars.REQUIRE_SIGNING }}
           LINUX_ARM64_RUNNER: ${{ vars.LINUX_ARM64_RUNNER }}
           # Only their presence is tested here; the build jobs read them.
@@ -61,20 +48,16 @@ jobs:
           HAS_UPDATE_KEY: ${{ secrets.UPDATE_SIGNING_KEY != '' && vars.UPDATE_PUBLIC_KEY != '' }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            version="${GITHUB_REF_NAME#v}"; is_tag=true; use=true
-          else
-            version="$INPUT_VERSION"; is_tag=false; use="${USE_SECRETS:-false}"
-          fi
+          version="${GITHUB_REF_NAME#v}"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::invalid semver '$version'"; exit 1; }
           channel=stable; [[ "$version" == *-* ]] && channel=beta
 
-          # A signing step runs only when it is wanted (a tag, or a dry run asking for the secrets) AND the secrets exist.
-          flag() { [[ "$use" == true && "$1" == true ]] && echo true || echo false; }
+          # A signing step runs only when its secrets exist.
+          flag() { [[ "$1" == true ]] && echo true || echo false; }
           apple="$(flag "$HAS_APPLE")"; windows="$(flag "$HAS_WINDOWS")"; updates="$(flag "$HAS_UPDATE_KEY")"
           unsigned=false; [[ "$apple" != true || "$windows" != true ]] && unsigned=true
 
-          if [[ "$is_tag" == true && "$REQUIRE_SIGNING" == true ]]; then
+          if [[ "$REQUIRE_SIGNING" == true ]]; then
             missing=()
             [[ "$apple" == true ]] || missing+=("Apple signing (APPLE_CERT_P12_BASE64, APPLE_SIGNING_IDENTITY)")
             [[ "$windows" == true ]] || missing+=("Authenticode (WINDOWS_CERT_PFX_BASE64)")
@@ -98,11 +81,11 @@ jobs:
             echo "::notice::LINUX_ARM64_RUNNER is not set: no Linux arm64 installer in this run"
           fi
 
-          { echo "version=$version"; echo "channel=$channel"; echo "is_tag=$is_tag"
+          { echo "version=$version"; echo "channel=$channel"
             echo "apple=$apple"; echo "windows=$windows"; echo "updates=$updates"; echo "unsigned=$unsigned"
             echo "matrix=$matrix"; } >> "$GITHUB_OUTPUT"
           {
-            echo "### Release $version ($channel, tag=$is_tag)"
+            echo "### Release $version ($channel)"
             echo "| signing | active |"; echo "|---|---|"
             echo "| macOS (Developer ID + notarisation) | $apple |"; echo "| Windows (Authenticode) | $windows |"
             echo "| update manifest (ed25519) | $updates |"
@@ -116,7 +99,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      packages: write # push to GHCR (tags only)
+      packages: write # push to GHCR
       id-token: write # keyless cosign signature
       attestations: write
     outputs:
@@ -124,7 +107,6 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
     env:
       VERSION: ${{ needs.meta.outputs.version }}
-      PUSH: ${{ needs.meta.outputs.is_tag }} # a dry run builds the image and publishes nothing
     steps:
       # The two-architecture build does not fit in the ~14 GB the runner leaves free.
       - name: Free disk space
@@ -137,7 +119,6 @@ jobs:
           echo "stable=$stable" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
-        if: env.PUSH == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -157,7 +138,7 @@ jobs:
           context: .
           file: services/cloud/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ env.PUSH == 'true' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ env.VERSION }}
@@ -167,10 +148,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Install cosign
-        if: env.PUSH == 'true'
         uses: sigstore/cosign-installer@v3
       - name: Sign the image (keyless, by digest) and verify it
-        if: env.PUSH == 'true'
         env:
           IMAGE: ${{ steps.plan.outputs.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -182,7 +161,7 @@ jobs:
       # GitHub attestations need a public repository or a plan that includes them (variable ENABLE_ATTESTATIONS=true):
       # the image is signed with cosign either way.
       - name: GitHub provenance attestation (registry)
-        if: env.PUSH == 'true' && vars.ENABLE_ATTESTATIONS == 'true'
+        if: vars.ENABLE_ATTESTATIONS == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ steps.plan.outputs.image }}
@@ -202,7 +181,6 @@ jobs:
       chart: ${{ steps.push.outputs.chart }}
     env:
       VERSION: ${{ needs.meta.outputs.version }}
-      PUSH: ${{ needs.meta.outputs.is_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
@@ -214,12 +192,17 @@ jobs:
             helm lint deploy/helm/memobrain -f "$f"
             helm template ci deploy/helm/memobrain -f "$f" > /dev/null
           done
+      # cosign reads the registry credentials from the Docker config, not from helm's.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Install cosign
-        if: env.PUSH == 'true'
         uses: sigstore/cosign-installer@v3
-      - name: Package, push and sign the chart (tags only)
+      - name: Package, push and sign the chart
         id: push
-        if: env.PUSH == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -280,10 +263,9 @@ jobs:
         run: bash scripts/install-wails.sh "$WAILS_VERSION"
       - shell: bash
         run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
-      - name: Release mode (a tag must carry the real update key, or be explicitly unsigned)
+      - name: Release mode (the build refuses the development update key unless the updater is compiled out)
         shell: bash
-        run: |
-          if [[ "${{ needs.meta.outputs.is_tag }}" == "true" ]]; then echo "RELEASE_FLAG=--release" >> "$GITHUB_ENV"; else echo "RELEASE_FLAG=" >> "$GITHUB_ENV"; fi
+        run: echo "RELEASE_FLAG=--release" >> "$GITHUB_ENV"
 
       # ---------------------------------------------------------------- macOS
       - name: macOS build
@@ -458,7 +440,7 @@ jobs:
 
       # GitHub attestations need a public repository or a plan that includes them (variable ENABLE_ATTESTATIONS=true).
       - name: Provenance attestation of the release files
-        if: needs.meta.outputs.is_tag == 'true' && vars.ENABLE_ATTESTATIONS == 'true'
+        if: vars.ENABLE_ATTESTATIONS == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
@@ -471,8 +453,7 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-      - name: GitHub Release (tags only)
-        if: needs.meta.outputs.is_tag == 'true'
+      - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           AUTO_PUBLISH: ${{ vars.RELEASE_AUTO_PUBLISH }}

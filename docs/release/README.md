@@ -12,7 +12,7 @@ Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline
 
 1. `main` verde in CI (`make ci`), checklist cross-OS aggiornata (`docs/qa/`).
 2. Variabili e segreti configurati (`secrets.md`), **se si vuole firmare**: senza, il rilascio esce non firmato (prerelease). Se ci sono, `UPDATE_PUBLIC_KEY` corrisponde alla chiave privata in `UPDATE_SIGNING_KEY` (provare con `bin/release`).
-3. (Consigliato) dry run: Actions, "Release", Run workflow, versione `0.0.0-dryrun.1`. Costruisce tutto senza creare release; con `use_secrets` firma davvero.
+3. Il rilascio parte **solo da un tag**: non c'è un dry run. Per provare la pipeline si usa un tag di pre-release (`v1.2.0-rc.1`), che produce una release in bozza marcata prerelease.
 4. Note di rilascio: sezione `## X.Y.Z` in `CHANGELOG.md` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
 
 ## Tagliare un rilascio
@@ -27,7 +27,7 @@ Il push del tag avvia **un solo workflow**, `release.yml`, che nell'ordine:
 2. costruisce gli installer: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage) e, con la variabile `LINUX_ARM64_RUNNER`, Linux arm64;
 3. crea **una** GitHub Release con installer, `SHA256SUMS`, SBOM, attestazione di provenienza, riferimento all'immagine (con digest) e al chart, e (solo con le chiavi) il manifest di aggiornamento firmato. È una **bozza**, a meno di `RELEASE_AUTO_PUBLISH=true`, e una **prerelease** se la versione ha un suffisso o gli installer non sono firmati.
 
-Su pull request e su `main` `ci.yml` costruisce l'app desktop su Linux, Windows e macOS e costruisce (senza pubblicare) l'immagine cloud multi-arch: **nessuna immagine esce da un branch**, solo dai tag.
+`ci.yml` esegue solo le verifiche (lint, tipi e test) a ogni commit: **non costruisce né pubblica nulla**. Installer, immagine e chart escono solo da `release.yml`, su un tag.
 
 Poi, a mano:
 

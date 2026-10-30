@@ -14,7 +14,7 @@ Elenco completo di ciò che si può configurare nel repository GitHub (Settings,
 | `UPDATE_SIGNING_KEY` o variabile `UPDATE_PUBLIC_KEY` | Il desktop è compilato con l'updater **disattivato** (`updater.DisabledByBuild`) e non si pubblica nessun manifest.           | La pipeline fallisce in `meta`.      |
 | nessuno dei precedenti                               | Release in prerelease "unsigned", bozza (vedi `RELEASE_AUTO_PUBLISH`). Le immagini Docker restano firmate (cosign è keyless). | La pipeline fallisce in `meta`.      |
 
-Un `dry run` (`workflow_dispatch`) non firma con i segreti reali a meno di `use_secrets=true`, non pubblica immagini e non crea la release.
+Il rilascio parte solo da un tag: non esiste più un dry run da `workflow_dispatch`.
 
 ## Variabili (pubbliche, tab Variables)
 
