@@ -63,6 +63,14 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       push: ${{ steps.plan.outputs.push }}
     steps:
+      # The two-architecture build (Go, node_modules, the WebAssembly core, BuildKit cache) does not fit in the
+      # ~14 GB the runner leaves free: the first run on main died with "No space left on device".
+      - name: Free disk space
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force > /dev/null
+          df -h / | tail -1
       - uses: actions/checkout@v4
       - id: plan
         env:
