@@ -428,9 +428,9 @@ describe('SyncSection (settings)', () => {
     await signIn();
     await api.sync.linkNew(vaultId, 'Diary', 'private', GOOD);
     await useSync.getState().refresh(vaultId);
-    useAppStore
-      .getState()
-      .setSettings({ ...useAppStore.getState().settings, vaultLockMinutes: undefined });
+    const withoutChoice = { ...useAppStore.getState().settings };
+    delete withoutChoice.vaultLockMinutes;
+    useAppStore.getState().setSettings(withoutChoice);
     useManaged.setState({
       ...unmanaged,
       managed: true,

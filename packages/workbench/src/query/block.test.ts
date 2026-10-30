@@ -11,6 +11,7 @@ const hit = (path: string, snippet = '', line = 0): SearchHit => ({
   line,
   matches: 1,
   score: 1,
+  highlights: [],
 });
 
 let client: QueryClient;

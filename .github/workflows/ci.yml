@@ -54,7 +54,7 @@ jobs:
           corepack enable
           yarn install --immutable
           yarn workspace @memobrain/api-client run gen
-          git diff --exit-code -- services/cloud/internal/api services/cloud/internal/db/dbgen shared/go/notifyv1 packages/api-client/src/gen
+          git diff --exit-code -- services/cloud/internal/api ':(glob)services/cloud/internal/*/*db/**' shared/go/notifyv1 packages/api-client/src/gen
 
   web:
     name: TypeScript lint, types and tests
