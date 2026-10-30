@@ -105,9 +105,10 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --immutable
+      - run: cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task
       - name: Build the cloud binary with the real Web UI
         run: |
-          make web-build
+          task web-build
           mkdir -p sbom bin
           (cd services/cloud && CGO_ENABLED=0 go build -trimpath -o ../../bin/memobrain-cloud ./cmd/memobrain-cloud)
       # Syft reads the Go build info of the binary (exact module versions linked in)
@@ -174,7 +175,8 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --immutable
-      - run: make web-build
+      - run: cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task
+      - run: task web-build
       - name: Embedded bundle, headers and CSP (Go)
         run: cd services/cloud && MEMOBRAIN_REQUIRE_WEB_BUILD=1 go test -race -count=1 ./web-embed ./internal/httpserver
       - name: Desktop CSP (release policy)

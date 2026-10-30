@@ -3,7 +3,7 @@ name: CI
 # Checks on every commit pushed to any branch (ADR-0031): lint, type checks and unit tests of every module,
 # generated code and the web parity matrix up to date. Nothing is built or published here: installers, image
 # and chart come from release.yml, only on a tag. Slower suites (Playwright e2e, testcontainers, sync e2e,
-# WebAssembly core tests) are run by hand: `make e2e`, `make test-integration`, `make test-wasm`.
+# WebAssembly core tests) are run by hand: `task e2e`, `task test-integration`, `task test-wasm`.
 
 on:
   push:
@@ -70,7 +70,8 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       # The workbench UI is typed against the Wails bindings generated from the Go API (not in the repository).
-      - run: make packages/workbench/wailsjs/go/models.ts
+      - run: cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task
+      - run: task wailsjs
       # The web parity matrix lists every command and binding: it must be regenerated when one is added.
       - run: node scripts/parity.mjs --check
       - run: yarn run lint
