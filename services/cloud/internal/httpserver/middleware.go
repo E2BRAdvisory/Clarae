@@ -2,9 +2,12 @@ package httpserver
 
 import (
 	"errors"
+	"net"
 	"net/http"
+	"net/netip"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,12 +129,77 @@ func (rl *RateLimiter) Allow(w http.ResponseWriter, r *http.Request, key string)
 	return true
 }
 
-// ByIP applies the limiter per client address.
-func (rl *RateLimiter) ByIP(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.Allow(w, r, "ip:"+r.RemoteAddr) {
-			return
+// ByIP applies the limiter per client address as resolved by ip. Health
+// probes are exempt: the orchestrator polls them from a few addresses and a
+// throttled probe would take the pod out of rotation.
+func (rl *RateLimiter) ByIP(ip ClientIP) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isProbe(r.URL.Path) || rl.Allow(w, r, "ip:"+ip.Of(r)) {
+				next.ServeHTTP(w, r)
+			}
+		})
+	}
+}
+
+func isProbe(path string) bool {
+	return path == BasePath+"/healthz" || path == BasePath+"/readyz"
+}
+
+// ClientIP resolves the address of the client behind the trusted reverse
+// proxies. X-Forwarded-For is read only when the TCP peer is trusted, and
+// from the right: each trusted hop appended the address it saw, so the first
+// untrusted entry is the client. Entries further left are client-supplied and
+// never believed, which is what makes the header unspoofable.
+type ClientIP struct {
+	trusted []netip.Prefix
+}
+
+// NewClientIP trusts the proxies in the given networks (none: the peer is the client).
+func NewClientIP(trusted []netip.Prefix) ClientIP { return ClientIP{trusted: trusted} }
+
+// Of returns the client address without the port.
+func (c ClientIP) Of(r *http.Request) string {
+	peer, ok := parseHost(r.RemoteAddr)
+	if !ok {
+		return r.RemoteAddr
+	}
+	if !c.isTrusted(peer) {
+		return peer.String()
+	}
+	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	client := peer
+	for i := len(hops) - 1; i >= 0; i-- {
+		a, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+		if err != nil {
+			break // malformed hop: stop at the last address a trusted proxy vouched for
 		}
-		next.ServeHTTP(w, r)
-	})
+		client = a.Unmap()
+		if !c.isTrusted(client) {
+			break
+		}
+	}
+	return client.String()
+}
+
+func (c ClientIP) isTrusted(a netip.Addr) bool {
+	for _, p := range c.trusted {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseHost extracts the address from "host:port" (or a bare host).
+func parseHost(remote string) (netip.Addr, bool) {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return a.Unmap(), true
 }

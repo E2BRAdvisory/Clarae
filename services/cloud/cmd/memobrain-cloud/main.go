@@ -110,10 +110,11 @@ func run(role config.Role) error {
 				Audience:        cfg.OIDC.Audience,
 				GRPCEndpoint:    cfg.OIDC.PublicGRPCAddr,
 			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}, system.CheckerFunc{N: "shutdown", F: drain.Check}),
-			WebUI:       webembed.Handler(webembed.Options{Issuer: cfg.OIDC.Issuer}),
-			WebUIOrigin: cfg.WebUIOrigin,
-			Metrics:     observability.New(),
-			Drain:       drain,
+			WebUI:          webembed.Handler(webembed.Options{Issuer: cfg.OIDC.Issuer}),
+			WebUIOrigin:    cfg.WebUIOrigin,
+			TrustedProxies: cfg.TrustedProxies,
+			Metrics:        observability.New(),
+			Drain:          drain,
 		}))
 		httpSrv := httpserver.NewServer(cfg.ListenAddr, router)
 		g.Go(func() error {

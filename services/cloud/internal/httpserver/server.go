@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -64,7 +65,10 @@ type Deps struct {
 	// (nil: plain 404).
 	WebUI       http.Handler
 	WebUIOrigin string
-	Metrics     *observability.Metrics
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed
+	// when resolving the client address for the per-IP rate limit.
+	TrustedProxies []netip.Prefix
+	Metrics        *observability.Metrics
 	// Drain, when set, ends the SSE streams at shutdown (see Drain).
 	Drain *Drain
 }
@@ -113,8 +117,7 @@ func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// No RealIP middleware: trusting X-Forwarded-For blindly enables spoofing.
-	// Behind the ingress, r.RemoteAddr is the proxy; a trusted-proxy aware
-	// resolver is added with the deployment work (M7).
+	// The rate limiter resolves the client through the trusted proxies only.
 	r.Use(SecurityHeaders)
 	r.Use(RequestLogger(d.Logger))
 	r.Use(Recoverer)
@@ -132,8 +135,7 @@ func NewRouter(d Deps) http.Handler {
 			MaxAge:           600,
 		}))
 	}
-	r.Use(NewRateLimiter(50, 100).ByIP)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(NewRateLimiter(50, 100).ByIP(NewClientIP(d.TrustedProxies)))
 
 	r.Handle("/metrics", internalOnly(promhttp.Handler()))
 
@@ -156,9 +158,7 @@ func NewRouter(d Deps) http.Handler {
 		handlers{d.System, d.Users, d.Config, d.Vaults, d.Blobs, d.Sync, d.Revisions, d.Quota, d.Groups, d.Sharing, d.Admin, d.Export, d.Privacy},
 		nil,
 		api.StrictHTTPServerOptions{
-			RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-				httpproblem.Write(w, r, syncproto.CodeValidationFailed, err.Error(), nil)
-			},
+			RequestErrorHandlerFunc: writeRequestError,
 			ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 				handleHandlerError(w, r, err)
 			},
@@ -167,8 +167,9 @@ func NewRouter(d Deps) http.Handler {
 	api.HandlerWithOptions(strict, api.ChiServerOptions{
 		BaseURL:    BasePath,
 		BaseRouter: r,
-		// Applied innermost-first: the last entry runs first, so auth precedes validation.
-		Middlewares: []api.MiddlewareFunc{requestValidator(), d.Auth.Handler},
+		// Applied innermost-first: the last entry runs first, so the limits
+		// cover the whole operation and auth precedes validation.
+		Middlewares: []api.MiddlewareFunc{requestValidator(), d.Auth.Handler, apiLimits},
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			httpproblem.Write(w, r, syncproto.CodeValidationFailed, err.Error(), nil)
 		},

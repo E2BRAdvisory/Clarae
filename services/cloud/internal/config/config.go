@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,10 @@ type Config struct {
 	GRPCListenAddr string
 	WebUIOrigin    string
 	LogLevel       string
+	// TrustedProxies are the networks of the reverse proxies whose
+	// X-Forwarded-For header is believed when resolving the client address
+	// (rate limiting). Empty: the TCP peer is the client.
+	TrustedProxies []netip.Prefix
 
 	DatabaseURL string
 
@@ -130,7 +135,26 @@ func Load(role Role, version string) (Config, error) {
 			ClientSecret: env("KC_ADMIN_CLIENT_SECRET", ""),
 		},
 	}
-	return c, c.validate()
+	proxies, err := parsePrefixes(envList("TRUSTED_PROXIES", ""))
+	c.TrustedProxies = proxies
+	return c, errors.Join(err, c.validate())
+}
+
+// parsePrefixes reads CIDRs or bare addresses (a single host).
+func parsePrefixes(list []string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, s := range list {
+		if p, err := netip.ParsePrefix(s); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXIES: %q is neither a CIDR nor an address", s)
+		}
+		out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
+	}
+	return out, nil
 }
 
 func (c Config) validate() error {

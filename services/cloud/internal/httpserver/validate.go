@@ -9,8 +9,6 @@ import (
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
 	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
 )
 
 // requestValidator validates every request (parameters, headers, JSON body)
@@ -28,7 +26,7 @@ func requestValidator() api.MiddlewareFunc {
 		},
 		SilenceServersWarning: true,
 		ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, _ nethttpmiddleware.ErrorHandlerOpts) {
-			httpproblem.Write(w, r, syncproto.CodeValidationFailed, err.Error(), nil)
+			writeRequestError(w, r, err)
 		},
 	})
 }
