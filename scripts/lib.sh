@@ -36,7 +36,7 @@ stack_up() {
   local out; out="$(mktemp)"
   if ! compose up -d --wait >"$out" 2>&1; then
     cat "$out" >&2; rm -f "$out"
-    die "stack failed to start (details above; logs: make stack-logs)"
+    die "stack failed to start (details above; logs: task stack-logs)"
   fi
   rm -f "$out"
   ok "stack is healthy"

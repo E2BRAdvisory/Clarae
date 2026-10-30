@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// TestLiveKeycloak runs the client against a real Keycloak (make stack-up) to check the REST
+// TestLiveKeycloak runs the client against a real Keycloak (task stack-up) to check the REST
 // contract the fakes only imitate. It is skipped unless KC_LIVE_URL is set:
 //
 //	KC_LIVE_URL=http://localhost:8080 go test ./internal/keycloak -run Live -v

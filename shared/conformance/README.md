@@ -79,5 +79,5 @@ Regole condivise:
 ## Esecuzione
 
 ```sh
-make conformance   # Go (desktop parser) + TS (@memobrain/conformance e frontend)
+task conformance   # Go (desktop parser) + TS (@memobrain/conformance e frontend)
 ```

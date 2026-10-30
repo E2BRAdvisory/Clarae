@@ -1,6 +1,6 @@
 // Package webembed serves the Web UI single page application that is
 // compiled into the binary (go:embed of the esbuild build copied into dist/ by
-// `make web-build`). It adds the strict Content Security Policy of §3.7, the
+// `task web-build`). It adds the strict Content Security Policy of §3.7, the
 // cache policy (immutable hashed assets, no-cache index) and the SPA fallback.
 //
 // Two pages are served: the console (index.html, the SPA) and the vault workbench (workbench.html, for

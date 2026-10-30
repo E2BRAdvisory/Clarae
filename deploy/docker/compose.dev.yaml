@@ -1,7 +1,7 @@
 # Development stack for the MemoBrain Notes Cloud Service: PostgreSQL, an S3-compatible
 # object store (RustFS: MinIO-compatible, Apache-2.0; MinIO images are no longer
 # publicly pullable) and Keycloak. The cloud service itself runs on the host
-# (`make dev-cloud`) with deploy/docker/cloud.dev.env.
+# (`task dev-cloud`) with deploy/docker/cloud.dev.env.
 name: memobrain-dev
 
 services:

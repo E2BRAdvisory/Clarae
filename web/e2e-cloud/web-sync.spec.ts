@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 // The vault workbench against a real cloud: Keycloak login, the real API, PostgreSQL and S3. Two browser
 // contexts are two devices (each has its own OPFS, so its own copy of the vault and its own sync state).
-// Start the stack first: scripts/run-desktop-with-cloud.sh --cloud-only --keep   (after `make web-build`).
+// Start the stack first: scripts/run-desktop-with-cloud.sh --cloud-only --keep   (after `task web-build`).
 // Run with: yarn workspace @memobrain/web e2e:cloud
 
 type Bindings = Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>;

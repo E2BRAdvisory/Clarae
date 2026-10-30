@@ -8,7 +8,7 @@ declare const __MEMOBRAIN_CORE__: unknown;
 declare const __MEMOBRAIN_WORKER__: string;
 /** Version stamped by the build. */
 declare const __MEMOBRAIN_VERSION__: string;
-/** Go's loader for the core (build/wasm/wasm_exec.js, produced by `make wasm-core`). */
+/** Go's loader for the core (build/wasm/wasm_exec.js, produced by `task wasm-core`). */
 declare module '*/wasm_exec.js';
 
 interface ImportMetaEnv {

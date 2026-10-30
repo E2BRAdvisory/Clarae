@@ -2,7 +2,7 @@
 # Runs a Go test binary built with GOOS=js GOARCH=wasm under Node, with the sqlite-wasm bridge
 # installed (ADR-0030, M9-WP2). Use it as the -exec program:
 #   GOOS=js GOARCH=wasm go test -exec "$PWD/scripts/go-js-exec.sh" ./internal/store/...
-# See `make test-wasm`.
+# See `task test-wasm`.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 goroot="$(go env GOROOT)"

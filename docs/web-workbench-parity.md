@@ -25,7 +25,7 @@ Obiettivo (ADR-0029): dal browser si fa tutto ciò che si fa dal client desktop,
 
 | Livello                                 | Cosa                                                                                                                                                        | Dove                                                              |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Core Go sotto WASM                      | tutti i pacchetti di `apps/desktop/internal` e `cmd`                                                                                                        | `make test-wasm` (29 pacchetti)                                   |
+| Core Go sotto WASM                      | tutti i pacchetti di `apps/desktop/internal` e `cmd`                                                                                                        | `task test-wasm` (29 pacchetti)                                   |
 | Shim `fs` su OPFS                       | 11 test in un worker vero, tra cui rename atomico, cartelle, handle condivisi                                                                               | `web/e2e/opfs-fs.spec.ts`                                         |
 | Workbench sul core vero                 | 11 test: scrittura, ricerca FTS5, link, rinomina, storia, ZIP, grafo, persistenza, blocco e cancellazione, «Dimentica questo browser»                       | `web/e2e/workbench.spec.ts`                                       |
 | **Gli stessi spec del desktop sul web** | 14 test di 5 file (`workflows`, `keyboard`, `editor-toolbar`, `slides`, `graph`) eseguiti sul core vero con `E2E_TARGET=web`                                | `yarn workspace @memobrain/web e2e:workbench-ui`                  |
@@ -129,7 +129,7 @@ Le tabelle qui sotto si rigenerano con `node scripts/parity.mjs`; la CI (`--chec
 
 ### Binding Go (122 metodi, 20 servizi)
 
-Il dispatcher del core espone tutti i 122 metodi (verificato da `TestDispatcherMatchesTheGeneratedBindings`). **13 su 122** sono chiamati da un test del workbench web contro il core vero (`web/e2e`, `web/e2e-cloud`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (`make test-wasm`), ma non hanno ancora un test nel browser.
+Il dispatcher del core espone tutti i 122 metodi (verificato da `TestDispatcherMatchesTheGeneratedBindings`). **13 su 122** sono chiamati da un test del workbench web contro il core vero (`web/e2e`, `web/e2e-cloud`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (`task test-wasm`), ma non hanno ancora un test nel browser.
 
 | Binding | Esposto sul web | Chiamato in un test web | Nota |
 | --- | --- | --- | --- |

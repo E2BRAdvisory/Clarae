@@ -1,7 +1,7 @@
 // Package perf measures the non-functional targets of Appendix A that can be
 // checked headlessly on the Go side (indexing, search, note open path, vault
 // open, graph build, index memory). It is a test harness, not a unit test: it
-// only runs when MEMOBRAIN_PERF_NOTES is set (see `make perf`).
+// only runs when MEMOBRAIN_PERF_NOTES is set (see `task perf`).
 //
 //	MEMOBRAIN_PERF_NOTES=50000 MEMOBRAIN_PERF_OUT=perf.json go test -run TestPerf -timeout 60m -v ./internal/perf/
 //

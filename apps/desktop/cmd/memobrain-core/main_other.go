@@ -10,6 +10,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "memobrain-core runs as WebAssembly only: build with GOOS=js GOARCH=wasm (make wasm-core)")
+	fmt.Fprintln(os.Stderr, "memobrain-core runs as WebAssembly only: build with GOOS=js GOARCH=wasm (task wasm-core)")
 	os.Exit(2)
 }

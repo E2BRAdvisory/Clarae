@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 // The vault workbench against a real cloud (Keycloak, PostgreSQL, S3), served by the cloud binary with the
-// production web build. No web server is started here: bring the stack up first, after `make web-build`:
+// production web build. No web server is started here: bring the stack up first, after `task web-build`:
 //   scripts/run-desktop-with-cloud.sh --cloud-only --keep
 // Keycloak's redirect URIs cover http://localhost:18081/*, so the tests use that origin (not 127.0.0.1).
 // Run with: yarn workspace @memobrain/web e2e:cloud

@@ -1,7 +1,7 @@
 {
   "meta": {
     "machine": "Apple M4 (10 cores), 32 GB, macOS 27.0.1, SSD; Go 1.26.0 darwin/arm64",
-    "note": "Measured on a shared developer laptop with load average 11-15 (other builds running), so absolute values are pessimistic and noisy. Use this file for regression budgets on the SAME machine (make perf-check); CI runners need their own docs/perf/baseline-ci-50000.json (see .github/workflows/nightly-perf.yml).",
+    "note": "Measured on a shared developer laptop with load average 11-15 (other builds running), so absolute values are pessimistic and noisy. Use this file for regression budgets on the SAME machine (task perf-check); CI runners need their own docs/perf/baseline-ci-50000.json (see .github/workflows/nightly-perf.yml).",
     "date": "2026-10-27",
     "notes": 50000,
     "dataset": "apps/desktop/internal/perf/dataset, seed 1, 168 MB",

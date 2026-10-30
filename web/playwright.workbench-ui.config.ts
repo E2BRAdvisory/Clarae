@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test';
 // the same UI on the real Go core compiled to WebAssembly (OPFS, sqlite-wasm), not on the Wails mock.
 // E2E_TARGET=web makes e2e/support.ts open a vault of this browser (`?local`, E2E builds only).
 // Only the specs whose flows exist on both targets are listed; see docs/web-workbench-parity.md.
-// Prerequisite: `make wasm-core`. Run with: yarn workspace @memobrain/web e2e:workbench-ui
+// Prerequisite: `task wasm-core`. Run with: yarn workspace @memobrain/web e2e:workbench-ui
 export default defineConfig({
   testDir: '../apps/desktop/frontend/e2e',
   testMatch: ['workflows', 'keyboard', 'editor-toolbar', 'slides', 'graph'].map(

@@ -14,7 +14,7 @@ apps/desktop/build/bin/
 *.test
 *.out
 
-# Performance suite output (make perf)
+# Performance suite output (task perf)
 .perf/
 
 # Local data
@@ -57,5 +57,5 @@ apps/desktop/build/bin/
 packages/workbench/wailsjs/
 apps/desktop/frontend/package.json.md5
 
-# Go core compiled to WebAssembly (make wasm-core)
+# Go core compiled to WebAssembly (task wasm-core)
 build/wasm/

@@ -32,7 +32,7 @@ if (commands.length < 50)
 const bindingsDir = join(root, 'packages/workbench/wailsjs/go/app');
 if (!existsSync(bindingsDir)) {
   console.error(
-    'packages/workbench/wailsjs is not generated (make gen-wails): cannot build the parity tables',
+    'packages/workbench/wailsjs is not generated (task gen-wails): cannot build the parity tables',
   );
   process.exit(check() ? 0 : 1);
 }
@@ -104,7 +104,7 @@ const generated = [
   '',
   `### Binding Go (${bindings.length} metodi, ${new Set(bindings.map((b) => b.service)).size} servizi)`,
   '',
-  `Il dispatcher del core espone tutti i ${bindings.length} metodi (verificato da \`TestDispatcherMatchesTheGeneratedBindings\`). **${nCalled} su ${bindings.length}** sono chiamati da un test del workbench web contro il core vero (\`web/e2e\`, \`web/e2e-cloud\`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (\`make test-wasm\`), ma non hanno ancora un test nel browser.`,
+  `Il dispatcher del core espone tutti i ${bindings.length} metodi (verificato da \`TestDispatcherMatchesTheGeneratedBindings\`). **${nCalled} su ${bindings.length}** sono chiamati da un test del workbench web contro il core vero (\`web/e2e\`, \`web/e2e-cloud\`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (\`task test-wasm\`), ma non hanno ancora un test nel browser.`,
   '',
   table(bindRows, ['Binding', 'Esposto sul web', 'Chiamato in un test web', 'Nota']),
   '',

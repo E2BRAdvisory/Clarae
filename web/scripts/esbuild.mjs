@@ -5,7 +5,7 @@
 //
 // Two pages are built: the console (index.html) and the vault workbench (workbench.html, served for
 // /vaults/:id/open). The workbench is a page of its own so that the desktop UI's global style sheet
-// cannot reach the console (ADR-0029). It also needs the WebAssembly core, which `make wasm-core`
+// cannot reach the console (ADR-0029). It also needs the WebAssembly core, which `task wasm-core`
 // produces in build/wasm/ (MEMOBRAIN_CORE_WASM overrides the path).
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -176,7 +176,7 @@ async function prepareCore() {
   );
   if (!existsSync(corePath)) {
     console.warn(
-      `The WebAssembly core is missing (${corePath}): the vault workbench will not run. Build it with: make wasm-core`,
+      `The WebAssembly core is missing (${corePath}): the vault workbench will not run. Build it with: task wasm-core`,
     );
     return { assets: null, sizes: null };
   }

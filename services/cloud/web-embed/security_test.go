@@ -13,7 +13,7 @@ import (
 )
 
 // These tests run against the build that is really embedded in the binary
-// (dist/, produced by `make web-build`): the CSP only protects if the page it
+// (dist/, produced by `task web-build`): the CSP only protects if the page it
 // protects has no inline code and every subresource is pinned by SRI.
 
 var (
@@ -54,9 +54,9 @@ func TestBuiltIndexPinsEverySubresourceWithSRI(t *testing.T) {
 func TestBuiltWorkbenchPinsEverySubresourceWithSRI(t *testing.T) {
 	if _, err := fs.Stat(Dist(), "workbench.html"); err != nil {
 		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
-			t.Fatal("workbench.html is not embedded: is dist/ built (make web-build)?")
+			t.Fatal("workbench.html is not embedded: is dist/ built (task web-build)?")
 		}
-		t.Skip("dist/ holds only the placeholder index (run make web-build)")
+		t.Skip("dist/ holds only the placeholder index (run task web-build)")
 	}
 	checkPagePinsEverySubresource(t, "workbench.html")
 }
@@ -140,7 +140,7 @@ func checkPinned(t *testing.T, root fs.FS, tag, ref string, a map[string]string)
 	data, err := fs.ReadFile(root, strings.TrimPrefix(ref, "/"))
 	if err != nil {
 		// The tracked dist/ holds only the placeholder index; CI builds the real SPA
-		// (make web-build) and sets MEMOBRAIN_REQUIRE_WEB_BUILD=1 so a missing file is an error.
+		// (task web-build) and sets MEMOBRAIN_REQUIRE_WEB_BUILD=1 so a missing file is an error.
 		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
 			t.Errorf("<%s %s>: file is not embedded: %v", tag, ref, err)
 		}
