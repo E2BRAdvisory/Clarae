@@ -2,6 +2,43 @@
 
 Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file: il workflow di release le allega alla release (`scripts/release/notes.sh`).
 
+## [1.2.0] - 2026-10-30
+
+Correzioni di affidabilità nel cloud e nella sync, ricerca più pertinente, footnote inline, template per le nuove note e import di Google Keep in HTML. Dentro, il cloud separa l'accesso ai dati per modulo.
+
+### Cloud
+
+- **Stream e download lunghi non si interrompono più:** il timeout di 60 s vale solo per le operazioni JSON; lo stream degli eventi, gli upload ripristinabili, i blob e gli export ZIP non hanno più un limite di tempo.
+- **Limite di richieste per IP effettivo:** prima ogni connessione aveva un contatore nuovo. Dietro un reverse proxy va impostato `TRUSTED_PROXIES` (guida admin, «Rete e processo»). I probe di salute sono esenti.
+- **Corpo delle richieste JSON** al massimo 8 MiB (`413 FILE_TOO_LARGE`).
+- **Nessun blob perso dalla pulizia:** un commit che referenzia un blob mentre la pulizia lo sta cancellando non lascia più un riferimento a un oggetto inesistente.
+- **Manutenzione notturna:** un passo che fallisce non blocca più gli altri (purge, riconciliazione delle quote, snapshot).
+- **Accesso ai dati per modulo** (ADR-0033): ogni modulo ha le proprie query e non tocca le tabelle degli altri, salvo eccezioni dichiarate e verificate da un test.
+
+### Client desktop e workbench web
+
+- **Vault privati:** blocco automatico dopo un periodo di inattività, in Impostazioni › Sync › Cifratura, anche impostabile dall'amministratore (`security.vault_lock_minutes`). Default: mai, come prima.
+- **Nessuna perdita locale nella sync:** prima che un merge sostituisca testo non ancora sincronizzato, una copia va nella cronologia locale (File recovery).
+- **File troppo grandi:** sono esclusi dalla sync prima di essere letti e cifrati, e non bloccano più l'invio degli altri file.
+- **Login:** se Keycloak rifiuta il redirect locale, l'app passa da sola a `memobrain://`; l'amministratore può imporre la modalità dal profilo (`auth.redirect_mode`).
+- **Ricerca:** risultati ordinati per pertinenza (BM25, con peso maggiore per il titolo) e parole trovate evidenziate nell'anteprima, centrata sulla corrispondenza nelle righe lunghe.
+- **Footnote inline** `^[…]` nella vista di lettura e nell'export HTML, numerate insieme alle `[^x]`.
+- **Template per ogni nuova nota**, in Impostazioni › Note giornaliere e template.
+- **Import di Google Keep anche dalle pagine HTML** di Takeout, quando manca il JSON.
+- **Disegni:** i font di Excalidraw (compreso quello per il cinese, il giapponese e il coreano) arrivano sempre dall'app; prima il font CJK veniva cercato su un CDN esterno e non si caricava.
+
+### Documentazione
+
+- Proposta di aggiornamento delle specifiche alla v1.2 (`docs/spec-v1.2-proposta.md`).
+- Nuovi ADR in stato di proposta: involucri della chiave dei vault legati al vault (ADR-0034) e barra di stato opzionale (ADR-0035).
+
+### Limiti noti
+
+- Valgono quelli della 1.1.0: installer non firmati, nessun aggiornamento automatico, nessun installer Linux arm64, pacchetti GHCR privati.
+- **Limite di dimensione dei file:** il client usa quello del profilo di configurazione (default 100 MB). Se l'amministratore alza solo `files.max_size_bytes` del server, va alzato anche `sync.max_file_size_bytes` del profilo.
+- **Footnote inline:** in Live Preview restano testo.
+- **Keep HTML:** porta solo la data di modifica, non quella di creazione.
+
 ## [1.1.0] - 2026-10-30
 
 Il vault si apre e si modifica anche dalla Web UI del cloud, e il rilascio dei tre installer desktop e dell'immagine del cloud è automatico.
