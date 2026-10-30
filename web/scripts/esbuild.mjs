@@ -100,6 +100,8 @@ const TYPES = {
   '.ttf': 'font/ttf',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.ico': 'image/vnd.microsoft.icon',
+  '.webmanifest': 'application/manifest+json',
   '.wasm': 'application/wasm',
 };
 

@@ -83,7 +83,7 @@ func checkPagePinsEverySubresource(t *testing.T, page string) {
 			pinned++
 		case "link":
 			rel := strings.ToLower(a["rel"])
-			if rel == "icon" || rel == "apple-touch-icon" || rel == "manifest" {
+			if rel == "icon" || rel == "apple-touch-icon" || rel == "mask-icon" || rel == "manifest" {
 				checkLocal(t, a["href"])
 				continue
 			}

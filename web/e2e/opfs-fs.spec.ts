@@ -47,7 +47,7 @@ const O = globalThis.fs ? null : null;
 test.describe('OPFS fs shim (what Go os calls)', () => {
   test.beforeEach(async ({ page }) => {
     // A static file of the app's origin (a secure context with OPFS): no script of the dev server that could reload it.
-    await page.goto('/favicon.svg');
+    await page.goto('/icon.svg');
   });
 
   test('creates, writes, reads and stats a file', async ({ page }) => {

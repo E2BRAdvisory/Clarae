@@ -12,9 +12,11 @@ func testHandler() http.Handler {
 	return Handler(Options{
 		Issuer: "https://id.example.com:8443/realms/memobrain",
 		FS: fstest.MapFS{
-			"index.html":      {Data: []byte("<html>app</html>")},
-			"assets/app-1.js": {Data: []byte("console.log(1)")},
-			"favicon.svg":     {Data: []byte("<svg/>")},
+			"index.html":       {Data: []byte("<html>app</html>")},
+			"assets/app-1.js":  {Data: []byte("console.log(1)")},
+			"favicon.svg":      {Data: []byte("<svg/>")},
+			"site.webmanifest": {Data: []byte(`{"name":"MemoBrain Notes"}`)},
+			"favicon.ico":      {Data: []byte("\x00\x00\x01\x00")},
 		},
 	})
 }
@@ -47,6 +49,18 @@ func TestHashedAssetsAreImmutable(t *testing.T) {
 	}
 	if rec2 := get(testHandler(), http.MethodGet, "/favicon.svg"); rec2.Header().Get("Cache-Control") != "no-cache" {
 		t.Fatalf("non-hashed file must not be immutable")
+	}
+}
+
+func TestStaticFilesUnknownToGoGetTheirType(t *testing.T) {
+	for p, want := range map[string]string{
+		"/site.webmanifest": "application/manifest+json",
+		"/favicon.ico":      "image/vnd.microsoft.icon",
+		"/favicon.svg":      "image/svg+xml",
+	} {
+		if rec := get(testHandler(), http.MethodGet, p); rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != want {
+			t.Fatalf("%s: code %d Content-Type %q", p, rec.Code, rec.Header().Get("Content-Type"))
+		}
 	}
 }
 

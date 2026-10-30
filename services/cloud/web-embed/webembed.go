@@ -37,6 +37,12 @@ func Dist() fs.FS {
 	return sub
 }
 
+// extraTypes are the Content-Type of the static files whose extension Go does not know.
+var extraTypes = map[string]string{
+	".webmanifest": "application/manifest+json",
+	".ico":         "image/vnd.microsoft.icon",
+}
+
 // Options configure Handler.
 type Options struct {
 	// FS is the built SPA; nil means the embedded Dist().
@@ -208,6 +214,11 @@ func serveFile(w http.ResponseWriter, r *http.Request, root fs.FS, name string) 
 	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	// Types missing from Go's built-in table (the image may have no /etc/mime.types): the PWA manifest
+	// and the favicon would otherwise be sniffed as text/plain and image/x-icon.
+	if t, ok := extraTypes[path.Ext(name)]; ok {
+		w.Header().Set("Content-Type", t)
 	}
 	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }
