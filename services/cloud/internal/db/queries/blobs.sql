@@ -1,6 +1,12 @@
 -- name: GetBlob :one
 SELECT * FROM blobs WHERE hash = $1;
 
+-- name: GetBlobKeyShare :one
+-- A commit locks the blob it references until it has added its reference,
+-- so the garbage collector cannot delete it in between (CollectBlobs). KEY
+-- SHARE blocks only DELETE: concurrent commits still update ref_count.
+SELECT * FROM blobs WHERE hash = $1 FOR KEY SHARE;
+
 -- name: InsertBlob :execrows
 INSERT INTO blobs (hash, size, storage_key) VALUES ($1, $2, $3) ON CONFLICT (hash) DO NOTHING;
 
@@ -23,8 +29,12 @@ SELECT hash, storage_key FROM blobs
 WHERE ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $1
 ORDER BY unreferenced_since LIMIT $2;
 
--- name: DeleteBlobRow :exec
-DELETE FROM blobs WHERE hash = $1 AND ref_count = 0;
+-- name: DeleteCollectableBlob :one
+-- Deletes the row only if it is still unreferenced past the grace period: a
+-- commit that referenced the blob meanwhile keeps it (no row returned).
+DELETE FROM blobs
+WHERE hash = $1 AND ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $2
+RETURNING storage_key;
 
 -- name: ListBlobRefCounts :many
 -- Reconciliation: actual number of revisions referencing each blob.

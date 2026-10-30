@@ -5,10 +5,16 @@ package integration
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"memobrain/services/cloud/internal/blobs"
+	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/jobs"
 	"memobrain/shared/syncproto"
 )
@@ -53,6 +59,57 @@ func TestBlobGarbageCollection(t *testing.T) {
 	// A commit that referenced the collected blob is told to upload it again.
 	if res := ada.commit(v, create(newID(), "b.md", orphan)); res[0].code() != "BLOB_MISSING" {
 		t.Fatalf("collected blob accepted: %v", res[0])
+	}
+}
+
+// Regression (D3): the collector deleted the object before the guarded row
+// delete, so a commit referencing the blob in between kept the row and lost
+// the bytes. Now a commit locks the blob it references, and the collector
+// waits for it and then spares the blob.
+func TestBlobGCSparesABlobACommitIsReferencing(t *testing.T) {
+	e := newEnv(t)
+	ada := e.user("ada")
+	v := ada.createVault("GC race", "shared")
+	h := ada.putBlob(v, []byte("referenced while collected "+newID()))
+	vid := uuid.MustParse(v)
+	ctx := context.Background()
+
+	// A commit in flight: it has checked the blob but not yet added its reference.
+	locked, release := make(chan struct{}), make(chan struct{})
+	commitErr := make(chan error, 1)
+	go func() {
+		commitErr <- e.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+			_, ok, err := blobs.VaultBlob(ctx, q, vid, h)
+			if err != nil || !ok {
+				close(locked)
+				return fmt.Errorf("blob not found before collection (ok=%v): %v", ok, err)
+			}
+			close(locked)
+			<-release
+			return blobs.AddRef(ctx, q, h, 1)
+		})
+	}()
+	<-locked
+
+	gcErr := make(chan error, 1)
+	go func() {
+		_, err := e.jobs(time.Now().Add(25 * time.Hour)).CollectBlobs(ctx)
+		gcErr <- err
+	}()
+	select {
+	case err := <-gcErr:
+		t.Fatalf("the collector finished while a commit held the blob (%v)", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	close(release)
+	if err := <-commitErr; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-gcErr; err != nil {
+		t.Fatal(err)
+	}
+	if r := ada.json(http.MethodGet, "/vaults/"+v+"/blobs/"+h, nil); r.StatusCode != http.StatusOK {
+		t.Fatalf("referenced blob collected: %d", r.StatusCode)
 	}
 }
 

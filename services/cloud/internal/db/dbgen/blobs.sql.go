@@ -80,13 +80,24 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (Upl
 	return i, err
 }
 
-const deleteBlobRow = `-- name: DeleteBlobRow :exec
-DELETE FROM blobs WHERE hash = $1 AND ref_count = 0
+const deleteCollectableBlob = `-- name: DeleteCollectableBlob :one
+DELETE FROM blobs
+WHERE hash = $1 AND ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $2
+RETURNING storage_key
 `
 
-func (q *Queries) DeleteBlobRow(ctx context.Context, hash string) error {
-	_, err := q.db.Exec(ctx, deleteBlobRow, hash)
-	return err
+type DeleteCollectableBlobParams struct {
+	Hash              string
+	UnreferencedSince *time.Time
+}
+
+// Deletes the row only if it is still unreferenced past the grace period: a
+// commit that referenced the blob meanwhile keeps it (no row returned).
+func (q *Queries) DeleteCollectableBlob(ctx context.Context, arg DeleteCollectableBlobParams) (string, error) {
+	row := q.db.QueryRow(ctx, deleteCollectableBlob, arg.Hash, arg.UnreferencedSince)
+	var storage_key string
+	err := row.Scan(&storage_key)
+	return storage_key, err
 }
 
 const deleteUpload = `-- name: DeleteUpload :exec
@@ -104,6 +115,27 @@ SELECT hash, size, storage_key, ref_count, created_at, unreferenced_since FROM b
 
 func (q *Queries) GetBlob(ctx context.Context, hash string) (Blob, error) {
 	row := q.db.QueryRow(ctx, getBlob, hash)
+	var i Blob
+	err := row.Scan(
+		&i.Hash,
+		&i.Size,
+		&i.StorageKey,
+		&i.RefCount,
+		&i.CreatedAt,
+		&i.UnreferencedSince,
+	)
+	return i, err
+}
+
+const getBlobKeyShare = `-- name: GetBlobKeyShare :one
+SELECT hash, size, storage_key, ref_count, created_at, unreferenced_since FROM blobs WHERE hash = $1 FOR KEY SHARE
+`
+
+// A commit locks the blob it references until it has added its reference,
+// so the garbage collector cannot delete it in between (CollectBlobs). KEY
+// SHARE blocks only DELETE: concurrent commits still update ref_count.
+func (q *Queries) GetBlobKeyShare(ctx context.Context, hash string) (Blob, error) {
+	row := q.db.QueryRow(ctx, getBlobKeyShare, hash)
 	var i Blob
 	err := row.Scan(
 		&i.Hash,

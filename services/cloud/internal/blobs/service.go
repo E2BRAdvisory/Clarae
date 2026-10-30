@@ -285,13 +285,19 @@ func (s *Service) Size(ctx context.Context, userID, vaultID uuid.UUID, scope, ha
 	return size, nil
 }
 
-// VaultBlob reports whether the vault owns the blob and its size.
+// VaultBlob reports whether the vault owns the blob and its size. Inside a
+// transaction it also locks the blob against the garbage collector until the
+// transaction ends, so a commit can safely reference it; a blob the collector
+// deleted meanwhile is reported as missing.
 func VaultBlob(ctx context.Context, q *dbgen.Queries, vaultID uuid.UUID, hash string) (size int64, ok bool, err error) {
 	has, err := q.VaultHasBlob(ctx, dbgen.VaultHasBlobParams{VaultID: vaultID, Hash: hash})
 	if err != nil || !has {
 		return 0, false, err
 	}
-	b, err := q.GetBlob(ctx, hash)
+	b, err := q.GetBlobKeyShare(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
 	if err != nil {
 		return 0, false, err
 	}

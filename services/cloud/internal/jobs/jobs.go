@@ -9,6 +9,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -163,29 +164,64 @@ func (r *Runner) Run(ctx context.Context) {
 }
 
 // CollectBlobs deletes blobs that no revision references and that stayed
-// unreferenced for the grace period (default 24 h), objects first.
+// unreferenced for the grace period (default 24 h).
+//
+// Each blob goes in its own transaction: the guarded row delete first, then
+// the object, then the commit. The row lock orders the collector against a
+// concurrent commit, which locks the blob FOR SHARE before referencing it:
+// either the commit wins and the guard keeps the row (and the object), or the
+// collector wins and the commit finds no blob and answers BLOB_MISSING. If
+// the object delete fails the row is restored by the rollback and the blob is
+// retried on the next run.
 func (r *Runner) CollectBlobs(ctx context.Context) (int, error) {
 	grace := time.Duration(r.setting(ctx, "blobs.gc_grace_hours", 24)) * time.Hour
-	q := r.db.Queries()
+	cutoff := ptrTime(r.now().Add(-grace))
 	total := 0
 	for {
-		rows, err := q.ListUnreferencedBlobs(ctx, dbgen.ListUnreferencedBlobsParams{UnreferencedSince: ptrTime(r.now().Add(-grace)), Limit: 500})
+		rows, err := r.db.Queries().ListUnreferencedBlobs(ctx, dbgen.ListUnreferencedBlobsParams{UnreferencedSince: cutoff, Limit: 500})
 		if err != nil {
 			return total, err
 		}
 		if len(rows) == 0 {
 			return total, nil
 		}
+		collected := 0
 		for _, b := range rows {
-			if err := r.store.Delete(ctx, b.StorageKey); err != nil {
-				return total, fmt.Errorf("delete object %s: %w", b.StorageKey, err)
-			}
-			if err := q.DeleteBlobRow(ctx, b.Hash); err != nil {
+			ok, err := r.collectBlob(ctx, b.Hash, cutoff)
+			if err != nil {
 				return total, err
 			}
-			total++
+			if ok {
+				collected++
+			}
+		}
+		total += collected
+		if collected == 0 {
+			// Every candidate was referenced meanwhile: nothing left to do now.
+			return total, nil
 		}
 	}
+}
+
+// collectBlob deletes one blob, row and object, unless it was referenced
+// since it was listed.
+func (r *Runner) collectBlob(ctx context.Context, hash string, cutoff *time.Time) (bool, error) {
+	deleted := false
+	err := r.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+		key, err := q.DeleteCollectableBlob(ctx, dbgen.DeleteCollectableBlobParams{Hash: hash, UnreferencedSince: cutoff})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // referenced again (or already collected): keep it
+		}
+		if err != nil {
+			return err
+		}
+		if err := r.store.Delete(ctx, key); err != nil {
+			return fmt.Errorf("delete object %s: %w", key, err)
+		}
+		deleted = true
+		return nil
+	})
+	return deleted && err == nil, err
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
@@ -214,27 +250,43 @@ func (r *Runner) PruneRevisions(ctx context.Context) (int, error) {
 }
 
 // Maintain runs the daily jobs: changelog compaction, purge of deleted
-// vaults and reconciliation of counters.
+// vaults and accounts, reconciliation of counters and the storage snapshot.
+// The steps are independent: a failing one is logged, counted in its own
+// metric and reported, but never stops the others (a broken compaction must
+// not leave deleted vaults unpurged for days).
 func (r *Runner) Maintain(ctx context.Context) error {
-	if err := r.CompactChangelogs(ctx); err != nil {
-		return fmt.Errorf("compaction: %w", err)
+	return r.runSteps(ctx, []step{
+		{"compaction", r.CompactChangelogs},
+		{"purge-vaults", func(c context.Context) error { _, err := r.PurgeDeletedVaults(c); return err }},
+		{"purge-accounts", func(c context.Context) error { _, err := r.PurgeDeletedAccounts(c); return err }},
+		{"reconcile-usage", r.ReconcileUsage},
+		{"reconcile-blob-refs", r.ReconcileBlobRefs},
+		{"storage-snapshot", r.SnapshotStorage},
+	})
+}
+
+// step is one independent part of a job.
+type step struct {
+	name string
+	run  func(context.Context) error
+}
+
+// runSteps runs every step in order until ctx ends and joins their errors.
+func (r *Runner) runSteps(ctx context.Context, steps []step) error {
+	var errs []error
+	for _, s := range steps {
+		if ctx.Err() != nil {
+			break
+		}
+		start := time.Now()
+		err := s.run(ctx)
+		observability.JobRun("maintenance:"+s.name, time.Since(start), err)
+		if err != nil {
+			r.log.Error().Err(err).Str("job", "maintenance").Str("step", s.name).Msg("maintenance step failed")
+			errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
+		}
 	}
-	if _, err := r.PurgeDeletedVaults(ctx); err != nil {
-		return fmt.Errorf("purge vaults: %w", err)
-	}
-	if _, err := r.PurgeDeletedAccounts(ctx); err != nil {
-		return fmt.Errorf("purge accounts: %w", err)
-	}
-	if err := r.ReconcileUsage(ctx); err != nil {
-		return fmt.Errorf("reconcile usage: %w", err)
-	}
-	if err := r.ReconcileBlobRefs(ctx); err != nil {
-		return fmt.Errorf("reconcile blob refs: %w", err)
-	}
-	if err := r.SnapshotStorage(ctx); err != nil {
-		return fmt.Errorf("storage snapshot: %w", err)
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // SnapshotStorage records today's total usage for the trend of the admin dashboard.
