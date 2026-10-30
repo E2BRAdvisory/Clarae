@@ -20,7 +20,7 @@ git tag -a v1.0.0 -m "MemoBrain Notes 1.0.0" && git push origin v1.0.0     # azi
 Il push del tag avvia `release.yml`, che:
 
 1. costruisce e pubblica su GHCR l'**immagine cloud** multi-arch (`ghcr.io/<owner>/memobrain-cloud:X.Y.Z`, più `X.Y` sulle versioni stabili) e il **chart Helm** come artefatto OCI (`oci://ghcr.io/<owner>/charts/memobrain`);
-2. costruisce gli **installer desktop**: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage);
+2. costruisce gli **installer desktop**: macOS universale (`.dmg`), Windows amd64 (NSIS), Linux amd64 (`.deb` e AppImage);
 3. crea e pubblica **una** GitHub Release con gli installer e `SHA256SUMS`, marcata **prerelease** se la versione ha un suffisso.
 
 Gli installer non sono firmati (Gatekeeper e SmartScreen avvisano al primo avvio) e l'updater è compilato fuori dai binari (`ALLOW_UNSIGNED_UPDATES=1`): nessun manifest di aggiornamento. La prima volta i pacchetti GHCR sono privati: renderli pubblici (Package settings, Change visibility) se non devono richiedere un login.

@@ -95,9 +95,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { id: macos-universal, os_name: darwin, runner: macos-14, arch: universal }
+          - { id: macos-universal, os_name: darwin, runner: macos-15, arch: universal }
           - { id: windows-amd64, os_name: windows, runner: windows-2022, arch: amd64 }
-          - { id: windows-arm64, os_name: windows, runner: windows-2022, arch: arm64 }
           - { id: linux-amd64, os_name: linux, runner: ubuntu-24.04, arch: amd64 }
     runs-on: ${{ matrix.runner }}
     env:

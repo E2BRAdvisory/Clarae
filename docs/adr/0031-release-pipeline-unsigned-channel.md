@@ -39,7 +39,7 @@
 
    | Piattaforma   | Artefatto         | Build                                 |
    | ------------- | ----------------- | ------------------------------------- |
-   | macOS         | universal `.dmg`  | `macos-14`                            |
+   | macOS         | universal `.dmg`  | `macos-15`                            |
    | Windows amd64 | NSIS              | `windows-2022`                        |
    | Windows arm64 | NSIS              | cross-compilato: WebView2 non usa CGO |
    | Linux amd64   | `.deb` + AppImage | `ubuntu-24.04`                        |
