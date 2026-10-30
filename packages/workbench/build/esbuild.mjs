@@ -1,7 +1,7 @@
 // esbuild pieces shared by every app that hosts the workbench (the desktop frontend today, the Web UI
 // in M9-WP5): plugins, loaders and the copies of Excalidraw's assets. Each app keeps its own entry,
 // HTML, dev server and bundle budget. Usage: `import { ... } from '@memobrain/workbench/build'`.
-import { cp, readFile } from 'node:fs/promises';
+import { cp, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,10 +91,28 @@ ${excalidrawExports.map((k) => `export const ${k} = lib.${k};`).join('\n')}
 export async function copyExcalidrawAssets(dist) {
   const dir = dirname(require.resolve('@excalidraw/excalidraw')); // .../dist/prod
   await cp(join(dir, 'fonts'), join(dist, 'excalidraw-assets', 'fonts'), { recursive: true });
-  await cp(
+  const script = await readFile(
     join(excalidrawDir, 'obsidian/excalidraw.production.min.js'),
-    join(dist, 'excalidraw-assets', 'excalidraw.js'),
+    'utf8',
   );
+  await writeFile(join(dist, 'excalidraw-assets', 'excalidraw.js'), withoutCdnFallback(script));
+}
+
+// Excalidraw lists a CDN (esm.sh) after EXCALIDRAW_ASSET_PATH as the source of every font face, and
+// the browser goes there for faces it does not take from the first source: the CJK fallback Xiaolai
+// did, on every drawing with text (blocked by the CSP, so it never rendered). The fallback is pointed
+// at the fonts the app serves, so no font can come from outside (spec §2.7.3, V-08 offline).
+const CDN_FALLBACK =
+  /`https:\/\/esm\.sh\/\$\{(\w+)\.PKG_NAME\?`\$\{\1\.PKG_NAME\}@\$\{\1\.PKG_VERSION\}`:"@excalidraw\/excalidraw"\}\/dist\/prod\/`/g;
+
+export function withoutCdnFallback(script) {
+  const found = script.match(CDN_FALLBACK)?.length ?? 0;
+  if (found !== 1 || /https:\/\/esm\.sh\//.test(script.replace(CDN_FALLBACK, ''))) {
+    throw new Error(
+      `excalidraw.js: expected exactly one esm.sh font fallback, found ${found}: update withoutCdnFallback for this Excalidraw version`,
+    );
+  }
+  return script.replace(CDN_FALLBACK, '`${location.origin}/excalidraw-assets/`');
 }
 
 /** Build options that do not depend on the app: bundle, target, loaders, aliases. */
