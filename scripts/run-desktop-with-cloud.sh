@@ -78,7 +78,7 @@ if [ "$TWO" = 1 ]; then
   log "Building desktop (production) for two instances"
   (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -ldflags "-X main.Version=dev-cloud")
   case "$(uname -s)" in
-    Darwin) BIN="$ROOT/apps/desktop/build/bin/memobrain.app/Contents/MacOS/memobrain" ;;
+    Darwin) BIN="$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)/Contents/MacOS/memobrain" ;;
     *) BIN="$ROOT/apps/desktop/build/bin/memobrain" ;;
   esac
   for n in 1 2; do

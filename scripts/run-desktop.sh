@@ -42,7 +42,7 @@ if [ "$BUILD" = 1 ]; then
   log "Building (production)"
   (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -ldflags "-X main.Version=dev-standalone")
   case "$(uname -s)" in
-    Darwin) exec "$ROOT/apps/desktop/build/bin/memobrain.app/Contents/MacOS/memobrain" ;;
+    Darwin) exec "$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)/Contents/MacOS/memobrain" ;;
     *) exec "$ROOT/apps/desktop/build/bin/memobrain" ;;
   esac
 else

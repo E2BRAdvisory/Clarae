@@ -3,7 +3,7 @@
 #
 #   scripts/release/package-macos.sh <version> [--require-signing]
 #
-# Input : apps/desktop/build/bin/memobrain.app (scripts/release/build-desktop.sh darwin <version>)
+# Input : apps/desktop/build/bin/<name>.app (scripts/release/build-desktop.sh darwin <version>; the bundle is named after "name" in wails.json)
 # Output: dist/memobrain-<version>-darwin-universal.dmg
 #
 # Signing and notarisation run ONLY when their secrets are present; otherwise the dmg is built
@@ -21,10 +21,10 @@ set -euo pipefail
 VERSION="${1:-}"; REQUIRE="${2:-}"
 [ -n "$VERSION" ] || die "usage: $0 <version> [--require-signing]"
 VERSION="${VERSION#v}"
-APP="$ROOT/apps/desktop/build/bin/memobrain.app"
+APP="$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)"
 ENTITLEMENTS="$ROOT/apps/desktop/build/darwin/entitlements.plist"
 OUT_DIR="$ROOT/dist"; DMG="$OUT_DIR/memobrain-$VERSION-darwin-universal.dmg"
-[ -d "$APP" ] || die "$APP not found: run scripts/release/build-desktop.sh darwin $VERSION first"
+[ -n "$APP" ] && [ -d "$APP" ] || die "no .app in apps/desktop/build/bin: run scripts/release/build-desktop.sh darwin $VERSION first"
 need hdiutil; need codesign; need xcrun
 mkdir -p "$OUT_DIR"
 
