@@ -16,5 +16,5 @@
 
 ## Conseguenze / note
 
-- Non implementata l'impostazione "applica template a ogni nuova nota" (rimane il comando "Nuova nota da template").
+- Impostazione "Template di ogni nuova nota" (`newNoteTemplate` in `.memobrain/daily.json`, vuota per default): `createNote` espande il template scelto con il titolo della nota (variabili come negli altri template) per ogni nota nuova, anche quelle create da un link a una nota mancante. Un template sparito lascia la nota vuota invece di bloccarne la creazione. Restano a parte il comando "Nuova nota da template", le note giornaliere e le note uniche, che hanno i propri template.
 - `frontend/wailsjs/go/models.ts` rigenerato: in fase di merge va rigenerato di nuovo (`make gen-wails`).

@@ -130,6 +130,7 @@
       "format": "Formato data",
       "template": "Template",
       "noTemplate": "(nessun template)",
+      "newNoteTemplate": "Template di ogni nuova nota",
       "unique": "Note uniche",
       "composer": "Note composer",
       "mergeSeparator": "Separatore nell'unione di note",

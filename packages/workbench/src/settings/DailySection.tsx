@@ -77,7 +77,7 @@ function TemplateSelect({
 }: {
   id: string;
   label: string;
-  k: 'dailyTemplate' | 'uniqueTemplate';
+  k: 'dailyTemplate' | 'uniqueTemplate' | 'newNoteTemplate';
   options: TemplateInfo[];
   folder: string;
 }) {
@@ -129,6 +129,13 @@ export function DailySection() {
         <code>{'{{date}} {{date:FORMAT}} {{time}} {{time:FORMAT}} {{title}}'}</code>{' '}
         {t('settings.daily.variablesHelp')}
       </p>
+      <TemplateSelect
+        id="new-note-template"
+        label={t('settings.daily.newNoteTemplate')}
+        k="newNoteTemplate"
+        options={templates}
+        folder={folder}
+      />
 
       <h4>{t('settings.daily.daily')}</h4>
       <Text id="daily-folder" label={t('settings.daily.folder')} k="dailyFolder" />

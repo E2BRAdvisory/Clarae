@@ -21,6 +21,8 @@ export interface NotesSettings {
   uniqueFolder: string;
   uniqueFormat: string;
   uniqueTemplate: string;
+  /** Template applied to every new note (New note, links to missing notes); "" = empty note. */
+  newNoteTemplate: string;
   /** The "/" menu in the editor. */
   slashCommands: boolean;
   /** Extract selection: replace it with an embed instead of a link. */
@@ -38,6 +40,7 @@ export const defaultNotesSettings: NotesSettings = {
   uniqueFolder: '',
   uniqueFormat: 'YYYYMMDDHHmm',
   uniqueTemplate: '',
+  newNoteTemplate: '',
   slashCommands: true,
   extractEmbed: false,
   extractFrontmatter: false,

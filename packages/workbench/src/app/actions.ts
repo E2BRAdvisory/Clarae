@@ -2,6 +2,8 @@
 import { api, errorCode, type Entry } from './api';
 import { applyTheme, effectiveTheme, type Theme } from './theme';
 import { useBookmarks } from '../bookmarks/store';
+import { uiLang } from '../daily/actions';
+import { useNotesSettings } from '../daily/settings';
 import { queryClient } from '../state/queryClient';
 import { queryKeys } from '../state/queries';
 import { useSettings } from '../state/settings';
@@ -49,11 +51,27 @@ export async function createNote(
   ).replace(/^\/+|\/+$/g, '');
   const base = (opts.name ?? 'Untitled').replace(/\.md$/, '');
   const path = uniqueName(tree, dir, base, '.md');
-  await api.vault.writeNote(id, path, '', '');
+  await api.vault.writeNote(id, path, await newNoteContent(id, path), '');
   invalidateVault(id);
   if (opts.open !== false)
     useAppStore.getState().openNote(path, { ...(opts.newTab ? { newTab: true } : {}) });
   return path;
+}
+
+/**
+ * The content of a new note: the template chosen for new notes (Settings > Daily notes and
+ * templates), expanded with the note's title, or nothing. A template that is gone or unreadable
+ * leaves the note empty rather than failing its creation.
+ */
+async function newNoteContent(vaultId: string, path: string): Promise<string> {
+  const ref = (await useNotesSettings.getState().ready(vaultId)).newNoteTemplate;
+  if (!ref) return '';
+  const title = path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '');
+  try {
+    return await api.templates.expand(vaultId, ref, title, uiLang());
+  } catch {
+    return '';
+  }
 }
 
 export async function createFolder(dir: string): Promise<void> {

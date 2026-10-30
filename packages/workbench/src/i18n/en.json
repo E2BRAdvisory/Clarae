@@ -130,6 +130,7 @@
       "format": "Date format",
       "template": "Template",
       "noTemplate": "(no template)",
+      "newNoteTemplate": "Template for every new note",
       "unique": "Unique notes",
       "composer": "Note composer",
       "mergeSeparator": "Separator when merging notes",

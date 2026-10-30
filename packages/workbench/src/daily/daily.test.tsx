@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createNote } from '../app/actions';
 import { extractSelection, mergeActiveNote } from '../composer/actions';
 import { api } from '../app/api';
 import { getActiveEditor, registerEditor, setActiveEditor } from '../editor/registry';
@@ -127,6 +128,19 @@ describe('unique notes and templates', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await done;
     expect(files().get('Standup.md')).toBe('Meeting Standup');
+  });
+
+  it('applies the template for new notes to every new note', async () => {
+    files().set('Templates/Note.md', '# {{title}}\n\ntags: #inbox\n');
+    expect(files().get(await createNote({ name: 'Plain', open: false }))).toBe('');
+    useNotesSettings.setState({
+      settings: { ...defaultNotesSettings, newNoteTemplate: 'Templates/Note.md' },
+    });
+    const path = await createNote({ name: 'Idea', open: false });
+    expect(files().get(path)).toBe('# Idea\n\ntags: #inbox\n');
+    // A template that disappeared leaves the note empty instead of failing.
+    files().delete('Templates/Note.md');
+    expect(files().get(await createNote({ name: 'Later', open: false }))).toBe('');
   });
 
   it('tells when there are no templates', async () => {
