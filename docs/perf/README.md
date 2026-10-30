@@ -14,7 +14,7 @@ make perf-data PERF_NOTES=10000 # solo il dataset (cache in .perf/vault-N, mai c
 - Variabili del test (`internal/perf/perf_test.go`): `MEMOBRAIN_PERF_NOTES`, `MEMOBRAIN_PERF_DIR`, `MEMOBRAIN_PERF_GRAPH_NOTES`, `MEMOBRAIN_PERF_OUT`, `MEMOBRAIN_PERF_KEEP_INDEX`, `MEMOBRAIN_PERF_CPUPROFILE`, `MEMOBRAIN_PERF_INDEX_PROFILE`.
 - UI (Chromium headless su mock dei binding): `MEMOBRAIN_UI_BENCH=1 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/ui-perf.spec.ts` (`MEMOBRAIN_UI_BENCH_NOTES`, `MEMOBRAIN_UI_BENCH_NOTE_KB`, `MEMOBRAIN_UI_BENCH_OUT`).
 - Cloud: vedi la sezione sotto.
-- Nightly: `.github/workflows/nightly-perf.yml` (desktop + smoke k6), artifact dei risultati, budget con `perfcheck`. Le baseline di CI sono `docs/perf/baseline-ci-<note>.json`: vanno create dalla prima esecuzione verde (artifact "candidate baseline"), perché quella di questo repository è di un'altra macchina.
+- Esecuzione: a mano (`make perf`, k6 e `perfcheck`); il workflow notturno `nightly-perf.yml` è stato rimosso il 2026-10-30 e non c'è più un job che produca artifact. Le baseline di CI sono `docs/perf/baseline-ci-<note>.json`: vanno create alla prima esecuzione su una macchina di riferimento, perché quella di questo repository è di un'altra macchina.
 
 ## Macchina e metodo
 
