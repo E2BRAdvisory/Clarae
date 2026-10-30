@@ -1,23 +1,24 @@
 name: Release
 
-# One pipeline per release (M7-WP3, M10, ADR-0023, ADR-0031). On a tag vX.Y.Z or vX.Y.Z-rc.N:
-#   meta -> image + Helm chart (GHCR, signed) and desktop installers
-#   (macOS universal, Windows amd64 + arm64, Linux amd64 [+ arm64]) -> ONE GitHub Release.
-# Signing is optional: without the certificates the installers are built UNSIGNED and the release is marked
-# a prerelease saying so; set the repository variable REQUIRE_SIGNING=true to make missing secrets fatal.
-# Builds and publishes only from a tag: nothing is built or published on branches or pull requests.
-# Secrets and variables: docs/release/secrets.md.
+# On a tag X.Y.Z or X.Y.Z-rc.N or vX.Y.Z or vX.Y.Z-rc.N: cloud image and Helm chart on GHCR, desktop installers for every OS,
+# all attached to one GitHub Release. Nothing is signed: the updater is compiled out (ADR-0031).
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+    tags:
+      [
+        '[0-9]+.[0-9]+.[0-9]+',
+        '[0-9]+.[0-9]+.[0-9]+-*',
+        'v[0-9]+.[0-9]+.[0-9]+',
+        'v[0-9]+.[0-9]+.[0-9]+-*',
+      ]
 
 permissions:
   contents: read
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   GOTOOLCHAIN: auto
@@ -26,100 +27,22 @@ env:
   APPIMAGETOOL_VERSION: '1.9.0'
 
 jobs:
-  meta:
-    name: Resolve version and signing
-    runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.v.outputs.version }}
-      channel: ${{ steps.v.outputs.channel }}
-      apple: ${{ steps.v.outputs.apple }}
-      windows: ${{ steps.v.outputs.windows }}
-      updates: ${{ steps.v.outputs.updates }}
-      unsigned: ${{ steps.v.outputs.unsigned }}
-      matrix: ${{ steps.v.outputs.matrix }}
-    steps:
-      - id: v
-        env:
-          REQUIRE_SIGNING: ${{ vars.REQUIRE_SIGNING }}
-          LINUX_ARM64_RUNNER: ${{ vars.LINUX_ARM64_RUNNER }}
-          # Only their presence is tested here; the build jobs read them.
-          HAS_APPLE: ${{ secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
-          HAS_WINDOWS: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
-          HAS_UPDATE_KEY: ${{ secrets.UPDATE_SIGNING_KEY != '' && vars.UPDATE_PUBLIC_KEY != '' }}
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::invalid semver '$version'"; exit 1; }
-          channel=stable; [[ "$version" == *-* ]] && channel=beta
-
-          # A signing step runs only when its secrets exist.
-          flag() { [[ "$1" == true ]] && echo true || echo false; }
-          apple="$(flag "$HAS_APPLE")"; windows="$(flag "$HAS_WINDOWS")"; updates="$(flag "$HAS_UPDATE_KEY")"
-          unsigned=false; [[ "$apple" != true || "$windows" != true ]] && unsigned=true
-
-          if [[ "$REQUIRE_SIGNING" == true ]]; then
-            missing=()
-            [[ "$apple" == true ]] || missing+=("Apple signing (APPLE_CERT_P12_BASE64, APPLE_SIGNING_IDENTITY)")
-            [[ "$windows" == true ]] || missing+=("Authenticode (WINDOWS_CERT_PFX_BASE64)")
-            [[ "$updates" == true ]] || missing+=("update manifest (UPDATE_SIGNING_KEY, variable UPDATE_PUBLIC_KEY)")
-            if (( ${#missing[@]} )); then
-              echo "::error::REQUIRE_SIGNING is true and these are missing: ${missing[*]}"; exit 1
-            fi
-          fi
-
-          # The desktop matrix. Linux arm64 needs an arm64 runner (WebKitGTK is CGO): name it in LINUX_ARM64_RUNNER
-          # (ubuntu-24.04-arm is free for public repositories); without it the release has no arm64 Linux build.
-          matrix='[
-            {"id":"macos-universal","os_name":"darwin","runner":"macos-14","arch":"universal"},
-            {"id":"windows-amd64","os_name":"windows","runner":"windows-2022","arch":"amd64"},
-            {"id":"windows-arm64","os_name":"windows","runner":"windows-2022","arch":"arm64"},
-            {"id":"linux-amd64","os_name":"linux","runner":"ubuntu-24.04","arch":"amd64"}]'
-          if [[ -n "$LINUX_ARM64_RUNNER" ]]; then
-            matrix="$(jq -c --arg r "$LINUX_ARM64_RUNNER" '. + [{"id":"linux-arm64","os_name":"linux","runner":$r,"arch":"arm64"}]' <<<"$matrix")"
-          else
-            matrix="$(jq -c . <<<"$matrix")"
-            echo "::notice::LINUX_ARM64_RUNNER is not set: no Linux arm64 installer in this run"
-          fi
-
-          { echo "version=$version"; echo "channel=$channel"
-            echo "apple=$apple"; echo "windows=$windows"; echo "updates=$updates"; echo "unsigned=$unsigned"
-            echo "matrix=$matrix"; } >> "$GITHUB_OUTPUT"
-          {
-            echo "### Release $version ($channel)"
-            echo "| signing | active |"; echo "|---|---|"
-            echo "| macOS (Developer ID + notarisation) | $apple |"; echo "| Windows (Authenticode) | $windows |"
-            echo "| update manifest (ed25519) | $updates |"
-            [[ "$unsigned" == true ]] && echo $'\n:warning: installers will be **unsigned**: Gatekeeper / SmartScreen will warn (docs/release/secrets.md).'
-          } >> "$GITHUB_STEP_SUMMARY"
-
   image:
     name: Cloud image
-    needs: meta
-    if: ${{ !cancelled() && needs.meta.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      packages: write # push to GHCR
-      id-token: write # keyless cosign signature
-      attestations: write
-    outputs:
-      image: ${{ steps.plan.outputs.image }}
-      digest: ${{ steps.build.outputs.digest }}
-    env:
-      VERSION: ${{ needs.meta.outputs.version }}
+      packages: write
     steps:
       # The two-architecture build does not fit in the ~14 GB the runner leaves free.
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
       - uses: actions/checkout@v4
-      - id: plan
-        run: |
-          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/memobrain-cloud" >> "$GITHUB_OUTPUT"
-          stable=false; [[ "$VERSION" != *-* ]] && stable=true
-          echo "stable=$stable" >> "$GITHUB_OUTPUT"
+      - run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/memobrain-cloud" >> "$GITHUB_ENV"
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -127,13 +50,12 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.plan.outputs.image }}
+          images: ${{ env.IMAGE }}
+          # semver patterns skip the minor and latest tags on a prerelease.
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ steps.plan.outputs.stable == 'true' }}
-            type=raw,value=latest,enable=${{ steps.plan.outputs.stable == 'true' }}
-      - id: build
-        uses: docker/build-push-action@v6
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - uses: docker/build-push-action@v6
         with:
           context: .
           file: services/cloud/Dockerfile
@@ -142,102 +64,49 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ env.VERSION }}
-          # BuildKit attestations: SLSA provenance and an SPDX SBOM stored next to the image in the registry.
-          provenance: mode=max
-          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-      - name: Sign the image (keyless, by digest) and verify it
-        env:
-          IMAGE: ${{ steps.plan.outputs.image }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          cosign sign --yes "${IMAGE}@${DIGEST}"
-          cosign verify "${IMAGE}@${DIGEST}" \
-            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com
-      # GitHub attestations need a public repository or a plan that includes them (variable ENABLE_ATTESTATIONS=true):
-      # the image is signed with cosign either way.
-      - name: GitHub provenance attestation (registry)
-        if: vars.ENABLE_ATTESTATIONS == 'true'
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: ${{ steps.plan.outputs.image }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
 
   chart:
     name: Helm chart
-    needs: meta
-    if: ${{ !cancelled() && needs.meta.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-      id-token: write
-    outputs:
-      chart: ${{ steps.push.outputs.chart }}
-    env:
-      VERSION: ${{ needs.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - name: Lint and render every values file
-        run: |
-          set -euo pipefail
-          helm lint deploy/helm/memobrain
-          for f in deploy/helm/memobrain/values-k3d.yaml deploy/helm/memobrain/ci/*.yaml; do
-            helm lint deploy/helm/memobrain -f "$f"
-            helm template ci deploy/helm/memobrain -f "$f" > /dev/null
-          done
-      # cosign reads the registry credentials from the Docker config, not from helm's.
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-      - name: Package, push and sign the chart
-        id: push
+      - name: Package and push the chart
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          registry=ghcr.io; owner="${GITHUB_REPOSITORY_OWNER,,}"
+          version="${GITHUB_REF_NAME#v}"; owner="${GITHUB_REPOSITORY_OWNER,,}"
           work="$(mktemp -d)"; cp -R deploy/helm/memobrain "$work/memobrain"
           # The repository default names the project's registry: point it at the image published by this run.
-          sed -i "s#ghcr.io/e2br/memobrain-cloud#${registry}/${owner}/memobrain-cloud#" "$work/memobrain/values.yaml"
-          helm package "$work/memobrain" --version "$VERSION" --app-version "$VERSION" -d "$work"
-          echo "$TOKEN" | helm registry login "$registry" -u "${GITHUB_ACTOR}" --password-stdin
-          out="$(helm push "$work/memobrain-${VERSION}.tgz" "oci://${registry}/${owner}/charts" 2>&1 | tee /dev/stderr)"
-          digest="$(sed -n 's/^Digest: //p' <<<"$out" | tail -n1)"
-          [[ -n "$digest" ]] || { echo "::error::cannot read the pushed chart digest"; exit 1; }
-          cosign sign --yes "${registry}/${owner}/charts/memobrain@${digest}"
-          echo "chart=oci://${registry}/${owner}/charts/memobrain:${VERSION}" >> "$GITHUB_OUTPUT"
+          sed -i "s#ghcr.io/e2br/memobrain-cloud#ghcr.io/${owner}/memobrain-cloud#" "$work/memobrain/values.yaml"
+          helm package "$work/memobrain" --version "$version" --app-version "$version" -d "$work"
+          echo "$TOKEN" | helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          helm push "$work/memobrain-${version}.tgz" "oci://ghcr.io/${owner}/charts"
 
-  build:
-    name: Build ${{ matrix.id }}
-    needs: meta
-    if: ${{ !cancelled() && needs.meta.result == 'success' }}
+  desktop:
+    name: Desktop ${{ matrix.id }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.meta.outputs.matrix) }}
+        include:
+          - { id: macos-universal, os_name: darwin, runner: macos-14, arch: universal }
+          - { id: windows-amd64, os_name: windows, runner: windows-2022, arch: amd64 }
+          - { id: windows-arm64, os_name: windows, runner: windows-2022, arch: arm64 }
+          - { id: linux-amd64, os_name: linux, runner: ubuntu-24.04, arch: amd64 }
     runs-on: ${{ matrix.runner }}
     env:
-      VERSION: ${{ needs.meta.outputs.version }}
       ARCH: ${{ matrix.arch }}
-      # Compiled into the binary (scripts/release/build-desktop.sh). Public by nature, so repository variables.
-      UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
-      UPDATE_BASE_URL: ${{ vars.UPDATE_BASE_URL }}
-      # Without the update key the updater is compiled out (ADR-0031): a build never trusts the development key.
-      ALLOW_UNSIGNED_UPDATES: ${{ needs.meta.outputs.updates == 'true' && '0' || '1' }}
+      ALLOW_UNSIGNED_UPDATES: '1'
     steps:
       - uses: actions/checkout@v4
+      - shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version-file: tools/go.mod
@@ -263,80 +132,24 @@ jobs:
         run: bash scripts/install-wails.sh "$WAILS_VERSION"
       - shell: bash
         run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
-      - name: Release mode (the build refuses the development update key unless the updater is compiled out)
-        shell: bash
-        run: echo "RELEASE_FLAG=--release" >> "$GITHUB_ENV"
 
-      # ---------------------------------------------------------------- macOS
-      - name: macOS build
-        if: matrix.os_name == 'darwin'
-        run: bash scripts/release/build-desktop.sh darwin "$VERSION" "$RELEASE_FLAG"
-      - name: macOS signing material
-        if: matrix.os_name == 'darwin' && needs.meta.outputs.apple == 'true'
-        env:
-          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-          APPLE_SIGNING_IDENTITY_S: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-        run: |
-          set -euo pipefail
-          kc="$RUNNER_TEMP/build.keychain-db"; pw="$(openssl rand -base64 24)"
-          security create-keychain -p "$pw" "$kc"; security set-keychain-settings -lut 21600 "$kc"
-          security unlock-keychain -p "$pw" "$kc"
-          echo "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc"
-          security list-keychains -d user -s "$kc" login.keychain
-          rm -f "$RUNNER_TEMP/cert.p12"
-          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY_S" >> "$GITHUB_ENV"
-          if [[ -n "$APPLE_API_KEY_P8_BASE64" ]]; then
-            echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
-            {
-              echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
-              echo "APPLE_API_KEY_ID=${{ secrets.APPLE_API_KEY_ID }}"
-              echo "APPLE_API_ISSUER=${{ secrets.APPLE_API_ISSUER }}"
-            } >> "$GITHUB_ENV"
-          fi
-      - name: macOS dmg (sign, notarise, staple when the secrets exist)
+      - name: macOS (.dmg)
         if: matrix.os_name == 'darwin'
         run: |
-          if [[ "${{ needs.meta.outputs.apple }}" == "true" ]]; then flag=--require-signing; else flag=""; echo "::warning::macOS dmg is UNSIGNED"; fi
-          bash scripts/release/package-macos.sh "$VERSION" $flag
+          bash scripts/release/build-desktop.sh darwin "$VERSION" --release
+          bash scripts/release/package-macos.sh "$VERSION"
 
-      # -------------------------------------------------------------- Windows
-      - name: Windows signing command
-        if: matrix.os_name == 'windows' && needs.meta.outputs.windows == 'true'
-        shell: bash
-        env:
-          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: |
-          set -euo pipefail
-          echo "$WINDOWS_CERT_PFX_BASE64" | base64 --decode > "$RUNNER_TEMP/codesign.pfx"
-          signtool="$(find "/c/Program Files (x86)/Windows Kits/10/bin" -name signtool.exe -path '*x64*' | sort | tail -n1)"
-          # build-desktop.sh signs memobrain.exe with this command, then NSIS signs the installer and uninstaller.
-          echo "MEMOBRAIN_SIGNTOOL_CMD=\"$signtool\" sign /fd SHA256 /td SHA256 /tr ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }} /f $RUNNER_TEMP/codesign.pfx /p $WINDOWS_CERT_PASSWORD \"%1\"" >> "$GITHUB_ENV"
-      - name: Windows build (NSIS installer)
+      - name: Windows (NSIS installer)
         if: matrix.os_name == 'windows'
         shell: bash
         run: |
           choco install nsis -y --no-progress
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
-          [[ "${{ needs.meta.outputs.windows }}" == "true" ]] || echo "::warning::Windows installer is UNSIGNED"
-          bash scripts/release/build-desktop.sh windows "$VERSION" "$RELEASE_FLAG"
+          bash scripts/release/build-desktop.sh windows "$VERSION" --release
           mkdir -p dist
           cp "apps/desktop/build/bin/memobrain-$ARCH-installer.exe" "dist/memobrain-$VERSION-windows-$ARCH.exe"
-      - name: Windows verify signature
-        if: matrix.os_name == 'windows' && needs.meta.outputs.windows == 'true'
-        shell: pwsh
-        run: |
-          foreach ($f in @("dist/memobrain-$env:VERSION-windows-$env:ARCH.exe", "apps/desktop/build/bin/memobrain.exe")) {
-            $sig = Get-AuthenticodeSignature $f
-            if ($sig.Status -ne 'Valid') { throw "$f signature status: $($sig.Status)" }
-          }
 
-      # ---------------------------------------------------------------- Linux
-      - name: Linux build and packages (.deb, AppImage)
+      - name: Linux (.deb, AppImage)
         if: matrix.os_name == 'linux'
         env:
           # appimagetool is itself an AppImage: run it extracted, so the runner needs no FUSE.
@@ -344,11 +157,9 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev desktop-file-utils
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${{ env.NFPM_VERSION }}
-          case "$ARCH" in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
-          sudo curl -fsSL -o /usr/local/bin/appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${ai}.AppImage"
+          sudo curl -fsSL -o /usr/local/bin/appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
           sudo chmod +x /usr/local/bin/appimagetool
-          export PATH="$PATH:$HOME/go/bin"
-          bash scripts/release/build-desktop.sh linux "$VERSION" "$RELEASE_FLAG"
+          bash scripts/release/build-desktop.sh linux "$VERSION" --release
           bash scripts/release/package-linux.sh all "$VERSION"
 
       - uses: actions/upload-artifact@v4
@@ -358,113 +169,37 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Checksums, update manifest, GitHub Release
-    needs: [meta, image, chart, build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && needs.image.result == 'success' && needs.chart.result == 'success' }}
+    name: GitHub Release
+    needs: [image, chart, desktop]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # the release
-      id-token: write # build provenance attestation
-      attestations: write
-    env:
-      VERSION: ${{ needs.meta.outputs.version }}
-      CHANNEL: ${{ needs.meta.outputs.channel }}
-      UNSIGNED: ${{ needs.meta.outputs.unsigned }}
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/go.mod
       - uses: actions/download-artifact@v4
         with:
           pattern: installers-*
           path: dist
           merge-multiple: true
-      - name: Checksums
-        working-directory: dist
-        run: sha256sum memobrain-* > SHA256SUMS && cat SHA256SUMS
-
-      - name: Release notes
-        env:
-          IMAGE: ${{ needs.image.outputs.image }}
-          DIGEST: ${{ needs.image.outputs.digest }}
-          CHART: ${{ needs.chart.outputs.chart }}
-        run: |
-          set -euo pipefail
-          prev="$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
-          bash scripts/release/notes.sh "$VERSION" "$prev" > dist/RELEASE_NOTES.md
-          {
-            if [[ -n "$IMAGE" ]]; then
-              echo; echo "## Cloud service"
-              echo; echo '```sh'
-              echo "docker pull ${IMAGE}:${VERSION}"
-              echo "# pinned: ${IMAGE}@${DIGEST}"
-              echo '```'
-              echo; echo "Helm chart: \`${CHART}\`. Images are signed with cosign (keyless); the GHCR package must be public to pull it anonymously."
-            fi
-            if [[ "$UNSIGNED" == true ]]; then
-              echo; echo "## Unsigned installers"
-              echo; echo "These installers are **not code-signed** yet: macOS Gatekeeper and Windows SmartScreen warn on first launch (right-click > Open on macOS, *More info > Run anyway* on Windows). Verify the download against \`SHA256SUMS\`."
-            fi
-          } >> dist/RELEASE_NOTES.md
-
-      - name: Update manifest (only with the update signing key; sequence = workflow run number)
-        if: needs.meta.outputs.updates == 'true'
-        env:
-          MEMOBRAIN_UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-          UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
-        run: |
-          set -euo pipefail
-          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}"
-          (cd tools/release && GOWORK=off go build -o ../../dist/release-tool .)
-          # Release workflow runs are monotonic, so the run number is a valid manifest sequence.
-          # Rule: never re-run an old tag after a newer one was published (docs/release/README.md).
-          dist/release-tool gen-manifest -channel "$CHANNEL" -version "$VERSION" -sequence "$GITHUB_RUN_NUMBER" \
-            -notes-file dist/RELEASE_NOTES.md -artifacts-dir dist -base-url "$base" -out dist/manifest.json
-          dist/release-tool sign-manifest -in dist/manifest.json
-          dist/release-tool verify-manifest -in dist/manifest.json -pubkey "$UPDATE_PUBLIC_KEY"
-          rm dist/release-tool
-      - name: No update manifest
-        if: needs.meta.outputs.updates != 'true'
-        run: echo "::notice::No update signing key, so the desktop builds have the updater compiled out and no manifest is published."
-
-      - name: SBOM (source tree)
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: dist/memobrain-${{ needs.meta.outputs.version }}-sbom.spdx.json
-          upload-artifact: false
-
-      # GitHub attestations need a public repository or a plan that includes them (variable ENABLE_ATTESTATIONS=true).
-      - name: Provenance attestation of the release files
-        if: vars.ENABLE_ATTESTATIONS == 'true'
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: |
-            dist/memobrain-*
-            dist/SHA256SUMS
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-files
-          path: dist/*
-          if-no-files-found: error
-
-      - name: GitHub Release
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-          AUTO_PUBLISH: ${{ vars.RELEASE_AUTO_PUBLISH }}
         run: |
           set -euo pipefail
-          flags=(--title "MemoBrain Notes ${VERSION}" --notes-file dist/RELEASE_NOTES.md)
-          # A human promotes the draft after the cross-OS checklist, unless RELEASE_AUTO_PUBLISH=true.
-          [[ "$AUTO_PUBLISH" == true ]] || flags+=(--draft)
-          # Unsigned installers are never presented as the latest stable release.
-          if [[ "$VERSION" == *-* || "$UNSIGNED" == true ]]; then flags+=(--prerelease); fi
-          files=(dist/memobrain-* dist/SHA256SUMS)
-          # The manifest is attached but only becomes the live update channel when copied to UPDATE_BASE_URL.
-          [[ -f dist/manifest.json ]] && files+=(dist/manifest.json dist/manifest.json.sig)
-          gh release create "v${VERSION}" "${flags[@]}" "${files[@]}"
+          version="${GITHUB_REF_NAME#v}"; owner="${GITHUB_REPOSITORY_OWNER,,}"
+          (cd dist && sha256sum memobrain-* > SHA256SUMS)
+          prev="$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          bash scripts/release/notes.sh "$version" "$prev" > notes.md
+          {
+            echo; echo "## Cloud service"
+            echo; echo '```sh'
+            echo "docker pull ghcr.io/${owner}/memobrain-cloud:${version}"
+            echo "helm install memobrain oci://ghcr.io/${owner}/charts/memobrain --version ${version}"
+            echo '```'
+            echo; echo "The desktop installers are not code-signed: macOS Gatekeeper and Windows SmartScreen warn on first launch. Verify the download against \`SHA256SUMS\`."
+          } >> notes.md
+          flags=(--title "MemoBrain Notes ${version}" --notes-file notes.md)
+          [[ "$version" == *-* ]] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" dist/memobrain-* dist/SHA256SUMS

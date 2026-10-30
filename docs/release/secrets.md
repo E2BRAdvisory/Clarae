@@ -1,6 +1,6 @@
 # Segreti e variabili della pipeline di rilascio
 
-Elenco completo di ciò che si può configurare nel repository GitHub (Settings, Secrets and variables, Actions) perché `release.yml` firmi. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
+Elenco completo di ciò che si può configurare nel repository GitHub (Settings, Secrets and variables, Actions) perché `release.yml` firmi. **Oggi `release.yml` non legge nessuno di questi segreti né variabili**: costruisce e pubblica senza firmare (vedi `README.md`). Il documento resta come riferimento se la firma viene reintrodotta. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
 
 **Nessun segreto è obbligatorio** (ADR-0031): senza certificati la pipeline produce un canale **non firmato** (installer senza firma, updater disattivato, release segnata come prerelease con la nota "unsigned"). Per tornare al comportamento rigido, in cui un segreto mancante su un tag fa fallire la pipeline, impostare la variabile `REQUIRE_SIGNING=true`. La firma si attiva da sola quando i segreti compaiono: non serve toccare i workflow.
 

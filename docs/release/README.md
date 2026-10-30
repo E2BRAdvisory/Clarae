@@ -1,19 +1,15 @@
 # Processo di rilascio
 
-Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline e canale non firmato: ADR-0031. **Stato**: le pipeline GitHub (`ci.yml`, `release.yml`) sono scritte e validate con `actionlint` ma **non sono mai state eseguite su GitHub**; firma, notarizzazione, cosign, la build Windows arm64 e Linux arm64 e la pubblicazione sono configurate e non verificate. Il primo giro reale è un dry run e poi il release candidate (RC).
+Dettagli tecnici e scelte: ADR-0023 e ADR-0031. L'unico workflow GitHub è `release.yml`: costruisce e pubblica, **non firma nulla** e non esegue lint né test. Le verifiche si fanno in locale con `task ci` prima del tag.
 
-## Versioni e canali
+## Versioni
 
-- Versioni semver: `MAJOR.MINOR.PATCH`, con pre-release `-rc.N` / `-beta.N`. Il tag git è `vX.Y.Z[-pre]` ed è l'unica fonte della versione: finisce nel binario (`-X main.Version`, schermata About), nell'`Info.plist`, nelle risorse versione Windows, nell'immagine OCI e nel chart Helm.
-- Canali di aggiornamento del desktop: **stable** (tag senza pre-release) e **beta** (tag con `-`). Ogni canale ha il suo manifest firmato (`<base>/stable/manifest.json`, `<base>/beta/manifest.json`).
-- Un client su `stable` non vede mai una pre-release; uno su `beta` vede sia le RC sia le stable più recenti (il manifest beta è quello dell'ultimo tag di qualsiasi tipo).
+Versioni semver: `MAJOR.MINOR.PATCH`, con pre-release `-rc.N` / `-beta.N`. Il tag git è `vX.Y.Z[-pre]` ed è l'unica fonte della versione: finisce nel binario (`-X main.Version`, schermata About), nell'`Info.plist`, nelle risorse versione Windows, nell'immagine OCI e nel chart Helm.
 
 ## Prima di tagliare
 
-1. `main` verde in CI (`task ci`), checklist cross-OS aggiornata (`docs/qa/`).
-2. Variabili e segreti configurati (`secrets.md`), **se si vuole firmare**: senza, il rilascio esce non firmato (prerelease). Se ci sono, `UPDATE_PUBLIC_KEY` corrisponde alla chiave privata in `UPDATE_SIGNING_KEY` (provare con `bin/release`).
-3. Il rilascio parte **solo da un tag**: non c'è un dry run. Per provare la pipeline si usa un tag di pre-release (`v1.2.0-rc.1`), che produce una release in bozza marcata prerelease.
-4. Note di rilascio: sezione `## X.Y.Z` in `CHANGELOG.md` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
+1. `task ci` verde in locale, checklist cross-OS aggiornata (`docs/qa/`).
+2. Note di rilascio: sezione `## [X.Y.Z]` in `CHANGELOG.md` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
 
 ## Tagliare un rilascio
 
@@ -21,42 +17,22 @@ Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline
 git tag -a v1.0.0 -m "MemoBrain Notes 1.0.0" && git push origin v1.0.0     # azione dell'utente: gli agenti non fanno tag/push
 ```
 
-Il push del tag avvia **un solo workflow**, `release.yml`, che nell'ordine:
+Il push del tag avvia `release.yml`, che:
 
-1. costruisce e pubblica l'**immagine cloud** multi-arch su GHCR (job `image` di `release.yml`, cross-compilata, firma cosign keyless, SBOM e provenienza BuildKit) e il chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/memobrain`);
-2. costruisce gli installer: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage) e, con la variabile `LINUX_ARM64_RUNNER`, Linux arm64;
-3. crea **una** GitHub Release con installer, `SHA256SUMS`, SBOM, attestazione di provenienza, riferimento all'immagine (con digest) e al chart, e (solo con le chiavi) il manifest di aggiornamento firmato. È una **bozza**, a meno di `RELEASE_AUTO_PUBLISH=true`, e una **prerelease** se la versione ha un suffisso o gli installer non sono firmati.
+1. costruisce e pubblica su GHCR l'**immagine cloud** multi-arch (`ghcr.io/<owner>/memobrain-cloud:X.Y.Z`, più `X.Y` sulle versioni stabili) e il **chart Helm** come artefatto OCI (`oci://ghcr.io/<owner>/charts/memobrain`);
+2. costruisce gli **installer desktop**: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage);
+3. crea e pubblica **una** GitHub Release con gli installer e `SHA256SUMS`, marcata **prerelease** se la versione ha un suffisso.
 
-`ci.yml` esegue solo le verifiche (lint, tipi e test) a ogni commit: **non costruisce né pubblica nulla**. Installer, immagine e chart escono solo da `release.yml`, su un tag.
-
-Poi, a mano:
-
-1. Scaricare gli artefatti della bozza e **verificarli** (sotto), eseguire la checklist cross-OS su macchine pulite (installazione, apertura `memobrain://`, login, update dalla versione precedente).
-2. Pubblicare la Release (toglie lo stato di bozza).
-3. **Rendere pubblici i pacchetti GHCR** (immagine e chart: la prima volta sono privati; Package settings, Change visibility) se non devono richiedere un login.
-4. **Attivare il canale di aggiornamento** (solo con le chiavi di aggiornamento; senza, l'updater è disattivato nei binari e non c'è nessun manifest): copiare `manifest.json` e `manifest.json.sig` nella cartella del canale (`stable/` o `beta/` sotto `UPDATE_BASE_URL`). Finché non lo si fa, nessun client riceve l'aggiornamento: è il passaggio di "go live" e va fatto per ultimo. Gli URL degli artefatti nel manifest puntano agli asset della Release.
-
-Regola sul `sequence` del manifest: è il numero di run del workflow, quindi cresce a ogni rilascio. **Non rieseguire il workflow di un tag vecchio dopo averne pubblicato uno più nuovo**: produrrebbe un manifest con sequence maggiore e versione minore, che i client rifiutano (revoca a monte) ma che sporcherebbe il canale.
+Gli installer non sono firmati (Gatekeeper e SmartScreen avvisano al primo avvio) e l'updater è compilato fuori dai binari (`ALLOW_UNSIGNED_UPDATES=1`): nessun manifest di aggiornamento. La prima volta i pacchetti GHCR sono privati: renderli pubblici (Package settings, Change visibility) se non devono richiedere un login.
 
 ## Release candidate
 
-Tag `v1.0.0-rc.1`: il workflow lo tratta come pre-release (canale beta, Release marcata `prerelease`). Si promuove a stable solo con un nuovo tag `v1.0.0` costruito da zero (mai rinominare un RC: il binario porta la versione del tag).
+Tag `v1.0.0-rc.1`: Release marcata `prerelease`, immagine senza il tag `X.Y`. Si promuove a stable solo con un nuovo tag `v1.0.0` costruito da zero (mai rinominare un RC: il binario porta la versione del tag).
 
 ## Verificare gli artefatti
 
 ```sh
 sha256sum -c SHA256SUMS
-# manifest di aggiornamento
-bin/release verify-manifest -in manifest.json -pubkey "$UPDATE_PUBLIC_KEY"
-# immagine OCI
-cosign verify ghcr.io/e2br/memobrain-cloud:1.0.0 \
-  --certificate-identity-regexp '^https://github.com/E2BR/MemoBrain/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-# attestazione di provenienza dei file
-gh attestation verify memobrain-1.0.0-linux-amd64.deb --repo E2BR/MemoBrain
-# macOS
-spctl --assess --type open --context context:primary-signature -v memobrain-1.0.0-darwin-universal.dmg
-xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
 ```
 
 ## Build locali (senza segreti)
@@ -67,6 +43,8 @@ xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
 - Icone: generate da `assets/logo.png` con `scripts/brand/gen-brand-assets.py` (vedi `assets/brand/README.md`). Wails ricava `iconfile.icns` da `apps/desktop/build/appicon.png` e usa `build/windows/icon.ico` così com'è; il pacchetto Linux prende `build/linux/memobrain.{png,svg}`.
 
 ## Ruotare la chiave di aggiornamento
+
+> Vale solo se la pipeline torna a firmare il manifest di aggiornamento: oggi `release.yml` non lo pubblica.
 
 La chiave pubblica è compilata nei client: una rotazione richiede che i client già installati si fidino della nuova chiave **prima** che la vecchia sia ritirata.
 
