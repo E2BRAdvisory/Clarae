@@ -30,6 +30,7 @@ apps/desktop/build/bin/
 .DS_Store
 Thumbs.db
 .idea/
+.delta/
 .vscode/*
 !.vscode/extensions.json
 
