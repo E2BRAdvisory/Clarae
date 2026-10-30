@@ -1,10 +1,10 @@
 # ADR-0028 — Excalidraw: fork del plugin Obsidian (lazo, secchiello, disegna per la forma)
 
-|                       |                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                         |
-| **Data**              | 2026-10-29                                                                       |
-| **Riferimenti spec**  | ADR-0003, ADR-0024 (limiti noti: Scribble Helper), ADR-0025 (build esbuild)      |
+|                       |                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| **Stato**             | proposta                                                                           |
+| **Data**              | 2026-10-29                                                                         |
+| **Riferimenti spec**  | ADR-0003, ADR-0024 (limiti noti: Scribble Helper), ADR-0025 (build esbuild)        |
 | **Devia dallo spec?** | sì: dipendenza `@zsviczian/excalidraw` al posto di `@excalidraw/excalidraw` 0.18.1 |
 
 ## Contesto

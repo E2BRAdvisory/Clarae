@@ -6,26 +6,26 @@ Elenco completo di ciò che si può configurare nel repository GitHub (Settings,
 
 ## Cosa succede con o senza ciascun segreto
 
-| Manca                                                            | Effetto (`REQUIRE_SIGNING` non impostata)                                                                                      | Con `REQUIRE_SIGNING=true` su un tag |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| `APPLE_CERT_P12_BASE64` o `APPLE_SIGNING_IDENTITY`               | `.dmg` non firmato né notarizzato: Gatekeeper avvisa (tasto destro, Apri).                                                      | La pipeline fallisce in `meta`.      |
-| `APPLE_API_KEY_*`                                                | `.dmg` firmato ma non notarizzato (se il resto c'è).                                                                            | Come sopra.                          |
-| `WINDOWS_CERT_PFX_BASE64`                                        | `memobrain.exe` e installer non firmati: SmartScreen avvisa (Ulteriori informazioni, Esegui comunque).                          | La pipeline fallisce in `meta`.      |
-| `UPDATE_SIGNING_KEY` o variabile `UPDATE_PUBLIC_KEY`             | Il desktop è compilato con l'updater **disattivato** (`updater.DisabledByBuild`) e non si pubblica nessun manifest.            | La pipeline fallisce in `meta`.      |
-| nessuno dei precedenti                                           | Release in prerelease "unsigned", bozza (vedi `RELEASE_AUTO_PUBLISH`). Le immagini Docker restano firmate (cosign è keyless).  | La pipeline fallisce in `meta`.      |
+| Manca                                                | Effetto (`REQUIRE_SIGNING` non impostata)                                                                                     | Con `REQUIRE_SIGNING=true` su un tag |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `APPLE_CERT_P12_BASE64` o `APPLE_SIGNING_IDENTITY`   | `.dmg` non firmato né notarizzato: Gatekeeper avvisa (tasto destro, Apri).                                                    | La pipeline fallisce in `meta`.      |
+| `APPLE_API_KEY_*`                                    | `.dmg` firmato ma non notarizzato (se il resto c'è).                                                                          | Come sopra.                          |
+| `WINDOWS_CERT_PFX_BASE64`                            | `memobrain.exe` e installer non firmati: SmartScreen avvisa (Ulteriori informazioni, Esegui comunque).                        | La pipeline fallisce in `meta`.      |
+| `UPDATE_SIGNING_KEY` o variabile `UPDATE_PUBLIC_KEY` | Il desktop è compilato con l'updater **disattivato** (`updater.DisabledByBuild`) e non si pubblica nessun manifest.           | La pipeline fallisce in `meta`.      |
+| nessuno dei precedenti                               | Release in prerelease "unsigned", bozza (vedi `RELEASE_AUTO_PUBLISH`). Le immagini Docker restano firmate (cosign è keyless). | La pipeline fallisce in `meta`.      |
 
 Un `dry run` (`workflow_dispatch`) non firma con i segreti reali a meno di `use_secrets=true`, non pubblica immagini e non crea la release.
 
 ## Variabili (pubbliche, tab Variables)
 
-| Nome                    | Uso                                                                                                                                                                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nome                    | Uso                                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UPDATE_PUBLIC_KEY`     | Chiave pubblica ed25519 (base64) che i client usano per verificare il manifest di aggiornamento; compilata nel binario con ldflags. Senza di essa l'updater è disattivato nella build: `build-desktop.sh --release` non compila mai con la chiave di sviluppo. |
-| `UPDATE_BASE_URL`       | URL pubblico del canale di aggiornamento (contiene `stable/manifest.json` e `beta/manifest.json`, con i `.sig`). Serve solo con l'updater attivo.                                                                                           |
-| `REQUIRE_SIGNING`       | (opzionale) `true`: un tag senza tutti i segreti di firma fallisce. Default: canale non firmato.                                                                                                                                            |
-| `RELEASE_AUTO_PUBLISH`  | (opzionale) `true`: la release è pubblicata subito. Default: bozza, che una persona promuove dopo la checklist su tre sistemi.                                                                                                              |
-| `LINUX_ARM64_RUNNER`    | (opzionale) etichetta di un runner arm64, es. `ubuntu-24.04-arm` (gratuito nei repository pubblici). Senza, nessun installer Linux arm64.                                                                                                   |
-| `WINDOWS_TIMESTAMP_URL` | (opzionale) server RFC 3161, default `http://timestamp.digicert.com`.                                                                                                                                                                     |
+| `UPDATE_BASE_URL`       | URL pubblico del canale di aggiornamento (contiene `stable/manifest.json` e `beta/manifest.json`, con i `.sig`). Serve solo con l'updater attivo.                                                                                                              |
+| `REQUIRE_SIGNING`       | (opzionale) `true`: un tag senza tutti i segreti di firma fallisce. Default: canale non firmato.                                                                                                                                                               |
+| `RELEASE_AUTO_PUBLISH`  | (opzionale) `true`: la release è pubblicata subito. Default: bozza, che una persona promuove dopo la checklist su tre sistemi.                                                                                                                                 |
+| `LINUX_ARM64_RUNNER`    | (opzionale) etichetta di un runner arm64, es. `ubuntu-24.04-arm` (gratuito nei repository pubblici). Senza, nessun installer Linux arm64.                                                                                                                      |
+| `WINDOWS_TIMESTAMP_URL` | (opzionale) server RFC 3161, default `http://timestamp.digicert.com`.                                                                                                                                                                                          |
 
 ## Segreti (tab Secrets)
 

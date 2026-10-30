@@ -2,7 +2,7 @@
 
 |                       |                                                                                                                                              |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | implementata; installer provati da un dry run su GitHub, **immagine Docker e firme non verificate** (vedi "Verificato e non")              |
+| **Stato**             | implementata; installer provati da un dry run su GitHub, **immagine Docker e firme non verificate** (vedi "Verificato e non")                |
 | **Data**              | 2026-10-29                                                                                                                                   |
 | **Riferimenti spec**  | §4 (supply chain, release policy: macOS firmato e notarizzato, Authenticode, immagine OCI immutabile), M7; ADR-0001, ADR-0006, ADR-0023      |
 | **Devia dallo spec?** | sì, temporaneamente: rilasci desktop non firmati finché mancano i certificati → richiede una nota in `Specifications.md` da parte dell'owner |

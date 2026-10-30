@@ -26,12 +26,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --immutable
+      # The Web UI embeds the vault workbench: it is typed against the generated Wails bindings and loads the core as WebAssembly.
+      - run: make packages/workbench/wailsjs/go/models.ts
+      - run: make wasm-core
       - run: yarn workspace @memobrain/desktop-frontend exec playwright install --with-deps chromium
       - name: Web UI (every route and dialog, light and dark; keyboard flows)
         run: yarn workspace @memobrain/web run e2e a11y keyboard

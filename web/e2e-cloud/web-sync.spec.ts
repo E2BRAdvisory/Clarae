@@ -11,7 +11,7 @@ const bind = <T>(page: Page, service: string, method: string, ...args: unknown[]
   page.evaluate(
     async ({ service, method, args }) => {
       const app = (window as unknown as { go: { app: Bindings } }).go.app;
-      return (await app[service]![method]!(...args));
+      return await app[service]![method]!(...args);
     },
     { service, method, args },
   ) as Promise<T>;
