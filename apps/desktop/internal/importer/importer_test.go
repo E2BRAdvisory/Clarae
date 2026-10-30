@@ -551,6 +551,55 @@ func checkKeep(t *testing.T, path string) {
 func TestKeepFolder(t *testing.T) { checkKeep(t, "testdata/keep") }
 func TestKeepZip(t *testing.T)    { checkKeep(t, zipDir(t, "testdata/keep")) }
 
+// An export with the HTML pages only (older Takeout, or the JSON left out).
+func checkKeepHTML(t *testing.T, path string) {
+	fsys, root := newVault(t)
+	o := baseOpts(fsys)
+	rep := doImport(t, "google-keep", path, o)
+	fl := files(t, root)
+	if len(rep.Skipped) != 1 || rep.NotesCreated != 1 {
+		t.Errorf("the archived note is skipped, the index page ignored: %+v (notes %d)", rep.Skipped, rep.NotesCreated)
+	}
+	s := fl["Imp/Shopping list.md"]
+	mustContain(t, "shopping", s,
+		"For **Saturday**", "[the shop](https://shop.example/list)", // the content keeps its formatting
+		"- [x] Bread", "- [ ] Cheese", "![[pic.jpg]]", "[Recipe](https://example.org/recipe)",
+		"tags: [home]", "pinned: true", "color: blue",
+		// The page shows the time of the exporting machine, read as local time and stored in UTC.
+		"updated: "+isoTime(time.Date(2024, 3, 5, 9, 30, 0, 0, time.Local)))
+	mustNotContain(t, "shopping", s, "javascript", "alert", "<script", "color:red")
+	if _, ok := fl["Imp/attachments/pic.jpg"]; !ok {
+		t.Errorf("picture missing: %v", keys(fl))
+	}
+
+	fsys2, root2 := newVault(t)
+	o = baseOpts(fsys2)
+	o.IncludeArchived = true
+	doImport(t, "google-keep", path, o)
+	fl = files(t, root2)
+	mustContain(t, "archived", fl["Imp/Something old.md"], "Something old", "archived: true",
+		"updated: "+isoTime(time.Date(2024, 1, 4, 10, 0, 0, 0, time.Local)))
+}
+
+func TestKeepHTMLFolder(t *testing.T) { checkKeepHTML(t, "testdata/keep-html") }
+func TestKeepHTMLZip(t *testing.T)    { checkKeepHTML(t, zipDir(t, "testdata/keep-html")) }
+
+func TestKeepHTMLDate(t *testing.T) {
+	for in, want := range map[string]string{
+		"Mar 5, 2024, 9:30:00\u202fAM": "2024-03-05 09:30:00",
+		" Jan 4, 2024, 1:02:03 PM \n":  "2024-01-04 13:02:03",
+		"4 Jan 2024, 10:00:00":         "2024-01-04 10:00:00",
+	} {
+		us := keepHTMLDate(in)
+		if got := time.UnixMicro(us).In(time.Local).Format("2006-01-02 15:04:05"); us == 0 || got != want {
+			t.Errorf("keepHTMLDate(%q) = %s, want %s", in, got, want)
+		}
+	}
+	if keepHTMLDate("yesterday") != 0 {
+		t.Error("an unreadable date must give 0")
+	}
+}
+
 // ---- CSV ----
 
 func TestCSV(t *testing.T) {
@@ -647,6 +696,7 @@ func TestDetect(t *testing.T) {
 		"testdata/roam/export.json": "roam",
 		"testdata/csv/books.csv":    "csv",
 		"testdata/keep":             "google-keep",
+		"testdata/keep-html":        "google-keep",
 		"testdata/bear":             "bear",
 		"testdata/notion/Export-1":  "notion",
 		"testdata/mdfolder":         "markdown-folder",

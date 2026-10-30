@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -61,7 +62,8 @@ func detectKeep(p string) (bool, error) {
 	defer func() { _ = t.Close() }()
 	checked := 0
 	for _, f := range t.Files() {
-		if !strings.EqualFold(path.Ext(f.Path), ".json") {
+		ext := strings.ToLower(path.Ext(f.Path))
+		if ext != ".json" && ext != ".html" {
 			continue
 		}
 		if path.Base(path.Dir(f.Path)) == "Keep" {
@@ -77,7 +79,7 @@ func detectKeep(p string) (bool, error) {
 		head := make([]byte, 16<<10)
 		n, _ := rc.Read(head)
 		_ = rc.Close()
-		if looksLikeKeep(head[:n]) {
+		if looksLikeKeep(head[:n]) || looksLikeKeepHTML(head[:n]) {
 			return true, nil
 		}
 	}
@@ -94,14 +96,21 @@ func execKeep(r *run, p string) error {
 		r.warn("Ignored %s", rj)
 	}
 	byDir := map[string][]string{}
-	var jsons []string
+	var jsons, htmls []string
+	stems := map[string]bool{}
 	for _, f := range tree.Files() {
 		byDir[path.Dir(f.Path)] = append(byDir[path.Dir(f.Path)], f.Path)
-		if strings.EqualFold(path.Ext(f.Path), ".json") {
+		switch strings.ToLower(path.Ext(f.Path)) {
+		case ".json":
 			jsons = append(jsons, f.Path)
+			stems[strings.TrimSuffix(f.Path, path.Ext(f.Path))] = true
+		case ".html":
+			htmls = append(htmls, f.Path)
 		}
 	}
-	r.setTotal(len(jsons))
+	// A note exported in both formats is read from its JSON, which carries more (creation date).
+	htmls = slices.DeleteFunc(htmls, func(h string) bool { return stems[strings.TrimSuffix(h, path.Ext(h))] })
+	r.setTotal(len(jsons) + len(htmls))
 	notes := 0
 	for _, jp := range jsons {
 		if err := r.step(jp); err != nil {
@@ -130,6 +139,30 @@ func execKeep(r *run, p string) error {
 		}
 		notes++
 		importKeepNote(r, tree, byDir, jp, &kn)
+	}
+	for _, hp := range htmls {
+		if err := r.step(hp); err != nil {
+			return err
+		}
+		data, err := readAll(tree, hp)
+		if err != nil {
+			r.fail("note", hp, "", err)
+			continue
+		}
+		kn, ok := parseKeepHTML(data)
+		if !ok {
+			continue // not a note (the index page of an export, …)
+		}
+		if kn.IsTrashed && !r.opts.IncludeTrashed {
+			r.skip("note", hp, "trashed note")
+			continue
+		}
+		if kn.IsArchived && !r.opts.IncludeArchived {
+			r.skip("note", hp, "archived note")
+			continue
+		}
+		notes++
+		importKeepNote(r, tree, byDir, hp, &kn)
 	}
 	if notes == 0 && len(r.rep.Skipped) == 0 && len(r.rep.Failed) == 0 {
 		return fmt.Errorf("invalid: no Google Keep notes found")
