@@ -2,7 +2,7 @@
 
 |                       |                                                                                                                                              |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | implementata (scritta e validata con `actionlint`, build Docker multi-arch provata in locale; **mai eseguita su GitHub**, vedi sotto)       |
+| **Stato**             | implementata; installer provati da un dry run su GitHub, **immagine Docker e firme non verificate** (vedi "Verificato e non")              |
 | **Data**              | 2026-10-29                                                                                                                                   |
 | **Riferimenti spec**  | §4 (supply chain, release policy: macOS firmato e notarizzato, Authenticode, immagine OCI immutabile), M7; ADR-0001, ADR-0006, ADR-0023      |
 | **Devia dallo spec?** | sì, temporaneamente: rilasci desktop non firmati finché mancano i certificati → richiede una nota in `Specifications.md` da parte dell'owner |
@@ -71,9 +71,22 @@
 
 ## Verificato e non
 
-- **Verificato qui**: `actionlint` pulito sui workflow toccati; `bash -n` degli script; installer NSIS arm64 costruito con `makensis` da macOS con template reso, exe finto e firma simulata (`!finalize` ha chiamato il comando su installer e uninstaller); `helm lint`; `docker buildx build --platform linux/amd64,linux/arm64` del Dockerfile modificato (nativo, senza QEMU) dalla copia di lavoro.
-- **Non verificato**: **nessuna esecuzione reale dei workflow** (`gh` non è autenticato qui); build Windows arm64 e il flusso di firma di `memobrain.exe` su un runner Windows; Linux arm64; `.deb` e AppImage; firma e notarizzazione Apple; cosign, attestazioni, push su GHCR e visibilità del package; reusable workflow con `permissions` e `outputs`; la cache della CLI Wails. La build Docker è stata provata dalla copia di lavoro, non da un clone pulito: il lavoro di M9 non è ancora in un commit.
-- **Da fornire dall'owner**: certificati di firma, icone definitive, `LINUX_ARM64_RUNNER`, rendere pubblici i package GHCR.
+- **Verificato su GitHub (dry run `workflow_dispatch` dal branch `m10-release-dryrun`, versione `0.0.0-dryrun.3`, senza segreti, senza CI, senza immagini):** `meta`, build di macOS universale, Windows amd64, Windows arm64 (cross-compilato), Linux amd64 (`.deb` e AppImage), job `release` (checksum, SBOM) e raccolta degli artefatti. Il run completo è verde in circa 6 minuti, e produce installer da 62 MB (Linux), 65 MB (macOS), 33 MB (Windows amd64) e 32 MB (Windows arm64). Gli installer sono **non firmati**, come previsto.
+- **Difetti trovati dai dry run e corretti:**
+  1. Windows: `corepack enable` prima di `setup-node` perdeva lo shim di Yarn 4 (corretto anche nel job `desktop-build` di `ci.yml`).
+  2. Linux: `nfpm` non espande `${STAGE}` nei percorsi dei file (ora reso da `package-linux.sh`).
+  3. Linux: `appimagetool` richiede `desktop-file-utils`.
+  4. (Prima dei dry run) `ci.yml` aveva un nome di job con `:` non quotato, e `MEMOBRAIN_SIGNTOOL_CMD` non impostata arrivava a NSIS come testo letterale.
+- **Verificato in locale:** `actionlint`, `bash -n`, installer NSIS arm64 con `makensis` da macOS (template reso, exe finto, firma simulata), `helm lint`.
+- **Non verificato:**
+  - **L'immagine Docker**: nel dry run il job `images` è saltato per costruzione, e la build locale `docker buildx build --platform linux/amd64,linux/arm64` è fallita due volte per la rete di Docker (`unexpected EOF` da `sum.golang.org`, `ERR_SOCKET_CLOSED_BEFORE_CONNECTION` da yarn), non per il Dockerfile, ma resta senza esito. Va provata da GitHub (push su `main`, che pubblica `edge`, oppure un tag).
+  - Il gate `ci.yml` richiamato da `release.yml` (saltato nel dry run) e `ci.yml` stesso dopo le modifiche.
+  - Linux arm64 (senza `LINUX_ARM64_RUNNER` non entra nella matrice; il repository è privato).
+  - Firma Authenticode e Apple, notarizzazione, firma di `memobrain.exe`, manifest di aggiornamento firmato.
+  - Cosign, attestazioni, push su GHCR, visibilità dei package, chart OCI, i `permissions` e gli `outputs` del reusable workflow.
+  - Che gli installer **si avviino** su Windows, macOS e Linux (nessuno è stato eseguito).
+  - La creazione della GitHub Release (nel dry run non si crea).
+- **Da fornire dall'owner:** certificati di firma, icone definitive, `LINUX_ARM64_RUNNER`, rendere pubblici i package GHCR.
 
 ## Proposta di modifica dello spec
 

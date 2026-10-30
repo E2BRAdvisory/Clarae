@@ -615,7 +615,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ## 13-ter. M10 — Pipeline di rilascio (esito: installer e immagini pubblicati da CI)
 
-> **Stato (2026-10-29):** WP1-WP3 implementati (ADR-0031); **WP4 solo in parte**: `actionlint`, build Docker multi-arch e prove locali dell'installer Windows sono fatti, **nessuna esecuzione su GitHub** (serve `gh auth` dell'owner), quindi i criteri di uscita **non sono soddisfatti**. Mancano i certificati di firma: il canale non firmato è attivo, e la firma si accende quando arrivano i segreti. Dettaglio di cosa è verificato e no in ADR-0031.
+> **Stato (2026-10-29):** WP1-WP3 implementati (ADR-0031); **WP4 solo in parte**: un dry run su GitHub (`0.0.0-dryrun.3`) costruisce gli installer macOS, Windows amd64 e arm64 e Linux amd64 e ha trovato tre difetti, corretti. **Non verificati**: immagine Docker (la build locale è caduta per la rete, il dry run non la include), gate CI nel release, Linux arm64, firme, GHCR, tag RC e avvio degli installer: i criteri di uscita **non sono soddisfatti**. Mancano i certificati di firma: il canale non firmato è attivo, e la firma si accende quando arrivano i segreti. Dettaglio di cosa è verificato e no in ADR-0031.
 
 ### M10-WP1 Correzioni bloccanti
 
