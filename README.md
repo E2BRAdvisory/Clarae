@@ -55,18 +55,19 @@ Procedura completa, segreti, configurazione e verifica nella [guida di amministr
 | Strumento | Versione       | Note                                                                                             |
 | --------- | -------------- | ------------------------------------------------------------------------------------------------ |
 | Go        | 1.27.x         | con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato se manca                           |
-| Wails CLI | v2.12.x        | `make wails-cli`; `wails doctor` deve risultare "ready" (Xcode CLT, WebView2 o `webkit2gtk-4.1`) |
+| Wails CLI | v2.12.x        | `task wails-cli`; `wails doctor` deve risultare "ready" (Xcode CLT, WebView2 o `webkit2gtk-4.1`) |
 | Node      | 24 LTS         | vedi `.nvmrc`                                                                                    |
 | Yarn      | 4.18.1         | `corepack enable` (versione bloccata da `packageManager`; npm e pnpm sono bloccati)              |
 | Docker    | con Compose v2 | solo per lo stack del cloud (PostgreSQL, RustFS, Keycloak)                                       |
+| Task      | v3.54.x        | `cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task` (versione pinnata)       |
 
 ### Preparazione
 
 ```sh
 git clone git@github.com:E2BR/MemoBrain.git && cd MemoBrain
 corepack enable
-make tools   # tool Go pinnati (golangci-lint, buf, sqlc, oapi-codegen, …) + yarn install
-make gen     # codice generato: OpenAPI → Go/TS, proto, sqlc, binding Wails
+task tools   # tool Go pinnati (golangci-lint, buf, sqlc, oapi-codegen, …) + yarn install
+task gen     # codice generato: OpenAPI → Go/TS, proto, sqlc, binding Wails
 ```
 
 Il repository è un monorepo: `go.work` unisce i moduli Go (`shared/go`, `services/cloud`, `apps/desktop`),
@@ -75,30 +76,30 @@ i pacchetti TypeScript sono un workspace Yarn (`packages/*`, `web`).
 ### Avvio
 
 ```sh
-make run-desktop        # app desktop standalone (senza cloud né Docker) con un vault demo
+task run-desktop        # app desktop standalone (senza cloud né Docker) con un vault demo
 ```
 
 Con il cloud:
 
 ```sh
-make stack-up           # PostgreSQL :5433, RustFS (S3) :9000, Keycloak :8080 (admin/admin)
-make dev-cloud          # cloud su http://127.0.0.1:18081 (Web UI e API)
-make dev-desktop        # app desktop con hot reload del frontend
+task stack-up           # PostgreSQL :5433, RustFS (S3) :9000, Keycloak :8080 (admin/admin)
+task dev-cloud          # cloud su http://127.0.0.1:18081 (Web UI e API)
+task dev-desktop        # app desktop con hot reload del frontend
 ```
 
-In alternativa `make run-desktop-cloud` avvia stack, cloud e desktop insieme (`make run-desktop-2devices`
-simula due dispositivi); `make dev-stop` ferma tutto. Utenti di prova: `admin`, `user1`, `user2`, password
+In alternativa `task run-desktop-cloud` avvia stack, cloud e desktop insieme (`task run-desktop-2devices`
+simula due dispositivi); `task dev-stop` ferma tutto. Utenti di prova: `admin`, `user1`, `user2`, password
 `memobrain-dev-password`.
 
 ### Verifiche
 
 ```sh
-make lint               # golangci-lint, eslint, prettier
-make test               # go test -race, vitest, fixture di conformance Go/TS
-make e2e                # Playwright (Chromium) su UI desktop e Web UI
-make test-integration   # cloud con testcontainers (PostgreSQL, MinIO, Keycloak)
-make ci                 # tutto ciò che esegue la CI
-make help               # elenco completo dei target
+task lint               # golangci-lint, eslint, prettier
+task test               # go test -race, vitest, fixture di conformance Go/TS
+task e2e                # Playwright (Chromium) su UI desktop e Web UI
+task test-integration   # cloud con testcontainers (PostgreSQL, MinIO, Keycloak)
+task ci                 # tutto ciò che esegue la CI
+task --list             # elenco completo dei task
 ```
 
 Altri dettagli (script di debug, test singoli, struttura) in [docs/dev-setup.md](docs/dev-setup.md);

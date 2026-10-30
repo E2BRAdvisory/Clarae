@@ -10,7 +10,7 @@ Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline
 
 ## Prima di tagliare
 
-1. `main` verde in CI (`make ci`), checklist cross-OS aggiornata (`docs/qa/`).
+1. `main` verde in CI (`task ci`), checklist cross-OS aggiornata (`docs/qa/`).
 2. Variabili e segreti configurati (`secrets.md`), **se si vuole firmare**: senza, il rilascio esce non firmato (prerelease). Se ci sono, `UPDATE_PUBLIC_KEY` corrisponde alla chiave privata in `UPDATE_SIGNING_KEY` (provare con `bin/release`).
 3. Il rilascio parte **solo da un tag**: non c'è un dry run. Per provare la pipeline si usa un tag di pre-release (`v1.2.0-rc.1`), che produce una release in bozza marcata prerelease.
 4. Note di rilascio: sezione `## X.Y.Z` in `CHANGELOG.md` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
@@ -61,8 +61,8 @@ xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
 
 ## Build locali (senza segreti)
 
-- `make release-desktop OS=darwin V=1.0.0-rc.1` (poi `scripts/release/package-macos.sh 1.0.0-rc.1`): `.app` universale e `.dmg` **non firmato**. Funziona su macOS; `OS=windows` (`ARCH=amd64|arm64`) produce l'installer NSIS anche da macOS con `makensis` installato (non firmato, non provato su Windows). Lo script firma `memobrain.exe` prima di impacchettarlo quando `MEMOBRAIN_SIGNTOOL_CMD` è impostata, ed esegue `makensis` direttamente (il template `wails_tools.nsh` è reso da `scripts/release/nsis-render.go`).
-- Immagine cloud: `make docker-build` (architettura locale) e `make docker-push` (multi-arch, richiede `docker login` e un builder buildx).
+- `task release-desktop OS=darwin V=1.0.0-rc.1` (poi `scripts/release/package-macos.sh 1.0.0-rc.1`): `.app` universale e `.dmg` **non firmato**. Funziona su macOS; `OS=windows` (`ARCH=amd64|arm64`) produce l'installer NSIS anche da macOS con `makensis` installato (non firmato, non provato su Windows). Lo script firma `memobrain.exe` prima di impacchettarlo quando `MEMOBRAIN_SIGNTOOL_CMD` è impostata, ed esegue `makensis` direttamente (il template `wails_tools.nsh` è reso da `scripts/release/nsis-render.go`).
+- Immagine cloud: `task docker-build` (architettura locale) e `task docker-push` (multi-arch, richiede `docker login` e un builder buildx).
 - `scripts/release/package-linux.sh` richiede `nfpm` e `appimagetool` su Linux.
 - Icone: generate da `assets/logo.png` con `scripts/brand/gen-brand-assets.py` (vedi `assets/brand/README.md`). Wails ricava `iconfile.icns` da `apps/desktop/build/appicon.png` e usa `build/windows/icon.ico` così com'è; il pacchetto Linux prende `build/linux/memobrain.{png,svg}`.
 

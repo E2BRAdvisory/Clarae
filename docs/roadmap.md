@@ -12,8 +12,8 @@ Regole ereditate da `CLAUDE.md`: non modificare `Specifications.md` in automatic
 
 | Tema           | Scelta                                                                                                                         | Note                                                                                                                                                                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Module path Go | Path locale `memobrain` (moduli `memobrain/apps/desktop`, `memobrain/services/cloud`, `memobrain/shared`) in `go.work`         | Host non ancora deciso. Il rename futuro è un `find/sed` sugli import + `go.mod`; task **M0-00** lo prevede con `make rename-module NEW=…`.                                                                                                                                                                                                |
-| Go             | 1.27 (sqlc 1.31 e buf 1.75 richiedono ≥ 1.26; il toolchain si scarica via `GOTOOLCHAIN=auto`)                                  | Tutti i tool (`oapi-codegen`, `sqlc`, `goose`, `buf`, `golangci-lint`, `govulncheck`, `protoc-gen-go*`) sono pinnati con `tool` directive in un modulo separato `tools/go.mod` **fuori da `go.work`** (installazione con `make tools` → `GOWORK=off go install tool`), così il loro albero di dipendenze non entra nei moduli applicativi. |
+| Module path Go | Path locale `memobrain` (moduli `memobrain/apps/desktop`, `memobrain/services/cloud`, `memobrain/shared`) in `go.work`         | Host non ancora deciso. Il rename futuro è un `find/sed` sugli import + `go.mod`; task **M0-00** lo prevede con `task rename-module NEW=…`.                                                                                                                                                                                                |
+| Go             | 1.27 (sqlc 1.31 e buf 1.75 richiedono ≥ 1.26; il toolchain si scarica via `GOTOOLCHAIN=auto`)                                  | Tutti i tool (`oapi-codegen`, `sqlc`, `goose`, `buf`, `golangci-lint`, `govulncheck`, `protoc-gen-go*`) sono pinnati con `tool` directive in un modulo separato `tools/go.mod` **fuori da `go.work`** (installazione con `task tools` → `GOWORK=off go install tool`), così il loro albero di dipendenze non entra nei moduli applicativi. |
 | Wails          | v2.12.0 (installato) — D-07                                                                                                    | `OnUrlOpen` (Mac) + `SingleInstanceLock`/`OnSecondInstanceLaunch` esistono in v2 ≥ 2.10; comportamento "URL verso istanza già attiva su macOS" da verificare nello **SPIKE-01**.                                                                                                                                                           |
 | Node / Yarn    | Node 24 LTS, Yarn 4 (corepack, `packageManager` bloccato)                                                                      | Workspace Yarn: `apps/desktop/frontend`, `web`, `packages/*`.                                                                                                                                                                                                                                                                              |
 | React          | 19 (verifica peerDeps di `@excalidraw/excalidraw` 0.18.x nello **SPIKE-03**; fallback React 18.3)                              | Vite 6, TypeScript 5 `strict`, ESLint flat config, Prettier, Vitest, Playwright.                                                                                                                                                                                                                                                           |
@@ -38,7 +38,7 @@ Regole ereditate da `CLAUDE.md`: non modificare `Specifications.md` in automatic
 
 ## 2. Principi di esecuzione
 
-1. **Contract-first.** Ogni endpoint nasce in `api/openapi.yaml` (e `proto/`), poi `make gen`, poi implementazione. I tipi condivisi del protocollo (op, codici errore) vivono in `shared/go/syncproto` e sono la fonte per OpenAPI (enum) e per il client.
+1. **Contract-first.** Ogni endpoint nasce in `api/openapi.yaml` (e `proto/`), poi `task gen`, poi implementazione. I tipi condivisi del protocollo (op, codici errore) vivono in `shared/go/syncproto` e sono la fonte per OpenAPI (enum) e per il client.
 2. **Vertical slice per WP.** Ogni WP arriva fino a un comportamento osservabile (binding + UI minima, o endpoint + test d'integrazione), non "tutto il backend poi tutta la UI".
 3. **Gate di qualità per milestone** (bloccanti in CI): `golangci-lint`, `go test -race`, `govulncheck`, ESLint/tsc, Vitest, conformance Go+TS, integration cloud (testcontainers), build desktop su 3 OS (da M0). Copertura ≥ 80 % su `parser`, `merge`, `sync`, `sharing` misurata da M2 in poi.
 4. **Spike prima dei WP rischiosi.** Gli spike (§4) sono time-boxed (≤ 1 giorno) e producono un ADR in `docs/adr/`.
@@ -81,7 +81,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 - `go.work` con i tre moduli; `shared/go/go.mod` (`memobrain/shared`), `apps/desktop/go.mod`, `services/cloud/go.mod`.
 - `package.json` radice + `workspaces di package.json.yaml` (`apps/desktop/frontend`, `web`, `packages/*`); `tsconfig.base.json`; ESLint flat config + Prettier condivisi in `packages/config/` (o radice).
-- `Makefile`: `tools`, `gen`, `lint`, `test`, `test-integration`, `conformance`, `dev-cloud`, `dev-desktop`, `build-desktop`, `build-cloud`, `rename-module`.
+- `Makefile` (sostituito da `Taskfile.yml`, ADR-0032): `tools`, `gen`, `lint`, `test`, `test-integration`, `conformance`, `dev-cloud`, `dev-desktop`, `build-desktop`, `build-cloud`, `rename-module`.
 - `.gitignore`, `.editorconfig`, `.golangci.yml` (con `depguard` per le regole di modularità §4.3), `LICENSE` (MIT, deciso).
 - `docs/`: `docs/adr/0000-template.md`, `docs/roadmap.md` (copia di questo piano, aggiornata a ogni milestone), `docs/dev-setup.md`.
 - `deploy/docker/compose.dev.yaml`: postgres:17, minio + `mc` bootstrap bucket, keycloak:26.x con import realm, (opzionale) mailpit per le email di Keycloak.
@@ -98,7 +98,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 - `api/openapi.yaml` v0: `/healthz`, `/readyz`, `/me`, `/me/devices` (GET/POST/DELETE), `/config/effective` (stub che ritorna default), schema `Problem`. Componenti riusabili (`Pagination`, `Error`).
 - `api/proto/memobrain/v1/notify.proto` (testo §3.6), `buf.yaml`, `buf.gen.yaml`.
-- `make gen`: `oapi-codegen` → `services/cloud/internal/api/{types,server}.gen.go`; client TS → `packages/api-client/src/gen/`; buf → Go in `services/cloud/internal/api/grpc/` e client gRPC in `apps/desktop/internal/sync/transport/pb/`; `sqlc` (da M0-WP3); `wails generate module` per `wailsjs/`.
+- `task gen`: `oapi-codegen` → `services/cloud/internal/api/{types,server}.gen.go`; client TS → `packages/api-client/src/gen/`; buf → Go in `services/cloud/internal/api/grpc/` e client gRPC in `apps/desktop/internal/sync/transport/pb/`; `sqlc` (da M0-WP3); `wails generate module` per `wailsjs/`.
 
 ### M0-WP3 Cloud skeleton (`services/cloud`)
 
@@ -141,9 +141,9 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 ### M0-WP7 CI
 
 - `.github/workflows/ci.yml`: job `go` (lint, test -race, govulncheck), `ts` (tsc, eslint, vitest), `conformance`, `cloud-integration` (testcontainers), `desktop-build` matrix (ubuntu-24.04 con `webkit2gtk-4.1` e `wails build -tags webkit2_41`, windows, macos); `cloud-image` (buildx, push solo su tag).
-- Cache Go/Yarn; `make ci` locale equivalente.
+- Cache Go/Yarn; `task ci` locale equivalente.
 
-**Criteri di uscita M0:** `make dev-cloud` avvia lo stack (compose) e `curl /api/v1/me` con token Keycloak risponde; l'app desktop apre una cartella come vault, mostra l'albero, apre/modifica/salva una nota in Source mode (scrittura atomica verificata con test), rileva modifiche esterne; login PKCE loopback funziona su macOS (e in CI build su 3 OS); SPIKE-01, -02, -03, -05 chiusi con ADR (SPIKE-04 apre M1); CI verde.
+**Criteri di uscita M0:** `task dev-cloud` avvia lo stack (compose) e `curl /api/v1/me` con token Keycloak risponde; l'app desktop apre una cartella come vault, mostra l'albero, apre/modifica/salva una nota in Source mode (scrittura atomica verificata con test), rileva modifiche esterne; login PKCE loopback funziona su macOS (e in CI build su 3 OS); SPIKE-01, -02, -03, -05 chiusi con ADR (SPIKE-04 apre M1); CI verde.
 
 ---
 
@@ -446,7 +446,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ## 13. M8 — Revisione UI shell desktop (esito: shell conforme al mockup 28/10/2026)
 
-> **Stato (2026-10-29):** WP0–WP10 implementati e verificati in locale (`make test`, lint Go e TS, e2e su mock Wails, build, conformance Go e TS): milestone chiusa lato codice. Restano le verifiche manuali su webview e cloud reali di `docs/qa/m8-shell-ui.md` e l'aggiornamento dello spec da parte dell'owner (ADR-0026 e ADR-0027 in stato _proposta_). In WP2 la tab bar resta per pane (sotto l'header) e non nell'header, perché con gli split ogni pane ha le proprie tab. La tab «Segnalibri» del mockup si chiama _Link_ (link in uscita, backlink e bookmark del vault); _Statistiche_ è completa (WP7) e _Slide_ è completa (WP8). Gli indicatori di stato (permessi, aggiornamenti, sync, inviti, indicizzazione) stanno nel footer della sidebar destra e, a sidebar chiusa, nell'header. `note:export-image` non è verificato su una webview reale (WKWebView può marcare come «tainted» il canvas con `foreignObject`): voce da aggiungere a `docs/qa/m8-shell-ui.md`. Pianificata il 2026-10-28. ADR-0026 (shell) e ADR-0027 (Slides) in stato _proposta_: entrambi deviano dallo spec (`statusbar`, `sidebar/`, Slides da P2 a P1) e attendono l'aggiornamento di `Specifications.md` da parte dell'owner. Piano di dettaglio: `.claude/roadmap/progetta-e-pianifica-la-staged-dragon.md`. Solo frontend desktop, più un binding Go per le statistiche (WP7).
+> **Stato (2026-10-29):** WP0–WP10 implementati e verificati in locale (`task test`, lint Go e TS, e2e su mock Wails, build, conformance Go e TS): milestone chiusa lato codice. Restano le verifiche manuali su webview e cloud reali di `docs/qa/m8-shell-ui.md` e l'aggiornamento dello spec da parte dell'owner (ADR-0026 e ADR-0027 in stato _proposta_). In WP2 la tab bar resta per pane (sotto l'header) e non nell'header, perché con gli split ogni pane ha le proprie tab. La tab «Segnalibri» del mockup si chiama _Link_ (link in uscita, backlink e bookmark del vault); _Statistiche_ è completa (WP7) e _Slide_ è completa (WP8). Gli indicatori di stato (permessi, aggiornamenti, sync, inviti, indicizzazione) stanno nel footer della sidebar destra e, a sidebar chiusa, nell'header. `note:export-image` non è verificato su una webview reale (WKWebView può marcare come «tainted» il canvas con `foreignObject`): voce da aggiungere a `docs/qa/m8-shell-ui.md`. Pianificata il 2026-10-28. ADR-0026 (shell) e ADR-0027 (Slides) in stato _proposta_: entrambi deviano dallo spec (`statusbar`, `sidebar/`, Slides da P2 a P1) e attendono l'aggiornamento di `Specifications.md` da parte dell'owner. Piano di dettaglio: `.claude/roadmap/progetta-e-pianifica-la-staged-dragon.md`. Solo frontend desktop, più un binding Go per le statistiche (WP7).
 
 Ordine: WP0 → WP1 → (WP2 ∥ WP3 ∥ WP4) → WP5 → (WP6 ∥ WP7) → WP8 → WP9 → WP10.
 
@@ -502,7 +502,7 @@ Ordine: WP0 → WP1 → (WP2 ∥ WP3 ∥ WP4) → WP5 → (WP6 ∥ WP7) → WP8 
 - i18n it/en (la parità delle chiavi è un test bloccante), accessibilità: le scansioni axe coprono shell, schede a icona, menu della scheda bloccata e del vault, tab Slide e presentazione (hanno fatto emergere e correggere tre difetti: albero dei segnalibri vuoto, puntina della scheda bloccata dentro la `tablist`, collisione di classi con la slideshow dei disegni).
 - Guida utente: «Il primo vault» riscritto sulla nuova shell, nuovo capitolo «Presentazioni», scorciatoie, accessibilità, condivisione e sincronizzazione senza più la barra di stato; checklist manuale `docs/qa/m8-shell-ui.md` (export come immagine e schermo intero su webview reali, login OIDC, cloud).
 
-**Criteri di uscita M8:** layout conforme al mockup; comandi del ribbon operativi e presenti in palette; tab bloccabili con menu completo; cambio vault e login/avatar funzionanti; Statistiche e ShowSlide offline; chat visibile ma disabilitata; `make ci` e `make e2e` verdi.
+**Criteri di uscita M8:** layout conforme al mockup; comandi del ribbon operativi e presenti in palette; tab bloccabili con menu completo; cambio vault e login/avatar funzionanti; Statistiche e ShowSlide offline; chat visibile ma disabilitata; `task ci` e `task e2e` verdi.
 
 ---
 
@@ -535,7 +535,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ### M9-WP2 Portabilità del core Go
 
-> **Stato (2026-10-29):** implementato e provato in Node (ADR-0030, "Esito dell'implementazione"). Tutti i 27 pacchetti di `apps/desktop/internal/...` passano sotto `GOOS=js GOARCH=wasm` (`make test-wasm`, scritto solo in WP3: vedi lì) e il desktop nativo resta verde (`go test ./...`, `golangci-lint`). **Deviazione dal piano:** niente interfaccia `vfs` in Go. Su `js` il pacchetto `os` passa da `globalThis.fs`, che la pagina fornirà sopra OPFS (WP5): evita di migrare circa 60 chiamate in otto pacchetti. **Non verificato:** OPFS e `opfs-sahpool` in un browser vero, lo stream SSE nel browser, `cmd/memobrain-core` (WP3).
+> **Stato (2026-10-29):** implementato e provato in Node (ADR-0030, "Esito dell'implementazione"). Tutti i 27 pacchetti di `apps/desktop/internal/...` passano sotto `GOOS=js GOARCH=wasm` (`task test-wasm`, scritto solo in WP3: vedi lì) e il desktop nativo resta verde (`go test ./...`, `golangci-lint`). **Deviazione dal piano:** niente interfaccia `vfs` in Go. Su `js` il pacchetto `os` passa da `globalThis.fs`, che la pagina fornirà sopra OPFS (WP5): evita di migrare circa 60 chiamate in otto pacchetti. **Non verificato:** OPFS e `opfs-sahpool` in un browser vero, lo stream SSE nel browser, `cmd/memobrain-core` (WP3).
 
 - Driver SQL scelto con build tag in `internal/store`; nuovo `internal/sqlitejs` (driver `database/sql` sincrono verso `globalThis.__memobrainSQLite`) e `packages/sqlite-bridge`; `store.Exists`/`Reset` perché i database non stanno nel file system.
 - Interfaccia `Host` in `internal/app` (`host_wails.go` / `host_web.go`); nessun binding importa Wails; `isWeb` spegne updater, cestino di sistema e watcher.
@@ -547,14 +547,14 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ### M9-WP3 Host RPC WASM
 
-> **Stato (2026-10-29):** implementato e provato (ADR-0030, "Esito dell'implementazione (M9-WP3)"). `internal/rpc` (dispatcher con la semantica di Wails), `App.Services()` come elenco unico dei servizi (usato anche da `main.go`), `cmd/memobrain-core` con `globalThis.__memobrainCore`, `make wasm-core` (**6,44 MB con brotli**) e `make test-wasm`. La parità con `wailsjs/go/app/*.d.ts` è verificata: 20 servizi, 122 metodi, nessuna eccezione (le funzioni non applicabili al web restano esposte e rispondono con un errore o con lo stato «disattivato»; le nasconde la UI in WP4). **Non verificato:** caricamento in un Web Worker vero. **Correzione:** il target `make test-wasm`, dato per esistente alla chiusura del WP2, è stato scritto solo ora.
+> **Stato (2026-10-29):** implementato e provato (ADR-0030, "Esito dell'implementazione (M9-WP3)"). `internal/rpc` (dispatcher con la semantica di Wails), `App.Services()` come elenco unico dei servizi (usato anche da `main.go`), `cmd/memobrain-core` con `globalThis.__memobrainCore`, `task wasm-core` (**6,44 MB con brotli**) e `task test-wasm`. La parità con `wailsjs/go/app/*.d.ts` è verificata: 20 servizi, 122 metodi, nessuna eccezione (le funzioni non applicabili al web restano esposte e rispondono con un errore o con lo stato «disattivato»; le nasconde la UI in WP4). **Non verificato:** caricamento in un Web Worker vero. **Correzione:** il target `task test-wasm`, dato per esistente alla chiusura del WP2, è stato scritto solo ora.
 
 - `cmd/memobrain-core`: stessi struct dei binding Wails, dispatcher JSON via reflection con la semantica di Wails; gli eventi escono dall'`Emit` dell'host (`__memobrainHost.emit`), che la pagina inoltra con `postMessage`.
 - Test che ogni metodo di `wailsjs/go/app/*.d.ts` sia esposto (si salta se i binding non sono generati).
 
 ### M9-WP4 Frontend condiviso `packages/workbench`
 
-> **Stato (2026-10-29):** implementato e verificato (ADR-0029, ADR-0030). Verificati: typecheck dei due pacchetti, 562 test unitari del workbench (554 prima dello spostamento + 8 nuovi), build di produzione (iniziale 1962 kB su 2000 di budget), e2e Playwright del desktop (104 passati, 3 saltati) e della build minificata (42), `wails generate module` (binding identici, ora in `packages/workbench/wailsjs`) e `make build-desktop`. **Non verificato:** il workbench in un browser vero (WP5) e in modalità `web` dentro Playwright (WP7): la modalità `web` è coperta solo da test unitari.
+> **Stato (2026-10-29):** implementato e verificato (ADR-0029, ADR-0030). Verificati: typecheck dei due pacchetti, 562 test unitari del workbench (554 prima dello spostamento + 8 nuovi), build di produzione (iniziale 1962 kB su 2000 di budget), e2e Playwright del desktop (104 passati, 3 saltati) e della build minificata (42), `wails generate module` (binding identici, ora in `packages/workbench/wailsjs`) e `task build-desktop`. **Non verificato:** il workbench in un browser vero (WP5) e in modalità `web` dentro Playwright (WP7): la modalità `web` è coperta solo da test unitari.
 
 - `apps/desktop/frontend/src` è ora `packages/workbench/src` (`@memobrain/workbench`, spostato con `git mv`: cronologia conservata); `wailsjsdir` punta a `packages/workbench`. `apps/desktop/frontend` ha solo `src/main.tsx` (chiama `mountWorkbench`), `index.html`, lo script di build e gli e2e.
 - `mountWorkbench(root, { kind, onBackToConsole })`: l'host dice di che tipo è. `kind` (`desktop` per default, `web`) imposta le capability.
@@ -577,7 +577,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 - Il blocco per inattività è fisso a 15 minuti: non legge ancora il Config Profile.
 
 - Pagina `workbench.html` e `web/src/workbench/{main.tsx,launch.ts,bridge.ts,worker.ts,opfs-fs.ts,idle.ts}`; "Apri" nella tabella dei vault e nelle condivisioni accettate.
-- esbuild: due pagine, worker a sé, `core/*.wasm.gz` con hash e SRI verificata dal worker, budget separati; `make wasm-core`, `make web-build` (core e binding generati se mancano).
+- esbuild: due pagine, worker a sé, `core/*.wasm.gz` con hash e SRI verificata dal worker, budget separati; `task wasm-core`, `task web-build` (core e binding generati se mancano).
 - `web-embed`: route, CSP del workbench, servizio dei `.wasm` da `.wasm.gz`; `webembed-serve -dir` per provare una build E2E.
 - Dockerfile con gli stage `bindings` e `wasm`; CI con binding, core e job `wasm-core`.
 
@@ -601,15 +601,15 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 - Matrice di parità `docs/web-workbench-parity.md`: eccezioni dichiarate, cosa è verificato e cosa no, e tabelle generate di 72 comandi (71 sul web) e 122 binding (13 chiamati da un test web contro il core vero: gli altri sono provati solo sotto WASM dai test del core).
 - Spec del desktop eseguiti anche sul web con un helper comune (`openVault` apre un vault sul mock o su una cartella del browser).
-- E2E web ↔ cloud vero in `web/e2e-cloud` (richiede `scripts/run-desktop-with-cloud.sh --cloud-only --keep` dopo `make web-build`; non è in CI).
-- Test Go del core sotto `GOOS=js` (`make test-wasm`, job CI `wasm-core`), con `scripts/parity.mjs --check`.
+- E2E web ↔ cloud vero in `web/e2e-cloud` (richiede `scripts/run-desktop-with-cloud.sh --cloud-only --keep` dopo `task web-build`; non è in CI).
+- Test Go del core sotto `GOOS=js` (`task test-wasm`, job CI `wasm-core`), con `scripts/parity.mjs --check`.
 - Sicurezza: blocco e cancellazione (`lockAndForget`), «Dimentica questo browser» e logout (`forgetThisBrowser`), CSP e SRI (`web/e2e-security`).
 
 **Criteri di uscita M9:**
 
 - un vault condiviso e uno privato si aprono, si modificano e si sincronizzano dal browser con tutte le funzioni della matrice di parità;
 - le modifiche web ↔ desktop si propagano in entrambi i sensi;
-- `make ci` verde, con desktop invariato.
+- `task ci` verde, con desktop invariato.
 
 ---
 
@@ -624,7 +624,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
   - cross-compilazione da `$BUILDPLATFORM` invece di QEMU;
   - stage `wasm` per M9.
 - Wails CLI installata con `scripts/install-wails.sh` in `ci.yml` e `release.yml` (incompatibilità con Go 1.27).
-- `make build-desktop` con `-tags webkit2_41` su Linux; target `docker-build` e `docker-push`.
+- `task build-desktop` con `-tags webkit2_41` su Linux; target `docker-build` e `docker-push`.
 
 ### M10-WP2 Canale non firmato
 
@@ -663,15 +663,15 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 | Livello            | Strumento                                                                         | Dove                                                       |
 | ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Unit Go            | `go test -race ./...` (tabelle per parser, pathrules, merge, vaultcrypto, search) | tutti i moduli                                             |
-| Conformance        | fixture `shared/conformance/{markdown,merge,crypto}` eseguite da Go e TS          | `make conformance`                                         |
-| Integrazione cloud | testcontainers (PG, MinIO, Keycloak)                                              | `services/cloud/test/integration`, `make test-integration` |
+| Conformance        | fixture `shared/conformance/{markdown,merge,crypto}` eseguite da Go e TS          | `task conformance`                                         |
+| Integrazione cloud | testcontainers (PG, MinIO, Keycloak)                                              | `services/cloud/test/integration`, `task test-integration` |
 | Contratto          | risposte validate contro `openapi.yaml`                                           | `services/cloud/test/contract`                             |
 | E2E sync           | 2 engine desktop contro cloud in container                                        | `apps/desktop/internal/sync/e2e_test.go`                   |
 | Frontend           | Vitest (unit/componenti), Playwright su Wails dev server e su Web UI              | `apps/desktop/frontend/src/test`, `web/src/test`           |
 | Prestazioni        | benchmark Go (`-bench`), k6, dataset sintetici                                    | nightly                                                    |
 | Sicurezza          | govulncheck, yarn npm audit, SBOM, test CSP/no-network                            | CI                                                         |
 
-Verifica end-to-end di ogni milestone = i "Criteri di uscita" sopra, eseguiti con `make ci` + scenario manuale documentato in `docs/qa/m<N>-checklist.md`.
+Verifica end-to-end di ogni milestone = i "Criteri di uscita" sopra, eseguiti con `task ci` + scenario manuale documentato in `docs/qa/m<N>-checklist.md`.
 
 ---
 

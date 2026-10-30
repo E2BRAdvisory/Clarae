@@ -39,6 +39,6 @@ Prima delle ottimizzazioni (archi a 1,2 px, archi circolari per ogni nodo) lo st
 
 ## Cosa NON è stato verificato
 
-- Il webview reale di Wails (WKWebView/WebView2/WebKitGTK) con accelerazione GPU: le cifre sopra sono di Chromium headless con raster CPU, quindi un ordine di grandezza di riferimento prudente, non una garanzia per ogni piattaforma. Da ripetere su macOS/Windows/Linux con l'app (`make dev-desktop`) aprendo il grafo di un vault grande.
+- Il webview reale di Wails (WKWebView/WebView2/WebKitGTK) con accelerazione GPU: le cifre sopra sono di Chromium headless con raster CPU, quindi un ordine di grandezza di riferimento prudente, non una garanzia per ogni piattaforma. Da ripetere su macOS/Windows/Linux con l'app (`task dev-desktop`) aprendo il grafo di un vault grande.
 - Il tempo `Build` end-to-end tramite binding Wails (serializzazione JSON di ~10k nodi) non è stato misurato separatamente.
 - Hardware meno recente di un M4: i tick di layout (CPU, nel Worker) scalano con la CPU; il frame completo a 10k nodi potrebbe scendere sotto 30 fps su portatili lenti con raster CPU. In tal caso le leve già previste sono: `maxNodes` più basso, `labelZoom` più alto, passaggio a `pixi.js` (vedi ADR-0013).

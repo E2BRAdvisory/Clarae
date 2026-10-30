@@ -35,5 +35,6 @@ Le deviazioni e le precisazioni rispetto a `Specifications.md` si registrano com
 | [0029](0029-web-workbench.md)                        | Workbench del vault nella Web UI (M9)                                                | proposta  |
 | [0030](0030-desktop-core-wasm.md)                    | Core del desktop compilato in WebAssembly per il workbench web (M9)                  | proposta  |
 | [0031](0031-release-pipeline-unsigned-channel.md)    | Pipeline di rilascio: correzioni, canale non firmato, matrice estesa (M10)           | proposta  |
+| [0032](0032-task-runner.md)                          | Task (go-task) al posto di make                                                      | proposta  |
 
 Nota: gli ADR 0015 e 0018 usano un'intestazione in forma di elenco invece della tabella del template; il contenuto resta valido, l'uniformazione del formato è un'attività di pulizia non bloccante. Le righe 0020–0023 vanno trasformate in link quando i file arrivano (i titoli riportati sono provvisori).

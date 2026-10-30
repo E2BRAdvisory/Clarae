@@ -66,7 +66,7 @@ Nessun segreto aggiuntivo: la firma `cosign` è **keyless** (identità OIDC del 
 Su una macchina fidata, offline (il tool stampa solo su stdout, non scrive file):
 
 ```sh
-make release-tool
+task release-tool
 bin/release gen-key      # private -> segreto UPDATE_SIGNING_KEY, public -> variabile UPDATE_PUBLIC_KEY
 ```
 

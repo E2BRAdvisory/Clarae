@@ -1,6 +1,6 @@
 # Checklist manuale — console admin ed export (M5)
 
-Da eseguire contro `yarn dev:cloud:k3d` (o `make stack-up` + `make dev-cloud`) con l'utente `admin` del realm di sviluppo (password `memobrain-dev-password`) e un secondo utente. Gli automatismi (`go test -tags integration`, test live Keycloak, vitest, Playwright) coprono API e flussi sul mock; qui si verifica ciò che solo l'ambiente reale mostra.
+Da eseguire contro `yarn dev:cloud:k3d` (o `task stack-up` + `task dev-cloud`) con l'utente `admin` del realm di sviluppo (password `memobrain-dev-password`) e un secondo utente. Gli automatismi (`go test -tags integration`, test live Keycloak, vitest, Playwright) coprono API e flussi sul mock; qui si verifica ciò che solo l'ambiente reale mostra.
 
 Segnare `[x]` con data e sistema operativo.
 

@@ -4,14 +4,14 @@ Da eseguire su macOS (sviluppo) e, prima di chiudere M0, almeno una volta su Win
 
 ## Stack e cloud
 
-- [ ] `make stack-up` porta a healthy PostgreSQL (5433), RustFS (9000/9001), Keycloak (8080); `make stack-reset` re-importa il realm.
-- [ ] `make dev-cloud`: log "database migrated", "oidc issuer ready", "http listening" su 18081, "grpc listening" su 18082.
+- [ ] `task stack-up` porta a healthy PostgreSQL (5433), RustFS (9000/9001), Keycloak (8080); `task stack-reset` re-importa il realm.
+- [ ] `task dev-cloud`: log "database migrated", "oidc issuer ready", "http listening" su 18081, "grpc listening" su 18082.
 - [ ] `curl localhost:18081/api/v1/healthz` → 200; `/readyz` → `database: ok`; `/me` senza token → 401 problem+json con `request_id`.
-- [ ] `make test-integration` verde (testcontainers).
+- [ ] `task test-integration` verde (testcontainers).
 
 ## Desktop
 
-- [ ] `make dev-desktop` apre la finestra "MemoBrain Notes" con la schermata di benvenuto nella lingua di sistema (it/en).
+- [ ] `task dev-desktop` apre la finestra "MemoBrain Notes" con la schermata di benvenuto nella lingua di sistema (it/en).
 - [ ] "Apri cartella come vault" → picker nativo → l'albero mostra file e cartelle; `.DS_Store`, `.memobrain/cache` non compaiono.
 - [ ] Nuova nota → appare nell'albero e si apre nell'editor; digitare → "Salvato" entro ~1 s; il file su disco contiene il testo; nessun file `.memobrain-tmp-*` residuo.
 - [ ] Modificare la nota aperta con un editor esterno → banner di conflitto; "Ricarica" mostra il contenuto esterno; "Sovrascrivi" lo sostituisce.
@@ -21,7 +21,7 @@ Da eseguire su macOS (sviluppo) e, prima di chiudere M0, almeno una volta su Win
 - [ ] Riavvio: il vault compare tra i recenti e si riapre.
 - [ ] Seconda istanza (`memobrain --data-dir <altra>`) coesiste; seconda istanza con la **stessa** data dir porta in primo piano la prima.
 - [ ] URL scheme: `open "memobrain://open?vault=X&file=Y"` (macOS) con app aperta → evento `app:open-request` nel log; con app chiusa → l'app parte (richiede build installata in /Applications per la registrazione dello scheme).
-- [ ] Build di produzione (`make build-desktop`): l'app si avvia, nessun errore CSP nella console del webview (Safari → Sviluppo → MemoBrain Notes).
+- [ ] Build di produzione (`task build-desktop`): l'app si avvia, nessun errore CSP nella console del webview (Safari → Sviluppo → MemoBrain Notes).
 
 ## Login (M0-WP6)
 

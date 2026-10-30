@@ -1,6 +1,6 @@
 # Checklist manuale — embedded search, export, impostazioni (M6-WP6)
 
-Da eseguire con `make run-desktop` su macOS, Windows e Linux. Segnare `[x]` con data e sistema operativo. Gli automatismi (vitest, `go test`) coprono rendering, sanificazione e scrittura; qui si verifica ciò che solo la GUI reale mostra.
+Da eseguire con `task run-desktop` su macOS, Windows e Linux. Segnare `[x]` con data e sistema operativo. Gli automatismi (vitest, `go test`) coprono rendering, sanificazione e scrittura; qui si verifica ciò che solo la GUI reale mostra.
 
 ## Embedded search
 

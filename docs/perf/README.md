@@ -5,16 +5,16 @@ Obiettivi dall'Appendice A dello spec, misure e come ripeterle. Le cifre sono qu
 ## Come si esegue
 
 ```sh
-make perf PERF_NOTES=50000      # indice, ricerca, apertura nota, apertura vault, grafo 10k → .perf/results-50000.json
-make perf-check PERF_NOTES=50000 [PERF_TOLERANCE=25]   # confronto con docs/perf/baseline-50000.json
-make perf-data PERF_NOTES=10000 # solo il dataset (cache in .perf/vault-N, mai committato)
+task perf PERF_NOTES=50000      # indice, ricerca, apertura nota, apertura vault, grafo 10k → .perf/results-50000.json
+task perf-check PERF_NOTES=50000 [PERF_TOLERANCE=25]   # confronto con docs/perf/baseline-50000.json
+task perf-data PERF_NOTES=10000 # solo il dataset (cache in .perf/vault-N, mai committato)
 ```
 
 - Dataset: `apps/desktop/internal/perf/dataset` (seed fisso, stesso vault a ogni esecuzione). Note con dimensioni log-normali (mediana ≈ 1,8 KB, coda fino a 600 KB), frontmatter, intestazioni, tag, wikilink con grado entrante a legge di potenza (hub e coda lunga), link fantasma, riferimenti ad allegati. 50.000 note = 168 MB, ≈ 395.000 link.
 - Variabili del test (`internal/perf/perf_test.go`): `MEMOBRAIN_PERF_NOTES`, `MEMOBRAIN_PERF_DIR`, `MEMOBRAIN_PERF_GRAPH_NOTES`, `MEMOBRAIN_PERF_OUT`, `MEMOBRAIN_PERF_KEEP_INDEX`, `MEMOBRAIN_PERF_CPUPROFILE`, `MEMOBRAIN_PERF_INDEX_PROFILE`.
 - UI (Chromium headless su mock dei binding): `MEMOBRAIN_UI_BENCH=1 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/ui-perf.spec.ts` (`MEMOBRAIN_UI_BENCH_NOTES`, `MEMOBRAIN_UI_BENCH_NOTE_KB`, `MEMOBRAIN_UI_BENCH_OUT`).
 - Cloud: vedi la sezione sotto.
-- Esecuzione: a mano (`make perf`, k6 e `perfcheck`); il workflow notturno `nightly-perf.yml` è stato rimosso il 2026-10-30 e non c'è più un job che produca artifact. Le baseline di CI sono `docs/perf/baseline-ci-<note>.json`: vanno create alla prima esecuzione su una macchina di riferimento, perché quella di questo repository è di un'altra macchina.
+- Esecuzione: a mano (`task perf`, k6 e `perfcheck`); il workflow notturno `nightly-perf.yml` è stato rimosso il 2026-10-30 e non c'è più un job che produca artifact. Le baseline di CI sono `docs/perf/baseline-ci-<note>.json`: vanno create alla prima esecuzione su una macchina di riferimento, perché quella di questo repository è di un'altra macchina.
 
 ## Macchina e metodo
 
@@ -50,7 +50,7 @@ MacBook Apple M4 (10 core), 32 GB, macOS 27.0.1, SSD, Go 1.26.0; Chromium di Pla
 - Token: `TestServeLoadEnv` (`services/cloud/test/integration/loadenv_test.go`, tag `integration`, **solo test**: l'issuer OIDC finto esiste solo nei binari di test) avvia API + PostgreSQL in container, crea N utenti con vault e scrive `tokens.json`:
 
   ```sh
-  make perf-load-env USERS=1000            # resta in attesa; fermare con: touch .perf/tokens.json.stop
+  task perf-load-env USERS=1000            # resta in attesa; fermare con: touch .perf/tokens.json.stop
   k6 run -e TOKENS=.perf/tokens.json services/cloud/test/load/k6/active-users.js
   ```
 

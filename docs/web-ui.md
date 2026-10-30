@@ -43,7 +43,7 @@ Dalla Web UI si apre un vault nel browser con la stessa interfaccia del desktop.
 | Bridge         | `web/src/workbench/bridge.ts`            | RPC verso il worker, installa `window.go` e `window.runtime` per i moduli Wails generati                                               |
 | Inattività     | `web/src/workbench/idle.ts`              | dopo 15 min senza input un vault **privato** si blocca, la copia in chiaro si cancella dal browser e si torna alla console             |
 
-- **Build:** `make web-build` costruisce prima il core (`make wasm-core`) e i binding Wails (`packages/workbench/wailsjs`, se mancano), poi la SPA. `web/scripts/esbuild.mjs` emette `index.html` e `workbench.html`, il worker (`assets/core-worker-<hash>.js`) e `core/*.wasm.gz` con il nome contenente l'hash; l'integrità SHA-384 dei WASM è nel bundle e il worker la verifica con `fetch(..., { integrity })`. Senza il core (nessuna toolchain Go) la pagina lo dice invece di fallire.
+- **Build:** `task web-build` costruisce prima il core (`task wasm-core`) e i binding Wails (`packages/workbench/wailsjs`, se mancano), poi la SPA. `web/scripts/esbuild.mjs` emette `index.html` e `workbench.html`, il worker (`assets/core-worker-<hash>.js`) e `core/*.wasm.gz` con il nome contenente l'hash; l'integrità SHA-384 dei WASM è nel bundle e il worker la verifica con `fetch(..., { integrity })`. Senza il core (nessuna toolchain Go) la pagina lo dice invece di fallire.
 - **Budget** (ADR-0020): console 700/1000 kB; workbench 2500/23000 kB; core ≤ 8 MB e sqlite ≤ 1,5 MB, misurati in gzip.
 - **Serving** (`services/cloud/web-embed`): `/vaults/:id/open` risponde con `workbench.html` e una CSP dedicata (`style-src 'unsafe-inline'` per CodeMirror/KaTeX/Excalidraw, `worker-src 'self'`, `img-src data: blob:`, `connect-src` con l'issuer e `blob:`; mai script inline, mai `eval`, mai altre origini). I `.wasm` si conservano come `.wasm.gz` e si servono così a chi accetta gzip, decompressi agli altri. La console mantiene la CSP stretta.
 - **Una scheda sola:** i file e i database del browser si tengono con handle sincroni esclusivi, quindi un solo workbench per browser (qualsiasi vault). La seconda scheda mostra "già aperto in un'altra scheda".
@@ -52,14 +52,14 @@ Dalla Web UI si apre un vault nel browser con la stessa interfaccia del desktop.
 ## Comandi
 
 ```sh
-make dev-web          # esbuild su :5174, proxy /api -> :18081 (serve make stack-up + make dev-cloud)
-make web-build        # build + copia in services/cloud/web-embed/dist (poi make build-cloud)
-make web-clean        # ripristina il placeholder index.html (richiede il file tracciato in git)
+task dev-web          # esbuild su :5174, proxy /api -> :18081 (serve task stack-up + task dev-cloud)
+task web-build        # build + copia in services/cloud/web-embed/dist (poi task build-cloud)
+task web-clean        # ripristina il placeholder index.html (richiede il file tracciato in git)
 yarn workspace @memobrain/web run test     # Vitest + Testing Library
 yarn workspace @memobrain/ui run test
-make e2e-web          # Playwright (Chromium), API mockata con page.route
+task e2e-web          # Playwright (Chromium), API mockata con page.route
 ```
 
-`dist/` è ignorato da git tranne il placeholder `services/cloud/web-embed/dist/index.html`, così `go build` funziona senza costruire la SPA (la pagina mostra solo un avviso). Dopo `make web-build` il placeholder risulta modificato: non committarlo.
+`dist/` è ignorato da git tranne il placeholder `services/cloud/web-embed/dist/index.html`, così `go build` funziona senza costruire la SPA (la pagina mostra solo un avviso). Dopo `task web-build` il placeholder risulta modificato: non committarlo.
 
-Sviluppo con login reale: `make stack-up`, poi `make dev-cloud` (avvia anche la Web UI su :5174, `WEB=0` per saltarla; log in `.dev/logs/web.log`) oppure `yarn dev:cloud:k3d` (stessa cosa, `--no-web` per saltarla; la Web UI si ferma con `down`/`delete`); `make dev-web` serve solo per avviarla da sola, poi `http://localhost:5174` (utenti `user1`/`user2`/`admin`, password `memobrain-dev-password`). Per provare il binario con la SPA incorporata: `make web-build build-cloud` e aprire `http://127.0.0.1:18081`.
+Sviluppo con login reale: `task stack-up`, poi `task dev-cloud` (avvia anche la Web UI su :5174, `WEB=0` per saltarla; log in `.dev/logs/web.log`) oppure `yarn dev:cloud:k3d` (stessa cosa, `--no-web` per saltarla; la Web UI si ferma con `down`/`delete`); `task dev-web` serve solo per avviarla da sola, poi `http://localhost:5174` (utenti `user1`/`user2`/`admin`, password `memobrain-dev-password`). Per provare il binario con la SPA incorporata: `task web-build build-cloud` e aprire `http://127.0.0.1:18081`.

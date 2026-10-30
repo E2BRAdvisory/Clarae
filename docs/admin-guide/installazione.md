@@ -30,7 +30,7 @@ Il chart avvia `api.replicas` repliche con `--role=api` e `worker.replicas` (1) 
 
 ## Docker Compose
 
-Uno stack di **sviluppo** (PostgreSQL, RustFS, Keycloak) è in `deploy/docker/compose.dev.yaml` (`make stack-up`) e **non** è pensato per la produzione. Un compose di produzione per installazioni piccole, con proxy TLS (Caddy) e HTTP/2 per gRPC, è in `deploy/compose` (vedi il suo `README.md`).
+Uno stack di **sviluppo** (PostgreSQL, RustFS, Keycloak) è in `deploy/docker/compose.dev.yaml` (`task stack-up`) e **non** è pensato per la produzione. Un compose di produzione per installazioni piccole, con proxy TLS (Caddy) e HTTP/2 per gRPC, è in `deploy/compose` (vedi il suo `README.md`).
 
 ## Primo avvio e verifica
 

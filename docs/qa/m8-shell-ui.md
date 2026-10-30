@@ -1,6 +1,6 @@
 # Checklist manuale — revisione della shell desktop (M8)
 
-Da eseguire sull'app reale (`make run-desktop`, e `scripts/run-desktop-with-cloud.sh` per le voci cloud). Gli automatismi (vitest, Playwright su mock Wails, conformance Go e TS) coprono layout, comandi, tab, statistiche e presentazioni; qui si verifica ciò che solo una webview vera mostra. Riferimenti: ADR-0026 (shell) e ADR-0027 (slide).
+Da eseguire sull'app reale (`task run-desktop`, e `scripts/run-desktop-with-cloud.sh` per le voci cloud). Gli automatismi (vitest, Playwright su mock Wails, conformance Go e TS) coprono layout, comandi, tab, statistiche e presentazioni; qui si verifica ciò che solo una webview vera mostra. Riferimenti: ADR-0026 (shell) e ADR-0027 (slide).
 
 Segnare `[x]` con data e sistema operativo.
 
