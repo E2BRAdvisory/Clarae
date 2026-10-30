@@ -1,0 +1,385 @@
+# MemoBrain Notes monorepo entry points. Run `task` (or `task --list`) for the list.
+# Variables are passed as `task <name> VAR=value` (or as environment variables);
+# extra script arguments go after `--`.
+version: '3'
+
+vars:
+  GO_MODULES: shared/go services/cloud apps/desktop
+  CLOUD: services/cloud
+  WEB_DIR: web
+  WEBEMBED: '{{.CLOUD}}/web-embed'
+  DESKTOP: apps/desktop
+  COMPOSE: docker compose -f deploy/docker/compose.dev.yaml
+  WAILS:
+    sh: command -v wails 2>/dev/null || echo "$(go env GOPATH)/bin/wails"
+  VERSION:
+    sh: echo "${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+  WASM_OUT: '{{.WASM_OUT | default "build/wasm"}}'
+  IMAGE: '{{.IMAGE | default "ghcr.io/e2br/memobrain-cloud"}}'
+  PLATFORMS: '{{.PLATFORMS | default "linux/amd64,linux/arm64"}}'
+  PERF_NOTES: '{{.PERF_NOTES | default "50000"}}'
+  PERF_DIR: '{{.PERF_DIR | default (print .ROOT_DIR "/.perf")}}'
+  PERF_OUT: '{{.PERF_OUT | default (print .PERF_DIR "/results-" .PERF_NOTES ".json")}}'
+  PERF_TOLERANCE: '{{.PERF_TOLERANCE | default "25"}}'
+
+tasks:
+  default:
+    desc: Show this help
+    silent: true
+    cmds:
+      - '{{.TASK_EXE}} --list'
+
+  ## ---- tooling ---------------------------------------------------------------
+
+  tools:
+    desc: Install pinned developer tools from tools/go.mod (into GOBIN, task included) and JS deps
+    cmds:
+      - cd tools && GOWORK=off go install tool
+      - yarn install --immutable
+
+  ## ---- code generation -------------------------------------------------------
+
+  wails-cli:
+    desc: Build the Wails CLI with the repo's Go and a current x/tools (v2.12.0 fails on Go 1.27)
+    cmds:
+      - scripts/install-wails.sh
+
+  gen:
+    desc: Regenerate all generated code
+    cmds:
+      - task: gen-openapi
+      - task: gen-proto
+      - task: gen-sqlc
+      - task: gen-wails
+
+  gen-openapi:
+    desc: OpenAPI -> Go server stubs + TS client
+    preconditions:
+      - sh: test -f api/openapi.yaml
+        msg: api/openapi.yaml missing (M0-WP2)
+    cmds:
+      - cd {{.CLOUD}} && oapi-codegen -config ../../api/oapi-codegen.yaml ../../api/openapi.yaml
+      - cmd: if [ -d packages/api-client ]; then yarn workspace @memobrain/api-client run gen; fi
+        silent: true
+
+  gen-proto:
+    desc: protobuf -> Go (buf)
+    dir: api/proto
+    preconditions:
+      - sh: test -f buf.yaml
+        msg: api/proto/buf.yaml missing (M0-WP2)
+    cmds:
+      - buf generate
+
+  gen-sqlc:
+    desc: SQL queries -> typed Go (sqlc)
+    dir: '{{.CLOUD}}'
+    preconditions:
+      - sh: test -f sqlc.yaml
+        msg: '{{.CLOUD}}/sqlc.yaml missing (M0-WP3)'
+    cmds:
+      - sqlc generate
+
+  gen-wails:
+    desc: Wails Go bindings -> packages/workbench/wailsjs
+    cmds:
+      - cmd: mkdir -p {{.DESKTOP}}/frontend/dist
+        silent: true
+      # main.go embeds the frontend build
+      - cmd: '[ -e {{.DESKTOP}}/frontend/dist/index.html ] || touch {{.DESKTOP}}/frontend/dist/index.html'
+        silent: true
+      - cd {{.DESKTOP}} && {{.WAILS}} generate module
+
+  # The UI is typed against the generated bindings, which the repository does not hold: build them when they are
+  # missing (a stale copy is refreshed by `task gen-wails`, or `task gen`).
+  wailsjs:
+    desc: Generate the Wails bindings only if packages/workbench/wailsjs is missing
+    status:
+      - test -f packages/workbench/wailsjs/go/models.ts
+    cmds:
+      - cmd: command -v wails >/dev/null 2>&1 || [ -x "$(go env GOPATH)/bin/wails" ] || scripts/install-wails.sh
+        silent: true
+      - task: gen-wails
+
+  ## ---- quality ---------------------------------------------------------------
+
+  lint:
+    desc: Lint everything
+    cmds:
+      - task: lint-go
+      - task: lint-ts
+
+  lint-go:
+    desc: golangci-lint on all Go modules
+    silent: true
+    cmds:
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && golangci-lint run ./...) || exit 1; done
+
+  lint-ts:
+    desc: ESLint + Prettier
+    cmds:
+      - yarn run lint
+
+  vuln:
+    desc: govulncheck on all Go modules
+    silent: true
+    cmds:
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && govulncheck ./...) || exit 1; done
+
+  test:
+    desc: Unit tests (Go + TS) and conformance suite
+    cmds:
+      - task: test-go
+      - task: test-ts
+      - task: conformance
+
+  test-go:
+    desc: go test -race on all Go modules
+    silent: true
+    cmds:
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && go test -race -count=1 ./...) || exit 1; done
+
+  wasm-core:
+    desc: The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core) + wasm_exec.js (ADR-0030)
+    cmds:
+      - mkdir -p {{.WASM_OUT}}
+      - cd apps/desktop && GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o {{.ROOT_DIR}}/{{.WASM_OUT}}/memobrain-core.wasm ./cmd/memobrain-core
+      - install -m 0644 "$(go env GOROOT)/lib/wasm/wasm_exec.js" {{.WASM_OUT}}/wasm_exec.js
+
+  test-wasm:
+    desc: Desktop Go core tests as WebAssembly under Node, with the sqlite-wasm bridge (ADR-0030)
+    dir: apps/desktop
+    cmds:
+      - GOOS=js GOARCH=wasm go test -count=1 -exec "{{.ROOT_DIR}}/scripts/go-js-exec.sh" ./internal/... ./cmd/...
+
+  test-ts:
+    desc: Vitest in every workspace package
+    cmds:
+      - yarn run test
+
+  test-integration:
+    desc: 'Cloud integration tests (testcontainers: PG, MinIO, Keycloak)'
+    dir: '{{.CLOUD}}'
+    cmds:
+      - go test -race -count=1 -tags integration ./test/...
+
+  conformance:
+    desc: Shared Markdown/merge/crypto fixtures run by Go and TS
+    cmds:
+      - cd shared/go && go test -race -count=1 -run Conformance ./conformance/...
+      - cmd: if [ -d {{.DESKTOP}}/internal/parser ]; then cd {{.DESKTOP}} && go test -race -count=1 -run Conformance ./internal/parser/...; fi
+        silent: true
+      - yarn workspace @memobrain/conformance run test
+      - yarn workspace @memobrain/markdown run test
+      - cmd: if [ -f packages/workbench/src/test/conformance.test.ts ]; then yarn workspace @memobrain/workbench exec vitest run src/test/conformance.test.ts; fi
+        silent: true
+
+  test-desktop-e2e:
+    desc: Two-device sync e2e (builds the cloud binary, PG via testcontainers)
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - go test -race -count=1 -tags integration ./internal/sync/...
+
+  test-load:
+    desc: k6 load test (needs a running `task dev-cloud`; see services/cloud/test/load/README.md)
+    cmds:
+      - k6 run {{.CLOUD}}/test/load/sync.k6.js
+
+  e2e:
+    desc: Playwright (Chromium) for the desktop UI and the Web UI
+    cmds:
+      - task: e2e-desktop
+      - task: e2e-desktop-prod
+      - task: e2e-web
+
+  e2e-desktop:
+    desc: Desktop UI against the in-memory Wails mock
+    cmds:
+      - yarn workspace @memobrain/desktop-frontend run e2e
+
+  e2e-desktop-prod:
+    desc: Drawing/graph/canvas specs on the minified production bundle (ADR-0025)
+    cmds:
+      - yarn workspace @memobrain/desktop-frontend run e2e:prod
+
+  e2e-web:
+    desc: Web UI on the esbuild dev server with the API mocked (OIDC test double)
+    cmds:
+      - yarn workspace @memobrain/web run e2e
+
+  ci:
+    desc: What CI runs on every push
+    cmds:
+      - task: lint
+      - task: vuln
+      - task: test
+
+  ## ---- run -------------------------------------------------------------------
+
+  stack-up:
+    desc: Start PostgreSQL, MinIO and Keycloak for development
+    cmds:
+      - '{{.COMPOSE}} up -d --wait'
+
+  stack-down:
+    desc: Stop the development stack (keeps volumes)
+    cmds:
+      - '{{.COMPOSE}} down'
+
+  stack-logs:
+    desc: Tail the development stack logs
+    cmds:
+      - '{{.COMPOSE}} logs -f'
+
+  stack-reset:
+    desc: Destroy the stack volumes (re-imports the Keycloak realm, empties PG and S3) and start again
+    cmds:
+      - '{{.COMPOSE}} down -v'
+      - '{{.COMPOSE}} up -d --wait'
+
+  dev-cloud:
+    desc: Run the cloud service against the local stack (role=all) with the Web UI on :5174 (WEB=0 to skip)
+    silent: true
+    env:
+      WEB: '{{.WEB | default "1"}}'
+    cmds:
+      - bash -c '. scripts/lib.sh; if [ "${WEB:-1}" != 0 ]; then trap web_stop EXIT; web_start; fi; cd {{.CLOUD}} && set -a && . ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/memobrain-cloud --role=all'
+
+  dev-desktop:
+    desc: Run the desktop app with live reload (esbuild, no HMR)
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - wails dev
+
+  dev-web:
+    desc: Web UI on :5174 with live reload, proxying /api to the cloud on :18081
+    cmds:
+      - yarn workspace @memobrain/web run dev
+
+  run-desktop:
+    desc: 'Desktop standalone (no cloud) with a demo vault: scripts/run-desktop.sh --demo'
+    cmds:
+      - scripts/run-desktop.sh --demo
+
+  run-desktop-cloud:
+    desc: 'Desktop + Docker stack + cloud service: scripts/run-desktop-with-cloud.sh --demo'
+    cmds:
+      - scripts/run-desktop-with-cloud.sh --demo
+
+  run-desktop-2devices:
+    desc: Two desktop instances against the cloud (simulates two devices)
+    cmds:
+      - scripts/run-desktop-with-cloud.sh --two-devices --demo
+
+  dev-stop:
+    desc: 'Stop the cloud process started by the run scripts (add -- --stack or -- --purge)'
+    cmds:
+      - scripts/dev-stop.sh {{.ARGS}} {{.CLI_ARGS}}
+
+  ## ---- build -----------------------------------------------------------------
+
+  web-build:
+    desc: Build the Web UI (with the WebAssembly core) and copy it into the cloud binary's embed dir (then run build-cloud)
+    cmds:
+      - task: wasm-core
+      - task: wailsjs
+      - MEMOBRAIN_VERSION={{.VERSION}} yarn workspace @memobrain/web run build
+      - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
+      - cp -R {{.WEB_DIR}}/dist/. {{.WEBEMBED}}/dist/
+
+  web-clean:
+    desc: Drop the embedded Web UI build and restore the tracked placeholder index.html
+    cmds:
+      - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
+      - git checkout -- {{.WEBEMBED}}/dist/index.html
+
+  build-cloud:
+    desc: 'Build the cloud binary into bin/ (embeds whatever is in web-embed/dist: run web-build first)'
+    dir: '{{.CLOUD}}'
+    cmds:
+      - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o ../../bin/memobrain-cloud ./cmd/memobrain-cloud
+
+  build-desktop:
+    desc: Build the desktop app for the current OS
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - wails build -clean -ldflags "-X main.Version={{.VERSION}}"
+
+  docker-build:
+    desc: Build the cloud image (Web UI + workbench embedded) for this machine and load it as IMAGE:VERSION
+    cmds:
+      - docker build -f services/cloud/Dockerfile --build-arg VERSION={{.VERSION}} -t {{.IMAGE}}:{{.VERSION}} .
+
+  docker-push:
+    desc: Build and push the multi-arch cloud image (PLATFORMS); needs `docker login` and a buildx builder
+    cmds:
+      - docker buildx build -f services/cloud/Dockerfile --platform {{.PLATFORMS}} --build-arg VERSION={{.VERSION}} -t {{.IMAGE}}:{{.VERSION}} --push .
+
+  ## ---- release / distribution (M7-WP3, docs/release/README.md) --------------
+
+  release-tool:
+    desc: Build tools/release (gen-manifest, sign-manifest, verify-manifest) into bin/release
+    dir: tools/release
+    cmds:
+      - GOWORK=off go build -o ../../bin/release .
+
+  helm-check:
+    desc: helm lint + template for the chart with every values file
+    cmds:
+      - helm lint deploy/helm/memobrain
+      - cmd: for f in deploy/helm/memobrain/values-k3d.yaml deploy/helm/memobrain/ci/*.yaml; do helm lint deploy/helm/memobrain -f $f >/dev/null && helm template ci deploy/helm/memobrain -f $f >/dev/null && echo "ok $f" || exit 1; done
+        silent: true
+
+  release-desktop:
+    desc: 'Local installer build: task release-desktop OS=darwin|windows|linux V=1.0.0-rc.1'
+    requires:
+      vars: [OS, V]
+    cmds:
+      - bash scripts/release/build-desktop.sh {{.OS}} {{.V}}
+
+  ## ---- maintenance -----------------------------------------------------------
+
+  rename-module:
+    desc: 'Rename the Go module path placeholder: task rename-module NEW=github.com/org/memobrain'
+    silent: true
+    requires:
+      vars: [NEW]
+    cmds:
+      - |
+        git ls-files -z -- '*.go' 'go.mod' 'go.work' '*.yaml' '*.yml' '*.md' 'Taskfile.yml' \
+          | xargs -0 perl -pi -e 's{(?<![\w./-])memobrain/(apps|services|shared)\b}{{"{"}}{{.NEW}}/$1{{"}"}}g'
+      - 'echo "Module paths renamed to {{.NEW}}/...; run: go work sync && task gen"'
+
+  ## ---- performance (M7-WP1; see docs/perf/README.md) ------------------------
+
+  perf-data:
+    desc: 'Generate the synthetic vault (cached): task perf-data PERF_NOTES=50000'
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - go run ./internal/perf/cmd/perfdata -notes {{.PERF_NOTES}} -dir {{.PERF_DIR}}/vault-{{.PERF_NOTES}}
+
+  perf:
+    desc: 'Desktop perf suite (index, search, note open, vault open, graph 10k): task perf PERF_NOTES=50000'
+    cmds:
+      - cmd: mkdir -p {{.PERF_DIR}}
+        silent: true
+      - >-
+        cd {{.DESKTOP}} && MEMOBRAIN_PERF_NOTES={{.PERF_NOTES}} MEMOBRAIN_PERF_DIR={{.PERF_DIR}} MEMOBRAIN_PERF_OUT={{.PERF_OUT}}
+        go test -run TestPerf -count=1 -timeout 90m -v ./internal/perf/
+
+  perf-check:
+    desc: 'Fail on regressions vs the stored baseline: task perf-check PERF_NOTES=50000 [PERF_TOLERANCE=25]'
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - >-
+        go run ./internal/perf/cmd/perfcheck -baseline ../../docs/perf/baseline-{{.PERF_NOTES}}.json
+        -results {{.PERF_OUT}} -tolerance {{.PERF_TOLERANCE}}
+
+  perf-load-env:
+    desc: 'Cloud load env for k6 (needs Docker): task perf-load-env USERS=1000, then k6 run -e TOKENS=.perf/tokens.json services/cloud/test/load/k6/active-users.js'
+    cmds:
+      - cmd: mkdir -p {{.PERF_DIR}}
+        silent: true
+      - >-
+        cd {{.CLOUD}} && MEMOBRAIN_LOADENV_USERS={{.USERS | default "1000"}} MEMOBRAIN_LOADENV_OUT={{.PERF_DIR}}/tokens.json
+        go test -tags integration -run TestServeLoadEnv -count=1 -timeout 2h -v ./test/integration/

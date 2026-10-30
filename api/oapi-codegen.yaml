@@ -1,4 +1,4 @@
-# oapi-codegen configuration; run from services/cloud (see Makefile gen-openapi).
+# oapi-codegen configuration; run from services/cloud (see Taskfile.yml gen-openapi).
 package: api
 output: internal/api/api.gen.go
 generate:

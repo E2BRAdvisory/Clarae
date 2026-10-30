@@ -48,12 +48,12 @@ echo "== Application identity"
 count "Desktop app: wails.json, build/ (name, bundle id dev.nodus.desktop, protocols)" "$NAME" 'apps/desktop/wails.json' 'apps/desktop/build/*'
 count "URL scheme nodus:// (code, config, docs)" "$NAME://" '*.go' '*.ts' '*.tsx' '*.json' '*.md' '*.yaml' '*.plist'
 count "Desktop Go sources (incl. module path, app strings)" "$NAME" 'apps/desktop/main.go' 'apps/desktop/internal/*.go'
-count "Environment variables NODUS_*"      "NODUS_[A-Z_]+" '*.go' '*.sh' '*.md' '*.yaml' '*.env' 'Makefile'
+count "Environment variables NODUS_*"      "NODUS_[A-Z_]+" '*.go' '*.sh' '*.md' '*.yaml' '*.env' 'Taskfile.yml'
 count "On-disk names: .nodus/ vault dir, data dir, keychain service" "\\.$NAME[/\"']|keychain|zalando|dataDir" 'apps/desktop/internal/*' 'shared/go/*'
 count "Browser storage keys (nodus.web.*)" "$NAME\\.(web|e2e)" 'web/src/*' 'web/e2e/*'
 echo
 echo "== Packaging and deployment"
-count "Cloud binary / cmd dir (nodus-cloud)" "$NAME-cloud" 'services/*' 'Makefile' 'scripts/*' 'deploy/*' '.github/*'
+count "Cloud binary / cmd dir (nodus-cloud)" "$NAME-cloud" 'services/*' 'Taskfile.yml' 'scripts/*' 'deploy/*' '.github/*'
 count "Docker (image, compose, env files)"   "$NAME" 'services/cloud/Dockerfile' 'deploy/docker/*'
 count "Helm chart (name, templates, values)" "$NAME" 'deploy/helm/*'
 count "k3d / dev scripts"                    "$NAME" 'deploy/k3d/*' 'scripts/*'
@@ -62,7 +62,7 @@ count "Observability (metric prefix nodus_, dashboards, alerts)" "$NAME" 'deploy
 count "GitHub workflows"                     "$NAME" '.github/*'
 echo
 echo "== Code identifiers"
-count "Go module path nodus/..."             "(^|[^A-Za-z0-9_./-])$NAME/(apps|services|shared)" '*.go' 'go.mod' 'go.work' '*.yaml' '*.yml' '*.md' 'Makefile'
+count "Go module path nodus/..."             "(^|[^A-Za-z0-9_./-])$NAME/(apps|services|shared)" '*.go' 'go.mod' 'go.work' '*.yaml' '*.yml' '*.md' 'Taskfile.yml'
 count "npm scope @nodus/*"                   "@$NAME/" 'package.json' '**/package.json' '*.ts' '*.tsx' '*.js' '*.json'
 count "Protobuf package / OpenAPI"           "$NAME" 'api/*'
 count "OIDC client ids / audience (nodus-desktop, nodus-web, nodus-api, nodus-admin-svc)" "$NAME-(desktop|web|api|admin)" '*.go' '*.ts' '*.tsx' '*.json' '*.yaml' '*.md' '*.env'
