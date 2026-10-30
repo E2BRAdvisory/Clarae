@@ -189,9 +189,10 @@ jobs:
           cosign verify "${IMAGE}@${DIGEST}" \
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
-      # Attestations need a public repository (or a plan that includes them): the image is signed with cosign either way.
+      # GitHub attestations need a public repository or a plan that includes them (variable ENABLE_ATTESTATIONS=true):
+      # the image is signed with cosign either way.
       - name: GitHub provenance attestation (registry)
-        if: env.PUSH == 'true' && github.event.repository.private == false
+        if: env.PUSH == 'true' && vars.ENABLE_ATTESTATIONS == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ steps.plan.outputs.image }}
