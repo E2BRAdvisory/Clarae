@@ -20,6 +20,8 @@ export default tseslint.config(
       '**/test-results/**',
       'services/cloud/test/load/**',
       '**/playwright-report/**',
+      // Local copies of the repository made by tooling (git-ignored, not part of the workspace).
+      '.delta/**',
     ],
   },
   js.configs.recommended,
