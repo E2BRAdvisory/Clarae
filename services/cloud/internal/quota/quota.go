@@ -11,8 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/quota/quotadb"
+	"memobrain/services/cloud/internal/settings"
+	"memobrain/services/cloud/internal/users"
 	"memobrain/shared/syncproto"
 )
 
@@ -32,7 +34,7 @@ const (
 
 // QuotaSource resolves the effective quota of a user (users module).
 type QuotaSource interface {
-	EffectiveQuota(ctx context.Context, u dbgen.User) (int64, error)
+	EffectiveQuota(ctx context.Context, u users.User) (int64, error)
 }
 
 // Service implements the quota module.
@@ -52,8 +54,8 @@ type Usage struct {
 }
 
 func (s *Service) percent(ctx context.Context, key string, def int) int {
-	raw, err := s.db.Queries().GetSetting(ctx, key)
-	if err != nil {
+	raw, ok, err := settings.Get(ctx, s.db.Pool, key)
+	if err != nil || !ok {
 		return def
 	}
 	var n int
@@ -82,7 +84,7 @@ func LevelFor(used, quota int64, warnPct, critPct int) Level {
 
 // Usage returns the current usage of a user.
 func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
-	u, err := s.db.Queries().GetUserByID(ctx, userID)
+	u, err := users.GetUserByID(ctx, s.db.Pool, userID)
 	if err != nil {
 		return Usage{}, err
 	}
@@ -99,7 +101,7 @@ func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
 
 // QuotaOf returns the effective quota of a user (before opening transactions).
 func (s *Service) QuotaOf(ctx context.Context, userID uuid.UUID) (int64, error) {
-	u, err := s.db.Queries().GetUserByID(ctx, userID)
+	u, err := users.GetUserByID(ctx, s.db.Pool, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -109,8 +111,9 @@ func (s *Service) QuotaOf(ctx context.Context, userID uuid.UUID) (int64, error) 
 // Charge adds delta bytes to the owner's usage inside a transaction and fails
 // with QUOTA_EXCEEDED when that would exceed quota. Releasing space (delta
 // <= 0) always succeeds.
-func Charge(ctx context.Context, q *dbgen.Queries, ownerID uuid.UUID, delta, quota int64) error {
-	n, err := q.ChargeUser(ctx, dbgen.ChargeUserParams{ID: ownerID, Delta: delta, Quota: quota})
+func Charge(ctx context.Context, tx db.DBTX, ownerID uuid.UUID, delta, quota int64) error {
+	q := quotadb.New(tx)
+	n, err := q.ChargeUser(ctx, quotadb.ChargeUserParams{ID: ownerID, Delta: delta, Quota: quota})
 	if err != nil {
 		return err
 	}
@@ -129,4 +132,16 @@ func Charge(ctx context.Context, q *dbgen.Queries, ownerID uuid.UUID, delta, quo
 		Detail: "storage quota exceeded",
 		Extra:  map[string]any{"used_bytes": used, "quota_bytes": quota},
 	}
+}
+
+// UsedBytes returns the storage an owner uses, read inside tx.
+func UsedBytes(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) (int64, error) {
+	return quotadb.New(tx).UserUsedBytes(ctx, ownerID)
+}
+
+// Release gives back bytes to an owner's usage inside tx (a purged vault); it
+// never fails for lack of quota.
+func Release(ctx context.Context, tx db.DBTX, ownerID uuid.UUID, bytes int64) error {
+	_, err := quotadb.New(tx).ChargeUser(ctx, quotadb.ChargeUserParams{ID: ownerID, Delta: -bytes, Quota: Unlimited})
+	return err
 }

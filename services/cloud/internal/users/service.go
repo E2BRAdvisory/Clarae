@@ -9,11 +9,11 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/auth"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/settings"
+	"memobrain/services/cloud/internal/users/usersdb"
 )
 
 // QuotaUnlimited is the sentinel stored in quota_bytes_override and returned
@@ -36,7 +36,7 @@ var _ auth.Provisioner = (*Service)(nil)
 // Provision upserts the user from token claims and returns the Principal.
 // Suspended and deleted accounts yield auth.ErrSuspended.
 func (s *Service) Provision(ctx context.Context, c auth.Claims) (auth.Principal, error) {
-	q := s.db.Queries()
+	q := usersdb.New(s.db.Pool)
 	username := c.PreferredUsername
 	if username == "" {
 		username = c.Subject
@@ -54,7 +54,7 @@ func (s *Service) Provision(ctx context.Context, c auth.Claims) (auth.Principal,
 	if err != nil {
 		return auth.Principal{}, err
 	}
-	u, err := q.UpsertUserFromToken(ctx, dbgen.UpsertUserFromTokenParams{
+	u, err := q.UpsertUserFromToken(ctx, usersdb.UpsertUserFromTokenParams{
 		ID:          id,
 		KeycloakSub: c.Subject,
 		Username:    username,
@@ -80,14 +80,14 @@ func (s *Service) Provision(ctx context.Context, c auth.Claims) (auth.Principal,
 
 // Me is the profile returned by GET /me.
 type Me struct {
-	User          dbgen.User
+	User          usersdb.User
 	QuotaBytes    int64
 	ConfigVersion int
 }
 
 // GetMe loads the profile and computes the effective quota.
 func (s *Service) GetMe(ctx context.Context, userID uuid.UUID) (Me, error) {
-	q := s.db.Queries()
+	q := usersdb.New(s.db.Pool)
 	u, err := q.GetUserByID(ctx, userID)
 	if err != nil {
 		return Me{}, err
@@ -100,16 +100,16 @@ func (s *Service) GetMe(ctx context.Context, userID uuid.UUID) (Me, error) {
 }
 
 // EffectiveQuota applies the per-user override over the global default.
-func (s *Service) EffectiveQuota(ctx context.Context, u dbgen.User) (int64, error) {
+func (s *Service) EffectiveQuota(ctx context.Context, u usersdb.User) (int64, error) {
 	if u.QuotaBytesOverride != nil {
 		return *u.QuotaBytesOverride, nil
 	}
-	raw, err := s.db.Queries().GetSetting(ctx, SettingDefaultQuota)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, fmt.Errorf("setting %s is missing", SettingDefaultQuota)
-	}
+	raw, ok, err := settings.Get(ctx, s.db.Pool, SettingDefaultQuota)
 	if err != nil {
 		return 0, err
+	}
+	if !ok {
+		return 0, fmt.Errorf("setting %s is missing", SettingDefaultQuota)
 	}
 	var quota int64
 	if err := json.Unmarshal(raw, &quota); err != nil {
@@ -119,17 +119,17 @@ func (s *Service) EffectiveQuota(ctx context.Context, u dbgen.User) (int64, erro
 }
 
 // ListDevices returns the active devices of a user.
-func (s *Service) ListDevices(ctx context.Context, userID uuid.UUID) ([]dbgen.Device, error) {
-	return s.db.Queries().ListDevices(ctx, userID)
+func (s *Service) ListDevices(ctx context.Context, userID uuid.UUID) ([]usersdb.Device, error) {
+	return usersdb.New(s.db.Pool).ListDevices(ctx, userID)
 }
 
 // RegisterDevice creates a device and returns it.
-func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, name, platform string, appVersion *string) (dbgen.Device, error) {
+func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, name, platform string, appVersion *string) (usersdb.Device, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
-		return dbgen.Device{}, err
+		return usersdb.Device{}, err
 	}
-	return s.db.Queries().CreateDevice(ctx, dbgen.CreateDeviceParams{
+	return usersdb.New(s.db.Pool).CreateDevice(ctx, usersdb.CreateDeviceParams{
 		ID:         id,
 		UserID:     userID,
 		Name:       name,
@@ -144,7 +144,7 @@ var ErrDeviceNotFound = errors.New("device not found")
 
 // RevokeDevice revokes a device of the user.
 func (s *Service) RevokeDevice(ctx context.Context, userID, deviceID uuid.UUID) error {
-	n, err := s.db.Queries().RevokeDevice(ctx, dbgen.RevokeDeviceParams{ID: deviceID, UserID: userID})
+	n, err := usersdb.New(s.db.Pool).RevokeDevice(ctx, usersdb.RevokeDeviceParams{ID: deviceID, UserID: userID})
 	if err != nil {
 		return err
 	}

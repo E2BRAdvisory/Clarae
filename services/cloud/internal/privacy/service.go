@@ -16,10 +16,14 @@ import (
 
 	"memobrain/services/cloud/internal/audit"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/keycloak"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/privacy/privacydb"
+	"memobrain/services/cloud/internal/sharing"
+	"memobrain/services/cloud/internal/users"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/syncproto"
 )
 
@@ -59,8 +63,9 @@ type Export struct {
 
 // Export collects the account data of a user.
 func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) {
-	q := s.db.Queries()
-	u, err := q.GetUserByID(ctx, userID)
+	conn := s.db.Pool
+	q := privacydb.New(conn)
+	u, err := users.GetUserByID(ctx, conn, userID)
 	if err != nil {
 		return Export{}, err
 	}
@@ -86,11 +91,11 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 			"created_at": d.CreatedAt, "last_seen_at": d.LastSeenAt, "revoked_at": d.RevokedAt,
 		})
 	}
-	groups, err := q.ListGroupsOfUser(ctx, userID)
+	memberships, err := groups.ListGroupsOfUser(ctx, conn, userID)
 	if err != nil {
 		return Export{}, err
 	}
-	for _, g := range groups {
+	for _, g := range memberships {
 		out.Groups = append(out.Groups, map[string]any{"id": g.ID, "name": g.Name, "description": g.Description, "member_role": g.MemberRole})
 	}
 	envelopes, err := q.ListEnvelopeKindsOfOwner(ctx, userID)
@@ -118,7 +123,7 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 		return Export{}, err
 	}
 	for _, sh := range shares {
-		grants, err := q.ListGrants(ctx, sh.ID)
+		grants, err := sharing.ListGrants(ctx, conn, sh.ID)
 		if err != nil {
 			return Export{}, err
 		}
@@ -135,7 +140,7 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 			"created_at": sh.CreatedAt, "expires_at": sh.ExpiresAt, "revoked_at": sh.RevokedAt, "grants": gs,
 		})
 	}
-	received, err := q.ListGrantsOfUser(ctx, userID)
+	received, err := sharing.ListGrantsOfUser(ctx, conn, userID)
 	if err != nil {
 		return Export{}, err
 	}
@@ -162,8 +167,8 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 		})
 	}
 	// Record that the export happened (the entry shows up in the next export).
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
-		return audit.Record(ctx, q, userID, "account.export", "user", userID.String(), nil)
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return audit.Record(ctx, tx, userID, "account.export", "user", userID.String(), nil)
 	})
 	return out, err
 }
@@ -177,8 +182,9 @@ type DeleteRequest struct {
 // Delete deletes the caller's account: see the package comment.
 func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteRequest) error {
 	var sub string
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		cur, err := q.GetUserByID(ctx, userID)
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := privacydb.New(tx)
+		cur, err := users.GetUserByID(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
@@ -193,7 +199,7 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteReques
 			if _, err := q.LockActiveAdmins(ctx); err != nil {
 				return err
 			}
-			n, err := q.CountActiveAdmins(ctx)
+			n, err := users.CountActiveAdmins(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -210,18 +216,18 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteReques
 				"you own %d private (end-to-end encrypted) vault(s): their content cannot be recovered by anyone once deleted; set acknowledge_data_loss to confirm", private)
 		}
 		sub = cur.KeycloakSub
-		vaults, err := q.SoftDeleteVaultsOfOwner(ctx, userID)
+		deleted, err := vaults.SoftDeleteVaultsOfOwner(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
-		if err := Anonymise(ctx, q, userID); err != nil {
+		if err := Anonymise(ctx, tx, userID); err != nil {
 			return err
 		}
 		memberships, err := q.DeleteMembershipsOfUser(ctx, userID)
 		if err != nil {
 			return err
 		}
-		if _, err := q.DeleteGrantsOfPrincipal(ctx, dbgen.DeleteGrantsOfPrincipalParams{PrincipalType: "user", PrincipalID: userID}); err != nil {
+		if err := sharing.DeleteGrantsOfPrincipal(ctx, tx, "user", userID); err != nil {
 			return err
 		}
 		if _, err := q.DeleteGrantsGrantedBy(ctx, userID); err != nil {
@@ -233,8 +239,8 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteReques
 		if _, err := q.ExpireExportsOfUser(ctx, userID); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, userID, "account.delete", "user", userID.String(), map[string]any{
-			"vaults": vaults, "private_vaults": private, "memberships": memberships,
+		if err := audit.Record(ctx, tx, userID, "account.delete", "user", userID.String(), map[string]any{
+			"vaults": deleted, "private_vaults": private, "memberships": memberships,
 		}); err != nil {
 			return err
 		}
@@ -256,7 +262,8 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteReques
 // Anonymise replaces the personal data of a user with a tombstone and removes
 // the devices and the network addresses in the audit trail. It keeps ids so
 // audit rows and revisions stay consistent, and it is idempotent.
-func Anonymise(ctx context.Context, q *dbgen.Queries, id uuid.UUID) error {
+func Anonymise(ctx context.Context, tx db.DBTX, id uuid.UUID) error {
+	q := privacydb.New(tx)
 	if _, err := q.TombstoneUser(ctx, id); err != nil {
 		return err
 	}

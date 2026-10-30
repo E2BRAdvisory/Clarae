@@ -8,7 +8,6 @@ package jobs
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -17,11 +16,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
+	"memobrain/services/cloud/internal/admin"
 	"memobrain/services/cloud/internal/blobs"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/jobs/jobsdb"
 	"memobrain/services/cloud/internal/observability"
+	"memobrain/services/cloud/internal/quota"
 	"memobrain/services/cloud/internal/revisions"
+	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/storage"
 )
 
@@ -74,15 +76,7 @@ const (
 )
 
 func (r *Runner) setting(ctx context.Context, key string, def int) int {
-	raw, err := r.db.Queries().GetSetting(ctx, key)
-	if err != nil {
-		return def
-	}
-	var n int
-	if json.Unmarshal(raw, &n) != nil || n <= 0 {
-		return def
-	}
-	return n
+	return int(settings.Int(ctx, r.db.Pool, key, int64(def)))
 }
 
 // withLock runs fn only if no other replica holds the job's lock.
@@ -178,7 +172,7 @@ func (r *Runner) CollectBlobs(ctx context.Context) (int, error) {
 	cutoff := ptrTime(r.now().Add(-grace))
 	total := 0
 	for {
-		rows, err := r.db.Queries().ListUnreferencedBlobs(ctx, dbgen.ListUnreferencedBlobsParams{UnreferencedSince: cutoff, Limit: 500})
+		rows, err := jobsdb.New(r.db.Pool).ListUnreferencedBlobs(ctx, jobsdb.ListUnreferencedBlobsParams{UnreferencedSince: cutoff, Limit: 500})
 		if err != nil {
 			return total, err
 		}
@@ -207,8 +201,9 @@ func (r *Runner) CollectBlobs(ctx context.Context) (int, error) {
 // since it was listed.
 func (r *Runner) collectBlob(ctx context.Context, hash string, cutoff *time.Time) (bool, error) {
 	deleted := false
-	err := r.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
-		key, err := q.DeleteCollectableBlob(ctx, dbgen.DeleteCollectableBlobParams{Hash: hash, UnreferencedSince: cutoff})
+	err := r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := jobsdb.New(tx)
+		key, err := q.DeleteCollectableBlob(ctx, jobsdb.DeleteCollectableBlobParams{Hash: hash, UnreferencedSince: cutoff})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // referenced again (or already collected): keep it
 		}
@@ -237,12 +232,12 @@ func (r *Runner) PruneRevisions(ctx context.Context) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	totals, err := r.db.Queries().ListVaultTotals(ctx)
+	totals, err := jobsdb.New(r.db.Pool).ListVaultTotals(ctx)
 	if err != nil {
 		return n, err
 	}
 	for _, v := range totals {
-		if _, err := r.db.Queries().PurgeDeletedFiles(ctx, v.VaultID); err != nil {
+		if _, err := jobsdb.New(r.db.Pool).PurgeDeletedFiles(ctx, v.VaultID); err != nil {
 			return n, err
 		}
 	}
@@ -291,12 +286,7 @@ func (r *Runner) runSteps(ctx context.Context, steps []step) error {
 
 // SnapshotStorage records today's total usage for the trend of the admin dashboard.
 func (r *Runner) SnapshotStorage(ctx context.Context) error {
-	q := r.db.Queries()
-	totals, err := q.StorageTotals(ctx)
-	if err != nil {
-		return err
-	}
-	return q.UpsertStorageSnapshot(ctx, totals.TotalUsed)
+	return admin.SnapshotStorage(ctx, r.db.Pool)
 }
 
 // CompactChangelogs advances compaction_seq so entries older than the window
@@ -305,18 +295,18 @@ func (r *Runner) SnapshotStorage(ctx context.Context) error {
 func (r *Runner) CompactChangelogs(ctx context.Context) error {
 	window := time.Duration(r.setting(ctx, "sync.changelog_window_days", 90)) * 24 * time.Hour
 	cut := r.now().Add(-window)
-	q := r.db.Queries()
+	q := jobsdb.New(r.db.Pool)
 	vaults, err := q.ListVaultTotals(ctx)
 	if err != nil {
 		return err
 	}
 	for _, v := range vaults {
-		seq, err := q.MaxSeqBefore(ctx, dbgen.MaxSeqBeforeParams{VaultID: v.VaultID, ServerTime: cut})
+		seq, err := q.MaxSeqBefore(ctx, jobsdb.MaxSeqBeforeParams{VaultID: v.VaultID, ServerTime: cut})
 		if err != nil {
 			return err
 		}
 		if seq > 0 {
-			if err := q.SetVaultCompaction(ctx, dbgen.SetVaultCompactionParams{ID: v.VaultID, CompactionSeq: seq}); err != nil {
+			if err := q.SetVaultCompaction(ctx, jobsdb.SetVaultCompactionParams{ID: v.VaultID, CompactionSeq: seq}); err != nil {
 				return err
 			}
 		}
@@ -328,7 +318,7 @@ func (r *Runner) CompactChangelogs(ctx context.Context) error {
 // vaults.deleted_retention_days, releasing blob references and quota.
 func (r *Runner) PurgeDeletedVaults(ctx context.Context) (int, error) {
 	retention := time.Duration(r.setting(ctx, "vaults.deleted_retention_days", 30)) * 24 * time.Hour
-	q := r.db.Queries()
+	q := jobsdb.New(r.db.Pool)
 	ids, err := q.ListDeletedVaultsBefore(ctx, ptrTime(r.now().Add(-retention)))
 	if err != nil {
 		return 0, err
@@ -342,7 +332,8 @@ func (r *Runner) PurgeDeletedVaults(ctx context.Context) (int, error) {
 }
 
 func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	return r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := jobsdb.New(tx)
 		v, err := q.GetVaultForUpdate(ctx, id)
 		if err != nil {
 			return err
@@ -358,12 +349,12 @@ func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID) error {
 			}
 		}
 		for h, n := range count {
-			if err := blobs.AddRef(ctx, q, h, -n); err != nil {
+			if err := blobs.AddRef(ctx, tx, h, -n); err != nil {
 				return err
 			}
 		}
 		if v.TotalBytes > 0 {
-			if _, err := q.ChargeUser(ctx, dbgen.ChargeUserParams{ID: v.OwnerID, Delta: -v.TotalBytes, Quota: -1}); err != nil {
+			if err := quota.Release(ctx, tx, v.OwnerID, v.TotalBytes); err != nil {
 				return err
 			}
 		}
@@ -374,7 +365,7 @@ func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID) error {
 // ReconcileUsage recomputes per-vault and per-user counters from the files
 // table and corrects any drift (e.g. after a crash between steps).
 func (r *Runner) ReconcileUsage(ctx context.Context) error {
-	q := r.db.Queries()
+	q := jobsdb.New(r.db.Pool)
 	totals, err := q.ListVaultTotals(ctx)
 	if err != nil {
 		return err
@@ -388,7 +379,7 @@ func (r *Runner) ReconcileUsage(ctx context.Context) error {
 		}
 		if cur.TotalBytes != v.Bytes || int(cur.FileCount) != int(v.Files) {
 			r.log.Warn().Str("vault", v.VaultID.String()).Int64("stored", cur.TotalBytes).Int64("actual", v.Bytes).Msg("usage drift corrected")
-			if err := q.SetVaultTotals(ctx, dbgen.SetVaultTotalsParams{ID: v.VaultID, TotalBytes: v.Bytes, FileCount: v.Files}); err != nil {
+			if err := q.SetVaultTotals(ctx, jobsdb.SetVaultTotalsParams{ID: v.VaultID, TotalBytes: v.Bytes, FileCount: v.Files}); err != nil {
 				return err
 			}
 		}
@@ -400,7 +391,7 @@ func (r *Runner) ReconcileUsage(ctx context.Context) error {
 	for _, u := range users {
 		if want := perOwner[u.ID]; u.UsedBytes != want {
 			r.log.Warn().Str("user", u.ID.String()).Int64("stored", u.UsedBytes).Int64("actual", want).Msg("user usage drift corrected")
-			if err := q.SetUserUsed(ctx, dbgen.SetUserUsedParams{ID: u.ID, UsedBytes: want}); err != nil {
+			if err := q.SetUserUsed(ctx, jobsdb.SetUserUsedParams{ID: u.ID, UsedBytes: want}); err != nil {
 				return err
 			}
 		}
@@ -410,14 +401,14 @@ func (r *Runner) ReconcileUsage(ctx context.Context) error {
 
 // ReconcileBlobRefs recomputes blob reference counts from the revisions.
 func (r *Runner) ReconcileBlobRefs(ctx context.Context) error {
-	q := r.db.Queries()
+	q := jobsdb.New(r.db.Pool)
 	rows, err := q.ListBlobRefCounts(ctx)
 	if err != nil {
 		return err
 	}
 	for _, b := range rows {
 		r.log.Warn().Str("blob", b.Hash).Int32("stored", b.RefCount).Int32("actual", b.Actual).Msg("blob ref count corrected")
-		if err := q.SetBlobRef(ctx, dbgen.SetBlobRefParams{Hash: b.Hash, RefCount: b.Actual}); err != nil {
+		if err := q.SetBlobRef(ctx, jobsdb.SetBlobRefParams{Hash: b.Hash, RefCount: b.Actual}); err != nil {
 			return err
 		}
 	}

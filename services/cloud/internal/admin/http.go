@@ -12,30 +12,30 @@ import (
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
 	"memobrain/services/cloud/internal/configprofiles"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/shared/syncproto"
 )
 
 // Groups is what the admin API needs from the groups module.
 type Groups interface {
-	Create(ctx context.Context, actor uuid.UUID, name, description string) (dbgen.Group, error)
-	Update(ctx context.Context, actor, id uuid.UUID, name, description string) (dbgen.Group, error)
+	Create(ctx context.Context, actor uuid.UUID, name, description string) (groups.Group, error)
+	Update(ctx context.Context, actor, id uuid.UUID, name, description string) (groups.Group, error)
 	Delete(ctx context.Context, actor, id uuid.UUID) error
 	SetMember(ctx context.Context, actor, groupID, userID uuid.UUID, role string) error
 	RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error
-	Members(ctx context.Context, groupID uuid.UUID) ([]dbgen.ListGroupMembersRow, error)
+	Members(ctx context.Context, groupID uuid.UUID) ([]groups.ListGroupMembersRow, error)
 }
 
 // Profiles is what the admin API needs from the configuration module.
 type Profiles interface {
-	List(ctx context.Context) ([]dbgen.ConfigProfile, error)
-	Get(ctx context.Context, id uuid.UUID) (dbgen.ConfigProfile, error)
-	Create(ctx context.Context, actor uuid.UUID, in configprofiles.ProfileInput) (dbgen.ConfigProfile, error)
-	Update(ctx context.Context, actor, id uuid.UUID, in configprofiles.ProfileInput) (dbgen.ConfigProfile, error)
+	List(ctx context.Context) ([]configprofiles.ConfigProfile, error)
+	Get(ctx context.Context, id uuid.UUID) (configprofiles.ConfigProfile, error)
+	Create(ctx context.Context, actor uuid.UUID, in configprofiles.ProfileInput) (configprofiles.ConfigProfile, error)
+	Update(ctx context.Context, actor, id uuid.UUID, in configprofiles.ProfileInput) (configprofiles.ConfigProfile, error)
 	Delete(ctx context.Context, actor, id uuid.UUID) error
-	Versions(ctx context.Context, id uuid.UUID) ([]dbgen.ConfigProfileVersion, error)
-	Restore(ctx context.Context, actor, id uuid.UUID, version int32) (dbgen.ConfigProfile, error)
+	Versions(ctx context.Context, id uuid.UUID) ([]configprofiles.ConfigProfileVersion, error)
+	Restore(ctx context.Context, actor, id uuid.UUID, version int32) (configprofiles.ConfigProfile, error)
 	SetGroupAssignments(ctx context.Context, actor, groupID uuid.UUID, as []configprofiles.Assignment) error
 	EffectiveFor(ctx context.Context, userID uuid.UUID) (configprofiles.Effective, error)
 }
@@ -502,7 +502,7 @@ func decodeConfig(raw []byte) map[string]any {
 	return m
 }
 
-func toProfile(p dbgen.ConfigProfile) api.ConfigProfile {
+func toProfile(p configprofiles.ConfigProfile) api.ConfigProfile {
 	locked := p.LockedKeys
 	if locked == nil {
 		locked = []string{}

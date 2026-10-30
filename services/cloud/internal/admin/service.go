@@ -20,12 +20,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
+	"memobrain/services/cloud/internal/admin/admindb"
 	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/configprofiles"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/keycloak"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/settings"
+	"memobrain/services/cloud/internal/users"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/syncproto"
 )
 
@@ -48,7 +52,7 @@ type SessionInvalidator interface{ Invalidate(subject string) }
 
 // QuotaResolver computes the effective quota of a user (users.Service).
 type QuotaResolver interface {
-	EffectiveQuota(ctx context.Context, u dbgen.User) (int64, error)
+	EffectiveQuota(ctx context.Context, u users.User) (int64, error)
 }
 
 // Service implements the admin module.
@@ -92,11 +96,11 @@ func tolerant(err error) bool {
 
 // UserView is a user with their effective quota.
 type UserView struct {
-	User       dbgen.User
+	User       users.User
 	QuotaBytes int64
 }
 
-func (s *Service) view(ctx context.Context, u dbgen.User) (UserView, error) {
+func (s *Service) view(ctx context.Context, u users.User) (UserView, error) {
 	q, err := s.quota.EffectiveQuota(ctx, u)
 	return UserView{User: u, QuotaBytes: q}, err
 }
@@ -120,7 +124,7 @@ func (s *Service) ListUsers(ctx context.Context, f UserFilter) ([]UserView, int,
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 50
 	}
-	rows, err := s.db.Queries().ListUsersAdmin(ctx, dbgen.ListUsersAdminParams{
+	rows, err := admindb.New(s.db.Pool).ListUsersAdmin(ctx, admindb.ListUsersAdminParams{
 		Q: strings.TrimSpace(f.Query), Status: f.Status, Role: f.Role, GroupID: f.Group, Sort: f.Sort,
 		SkipRows: clampInt32(f.Offset), MaxRows: clampInt32(f.Limit),
 	})
@@ -131,7 +135,7 @@ func (s *Service) ListUsers(ctx context.Context, f UserFilter) ([]UserView, int,
 	total := 0
 	for _, r := range rows {
 		total = int(r.Total)
-		v, err := s.view(ctx, dbgen.User{
+		v, err := s.view(ctx, users.User{
 			ID: r.ID, KeycloakSub: r.KeycloakSub, Username: r.Username, Email: r.Email, DisplayName: r.DisplayName,
 			Role: r.Role, Status: r.Status, QuotaBytesOverride: r.QuotaBytesOverride, UsedBytes: r.UsedBytes,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, LastLoginAt: r.LastLoginAt,
@@ -143,7 +147,7 @@ func (s *Service) ListUsers(ctx context.Context, f UserFilter) ([]UserView, int,
 	}
 	if len(rows) == 0 && f.Offset > 0 {
 		// A page past the end still reports the real total.
-		all, err := s.db.Queries().ListUsersAdmin(ctx, dbgen.ListUsersAdminParams{
+		all, err := admindb.New(s.db.Pool).ListUsersAdmin(ctx, admindb.ListUsersAdminParams{
 			Q: strings.TrimSpace(f.Query), Status: f.Status, Role: f.Role, GroupID: f.Group, Sort: f.Sort, MaxRows: 1,
 		})
 		if err == nil && len(all) > 0 {
@@ -165,17 +169,17 @@ func clampInt32(n int) int32 {
 
 // GetUser returns one user.
 func (s *Service) GetUser(ctx context.Context, id uuid.UUID) (UserView, error) {
-	u, err := s.user(ctx, s.db.Queries(), id)
+	u, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
 		return UserView{}, err
 	}
 	return s.view(ctx, u)
 }
 
-func (s *Service) user(ctx context.Context, q *dbgen.Queries, id uuid.UUID) (dbgen.User, error) {
-	u, err := q.GetUserByID(ctx, id)
+func (s *Service) user(ctx context.Context, tx db.DBTX, id uuid.UUID) (users.User, error) {
+	u, err := users.GetUserByID(ctx, tx, id)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && u.Status == "deleted") {
-		return dbgen.User{}, httpproblem.NotFound("user")
+		return users.User{}, httpproblem.NotFound("user")
 	}
 	return u, err
 }
@@ -220,16 +224,16 @@ func (s *Service) CreateUser(ctx context.Context, actor uuid.UUID, in NewUser) (
 	if d := strings.TrimSpace(in.DisplayName); d != "" {
 		display = &d
 	}
-	var u dbgen.User
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	var u users.User
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
-		u, err = q.InsertProvisionedUser(ctx, dbgen.InsertProvisionedUserParams{
+		u, err = users.InsertProvisionedUser(ctx, tx, users.InsertProvisionedUserParams{
 			ID: uuid.Must(uuid.NewV7()), KeycloakSub: sub, Username: username, Email: addr.Address, DisplayName: display, Role: role,
 		})
 		if err != nil {
 			return err
 		}
-		return audit.Record(ctx, q, actor, "user.create", "user", u.ID.String(), map[string]string{"username": username, "role": role})
+		return audit.Record(ctx, tx, actor, "user.create", "user", u.ID.String(), map[string]string{"username": username, "role": role})
 	})
 	if err != nil {
 		_ = s.kc.SetEnabled(ctx, sub, false)
@@ -243,7 +247,7 @@ func (s *Service) CreateUser(ctx context.Context, actor uuid.UUID, in NewUser) (
 
 // UpdateUser changes display name and e-mail.
 func (s *Service) UpdateUser(ctx context.Context, actor, id uuid.UUID, displayName, email *string) (UserView, error) {
-	cur, err := s.user(ctx, s.db.Queries(), id)
+	cur, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
 		return UserView{}, err
 	}
@@ -263,13 +267,13 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id uuid.UUID, displayNa
 	if err := s.kc.UpdateUser(ctx, cur.KeycloakSub, deref(em), deref(dn)); err != nil && !tolerant(err) {
 		return UserView{}, kcError(err)
 	}
-	var u dbgen.User
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	var u users.User
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
-		if u, err = q.UpdateUserProfile(ctx, dbgen.UpdateUserProfileParams{ID: id, DisplayName: dn, Email: em}); err != nil {
+		if u, err = users.UpdateUserProfile(ctx, tx, users.UpdateUserProfileParams{ID: id, DisplayName: dn, Email: em}); err != nil {
 			return err
 		}
-		return audit.Record(ctx, q, actor, "user.update", "user", id.String(), nil)
+		return audit.Record(ctx, tx, actor, "user.update", "user", id.String(), nil)
 	})
 	if db.IsUniqueViolation(err) {
 		return UserView{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a user with this e-mail already exists")
@@ -288,11 +292,11 @@ func deref(s *string) string {
 }
 
 // guardLastAdmin refuses to remove the last active administrator from service.
-func (s *Service) guardLastAdmin(ctx context.Context, q *dbgen.Queries, target dbgen.User) error {
+func (s *Service) guardLastAdmin(ctx context.Context, tx db.DBTX, target users.User) error {
 	if target.Role != "admin" || target.Status != "active" {
 		return nil
 	}
-	n, err := q.CountActiveAdmins(ctx)
+	n, err := users.CountActiveAdmins(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -308,19 +312,19 @@ func (s *Service) Suspend(ctx context.Context, actor, id uuid.UUID) (UserView, e
 	if actor == id {
 		return UserView{}, httpproblem.Errorf(syncproto.CodeInvalidState, "you cannot suspend yourself")
 	}
-	var u dbgen.User
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		cur, err := s.user(ctx, q, id)
+	var u users.User
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		cur, err := s.user(ctx, tx, id)
 		if err != nil {
 			return err
 		}
-		if err := s.guardLastAdmin(ctx, q, cur); err != nil {
+		if err := s.guardLastAdmin(ctx, tx, cur); err != nil {
 			return err
 		}
-		if u, err = q.SetUserStatus(ctx, dbgen.SetUserStatusParams{ID: id, Status: "suspended"}); err != nil {
+		if u, err = users.SetUserStatus(ctx, tx, users.SetUserStatusParams{ID: id, Status: "suspended"}); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "user.suspend", "user", id.String(), nil); err != nil {
+		if err := audit.Record(ctx, tx, actor, "user.suspend", "user", id.String(), nil); err != nil {
 			return err
 		}
 		return notify.PublishAccount(ctx, tx, notify.AccountEvent{User: id, Kind: notify.AccountSuspended})
@@ -340,20 +344,20 @@ func (s *Service) Suspend(ctx context.Context, actor, id uuid.UUID) (UserView, e
 
 // Activate lifts a suspension.
 func (s *Service) Activate(ctx context.Context, actor, id uuid.UUID) (UserView, error) {
-	cur, err := s.user(ctx, s.db.Queries(), id)
+	cur, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
 		return UserView{}, err
 	}
 	if err := s.kc.SetEnabled(ctx, cur.KeycloakSub, true); err != nil && !tolerant(err) {
 		return UserView{}, kcError(err)
 	}
-	var u dbgen.User
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	var u users.User
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
-		if u, err = q.SetUserStatus(ctx, dbgen.SetUserStatusParams{ID: id, Status: "active"}); err != nil {
+		if u, err = users.SetUserStatus(ctx, tx, users.SetUserStatusParams{ID: id, Status: "active"}); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "user.activate", "user", id.String(), nil); err != nil {
+		if err := audit.Record(ctx, tx, actor, "user.activate", "user", id.String(), nil); err != nil {
 			return err
 		}
 		return notify.PublishAccount(ctx, tx, notify.AccountEvent{User: id, Kind: notify.AccountActivated})
@@ -374,23 +378,23 @@ func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
 		return httpproblem.Errorf(syncproto.CodeInvalidState, "you cannot delete yourself")
 	}
 	var sub string
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		cur, err := s.user(ctx, q, id)
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		cur, err := s.user(ctx, tx, id)
 		if err != nil {
 			return err
 		}
-		if err := s.guardLastAdmin(ctx, q, cur); err != nil {
+		if err := s.guardLastAdmin(ctx, tx, cur); err != nil {
 			return err
 		}
 		sub = cur.KeycloakSub
-		if _, err := q.SetUserStatus(ctx, dbgen.SetUserStatusParams{ID: id, Status: "deleted"}); err != nil {
+		if _, err := users.SetUserStatus(ctx, tx, users.SetUserStatusParams{ID: id, Status: "deleted"}); err != nil {
 			return err
 		}
-		n, err := q.SoftDeleteVaultsOfOwner(ctx, id)
+		n, err := vaults.SoftDeleteVaultsOfOwner(ctx, tx, id)
 		if err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "user.delete", "user", id.String(), map[string]any{"vaults": n}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "user.delete", "user", id.String(), map[string]any{"vaults": n}); err != nil {
 			return err
 		}
 		return notify.PublishAccount(ctx, tx, notify.AccountEvent{User: id, Kind: notify.AccountSuspended})
@@ -409,7 +413,7 @@ func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
 
 // ResetPassword requires a new password at the next login.
 func (s *Service) ResetPassword(ctx context.Context, actor, id uuid.UUID) (bool, error) {
-	cur, err := s.user(ctx, s.db.Queries(), id)
+	cur, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
 		return false, err
 	}
@@ -417,8 +421,8 @@ func (s *Service) ResetPassword(ctx context.Context, actor, id uuid.UUID) (bool,
 	if err != nil {
 		return false, kcError(err)
 	}
-	return sent, s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
-		return audit.Record(ctx, q, actor, "user.reset_password", "user", id.String(), map[string]bool{"email_sent": sent})
+	return sent, s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return audit.Record(ctx, tx, actor, "user.reset_password", "user", id.String(), map[string]bool{"email_sent": sent})
 	})
 }
 
@@ -428,7 +432,7 @@ func (s *Service) SetRole(ctx context.Context, actor, id uuid.UUID, role string)
 	if role != "admin" && role != "user" {
 		return UserView{}, bad("role must be user or admin")
 	}
-	cur, err := s.user(ctx, s.db.Queries(), id)
+	cur, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
 		return UserView{}, err
 	}
@@ -439,20 +443,20 @@ func (s *Service) SetRole(ctx context.Context, actor, id uuid.UUID, role string)
 		if actor == id {
 			return UserView{}, httpproblem.Errorf(syncproto.CodeInvalidState, "you cannot remove your own administrator role")
 		}
-		if err := s.guardLastAdmin(ctx, s.db.Queries(), cur); err != nil {
+		if err := s.guardLastAdmin(ctx, s.db.Pool, cur); err != nil {
 			return UserView{}, err
 		}
 	}
 	if err := s.kc.SetAdmin(ctx, cur.KeycloakSub, role == "admin"); err != nil && !tolerant(err) {
 		return UserView{}, kcError(err)
 	}
-	var u dbgen.User
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	var u users.User
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
-		if u, err = q.SetUserRole(ctx, dbgen.SetUserRoleParams{ID: id, Role: role}); err != nil {
+		if u, err = users.SetUserRole(ctx, tx, users.SetUserRoleParams{ID: id, Role: role}); err != nil {
 			return err
 		}
-		return audit.Record(ctx, q, actor, "user.role", "user", id.String(), map[string]string{"from": cur.Role, "to": role})
+		return audit.Record(ctx, tx, actor, "user.role", "user", id.String(), map[string]string{"from": cur.Role, "to": role})
 	})
 	if err != nil {
 		return UserView{}, err
@@ -475,16 +479,16 @@ func (s *Service) SetQuota(ctx context.Context, actor, id uuid.UUID, quota *int6
 	if err := validQuota(quota); err != nil {
 		return UserView{}, err
 	}
-	var u dbgen.User
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		if _, err := s.user(ctx, q, id); err != nil {
+	var u users.User
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := s.user(ctx, tx, id); err != nil {
 			return err
 		}
 		var err error
-		if u, err = q.SetUserQuotaOverride(ctx, dbgen.SetUserQuotaOverrideParams{ID: id, QuotaBytesOverride: quota}); err != nil {
+		if u, err = users.SetUserQuotaOverride(ctx, tx, users.SetUserQuotaOverrideParams{ID: id, QuotaBytesOverride: quota}); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "user.quota", "user", id.String(), map[string]*int64{"quota_bytes": quota}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "user.quota", "user", id.String(), map[string]*int64{"quota_bytes": quota}); err != nil {
 			return err
 		}
 		return notify.PublishAccount(ctx, tx, notify.AccountEvent{User: id, Kind: notify.AccountQuotaChanged})
@@ -504,12 +508,12 @@ func (s *Service) BulkQuota(ctx context.Context, actor uuid.UUID, ids []uuid.UUI
 		return 0, bad("user_ids has 1..500 entries")
 	}
 	var n int64
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
-		if n, err = q.BulkSetUserQuota(ctx, dbgen.BulkSetUserQuotaParams{Quota: quota, Ids: ids}); err != nil {
+		if n, err = users.BulkSetUserQuota(ctx, tx, users.BulkSetUserQuotaParams{Quota: quota, Ids: ids}); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "user.quota.bulk", "user", "", map[string]any{"count": n, "quota_bytes": quota}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "user.quota.bulk", "user", "", map[string]any{"count": n, "quota_bytes": quota}); err != nil {
 			return err
 		}
 		for _, id := range ids {
@@ -523,24 +527,24 @@ func (s *Service) BulkQuota(ctx context.Context, actor uuid.UUID, ids []uuid.UUI
 }
 
 // Vaults lists the vaults of a user (metadata only: name, kind, size), deleted ones included.
-func (s *Service) Vaults(ctx context.Context, id uuid.UUID) ([]dbgen.ListVaultsOfUserAdminRow, error) {
-	if _, err := s.user(ctx, s.db.Queries(), id); err != nil {
+func (s *Service) Vaults(ctx context.Context, id uuid.UUID) ([]admindb.ListVaultsOfUserAdminRow, error) {
+	if _, err := s.user(ctx, s.db.Pool, id); err != nil {
 		return nil, err
 	}
-	return s.db.Queries().ListVaultsOfUserAdmin(ctx, id)
+	return admindb.New(s.db.Pool).ListVaultsOfUserAdmin(ctx, id)
 }
 
 // Devices lists the active devices of a user.
-func (s *Service) Devices(ctx context.Context, id uuid.UUID) ([]dbgen.Device, error) {
-	if _, err := s.user(ctx, s.db.Queries(), id); err != nil {
+func (s *Service) Devices(ctx context.Context, id uuid.UUID) ([]admindb.Device, error) {
+	if _, err := s.user(ctx, s.db.Pool, id); err != nil {
 		return nil, err
 	}
-	return s.db.Queries().ListDevicesOfUserAdmin(ctx, id)
+	return admindb.New(s.db.Pool).ListDevicesOfUserAdmin(ctx, id)
 }
 
 // Sessions lists the open Keycloak sessions of a user.
 func (s *Service) Sessions(ctx context.Context, id uuid.UUID) ([]keycloak.Session, error) {
-	u, err := s.user(ctx, s.db.Queries(), id)
+	u, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
 		return nil, err
 	}
@@ -564,8 +568,11 @@ type StorageSettings struct {
 	MaxFileSizeBytes          int64
 }
 
-func (s *Service) number(ctx context.Context, q *dbgen.Queries, key string) (int64, error) {
-	raw, err := q.GetSetting(ctx, key)
+func (s *Service) number(ctx context.Context, tx db.DBTX, key string) (int64, error) {
+	raw, ok, err := settings.Get(ctx, tx, key)
+	if err == nil && !ok {
+		err = pgx.ErrNoRows
+	}
 	if err != nil {
 		return 0, fmt.Errorf("setting %s: %w", key, err)
 	}
@@ -578,7 +585,7 @@ func (s *Service) number(ctx context.Context, q *dbgen.Queries, key string) (int
 
 // StorageSettings reads the current limits.
 func (s *Service) StorageSettings(ctx context.Context) (StorageSettings, error) {
-	q := s.db.Queries()
+	conn := s.db.Pool
 	var out StorageSettings
 	for _, f := range []struct {
 		key string
@@ -591,7 +598,7 @@ func (s *Service) StorageSettings(ctx context.Context) (StorageSettings, error) 
 		{keyHistoryDaily, func(n int64) { out.HistoryDailyRetentionDays = int(n) }},
 		{keyMaxFile, func(n int64) { out.MaxFileSizeBytes = n }},
 	} {
-		n, err := s.number(ctx, q, f.key)
+		n, err := s.number(ctx, conn, f.key)
 		if err != nil {
 			return StorageSettings{}, err
 		}
@@ -616,16 +623,16 @@ func (s *Service) PutStorageSettings(ctx context.Context, actor uuid.UUID, in St
 	if err != nil {
 		return StorageSettings{}, err
 	}
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		for key, v := range map[string]int64{
 			keyDefaultQuota: in.DefaultQuotaBytes, keyWarn: int64(in.WarnPercent), keyCritical: int64(in.CriticalPercent),
 			keyHistory: int64(in.HistoryRetentionDays), keyHistoryDaily: int64(in.HistoryDailyRetentionDays), keyMaxFile: in.MaxFileSizeBytes,
 		} {
-			if err := q.UpsertSetting(ctx, dbgen.UpsertSettingParams{Key: key, Value: []byte(strconv.FormatInt(v, 10)), UpdatedBy: &actor}); err != nil {
+			if err := settings.Set(ctx, tx, key, []byte(strconv.FormatInt(v, 10)), &actor); err != nil {
 				return err
 			}
 		}
-		return audit.Record(ctx, q, actor, "settings.storage", "settings", "storage", map[string]any{"before": before, "after": in})
+		return audit.Record(ctx, tx, actor, "settings.storage", "settings", "storage", map[string]any{"before": before, "after": in})
 	})
 	if err != nil {
 		return StorageSettings{}, err
@@ -640,8 +647,8 @@ type Overview struct {
 	UserCount         int
 	OverWarn          int
 	OverCritical      int
-	Top               []dbgen.TopConsumersRow
-	Trend             []dbgen.StorageSnapshot
+	Top               []admindb.TopConsumersRow
+	Trend             []admindb.StorageSnapshot
 }
 
 // trendDays is the window of the dashboard trend.
@@ -650,7 +657,8 @@ const trendDays = 30
 // StorageOverview computes totals, the top consumers, the users beyond the thresholds and
 // the trend; reading it also records today's snapshot, so the trend fills without a job.
 func (s *Service) StorageOverview(ctx context.Context) (Overview, error) {
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := admindb.New(conn)
 	set, err := s.StorageSettings(ctx)
 	if err != nil {
 		return Overview{}, err
@@ -660,14 +668,14 @@ func (s *Service) StorageOverview(ctx context.Context) (Overview, error) {
 		return Overview{}, err
 	}
 	out := Overview{DefaultQuotaBytes: set.DefaultQuotaBytes, TotalUsedBytes: totals.TotalUsed, UserCount: int(totals.UserCount)}
-	if out.Top, err = q.TopConsumers(ctx, dbgen.TopConsumersParams{DefaultQuota: set.DefaultQuotaBytes, MaxRows: 10}); err != nil {
+	if out.Top, err = q.TopConsumers(ctx, admindb.TopConsumersParams{DefaultQuota: set.DefaultQuotaBytes, MaxRows: 10}); err != nil {
 		return Overview{}, err
 	}
-	warn, err := q.CountUsersOverPercent(ctx, dbgen.CountUsersOverPercentParams{DefaultQuota: set.DefaultQuotaBytes, Percent: int64(set.WarnPercent)})
+	warn, err := q.CountUsersOverPercent(ctx, admindb.CountUsersOverPercentParams{DefaultQuota: set.DefaultQuotaBytes, Percent: int64(set.WarnPercent)})
 	if err != nil {
 		return Overview{}, err
 	}
-	crit, err := q.CountUsersOverPercent(ctx, dbgen.CountUsersOverPercentParams{DefaultQuota: set.DefaultQuotaBytes, Percent: int64(set.CriticalPercent)})
+	crit, err := q.CountUsersOverPercent(ctx, admindb.CountUsersOverPercentParams{DefaultQuota: set.DefaultQuotaBytes, Percent: int64(set.CriticalPercent)})
 	if err != nil {
 		return Overview{}, err
 	}
@@ -690,7 +698,7 @@ type AuditFilter struct {
 }
 
 // AuditPage returns up to limit entries older than cursor and the cursor of the next page ("" at the end).
-func (s *Service) AuditPage(ctx context.Context, f AuditFilter, limit int, cursor string) ([]dbgen.ListAuditEntriesRow, string, error) {
+func (s *Service) AuditPage(ctx context.Context, f AuditFilter, limit int, cursor string) ([]admindb.ListAuditEntriesRow, string, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -702,7 +710,7 @@ func (s *Service) AuditPage(ctx context.Context, f AuditFilter, limit int, curso
 		}
 		before = &n
 	}
-	rows, err := s.db.Queries().ListAuditEntries(ctx, dbgen.ListAuditEntriesParams{
+	rows, err := admindb.New(s.db.Pool).ListAuditEntries(ctx, admindb.ListAuditEntriesParams{
 		ActorID: f.Actor, Action: f.Action, Target: f.Target, FromAt: f.From, ToAt: f.To, BeforeID: before, MaxRows: clampInt32(limit + 1),
 	})
 	if err != nil {
@@ -760,23 +768,23 @@ func csvSafe(v string) string {
 }
 
 // Groups returns every group with its member count.
-func (s *Service) Groups(ctx context.Context) ([]dbgen.ListGroupsWithCountsRow, error) {
-	return s.db.Queries().ListGroupsWithCounts(ctx)
+func (s *Service) Groups(ctx context.Context) ([]admindb.ListGroupsWithCountsRow, error) {
+	return admindb.New(s.db.Pool).ListGroupsWithCounts(ctx)
 }
 
 // Group returns one group with its member count.
-func (s *Service) Group(ctx context.Context, id uuid.UUID) (dbgen.GetGroupWithCountRow, error) {
-	g, err := s.db.Queries().GetGroupWithCount(ctx, id)
+func (s *Service) Group(ctx context.Context, id uuid.UUID) (admindb.GetGroupWithCountRow, error) {
+	g, err := admindb.New(s.db.Pool).GetGroupWithCount(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.GetGroupWithCountRow{}, httpproblem.NotFound("group")
+		return admindb.GetGroupWithCountRow{}, httpproblem.NotFound("group")
 	}
 	return g, err
 }
 
 // GroupAssignments lists the profiles assigned to a group.
-func (s *Service) GroupAssignments(ctx context.Context, id uuid.UUID) ([]dbgen.ConfigAssignment, error) {
+func (s *Service) GroupAssignments(ctx context.Context, id uuid.UUID) ([]configprofiles.ConfigAssignment, error) {
 	if _, err := s.Group(ctx, id); err != nil {
 		return nil, err
 	}
-	return s.db.Queries().ListGroupAssignments(ctx, id)
+	return configprofiles.ListGroupAssignments(ctx, s.db.Pool, id)
 }

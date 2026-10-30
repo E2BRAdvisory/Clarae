@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/blobs"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/jobs"
 	"memobrain/shared/syncproto"
 )
@@ -78,15 +77,15 @@ func TestBlobGCSparesABlobACommitIsReferencing(t *testing.T) {
 	locked, release := make(chan struct{}), make(chan struct{})
 	commitErr := make(chan error, 1)
 	go func() {
-		commitErr <- e.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
-			_, ok, err := blobs.VaultBlob(ctx, q, vid, h)
+		commitErr <- e.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			_, ok, err := blobs.VaultBlob(ctx, tx, vid, h)
 			if err != nil || !ok {
 				close(locked)
 				return fmt.Errorf("blob not found before collection (ok=%v): %v", ok, err)
 			}
 			close(locked)
 			<-release
-			return blobs.AddRef(ctx, q, h, 1)
+			return blobs.AddRef(ctx, tx, h, 1)
 		})
 	}()
 	<-locked

@@ -14,8 +14,9 @@ import (
 
 	"memobrain/services/cloud/internal/access"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/sharing/sharingdb"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
 )
@@ -29,7 +30,7 @@ func NewService(d *db.DB) *Service { return &Service{db: d} }
 var _ access.Authorizer = (*Service)(nil)
 
 // best returns the highest level among accepted grants.
-func best(grants []dbgen.ShareGrant) access.Permission {
+func best(grants []sharingdb.ShareGrant) access.Permission {
 	var p access.Permission
 	for _, g := range grants {
 		if g.Status == "accepted" {
@@ -40,14 +41,15 @@ func best(grants []dbgen.ShareGrant) access.Permission {
 }
 
 // live reports whether a share still grants anything.
-func live(s dbgen.Share, now time.Time) bool {
+func live(s sharingdb.Share, now time.Time) bool {
 	return s.RevokedAt == nil && (s.ExpiresAt == nil || s.ExpiresAt.After(now))
 }
 
 // Authorize implements access.Authorizer.
 func (s *Service) Authorize(ctx context.Context, userID, vaultID uuid.UUID, scope string, need access.Permission) (access.Access, error) {
-	q := s.db.Queries()
-	v, err := q.GetVault(ctx, vaultID)
+	conn := s.db.Pool
+	q := sharingdb.New(conn)
+	v, err := vaults.GetVault(ctx, conn, vaultID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return access.Access{}, httpproblem.NotFound("vault")
 	}
@@ -76,7 +78,7 @@ func (s *Service) Authorize(ctx context.Context, userID, vaultID uuid.UUID, scop
 	}
 	perm := access.Owner
 	if v.OwnerID != userID {
-		grants, err := q.ListUserGrantsOnShare(ctx, dbgen.ListUserGrantsOnShareParams{ShareID: sid, PrincipalID: userID})
+		grants, err := q.ListUserGrantsOnShare(ctx, sharingdb.ListUserGrantsOnShareParams{ShareID: sid, PrincipalID: userID})
 		if err != nil {
 			return access.Access{}, err
 		}
@@ -87,7 +89,7 @@ func (s *Service) Authorize(ctx context.Context, userID, vaultID uuid.UUID, scop
 	if perm < need {
 		return access.Access{}, httpproblem.Errorf(syncproto.CodeForbidden, "this share is %s: %s access is required", perm, need)
 	}
-	return access.Access{Vault: v, Perm: perm, Scope: access.NewScope(sh)}, nil
+	return access.Access{Vault: v, Perm: perm, Scope: access.NewScope(sh.ID, sh.ResourceType, sh.PathPrefix, sh.FileID)}, nil
 }
 
 // Evaluator answers "what may this user do on this path" for one request: the
@@ -95,7 +97,7 @@ func (s *Service) Authorize(ctx context.Context, userID, vaultID uuid.UUID, scop
 type Evaluator struct {
 	svc    *Service
 	userID uuid.UUID
-	grants []dbgen.ListGrantsOfUserRow
+	grants []sharingdb.ListGrantsOfUserRow
 	loaded bool
 }
 
@@ -105,7 +107,7 @@ func (s *Service) Evaluator(userID uuid.UUID) *Evaluator { return &Evaluator{svc
 // Effective is the algorithm of §3.3.2 for (user, vault, path): private vaults admit
 // only their owner; the owner is owner; otherwise the maximum over the accepted
 // grants of the user and of their groups on live shares whose scope covers the path.
-func (e *Evaluator) Effective(ctx context.Context, vault dbgen.Vault, path string) (access.Permission, error) {
+func (e *Evaluator) Effective(ctx context.Context, vault vaults.Vault, path string) (access.Permission, error) {
 	if vault.Kind == "private" {
 		if vault.OwnerID == e.userID {
 			return access.Owner, nil
@@ -116,7 +118,7 @@ func (e *Evaluator) Effective(ctx context.Context, vault dbgen.Vault, path strin
 		return access.Owner, nil
 	}
 	if !e.loaded {
-		g, err := e.svc.db.Queries().ListGrantsOfUser(ctx, e.userID)
+		g, err := sharingdb.New(e.svc.db.Pool).ListGrantsOfUser(ctx, e.userID)
 		if err != nil {
 			return access.None, err
 		}
@@ -129,13 +131,13 @@ func (e *Evaluator) Effective(ctx context.Context, vault dbgen.Vault, path strin
 		if g.VaultID != vault.ID || g.Status != "accepted" {
 			continue
 		}
-		sc := access.NewScope(dbgen.Share{ID: g.ShareID, ResourceType: g.ResourceType, PathPrefix: g.PathPrefix, FileID: g.FileID})
+		sc := access.NewScope(g.ShareID, g.ResourceType, g.PathPrefix, g.FileID)
 		covered := false
 		switch g.ResourceType {
 		case access.ResourceFile:
 			if !fileLooked {
 				fileLooked = true
-				id, err := e.svc.db.Queries().PathKeyTaken(ctx, dbgen.PathKeyTakenParams{VaultID: vault.ID, PathKey: pathrules.Key(path)})
+				id, err := sharingdb.New(e.svc.db.Pool).PathKeyTaken(ctx, sharingdb.PathKeyTakenParams{VaultID: vault.ID, PathKey: pathrules.Key(path)})
 				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 					return access.None, err
 				}

@@ -12,9 +12,13 @@ import (
 
 	"memobrain/services/cloud/internal/access"
 	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/sharing/sharingdb"
+	"memobrain/services/cloud/internal/users"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
 )
@@ -39,7 +43,7 @@ type CreateInput struct {
 
 // View is a share as seen by one user.
 type View struct {
-	Share        dbgen.Share
+	Share        sharingdb.Share
 	VaultName    string
 	OwnerID      uuid.UUID
 	OwnerName    string
@@ -47,7 +51,7 @@ type View struct {
 	MyStatus     string            // accepted | pending | declined; "" for the owner
 	IsOwner      bool
 	// Grants is filled for the owner and for managers.
-	Grants []dbgen.ListGrantsRow
+	Grants []sharingdb.ListGrantsRow
 }
 
 func (v View) canManage() bool { return v.IsOwner || v.MyPermission >= access.Manager }
@@ -77,8 +81,9 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 		return View{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "expires_at must be in the future")
 	}
 	var id uuid.UUID
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		v, err := q.GetVault(ctx, in.VaultID)
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := sharingdb.New(tx)
+		v, err := vaults.GetVault(ctx, tx, in.VaultID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (v.OwnerID != actor || v.DeletedAt != nil)) {
 			return httpproblem.NotFound("vault")
 		}
@@ -88,7 +93,7 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 		if v.Kind != "shared" {
 			return httpproblem.Errorf(syncproto.CodeVaultEncrypted, "a private vault cannot be shared")
 		}
-		params := dbgen.CreateShareParams{ID: uuid.Must(uuid.NewV7()), VaultID: v.ID, ResourceType: in.ResourceType, DisplayName: name, CreatedBy: actor, ExpiresAt: in.ExpiresAt}
+		params := sharingdb.CreateShareParams{ID: uuid.Must(uuid.NewV7()), VaultID: v.ID, ResourceType: in.ResourceType, DisplayName: name, CreatedBy: actor, ExpiresAt: in.ExpiresAt}
 		switch in.ResourceType {
 		case access.ResourceVault:
 		case access.ResourceFolder:
@@ -96,7 +101,7 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 			if err != nil {
 				return httpproblem.Errorf(syncproto.CodePathInvalid, "path_prefix: %v", err)
 			}
-			n, err := q.CountFilesUnderPrefix(ctx, dbgen.CountFilesUnderPrefixParams{VaultID: v.ID, Exact: pathrules.Key(prefix), Descendants: likeEscape(pathrules.Key(prefix)) + "/%"})
+			n, err := q.CountFilesUnderPrefix(ctx, sharingdb.CountFilesUnderPrefixParams{VaultID: v.ID, Exact: pathrules.Key(prefix), Descendants: likeEscape(pathrules.Key(prefix)) + "/%"})
 			if err != nil {
 				return err
 			}
@@ -105,7 +110,7 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 			}
 			params.PathPrefix = &prefix
 		case access.ResourceFile:
-			f, err := q.GetFile(ctx, dbgen.GetFileParams{ID: in.FileID, VaultID: v.ID})
+			f, err := q.GetFile(ctx, sharingdb.GetFileParams{ID: in.FileID, VaultID: v.ID})
 			if errors.Is(err, pgx.ErrNoRows) || (err == nil && f.IsDeleted) {
 				return httpproblem.NotFound("file")
 			}
@@ -125,11 +130,11 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 		}
 		id = sh.ID
 		for _, g := range in.Grants {
-			if err := s.putGrant(ctx, q, actor, v, sh.ID, g); err != nil {
+			if err := s.putGrant(ctx, tx, actor, v, sh.ID, g); err != nil {
 				return err
 			}
 		}
-		if err := audit.Record(ctx, q, actor, "share.create", "share", sh.ID.String(), map[string]any{"vault": v.ID, "type": in.ResourceType, "name": name}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "share.create", "share", sh.ID.String(), map[string]any{"vault": v.ID, "type": in.ResourceType, "name": name}); err != nil {
 			return err
 		}
 		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareGranted, Share: sh.ID})
@@ -145,7 +150,8 @@ func likeEscape(s string) string {
 }
 
 // putGrant validates and writes one grant (a new one starts pending).
-func (s *Service) putGrant(ctx context.Context, q *dbgen.Queries, actor uuid.UUID, v dbgen.Vault, shareID uuid.UUID, g NewGrant) error {
+func (s *Service) putGrant(ctx context.Context, tx db.DBTX, actor uuid.UUID, v vaults.Vault, shareID uuid.UUID, g NewGrant) error {
+	q := sharingdb.New(tx)
 	if !validPrincipal(g.PrincipalType) || g.Permission < access.Viewer || g.Permission > access.Manager {
 		return httpproblem.Errorf(syncproto.CodeValidationFailed, "a grant needs a user or group and a level of viewer, editor or manager")
 	}
@@ -154,7 +160,7 @@ func (s *Service) putGrant(ctx context.Context, q *dbgen.Queries, actor uuid.UUI
 		if g.PrincipalID == v.OwnerID {
 			return httpproblem.Errorf(syncproto.CodeValidationFailed, "the owner already has full access")
 		}
-		u, err := q.GetUserBrief(ctx, g.PrincipalID)
+		u, err := users.GetUserBrief(ctx, tx, g.PrincipalID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && u.Status != "active") {
 			return httpproblem.NotFound("user")
 		}
@@ -162,13 +168,13 @@ func (s *Service) putGrant(ctx context.Context, q *dbgen.Queries, actor uuid.UUI
 			return err
 		}
 	case "group":
-		if _, err := q.GetGroup(ctx, g.PrincipalID); errors.Is(err, pgx.ErrNoRows) {
+		if _, err := groups.GetGroup(ctx, tx, g.PrincipalID); errors.Is(err, pgx.ErrNoRows) {
 			return httpproblem.NotFound("group")
 		} else if err != nil {
 			return err
 		}
 	}
-	_, err := q.UpsertGrant(ctx, dbgen.UpsertGrantParams{
+	_, err := q.UpsertGrant(ctx, sharingdb.UpsertGrantParams{
 		ID: uuid.Must(uuid.NewV7()), ShareID: shareID, PrincipalType: g.PrincipalType, PrincipalID: g.PrincipalID,
 		Permission: g.Permission.String(), Status: "pending", GrantedBy: actor,
 	})
@@ -176,12 +182,13 @@ func (s *Service) putGrant(ctx context.Context, q *dbgen.Queries, actor uuid.UUI
 }
 
 // view assembles a share for a viewer; a viewer with no link to the share learns nothing.
-func (s *Service) view(ctx context.Context, q *dbgen.Queries, sh dbgen.Share, viewer uuid.UUID) (View, error) {
-	v, err := q.GetVault(ctx, sh.VaultID)
+func (s *Service) view(ctx context.Context, tx db.DBTX, sh sharingdb.Share, viewer uuid.UUID) (View, error) {
+	q := sharingdb.New(tx)
+	v, err := vaults.GetVault(ctx, tx, sh.VaultID)
 	if err != nil {
 		return View{}, err
 	}
-	owner, err := q.GetUserBrief(ctx, v.OwnerID)
+	owner, err := users.GetUserBrief(ctx, tx, v.OwnerID)
 	if err != nil {
 		return View{}, err
 	}
@@ -189,7 +196,7 @@ func (s *Service) view(ctx context.Context, q *dbgen.Queries, sh dbgen.Share, vi
 	if v.OwnerID == viewer {
 		out.IsOwner = true
 	} else {
-		grants, err := q.ListUserGrantsOnShare(ctx, dbgen.ListUserGrantsOnShareParams{ShareID: sh.ID, PrincipalID: viewer})
+		grants, err := q.ListUserGrantsOnShare(ctx, sharingdb.ListUserGrantsOnShareParams{ShareID: sh.ID, PrincipalID: viewer})
 		if err != nil {
 			return View{}, err
 		}
@@ -226,7 +233,8 @@ func (s *Service) view(ctx context.Context, q *dbgen.Queries, sh dbgen.Share, vi
 
 // Get returns a share to its owner or to anyone invited to it.
 func (s *Service) Get(ctx context.Context, viewer, shareID uuid.UUID) (View, error) {
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := sharingdb.New(conn)
 	sh, err := q.GetShare(ctx, shareID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return View{}, httpproblem.NotFound("share")
@@ -234,11 +242,12 @@ func (s *Service) Get(ctx context.Context, viewer, shareID uuid.UUID) (View, err
 	if err != nil {
 		return View{}, err
 	}
-	return s.view(ctx, q, sh, viewer)
+	return s.view(ctx, conn, sh, viewer)
 }
 
 // requireManage loads a share for a change made by its owner or a manager.
-func (s *Service) requireManage(ctx context.Context, q *dbgen.Queries, actor, shareID uuid.UUID) (View, error) {
+func (s *Service) requireManage(ctx context.Context, tx db.DBTX, actor, shareID uuid.UUID) (View, error) {
+	q := sharingdb.New(tx)
 	sh, err := q.GetShare(ctx, shareID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return View{}, httpproblem.NotFound("share")
@@ -246,7 +255,7 @@ func (s *Service) requireManage(ctx context.Context, q *dbgen.Queries, actor, sh
 	if err != nil {
 		return View{}, err
 	}
-	v, err := s.view(ctx, q, sh, actor)
+	v, err := s.view(ctx, tx, sh, actor)
 	if err != nil {
 		return View{}, err
 	}
@@ -268,8 +277,8 @@ type UpdateInput struct {
 
 // Update renames a share or changes its expiry (owner or manager).
 func (s *Service) Update(ctx context.Context, actor, shareID uuid.UUID, in UpdateInput) (View, error) {
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		cur, err := s.requireManage(ctx, q, actor, shareID)
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		cur, err := s.requireManage(ctx, tx, actor, shareID)
 		if err != nil {
 			return err
 		}
@@ -287,10 +296,10 @@ func (s *Service) Update(ctx context.Context, actor, shareID uuid.UUID, in Updat
 			}
 			expires = in.ExpiresAt
 		}
-		if _, err := q.UpdateShare(ctx, dbgen.UpdateShareParams{ID: shareID, DisplayName: name, ExpiresAt: expires}); err != nil {
+		if _, err := sharingdb.New(tx).UpdateShare(ctx, sharingdb.UpdateShareParams{ID: shareID, DisplayName: name, ExpiresAt: expires}); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "share.update", "share", shareID.String(), map[string]any{"name": name, "expires_at": expires}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "share.update", "share", shareID.String(), map[string]any{"name": name, "expires_at": expires}); err != nil {
 			return err
 		}
 		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareUpdated, Share: shareID})
@@ -303,7 +312,8 @@ func (s *Service) Update(ctx context.Context, actor, shareID uuid.UUID, in Updat
 
 // Revoke ends a share: recipients lose access at their next event or sync (owner only).
 func (s *Service) Revoke(ctx context.Context, actor, shareID uuid.UUID) error {
-	return s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := sharingdb.New(tx)
 		sh, err := q.GetShare(ctx, shareID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpproblem.NotFound("share")
@@ -311,12 +321,12 @@ func (s *Service) Revoke(ctx context.Context, actor, shareID uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		v, err := q.GetVault(ctx, sh.VaultID)
+		v, err := vaults.GetVault(ctx, tx, sh.VaultID)
 		if err != nil {
 			return err
 		}
 		if v.OwnerID != actor {
-			if _, verr := s.view(ctx, q, sh, actor); verr != nil {
+			if _, verr := s.view(ctx, tx, sh, actor); verr != nil {
 				return verr // invisible to the caller
 			}
 			return httpproblem.Errorf(syncproto.CodeForbidden, "only the owner of the vault can revoke a share")
@@ -328,7 +338,7 @@ func (s *Service) Revoke(ctx context.Context, actor, shareID uuid.UUID) error {
 		if n == 0 {
 			return httpproblem.NotFound("share")
 		}
-		if err := audit.Record(ctx, q, actor, "share.revoke", "share", shareID.String(), nil); err != nil {
+		if err := audit.Record(ctx, tx, actor, "share.revoke", "share", shareID.String(), nil); err != nil {
 			return err
 		}
 		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareRevoked, Share: shareID})
@@ -336,43 +346,44 @@ func (s *Service) Revoke(ctx context.Context, actor, shareID uuid.UUID) error {
 }
 
 // PutGrant adds a grant or changes its level (owner or manager); a new grant is pending.
-func (s *Service) PutGrant(ctx context.Context, actor, shareID uuid.UUID, g NewGrant) (dbgen.ListGrantsRow, error) {
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		cur, err := s.requireManage(ctx, q, actor, shareID)
+func (s *Service) PutGrant(ctx context.Context, actor, shareID uuid.UUID, g NewGrant) (sharingdb.ListGrantsRow, error) {
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		cur, err := s.requireManage(ctx, tx, actor, shareID)
 		if err != nil {
 			return err
 		}
-		v, err := q.GetVault(ctx, cur.Share.VaultID)
+		v, err := vaults.GetVault(ctx, tx, cur.Share.VaultID)
 		if err != nil {
 			return err
 		}
-		if err := s.putGrant(ctx, q, actor, v, shareID, g); err != nil {
+		if err := s.putGrant(ctx, tx, actor, v, shareID, g); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "grant.put", "share", shareID.String(), map[string]any{"principal_type": g.PrincipalType, "principal_id": g.PrincipalID, "permission": g.Permission.String()}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "grant.put", "share", shareID.String(), map[string]any{"principal_type": g.PrincipalType, "principal_id": g.PrincipalID, "permission": g.Permission.String()}); err != nil {
 			return err
 		}
 		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareGranted, Share: shareID})
 	})
 	if err != nil {
-		return dbgen.ListGrantsRow{}, err
+		return sharingdb.ListGrantsRow{}, err
 	}
-	grants, err := s.db.Queries().ListGrants(ctx, shareID)
+	grants, err := sharingdb.New(s.db.Pool).ListGrants(ctx, shareID)
 	if err != nil {
-		return dbgen.ListGrantsRow{}, err
+		return sharingdb.ListGrantsRow{}, err
 	}
 	for _, r := range grants {
 		if r.PrincipalType == g.PrincipalType && r.PrincipalID == g.PrincipalID {
 			return r, nil
 		}
 	}
-	return dbgen.ListGrantsRow{}, httpproblem.NotFound("grant")
+	return sharingdb.ListGrantsRow{}, httpproblem.NotFound("grant")
 }
 
 // DeleteGrant removes a grant (owner or manager); whoever it reached is told.
 func (s *Service) DeleteGrant(ctx context.Context, actor, shareID uuid.UUID, ptype string, pid uuid.UUID) error {
-	return s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		if _, err := s.requireManage(ctx, q, actor, shareID); err != nil {
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := sharingdb.New(tx)
+		if _, err := s.requireManage(ctx, tx, actor, shareID); err != nil {
 			return err
 		}
 		if !validPrincipal(ptype) {
@@ -383,7 +394,7 @@ func (s *Service) DeleteGrant(ctx context.Context, actor, shareID uuid.UUID, pty
 		if err != nil {
 			return err
 		}
-		n, err := q.DeleteGrant(ctx, dbgen.DeleteGrantParams{ShareID: shareID, PrincipalType: ptype, PrincipalID: pid})
+		n, err := q.DeleteGrant(ctx, sharingdb.DeleteGrantParams{ShareID: shareID, PrincipalType: ptype, PrincipalID: pid})
 		if err != nil {
 			return err
 		}
@@ -404,7 +415,7 @@ func (s *Service) DeleteGrant(ctx context.Context, actor, shareID uuid.UUID, pty
 				lost = append(lost, u)
 			}
 		}
-		if err := audit.Record(ctx, q, actor, "grant.delete", "share", shareID.String(), map[string]any{"principal_type": ptype, "principal_id": pid}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "grant.delete", "share", shareID.String(), map[string]any{"principal_type": ptype, "principal_id": pid}); err != nil {
 			return err
 		}
 		if len(lost) > 0 {
@@ -418,7 +429,8 @@ func (s *Service) DeleteGrant(ctx context.Context, actor, shareID uuid.UUID, pty
 
 // respond accepts or declines the invitation that reaches the caller.
 func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept bool) (View, error) {
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := sharingdb.New(tx)
 		sh, err := q.GetShare(ctx, shareID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !live(sh, time.Now())) {
 			return httpproblem.NotFound("share")
@@ -426,7 +438,7 @@ func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept
 		if err != nil {
 			return err
 		}
-		grants, err := q.ListUserGrantsOnShare(ctx, dbgen.ListUserGrantsOnShareParams{ShareID: shareID, PrincipalID: userID})
+		grants, err := q.ListUserGrantsOnShare(ctx, sharingdb.ListUserGrantsOnShareParams{ShareID: shareID, PrincipalID: userID})
 		if err != nil {
 			return err
 		}
@@ -438,12 +450,12 @@ func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept
 			switch {
 			case accept && g.Status != "accepted":
 				// A group grant is accepted for the whole group by any of its members.
-				if err := q.SetGrantStatus(ctx, dbgen.SetGrantStatusParams{ID: g.ID, Status: "accepted"}); err != nil {
+				if err := q.SetGrantStatus(ctx, sharingdb.SetGrantStatusParams{ID: g.ID, Status: "accepted"}); err != nil {
 					return err
 				}
 				changed = true
 			case !accept && g.PrincipalType == "user" && g.Status != "declined":
-				if err := q.SetGrantStatus(ctx, dbgen.SetGrantStatusParams{ID: g.ID, Status: "declined"}); err != nil {
+				if err := q.SetGrantStatus(ctx, sharingdb.SetGrantStatusParams{ID: g.ID, Status: "declined"}); err != nil {
 					return err
 				}
 				changed = true
@@ -456,7 +468,7 @@ func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept
 		if !accept {
 			action = "share.decline"
 		}
-		if err := audit.Record(ctx, q, userID, action, "share", shareID.String(), nil); err != nil {
+		if err := audit.Record(ctx, tx, userID, action, "share", shareID.String(), nil); err != nil {
 			return err
 		}
 		if accept {
@@ -482,14 +494,15 @@ func (s *Service) Decline(ctx context.Context, userID, shareID uuid.UUID) (View,
 
 // ListOwned returns the shares of the vaults the caller owns plus those they manage.
 func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID) ([]View, error) {
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := sharingdb.New(conn)
 	rows, err := q.ListSharesOfVaultOwner(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]View, 0, len(rows))
 	for _, sh := range rows {
-		v, err := s.view(ctx, q, sh, userID)
+		v, err := s.view(ctx, conn, sh, userID)
 		if err != nil {
 			continue
 		}
@@ -500,7 +513,8 @@ func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID) ([]View, erro
 
 // ListReceived returns the shares that reach the caller, pending invitations included.
 func (s *Service) ListReceived(ctx context.Context, userID uuid.UUID) ([]View, error) {
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := sharingdb.New(conn)
 	rows, err := q.ListGrantsOfUser(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -516,7 +530,7 @@ func (s *Service) ListReceived(ctx context.Context, userID uuid.UUID) ([]View, e
 		if err != nil {
 			continue
 		}
-		v, err := s.view(ctx, q, sh, userID)
+		v, err := s.view(ctx, conn, sh, userID)
 		if err != nil || v.MyStatus == "declined" {
 			continue
 		}
@@ -541,7 +555,7 @@ func (m Mount) Scope() string { return access.ScopePrefix + m.ShareID.String() }
 
 // SharedWithMe lists the accepted shares of the caller, with the strongest level they hold.
 func (s *Service) SharedWithMe(ctx context.Context, userID uuid.UUID) ([]Mount, error) {
-	rows, err := s.db.Queries().ListGrantsOfUser(ctx, userID)
+	rows, err := sharingdb.New(s.db.Pool).ListGrantsOfUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}

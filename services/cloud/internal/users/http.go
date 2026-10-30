@@ -8,8 +8,8 @@ import (
 
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/users/usersdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -89,7 +89,7 @@ func toMe(m Me) api.Me {
 	return out
 }
 
-func toDevice(d dbgen.Device) api.Device {
+func toDevice(d usersdb.Device) api.Device {
 	return api.Device{
 		Id:         d.ID,
 		Name:       d.Name,

@@ -1,3 +1,5 @@
+-- Queries of the admin module (ADR-0033: one sqlc package per module).
+
 -- name: ListUsersAdmin :many
 SELECT u.*, COUNT(*) OVER()::int AS total FROM users u
 WHERE u.status <> 'deleted'
@@ -15,39 +17,9 @@ ORDER BY
   lower(u.username)
 LIMIT sqlc.arg(max_rows)::int OFFSET sqlc.arg(skip_rows)::int;
 
--- name: InsertProvisionedUser :one
--- A user created by an administrator: the row exists before the first login,
--- which then links to it through the Keycloak subject.
-INSERT INTO users (id, keycloak_sub, username, email, display_name, role, status)
-VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING *;
-
--- name: SetUserStatus :one
-UPDATE users SET status = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING *;
-
--- name: SetUserRole :one
-UPDATE users SET role = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING *;
-
--- name: SetUserQuotaOverride :one
-UPDATE users SET quota_bytes_override = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING *;
-
--- name: BulkSetUserQuota :execrows
-UPDATE users SET quota_bytes_override = sqlc.narg(quota)::bigint, updated_at = now()
-WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND status <> 'deleted';
-
--- name: UpdateUserProfile :one
-UPDATE users SET display_name = COALESCE(sqlc.narg(display_name), display_name),
-                 email = COALESCE(sqlc.narg(email), email), updated_at = now()
-WHERE id = $1 AND status <> 'deleted' RETURNING *;
-
 -- name: ListVaultsOfUserAdmin :many
 SELECT id, name, kind, total_bytes, file_count, created_at, deleted_at
 FROM vaults WHERE owner_id = $1 ORDER BY lower(name);
-
--- name: SoftDeleteVaultsOfOwner :execrows
-UPDATE vaults SET deleted_at = now() WHERE owner_id = $1 AND deleted_at IS NULL;
-
--- name: CountActiveAdmins :one
-SELECT COUNT(*)::int FROM users WHERE role = 'admin' AND status = 'active';
 
 -- name: ListDevicesOfUserAdmin :many
 SELECT * FROM devices WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at;
@@ -88,40 +60,6 @@ WHERE (sqlc.narg(actor_id)::uuid IS NULL OR a.actor_id = sqlc.narg(actor_id)::uu
 ORDER BY a.id DESC
 LIMIT sqlc.arg(max_rows)::int;
 
--- name: InsertProfileVersion :exec
-INSERT INTO config_profile_versions (profile_id, version, name, description, is_global, config, locked_keys, updated_by, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-ON CONFLICT (profile_id, version) DO NOTHING;
-
--- name: ListProfileVersions :many
-SELECT * FROM config_profile_versions WHERE profile_id = $1 ORDER BY version DESC;
-
--- name: GetProfileVersion :one
-SELECT * FROM config_profile_versions WHERE profile_id = $1 AND version = $2;
-
--- name: CreateExportJob :one
-INSERT INTO export_jobs (id, vault_id, requested_by) VALUES ($1, $2, $3) RETURNING *;
-
--- name: GetExportJob :one
-SELECT * FROM export_jobs WHERE id = $1 AND vault_id = $2;
-
--- name: ClaimExportJob :one
-UPDATE export_jobs SET status = 'running'
-WHERE id = (SELECT j.id FROM export_jobs j WHERE j.status = 'queued' ORDER BY j.created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
-RETURNING *;
-
--- name: FinishExportJob :exec
-UPDATE export_jobs SET status = 'ready', size = $2, object_key = $3, finished_at = now(), expires_at = $4 WHERE id = $1;
-
--- name: FailExportJob :exec
-UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now() WHERE id = $1;
-
--- name: ExpireExportJobs :many
-UPDATE export_jobs SET status = 'expired' WHERE status = 'ready' AND expires_at < sqlc.arg(now)::timestamptz RETURNING id, object_key;
-
--- name: RequeueStaleExportJobs :execrows
-UPDATE export_jobs SET status = 'queued' WHERE status = 'running' AND created_at < sqlc.arg(before)::timestamptz;
-
 -- name: ListGroupsWithCounts :many
 SELECT g.id, g.name, g.description, g.created_at,
        (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
@@ -133,7 +71,3 @@ SELECT g.id, g.name, g.description, g.created_at,
        (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
          WHERE m.group_id = g.id AND u.status <> 'deleted')::int AS member_count
 FROM groups g WHERE g.id = $1;
-
--- name: ListExportFiles :many
-SELECT path, blob_hash, size, updated_at FROM files
-WHERE vault_id = $1 AND NOT is_deleted AND blob_hash IS NOT NULL ORDER BY path_key;

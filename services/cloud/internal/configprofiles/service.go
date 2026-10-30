@@ -16,10 +16,12 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"memobrain/services/cloud/internal/audit"
+	"memobrain/services/cloud/internal/configprofiles/configprofilesdb"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/settings"
 	"memobrain/shared/syncproto"
 )
 
@@ -140,8 +142,8 @@ func decode(raw []byte) (map[string]any, error) {
 // the user's groups by increasing priority (§2.6.6). The user's own overrides are applied by
 // the client, which ignores them for the locked keys returned here.
 func (s *Service) EffectiveFor(ctx context.Context, userID uuid.UUID) (Effective, error) {
-	q := s.db.Queries()
-	rev, err := q.GetConfigRevision(ctx)
+	q := configprofilesdb.New(s.db.Pool)
+	rev, err := settings.ConfigRevision(ctx, s.db.Pool)
 	if err != nil {
 		return Effective{}, err
 	}
@@ -180,7 +182,7 @@ func (s *Service) EffectiveFor(ctx context.Context, userID uuid.UUID) (Effective
 // Changed records that something affecting configuration changed: it bumps the revision
 // clients see and announces it when the surrounding transaction commits.
 func (s *Service) Changed(ctx context.Context, tx pgx.Tx) error {
-	rev, err := dbgen.New(tx).BumpConfigRevision(ctx)
+	rev, err := settings.BumpConfigRevision(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -228,24 +230,25 @@ func unique(err error) bool {
 }
 
 // Create adds a profile; making it global replaces the previous global one.
-func (s *Service) Create(ctx context.Context, actor uuid.UUID, in ProfileInput) (dbgen.ConfigProfile, error) {
+func (s *Service) Create(ctx context.Context, actor uuid.UUID, in ProfileInput) (configprofilesdb.ConfigProfile, error) {
 	name, locked, err := validateInput(in)
 	if err != nil {
-		return dbgen.ConfigProfile{}, err
+		return configprofilesdb.ConfigProfile{}, err
 	}
 	cfg := in.Config
 	if len(cfg) == 0 {
 		cfg = json.RawMessage(`{}`)
 	}
-	var p dbgen.ConfigProfile
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	var p configprofilesdb.ConfigProfile
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := configprofilesdb.New(tx)
 		if in.IsGlobal {
 			if err := s.demoteGlobal(ctx, q, uuid.Nil, actor); err != nil {
 				return err
 			}
 		}
 		var err error
-		p, err = q.CreateConfigProfile(ctx, dbgen.CreateConfigProfileParams{
+		p, err = q.CreateConfigProfile(ctx, configprofilesdb.CreateConfigProfileParams{
 			ID: uuid.Must(uuid.NewV7()), Name: name, Description: nilIfEmpty(in.Description), IsGlobal: in.IsGlobal,
 			Config: cfg, LockedKeys: locked, UpdatedBy: &actor,
 		})
@@ -255,20 +258,20 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in ProfileInput) 
 		if err := snapshot(ctx, q, p); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "config.profile.create", "config_profile", p.ID.String(), map[string]any{"name": name, "global": in.IsGlobal}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "config.profile.create", "config_profile", p.ID.String(), map[string]any{"name": name, "global": in.IsGlobal}); err != nil {
 			return err
 		}
 		return s.Changed(ctx, tx)
 	})
 	if unique(err) {
-		return dbgen.ConfigProfile{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a profile named %q exists", name)
+		return configprofilesdb.ConfigProfile{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a profile named %q exists", name)
 	}
 	return p, err
 }
 
 // snapshot stores the state of a profile in its history (version numbers are unique per profile).
-func snapshot(ctx context.Context, q *dbgen.Queries, p dbgen.ConfigProfile) error {
-	return q.InsertProfileVersion(ctx, dbgen.InsertProfileVersionParams{
+func snapshot(ctx context.Context, q *configprofilesdb.Queries, p configprofilesdb.ConfigProfile) error {
+	return q.InsertProfileVersion(ctx, configprofilesdb.InsertProfileVersionParams{
 		ProfileID: p.ID, Version: p.Version, Name: p.Name, Description: p.Description, IsGlobal: p.IsGlobal,
 		Config: p.Config, LockedKeys: p.LockedKeys, UpdatedBy: p.UpdatedBy, UpdatedAt: p.UpdatedAt,
 	})
@@ -282,7 +285,7 @@ func nilIfEmpty(s string) *string {
 }
 
 // demoteGlobal clears the global flag of the current global profile (not keep).
-func (s *Service) demoteGlobal(ctx context.Context, q *dbgen.Queries, keep, actor uuid.UUID) error {
+func (s *Service) demoteGlobal(ctx context.Context, q *configprofilesdb.Queries, keep, actor uuid.UUID) error {
 	cur, err := q.GetGlobalConfigProfile(ctx)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.ID == keep) {
 		return nil
@@ -290,7 +293,7 @@ func (s *Service) demoteGlobal(ctx context.Context, q *dbgen.Queries, keep, acto
 	if err != nil {
 		return err
 	}
-	demoted, err := q.UpdateConfigProfile(ctx, dbgen.UpdateConfigProfileParams{
+	demoted, err := q.UpdateConfigProfile(ctx, configprofilesdb.UpdateConfigProfileParams{
 		ID: cur.ID, Name: cur.Name, Description: cur.Description, IsGlobal: false, Config: cur.Config, LockedKeys: cur.LockedKeys, UpdatedBy: &actor,
 	})
 	if err != nil {
@@ -300,17 +303,18 @@ func (s *Service) demoteGlobal(ctx context.Context, q *dbgen.Queries, keep, acto
 }
 
 // Update replaces a profile and increments its version.
-func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in ProfileInput) (dbgen.ConfigProfile, error) {
+func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in ProfileInput) (configprofilesdb.ConfigProfile, error) {
 	name, locked, err := validateInput(in)
 	if err != nil {
-		return dbgen.ConfigProfile{}, err
+		return configprofilesdb.ConfigProfile{}, err
 	}
 	cfg := in.Config
 	if len(cfg) == 0 {
 		cfg = json.RawMessage(`{}`)
 	}
-	var p dbgen.ConfigProfile
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	var p configprofilesdb.ConfigProfile
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := configprofilesdb.New(tx)
 		if _, err := q.GetConfigProfile(ctx, id); errors.Is(err, pgx.ErrNoRows) {
 			return httpproblem.NotFound("profile")
 		} else if err != nil {
@@ -322,7 +326,7 @@ func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in ProfileInp
 			}
 		}
 		var err error
-		p, err = q.UpdateConfigProfile(ctx, dbgen.UpdateConfigProfileParams{
+		p, err = q.UpdateConfigProfile(ctx, configprofilesdb.UpdateConfigProfileParams{
 			ID: id, Name: name, Description: nilIfEmpty(in.Description), IsGlobal: in.IsGlobal, Config: cfg, LockedKeys: locked, UpdatedBy: &actor,
 		})
 		if err != nil {
@@ -331,20 +335,21 @@ func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in ProfileInp
 		if err := snapshot(ctx, q, p); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, q, actor, "config.profile.update", "config_profile", id.String(), map[string]any{"version": p.Version}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "config.profile.update", "config_profile", id.String(), map[string]any{"version": p.Version}); err != nil {
 			return err
 		}
 		return s.Changed(ctx, tx)
 	})
 	if unique(err) {
-		return dbgen.ConfigProfile{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a profile named %q exists", name)
+		return configprofilesdb.ConfigProfile{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a profile named %q exists", name)
 	}
 	return p, err
 }
 
 // Delete removes a profile and its assignments.
 func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
-	return s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := configprofilesdb.New(tx)
 		n, err := q.DeleteConfigProfile(ctx, id)
 		if err != nil {
 			return err
@@ -352,7 +357,7 @@ func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
 		if n == 0 {
 			return httpproblem.NotFound("profile")
 		}
-		if err := audit.Record(ctx, q, actor, "config.profile.delete", "config_profile", id.String(), nil); err != nil {
+		if err := audit.Record(ctx, tx, actor, "config.profile.delete", "config_profile", id.String(), nil); err != nil {
 			return err
 		}
 		return s.Changed(ctx, tx)
@@ -360,17 +365,17 @@ func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
 }
 
 // Get returns a profile.
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (dbgen.ConfigProfile, error) {
-	p, err := s.db.Queries().GetConfigProfile(ctx, id)
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (configprofilesdb.ConfigProfile, error) {
+	p, err := configprofilesdb.New(s.db.Pool).GetConfigProfile(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.ConfigProfile{}, httpproblem.NotFound("profile")
+		return configprofilesdb.ConfigProfile{}, httpproblem.NotFound("profile")
 	}
 	return p, err
 }
 
 // List returns every profile, the global one first.
-func (s *Service) List(ctx context.Context) ([]dbgen.ConfigProfile, error) {
-	return s.db.Queries().ListConfigProfiles(ctx)
+func (s *Service) List(ctx context.Context) ([]configprofilesdb.ConfigProfile, error) {
+	return configprofilesdb.New(s.db.Pool).ListConfigProfiles(ctx)
 }
 
 // Assignment ties a profile to a group with a priority (higher wins).
@@ -381,8 +386,9 @@ type Assignment struct {
 
 // SetGroupAssignments replaces the profiles assigned to a group.
 func (s *Service) SetGroupAssignments(ctx context.Context, actor, groupID uuid.UUID, as []Assignment) error {
-	return s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		if _, err := q.GetGroup(ctx, groupID); errors.Is(err, pgx.ErrNoRows) {
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := configprofilesdb.New(tx)
+		if _, err := groups.GetGroup(ctx, tx, groupID); errors.Is(err, pgx.ErrNoRows) {
 			return httpproblem.NotFound("group")
 		} else if err != nil {
 			return err
@@ -396,11 +402,11 @@ func (s *Service) SetGroupAssignments(ctx context.Context, actor, groupID uuid.U
 			} else if err != nil {
 				return err
 			}
-			if err := q.AssignProfile(ctx, dbgen.AssignProfileParams{ProfileID: a.ProfileID, GroupID: groupID, Priority: a.Priority}); err != nil {
+			if err := q.AssignProfile(ctx, configprofilesdb.AssignProfileParams{ProfileID: a.ProfileID, GroupID: groupID, Priority: a.Priority}); err != nil {
 				return err
 			}
 		}
-		if err := audit.Record(ctx, q, actor, "config.assignments.set", "group", groupID.String(), as); err != nil {
+		if err := audit.Record(ctx, tx, actor, "config.assignments.set", "group", groupID.String(), as); err != nil {
 			return err
 		}
 		return s.Changed(ctx, tx)
@@ -408,26 +414,26 @@ func (s *Service) SetGroupAssignments(ctx context.Context, actor, groupID uuid.U
 }
 
 // Versions returns the history of a profile, newest first.
-func (s *Service) Versions(ctx context.Context, id uuid.UUID) ([]dbgen.ConfigProfileVersion, error) {
+func (s *Service) Versions(ctx context.Context, id uuid.UUID) ([]configprofilesdb.ConfigProfileVersion, error) {
 	if _, err := s.Get(ctx, id); err != nil {
 		return nil, err
 	}
-	return s.db.Queries().ListProfileVersions(ctx, id)
+	return configprofilesdb.New(s.db.Pool).ListProfileVersions(ctx, id)
 }
 
 // Restore makes an old version the new current one (a rollback adds a version, it never rewrites history).
 // Whether the profile is global is a property of the profile now, not of the restored content.
-func (s *Service) Restore(ctx context.Context, actor, id uuid.UUID, version int32) (dbgen.ConfigProfile, error) {
+func (s *Service) Restore(ctx context.Context, actor, id uuid.UUID, version int32) (configprofilesdb.ConfigProfile, error) {
 	cur, err := s.Get(ctx, id)
 	if err != nil {
-		return dbgen.ConfigProfile{}, err
+		return configprofilesdb.ConfigProfile{}, err
 	}
-	old, err := s.db.Queries().GetProfileVersion(ctx, dbgen.GetProfileVersionParams{ProfileID: id, Version: version})
+	old, err := configprofilesdb.New(s.db.Pool).GetProfileVersion(ctx, configprofilesdb.GetProfileVersionParams{ProfileID: id, Version: version})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.ConfigProfile{}, httpproblem.NotFound("version")
+		return configprofilesdb.ConfigProfile{}, httpproblem.NotFound("version")
 	}
 	if err != nil {
-		return dbgen.ConfigProfile{}, err
+		return configprofilesdb.ConfigProfile{}, err
 	}
 	desc := ""
 	if old.Description != nil {

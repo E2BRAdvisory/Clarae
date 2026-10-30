@@ -7,11 +7,14 @@ import (
 	"time"
 
 	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/sharing"
+	"memobrain/services/cloud/internal/vaults"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/sync/syncdb"
 	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
 )
@@ -35,7 +38,8 @@ func mtime(op syncproto.Op) *timePtr {
 
 func ptr[T any](v T) *T { return &v }
 
-func (s *Service) create(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) create(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+	q := syncdb.New(tx)
 	fileID, err := parseFileID(op)
 	if err != nil {
 		return syncproto.OpResult{}, err
@@ -49,11 +53,11 @@ func (s *Service) create(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	size, err := s.checkBlob(ctx, q, env, op.BlobHash, op.Size)
+	size, err := s.checkBlob(ctx, tx, env, op.BlobHash, op.Size)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	if _, err := q.PathKeyTaken(ctx, dbgen.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: key}); err == nil {
+	if _, err := q.PathKeyTaken(ctx, syncdb.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: key}); err == nil {
 		return syncproto.OpResult{}, reject(syncproto.CodePathCollision, "%s already exists", displayPath(env, path))
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.OpResult{}, err
@@ -61,22 +65,22 @@ func (s *Service) create(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 	var conflictRev *uuid.UUID
 	if op.ConflictOf != "" {
 		if cid, perr := uuid.Parse(op.ConflictOf); perr == nil {
-			if cf, gerr := q.GetFile(ctx, dbgen.GetFileParams{ID: cid, VaultID: env.vault.ID}); gerr == nil {
-				if rid, rerr := q.GetCurrentRevisionID(ctx, dbgen.GetCurrentRevisionIDParams{FileID: cf.ID, RevNo: cf.CurrentRev}); rerr == nil {
+			if cf, gerr := q.GetFile(ctx, syncdb.GetFileParams{ID: cid, VaultID: env.vault.ID}); gerr == nil {
+				if rid, rerr := q.GetCurrentRevisionID(ctx, syncdb.GetCurrentRevisionIDParams{FileID: cf.ID, RevNo: cf.CurrentRev}); rerr == nil {
 					conflictRev = &rid
 				}
 			}
 		}
 	}
-	if err := chargeOwner(ctx, q, env, size); err != nil {
+	if err := chargeOwner(ctx, tx, env, size); err != nil {
 		return syncproto.OpResult{}, err
 	}
-	f := dbgen.File{ID: fileID, VaultID: env.vault.ID, Path: path, PathKey: key, Kind: string(kind), BlobHash: ptr(op.BlobHash), Size: size}
-	seq, err := s.record(ctx, q, env, recordArgs{file: f, rev: 1, op: "create", clientMtm: mtime(op), opID: &opID, conflict: conflictRev})
+	f := syncdb.File{ID: fileID, VaultID: env.vault.ID, Path: path, PathKey: key, Kind: string(kind), BlobHash: ptr(op.BlobHash), Size: size}
+	seq, err := s.record(ctx, tx, env, recordArgs{file: f, rev: 1, op: "create", clientMtm: mtime(op), opID: &opID, conflict: conflictRev})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	if err := q.AddVaultUsage(ctx, dbgen.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: size, FileCount: 1}); err != nil {
+	if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: size, FileCount: 1}); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, fileID, 1, seq), nil
@@ -91,37 +95,39 @@ func displayPath(env commitEnv, path string) string {
 
 // lockFile loads the file for update and enforces the optimistic concurrency
 // rule: the client must have based its change on the current revision.
-func (s *Service) lockFile(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op) (dbgen.File, error) {
+func (s *Service) lockFile(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op) (syncdb.File, error) {
+	q := syncdb.New(tx)
 	fileID, err := parseFileID(op)
 	if err != nil {
-		return dbgen.File{}, err
+		return syncdb.File{}, err
 	}
-	f, err := q.GetFileForUpdate(ctx, dbgen.GetFileForUpdateParams{ID: fileID, VaultID: env.vault.ID})
+	f, err := q.GetFileForUpdate(ctx, syncdb.GetFileForUpdateParams{ID: fileID, VaultID: env.vault.ID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.File{}, reject(syncproto.CodeNotFound, "file not found")
+		return syncdb.File{}, reject(syncproto.CodeNotFound, "file not found")
 	}
 	if err != nil {
-		return dbgen.File{}, err
+		return syncdb.File{}, err
 	}
 	if env.scope != nil && !env.scope.ContainsFile(f.ID, f.Path) {
 		// Outside the share the file does not exist for the caller.
-		return dbgen.File{}, reject(syncproto.CodeNotFound, "file not found")
+		return syncdb.File{}, reject(syncproto.CodeNotFound, "file not found")
 	}
 	if op.BaseRev == nil {
-		return dbgen.File{}, reject(syncproto.CodeValidationFailed, "base_rev is required")
+		return syncdb.File{}, reject(syncproto.CodeValidationFailed, "base_rev is required")
 	}
 	if int64(*op.BaseRev) != int64(f.CurrentRev) {
-		return dbgen.File{}, &conflictError{f: f}
+		return syncdb.File{}, &conflictError{f: f}
 	}
 	return f, nil
 }
 
-func (s *Service) modify(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
-	f, err := s.lockFile(ctx, q, env, op)
+func (s *Service) modify(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+	q := syncdb.New(tx)
+	f, err := s.lockFile(ctx, tx, env, op)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	size, err := s.checkBlob(ctx, q, env, op.BlobHash, op.Size)
+	size, err := s.checkBlob(ctx, tx, env, op.BlobHash, op.Size)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -137,7 +143,7 @@ func (s *Service) modify(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 			}
 			kind = string(k)
 		}
-		if taken, err := q.PathKeyTaken(ctx, dbgen.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: key}); err == nil && taken != f.ID {
+		if taken, err := q.PathKeyTaken(ctx, syncdb.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: key}); err == nil && taken != f.ID {
 			return syncproto.OpResult{}, reject(syncproto.CodePathCollision, "%s is used by another file now", displayPath(env, path))
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return syncproto.OpResult{}, err
@@ -147,7 +153,7 @@ func (s *Service) modify(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 	if revive {
 		old = 0
 	}
-	if err := chargeOwner(ctx, q, env, size-old); err != nil {
+	if err := chargeOwner(ctx, tx, env, size-old); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	opName := "modify"
@@ -157,7 +163,7 @@ func (s *Service) modify(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 	nf := f
 	nf.Path, nf.PathKey, nf.Kind, nf.BlobHash, nf.Size, nf.IsDeleted = path, key, kind, ptr(op.BlobHash), size, false
 	rev := f.CurrentRev + 1
-	seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: opName, baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
+	seq, err := s.record(ctx, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: opName, baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -165,14 +171,15 @@ func (s *Service) modify(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 	if revive {
 		files = 1
 	}
-	if err := q.AddVaultUsage(ctx, dbgen.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: size - old, FileCount: files}); err != nil {
+	if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: size - old, FileCount: files}); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
 }
 
-func (s *Service) move(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
-	f, err := s.lockFile(ctx, q, env, op)
+func (s *Service) move(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+	q := syncdb.New(tx)
+	f, err := s.lockFile(ctx, tx, env, op)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -186,43 +193,43 @@ func (s *Service) move(ctx context.Context, q *dbgen.Queries, env commitEnv, op 
 	if path == f.Path {
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "path is unchanged")
 	}
-	if taken, err := q.PathKeyTaken(ctx, dbgen.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: key}); err == nil && taken != f.ID {
+	if taken, err := q.PathKeyTaken(ctx, syncdb.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: key}); err == nil && taken != f.ID {
 		return syncproto.OpResult{}, reject(syncproto.CodePathCollision, "%s already exists", displayPath(env, path))
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.OpResult{}, err
 	}
-	if err := s.checkShareRoot(ctx, q, env, f, path); err != nil {
+	if err := s.checkShareRoot(ctx, tx, env, f, path); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	nf := f
 	nf.Path, nf.PathKey, nf.Kind = path, key, string(kind)
 	rev := f.CurrentRev + 1
-	seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(f.Path), baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
+	seq, err := s.record(ctx, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(f.Path), baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
 }
 
-func (s *Service) remove(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
-	f, err := s.lockFile(ctx, q, env, op)
+func (s *Service) remove(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+	f, err := s.lockFile(ctx, tx, env, op)
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
 	if f.IsDeleted {
 		return accepted(op.OpID, f.ID, f.CurrentRev, f.CurrentSeq), nil // already gone
 	}
-	if err := chargeOwner(ctx, q, env, -f.Size); err != nil {
+	if err := chargeOwner(ctx, tx, env, -f.Size); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	nf := f
 	nf.BlobHash, nf.Size, nf.IsDeleted = nil, 0, true
 	rev := f.CurrentRev + 1
-	seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: "delete", baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
+	seq, err := s.record(ctx, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: "delete", baseRev: ptr(f.CurrentRev), clientMtm: mtime(op), opID: &opID})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	if err := q.AddVaultUsage(ctx, dbgen.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: -f.Size, FileCount: -1}); err != nil {
+	if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: -f.Size, FileCount: -1}); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
@@ -231,11 +238,12 @@ func (s *Service) remove(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 // checkShareRoot refuses a file-by-file rename that would move the last file out of a
 // folder share: to the recipients the whole root would vanish (SHARE_ROOT_MOVE, §3.4.7);
 // renaming the folder is a move_prefix, which carries the share along.
-func (s *Service) checkShareRoot(ctx context.Context, q *dbgen.Queries, env commitEnv, f dbgen.File, newPath string) error {
+func (s *Service) checkShareRoot(ctx context.Context, tx db.DBTX, env commitEnv, f syncdb.File, newPath string) error {
+	q := syncdb.New(tx)
 	if env.private() || env.scope != nil {
 		return nil
 	}
-	shares, err := q.ListLiveSharesOfVault(ctx, env.vault.ID)
+	shares, err := sharing.ListLiveSharesOfVault(ctx, tx, env.vault.ID)
 	if err != nil {
 		return err
 	}
@@ -243,12 +251,12 @@ func (s *Service) checkShareRoot(ctx context.Context, q *dbgen.Queries, env comm
 		if sh.ResourceType != access.ResourceFolder {
 			continue
 		}
-		sc := access.NewScope(sh)
+		sc := access.NewScope(sh.ID, sh.ResourceType, sh.PathPrefix, sh.FileID)
 		if !sc.ContainsPath(f.Path) || sc.ContainsPath(newPath) {
 			continue
 		}
 		key := pathrules.Key(sc.Prefix)
-		n, err := q.CountFilesUnderPrefix(ctx, dbgen.CountFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: key, Descendants: likeEscape(key) + "/%"})
+		n, err := q.CountFilesUnderPrefix(ctx, syncdb.CountFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: key, Descendants: likeEscape(key) + "/%"})
 		if err != nil {
 			return err
 		}
@@ -268,7 +276,8 @@ func likeEscape(s string) string {
 // movePrefix renames a folder atomically: every file below it gets a move
 // revision, or none does (shared vaults only; private vaults emit one move
 // per file because the server cannot see folders, §3.8.5).
-func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) movePrefix(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+	q := syncdb.New(tx)
 	if env.private() {
 		return syncproto.OpResult{}, reject(syncproto.CodeVaultEncrypted, "move_prefix is not available on private vaults")
 	}
@@ -284,7 +293,7 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEn
 	if fromKey == toKey || strings.HasPrefix(toKey, fromKey+"/") {
 		return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "a folder cannot move into itself")
 	}
-	files, err := q.ListFilesUnderPrefix(ctx, dbgen.ListFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: fromKey, Descendants: likeEscape(fromKey) + "/%"})
+	files, err := q.ListFilesUnderPrefix(ctx, syncdb.ListFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: fromKey, Descendants: likeEscape(fromKey) + "/%"})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
@@ -297,7 +306,7 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEn
 	}
 	depth := len(strings.Split(from, "/"))
 	type target struct {
-		f         dbgen.File
+		f         syncdb.File
 		path, key string
 		kind      syncproto.FileKind
 	}
@@ -313,7 +322,7 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEn
 			return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "moving would create an invalid path: %s", np)
 		}
 		nk := pathrules.Key(np)
-		if taken, err := q.PathKeyTaken(ctx, dbgen.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: nk}); err == nil && !moving[taken] {
+		if taken, err := q.PathKeyTaken(ctx, syncdb.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: nk}); err == nil && !moving[taken] {
 			return syncproto.OpResult{}, reject(syncproto.CodePathCollision, "%s already exists", np)
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return syncproto.OpResult{}, err
@@ -330,7 +339,7 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEn
 			id = &opID // only the first revision can carry the idempotency id
 		}
 		rev := t.f.CurrentRev + 1
-		seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(t.f.Path), baseRev: ptr(t.f.CurrentRev), clientMtm: mtime(op), opID: id})
+		seq, err := s.record(ctx, tx, env, recordArgs{file: nf, exists: true, rev: rev, op: "move", prevPath: ptr(t.f.Path), baseRev: ptr(t.f.CurrentRev), clientMtm: mtime(op), opID: id})
 		if err != nil {
 			return syncproto.OpResult{}, err
 		}
@@ -338,7 +347,7 @@ func (s *Service) movePrefix(ctx context.Context, q *dbgen.Queries, env commitEn
 	}
 	// The shares rooted at or below the renamed folder follow it.
 	if env.scope == nil {
-		if err := q.RebasePrefixShares(ctx, dbgen.RebasePrefixSharesParams{
+		if err := sharing.RebasePrefixShares(ctx, tx, sharing.RebasePrefixSharesParams{
 			VaultID: env.vault.ID, ToPath: to, FromPath: from, LikeFrom: likeEscape(from) + "/%",
 		}); err != nil {
 			return syncproto.OpResult{}, err

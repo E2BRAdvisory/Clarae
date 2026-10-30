@@ -23,9 +23,11 @@ import (
 	"memobrain/services/cloud/internal/access"
 	"memobrain/services/cloud/internal/audit"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/export/exportdb"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/sync"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
 )
@@ -68,13 +70,13 @@ func NewService(d *db.DB, blobs, exports storage.BlobStore, a access.Authorizer,
 func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
 // vault authorizes the caller as owner of a live, non-encrypted vault.
-func (s *Service) vault(ctx context.Context, user, vaultID uuid.UUID) (dbgen.Vault, error) {
+func (s *Service) vault(ctx context.Context, user, vaultID uuid.UUID) (vaults.Vault, error) {
 	acc, err := s.authz.Authorize(ctx, user, vaultID, "", access.Owner)
 	if err != nil {
-		return dbgen.Vault{}, err
+		return vaults.Vault{}, err
 	}
 	if acc.Vault.Kind == "private" {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeVaultEncrypted, "a private vault is exported by the client, after decryption")
+		return vaults.Vault{}, httpproblem.Errorf(syncproto.CodeVaultEncrypted, "a private vault is exported by the client, after decryption")
 	}
 	return acc.Vault, nil
 }
@@ -91,7 +93,7 @@ var compressible = map[string]bool{
 func skipped(p string) bool { return pathrules.IsExcluded(p, false) }
 
 func (s *Service) writeZip(ctx context.Context, w io.Writer, vaultID uuid.UUID) error {
-	files, err := s.db.Queries().ListExportFiles(ctx, vaultID)
+	files, err := sync.ListExportFiles(ctx, s.db.Pool, vaultID)
 	if err != nil {
 		return err
 	}
@@ -139,15 +141,15 @@ func (s *Service) Stream(ctx context.Context, user, vaultID uuid.UUID) (io.ReadC
 }
 
 func (s *Service) audit(ctx context.Context, user uuid.UUID, action string, vaultID uuid.UUID, details any) {
-	err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
-		return audit.Record(ctx, q, user, action, "vault", vaultID.String(), details)
+	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return audit.Record(ctx, tx, user, action, "vault", vaultID.String(), details)
 	})
 	if err != nil {
 		s.log.Warn().Err(err).Str("action", action).Msg("export: cannot write the audit entry")
 	}
 }
 
-func (s *Service) filename(v dbgen.Vault) string {
+func (s *Service) filename(v vaults.Vault) string {
 	var b strings.Builder
 	for _, r := range v.Name {
 		switch {
@@ -165,30 +167,31 @@ func (s *Service) filename(v dbgen.Vault) string {
 }
 
 // Create queues an export job for a vault of any size.
-func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (dbgen.ExportJob, error) {
+func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb.ExportJob, error) {
 	v, err := s.vault(ctx, user, vaultID)
 	if err != nil {
-		return dbgen.ExportJob{}, err
+		return exportdb.ExportJob{}, err
 	}
-	var j dbgen.ExportJob
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	var j exportdb.ExportJob
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := exportdb.New(tx)
 		var err error
-		if j, err = q.CreateExportJob(ctx, dbgen.CreateExportJobParams{ID: uuid.Must(uuid.NewV7()), VaultID: v.ID, RequestedBy: user}); err != nil {
+		if j, err = q.CreateExportJob(ctx, exportdb.CreateExportJobParams{ID: uuid.Must(uuid.NewV7()), VaultID: v.ID, RequestedBy: user}); err != nil {
 			return err
 		}
-		return audit.Record(ctx, q, user, "vault.export", "vault", v.ID.String(), map[string]string{"mode": "job", "job": j.ID.String()})
+		return audit.Record(ctx, tx, user, "vault.export", "vault", v.ID.String(), map[string]string{"mode": "job", "job": j.ID.String()})
 	})
 	return j, err
 }
 
 // Job returns a job of a vault the caller owns.
-func (s *Service) Job(ctx context.Context, user, vaultID, jobID uuid.UUID) (dbgen.ExportJob, error) {
+func (s *Service) Job(ctx context.Context, user, vaultID, jobID uuid.UUID) (exportdb.ExportJob, error) {
 	if _, err := s.vault(ctx, user, vaultID); err != nil {
-		return dbgen.ExportJob{}, err
+		return exportdb.ExportJob{}, err
 	}
-	j, err := s.db.Queries().GetExportJob(ctx, dbgen.GetExportJobParams{ID: jobID, VaultID: vaultID})
+	j, err := exportdb.New(s.db.Pool).GetExportJob(ctx, exportdb.GetExportJobParams{ID: jobID, VaultID: vaultID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.ExportJob{}, httpproblem.NotFound("export")
+		return exportdb.ExportJob{}, httpproblem.NotFound("export")
 	}
 	return j, err
 }
@@ -197,7 +200,7 @@ func objectKey(id uuid.UUID) string { return "exports/" + id.String() + ".zip" }
 
 // DownloadURL is where a ready job is fetched: a presigned object URL when the store has a
 // public endpoint, otherwise the authenticated API path ("").
-func (s *Service) DownloadURL(ctx context.Context, j dbgen.ExportJob, name string) string {
+func (s *Service) DownloadURL(ctx context.Context, j exportdb.ExportJob, name string) string {
 	if j.Status != StatusReady {
 		return ""
 	}
@@ -210,8 +213,8 @@ func (s *Service) DownloadURL(ctx context.Context, j dbgen.ExportJob, name strin
 }
 
 // Name is the file name proposed for a job's archive.
-func (s *Service) Name(ctx context.Context, j dbgen.ExportJob) string {
-	v, err := s.db.Queries().GetVault(ctx, j.VaultID)
+func (s *Service) Name(ctx context.Context, j exportdb.ExportJob) string {
+	v, err := vaults.GetVault(ctx, s.db.Pool, j.VaultID)
 	if err != nil {
 		return "vault.zip"
 	}
@@ -245,7 +248,7 @@ func (s *Service) Open(ctx context.Context, user, vaultID, jobID uuid.UUID) (io.
 func (s *Service) ProcessPending(ctx context.Context) (int, error) {
 	n := 0
 	for ctx.Err() == nil {
-		j, err := s.db.Queries().ClaimExportJob(ctx)
+		j, err := exportdb.New(s.db.Pool).ClaimExportJob(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return n, nil
 		}
@@ -259,7 +262,7 @@ func (s *Service) ProcessPending(ctx context.Context) (int, error) {
 			if len(msg) > 500 {
 				msg = msg[:500]
 			}
-			if ferr := s.db.Queries().FailExportJob(context.WithoutCancel(ctx), dbgen.FailExportJobParams{ID: j.ID, Error: &msg}); ferr != nil {
+			if ferr := exportdb.New(s.db.Pool).FailExportJob(context.WithoutCancel(ctx), exportdb.FailExportJobParams{ID: j.ID, Error: &msg}); ferr != nil {
 				return n, ferr
 			}
 		}
@@ -267,7 +270,7 @@ func (s *Service) ProcessPending(ctx context.Context) (int, error) {
 	return n, ctx.Err()
 }
 
-func (s *Service) build(ctx context.Context, j dbgen.ExportJob) error {
+func (s *Service) build(ctx context.Context, j exportdb.ExportJob) error {
 	tmp, err := os.CreateTemp("", "memobrain-export-*.zip")
 	if err != nil {
 		return err
@@ -287,7 +290,7 @@ func (s *Service) build(ctx context.Context, j dbgen.ExportJob) error {
 		return err
 	}
 	exp := s.now().Add(LinkTTL)
-	return s.db.Queries().FinishExportJob(ctx, dbgen.FinishExportJobParams{ID: j.ID, Size: &size, ObjectKey: ptrStr(objectKey(j.ID)), ExpiresAt: &exp})
+	return exportdb.New(s.db.Pool).FinishExportJob(ctx, exportdb.FinishExportJobParams{ID: j.ID, Size: &size, ObjectKey: ptrStr(objectKey(j.ID)), ExpiresAt: &exp})
 }
 
 func ptrStr(s string) *string { return &s }
@@ -295,7 +298,7 @@ func ptrStr(s string) *string { return &s }
 // Expire retires finished exports past their 24 hours, deleting the archives, and requeues
 // jobs abandoned by a crashed worker.
 func (s *Service) Expire(ctx context.Context) error {
-	rows, err := s.db.Queries().ExpireExportJobs(ctx, s.now())
+	rows, err := exportdb.New(s.db.Pool).ExpireExportJobs(ctx, s.now())
 	if err != nil {
 		return err
 	}
@@ -306,6 +309,6 @@ func (s *Service) Expire(ctx context.Context) error {
 			}
 		}
 	}
-	_, err = s.db.Queries().RequeueStaleExportJobs(ctx, s.now().Add(-staleAfter))
+	_, err = exportdb.New(s.db.Pool).RequeueStaleExportJobs(ctx, s.now().Add(-staleAfter))
 	return err
 }

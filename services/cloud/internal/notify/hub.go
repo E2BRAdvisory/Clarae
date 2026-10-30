@@ -19,7 +19,9 @@ import (
 	"github.com/rs/zerolog"
 
 	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/notify/notifydb"
 	"memobrain/services/cloud/internal/observability"
+	"memobrain/services/cloud/internal/settings"
 )
 
 // Channel is the Postgres NOTIFY channel (mirrors sync.ChannelVaultChanged).
@@ -200,7 +202,7 @@ func (h *Hub) owner(ctx context.Context, vault uuid.UUID) (uuid.UUID, bool) {
 	if ok && time.Now().Before(e.until) {
 		return e.owner, !e.deleted
 	}
-	row, err := h.db.Queries().GetVaultOwner(ctx, vault)
+	row, err := notifydb.New(h.db.Pool).GetVaultOwner(ctx, vault)
 	if err != nil {
 		return uuid.Nil, false
 	}
@@ -219,7 +221,7 @@ func (h *Hub) sharedReaders(ctx context.Context, vault uuid.UUID) map[uuid.UUID]
 	if ok && time.Now().Before(e.until) {
 		return e.users
 	}
-	ids, err := h.db.Queries().ListVaultRecipients(ctx, vault)
+	ids, err := notifydb.New(h.db.Pool).ListVaultRecipients(ctx, vault)
 	if err != nil {
 		h.log.Warn().Err(err).Msg("notify: cannot resolve share recipients")
 		return e.users
@@ -273,7 +275,7 @@ func (h *Hub) DispatchShare(ctx context.Context, se ShareEvent) {
 		users[u] = true
 	}
 	if len(se.Users) == 0 {
-		q := h.db.Queries()
+		q := notifydb.New(h.db.Pool)
 		sh, err := q.GetShare(ctx, se.Share)
 		if err != nil {
 			return
@@ -306,7 +308,7 @@ func (h *Hub) DispatchAccount(ev AccountEvent) {
 // Snapshot returns what is ahead of what the client knows (replay after a reconnect, §3.6):
 // the vaults of the user, the ones shared with them, and the configuration revision.
 func (h *Hub) Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64, configVersion int64) ([]Event, error) {
-	q := h.db.Queries()
+	q := notifydb.New(h.db.Pool)
 	rows, err := q.ListVaultsOfOwners(ctx, user)
 	if err != nil {
 		return nil, err
@@ -329,7 +331,7 @@ func (h *Hub) Snapshot(ctx context.Context, user uuid.UUID, known map[string]int
 			out = append(out, Event{VaultID: r.ID, Seq: r.LastSeq})
 		}
 	}
-	if rev, err := q.GetConfigRevision(ctx); err == nil && rev > configVersion {
+	if rev, err := settings.ConfigRevision(ctx, h.db.Pool); err == nil && rev > configVersion {
 		out = append(out, Event{Kind: KindConfig, Revision: rev})
 	}
 	return out, nil

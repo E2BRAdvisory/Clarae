@@ -1,3 +1,5 @@
+-- Queries of the privacy module (ADR-0033: one sqlc package per module).
+
 -- name: LockActiveAdmins :many
 -- Serialises concurrent deletions of administrators (last-admin guard).
 SELECT id FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id FOR UPDATE;
@@ -14,16 +16,6 @@ UPDATE users SET
   updated_at   = now()
 WHERE id = $1
 RETURNING *;
-
--- name: MarkUserPurged :exec
-UPDATE users SET purged_at = now(), keycloak_sub = 'purged:' || id::text, updated_at = now() WHERE id = $1;
-
--- name: ListUsersToPurge :many
-SELECT id FROM users
-WHERE status = 'deleted' AND purged_at IS NULL AND COALESCE(deleted_at, updated_at) < $1;
-
--- name: ListAllVaultIDsOfOwner :many
-SELECT id FROM vaults WHERE owner_id = $1;
 
 -- name: CountLivePrivateVaultsOfOwner :one
 SELECT COUNT(*)::int FROM vaults WHERE owner_id = $1 AND kind = 'private' AND deleted_at IS NULL;

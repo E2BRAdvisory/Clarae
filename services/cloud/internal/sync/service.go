@@ -5,13 +5,15 @@ package sync
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/settings"
+	"memobrain/services/cloud/internal/users"
+	"memobrain/services/cloud/internal/vaults"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -19,10 +21,10 @@ import (
 
 	"memobrain/services/cloud/internal/blobs"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/observability"
 	"memobrain/services/cloud/internal/quota"
+	"memobrain/services/cloud/internal/sync/syncdb"
 	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
 )
@@ -72,20 +74,12 @@ func reject(code syncproto.Code, format string, args ...any) *opError {
 }
 
 // conflict carries the current state of a file back to the client.
-type conflictError struct{ f dbgen.File }
+type conflictError struct{ f syncdb.File }
 
 func (e *conflictError) Error() string { return "revision conflict" }
 
 func (s *Service) maxFileBytes(ctx context.Context) int64 {
-	raw, err := s.db.Queries().GetSetting(ctx, "files.max_size_bytes")
-	if err != nil {
-		return DefaultMaxFileBytes
-	}
-	var n int64
-	if json.Unmarshal(raw, &n) != nil || n <= 0 {
-		return DefaultMaxFileBytes
-	}
-	return n
+	return settings.Int(ctx, s.db.Pool, "files.max_size_bytes", DefaultMaxFileBytes)
 }
 
 // MaxFileBytes is the largest accepted file (exposed to the tus handler).
@@ -114,8 +108,8 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 		return syncproto.CommitResponse{}, err
 	}
 	vault := acc.Vault
-	q := s.db.Queries()
-	dev, err := q.GetDevice(ctx, dbgen.GetDeviceParams{ID: deviceID, UserID: userID})
+	conn := s.db.Pool
+	dev, err := users.GetDevice(ctx, conn, users.GetDeviceParams{ID: deviceID, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.CommitResponse{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "unknown device_id")
 	}
@@ -125,7 +119,7 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 	if dev.RevokedAt != nil {
 		return syncproto.CommitResponse{}, httpproblem.Errorf(syncproto.CodeForbidden, "device revoked")
 	}
-	_ = q.TouchDevice(ctx, dbgen.TouchDeviceParams{ID: deviceID, UserID: userID})
+	_ = users.TouchDevice(ctx, conn, users.TouchDeviceParams{ID: deviceID, UserID: userID})
 
 	// The owner pays for the storage, whoever edits (shared vaults, M4).
 	quotaBytes, err := s.quota.QuotaOf(ctx, vault.OwnerID)
@@ -141,14 +135,14 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 	if err != nil {
 		return syncproto.CommitResponse{}, err
 	}
-	if latest, err := q.GetVault(ctx, vaultID); err == nil {
+	if latest, err := vaults.GetVault(ctx, conn, vaultID); err == nil {
 		resp.LastSeq = latest.LastSeq
 	}
 	return resp, nil
 }
 
 type commitEnv struct {
-	vault    dbgen.Vault
+	vault    vaults.Vault
 	userID   uuid.UUID
 	deviceID uuid.UUID
 	quota    int64
@@ -190,15 +184,14 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 		return resp, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	q := dbgen.New(tx)
-	used, err := q.UserUsedBytes(ctx, env.vault.OwnerID)
+	used, err := quota.UsedBytes(ctx, tx, env.vault.OwnerID)
 	if err != nil {
 		return resp, err
 	}
 	env.batch = &batchState{usedAtStart: used, refs: map[string]int32{}}
 	var top int64
 	for _, op := range ops {
-		res, err := s.execOp(ctx, q, env, op)
+		res, err := s.execOp(ctx, tx, env, op)
 		if res2, handled := business(op.OpID, err); handled {
 			res, err = res2, nil
 		}
@@ -209,7 +202,7 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 		top = max(top, res.Seq)
 	}
 	if top > 0 {
-		if err := s.flushBatch(ctx, q, env); err != nil {
+		if err := s.flushBatch(ctx, tx, env); err != nil {
 			return resp, err
 		}
 		if err := s.notify(ctx, tx, env.vault.ID, top); err != nil {
@@ -221,10 +214,10 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 
 // flushBatch applies the accumulated usage charge and blob references. Blob
 // hashes are processed in sorted order so concurrent batches never deadlock.
-func (s *Service) flushBatch(ctx context.Context, q *dbgen.Queries, env commitEnv) error {
+func (s *Service) flushBatch(ctx context.Context, tx db.DBTX, env commitEnv) error {
 	b := env.batch
 	if b.delta != 0 {
-		if err := quota.Charge(ctx, q, env.vault.OwnerID, b.delta, env.quota); err != nil {
+		if err := quota.Charge(ctx, tx, env.vault.OwnerID, b.delta, env.quota); err != nil {
 			var pe *httpproblem.Error
 			if errors.As(err, &pe) && pe.Code == syncproto.CodeQuotaExceeded {
 				return errChargeRace
@@ -238,7 +231,7 @@ func (s *Service) flushBatch(ctx context.Context, q *dbgen.Queries, env commitEn
 	}
 	slices.Sort(hashes)
 	for _, h := range hashes {
-		if err := blobs.AddRef(ctx, q, h, b.refs[h]); err != nil {
+		if err := blobs.AddRef(ctx, tx, h, b.refs[h]); err != nil {
 			return err
 		}
 	}
@@ -250,9 +243,10 @@ func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto
 	resp := syncproto.CommitResponse{Results: make([]syncproto.OpResult, 0, len(ops))}
 	for _, op := range ops {
 		var res syncproto.OpResult
-		err := s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
+		err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 			var err error
-			if res, err = s.execOp(ctx, q, env, op); err != nil {
+			res, err = s.execOp(ctx, tx, env, op)
+			if err != nil {
 				return err
 			}
 			if res.Status == syncproto.StatusAccepted && res.Seq > 0 {
@@ -266,7 +260,7 @@ func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto
 		case isUnique(err, "file_revisions_op_uq"):
 			// A concurrent retry of the same operation won: it is applied.
 			opID, _ := uuid.Parse(op.OpID)
-			prev, gerr := s.db.Queries().GetRevisionByOpID(ctx, dbgen.GetRevisionByOpIDParams{VaultID: env.vault.ID, OpID: &opID})
+			prev, gerr := syncdb.New(s.db.Pool).GetRevisionByOpID(ctx, syncdb.GetRevisionByOpIDParams{VaultID: env.vault.ID, OpID: &opID})
 			if gerr != nil {
 				return resp, gerr
 			}
@@ -286,13 +280,14 @@ func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto
 // execOp evaluates one operation inside tx. Business outcomes come back as
 // *opError or *conflictError (see business); anything else is an infrastructure
 // error.
-func (s *Service) execOp(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op) (syncproto.OpResult, error) {
+func (s *Service) execOp(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op) (syncproto.OpResult, error) {
+	q := syncdb.New(tx)
 	opID, err := uuid.Parse(op.OpID)
 	if err != nil {
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "op_id must be a UUID")
 	}
 	// A retried operation returns its original outcome (idempotency).
-	prev, err := q.GetRevisionByOpID(ctx, dbgen.GetRevisionByOpIDParams{VaultID: env.vault.ID, OpID: &opID})
+	prev, err := q.GetRevisionByOpID(ctx, syncdb.GetRevisionByOpIDParams{VaultID: env.vault.ID, OpID: &opID})
 	if err == nil {
 		return accepted(op.OpID, prev.FileID, prev.RevNo, prev.Seq), nil
 	}
@@ -304,7 +299,7 @@ func (s *Service) execOp(ctx context.Context, q *dbgen.Queries, env commitEnv, o
 			return syncproto.OpResult{}, err
 		}
 	}
-	return s.dispatch(ctx, q, env, op, opID)
+	return s.dispatch(ctx, tx, env, op, opID)
 }
 
 // scopeOp turns the paths of an operation sent through a share (relative to its root)
@@ -396,18 +391,18 @@ func accepted(opID string, fileID uuid.UUID, rev int32, seq int64) syncproto.OpR
 	return syncproto.OpResult{OpID: opID, Status: syncproto.StatusAccepted, FileID: fileID.String(), Rev: int(rev), Seq: seq}
 }
 
-func (s *Service) dispatch(ctx context.Context, q *dbgen.Queries, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
+func (s *Service) dispatch(ctx context.Context, tx db.DBTX, env commitEnv, op syncproto.Op, opID uuid.UUID) (syncproto.OpResult, error) {
 	switch op.Op {
 	case syncproto.OpCreate:
-		return s.create(ctx, q, env, op, opID)
+		return s.create(ctx, tx, env, op, opID)
 	case syncproto.OpModify, syncproto.OpRestore:
-		return s.modify(ctx, q, env, op, opID)
+		return s.modify(ctx, tx, env, op, opID)
 	case syncproto.OpMove:
-		return s.move(ctx, q, env, op, opID)
+		return s.move(ctx, tx, env, op, opID)
 	case syncproto.OpDelete:
-		return s.remove(ctx, q, env, op, opID)
+		return s.remove(ctx, tx, env, op, opID)
 	case syncproto.OpMovePrefix:
-		return s.movePrefix(ctx, q, env, op, opID)
+		return s.movePrefix(ctx, tx, env, op, opID)
 	default:
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "unknown operation %q", op.Op)
 	}
@@ -446,11 +441,11 @@ func parseFileID(op syncproto.Op) (uuid.UUID, error) {
 
 // checkBlob verifies the vault owns the blob and returns its size, enforcing
 // the file size limit.
-func (s *Service) checkBlob(ctx context.Context, q *dbgen.Queries, env commitEnv, hash string, declared int64) (int64, error) {
+func (s *Service) checkBlob(ctx context.Context, tx db.DBTX, env commitEnv, hash string, declared int64) (int64, error) {
 	if !blobs.IsHash(hash) {
 		return 0, reject(syncproto.CodeValidationFailed, "blob_hash must be a SHA-256 hex digest")
 	}
-	size, ok, err := blobs.VaultBlob(ctx, q, env.vault.ID, hash)
+	size, ok, err := blobs.VaultBlob(ctx, tx, env.vault.ID, hash)
 	if err != nil {
 		return 0, err
 	}
@@ -466,7 +461,7 @@ func (s *Service) checkBlob(ctx context.Context, q *dbgen.Queries, env commitEnv
 	return size, nil
 }
 
-func chargeOwner(ctx context.Context, q *dbgen.Queries, env commitEnv, delta int64) error {
+func chargeOwner(ctx context.Context, tx db.DBTX, env commitEnv, delta int64) error {
 	if delta == 0 {
 		return nil
 	}
@@ -478,7 +473,7 @@ func chargeOwner(ctx context.Context, q *dbgen.Queries, env commitEnv, delta int
 		b.delta += delta
 		return nil
 	}
-	if err := quota.Charge(ctx, q, env.vault.OwnerID, delta, env.quota); err != nil {
+	if err := quota.Charge(ctx, tx, env.vault.OwnerID, delta, env.quota); err != nil {
 		var pe *httpproblem.Error
 		if errors.As(err, &pe) && pe.Code == syncproto.CodeQuotaExceeded {
 			return reject(syncproto.CodeQuotaExceeded, "storage quota exceeded (used %v of %v bytes)", pe.Extra["used_bytes"], pe.Extra["quota_bytes"])
@@ -491,8 +486,8 @@ func chargeOwner(ctx context.Context, q *dbgen.Queries, env commitEnv, delta int
 // record appends a revision, advances the file and notifies listeners. The
 // caller has already taken care of quota and counters.
 type recordArgs struct {
-	file      dbgen.File // new state of the files row (ID, Path, PathKey, Kind, BlobHash, Size, IsDeleted)
-	exists    bool       // false: INSERT (create), true: UPDATE
+	file      syncdb.File // new state of the files row (ID, Path, PathKey, Kind, BlobHash, Size, IsDeleted)
+	exists    bool        // false: INSERT (create), true: UPDATE
 	rev       int32
 	op        string
 	prevPath  *string
@@ -502,19 +497,20 @@ type recordArgs struct {
 	conflict  *uuid.UUID
 }
 
-func (s *Service) record(ctx context.Context, q *dbgen.Queries, env commitEnv, a recordArgs) (seq int64, err error) {
-	seq, err = q.NextVaultSeq(ctx, env.vault.ID)
+func (s *Service) record(ctx context.Context, tx db.DBTX, env commitEnv, a recordArgs) (seq int64, err error) {
+	q := syncdb.New(tx)
+	seq, err = vaults.NextVaultSeq(ctx, tx, env.vault.ID)
 	if err != nil {
 		return 0, err
 	}
 	f := a.file
 	if a.exists {
-		err = q.UpdateFile(ctx, dbgen.UpdateFileParams{
+		err = q.UpdateFile(ctx, syncdb.UpdateFileParams{
 			ID: f.ID, Path: f.Path, PathKey: f.PathKey, Kind: f.Kind, CurrentRev: a.rev, CurrentSeq: seq,
 			BlobHash: f.BlobHash, Size: f.Size, IsDeleted: f.IsDeleted,
 		})
 	} else {
-		err = q.InsertFile(ctx, dbgen.InsertFileParams{
+		err = q.InsertFile(ctx, syncdb.InsertFileParams{
 			ID: f.ID, VaultID: env.vault.ID, Path: f.Path, PathKey: f.PathKey, Kind: f.Kind, CurrentRev: a.rev, CurrentSeq: seq,
 			BlobHash: f.BlobHash, Size: f.Size,
 		})
@@ -531,7 +527,7 @@ func (s *Service) record(ctx context.Context, q *dbgen.Queries, env commitEnv, a
 	if devID != uuid.Nil {
 		devPtr = &devID
 	}
-	if _, err := q.InsertRevision(ctx, dbgen.InsertRevisionParams{
+	if _, err := q.InsertRevision(ctx, syncdb.InsertRevisionParams{
 		ID: revID, FileID: f.ID, VaultID: env.vault.ID, Seq: seq, RevNo: a.rev, Op: a.op, Path: f.Path, PrevPath: a.prevPath,
 		BlobHash: f.BlobHash, Size: f.Size, BaseRev: a.baseRev, AuthorID: env.userID, DeviceID: devPtr, OpID: a.opID,
 		ClientMtime: a.clientMtm.get(), ConflictOf: a.conflict,
@@ -541,7 +537,7 @@ func (s *Service) record(ctx context.Context, q *dbgen.Queries, env commitEnv, a
 	if f.BlobHash != nil {
 		if env.batch != nil {
 			env.batch.refs[*f.BlobHash]++
-		} else if err := blobs.AddRef(ctx, q, *f.BlobHash, 1); err != nil {
+		} else if err := blobs.AddRef(ctx, tx, *f.BlobHash, 1); err != nil {
 			return 0, err
 		}
 	}

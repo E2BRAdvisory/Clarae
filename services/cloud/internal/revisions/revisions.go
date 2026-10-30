@@ -17,8 +17,8 @@ import (
 
 	"memobrain/services/cloud/internal/blobs"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/revisions/revisionsdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -51,7 +51,7 @@ func (s *Service) readableFile(ctx context.Context, userID, vaultID uuid.UUID, s
 	if err != nil {
 		return err
 	}
-	f, err := s.db.Queries().GetFile(ctx, dbgen.GetFileParams{ID: fileID, VaultID: vaultID})
+	f, err := revisionsdb.New(s.db.Pool).GetFile(ctx, revisionsdb.GetFileParams{ID: fileID, VaultID: vaultID})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && acc.Scope != nil && !acc.Scope.ContainsFile(f.ID, f.Path)) {
 		return httpproblem.NotFound("file")
 	}
@@ -59,11 +59,12 @@ func (s *Service) readableFile(ctx context.Context, userID, vaultID uuid.UUID, s
 }
 
 // List returns revisions newest first, with a cursor for the next page.
-func (s *Service) List(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, limit int, cursor string) ([]dbgen.FileRevision, string, error) {
+func (s *Service) List(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, limit int, cursor string) ([]revisionsdb.FileRevision, string, error) {
 	if err := s.readableFile(ctx, userID, vaultID, scope, fileID); err != nil {
 		return nil, "", err
 	}
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := revisionsdb.New(conn)
 	before := int32(0)
 	if cursor != "" {
 		n, err := strconv.ParseInt(cursor, 10, 32)
@@ -75,7 +76,7 @@ func (s *Service) List(ctx context.Context, userID, vaultID uuid.UUID, scope str
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := q.ListRevisions(ctx, dbgen.ListRevisionsParams{VaultID: vaultID, FileID: fileID, BeforeRev: before, MaxRows: int32(limit + 1)})
+	rows, err := q.ListRevisions(ctx, revisionsdb.ListRevisionsParams{VaultID: vaultID, FileID: fileID, BeforeRev: before, MaxRows: int32(limit + 1)})
 	if err != nil {
 		return nil, "", err
 	}
@@ -92,7 +93,7 @@ func (s *Service) Content(ctx context.Context, userID, vaultID uuid.UUID, scope 
 	if err := s.readableFile(ctx, userID, vaultID, scope, fileID); err != nil {
 		return nil, 0, err
 	}
-	r, err := s.db.Queries().GetRevision(ctx, dbgen.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
+	r, err := revisionsdb.New(s.db.Pool).GetRevision(ctx, revisionsdb.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, 0, httpproblem.NotFound("revision")
 	}
@@ -123,10 +124,11 @@ type RetentionPolicy struct {
 func (s *Service) Prune(ctx context.Context, p RetentionPolicy, now time.Time) (int, error) {
 	fullCut := now.AddDate(0, 0, -p.FullDays)
 	dailyCut := now.AddDate(0, 0, -p.DailyDays)
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := revisionsdb.New(conn)
 	total := 0
 	for {
-		cands, err := q.ListRevisionsForRetention(ctx, dbgen.ListRevisionsForRetentionParams{ServerTime: fullCut, Limit: 5000})
+		cands, err := q.ListRevisionsForRetention(ctx, revisionsdb.ListRevisionsForRetentionParams{ServerTime: fullCut, Limit: 5000})
 		if err != nil {
 			return total, err
 		}
@@ -137,7 +139,8 @@ func (s *Service) Prune(ctx context.Context, p RetentionPolicy, now time.Time) (
 		if len(doomed) == 0 {
 			return total, nil
 		}
-		err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+		err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			q := revisionsdb.New(tx)
 			hashes, err := q.DeleteRevisions(ctx, doomed)
 			if err != nil {
 				return err
@@ -149,7 +152,7 @@ func (s *Service) Prune(ctx context.Context, p RetentionPolicy, now time.Time) (
 				}
 			}
 			for h, n := range count {
-				if err := blobs.AddRef(ctx, q, h, -n); err != nil {
+				if err := blobs.AddRef(ctx, tx, h, -n); err != nil {
 					return err
 				}
 			}
@@ -168,7 +171,7 @@ func (s *Service) Prune(ctx context.Context, p RetentionPolicy, now time.Time) (
 // selectDoomed picks the revisions to delete among candidates ordered by
 // (file, time): all older than dailyCut, and within the daily window every
 // revision except the last one of its UTC day.
-func selectDoomed(cands []dbgen.ListRevisionsForRetentionRow, dailyCut time.Time) []uuid.UUID {
+func selectDoomed(cands []revisionsdb.ListRevisionsForRetentionRow, dailyCut time.Time) []uuid.UUID {
 	var doomed []uuid.UUID
 	for i, c := range cands {
 		if c.ServerTime.Before(dailyCut) {

@@ -1,3 +1,5 @@
+-- Queries of the blobs module (ADR-0033: one sqlc package per module).
+
 -- name: GetBlob :one
 SELECT * FROM blobs WHERE hash = $1;
 
@@ -22,30 +24,6 @@ SELECT hash FROM vault_blobs WHERE vault_id = $1 AND hash = ANY(sqlc.arg(hashes)
 -- name: AddBlobRef :exec
 UPDATE blobs SET ref_count = ref_count + $2,
   unreferenced_since = CASE WHEN ref_count + $2 = 0 THEN now() ELSE NULL END
-WHERE hash = $1;
-
--- name: ListUnreferencedBlobs :many
-SELECT hash, storage_key FROM blobs
-WHERE ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $1
-ORDER BY unreferenced_since LIMIT $2;
-
--- name: DeleteCollectableBlob :one
--- Deletes the row only if it is still unreferenced past the grace period: a
--- commit that referenced the blob meanwhile keeps it (no row returned).
-DELETE FROM blobs
-WHERE hash = $1 AND ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $2
-RETURNING storage_key;
-
--- name: ListBlobRefCounts :many
--- Reconciliation: actual number of revisions referencing each blob.
-SELECT b.hash, b.ref_count, COUNT(r.id)::int AS actual
-FROM blobs b LEFT JOIN file_revisions r ON r.blob_hash = b.hash
-GROUP BY b.hash, b.ref_count
-HAVING b.ref_count <> COUNT(r.id);
-
--- name: SetBlobRef :exec
-UPDATE blobs SET ref_count = $2,
-  unreferenced_since = CASE WHEN $2 = 0 THEN COALESCE(unreferenced_since, now()) ELSE NULL END
 WHERE hash = $1;
 
 -- name: CreateUpload :one

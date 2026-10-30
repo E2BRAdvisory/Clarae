@@ -6,8 +6,8 @@ import (
 	"memobrain/services/cloud/internal/access"
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/sharing/sharingdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -17,7 +17,7 @@ type HTTP struct{ svc *Service }
 // NewHTTP binds the handlers.
 func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
-func toGrant(g dbgen.ListGrantsRow) api.Grant {
+func toGrant(g sharingdb.ListGrantsRow) api.Grant {
 	out := api.Grant{
 		CreatedAt: g.CreatedAt, Permission: api.SharePermission(g.Permission), PrincipalId: g.PrincipalID,
 		PrincipalName: g.PrincipalName, PrincipalType: api.GrantPrincipalType(g.PrincipalType), Status: api.GrantStatus(g.Status),

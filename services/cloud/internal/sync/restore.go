@@ -6,11 +6,12 @@ import (
 	"fmt"
 
 	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/vaults"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/sync/syncdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -32,14 +33,15 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID
 	op := syncproto.Op{OpID: opID.String(), Op: syncproto.OpRestore, FileID: fileID.String()}
 
 	var res syncproto.OpResult
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error {
-		if prev, err := q.GetRevisionByOpID(ctx, dbgen.GetRevisionByOpIDParams{VaultID: vaultID, OpID: &opID}); err == nil {
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := syncdb.New(tx)
+		if prev, err := q.GetRevisionByOpID(ctx, syncdb.GetRevisionByOpIDParams{VaultID: vaultID, OpID: &opID}); err == nil {
 			res = accepted(op.OpID, prev.FileID, prev.RevNo, prev.Seq)
 			return nil
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		f, err := q.GetFileForUpdate(ctx, dbgen.GetFileForUpdateParams{ID: fileID, VaultID: vaultID})
+		f, err := q.GetFileForUpdate(ctx, syncdb.GetFileForUpdateParams{ID: fileID, VaultID: vaultID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return reject(syncproto.CodeNotFound, "file not found")
 		}
@@ -49,7 +51,7 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID
 		if acc.Scope != nil && !acc.Scope.ContainsFile(f.ID, f.Path) {
 			return reject(syncproto.CodeNotFound, "file not found")
 		}
-		target, err := q.GetRevision(ctx, dbgen.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
+		target, err := q.GetRevision(ctx, syncdb.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return reject(syncproto.CodeNotFound, "revision not found")
 		}
@@ -59,12 +61,12 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID
 		if target.BlobHash == nil {
 			return reject(syncproto.CodeValidationFailed, "revision %d is a deletion: it has no content to restore", rev)
 		}
-		size, err := s.checkBlob(ctx, q, env, *target.BlobHash, 0)
+		size, err := s.checkBlob(ctx, tx, env, *target.BlobHash, 0)
 		if err != nil {
 			return err
 		}
 		if f.IsDeleted {
-			if taken, err := q.PathKeyTaken(ctx, dbgen.PathKeyTakenParams{VaultID: vaultID, PathKey: f.PathKey}); err == nil && taken != f.ID {
+			if taken, err := q.PathKeyTaken(ctx, syncdb.PathKeyTakenParams{VaultID: vaultID, PathKey: f.PathKey}); err == nil && taken != f.ID {
 				return reject(syncproto.CodePathCollision, "the original path is used by another file now")
 			} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return err
@@ -74,13 +76,13 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID
 		if f.IsDeleted {
 			old = 0
 		}
-		if err := chargeOwner(ctx, q, env, size-old); err != nil {
+		if err := chargeOwner(ctx, tx, env, size-old); err != nil {
 			return err
 		}
 		nf := f
 		nf.BlobHash, nf.Size, nf.IsDeleted = target.BlobHash, size, false
 		newRev := f.CurrentRev + 1
-		seq, err := s.record(ctx, q, env, recordArgs{file: nf, exists: true, rev: newRev, op: "restore", baseRev: ptr(f.CurrentRev), opID: &opID})
+		seq, err := s.record(ctx, tx, env, recordArgs{file: nf, exists: true, rev: newRev, op: "restore", baseRev: ptr(f.CurrentRev), opID: &opID})
 		if err != nil {
 			return err
 		}
@@ -88,7 +90,7 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID
 		if f.IsDeleted {
 			files = 1
 		}
-		if err := q.AddVaultUsage(ctx, dbgen.AddVaultUsageParams{ID: vaultID, TotalBytes: size - old, FileCount: files}); err != nil {
+		if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: vaultID, TotalBytes: size - old, FileCount: files}); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT pg_notify($1, $2)", ChannelVaultChanged, fmt.Sprintf("%s:%d", vaultID, seq)); err != nil {

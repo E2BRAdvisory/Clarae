@@ -21,8 +21,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/settings"
+	"memobrain/services/cloud/internal/vaults/vaultsdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -135,41 +136,42 @@ func isUnique(err error, constraint string) bool {
 
 // Create makes a vault owned by ownerID. Private vaults need both envelopes,
 // shared vaults none.
-func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind string, envs []EnvelopeInput) (dbgen.Vault, error) {
+func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind string, envs []EnvelopeInput) (vaultsdb.Vault, error) {
 	n, err := ValidateName(name)
 	if err != nil {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "%v", err)
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "%v", err)
 	}
 	switch kind {
 	case KindPrivate:
 		have := map[string]bool{}
 		for _, e := range envs {
 			if err := ValidateEnvelope(e); err != nil {
-				return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "key_envelopes: %v", err)
+				return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "key_envelopes: %v", err)
 			}
 			if have[e.Kind] {
-				return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "key_envelopes: duplicate %s envelope", e.Kind)
+				return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "key_envelopes: duplicate %s envelope", e.Kind)
 			}
 			have[e.Kind] = true
 		}
 		if !have[EnvelopePassphrase] || !have[EnvelopeRecovery] {
-			return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "a private vault requires both the passphrase and the recovery envelope")
+			return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "a private vault requires both the passphrase and the recovery envelope")
 		}
 	case KindShared:
 		if len(envs) > 0 {
-			return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "key_envelopes are only allowed on private vaults")
+			return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "key_envelopes are only allowed on private vaults")
 		}
 	default:
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "kind must be private or shared")
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "kind must be private or shared")
 	}
 	id, err := uuid.NewV7()
 	if err != nil {
-		return dbgen.Vault{}, err
+		return vaultsdb.Vault{}, err
 	}
-	var v dbgen.Vault
-	err = s.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
+	var v vaultsdb.Vault
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := vaultsdb.New(tx)
 		var err error
-		v, err = q.CreateVault(ctx, dbgen.CreateVaultParams{ID: id, OwnerID: ownerID, Name: n, Kind: kind})
+		v, err = q.CreateVault(ctx, vaultsdb.CreateVaultParams{ID: id, OwnerID: ownerID, Name: n, Kind: kind})
 		if err != nil {
 			return err
 		}
@@ -179,14 +181,14 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind stri
 			if err != nil {
 				return err
 			}
-			if _, err := q.UpsertEnvelope(ctx, dbgen.UpsertEnvelopeParams{ID: eid, VaultID: id, Kind: e.Kind, Kdf: kdf, WrappedVmk: e.WrappedVMK}); err != nil {
+			if _, err := q.UpsertEnvelope(ctx, vaultsdb.UpsertEnvelopeParams{ID: eid, VaultID: id, Kind: e.Kind, Kdf: kdf, WrappedVmk: e.WrappedVMK}); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
 	if isUnique(err, "vaults_owner_name_uq") {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "you already have a vault named %q", n)
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "you already have a vault named %q", n)
 	}
 	return v, err
 }
@@ -194,46 +196,46 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind stri
 // Open returns the vault when userID may use it. In M2 only the owner can;
 // shares and mounts extend this in M4. Unknown, foreign and (unless
 // allowDeleted) soft-deleted vaults are indistinguishable: NOT_FOUND (§3.7).
-func (s *Service) Open(ctx context.Context, userID, vaultID uuid.UUID) (dbgen.Vault, error) {
-	return s.open(ctx, s.db.Queries(), userID, vaultID, false)
+func (s *Service) Open(ctx context.Context, userID, vaultID uuid.UUID) (vaultsdb.Vault, error) {
+	return s.open(ctx, vaultsdb.New(s.db.Pool), userID, vaultID, false)
 }
 
 // OpenTx is Open inside a transaction.
-func (s *Service) OpenTx(ctx context.Context, q *dbgen.Queries, userID, vaultID uuid.UUID) (dbgen.Vault, error) {
+func (s *Service) OpenTx(ctx context.Context, q *vaultsdb.Queries, userID, vaultID uuid.UUID) (vaultsdb.Vault, error) {
 	return s.open(ctx, q, userID, vaultID, false)
 }
 
-func (s *Service) open(ctx context.Context, q *dbgen.Queries, userID, vaultID uuid.UUID, allowDeleted bool) (dbgen.Vault, error) {
+func (s *Service) open(ctx context.Context, q *vaultsdb.Queries, userID, vaultID uuid.UUID, allowDeleted bool) (vaultsdb.Vault, error) {
 	v, err := q.GetVault(ctx, vaultID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.Vault{}, httpproblem.NotFound("vault")
+		return vaultsdb.Vault{}, httpproblem.NotFound("vault")
 	}
 	if err != nil {
-		return dbgen.Vault{}, err
+		return vaultsdb.Vault{}, err
 	}
 	if v.OwnerID != userID || (v.DeletedAt != nil && !allowDeleted) {
-		return dbgen.Vault{}, httpproblem.NotFound("vault")
+		return vaultsdb.Vault{}, httpproblem.NotFound("vault")
 	}
 	return v, nil
 }
 
 // List returns the caller's vaults.
-func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]dbgen.Vault, error) {
-	return s.db.Queries().ListOwnedVaults(ctx, userID)
+func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]vaultsdb.Vault, error) {
+	return vaultsdb.New(s.db.Pool).ListOwnedVaults(ctx, userID)
 }
 
 // Rename changes the vault name (owner).
-func (s *Service) Rename(ctx context.Context, userID, vaultID uuid.UUID, name string) (dbgen.Vault, error) {
+func (s *Service) Rename(ctx context.Context, userID, vaultID uuid.UUID, name string) (vaultsdb.Vault, error) {
 	n, err := ValidateName(name)
 	if err != nil {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "%v", err)
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "%v", err)
 	}
 	if _, err := s.Open(ctx, userID, vaultID); err != nil {
-		return dbgen.Vault{}, err
+		return vaultsdb.Vault{}, err
 	}
-	v, err := s.db.Queries().RenameVault(ctx, dbgen.RenameVaultParams{ID: vaultID, Name: n})
+	v, err := vaultsdb.New(s.db.Pool).RenameVault(ctx, vaultsdb.RenameVaultParams{ID: vaultID, Name: n})
 	if isUnique(err, "vaults_owner_name_uq") {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "you already have a vault named %q", n)
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "you already have a vault named %q", n)
 	}
 	return v, err
 }
@@ -243,38 +245,41 @@ func (s *Service) Delete(ctx context.Context, userID, vaultID uuid.UUID) error {
 	if _, err := s.Open(ctx, userID, vaultID); err != nil {
 		return err
 	}
-	_, err := s.db.Queries().SoftDeleteVault(ctx, vaultID)
+	_, err := vaultsdb.New(s.db.Pool).SoftDeleteVault(ctx, vaultID)
 	return err
 }
 
 // Restore undoes a soft delete inside the retention period.
-func (s *Service) Restore(ctx context.Context, userID, vaultID uuid.UUID) (dbgen.Vault, error) {
-	q := s.db.Queries()
+func (s *Service) Restore(ctx context.Context, userID, vaultID uuid.UUID) (vaultsdb.Vault, error) {
+	q := vaultsdb.New(s.db.Pool)
 	v, err := s.open(ctx, q, userID, vaultID, true)
 	if err != nil {
-		return dbgen.Vault{}, err
+		return vaultsdb.Vault{}, err
 	}
 	if v.DeletedAt == nil {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "vault is not deleted")
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "vault is not deleted")
 	}
 	retention := defaultDeletedRetention
 	if days, err := s.settingInt(ctx, "vaults.deleted_retention_days"); err == nil && days > 0 {
 		retention = time.Duration(days) * 24 * time.Hour
 	}
 	if time.Since(*v.DeletedAt) > retention {
-		return dbgen.Vault{}, httpproblem.NotFound("vault")
+		return vaultsdb.Vault{}, httpproblem.NotFound("vault")
 	}
 	r, err := q.RestoreVault(ctx, vaultID)
 	if isUnique(err, "vaults_owner_name_uq") {
-		return dbgen.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "another vault is already named %q: rename it first", v.Name)
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "another vault is already named %q: rename it first", v.Name)
 	}
 	return r, err
 }
 
 func (s *Service) settingInt(ctx context.Context, key string) (int, error) {
-	raw, err := s.db.Queries().GetSetting(ctx, key)
+	raw, ok, err := settings.Get(ctx, s.db.Pool, key)
 	if err != nil {
 		return 0, err
+	}
+	if !ok {
+		return 0, pgx.ErrNoRows
 	}
 	var n int
 	return n, json.Unmarshal(raw, &n)
@@ -299,7 +304,7 @@ func (s *Service) Tree(ctx context.Context, userID, vaultID uuid.UUID) (entries 
 		return nil, 0, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	q := dbgen.New(tx)
+	q := vaultsdb.New(tx)
 	v, err := s.open(ctx, q, userID, vaultID, false)
 	if err != nil {
 		return nil, 0, err
@@ -354,7 +359,7 @@ type Envelope struct {
 	CreatedAt  time.Time
 }
 
-func toEnvelope(e dbgen.VaultKeyEnvelope) (Envelope, error) {
+func toEnvelope(e vaultsdb.VaultKeyEnvelope) (Envelope, error) {
 	var k KDF
 	if err := json.Unmarshal(e.Kdf, &k); err != nil {
 		return Envelope{}, err
@@ -362,7 +367,7 @@ func toEnvelope(e dbgen.VaultKeyEnvelope) (Envelope, error) {
 	return Envelope{Kind: e.Kind, KDF: k, WrappedVMK: e.WrappedVmk, CreatedAt: e.CreatedAt}, nil
 }
 
-func requirePrivate(v dbgen.Vault) error {
+func requirePrivate(v vaultsdb.Vault) error {
 	if v.Kind != KindPrivate {
 		return httpproblem.Errorf(syncproto.CodeValidationFailed, "key envelopes exist only on private vaults")
 	}
@@ -378,7 +383,7 @@ func (s *Service) Envelopes(ctx context.Context, userID, vaultID uuid.UUID) ([]E
 	if err := requirePrivate(v); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.Queries().ListEnvelopes(ctx, vaultID)
+	rows, err := vaultsdb.New(s.db.Pool).ListEnvelopes(ctx, vaultID)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +415,7 @@ func (s *Service) PutEnvelope(ctx context.Context, userID, vaultID uuid.UUID, in
 	if err != nil {
 		return Envelope{}, err
 	}
-	row, err := s.db.Queries().UpsertEnvelope(ctx, dbgen.UpsertEnvelopeParams{ID: id, VaultID: vaultID, Kind: in.Kind, Kdf: kdf, WrappedVmk: in.WrappedVMK})
+	row, err := vaultsdb.New(s.db.Pool).UpsertEnvelope(ctx, vaultsdb.UpsertEnvelopeParams{ID: id, VaultID: vaultID, Kind: in.Kind, Kdf: kdf, WrappedVmk: in.WrappedVMK})
 	if err != nil {
 		return Envelope{}, err
 	}

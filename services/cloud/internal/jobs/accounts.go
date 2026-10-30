@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/jobs/jobsdb"
 	"memobrain/services/cloud/internal/privacy"
 )
 
@@ -20,7 +20,7 @@ import (
 // keeps audit entries and revisions in other users' vaults consistent.
 func (r *Runner) PurgeDeletedAccounts(ctx context.Context) (int, error) {
 	retention := time.Duration(r.setting(ctx, "privacy.account_purge_days", 30)) * 24 * time.Hour
-	q := r.db.Queries()
+	q := jobsdb.New(r.db.Pool)
 	ids, err := q.ListUsersToPurge(ctx, ptrTime(r.now().Add(-retention)))
 	if err != nil {
 		return 0, err
@@ -36,14 +36,15 @@ func (r *Runner) PurgeDeletedAccounts(ctx context.Context) (int, error) {
 				return 0, fmt.Errorf("purge vault %s of deleted account %s: %w", v, id, err)
 			}
 		}
-		err = r.db.WithTx(ctx, func(ctx context.Context, q *dbgen.Queries, _ pgx.Tx) error {
-			if err := privacy.Anonymise(ctx, q, id); err != nil {
+		err = r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			q := jobsdb.New(tx)
+			if err := privacy.Anonymise(ctx, tx, id); err != nil {
 				return err
 			}
 			if err := q.MarkUserPurged(ctx, id); err != nil {
 				return err
 			}
-			return audit.Record(ctx, q, id, "account.purge", "user", id.String(), map[string]int{"vaults": len(vaults)})
+			return audit.Record(ctx, tx, id, "account.purge", "user", id.String(), map[string]int{"vaults": len(vaults)})
 		})
 		if err != nil {
 			return 0, err

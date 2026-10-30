@@ -7,8 +7,8 @@ import (
 
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/vaults/vaultsdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -19,7 +19,7 @@ type HTTP struct{ svc *Service }
 func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
 // ToAPI converts a vault row to its API representation.
-func ToAPI(v dbgen.Vault) api.Vault {
+func ToAPI(v vaultsdb.Vault) api.Vault {
 	return api.Vault{
 		Id:         v.ID,
 		OwnerId:    v.OwnerID,

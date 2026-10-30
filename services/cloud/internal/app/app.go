@@ -60,6 +60,7 @@ func New(d *db.DB, store storage.BlobStore, log zerolog.Logger) *App {
 	a.Sharing = sharing.NewService(d)
 	a.Config = configprofiles.NewService(d)
 	a.Groups = groups.NewService(d, a.Config)
+	a.Groups.Grants = a.Sharing // grants belong to sharing, which depends on groups (ADR-0033)
 	a.Vaults = vaults.NewService(d).WithAuthorizer(a.Sharing)
 	a.Quota = quota.NewService(d, a.Users)
 	a.Blobs = blobs.NewService(d, store, a.Sharing)

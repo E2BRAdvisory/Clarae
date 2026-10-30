@@ -9,7 +9,7 @@ import (
 
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/revisions/revisionsdb"
 	syncmod "memobrain/services/cloud/internal/sync"
 )
 
@@ -19,7 +19,7 @@ type HTTP struct{ svc *Service }
 // NewHTTP binds the handlers.
 func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
-func toAPI(r dbgen.FileRevision) api.Revision {
+func toAPI(r revisionsdb.FileRevision) api.Revision {
 	return api.Revision{
 		Rev: int(r.RevNo), Seq: r.Seq, Op: api.ChangeOp(r.Op), Path: r.Path, PrevPath: r.PrevPath, BlobHash: r.BlobHash,
 		Size: r.Size, AuthorId: r.AuthorID, DeviceId: r.DeviceID, ServerTime: r.ServerTime,

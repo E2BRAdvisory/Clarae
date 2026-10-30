@@ -14,8 +14,8 @@ import (
 	"github.com/google/uuid"
 
 	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/vaults"
 )
 
 // ---- helpers ----
@@ -519,7 +519,7 @@ func TestEffectivePermissionMatrix(t *testing.T) {
 		}
 	}
 	// A private vault admits only its owner, whatever rows exist.
-	priv := dbgen.Vault{ID: uuid.New(), OwnerID: ada.uid(), Kind: "private"}
+	priv := vaults.Vault{ID: uuid.New(), OwnerID: ada.uid(), Kind: "private"}
 	if p, _ := e.app.Sharing.Evaluator(bob.uid()).Effective(ctx, priv, "x"); p != access.None {
 		t.Errorf("private vault: %s", p)
 	}

@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/vaults/vaultsdb"
 	"memobrain/shared/pathrules"
 )
 
@@ -92,15 +92,16 @@ type Scope struct {
 	FileID    uuid.UUID // file shares
 }
 
-// NewScope builds the scope of a share row.
-func NewScope(s dbgen.Share) *Scope {
-	sc := &Scope{ShareID: s.ID, Type: s.ResourceType}
-	if s.PathPrefix != nil {
-		sc.Prefix = *s.PathPrefix
+// NewScope builds the scope of a share: its id, resource type, folder prefix
+// (folder shares) and file id (file shares).
+func NewScope(shareID uuid.UUID, resourceType string, prefix *string, fileID *uuid.UUID) *Scope {
+	sc := &Scope{ShareID: shareID, Type: resourceType}
+	if prefix != nil {
+		sc.Prefix = *prefix
 		sc.prefixKey = pathrules.Key(sc.Prefix)
 	}
-	if s.FileID != nil {
-		sc.FileID = *s.FileID
+	if fileID != nil {
+		sc.FileID = *fileID
 	}
 	return sc
 }
@@ -155,9 +156,15 @@ func (s *Scope) Abs(rel string) (string, error) {
 	return "", fmt.Errorf("a document share has no paths to address")
 }
 
+// Vault is a vault row as the vaults module stores it. access is the shared
+// vocabulary of the modules that serve vault content, so it names the type
+// they pass around; it is the one place outside vaults that refers to vaultsdb
+// (ADR-0033).
+type Vault = vaultsdb.Vault
+
 // Access is what an Authorizer grants for one request.
 type Access struct {
-	Vault dbgen.Vault
+	Vault Vault
 	Perm  Permission
 	// Scope is nil for the owner working on the whole vault.
 	Scope *Scope

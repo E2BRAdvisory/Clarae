@@ -8,11 +8,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/audit/auditdb"
+	"memobrain/services/cloud/internal/db"
 )
 
-// Record writes one audit row through q, so it commits with the change it describes.
-func Record(ctx context.Context, q *dbgen.Queries, actor uuid.UUID, action, targetType, targetID string, details any) error {
+// Record writes one audit row through tx, so it commits with the change it describes.
+func Record(ctx context.Context, tx db.DBTX, actor uuid.UUID, action, targetType, targetID string, details any) error {
 	var raw []byte
 	if details != nil {
 		b, err := json.Marshal(details)
@@ -21,7 +22,7 @@ func Record(ctx context.Context, q *dbgen.Queries, actor uuid.UUID, action, targ
 		}
 		raw = b
 	}
-	return q.InsertAudit(ctx, dbgen.InsertAuditParams{
+	return auditdb.New(tx).InsertAudit(ctx, auditdb.InsertAuditParams{
 		ActorID: &actor, Action: action, TargetType: &targetType, TargetID: &targetID, Details: raw,
 	})
 }

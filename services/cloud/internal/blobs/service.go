@@ -23,8 +23,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"memobrain/services/cloud/internal/blobs/blobsdb"
 	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/storage"
 	"memobrain/shared/syncproto"
@@ -71,7 +71,7 @@ func (s *Service) Check(ctx context.Context, userID, vaultID uuid.UUID, scope st
 			return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "invalid hash %q", h)
 		}
 	}
-	have, err := s.db.Queries().ListVaultBlobsAmong(ctx, dbgen.ListVaultBlobsAmongParams{VaultID: vaultID, Hashes: hashes})
+	have, err := blobsdb.New(s.db.Pool).ListVaultBlobsAmong(ctx, blobsdb.ListVaultBlobsAmongParams{VaultID: vaultID, Hashes: hashes})
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (s *Service) IngestFile(ctx context.Context, vaultID uuid.UUID, hash, path 
 }
 
 func (s *Service) ingestFile(ctx context.Context, vaultID uuid.UUID, hash, path string, size int64) error {
-	q := s.db.Queries()
+	q := blobsdb.New(s.db.Pool)
 	existing, err := q.GetBlob(ctx, hash)
 	if err == nil && existing.Size == size {
 		// Deduplicated: the bytes were verified above. Trust the row only if the
@@ -157,13 +157,13 @@ func (s *Service) ingestFile(ctx context.Context, vaultID uuid.UUID, hash, path 
 		if err := s.store.Put(ctx, storage.BlobKey(hash), f, size); err != nil {
 			return fmt.Errorf("store blob: %w", err)
 		}
-		if _, err := q.InsertBlob(ctx, dbgen.InsertBlobParams{Hash: hash, Size: size, StorageKey: storage.BlobKey(hash)}); err != nil {
+		if _, err := q.InsertBlob(ctx, blobsdb.InsertBlobParams{Hash: hash, Size: size, StorageKey: storage.BlobKey(hash)}); err != nil {
 			return err
 		}
 	default:
 		return err
 	}
-	return q.LinkVaultBlob(ctx, dbgen.LinkVaultBlobParams{VaultID: vaultID, Hash: hash})
+	return q.LinkVaultBlob(ctx, blobsdb.LinkVaultBlobParams{VaultID: vaultID, Hash: hash})
 }
 
 // Range is a resolved byte range.
@@ -230,7 +230,7 @@ func (s *Service) authorizeRead(ctx context.Context, userID, vaultID uuid.UUID, 
 	if acc.Scope == nil {
 		return nil
 	}
-	files, err := s.db.Queries().ListBlobFiles(ctx, dbgen.ListBlobFilesParams{VaultID: vaultID, BlobHash: &hash})
+	files, err := blobsdb.New(s.db.Pool).ListBlobFiles(ctx, blobsdb.ListBlobFilesParams{VaultID: vaultID, BlobHash: &hash})
 	if err != nil {
 		return err
 	}
@@ -244,8 +244,8 @@ func (s *Service) authorizeRead(ctx context.Context, userID, vaultID uuid.UUID, 
 
 // OpenForVault is Open for callers that already authorized the vault.
 func (s *Service) OpenForVault(ctx context.Context, vaultID uuid.UUID, hash string, rng *Range) (io.ReadCloser, int64, error) {
-	q := s.db.Queries()
-	ok, err := q.VaultHasBlob(ctx, dbgen.VaultHasBlobParams{VaultID: vaultID, Hash: hash})
+	q := blobsdb.New(s.db.Pool)
+	ok, err := q.VaultHasBlob(ctx, blobsdb.VaultHasBlobParams{VaultID: vaultID, Hash: hash})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -275,7 +275,7 @@ func (s *Service) Size(ctx context.Context, userID, vaultID uuid.UUID, scope, ha
 	if err := s.authorizeRead(ctx, userID, vaultID, scope, hash); err != nil {
 		return 0, err
 	}
-	size, ok, err := VaultBlob(ctx, s.db.Queries(), vaultID, hash)
+	size, ok, err := VaultBlob(ctx, s.db.Pool, vaultID, hash)
 	if err != nil {
 		return 0, err
 	}
@@ -289,8 +289,9 @@ func (s *Service) Size(ctx context.Context, userID, vaultID uuid.UUID, scope, ha
 // transaction it also locks the blob against the garbage collector until the
 // transaction ends, so a commit can safely reference it; a blob the collector
 // deleted meanwhile is reported as missing.
-func VaultBlob(ctx context.Context, q *dbgen.Queries, vaultID uuid.UUID, hash string) (size int64, ok bool, err error) {
-	has, err := q.VaultHasBlob(ctx, dbgen.VaultHasBlobParams{VaultID: vaultID, Hash: hash})
+func VaultBlob(ctx context.Context, tx db.DBTX, vaultID uuid.UUID, hash string) (size int64, ok bool, err error) {
+	q := blobsdb.New(tx)
+	has, err := q.VaultHasBlob(ctx, blobsdb.VaultHasBlobParams{VaultID: vaultID, Hash: hash})
 	if err != nil || !has {
 		return 0, false, err
 	}
@@ -306,6 +307,6 @@ func VaultBlob(ctx context.Context, q *dbgen.Queries, vaultID uuid.UUID, hash st
 
 // AddRef adjusts the revision reference count of a blob; it must run in the
 // transaction that inserts or deletes the revision.
-func AddRef(ctx context.Context, q *dbgen.Queries, hash string, delta int32) error {
-	return q.AddBlobRef(ctx, dbgen.AddBlobRefParams{Hash: hash, RefCount: delta})
+func AddRef(ctx context.Context, tx db.DBTX, hash string, delta int32) error {
+	return blobsdb.New(tx).AddBlobRef(ctx, blobsdb.AddBlobRefParams{Hash: hash, RefCount: delta})
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/blobs/blobsdb"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/shared/syncproto"
 )
@@ -153,7 +153,7 @@ func (h *TusHandler) create(w http.ResponseWriter, r *http.Request) {
 		problem(w, r, err)
 		return
 	}
-	_, err = h.svc.db.Queries().CreateUpload(r.Context(), dbgen.CreateUploadParams{
+	_, err = blobsdb.New(h.svc.db.Pool).CreateUpload(r.Context(), blobsdb.CreateUploadParams{
 		ID: id, VaultID: vid, UserID: p.UserID, ExpectedHash: hash, Length: length,
 		ExpiresAt: time.Now().Add(h.expiry(r.Context())),
 	})
@@ -167,25 +167,25 @@ func (h *TusHandler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 // loadUpload fetches an upload owned by the caller; others get 404.
-func (h *TusHandler) loadUpload(r *http.Request, q *dbgen.Queries, forUpdate bool) (dbgen.Upload, error) {
+func (h *TusHandler) loadUpload(r *http.Request, q *blobsdb.Queries, forUpdate bool) (blobsdb.Upload, error) {
 	id, err := uuid.Parse(chi.URLParam(r, "uploadId"))
 	if err != nil {
-		return dbgen.Upload{}, httpproblem.NotFound("upload")
+		return blobsdb.Upload{}, httpproblem.NotFound("upload")
 	}
-	var u dbgen.Upload
+	var u blobsdb.Upload
 	if forUpdate {
 		u, err = q.GetUploadForUpdate(r.Context(), id)
 	} else {
 		u, err = q.GetUpload(r.Context(), id)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dbgen.Upload{}, httpproblem.NotFound("upload")
+		return blobsdb.Upload{}, httpproblem.NotFound("upload")
 	}
 	if err != nil {
-		return dbgen.Upload{}, err
+		return blobsdb.Upload{}, err
 	}
 	if u.UserID != auth.MustPrincipal(r.Context()).UserID || time.Now().After(u.ExpiresAt) {
-		return dbgen.Upload{}, httpproblem.NotFound("upload")
+		return blobsdb.Upload{}, httpproblem.NotFound("upload")
 	}
 	return u, nil
 }
@@ -194,7 +194,7 @@ func (h *TusHandler) head(w http.ResponseWriter, r *http.Request) {
 	if !requireTus(w, r) {
 		return
 	}
-	u, err := h.loadUpload(r, h.svc.db.Queries(), false)
+	u, err := h.loadUpload(r, blobsdb.New(h.svc.db.Pool), false)
 	if err != nil {
 		problem(w, r, err)
 		return
@@ -209,7 +209,7 @@ func (h *TusHandler) terminate(w http.ResponseWriter, r *http.Request) {
 	if !requireTus(w, r) {
 		return
 	}
-	u, err := h.loadUpload(r, h.svc.db.Queries(), false)
+	u, err := h.loadUpload(r, blobsdb.New(h.svc.db.Pool), false)
 	if err != nil {
 		problem(w, r, err)
 		return
@@ -219,11 +219,11 @@ func (h *TusHandler) terminate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *TusHandler) discard(ctx context.Context, u dbgen.Upload) {
+func (h *TusHandler) discard(ctx context.Context, u blobsdb.Upload) {
 	for i := int32(0); i < u.Chunks; i++ {
 		_ = h.svc.store.Delete(ctx, chunkKey(u.ID, i))
 	}
-	_ = h.svc.db.Queries().DeleteUpload(ctx, u.ID)
+	_ = blobsdb.New(h.svc.db.Pool).DeleteUpload(ctx, u.ID)
 }
 
 func (h *TusHandler) patch(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +251,7 @@ func (h *TusHandler) patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	q := dbgen.New(tx)
+	q := blobsdb.New(tx)
 	u, err := h.loadUpload(r, q, true)
 	if err != nil {
 		problem(w, r, err)
@@ -271,7 +271,7 @@ func (h *TusHandler) patch(w http.ResponseWriter, r *http.Request) {
 		problem(w, r, fmt.Errorf("store chunk: %w", err))
 		return
 	}
-	if err := q.AdvanceUpload(r.Context(), dbgen.AdvanceUploadParams{ID: u.ID, Received: r.ContentLength}); err != nil {
+	if err := q.AdvanceUpload(r.Context(), blobsdb.AdvanceUploadParams{ID: u.ID, Received: r.ContentLength}); err != nil {
 		problem(w, r, err)
 		return
 	}
@@ -296,7 +296,7 @@ func (h *TusHandler) patch(w http.ResponseWriter, r *http.Request) {
 
 // finalize assembles the chunks into a temporary file, verifies the digest
 // and publishes the blob.
-func (h *TusHandler) finalize(ctx context.Context, u dbgen.Upload) error {
+func (h *TusHandler) finalize(ctx context.Context, u blobsdb.Upload) error {
 	f, err := os.CreateTemp("", "memobrain-upload-*")
 	if err != nil {
 		return err
@@ -332,7 +332,7 @@ func (h *TusHandler) finalize(ctx context.Context, u dbgen.Upload) error {
 
 // CleanupExpired removes expired upload sessions and their chunks (job).
 func (s *Service) CleanupExpired(ctx context.Context) (int, error) {
-	q := s.db.Queries()
+	q := blobsdb.New(s.db.Pool)
 	rows, err := q.ListExpiredUploads(ctx, 200)
 	if err != nil {
 		return 0, err

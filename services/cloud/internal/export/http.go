@@ -6,7 +6,7 @@ import (
 
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/export/exportdb"
 )
 
 // HTTP implements the export endpoints of the generated strict server.
@@ -29,7 +29,7 @@ func (h *HTTP) ExportVaultZip(ctx context.Context, req api.ExportVaultZipRequest
 	return api.ExportVaultZip200ApplicationzipResponse{Body: body, Headers: api.ExportVaultZip200ResponseHeaders{ContentDisposition: disposition(name)}}, nil
 }
 
-func (h *HTTP) toJob(ctx context.Context, j dbgen.ExportJob) api.ExportJob {
+func (h *HTTP) toJob(ctx context.Context, j exportdb.ExportJob) api.ExportJob {
 	out := api.ExportJob{Id: j.ID, VaultId: j.VaultID, Status: api.ExportJobStatus(j.Status), Size: j.Size, Error: j.Error, CreatedAt: j.CreatedAt, ExpiresAt: j.ExpiresAt}
 	if u := h.svc.DownloadURL(ctx, j, h.svc.Name(ctx, j)); u != "" {
 		out.DownloadUrl = &u

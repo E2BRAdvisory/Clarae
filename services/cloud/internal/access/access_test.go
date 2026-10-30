@@ -4,12 +4,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-
-	"memobrain/services/cloud/internal/db/dbgen"
 )
 
 func folderScope(prefix string) *Scope {
-	return NewScope(dbgen.Share{ID: uuid.New(), ResourceType: ResourceFolder, PathPrefix: &prefix})
+	return NewScope(uuid.New(), ResourceFolder, &prefix, nil)
 }
 
 func TestPermissionOrderAndParsing(t *testing.T) {
@@ -72,12 +70,12 @@ func TestFolderScopeContainsAndTranslatesPaths(t *testing.T) {
 }
 
 func TestVaultAndFileScopes(t *testing.T) {
-	v := NewScope(dbgen.Share{ID: uuid.New(), ResourceType: ResourceVault})
+	v := NewScope(uuid.New(), ResourceVault, nil, nil)
 	if !v.ContainsPath("any/where.md") || v.Rel("a/b.md") != "a/b.md" {
 		t.Error("a vault share covers everything unchanged")
 	}
 	fid := uuid.New()
-	f := NewScope(dbgen.Share{ID: uuid.New(), ResourceType: ResourceFile, FileID: &fid})
+	f := NewScope(uuid.New(), ResourceFile, nil, &fid)
 	if !f.ContainsFile(fid, "Docs/Plan.md") || f.ContainsFile(uuid.New(), "Docs/Plan.md") {
 		t.Error("a document share matches by file id")
 	}

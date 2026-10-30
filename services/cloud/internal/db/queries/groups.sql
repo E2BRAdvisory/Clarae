@@ -1,3 +1,5 @@
+-- Queries of the groups module (ADR-0033: one sqlc package per module).
+
 -- name: CreateGroup :one
 INSERT INTO groups (id, name, description) VALUES ($1, $2, $3) RETURNING *;
 
@@ -32,21 +34,8 @@ FROM group_members m JOIN groups g ON g.id = m.group_id
 WHERE m.user_id = $1
 ORDER BY lower(g.name);
 
--- name: SearchDirectoryUsers :many
-SELECT id, username, display_name FROM users
-WHERE status = 'active'
-  AND (sqlc.arg(q)::text = ''
-       OR username ILIKE '%' || sqlc.arg(q)::text || '%'
-       OR email::text ILIKE '%' || sqlc.arg(q)::text || '%'
-       OR display_name ILIKE '%' || sqlc.arg(q)::text || '%')
-ORDER BY lower(username)
-LIMIT sqlc.arg(max_rows)::int;
-
 -- name: SearchDirectoryGroups :many
 SELECT id, name, description FROM groups
 WHERE sqlc.arg(q)::text = '' OR name::text ILIKE '%' || sqlc.arg(q)::text || '%'
 ORDER BY lower(name)
 LIMIT sqlc.arg(max_rows)::int;
-
--- name: GetUserBrief :one
-SELECT id, username, display_name, status FROM users WHERE id = $1;

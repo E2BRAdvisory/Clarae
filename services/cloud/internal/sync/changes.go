@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/vaults"
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db/dbgen"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/sync/syncdb"
 	"memobrain/shared/syncproto"
 )
 
@@ -61,7 +62,7 @@ func (s *Service) Changes(ctx context.Context, userID, vaultID uuid.UUID, scope 
 	if acc.Scope != nil {
 		return s.scopedChanges(ctx, acc, since, limit)
 	}
-	rows, err := s.db.Queries().ListChanges(ctx, dbgen.ListChangesParams{VaultID: vaultID, Seq: since, Limit: int32(limit + 1)})
+	rows, err := syncdb.New(s.db.Pool).ListChanges(ctx, syncdb.ListChangesParams{VaultID: vaultID, Seq: since, Limit: int32(limit + 1)})
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -96,17 +97,18 @@ const (
 // touch the share, paths become relative to its root, a file leaving the share is shown as a
 // delete and one entering it as a create.
 func (s *Service) scopedChanges(ctx context.Context, acc access.Access, since int64, limit int) ([]Change, int64, bool, error) {
-	q := s.db.Queries()
+	conn := s.db.Pool
+	q := syncdb.New(conn)
 	// Every seq up to the committed last_seq is visible (commits take the vault lock in seq
 	// order), so reaching it means the cursor can jump there even if nothing matched.
-	head, err := q.GetVault(ctx, acc.Vault.ID)
+	head, err := vaults.GetVault(ctx, conn, acc.Vault.ID)
 	if err != nil {
 		return nil, 0, false, err
 	}
 	items := make([]Change, 0, limit)
 	cursor := since
 	for b := 0; b < scanBatches; b++ {
-		rows, err := q.ListChanges(ctx, dbgen.ListChangesParams{VaultID: acc.Vault.ID, Seq: cursor, Limit: scanBatch})
+		rows, err := q.ListChanges(ctx, syncdb.ListChangesParams{VaultID: acc.Vault.ID, Seq: cursor, Limit: scanBatch})
 		if err != nil {
 			return nil, 0, false, err
 		}
@@ -130,7 +132,7 @@ func (s *Service) scopedChanges(ctx context.Context, acc access.Access, since in
 }
 
 // scopeChange translates one revision for a share, or reports that it is invisible to it.
-func scopeChange(sc *access.Scope, r dbgen.ListChangesRow) (Change, bool) {
+func scopeChange(sc *access.Scope, r syncdb.ListChangesRow) (Change, bool) {
 	inNew := sc.ContainsFile(r.FileID, r.Path)
 	inOld := r.PrevPath != nil && sc.ContainsFile(r.FileID, *r.PrevPath)
 	var original *uuid.UUID

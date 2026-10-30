@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db/dbgen"
+	"memobrain/services/cloud/internal/revisions/revisionsdb"
 )
 
 func TestSelectDoomed(t *testing.T) {
@@ -17,10 +17,10 @@ func TestSelectDoomed(t *testing.T) {
 		d := now.AddDate(0, 0, -daysAgo)
 		return time.Date(d.Year(), d.Month(), d.Day(), hour, 0, 0, 0, time.UTC)
 	}
-	row := func(f uuid.UUID, ts time.Time) dbgen.ListRevisionsForRetentionRow {
-		return dbgen.ListRevisionsForRetentionRow{ID: uuid.New(), FileID: f, ServerTime: ts}
+	row := func(f uuid.UUID, ts time.Time) revisionsdb.ListRevisionsForRetentionRow {
+		return revisionsdb.ListRevisionsForRetentionRow{ID: uuid.New(), FileID: f, ServerTime: ts}
 	}
-	rows := []dbgen.ListRevisionsForRetentionRow{
+	rows := []revisionsdb.ListRevisionsForRetentionRow{
 		row(fileA, at(120, 9)), // older than 90 days: gone
 		row(fileA, at(50, 8)),  // two revisions on one day: only the last stays
 		row(fileA, at(50, 17)),

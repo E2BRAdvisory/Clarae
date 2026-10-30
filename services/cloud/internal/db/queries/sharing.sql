@@ -1,3 +1,15 @@
+-- Queries of the sharing module (ADR-0033: one sqlc package per module).
+
+-- name: GetFile :one
+SELECT * FROM files WHERE id = $1 AND vault_id = $2;
+
+-- name: PathKeyTaken :one
+SELECT id FROM files WHERE vault_id = $1 AND path_key = $2 AND NOT is_deleted LIMIT 1;
+
+-- name: CountFilesUnderPrefix :one
+SELECT count(*)::int FROM files
+WHERE vault_id = $1 AND NOT is_deleted AND (path_key = sqlc.arg(exact)::text OR path_key LIKE sqlc.arg(descendants)::text ESCAPE '\');
+
 -- name: CreateShare :one
 INSERT INTO shares (id, vault_id, resource_type, path_prefix, file_id, display_name, created_by, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
@@ -17,9 +29,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (share_id, principal_type, principal_id)
 DO UPDATE SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by
 RETURNING *;
-
--- name: GetGrant :one
-SELECT * FROM share_grants WHERE share_id = $1 AND principal_type = $2 AND principal_id = $3;
 
 -- name: DeleteGrant :execrows
 DELETE FROM share_grants WHERE share_id = $1 AND principal_type = $2 AND principal_id = $3;
@@ -76,36 +85,11 @@ SELECT DISTINCT u FROM (
   WHERE g.share_id = $1 AND g.principal_type = 'group'
 ) r;
 
--- name: ListVaultRecipients :many
--- Users who may read the vault through an accepted grant on a live share.
-SELECT DISTINCT u FROM (
-  SELECT g.principal_id AS u FROM share_grants g JOIN shares s ON s.id = g.share_id
-  WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
-    AND g.status = 'accepted' AND g.principal_type = 'user'
-  UNION
-  SELECT m.user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
-  JOIN group_members m ON m.group_id = g.principal_id
-  WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
-    AND g.status = 'accepted' AND g.principal_type = 'group'
-) r;
-
--- name: ListSharedVaultSeqs :many
--- Vaults reached by a user through accepted grants, with their last seq (event replay).
-SELECT DISTINCT v.id, v.last_seq FROM share_grants g
-JOIN shares s ON s.id = g.share_id
-JOIN vaults v ON v.id = s.vault_id
-WHERE g.status = 'accepted' AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now()) AND v.deleted_at IS NULL
-  AND ((g.principal_type = 'user' AND g.principal_id = $1)
-    OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $1)));
-
 -- name: RebasePrefixShares :exec
 -- A folder rename (move_prefix) carries the shares rooted at or below it.
 UPDATE shares SET path_prefix = sqlc.arg(to_path)::text || substr(path_prefix, char_length(sqlc.arg(from_path)::text) + 1)
 WHERE vault_id = sqlc.arg(vault_id) AND resource_type = 'folder'
   AND (lower(path_prefix) = lower(sqlc.arg(from_path)::text) OR lower(path_prefix) LIKE lower(sqlc.arg(like_from)::text));
-
--- name: GetFileLive :one
-SELECT * FROM files WHERE id = $1 AND vault_id = $2;
 
 -- name: DeleteGrantsOfPrincipal :execrows
 DELETE FROM share_grants WHERE principal_type = $1 AND principal_id = $2;

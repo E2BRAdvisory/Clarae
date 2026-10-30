@@ -1,6 +1,7 @@
 // Package db owns the PostgreSQL connection pool, transactions and schema
-// migrations. Modules access data only through the sqlc-generated queries in
-// dbgen, scoped to their own tables (spec §4.3).
+// migrations. Each module accesses its own tables through its own
+// sqlc-generated package (internal/<module>/<module>db) and reaches the tables
+// of others only through their exported functions (spec §4.3, ADR-0033).
 package db
 
 import (
@@ -17,9 +18,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-
-	"memobrain/services/cloud/internal/db/dbgen"
 )
+
+// DBTX is what every generated query package runs on: the pool or a
+// transaction. Functions a module exports for others take a DBTX, so a caller
+// can include them in its own transaction.
+type DBTX interface {
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
+}
 
 //go:embed migrations/*.sql
 var migrations embed.FS
@@ -54,18 +62,16 @@ func (d *DB) Close() { d.Pool.Close() }
 // Ping is used by readiness checks.
 func (d *DB) Ping(ctx context.Context) error { return d.Pool.Ping(ctx) }
 
-// Queries returns the generated query set bound to the pool.
-func (d *DB) Queries() *dbgen.Queries { return dbgen.New(d.Pool) }
-
 // WithTx runs fn inside a transaction, committing when fn returns nil and
-// rolling back otherwise. The queries passed to fn are bound to the transaction.
-func (d *DB) WithTx(ctx context.Context, fn func(ctx context.Context, q *dbgen.Queries, tx pgx.Tx) error) error {
+// rolling back otherwise. fn binds its module's queries to tx and passes tx to
+// the functions of other modules it calls.
+func (d *DB) WithTx(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := fn(ctx, dbgen.New(tx), tx); err != nil {
+	if err := fn(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
