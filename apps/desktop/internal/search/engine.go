@@ -24,8 +24,11 @@ type Hit struct {
 	Title   string  `json:"title"`
 	Snippet string  `json:"snippet"` // the first matching line, trimmed
 	Line    int     `json:"line"`    // 1-based line of the snippet (0 if not line based)
-	Matches int     `json:"matches"` // number of matches (relevance)
-	Score   float64 `json:"score"`
+	Matches int     `json:"matches"` // number of matches
+	Score   float64 `json:"score"`   // relevance (BM25 over the text terms, see rank.go)
+	// Highlights are the matched ranges of Snippet, as [start, end) offsets in
+	// UTF-16 code units (JavaScript string indices).
+	Highlights [][2]int `json:"highlights"`
 }
 
 // Results is the answer to a query.
@@ -93,6 +96,15 @@ func (e *Engine) Query(ctx context.Context, q string, opts Options) (Results, er
 	} else if hits, err = e.queryStreaming(ctx, node); err != nil {
 		return Results{}, err
 	}
+	return e.finish(ctx, node, hits, opts, res)
+}
+
+// finish ranks, sorts and limits the matching files and marks the snippets.
+// Both evaluation strategies end here, so they rank alike.
+func (e *Engine) finish(ctx context.Context, node Node, hits []found, opts Options, res Results) (Results, error) {
+	if err := e.rank(ctx, node, hits); err != nil {
+		return Results{}, err
+	}
 	switch opts.Sort {
 	case "name":
 		sort.Slice(hits, func(i, j int) bool { return strings.ToLower(hits[i].hit.Title) < strings.ToLower(hits[j].hit.Title) })
@@ -110,16 +122,34 @@ func (e *Engine) Query(ctx context.Context, q string, opts Options) (Results, er
 	if len(hits) > opts.Limit {
 		hits = hits[:opts.Limit]
 	}
+	pats := highlighters(node)
 	for _, h := range hits {
+		h.hit.Highlights = highlight(h.hit.Snippet, pats)
+		if h.hit.Highlights == nil {
+			h.hit.Highlights = [][2]int{}
+		}
 		res.Hits = append(res.Hits, h.hit)
 	}
 	return res, nil
 }
 
-// found is a matching file with the data the sort orders need.
+// found is a matching file with the data the sort orders and the ranking need.
 type found struct {
-	hit   Hit
-	mtime int64
+	hit     Hit
+	mtime   int64
+	tf      map[string]int  // occurrences of each text term in the body
+	inTitle map[string]bool // text terms found in the title
+	words   int             // length of the body in words
+}
+
+// result builds the hit of a file that matched.
+func (f *fileCtx) result() found {
+	h := Hit{Path: f.meta.path, Title: f.meta.title, Snippet: f.snippet, Line: f.snippetLine, Matches: f.matches}
+	fd := found{hit: h, mtime: f.meta.mtime, tf: f.tf, inTitle: f.inTitle}
+	if f.bodyLoaded {
+		fd.words = countWords(f.body)
+	}
+	return fd
 }
 
 // queryStreaming evaluates the query reading candidates out of index.db (no cache).
@@ -142,9 +172,7 @@ func (e *Engine) queryStreaming(ctx context.Context, node Node) ([]found, error)
 		if err != nil || !ok {
 			return err
 		}
-		h := Hit{Path: c.path, Title: c.title, Snippet: f.snippet, Line: f.snippetLine, Matches: f.matches}
-		h.Score = float64(f.matches)
-		hits = append(hits, found{hit: h, mtime: c.mtime})
+		hits = append(hits, f.result())
 		return nil
 	})
 	return hits, err
@@ -275,6 +303,25 @@ type fileCtx struct {
 	snippet     string
 	snippetLine int
 	matches     int
+	tf          map[string]int  // text term -> occurrences in the body (ranking)
+	inTitle     map[string]bool // text terms found in the title (ranking)
+}
+
+func (f *fileCtx) countTerm(t string, n int) {
+	if n <= 0 {
+		return
+	}
+	if f.tf == nil {
+		f.tf = map[string]int{}
+	}
+	f.tf[t] = max(f.tf[t], n)
+}
+
+func (f *fileCtx) titleTerm(t string) {
+	if f.inTitle == nil {
+		f.inTitle = map[string]bool{}
+	}
+	f.inTitle[t] = true
 }
 
 func (f *fileCtx) loadBody(ctx context.Context) error {
@@ -340,19 +387,14 @@ func (f *fileCtx) loadDoc(ctx context.Context) error {
 	return nil
 }
 
-func (f *fileCtx) note(line int, text string, count int) {
+func (f *fileCtx) note(line int, text string, count int) { f.noteAt(line, text, count, 0) }
+
+// noteAt records a match on line, focus being the byte offset of the match in text.
+func (f *fileCtx) noteAt(line int, text string, count, focus int) {
 	f.matches += count
 	if f.snippet == "" {
-		f.snippet, f.snippetLine = trimSnippet(text), line
+		f.snippet, f.snippetLine = snippetAround(text, focus), line
 	}
-}
-
-func trimSnippet(s string) string {
-	s = strings.TrimSpace(s)
-	if r := []rune(s); len(r) > 160 {
-		return string(r[:160]) + "…"
-	}
-	return s
 }
 
 func fold(s string, caseSensitive bool) string {
@@ -385,8 +427,10 @@ func eval(ctx context.Context, n Node, f *fileCtx) (bool, error) {
 	case Not:
 		// A negation never contributes a snippet or relevance.
 		saved := *f
+		f.tf, f.inTitle = nil, nil
 		ok, err := eval(ctx, v.Item, f)
 		f.snippet, f.snippetLine, f.matches = saved.snippet, saved.snippetLine, saved.matches
+		f.tf, f.inTitle = saved.tf, saved.inTitle
 		return !ok, err
 	case Pred:
 		return evalPred(ctx, v, f)
@@ -445,6 +489,17 @@ func evalPred(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 		// A bare term matches the file name or the body.
 		if allIn(fold(f.meta.title, p.CaseSensitive), p.Terms) {
 			f.matches++
+			for _, t := range p.Terms {
+				f.titleTerm(t)
+			}
+			// The body counts too (already loaded on both evaluation paths: text needs it).
+			if err := f.loadBody(ctx); err != nil {
+				return false, err
+			}
+			hay := f.folded(p.CaseSensitive)
+			for _, t := range p.Terms {
+				f.countTerm(t, strings.Count(hay, t))
+			}
 			return true, nil
 		}
 		return matchBody(ctx, p, f)
@@ -528,6 +583,9 @@ func matchBody(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 	if !allIn(hay, p.Terms) {
 		return false, nil
 	}
+	for _, t := range p.Terms {
+		f.countTerm(t, strings.Count(hay, t))
+	}
 	// Report the first line containing the first term, and count occurrences.
 	first := p.Terms[0]
 	if i := strings.Index(hay, first); i >= 0 && len(hay) == len(f.body) {
@@ -539,12 +597,12 @@ func matchBody(ctx context.Context, p Pred, f *fileCtx) (bool, error) {
 		if j := strings.IndexByte(f.body[i:], '\n'); j >= 0 {
 			end = i + j
 		}
-		f.note(line, f.body[start:end], strings.Count(hay, first))
+		f.noteAt(line, f.body[start:end], strings.Count(hay, first), i-start)
 		return true, nil
 	}
 	for i, l := range f.getLines() {
-		if strings.Contains(fold(l, p.CaseSensitive), first) {
-			f.note(i+1, l, strings.Count(hay, first))
+		if at := strings.Index(fold(l, p.CaseSensitive), first); at >= 0 {
+			f.noteAt(i+1, l, strings.Count(hay, first), at)
 			break
 		}
 	}

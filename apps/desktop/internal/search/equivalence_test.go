@@ -7,7 +7,6 @@ import (
 	"math/rand/v2"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -57,7 +56,7 @@ func legacyQuery(ctx context.Context, db *sql.DB, q string, opts Options) (Resul
 		cands = append(cands, m)
 	}
 	_ = rows.Close()
-	var hits []Hit
+	var hits []found
 	for _, c := range cands {
 		f := &fileCtx{db: db, meta: c}
 		ok, err := eval(ctx, node, f)
@@ -67,33 +66,10 @@ func legacyQuery(ctx context.Context, db *sql.DB, q string, opts Options) (Resul
 		if !ok {
 			continue
 		}
-		h := Hit{Path: c.path, Title: c.title, Snippet: f.snippet, Line: f.snippetLine, Matches: f.matches}
-		h.Score = float64(f.matches)
-		hits = append(hits, h)
+		hits = append(hits, f.result())
 	}
-	switch opts.Sort {
-	case "name":
-		sort.Slice(hits, func(i, j int) bool { return strings.ToLower(hits[i].Title) < strings.ToLower(hits[j].Title) })
-	case "modified":
-		mt := map[string]int64{}
-		for _, c := range cands {
-			mt[c.path] = c.mtime
-		}
-		sort.Slice(hits, func(i, j int) bool { return mt[hits[i].Path] > mt[hits[j].Path] })
-	default:
-		sort.SliceStable(hits, func(i, j int) bool {
-			if hits[i].Score != hits[j].Score {
-				return hits[i].Score > hits[j].Score
-			}
-			return hits[i].Path < hits[j].Path
-		})
-	}
-	res.Total = len(hits)
-	if len(hits) > opts.Limit {
-		hits = hits[:opts.Limit]
-	}
-	res.Hits = hits
-	return res, nil
+	// Ranking, sorting and highlighting are shared: this reference covers the evaluation strategy.
+	return New(db).finish(ctx, node, hits, opts, res)
 }
 
 // TestQueryEquivalentToLegacy compares the streaming engine with the reference

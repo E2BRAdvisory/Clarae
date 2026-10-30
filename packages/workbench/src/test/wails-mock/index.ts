@@ -522,7 +522,22 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
             }
           }
         }
-        if (ok) hits.push({ path, title: stem(path), snippet, line, matches: 1, score: 1 });
+        if (ok) {
+          // Like the backend: the ranges of the positive plain terms in the snippet, in UTF-16 units.
+          const highlights: number[][] = [];
+          for (const term of terms) {
+            if (term.startsWith('-') || /^\w+:/.test(term)) continue;
+            const t = lower(term);
+            for (
+              let i = lower(snippet).indexOf(t);
+              t && i >= 0;
+              i = lower(snippet).indexOf(t, i + t.length)
+            )
+              highlights.push([i, i + t.length]);
+          }
+          highlights.sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0));
+          hits.push({ path, title: stem(path), snippet, line, matches: 1, score: 1, highlights });
+        }
       }
       const sliced = hits.slice(0, limit || 100);
       return Promise.resolve({ hits: sliced, total: hits.length, explain: [q] });

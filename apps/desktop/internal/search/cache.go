@@ -295,9 +295,7 @@ func evalSnapshot(ctx context.Context, s *snapshot, node Node) ([]found, error) 
 					if !ok {
 						continue
 					}
-					h := Hit{Path: cf.meta.path, Title: cf.meta.title, Snippet: f.snippet, Line: f.snippetLine, Matches: f.matches}
-					h.Score = float64(f.matches)
-					hits = append(hits, found{hit: h, mtime: cf.meta.mtime})
+					hits = append(hits, f.result())
 				}
 				out[ci] = hits
 			}

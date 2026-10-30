@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { SearchSort } from '../app/api';
 import { useAppStore } from '../state/store';
 import { useSearch } from '../state/queries';
+import { snippetParts } from './highlight';
 
 export function SearchPanel({ vaultId }: { vaultId: string }) {
   const { t } = useTranslation();
@@ -68,7 +69,9 @@ export function SearchPanel({ vaultId }: { vaultId: string }) {
             {h.snippet && (
               <div className="snippet">
                 {h.line > 0 ? `${h.line}: ` : ''}
-                {h.snippet}
+                {snippetParts(h.snippet, h.highlights).map((p, i) =>
+                  p.mark ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>,
+                )}
               </div>
             )}
           </div>
