@@ -26,6 +26,9 @@ type fakeIdP struct {
 	// singleUse makes refresh tokens one-shot (rotation with reuse detection, as Keycloak does).
 	singleUse atomic.Bool
 	usedRT    sync.Map
+	// rejectLoopback answers loopback redirect URIs like Keycloak answers an
+	// unregistered one: a 400 error page, no redirect.
+	rejectLoopback atomic.Bool
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -45,6 +48,12 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		q := r.URL.Query()
 		if q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {
 			http.Error(w, "pkce required", http.StatusBadRequest)
+			return
+		}
+		if f.rejectLoopback.Load() && strings.HasPrefix(q.Get("redirect_uri"), "http://127.0.0.1") {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`<html><body><p id="kc-error-message">Invalid parameter: redirect_uri</p></body></html>`))
 			return
 		}
 		redirect, _ := url.Parse(q.Get("redirect_uri"))
@@ -333,5 +342,98 @@ func TestConcurrentRefreshKeepsSession(t *testing.T) {
 	}
 	if svc.State().Status == StatusSignedOut {
 		t.Fatal("the session was signed out by a concurrent refresh")
+	}
+}
+
+// waitAuthURL returns the authorization URL the "browser" was asked to open.
+func waitAuthURL(t *testing.T, br *browser) *url.URL {
+	t.Helper()
+	for i := 0; i < 300; i++ {
+		if p := br.lastURL.Load(); p != nil {
+			u, err := url.Parse(*p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return u
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the browser was never opened")
+	return nil
+}
+
+// D-08 rule (b): when the identity provider rejects the loopback redirect URI,
+// auto mode falls back to the custom scheme instead of opening a dead-end page.
+func TestAutoFallsBackToSchemeWhenLoopbackIsRejected(t *testing.T) {
+	idp := newFakeIdP(t)
+	idp.rejectLoopback.Store(true)
+	cloud := newFakeCloud(t, idp.srv.URL)
+	br := &browser{t: t}
+	svc, _ := newService(t, "", br)
+	done := make(chan error, 1)
+	go func() { done <- svc.Login(context.Background(), cloud.URL) }()
+	u := waitAuthURL(t, br)
+	if got := u.Query().Get("redirect_uri"); got != SchemeRedirectURI {
+		t.Fatalf("redirect_uri = %q, want the custom scheme", got)
+	}
+	if !svc.HandleCallback(url.Values{"code": {"code-123"}, "state": {u.Query().Get("state")}}) {
+		t.Fatal("callback not accepted")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Forced loopback never probes nor falls back, even when the provider rejects it.
+func TestLoopbackModeDoesNotFallBack(t *testing.T) {
+	idp := newFakeIdP(t)
+	idp.rejectLoopback.Store(true)
+	cloud := newFakeCloud(t, idp.srv.URL)
+	br := &browser{t: t}
+	svc, _ := newService(t, RedirectLoopback, br)
+	svc.opts.LoginTimeout = 300 * time.Millisecond
+	_ = svc.Login(context.Background(), cloud.URL) // times out: nobody completes the flow
+	if got := waitAuthURL(t, br).Query().Get("redirect_uri"); !strings.HasPrefix(got, "http://127.0.0.1:") {
+		t.Fatalf("redirect_uri = %q, want loopback", got)
+	}
+}
+
+// D-08 rule (c): the Config Profile can force the scheme; an explicit option
+// (the environment variable) still wins over it.
+func TestManagedRedirectMode(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		opt     RedirectMode
+		managed string
+		scheme  bool
+	}{
+		{"profile forces the scheme", "", "custom_scheme", true},
+		{"profile auto", "", "auto", false},
+		{"no profile", "", "", false},
+		{"option wins over the profile", RedirectLoopback, "custom_scheme", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			idp := newFakeIdP(t)
+			cloud := newFakeCloud(t, idp.srv.URL)
+			br := &browser{t: t}
+			svc, _ := newService(t, c.opt, br)
+			svc.SetManagedRedirectMode(ParseRedirectMode(c.managed))
+			svc.opts.LoginTimeout = 300 * time.Millisecond
+			_ = svc.Login(context.Background(), cloud.URL)
+			got := waitAuthURL(t, br).Query().Get("redirect_uri")
+			if (got == SchemeRedirectURI) != c.scheme {
+				t.Fatalf("redirect_uri = %q, scheme expected: %v", got, c.scheme)
+			}
+		})
+	}
+}
+
+func TestParseRedirectMode(t *testing.T) {
+	for in, want := range map[string]RedirectMode{
+		"auto": RedirectAuto, "loopback": RedirectLoopback, "custom_scheme": RedirectScheme, "scheme": RedirectScheme, "": "", "other": "",
+	} {
+		if got := ParseRedirectMode(in); got != want {
+			t.Errorf("ParseRedirectMode(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

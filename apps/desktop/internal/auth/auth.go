@@ -6,11 +6,13 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -48,6 +50,21 @@ const (
 	RedirectScheme   RedirectMode = "scheme"
 )
 
+// ParseRedirectMode reads a mode as written in the Config Profile
+// (auth.redirect_mode: auto, loopback, custom_scheme) or in the environment
+// ("scheme" is accepted as well). Anything else, empty included, is "".
+func ParseRedirectMode(v string) RedirectMode {
+	switch v {
+	case "auto":
+		return RedirectAuto
+	case "loopback":
+		return RedirectLoopback
+	case "custom_scheme", "scheme":
+		return RedirectScheme
+	}
+	return ""
+}
+
 // SchemeRedirectURI is the custom-scheme callback registered in Keycloak.
 const SchemeRedirectURI = "memobrain://auth/callback"
 
@@ -77,7 +94,8 @@ type Options struct {
 	OpenURL func(url string) error
 	// OnState is called on every status change.
 	OnState func(State)
-	// RedirectMode defaults to auto.
+	// RedirectMode, when set, overrides the mode distributed by the Config
+	// Profile (SetManagedRedirectMode); both unset means auto.
 	RedirectMode RedirectMode
 	// HTTPClient is used for discovery, token and API calls (nil = default).
 	HTTPClient *http.Client
@@ -123,6 +141,8 @@ type Service struct {
 	expiry   time.Time
 	refresh  string
 	pending  *attempt
+	// managedMode is the redirect mode of the Config Profile ("" = none).
+	managedMode RedirectMode
 }
 
 type attempt struct {
@@ -135,9 +155,6 @@ type attempt struct {
 
 // New creates the service; call Restore to resume a previous session.
 func New(opts Options) *Service {
-	if opts.RedirectMode == "" {
-		opts.RedirectMode = RedirectAuto
-	}
 	if opts.LoginTimeout == 0 {
 		opts.LoginTimeout = 5 * time.Minute
 	}
@@ -193,6 +210,28 @@ func (s *Service) setState(mutate func(*State)) {
 	st := s.state
 	s.mu.Unlock()
 	s.opts.OnState(st)
+}
+
+// SetManagedRedirectMode applies auth.redirect_mode from the Config Profile
+// ("" clears it). An explicit Options.RedirectMode still takes precedence.
+func (s *Service) SetManagedRedirectMode(m RedirectMode) {
+	s.mu.Lock()
+	s.managedMode = m
+	s.mu.Unlock()
+}
+
+// redirectMode is the mode of the next login: the explicit option, else the
+// Config Profile, else auto.
+func (s *Service) redirectMode() RedirectMode {
+	if s.opts.RedirectMode != "" {
+		return s.opts.RedirectMode
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.managedMode != "" {
+		return s.managedMode
+	}
+	return RedirectAuto
 }
 
 // GRPCEndpoint is the host:port of the notification stream announced by the server.
@@ -275,16 +314,26 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	}
 
 	att := &attempt{state: randomString(24), verifier: oauth2.GenerateVerifier(), result: make(chan url.Values, 1)}
-	if s.opts.RedirectMode != RedirectScheme {
+	mode := s.redirectMode()
+	if mode != RedirectScheme {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		switch {
 		case err == nil:
 			att.listener = ln
 			att.redirectURI = fmt.Sprintf("http://127.0.0.1:%d/cb", ln.Addr().(*net.TCPAddr).Port)
-		case s.opts.RedirectMode == RedirectLoopback:
+		case mode == RedirectLoopback:
 			return fmt.Errorf("loopback listener: %w", err)
 		default:
 			s.logger.Warn().Err(err).Msg("loopback listener unavailable, falling back to custom scheme")
+		}
+	}
+	if att.listener != nil && mode == RedirectAuto {
+		probe := *cfg
+		probe.RedirectURL = att.redirectURI
+		if s.redirectRejected(ctx, &probe) {
+			s.logger.Warn().Msg("the identity provider rejects the loopback redirect, falling back to custom scheme")
+			_ = att.listener.Close()
+			att.listener, att.redirectURI = nil, ""
 		}
 	}
 	if att.redirectURI == "" {
@@ -346,6 +395,35 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 		return fmt.Errorf("store refresh token: %w", err)
 	}
 	return s.completeSession(ctx)
+}
+
+// redirectRejected asks the authorization endpoint, without a browser,
+// whether it accepts cfg's redirect URI (D-08, rule b). Keycloak answers an
+// unregistered one with a 400 error page ("Invalid parameter: redirect_uri")
+// instead of redirecting, which in the browser would be a dead end. The probe
+// carries a throwaway state and challenge, and its redirect is never
+// followed: an accepted URI only yields the login page or a redirect. Any
+// other outcome (network error, unexpected answer) keeps the loopback.
+func (s *Service) redirectRejected(ctx context.Context, cfg *oauth2.Config) bool {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	u := cfg.AuthCodeURL(randomString(24), oauth2.S256ChallengeOption(oauth2.GenerateVerifier()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false
+	}
+	hc := *s.hc
+	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := hc.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	return bytes.Contains(body, []byte("redirect_uri"))
 }
 
 // completeSession loads the profile, registers the device if needed and
