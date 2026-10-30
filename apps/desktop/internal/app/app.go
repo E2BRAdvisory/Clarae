@@ -101,7 +101,7 @@ func New(opts Options) *App {
 		DataDir:      opts.DataDir,
 		Logger:       opts.Logger.With().Str("module", "auth").Logger(),
 		AppVersion:   opts.Version,
-		RedirectMode: auth.RedirectMode(os.Getenv("MEMOBRAIN_AUTH_REDIRECT")), // "" = auto; "scheme" forces the fallback (checklist)
+		RedirectMode: envRedirectMode(), // "" = from the Config Profile, else auto; "scheme" forces the fallback (checklist)
 		OpenURL: func(u string) error {
 			if a.ctx == nil {
 				return errors.New("application not ready")
@@ -120,9 +120,10 @@ func New(opts Options) *App {
 	a.crypto = crypto.NewManager(crypto.Options{Store: opts.KeyStore})
 	a.sync = syncpkg.NewManager(sessionAdapter{a}, a.crypto, opts.Logger.With().Str("module", "sync").Logger(), a.emit)
 	a.sync.SetHooks(syncpkg.Hooks{
-		Shares:        func(transport.ShareEvent) { go a.reconcileMounts() },
-		Config:        func(int) { go a.refreshConfigQuietly() },
-		ConfigVersion: func() int { return a.config.Version() },
+		Shares:          func(transport.ShareEvent) { go a.reconcileMounts() },
+		Config:          func(int) { go a.refreshConfigQuietly() },
+		ConfigVersion:   func() int { return a.config.Version() },
+		BeforeOverwrite: a.snapshotBeforeOverwrite,
 	})
 	return a
 }
@@ -157,6 +158,8 @@ func (a *App) Startup(ctx context.Context) {
 	if st := a.auth.State(); st.ServerURL != "" {
 		a.config.Load(ctx, st.ServerURL) // the last valid configuration applies from the first moment, offline included
 		a.applyConfig()
+	} else {
+		a.applyLockTimeout() // the user's own choice applies without a server
 	}
 	a.sync.Start(ctx)
 	a.auth.Restore(ctx)

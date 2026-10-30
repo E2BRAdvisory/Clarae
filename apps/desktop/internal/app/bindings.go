@@ -329,6 +329,9 @@ type AppSettings struct {
 	// TrashMode is where deleted files go: "system" (OS trash, default) or
 	// "vault" (the vault's .trash/ folder).
 	TrashMode string `json:"trashMode"`
+	// VaultLockMinutes locks an unlocked private vault after this much idle
+	// time (0 = never); nil follows the administrator's default (§3.8.2).
+	VaultLockMinutes *int `json:"vaultLockMinutes,omitempty"`
 }
 
 // Get returns the saved preferences (defaults when unset).
@@ -358,12 +361,18 @@ func (s *SettingsAPI) Set(settings AppSettings) error {
 	default:
 		return fmt.Errorf("invalid trash mode %q", settings.TrashMode)
 	}
+	if m := settings.VaultLockMinutes; m != nil && (*m < 0 || *m > maxVaultLockMinutes) {
+		return fmt.Errorf("vault lock must be between 0 and %d minutes", maxVaultLockMinutes)
+	}
 	raw, err := json.Marshal(settings)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.appDB.ExecContext(s.app.ctx, `INSERT INTO app_settings (key, value) VALUES ('app', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, string(raw))
-	return err
+	if _, err = s.app.appDB.ExecContext(s.app.ctx, `INSERT INTO app_settings (key, value) VALUES ('app', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, string(raw)); err != nil {
+		return err
+	}
+	s.app.applyLockTimeout()
+	return nil
 }
 
 // Info returns build and environment facts for the About panel.

@@ -6,6 +6,7 @@ import { api } from '../app/api';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { useAppStore } from '../state/store';
+import { unmanaged, useManaged } from '../state/managed';
 import { useSync } from '../state/sync';
 import { DialogHost } from '../ui/dialogs';
 import { SyncSection } from '../settings/SyncSection';
@@ -408,6 +409,45 @@ describe('SyncSection (settings)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lock now' }));
     await screen.findByRole('button', { name: 'Unlock' });
     expect(mock.sync.links.get(vaultId)?.locked).toBe(true);
+  });
+
+  it('sets the idle lock of private vaults as a device setting', async () => {
+    useManaged.setState({ ...unmanaged });
+    await signIn();
+    await api.sync.linkNew(vaultId, 'Diary', 'private', GOOD);
+    await useSync.getState().refresh(vaultId);
+    render(wrap(<SyncSection />));
+    const select = await screen.findByLabelText('Lock automatically when idle');
+    expect(select).toHaveValue('0');
+    fireEvent.change(select, { target: { value: '15' } });
+    await waitFor(() => expect(mock.settings.vaultLockMinutes).toBe(15));
+    expect(useAppStore.getState().settings.vaultLockMinutes).toBe(15);
+  });
+
+  it('shows the administrator idle lock: a default until the user chooses, fixed when locked', async () => {
+    await signIn();
+    await api.sync.linkNew(vaultId, 'Diary', 'private', GOOD);
+    await useSync.getState().refresh(vaultId);
+    useAppStore
+      .getState()
+      .setSettings({ ...useAppStore.getState().settings, vaultLockMinutes: undefined });
+    useManaged.setState({
+      ...unmanaged,
+      managed: true,
+      config: { security: { vault_lock_minutes: 30 } },
+    });
+    const { unmount } = render(wrap(<SyncSection />));
+    expect(await screen.findByLabelText('Lock automatically when idle')).toHaveValue('30');
+    unmount();
+
+    useAppStore.getState().setSettings({ ...useAppStore.getState().settings, vaultLockMinutes: 5 });
+    useManaged.setState({ locked: ['security.vault_lock_minutes'] });
+    render(wrap(<SyncSection />));
+    const select = await screen.findByLabelText('Lock automatically when idle');
+    expect(select).toHaveValue('30');
+    expect(select).toBeDisabled();
+    expect(screen.getByText(/Managed by your administrator/)).toBeInTheDocument();
+    useManaged.setState({ ...unmanaged });
   });
 
   it('changes the passphrase only with the right old one', async () => {

@@ -3,12 +3,75 @@ import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
 import { useAppStore } from '../state/store';
+import { isLocked, useManaged } from '../state/managed';
 import { infoOf, useSync } from '../state/sync';
+import { Icon } from '../shell/icons';
 import { dialog } from '../ui/dialogs';
 import { PassphraseFields } from '../sync/PassphraseFields';
 import { RecoveryKeyStep } from '../sync/RecoveryKeyStep';
 
 const POLL_OPTIONS = [0, 30, 60, 300, 900];
+/** Idle minutes before a private vault locks itself (0 = never). */
+export const AUTO_LOCK_OPTIONS = [0, 5, 15, 30, 60, 240];
+const AUTO_LOCK_KEY = 'security.vault_lock_minutes';
+
+/** The administrator's idle timeout, when the profile sets one. */
+function managedLockMinutes(config: Record<string, unknown>): number | undefined {
+  const sec = config['security'];
+  if (typeof sec !== 'object' || sec === null) return undefined;
+  const v = (sec as Record<string, unknown>)['vault_lock_minutes'];
+  return typeof v === 'number' ? v : undefined;
+}
+
+/**
+ * Idle timeout of private vaults (§3.8.2), a device setting: a locked administrator value wins,
+ * then the user's choice, then the administrator's default, then never (as in the backend).
+ */
+function AutoLockRow() {
+  const { t } = useTranslation();
+  const settings = useAppStore((s) => s.settings);
+  const locked = useManaged((m) => isLocked(m.locked, AUTO_LOCK_KEY));
+  const managed = useManaged((m) => managedLockMinutes(m.config));
+  const value = locked ? (managed ?? 0) : (settings.vaultLockMinutes ?? managed ?? 0);
+  const options = AUTO_LOCK_OPTIONS.includes(value)
+    ? AUTO_LOCK_OPTIONS
+    : [...AUTO_LOCK_OPTIONS, value];
+  const change = async (minutes: number) => {
+    const next = { ...settings, vaultLockMinutes: minutes };
+    useAppStore.getState().setSettings(next);
+    try {
+      await api.settings.set(next);
+    } catch (e) {
+      await dialog.error(e);
+    }
+  };
+  return (
+    <div className={`row${locked ? ' managed' : ''}`}>
+      <label htmlFor="auto-lock">{t('sync.autoLock')}</label>
+      <select
+        id="auto-lock"
+        value={value}
+        disabled={locked}
+        onChange={(e) => void change(Number(e.target.value))}
+      >
+        {options.map((m) => (
+          <option key={m} value={m}>
+            {m === 0
+              ? t('sync.autoLockNever')
+              : m % 60 === 0
+                ? t('sync.autoLockHours', { n: m / 60 })
+                : t('sync.autoLockMinutes', { n: m })}
+          </option>
+        ))}
+      </select>
+      {locked && (
+        <span className="muted small managed-note">
+          <Icon name="lock" size={14} /> {t('settings.managedByAdmin')}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function ChangePassphrase({ vaultId, onDone }: { vaultId: string; onDone: () => void }) {
   const { t } = useTranslation();
@@ -203,6 +266,8 @@ export function SyncSection() {
             </div>
           )}
           <p className="muted small">{t('sync.encryptionText')}</p>
+          <AutoLockRow />
+          <p className="muted small">{t('sync.autoLockHint')}</p>
           {form === 'none' && (
             <div className="actions left">
               {info.locked ? (

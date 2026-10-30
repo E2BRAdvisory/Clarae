@@ -106,6 +106,18 @@
       "properties": {
         "redirect_mode": { "enum": ["auto", "loopback", "custom_scheme"] }
       }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vault_lock_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1440,
+          "description": "Idle minutes after which an unlocked private vault forgets its key on the device (0 = never)"
+        }
+      }
     }
   }
 }

@@ -63,17 +63,12 @@ func (a *App) reconcileMounts() {
 // applyConfig hands the parts of the configuration the backend itself uses to their owners.
 func (a *App) applyConfig() {
 	cur := a.config.Current()
-	secs := 0
-	if sync, ok := cur.Config["sync"].(map[string]any); ok {
-		if v, ok := sync["interval_seconds"].(float64); ok && v > 0 {
-			secs = int(v)
-		}
-	}
-	locked := false
-	for _, k := range cur.LockedKeys {
-		if k == "sync.interval_seconds" || k == "sync" {
-			locked = true
-		}
-	}
-	a.sync.SetManagedPoll(secs, locked)
+	secs, _ := configInt(cur.Config, "sync.interval_seconds")
+	a.sync.SetManagedPoll(int(max(secs, 0)), keyLocked(cur.LockedKeys, "sync.interval_seconds"))
+	maxFile, _ := configInt(cur.Config, "sync.max_file_size_bytes")
+	a.sync.SetMaxFileBytes(max(maxFile, 0))
+	mode, _ := configValue(cur.Config, "auth.redirect_mode")
+	s, _ := mode.(string)
+	a.auth.SetManagedRedirectMode(auth.ParseRedirectMode(s))
+	a.applyLockTimeout()
 }
