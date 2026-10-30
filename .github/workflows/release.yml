@@ -1,11 +1,11 @@
 name: Release
 
 # One pipeline per release (M7-WP3, M10, ADR-0023, ADR-0031). On a tag vX.Y.Z or vX.Y.Z-rc.N:
-#   meta -> ci (the whole suite, as a gate) -> images (GHCR, signed, + Helm chart) and desktop installers
+#   meta -> verify (the gate) -> image + Helm chart (GHCR, signed) and desktop installers
 #   (macOS universal, Windows amd64 + arm64, Linux amd64 [+ arm64]) -> ONE GitHub Release.
 # Signing is optional: without the certificates the installers are built UNSIGNED and the release is marked
 # a prerelease saying so; set the repository variable REQUIRE_SIGNING=true to make missing secrets fatal.
-#  - workflow_dispatch: dry run. Same builds, no images, no release; the output is the workflow artifacts.
+#  - workflow_dispatch: dry run. Same builds (the image is built, not pushed), no release; the output is the workflow artifacts.
 # Secrets and variables: docs/release/secrets.md. Nothing is published on pull requests.
 
 on:
@@ -113,30 +113,142 @@ jobs:
             [[ "$unsigned" == true ]] && echo $'\n:warning: installers will be **unsigned**: Gatekeeper / SmartScreen will warn (docs/release/secrets.md).'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  ci:
-    name: CI gate
+  verify:
+    name: Verify
     needs: meta
     if: needs.meta.outputs.is_tag == 'true' || inputs.run_ci
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/verify.yml
 
-  images:
-    name: Cloud image and chart
-    needs: [meta, ci]
-    # Only a real release pushes: a dry run builds the installers and nothing else leaves the runner.
-    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.ci.result != 'failure' && needs.ci.result != 'cancelled' && needs.meta.outputs.is_tag == 'true' }}
-    uses: ./.github/workflows/release-images.yml
+  image:
+    name: Cloud image
+    needs: [meta, verify]
+    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push to GHCR (tags only)
+      id-token: write # keyless cosign signature
+      attestations: write
+    outputs:
+      image: ${{ steps.plan.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      PUSH: ${{ needs.meta.outputs.is_tag }} # a dry run builds the image and publishes nothing
+    steps:
+      # The two-architecture build does not fit in the ~14 GB the runner leaves free.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/memobrain-cloud" >> "$GITHUB_OUTPUT"
+          stable=false; [[ "$VERSION" != *-* ]] && stable=true
+          echo "stable=$stable" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.plan.outputs.image }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ steps.plan.outputs.stable == 'true' }}
+            type=raw,value=latest,enable=${{ steps.plan.outputs.stable == 'true' }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/cloud/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ env.VERSION }}
+          # BuildKit attestations: SLSA provenance and an SPDX SBOM stored next to the image in the registry.
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Install cosign
+        if: env.PUSH == 'true'
+        uses: sigstore/cosign-installer@v3
+      - name: Sign the image (keyless, by digest) and verify it
+        if: env.PUSH == 'true'
+        env:
+          IMAGE: ${{ steps.plan.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      # Attestations need a public repository (or a plan that includes them): the image is signed with cosign either way.
+      - name: GitHub provenance attestation (registry)
+        if: env.PUSH == 'true' && github.event.repository.private == false
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.plan.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  chart:
+    name: Helm chart
+    needs: [meta, verify]
+    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
       id-token: write
-      attestations: write
-    with:
-      version: ${{ needs.meta.outputs.version }}
+    outputs:
+      chart: ${{ steps.push.outputs.chart }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      PUSH: ${{ needs.meta.outputs.is_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint and render every values file
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/memobrain
+          for f in deploy/helm/memobrain/values-k3d.yaml deploy/helm/memobrain/ci/*.yaml; do
+            helm lint deploy/helm/memobrain -f "$f"
+            helm template ci deploy/helm/memobrain -f "$f" > /dev/null
+          done
+      - name: Install cosign
+        if: env.PUSH == 'true'
+        uses: sigstore/cosign-installer@v3
+      - name: Package, push and sign the chart (tags only)
+        id: push
+        if: env.PUSH == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          registry=ghcr.io; owner="${GITHUB_REPOSITORY_OWNER,,}"
+          work="$(mktemp -d)"; cp -R deploy/helm/memobrain "$work/memobrain"
+          # The repository default names the project's registry: point it at the image published by this run.
+          sed -i "s#ghcr.io/e2br/memobrain-cloud#${registry}/${owner}/memobrain-cloud#" "$work/memobrain/values.yaml"
+          helm package "$work/memobrain" --version "$VERSION" --app-version "$VERSION" -d "$work"
+          echo "$TOKEN" | helm registry login "$registry" -u "${GITHUB_ACTOR}" --password-stdin
+          out="$(helm push "$work/memobrain-${VERSION}.tgz" "oci://${registry}/${owner}/charts" 2>&1 | tee /dev/stderr)"
+          digest="$(sed -n 's/^Digest: //p' <<<"$out" | tail -n1)"
+          [[ -n "$digest" ]] || { echo "::error::cannot read the pushed chart digest"; exit 1; }
+          cosign sign --yes "${registry}/${owner}/charts/memobrain@${digest}"
+          echo "chart=oci://${registry}/${owner}/charts/memobrain:${VERSION}" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.id }}
-    needs: [meta, ci]
-    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.ci.result != 'failure' && needs.ci.result != 'cancelled' }}
+    needs: [meta, verify]
+    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
     strategy:
       fail-fast: false
       matrix:
@@ -274,8 +386,8 @@ jobs:
 
   release:
     name: Checksums, update manifest, GitHub Release
-    needs: [meta, images, build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
+    needs: [meta, image, chart, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.image.result == 'success' && needs.chart.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the release
@@ -303,9 +415,9 @@ jobs:
 
       - name: Release notes
         env:
-          IMAGE: ${{ needs.images.outputs.image }}
-          DIGEST: ${{ needs.images.outputs.digest }}
-          CHART: ${{ needs.images.outputs.chart }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          CHART: ${{ needs.chart.outputs.chart }}
         run: |
           set -euo pipefail
           prev="$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"

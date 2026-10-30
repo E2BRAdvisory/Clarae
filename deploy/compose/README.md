@@ -8,7 +8,7 @@ Stack per un singolo host: reverse proxy Caddy (TLS automatico, HTTP/2 per gRPC)
 
 - Docker Engine 24+ con il plugin Compose v2, 4 GB di RAM liberi.
 - Tre nomi DNS che puntano all'host (esempio: `memobrain.example.com`, `notify.example.com`, `auth.example.com`) e le porte 80/443 raggiungibili da Internet per l'emissione dei certificati ACME. Senza accesso pubblico: `CADDY_GLOBAL=local_certs` (CA interna di Caddy, da distribuire ai client).
-- L'immagine `MEMOBRAIN_IMAGE:MEMOBRAIN_VERSION` pubblicata da `release-images.yml`. **Verificare la firma** prima di usarla (vedi `docs/release/README.md`): `cosign verify ghcr.io/e2br/memobrain-cloud:1.0.0 --certificate-identity-regexp ... --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
+- L'immagine `MEMOBRAIN_IMAGE:MEMOBRAIN_VERSION` pubblicata da `release.yml`. **Verificare la firma** prima di usarla (vedi `docs/release/README.md`): `cosign verify ghcr.io/e2br/memobrain-cloud:1.0.0 --certificate-identity-regexp ... --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 
 ## Primo avvio
 

@@ -9,7 +9,7 @@
 
 ## Contesto
 
-`release.yml` (installer desktop) e `release-images.yml` (immagine cloud e chart) sono stati scritti in M7-WP3 ma non sono mai stati eseguiti (ADR-0023, "Verificato e non"). Una lettura del codice ha trovato questi problemi:
+`release.yml` (installer desktop) e `release-images.yml` (immagine cloud e chart, poi assorbito in `release.yml`) sono stati scritti in M7-WP3 ma non sono mai stati eseguiti (ADR-0023, "Verificato e non"). Una lettura del codice ha trovato questi problemi:
 
 - **Dockerfile:** `services/cloud/Dockerfile` copia `.yarn`, che è ignorato da git. Su un checkout pulito la build dell'immagine fallisce.
 - **Wails CLI:** il workflow installa `wails@v2.12.0` con `go install`, ma con Go 1.27 la CLI non compila (x/tools v0.30, vedi `scripts/install-wails.sh`).
@@ -60,6 +60,16 @@
    - `ghcr.io/ORG` diventa `ghcr.io/e2br` (owner del repository, minuscolo).
    - La homepage del `.deb` è l'URL del repository GitHub. `UPDATE_BASE_URL` resta una variabile di repository, e il valore predefinito `updates.memobrain.example` in `internal/updater/key.go` non si usa più nelle build di rilascio: senza chiavi l'updater è compilato fuori, con le chiavi la variabile è passata con ldflags.
    - Le icone segnaposto restano finché l'owner non fornisce l'artwork.
+
+## Semplificazione dei workflow (2026-10-30)
+
+Dopo i primi run reali i workflow sono ridotti a tre, più `security.yml` (invariato):
+
+- `verify.yml` (riusabile): lint, tipi e test unitari Go e TypeScript, controllo del codice generato e della matrice di parità.
+- `ci.yml` (PR e `main`): `verify`, build dell'app desktop su Linux, Windows e macOS, build dell'immagine cloud multi-arch senza pubblicazione.
+- `release.yml` (tag, o dry run da `workflow_dispatch`): `verify`, installer, immagine e chart Helm pubblicati su GHCR e firmati, una sola GitHub Release.
+
+`release-images.yml` è stato rimosso, e con esso l'immagine `edge` da `main`. Fuori dalla CI automatica restano, da lanciare a mano, le suite lente: Playwright (`make e2e`), integrazione con testcontainers (`make test-integration`), sync e2e a due dispositivi, test del core sotto WASM (`make test-wasm`) e il budget di dimensione del core (applicato comunque dalla build dell'immagine). Si perde quindi la copertura continua di quelle suite: è il prezzo scelto per avere una CI veloce e leggibile.
 
 ## Implementazione (M10)
 

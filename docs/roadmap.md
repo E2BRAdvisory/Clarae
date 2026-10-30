@@ -636,7 +636,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 ### M10-WP3 Matrice e pubblicazione
 
 - Desktop: macOS universal, Windows amd64 e arm64, Linux amd64 e arm64 (`.deb` + AppImage).
-- Immagini GHCR: `edge` e `sha-<short>` da `main`, semver e `latest` dai tag; cosign, SBOM e provenance.
+- Immagini GHCR: semver e `latest` dai tag; cosign, SBOM e provenance (il canale `edge` da `main` è stato tolto nella semplificazione dei workflow).
 - `ci.yml` riusabile (`workflow_call`) come gate dei workflow di rilascio.
 - Una sola GitHub Release per tag, in bozza salvo `RELEASE_AUTO_PUBLISH=true`.
 - Placeholder: `ghcr.io/ORG` → `ghcr.io/e2br`; `memobrain.example` → variabili `HOMEPAGE_URL` e `UPDATE_BASE_URL`.
@@ -653,7 +653,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 **Criteri di uscita M10:**
 
 - un tag produce in automatico installer per i cinque target e un'immagine multi-arch firmata su GHCR;
-- una push su `main` pubblica l'immagine `edge`;
+- una push su `main` verifica, costruisce il desktop su tre sistemi e l'immagine (senza pubblicarla);
 - tutto è verificato su una run reale.
 
 ---

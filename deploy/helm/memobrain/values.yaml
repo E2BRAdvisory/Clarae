@@ -3,7 +3,7 @@
 # and --role=worker (background jobs).
 
 image:
-  repository: ghcr.io/e2br/memobrain-cloud # set to the registry of the release (release-images.yml publishes it)
+  repository: ghcr.io/e2br/memobrain-cloud # set to the registry of the release (release.yml publishes it)
   tag: '' # defaults to the chart appVersion; release builds set it to the git tag
   pullPolicy: IfNotPresent
 imagePullSecrets: []
