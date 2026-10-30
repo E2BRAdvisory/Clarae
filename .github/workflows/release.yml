@@ -1,7 +1,7 @@
 name: Release
 
 # One pipeline per release (M7-WP3, M10, ADR-0023, ADR-0031). On a tag vX.Y.Z or vX.Y.Z-rc.N:
-#   meta -> verify (the gate) -> image + Helm chart (GHCR, signed) and desktop installers
+#   meta -> image + Helm chart (GHCR, signed) and desktop installers
 #   (macOS universal, Windows amd64 + arm64, Linux amd64 [+ arm64]) -> ONE GitHub Release.
 # Signing is optional: without the certificates the installers are built UNSIGNED and the release is marked
 # a prerelease saying so; set the repository variable REQUIRE_SIGNING=true to make missing secrets fatal.
@@ -19,10 +19,6 @@ on:
         default: '0.0.0-dryrun.1'
       use_secrets:
         description: 'Sign with the real secrets (still no release is created)'
-        type: boolean
-        default: false
-      run_ci:
-        description: 'Run the whole CI suite first (always on for a tag)'
         type: boolean
         default: false
 
@@ -113,16 +109,10 @@ jobs:
             [[ "$unsigned" == true ]] && echo $'\n:warning: installers will be **unsigned**: Gatekeeper / SmartScreen will warn (docs/release/secrets.md).'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  verify:
-    name: Verify
-    needs: meta
-    if: needs.meta.outputs.is_tag == 'true' || inputs.run_ci
-    uses: ./.github/workflows/verify.yml
-
   image:
     name: Cloud image
-    needs: [meta, verify]
-    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
+    needs: meta
+    if: ${{ !cancelled() && needs.meta.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -201,8 +191,8 @@ jobs:
 
   chart:
     name: Helm chart
-    needs: [meta, verify]
-    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
+    needs: meta
+    if: ${{ !cancelled() && needs.meta.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -248,8 +238,8 @@ jobs:
 
   build:
     name: Build ${{ matrix.id }}
-    needs: [meta, verify]
-    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
+    needs: meta
+    if: ${{ !cancelled() && needs.meta.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:

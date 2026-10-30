@@ -1,6 +1,6 @@
 # Processo di rilascio
 
-Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline e canale non firmato: ADR-0031. **Stato**: le pipeline GitHub (`verify.yml`, `ci.yml`, `release.yml`) sono scritte e validate con `actionlint` ma **non sono mai state eseguite su GitHub**; firma, notarizzazione, cosign, la build Windows arm64 e Linux arm64 e la pubblicazione sono configurate e non verificate. Il primo giro reale è un dry run e poi il release candidate (RC).
+Dettagli tecnici e scelte: ADR-0023. Segreti e variabili: `secrets.md`. Pipeline e canale non firmato: ADR-0031. **Stato**: le pipeline GitHub (`ci.yml`, `release.yml`) sono scritte e validate con `actionlint` ma **non sono mai state eseguite su GitHub**; firma, notarizzazione, cosign, la build Windows arm64 e Linux arm64 e la pubblicazione sono configurate e non verificate. Il primo giro reale è un dry run e poi il release candidate (RC).
 
 ## Versioni e canali
 
@@ -23,12 +23,11 @@ git tag -a v1.0.0 -m "MemoBrain Notes 1.0.0" && git push origin v1.0.0     # azi
 
 Il push del tag avvia **un solo workflow**, `release.yml`, che nell'ordine:
 
-1. richiama `ci.yml` (tutta la suite: se fallisce non si pubblica niente);
-2. costruisce e pubblica l'**immagine cloud** multi-arch su GHCR (job `image` di `release.yml`, cross-compilata, firma cosign keyless, SBOM e provenienza BuildKit) e il chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/memobrain`);
-3. costruisce gli installer: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage) e, con la variabile `LINUX_ARM64_RUNNER`, Linux arm64;
-4. crea **una** GitHub Release con installer, `SHA256SUMS`, SBOM, attestazione di provenienza, riferimento all'immagine (con digest) e al chart, e (solo con le chiavi) il manifest di aggiornamento firmato. È una **bozza**, a meno di `RELEASE_AUTO_PUBLISH=true`, e una **prerelease** se la versione ha un suffisso o gli installer non sono firmati.
+1. costruisce e pubblica l'**immagine cloud** multi-arch su GHCR (job `image` di `release.yml`, cross-compilata, firma cosign keyless, SBOM e provenienza BuildKit) e il chart Helm come artefatto OCI firmato (`oci://ghcr.io/<owner>/charts/memobrain`);
+2. costruisce gli installer: macOS universale (`.dmg`), Windows amd64 e arm64 (NSIS), Linux amd64 (`.deb` e AppImage) e, con la variabile `LINUX_ARM64_RUNNER`, Linux arm64;
+3. crea **una** GitHub Release con installer, `SHA256SUMS`, SBOM, attestazione di provenienza, riferimento all'immagine (con digest) e al chart, e (solo con le chiavi) il manifest di aggiornamento firmato. È una **bozza**, a meno di `RELEASE_AUTO_PUBLISH=true`, e una **prerelease** se la versione ha un suffisso o gli installer non sono firmati.
 
-Su pull request e su `main` `ci.yml` esegue la verifica, costruisce l'app desktop su Linux, Windows e macOS e costruisce (senza pubblicare) l'immagine cloud multi-arch: **nessuna immagine esce da un branch**, solo dai tag.
+Su pull request e su `main` `ci.yml` costruisce l'app desktop su Linux, Windows e macOS e costruisce (senza pubblicare) l'immagine cloud multi-arch: **nessuna immagine esce da un branch**, solo dai tag.
 
 Poi, a mano:
 

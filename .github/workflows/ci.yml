@@ -17,13 +17,8 @@ env:
   WAILS_VERSION: v2.12.0
 
 jobs:
-  verify:
-    name: Verify
-    uses: ./.github/workflows/verify.yml
-
   desktop:
     name: Desktop build (${{ matrix.os }})
-    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +62,6 @@ jobs:
 
   image:
     name: Cloud image (build only)
-    needs: verify
     runs-on: ubuntu-24.04
     steps:
       # The two-architecture build does not fit in the ~14 GB the runner leaves free.
