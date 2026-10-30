@@ -2,6 +2,31 @@
 
 Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file: il workflow di release le allega alla release (`scripts/release/notes.sh`).
 
+## [1.1.0] - 2026-10-30
+
+Il vault si apre e si modifica anche dalla Web UI del cloud, e il rilascio dei tre installer desktop e dell'immagine del cloud è automatico.
+
+### Workbench web (ADR-0029, ADR-0030)
+
+- **Stessa interfaccia del client desktop nel browser**, alla rotta `/vaults/<id>/open` della console: editor, ricerca, link, grafo, canvas, disegni, Bases, cronologia, presentazioni. Il core Go del desktop gira compilato in WebAssembly in un Web Worker, con i file in OPFS e l'indice SQLite (FTS5) in sqlite-wasm: stesso codice, stesso comportamento, stesso merge sul client.
+- Il browser è un dispositivo (`web`) come gli altri: sincronizza con le stesse API, anche per i vault privati cifrati.
+- Il blocco per inattività e «Dimentica questo browser» (anche all'uscita) cancellano le copie in chiaro e i database del browser.
+- Interruttore `web_workbench` nei profili di configurazione (acceso di default); CSP e SRI dedicati per la pagina del workbench.
+- Il frontend del desktop è il pacchetto condiviso `@memobrain/workbench`.
+
+### Rilascio
+
+- Una sola pipeline per tag (`release.yml`): installer macOS (universale), Windows (amd64 e arm64) e Linux (amd64, `.deb` e AppImage), immagine multi-arch del cloud (amd64 e arm64, Web UI e workbench inclusi) su GHCR firmata con cosign, chart Helm come artefatto OCI firmato, una GitHub Release con i checksum.
+- La CI (`ci.yml`) costruisce l'app desktop sui tre sistemi e l'immagine a ogni pull request e push su `main`.
+
+### Limiti noti
+
+- **Gli installer non sono firmati** (nessun certificato Apple Developer ID né Authenticode): Gatekeeper e SmartScreen avvisano al primo avvio. Verificare il download con `SHA256SUMS`. L'aggiornamento automatico è disattivato in queste build: l'aggiornamento è manuale.
+- Nessun installer Linux arm64 (serve un runner arm64, vedi `docs/release/secrets.md`).
+- I pacchetti GHCR (immagine e chart) sono privati finché non si rendono pubblici dalle impostazioni del pacchetto.
+- Non verificati: vault privato nel browser, desktop nativo contro web sullo stesso cloud, copie di conflitto `.canvas` ed `.excalidraw` dal browser, Safari e Firefox, indicizzazione di vault molto grandi. Elenco in `docs/web-workbench-parity.md`.
+- La CI non esegue più i test end-to-end, di integrazione e del core WASM: restano da lanciare a mano (`make e2e`, `make test-integration`, `make test-wasm`).
+
 ## [1.0.0] - 2026-10-28
 
 Tutto ciò che c'è nella `1.0.0-rc.1` (sotto) più i disegni completi e il nuovo build del client desktop.
