@@ -144,6 +144,9 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 func (e *Engine) finishMerge(ctx context.Context, row File, c transportChange, strategy merge.Strategy, res merge.Result, local vault.Content, remote []byte) error {
 	ours := local.Data // what the user had, before the merged text replaces it
 	if !bytes.Equal(res.Merged, local.Data) {
+		if e.cfg.BeforeOverwrite != nil {
+			e.cfg.BeforeOverwrite(row.Path) // ours is not on the server: keep a local snapshot
+		}
 		cont, err := e.cfg.FS.WriteFile(row.Path, res.Merged, local.Hash, false)
 		if errors.Is(err, vault.ErrHashMismatch) {
 			return nil // edited again meanwhile: the next round starts over

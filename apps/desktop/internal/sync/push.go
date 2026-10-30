@@ -88,8 +88,24 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		}
 		batch := ops[start:end]
 		start = end
-		if err := e.upload(ctx, batch); err != nil {
+		tooLarge, err := e.upload(ctx, batch)
+		if err != nil {
 			return again, err
+		}
+		if len(tooLarge) > 0 {
+			// The server refused these blobs: their files are parked and
+			// the rest of the batch goes on without them.
+			kept := batch[:0:0]
+			for _, p := range batch {
+				if !tooLarge[p.blobHash] {
+					kept = append(kept, p)
+				}
+			}
+			done += len(batch) - len(kept)
+			if batch = kept; len(batch) == 0 {
+				e.progress(done, len(ops))
+				continue
+			}
 		}
 		reqOps := make([]syncproto.Op, len(batch))
 		for i, p := range batch {
@@ -162,6 +178,12 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 	}
 
 	if kind == "create" || kind == "modify" {
+		limit := e.maxFileBytes()
+		// Checked on disk first so an oversized file is never read into memory
+		// nor encrypted, then again on what was read (it may have grown).
+		if st, err := os.Stat(e.absPath(row.Path)); err == nil && st.Size() > limit {
+			return p, false, e.parkTooLarge(ctx, row, st.Size(), limit)
+		}
 		cont, err := e.cfg.FS.ReadFile(row.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -169,10 +191,16 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 			}
 			return p, false, err
 		}
+		if cont.Size > limit {
+			return p, false, e.parkTooLarge(ctx, row, cont.Size, limit)
+		}
 		p.localHash, p.mtime, p.size = cont.Hash, cont.Mtime.UnixNano(), cont.Size
 		data, blobHash, err := e.blobFor(ctx, row, kind, cont.Hash, cont.Data)
 		if err != nil {
 			return p, false, e.park(ctx, row, "cannot encrypt the content: "+err.Error())
+		}
+		if int64(len(data)) > limit { // the ciphertext is slightly larger than the plaintext
+			return p, false, e.parkTooLarge(ctx, row, int64(len(data)), limit)
 		}
 		p.data, p.blobHash = data, blobHash
 		op.BlobHash, op.Size = blobHash, int64(len(data))
@@ -231,14 +259,32 @@ func (e *Engine) blobFor(ctx context.Context, row File, kind, localHash string, 
 
 func (e *Engine) cachePath(hash string) string { return filepath.Join(e.cfg.CacheDir, hash) }
 
+func (e *Engine) maxFileBytes() int64 {
+	if e.cfg.MaxFileBytes != nil {
+		if n := e.cfg.MaxFileBytes(); n > 0 {
+			return n
+		}
+	}
+	return syncproto.DefaultMaxFileBytes
+}
+
+// parkTooLarge parks a file over the size limit with the server's error code,
+// so the UI explains it like a rejection.
+func (e *Engine) parkTooLarge(ctx context.Context, row File, size, limit int64) error {
+	return e.park(ctx, row, fmt.Sprintf("%s: file of %d bytes exceeds the limit of %d", syncproto.CodeFileTooLarge, size, limit))
+}
+
 // park stops retrying a file until it changes, remembering why.
 func (e *Engine) park(ctx context.Context, row File, reason string) error {
 	row.Attempts, row.LastError = MaxAttempts, reason
 	return e.cfg.DB.PutFile(ctx, row)
 }
 
-// upload sends the blobs of a batch the server does not have yet.
-func (e *Engine) upload(ctx context.Context, batch []prepared) error {
+// upload sends the blobs of a batch the server does not have yet. A blob the
+// server refuses as too large (its limit may be lower than the one this device
+// knows) parks its file and is reported in tooLarge instead of failing the
+// whole batch.
+func (e *Engine) upload(ctx context.Context, batch []prepared) (tooLarge map[string]bool, err error) {
 	byHash := map[string]*prepared{}
 	var hashes []string
 	for i := range batch {
@@ -251,11 +297,11 @@ func (e *Engine) upload(ctx context.Context, batch []prepared) error {
 		}
 	}
 	if len(hashes) == 0 {
-		return nil
+		return nil, nil
 	}
 	missing, err := e.cfg.Remote.CheckBlobs(ctx, hashes)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, h := range missing {
 		p := byHash[h]
@@ -268,11 +314,22 @@ func (e *Engine) upload(ctx context.Context, batch []prepared) error {
 			ob.UploadURL = url
 			_ = e.cfg.DB.PutOutbox(ctx, ob, e.cfg.Now())
 		}
+		var pe *transport.ProblemError
+		if errors.As(err, &pe) && pe.Problem.Code == syncproto.CodeFileTooLarge {
+			if err := e.park(ctx, p.row, err.Error()); err != nil {
+				return tooLarge, err
+			}
+			if tooLarge == nil {
+				tooLarge = map[string]bool{}
+			}
+			tooLarge[h] = true
+			continue
+		}
 		if err != nil {
-			return fmt.Errorf("upload %s: %w", p.row.Path, err)
+			return tooLarge, fmt.Errorf("upload %s: %w", p.row.Path, err)
 		}
 	}
-	return nil
+	return tooLarge, nil
 }
 
 // applyResult folds one operation's outcome into sync_files. It reports
@@ -363,8 +420,3 @@ func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncpro
 		return false, e.park(ctx, row, fmt.Sprintf("%s: %s", res.Code, res.Detail))
 	}
 }
-
-var (
-	_ = errors.New
-	_ = transport.BasePath
-)

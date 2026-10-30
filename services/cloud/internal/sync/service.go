@@ -40,7 +40,7 @@ func recordCommit(resp syncproto.CommitResponse, err error) {
 const ChannelVaultChanged = "vault_changed"
 
 // DefaultMaxFileBytes is used when the files.max_size_bytes setting is missing.
-const DefaultMaxFileBytes int64 = 100 << 20
+const DefaultMaxFileBytes = syncproto.DefaultMaxFileBytes
 
 // QuotaSource resolves the effective quota of the vault owner.
 type QuotaSource interface {

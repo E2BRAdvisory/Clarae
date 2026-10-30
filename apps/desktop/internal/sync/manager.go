@@ -58,6 +58,9 @@ type Hooks struct {
 	Config func(version int)
 	// ConfigVersion returns the revision this device holds (the server replays what is newer).
 	ConfigVersion func() int
+	// BeforeOverwrite is called before a merge replaces local content that the
+	// server does not have, so the application can snapshot it (local history).
+	BeforeOverwrite func(localVaultID, path string)
 }
 
 // SetManagedPoll sets the polling interval distributed by the administrator (0 = none).
@@ -65,6 +68,46 @@ type Hooks struct {
 func (m *Manager) SetManagedPoll(seconds int, locked bool) {
 	m.managedPoll.Store(int64(seconds))
 	m.managedLocked.Store(locked)
+}
+
+// SetMaxFileBytes sets the largest file the engines upload (0 = the protocol
+// default). Larger files are parked before being read or encrypted.
+func (m *Manager) SetMaxFileBytes(n int64) { m.maxFile.Store(n) }
+
+func (m *Manager) maxFileBytes() int64 {
+	if n := m.maxFile.Load(); n > 0 {
+		return n
+	}
+	return syncproto.DefaultMaxFileBytes
+}
+
+// SetLockTimeout sets how long an unlocked private vault may stay idle before
+// its key is forgotten (0 = never).
+func (m *Manager) SetLockTimeout(d time.Duration) { m.crypto.SetLockTimeout(d) }
+
+// idleLockInterval is how often idle private vaults are looked for.
+const idleLockInterval = 30 * time.Second
+
+// lockIdleVaults locks the private vaults idle past the timeout and tells the UI.
+func (m *Manager) lockIdleVaults() {
+	ids := m.crypto.LockIdle()
+	if len(ids) == 0 {
+		return
+	}
+	m.mu.Lock()
+	var hit []*managed
+	for _, mv := range m.vaults {
+		for _, id := range ids {
+			if mv.cloudID == id && mv.engine != nil {
+				hit = append(hit, mv)
+			}
+		}
+	}
+	m.mu.Unlock()
+	for _, mv := range hit {
+		mv.engine.setStatus(func(s *Status) { s.Phase, s.Error = PhaseLocked, "" })
+		m.emit(EventLocked, map[string]any{"vaultId": mv.localID})
+	}
 }
 
 // SetHooks installs the application's event hooks; call it before Start.
@@ -90,6 +133,8 @@ type Manager struct {
 	// managed polling interval from the distributed configuration (§2.6.6).
 	managedPoll   atomic.Int64
 	managedLocked atomic.Bool
+	// maxFile is the upload size limit from the distributed configuration (0 = default).
+	maxFile atomic.Int64
 }
 
 type managed struct {
@@ -121,6 +166,18 @@ func (m *Manager) Start(ctx context.Context) {
 	m.mu.Lock()
 	m.appCtx = ctx
 	m.mu.Unlock()
+	go func() {
+		t := time.NewTicker(idleLockInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				m.lockIdleVaults()
+			}
+		}
+	}()
 }
 
 // LinkInfo is what the UI shows about a vault's cloud connection.
@@ -239,8 +296,17 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: sessionRemote{m: m, vault: transport.Ref(cloud, mount.Scope)},
 		ReadOnly: isMount && mount.Permission == PermViewer,
 		DeviceID: deviceID, DeviceName: name, UserID: userID, Logger: m.log.With().Str("vault", mv.localID).Logger(),
-		OnStatus:   func(s Status) { m.emit(EventStatus, s) },
-		OnConflict: func(c Conflict) { m.emit(EventConflict, map[string]any{"vaultId": mv.localID, "conflict": c}) },
+		OnStatus:     func(s Status) { m.emit(EventStatus, s) },
+		OnConflict:   func(c Conflict) { m.emit(EventConflict, map[string]any{"vaultId": mv.localID, "conflict": c}) },
+		MaxFileBytes: m.maxFileBytes,
+		BeforeOverwrite: func(path string) {
+			m.mu.Lock()
+			hook := m.hooks.BeforeOverwrite
+			m.mu.Unlock()
+			if hook != nil {
+				hook(mv.localID, path)
+			}
+		},
 	}
 	if kind == "private" {
 		_, _ = m.crypto.Restore(cloud) // unlock silently from the keychain when possible

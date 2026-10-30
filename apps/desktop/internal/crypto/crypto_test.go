@@ -184,6 +184,32 @@ func TestIdleTimeoutLocks(t *testing.T) {
 	}
 }
 
+// LockIdle is the periodic sweep: it removes the key from memory and from the
+// keychain even when nothing asks whether the vault is locked.
+func TestLockIdleSweepsExpiredVaults(t *testing.T) {
+	m, store, now := newManager(t)
+	mat, _ := m.NewMaterial("correct horse battery staple")
+	_ = m.Adopt(vaultID, mat)
+	*now = now.Add(24 * time.Hour)
+	if ids := m.LockIdle(); len(ids) != 0 {
+		t.Fatalf("locked %v with no timeout set", ids)
+	}
+
+	m.SetLockTimeout(10 * time.Minute)
+	if ids := m.LockIdle(); len(ids) != 1 || ids[0] != vaultID {
+		t.Fatalf("LockIdle = %v, want [%s]", ids, vaultID)
+	}
+	if v, _ := store.Get(account(vaultID)); v != "" {
+		t.Fatal("the VMK stayed in the keychain")
+	}
+	if ok, _ := m.Restore(vaultID); ok || !m.IsLocked(vaultID) {
+		t.Fatal("vault still unlocked after the sweep")
+	}
+	if ids := m.LockIdle(); len(ids) != 0 {
+		t.Fatalf("locked again: %v", ids)
+	}
+}
+
 func TestDiskParsers(t *testing.T) {
 	cases := []struct {
 		got, want DiskEncryption

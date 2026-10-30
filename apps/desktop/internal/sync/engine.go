@@ -66,6 +66,12 @@ type Config struct {
 	// OnStatus and OnConflict receive updates (may be nil).
 	OnStatus   func(Status)
 	OnConflict func(Conflict)
+	// MaxFileBytes returns the largest file to upload (nil or 0: the protocol
+	// default). Larger files are parked before being read or encrypted (§3.4.2).
+	MaxFileBytes func() int64
+	// BeforeOverwrite is called before a merge replaces local content the server
+	// does not have (may be nil): the application snapshots it (§2.9).
+	BeforeOverwrite func(path string)
 }
 
 // Engine synchronizes one vault. Sync calls are serialized.

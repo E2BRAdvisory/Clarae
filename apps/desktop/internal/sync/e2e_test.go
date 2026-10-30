@@ -70,6 +70,8 @@ type device struct {
 	remote    *flaky
 	conflicts []syncpkg.Conflict
 	vaultID   string
+	// overwritten records path and content each time a merge is about to replace local content.
+	overwritten []string
 }
 
 // newDevice creates a local vault folder and an engine linked to cloudVault.
@@ -108,6 +110,7 @@ func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, ciph
 	cfg := syncpkg.Config{
 		LocalID: name, FS: fs, DB: d.db, Remote: d.remote, DeviceID: dev.ID, DeviceName: name, UserID: me.ID, ReadOnly: readOnly,
 		Logger: zerolog.Nop(), OnConflict: func(c syncpkg.Conflict) { d.conflicts = append(d.conflicts, c) },
+		BeforeOverwrite: func(path string) { d.overwritten = append(d.overwritten, path+"\n"+d.read(path)) },
 	}
 	if cipher != nil {
 		cfg.Cipher = cipher
@@ -297,6 +300,30 @@ func TestNonOverlappingEditsMerge(t *testing.T) {
 	}
 	if len(a.conflicts)+len(b.conflicts) != 0 {
 		t.Error("a clean merge must not raise a conflict")
+	}
+}
+
+// §2.9: before the merged text replaces B's local version (which the server
+// does not have), the application is asked to snapshot it.
+func TestMergeAsksForASnapshotBeforeOverwriting(t *testing.T) {
+	v := createVault(t, "ada", "snapshot")
+	a := newDevice(t, "ada", "laptop", v, nil)
+	b := newDevice(t, "ada", "desktop", v, nil)
+	base := lines(8, "line")
+	a.write("doc.md", base)
+	a.sync()
+	b.sync()
+	if len(b.overwritten) != 0 {
+		t.Fatalf("a plain download asked for a snapshot: %v", b.overwritten)
+	}
+
+	a.write("doc.md", replaceLine(base, 1, "line 1 edited on A"))
+	ours := replaceLine(base, 7, "line 7 edited on B")
+	b.write("doc.md", ours)
+	a.sync()
+	b.sync()
+	if len(b.overwritten) != 1 || b.overwritten[0] != "doc.md\n"+ours {
+		t.Fatalf("snapshots requested %q, want B's local version once", b.overwritten)
 	}
 }
 

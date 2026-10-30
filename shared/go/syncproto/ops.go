@@ -93,6 +93,10 @@ type CommitRequest struct {
 // MaxOpsPerCommit bounds the batch size (§3.7).
 const MaxOpsPerCommit = 500
 
+// DefaultMaxFileBytes is the largest file accepted when neither the system
+// setting nor the Config Profile sets one (§3.4.2: 100 MB).
+const DefaultMaxFileBytes int64 = 100 << 20
+
 // OpStatus is the per-operation outcome of a commit.
 type OpStatus string
 

@@ -87,6 +87,13 @@ func (m *Manager) SetLockTimeout(d time.Duration) {
 	m.mu.Unlock()
 }
 
+// LockTimeout returns the idle timeout in force (0 = never).
+func (m *Manager) LockTimeout() time.Duration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.timeout
+}
+
 // Material is the output of vault creation: what goes to the server and what
 // the user must keep.
 type Material struct {
@@ -318,12 +325,36 @@ func (m *Manager) IsLocked(cloudVaultID string) bool {
 	if !ok {
 		return true
 	}
-	if m.timeout > 0 && m.now().Sub(u.used) > m.timeout {
+	if m.idleLocked(u) {
 		delete(m.vaults, cloudVaultID)
 		go func() { _ = m.store.Delete(account(cloudVaultID)) }()
 		return true
 	}
 	return false
+}
+
+// idleLocked reports whether u has been idle past the timeout (m.mu held).
+func (m *Manager) idleLocked(u *unlocked) bool {
+	return m.timeout > 0 && m.now().Sub(u.used) > m.timeout
+}
+
+// LockIdle locks every vault idle past the timeout, in memory and in the
+// keychain, and returns their cloud ids. IsLocked does the same lazily; this
+// is called periodically so the key leaves memory even when nothing asks.
+func (m *Manager) LockIdle() []string {
+	m.mu.Lock()
+	var ids []string
+	for id, u := range m.vaults {
+		if m.idleLocked(u) {
+			delete(m.vaults, id)
+			ids = append(ids, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range ids {
+		_ = m.store.Delete(account(id))
+	}
+	return ids
 }
 
 func (m *Manager) get(cloudVaultID string) (*unlocked, error) {
