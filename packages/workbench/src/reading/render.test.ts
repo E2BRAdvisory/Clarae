@@ -83,6 +83,35 @@ describe('renderMarkdown', () => {
     expect(d.querySelector('section[data-footnotes], .footnotes')).toBeTruthy();
   });
 
+  it('renders inline footnotes ^[…] numbered with the labelled ones, in reading order', () => {
+    const d = dom(
+      renderMarkdown(
+        'One^[first *inline* with [[Linked]]] two[^x] three^[second [nested] note].\n\n[^x]: Labelled.\n',
+      ),
+    );
+    const refs = [...d.querySelectorAll('sup a[data-footnote-ref], a[data-footnote-ref]')].map(
+      (a) => a.textContent,
+    );
+    expect(refs).toEqual(['1', '2', '3']);
+    const items = [...d.querySelectorAll('section[data-footnotes] li')].map((li) =>
+      li.textContent?.replace('↩', '').trim(),
+    );
+    expect(items).toEqual(['first inline with Linked', 'Labelled.', 'second [nested] note']);
+    // The content keeps its formatting and its wikilink.
+    expect(d.querySelector('section[data-footnotes] em')?.textContent).toBe('inline');
+    expect(d.querySelector('section[data-footnotes] a.wikilink')?.getAttribute('data-target')).toBe(
+      'Linked',
+    );
+    expect(d.textContent).not.toContain('^[');
+  });
+
+  it('leaves code, escaped and unclosed ^[ as text', () => {
+    const d = dom(renderMarkdown('`a ^[b]` and \\^[c] and ^[open\n'));
+    expect(d.querySelector('section[data-footnotes]')).toBeNull();
+    expect(d.querySelector('code')?.textContent).toBe('a ^[b]');
+    expect(d.textContent).toContain('^[c] and ^[open');
+  });
+
   it('sanitizes: no scripts, frames, styles, event handlers or javascript: links', () => {
     const html = renderMarkdown(
       '<script>alert(1)</script><iframe src="https://evil"></iframe><style>*{display:none}</style>\n\n<p style="color:red" onclick="x()">hi</p>\n\n[x](javascript:alert(1)) <img src=x onerror=alert(1)> <b>ok</b>\n',

@@ -13,7 +13,7 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { unified, type Plugin } from 'unified';
 import type { Element, Root as HastRoot, RootContent as HastContent } from 'hast';
-import type { Parent, PhrasingContent, Root, Text } from 'mdast';
+import type { FootnoteDefinition, Parent, PhrasingContent, Root, Text } from 'mdast';
 import {
   parseWikilinkInner,
   scanSpans,
@@ -26,7 +26,7 @@ import { stripFrontmatter } from './sections';
 const ESC = ''; // stands for an escaped "[" until text nodes are processed
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
-/** Blanks %%comments%% (also across lines) outside code fences and protects \[[ escapes. */
+/** Blanks %%comments%% (also across lines) outside code fences and protects \[[ and \^[ escapes. */
 export function prepareSource(src: string): string {
   const lines = stripFrontmatter(src).split('\n');
   const st: BlockState = { inMath: false, inComment: false };
@@ -48,7 +48,7 @@ export function prepareSource(src: string): string {
         if (sp.kind === 'comment')
           out = out.slice(0, sp.from) + ' '.repeat(sp.to - sp.from) + out.slice(sp.to);
       }
-      return out.replace(/\\\[\[/g, ESC + '[');
+      return out.replace(/\\\[\[/g, ESC + '[').replace(/\\\^\[/g, '^' + ESC);
     })
     .join('\n');
 }
@@ -139,6 +139,90 @@ function transformText(value: string): PhrasingContent[] {
     }
   }
   push(value.slice(last));
+  return out;
+}
+
+/**
+ * Inline footnotes ^[…] (§2.2.2): each becomes a GFM footnote reference plus its definition, so
+ * they are numbered with the [^label] ones in reading order and listed in the same footnotes
+ * section. Brackets nest (^[see [[Note]]]) and the content may hold emphasis or code; an unclosed
+ * ^[ stays text, and \^[ was protected by prepareSource. The indexers count them alike
+ * (inlineFootnotes in @memobrain/markdown and in the Go parser).
+ */
+const remarkInlineFootnotes: Plugin<[], Root> = () => (tree) => {
+  const defs: FootnoteDefinition[] = [];
+  const visit = (n: Parent): void => {
+    for (const c of n.children) {
+      if ('children' in c && c.type !== 'link' && c.type !== 'linkReference') visit(c);
+    }
+    if (n.children.some((c) => c.type === 'text' && c.value.includes('^['))) {
+      n.children = splitInlineFootnotes(n.children as PhrasingContent[], defs);
+    }
+  };
+  visit(tree);
+  tree.children.push(...defs);
+};
+
+function splitInlineFootnotes(
+  children: PhrasingContent[],
+  defs: FootnoteDefinition[],
+): PhrasingContent[] {
+  const out: PhrasingContent[] = [];
+  const items = [...children];
+  const text = (value: string): Text => ({ type: 'text', value });
+  for (let i = 0; i < items.length; i++) {
+    const c = items[i];
+    const open = c?.type === 'text' ? c.value.indexOf('^[') : -1;
+    if (!c || open < 0) {
+      if (c) out.push(c);
+      continue;
+    }
+    const first = c as Text;
+    let close: [number, number] | null = null;
+    let depth = 1;
+    scan: for (let j = i, k = open + 2; j < items.length; j++, k = 0) {
+      const n = items[j];
+      if (n?.type !== 'text') continue;
+      for (; k < n.value.length; k++) {
+        if (n.value[k] === '[') depth++;
+        else if (n.value[k] === ']' && --depth === 0) {
+          close = [j, k];
+          break scan;
+        }
+      }
+    }
+    if (!close) {
+      // Unclosed: the ^[ is plain text; a later one in the same text may still close.
+      out.push(text(first.value.slice(0, open + 2)));
+      items[i] = text(first.value.slice(open + 2));
+      i--;
+      continue;
+    }
+    const [cj, ck] = close;
+    const last = items[cj] as Text;
+    if (open > 0) out.push(text(first.value.slice(0, open)));
+    const content: PhrasingContent[] =
+      cj === i
+        ? [text(first.value.slice(open + 2, ck))]
+        : [
+            text(first.value.slice(open + 2)),
+            ...items.slice(i + 1, cj),
+            text(last.value.slice(0, ck)),
+          ];
+    const id = `inline-fn-${defs.length + 1}`;
+    defs.push({
+      type: 'footnoteDefinition',
+      identifier: id,
+      label: id,
+      children: [
+        { type: 'paragraph', children: content.filter((x) => x.type !== 'text' || x.value) },
+      ],
+    });
+    out.push({ type: 'footnoteReference', identifier: id, label: id });
+    const rest = last.value.slice(ck + 1);
+    items.splice(i, cj - i + 1, ...(rest ? [text(rest)] : []));
+    i--;
+  }
   return out;
 }
 
@@ -267,6 +351,7 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkMath)
+  .use(remarkInlineFootnotes)
   .use(remarkOfm)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)

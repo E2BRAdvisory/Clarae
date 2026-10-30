@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -377,6 +378,43 @@ func scanLine(doc *Document, line, clean string, lineNo, base int, startedHidden
 	if m := footnoteRe.FindStringSubmatch(line); m != nil {
 		doc.Footnotes = append(doc.Footnotes, m[1])
 	}
+	for range inlineFootnotes(clean) {
+		inline := 1
+		for _, f := range doc.Footnotes {
+			if strings.HasPrefix(f, "^") {
+				inline++
+			}
+		}
+		doc.Footnotes = append(doc.Footnotes, "^"+strconv.Itoa(inline))
+	}
+}
+
+// inlineFootnotes counts the inline footnotes ^[…] of a line whose code spans,
+// comments and math are blanked. The brackets may nest (^[see [[Note]]]); an
+// escaped \^[ and an unclosed one do not count. Inline footnotes have no label:
+// the index names them ^1, ^2, … in document order, as they are numbered.
+func inlineFootnotes(clean string) int {
+	n := 0
+	for i := 0; i+1 < len(clean); i++ {
+		if clean[i] != '^' || clean[i+1] != '[' || (i > 0 && clean[i-1] == '\\') {
+			continue
+		}
+		depth := 0
+	scan:
+		for j := i + 1; j < len(clean); j++ {
+			switch clean[j] {
+			case '[':
+				depth++
+			case ']':
+				if depth--; depth == 0 {
+					n++
+					i = j
+					break scan
+				}
+			}
+		}
+	}
+	return n
 }
 
 var schemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]+:`)

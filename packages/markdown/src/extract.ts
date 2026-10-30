@@ -416,6 +416,34 @@ function scanLine(
   if (t) doc.tasks.push({ line: lineNo, state: t[1] ?? '', text: (t[2] ?? '').trim() });
   const f = FOOTNOTE.exec(line);
   if (f) doc.footnotes.push(f[1] ?? '');
+  for (let n = inlineFootnotes(clean); n > 0; n--) {
+    const inline = doc.footnotes.filter((x) => x.startsWith('^')).length + 1;
+    doc.footnotes.push(`^${inline}`);
+  }
+}
+
+/**
+ * Counts the inline footnotes ^[…] of a line whose code spans, comments and math are blanked. The
+ * brackets may nest (^[see [[Note]]]); an escaped \^[ and an unclosed one do not count. Inline
+ * footnotes have no label: the index names them ^1, ^2, … in document order, as they are numbered.
+ * Same algorithm as the Go parser (shared conformance fixtures).
+ */
+export function inlineFootnotes(clean: string): number {
+  let n = 0;
+  for (let i = 0; i + 1 < clean.length; i++) {
+    if (clean[i] !== '^' || clean[i + 1] !== '[' || (i > 0 && clean[i - 1] === '\\')) continue;
+    let depth = 0;
+    for (let j = i + 1; j < clean.length; j++) {
+      if (clean[j] === '[') depth++;
+      else if (clean[j] === ']') depth--;
+      if (depth === 0) {
+        n++;
+        i = j;
+        break;
+      }
+    }
+  }
+  return n;
 }
 
 function headingText(node: MdHeading, lines: string[]): string {

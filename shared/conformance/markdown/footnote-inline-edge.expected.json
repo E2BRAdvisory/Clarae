@@ -1,0 +1,27 @@
+{
+  "title": "footnote-inline-edge",
+  "aliases": [],
+  "properties": {},
+  "headings": [],
+  "links": [
+    {
+      "line": 1,
+      "kind": "wikilink",
+      "target": "Linked",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [
+    "^1",
+    "^2",
+    "d",
+    "^3"
+  ],
+  "wordCount": 21
+}
