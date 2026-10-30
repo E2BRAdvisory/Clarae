@@ -1,6 +1,6 @@
 # nfpm recipe for the .deb (scripts/release/package-linux.sh deb <version>).
 # Environment: VERSION (semver; nfpm turns "-rc.1" into "~rc.1"), ARCH (amd64|arm64), STAGE (directory
-# with memobrain, memobrain.desktop, dev.memobrain.desktop.metainfo.xml, memobrain.png prepared by the script).
+# with memobrain, memobrain.desktop, dev.memobrain.desktop.metainfo.xml, memobrain.png/.svg prepared by the script).
 name: memobrain
 arch: ${ARCH}
 platform: linux
@@ -27,6 +27,8 @@ contents:
     dst: /usr/share/metainfo/dev.memobrain.desktop.metainfo.xml
   - src: ${STAGE}/memobrain.png
     dst: /usr/share/icons/hicolor/512x512/apps/memobrain.png
+  - src: ${STAGE}/memobrain.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/memobrain.svg
 scripts:
   postinstall: apps/desktop/build/linux/postinst.sh
   postremove: apps/desktop/build/linux/postinst.sh

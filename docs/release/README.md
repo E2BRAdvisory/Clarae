@@ -64,7 +64,7 @@ xcrun stapler validate memobrain-1.0.0-darwin-universal.dmg
 - `make release-desktop OS=darwin V=1.0.0-rc.1` (poi `scripts/release/package-macos.sh 1.0.0-rc.1`): `.app` universale e `.dmg` **non firmato**. Funziona su macOS; `OS=windows` (`ARCH=amd64|arm64`) produce l'installer NSIS anche da macOS con `makensis` installato (non firmato, non provato su Windows). Lo script firma `memobrain.exe` prima di impacchettarlo quando `MEMOBRAIN_SIGNTOOL_CMD` è impostata, ed esegue `makensis` direttamente (il template `wails_tools.nsh` è reso da `scripts/release/nsis-render.go`).
 - Immagine cloud: `make docker-build` (architettura locale) e `make docker-push` (multi-arch, richiede `docker login` e un builder buildx).
 - `scripts/release/package-linux.sh` richiede `nfpm` e `appimagetool` su Linux.
-- Icone: l'app non ha ancora un'icona definitiva; si usa `apps/desktop/build/appicon.png` (1024 px, Wails ricava `icon.ico` e `iconfile.icns`). Sostituire quel file e `build/windows/icon.ico` quando c'è la grafica finale: nient'altro da toccare.
+- Icone: generate da `assets/logo.png` con `scripts/brand/gen-brand-assets.py` (vedi `assets/brand/README.md`). Wails ricava `iconfile.icns` da `apps/desktop/build/appicon.png` e usa `build/windows/icon.ico` così com'è; il pacchetto Linux prende `build/linux/memobrain.{png,svg}`.
 
 ## Ruotare la chiave di aggiornamento
 
