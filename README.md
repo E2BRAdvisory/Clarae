@@ -2,20 +2,14 @@
   <img src="assets/readme-banner.png" alt="MemoBrain Notes — Local-first notes and knowledge base" width="100%" />
 </p>
 
-**MemoBrain Notes** è un'app di knowledge management _local-first_ ispirata a Obsidian. Le note sono file
-Markdown ordinari in una cartella (il _vault_), compatibile con i vault di Obsidian: l'app funziona
-completamente offline e il cloud è facoltativo.
+**MemoBrain Notes** è un'app di knowledge management _local-first_. Le note sono file Markdown ordinari in una cartella (il _vault_), compatibile con i vault di Obsidian: l'app funziona completamente offline e il cloud è facoltativo.
 
-- **Client desktop** (macOS, Windows, Linux) basato su Wails: editor CodeMirror con Live Preview, link e
-  backlink, grafo, ricerca full-text, canvas (`.canvas`), disegni Excalidraw (`.excalidraw`), Bases (`.base`),
+- **Client desktop** (macOS, Windows, Linux) basato su Wails: editor CodeMirror con Live Preview, link e backlink, grafo, ricerca full-text, canvas (`.canvas`), disegni Excalidraw (`.excalidraw`), Bases (`.base`),
   template, note giornaliere, presentazioni e cronologia delle versioni.
-- **Cloud Service** self-hosted (Go, PostgreSQL, storage S3-compatibile, autenticazione Keycloak/OIDC) per
-  sincronizzare i vault tra dispositivi e condividerli con utenti e gruppi. Il merge avviene sempre sul
+- **Cloud Service** self-hosted (Go, PostgreSQL, storage S3-compatibile, autenticazione Keycloak/OIDC) per sincronizzare i vault tra dispositivi e condividerli con utenti e gruppi. Il merge avviene sempre sul
   client: il server ordina le modifiche e archivia i contenuti senza interpretarli.
-- **Due tipi di vault cloud:** _privati_, cifrati end-to-end sul client (il server non vede né i nomi né il
-  contenuto dei file), e _condivisi_, collaborativi con altri utenti.
-- **Web UI** incorporata nel cloud: console utente e amministrazione, e la stessa interfaccia del desktop nel
-  browser per aprire e modificare i vault.
+- **Due tipi di vault cloud:** _privati_, cifrati end-to-end sul client (il server non vede né i nomi né il contenuto dei file), e _condivisi_, collaborativi con altri utenti.
+- **Web UI** incorporata nel cloud: console utente e amministrazione, e la stessa interfaccia del desktop nel browser per aprire e modificare i vault.
 
 ## Installazione
 
