@@ -12,6 +12,12 @@ CLOUD_URL="http://127.0.0.1:18081"
 WEB_PID="$DEV_DIR/web.pid"
 WEB_LOG="$DEV_DIR/logs/web.log"
 WEB_URL="http://localhost:5174"
+# Wails v2 links webkit2gtk-4.0 unless built with the webkit2_41 tag; current distros
+# (Ubuntu 24.04+, Fedora 40+, Arch) ship only 4.1. Expand unquoted: `wails dev $WAILS_TAGS`.
+WAILS_TAGS=""
+if [ "$(uname -s)" = Linux ] && ! pkg-config --exists webkit2gtk-4.0 2>/dev/null; then
+  WAILS_TAGS="-tags webkit2_41"
+fi
 
 if [ -t 1 ]; then
   C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'; C_RED=$'\033[31m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_OFF=$'\033[0m'

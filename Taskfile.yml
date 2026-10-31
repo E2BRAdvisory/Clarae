@@ -12,6 +12,9 @@ vars:
   COMPOSE: docker compose -f deploy/docker/compose.dev.yaml
   WAILS:
     sh: command -v wails 2>/dev/null || echo "$(go env GOPATH)/bin/wails"
+  # Linux distros with only webkit2gtk-4.1 need the webkit2_41 build tag (see scripts/lib.sh).
+  WAILS_TAGS:
+    sh: '[ "$(uname -s)" = Linux ] && ! pkg-config --exists webkit2gtk-4.0 2>/dev/null && echo "-tags webkit2_41" || true'
   VERSION:
     sh: echo "${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
   WASM_OUT: '{{.WASM_OUT | default "build/wasm"}}'
@@ -249,7 +252,7 @@ tasks:
     desc: Run the desktop app with live reload (esbuild, no HMR)
     dir: '{{.DESKTOP}}'
     cmds:
-      - wails dev
+      - wails dev {{.WAILS_TAGS}}
 
   dev-web:
     desc: Web UI on :5174 with live reload, proxying /api to the cloud on :18081
@@ -303,7 +306,7 @@ tasks:
     desc: Build the desktop app for the current OS
     dir: '{{.DESKTOP}}'
     cmds:
-      - wails build -clean -ldflags "-X main.Version={{.VERSION}}"
+      - wails build -clean {{.WAILS_TAGS}} -ldflags "-X main.Version={{.VERSION}}"
 
   docker-build:
     desc: Build the cloud image (Web UI + workbench embedded) for this machine and load it as IMAGE:VERSION
