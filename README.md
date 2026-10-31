@@ -60,6 +60,7 @@ Procedura completa, segreti, configurazione e verifica nella [guida di amministr
 ```sh
 git clone git@github.com:E2BR/MemoBrain.git && cd MemoBrain
 corepack enable
+# Installa TASK da https://taskfile.dev/docs/installation
 task tools   # tool Go pinnati (golangci-lint, buf, sqlc, oapi-codegen, …) + yarn install
 task gen     # codice generato: OpenAPI → Go/TS, proto, sqlc, binding Wails
 ```
