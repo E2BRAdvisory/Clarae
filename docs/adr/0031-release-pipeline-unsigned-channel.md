@@ -1,11 +1,11 @@
 # ADR-0031 — Pipeline di rilascio: correzioni, canale non firmato, matrice estesa (M10)
 
-|                       |                                                                                                                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | implementata; installer provati da un dry run su GitHub, **immagine Docker e firme non verificate** (vedi "Verificato e non")                |
-| **Data**              | 2026-10-29                                                                                                                                   |
-| **Riferimenti spec**  | §4 (supply chain, release policy: macOS firmato e notarizzato, Authenticode, immagine OCI immutabile), M7; ADR-0001, ADR-0006, ADR-0023      |
-| **Devia dallo spec?** | sì, temporaneamente: rilasci desktop non firmati finché mancano i certificati → richiede una nota in `Specifications.md` da parte dell'owner |
+|                       |                                                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | implementata, poi ridotta: dalla 1.2.2 `release.yml` non firma e non ha gate di CI (vedi "Stato attuale"); le verifiche sono locali (ADR-0036) |
+| **Data**              | 2026-10-29                                                                                                                                     |
+| **Riferimenti spec**  | §4 (supply chain, release policy: macOS firmato e notarizzato, Authenticode, immagine OCI immutabile), M7; ADR-0001, ADR-0006, ADR-0023        |
+| **Devia dallo spec?** | sì, temporaneamente: rilasci desktop non firmati finché mancano i certificati → richiede una nota in `Specifications.md` da parte dell'owner   |
 
 ## Contesto
 
@@ -69,6 +69,18 @@ Dopo i primi run reali i workflow sono ridotti a due, più `security.yml` (invar
 - `release.yml` (solo tag `vX.Y.Z[-pre]`): installer macOS, Windows e Linux, immagine e chart Helm pubblicati su GHCR e firmati, una sola GitHub Release. Non esiste più il dry run da `workflow_dispatch`.
 
 `release-images.yml` è stato rimosso, e con esso l'immagine `edge` da `main`. Fuori dalla CI automatica restano, da lanciare a mano, le suite lente: Playwright (`make e2e`), integrazione con testcontainers (`make test-integration`), sync e2e a due dispositivi, test del core sotto WASM (`make test-wasm`) e il budget di dimensione del core (applicato comunque dalla build dell'immagine). Si perde quindi la copertura continua di quelle suite: è il prezzo scelto per avere una CI veloce e leggibile.
+
+## Stato attuale (2026-11-01)
+
+Dopo la semplificazione del 2026-10-30 la pipeline è stata ridotta ancora (1.2.2–1.2.4, vedi `CHANGELOG.md`):
+
+- `ci.yml` e `security.yml` sono stati rimossi: non c'è più un gate di CI né in `release.yml` né sulle push. Le verifiche si fanno in locale con `task ci` (ADR-0036).
+- `release.yml` è l'unico workflow: su un tag pubblica immagine multi-arch e chart Helm su GHCR, costruisce gli installer e crea una GitHub Release pubblicata con `SHA256SUMS`. Usa solo il `GITHUB_TOKEN` del run.
+- **Non firma nulla**: niente `REQUIRE_SIGNING`, firme Apple e Authenticode, cosign, SBOM, attestazioni né manifest di aggiornamento; l'updater resta compilato fuori (`ALLOW_UNSIGNED_UPDATES=1`). Il canale non firmato descritto sopra è quindi l'unico canale, e i punti 3, 6 e 7 della decisione sono da riattivare (`docs/release/README.md`, «Da riattivare»).
+- Matrice desktop: macOS universale su `macos-15`, Windows amd64 su `windows-2022`, Linux amd64 su `ubuntu-24.04`. Windows arm64 è stato tolto nella 1.2.3; Linux arm64 non è mai entrato.
+- Tutte le action sono alla major che gira su Node.js 24 (1.2.4).
+
+Le sezioni seguenti descrivono l'implementazione e le verifiche di M10 e restano come storia.
 
 ## Implementazione (M10)
 

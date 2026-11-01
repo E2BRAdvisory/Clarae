@@ -1,8 +1,9 @@
 //go:build !js
 
-// Command memobrain-core is the desktop core compiled to WebAssembly for the browser (ADR-0030).
-// On any other platform there is nothing to run: build it with GOOS=js GOARCH=wasm.
 package main
+
+// The desktop core runs in the browser only (see doc.go): on any other platform there is nothing
+// to run, build it with GOOS=js GOARCH=wasm.
 
 import (
 	"fmt"

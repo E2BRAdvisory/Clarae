@@ -359,7 +359,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apply a batch of operations; each one is evaluated independently (§3.4.4 C) */
+        /**
+         * Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
+         * @description Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+         */
         post: operations["commit"];
         delete?: never;
         options?: never;
@@ -1317,7 +1320,7 @@ export interface components {
         };
         VaultList: {
             items: components["schemas"]["Vault"][];
-            /** @description Shared mounts of other owners' vaults (empty until M4) */
+            /** @description Always empty: shares received from other owners are listed by GET /shares?scope=received (kept for compatibility) */
             mounts: components["schemas"]["Vault"][];
         };
         CreateVault: {
@@ -1345,7 +1348,7 @@ export interface components {
             kdf: components["schemas"]["KdfParams"];
             /**
              * Format: byte
-             * @description nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag, standard base64 (60 bytes)
+             * @description Standard base64. v1 (60 bytes): nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag; v2 (61 bytes, ADR-0034): 0x02 ‖ nonce ‖ AES-256-GCM(KEK, VMK; AAD) ‖ tag
              */
             wrapped_vmk: string;
         };
@@ -1874,10 +1877,33 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Too many requests (code RATE_LIMITED); honour Retry-After */
+        /** @description Too many requests from this client address (code RATE_LIMITED; the problem carries `retry_after`). Applies to every route; retry after the given number of seconds */
         RateLimited: {
             headers: {
+                /** @description Seconds to wait before retrying */
                 "Retry-After"?: number;
+                /** @description Size of the client's bucket (burst) */
+                "RateLimit-Limit"?: number;
+                /** @description Requests left in the bucket (0 on this answer) */
+                "RateLimit-Remaining"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Request body larger than 8 MiB (code FILE_TOO_LARGE) */
+        PayloadTooLarge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Unexpected server failure (code INTERNAL, HTTP 500); the problem carries the request id to quote */
+        InternalError: {
+            headers: {
                 [name: string]: unknown;
             };
             content: {
@@ -1929,6 +1955,8 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     readyz: {
@@ -1949,6 +1977,7 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+            429: components["responses"]["RateLimited"];
             /** @description Not ready */
             503: {
                 headers: {
@@ -1958,6 +1987,7 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+            default: components["responses"]["InternalError"];
         };
     };
     getClientConfig: {
@@ -1978,6 +2008,8 @@ export interface operations {
                     "application/json": components["schemas"]["ClientConfig"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getMe: {
@@ -2001,6 +2033,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     deleteMyAccount: {
@@ -2027,7 +2060,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     listMyDevices: {
@@ -2052,6 +2087,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     registerDevice: {
@@ -2082,6 +2119,9 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     revokeDevice: {
@@ -2105,6 +2145,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getEffectiveConfig: {
@@ -2137,6 +2179,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getMyUsage: {
@@ -2159,6 +2203,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     exportMyData: {
@@ -2183,11 +2229,15 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     listVaults: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also list the caller's soft-deleted vaults that can still be restored (deleted within the retention period, `deleted_at` set); they never appear in `mounts` */
+                include_deleted?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2205,6 +2255,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     createVault: {
@@ -2236,6 +2288,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getVault: {
@@ -2260,6 +2315,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     deleteVault: {
@@ -2282,6 +2339,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     updateVault: {
@@ -2312,6 +2371,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     restoreVault: {
@@ -2338,6 +2400,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getVaultTree: {
@@ -2366,6 +2430,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getKeyEnvelopes: {
@@ -2391,6 +2457,8 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     putKeyEnvelope: {
@@ -2422,6 +2490,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getChanges: {
@@ -2462,6 +2533,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     checkBlobs: {
@@ -2495,6 +2568,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getBlob: {
@@ -2548,6 +2624,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     putBlob: {
@@ -2589,6 +2667,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     commit: {
@@ -2625,6 +2705,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     listRevisions: {
@@ -2656,6 +2739,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getRevisionContent: {
@@ -2687,6 +2772,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     restoreRevision: {
@@ -2722,6 +2809,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     listMyGroups: {
@@ -2743,6 +2832,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     searchDirectoryUsers: {
@@ -2766,6 +2857,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     searchDirectoryGroups: {
@@ -2789,6 +2882,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     listShares: {
@@ -2813,6 +2908,8 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     createShare: {
@@ -2841,6 +2938,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getShare: {
@@ -2865,6 +2965,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     revokeShare: {
@@ -2888,6 +2990,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     updateShare: {
@@ -2918,6 +3022,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     putGrant: {
@@ -2950,6 +3057,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     deleteGrant: {
@@ -2975,6 +3085,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     acceptShare: {
@@ -2999,6 +3111,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     declineShare: {
@@ -3024,6 +3138,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     listSharedWithMe: {
@@ -3045,6 +3161,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListUsers: {
@@ -3076,6 +3194,8 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminCreateUser: {
@@ -3104,6 +3224,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminGetUser: {
@@ -3129,6 +3252,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminDeleteUser: {
@@ -3153,6 +3278,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminUpdateUser: {
@@ -3184,6 +3311,9 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminSuspendUser: {
@@ -3210,6 +3340,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminActivateUser: {
@@ -3236,6 +3368,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminResetPassword: {
@@ -3262,6 +3396,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminSetUserRole: {
@@ -3293,6 +3429,9 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminSetUserQuota: {
@@ -3323,6 +3462,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListUserVaults: {
@@ -3348,6 +3490,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListUserDevices: {
@@ -3373,6 +3517,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListUserSessions: {
@@ -3398,6 +3544,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminUserEffectiveConfig: {
@@ -3423,6 +3571,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListGroups: {
@@ -3445,6 +3595,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminCreateGroup: {
@@ -3473,6 +3625,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminGetGroup: {
@@ -3498,6 +3653,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminDeleteGroup: {
@@ -3521,6 +3678,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminUpdateGroup: {
@@ -3552,6 +3711,9 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListGroupMembers: {
@@ -3577,6 +3739,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminSetGroupMember: {
@@ -3606,6 +3770,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminRemoveGroupMember: {
@@ -3630,6 +3797,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminGetGroupProfiles: {
@@ -3655,6 +3824,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminSetGroupProfiles: {
@@ -3683,6 +3854,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListConfigProfiles: {
@@ -3705,6 +3879,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminCreateConfigProfile: {
@@ -3733,6 +3909,9 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminGetConfigProfile: {
@@ -3758,6 +3937,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminUpdateConfigProfile: {
@@ -3789,6 +3970,9 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminDeleteConfigProfile: {
@@ -3812,6 +3996,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminListProfileVersions: {
@@ -3837,6 +4023,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminRestoreProfileVersion: {
@@ -3863,6 +4051,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminGetStorageSettings: {
@@ -3885,6 +4075,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminPutStorageSettings: {
@@ -3912,6 +4104,9 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminStorageOverview: {
@@ -3934,6 +4129,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminBulkQuota: {
@@ -3961,6 +4158,9 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminAuditLog: {
@@ -3992,6 +4192,8 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     adminAuditLogCsv: {
@@ -4021,6 +4223,8 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     exportVaultZip: {
@@ -4048,6 +4252,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     createExport: {
@@ -4073,6 +4279,8 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     getExport: {
@@ -4098,6 +4306,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
     downloadExport: {
@@ -4124,6 +4334,8 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
         };
     };
 }

@@ -1,15 +1,17 @@
 # Processo di rilascio
 
-Dettagli tecnici e scelte: ADR-0023 e ADR-0031. L'unico workflow GitHub è `release.yml`: costruisce e pubblica, **non firma nulla** e non esegue lint né test. Le verifiche si fanno in locale con `task ci` prima del tag.
+Dettagli tecnici e scelte: ADR-0023 e ADR-0031; verifiche: ADR-0036. L'unico workflow GitHub è `release.yml`: costruisce e pubblica, **non firma nulla** e non esegue lint né test. Non c'è un servizio di CI: le verifiche si fanno in locale con `task ci` prima del tag.
 
 ## Versioni
 
-Versioni semver: `MAJOR.MINOR.PATCH`, con pre-release `-rc.N` / `-beta.N`. Il tag git è `vX.Y.Z[-pre]` ed è l'unica fonte della versione: finisce nel binario (`-X main.Version`, schermata About), nell'`Info.plist`, nelle risorse versione Windows, nell'immagine OCI e nel chart Helm.
+Versioni semver: `MAJOR.MINOR.PATCH`, con pre-release `-rc.N` / `-beta.N`. Il tag git è `vX.Y.Z[-pre]` (il workflow accetta anche `X.Y.Z[-pre]` senza `v`) ed è l'unica fonte della versione: finisce nel binario (`-X main.Version`, schermata About), nell'`Info.plist`, nelle risorse versione Windows, nell'immagine OCI e nel chart Helm.
 
 ## Prima di tagliare
 
-1. `task ci` verde in locale, checklist cross-OS aggiornata (`docs/qa/`).
-2. Note di rilascio: sezione `## [X.Y.Z]` in `CHANGELOG.md` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
+1. `task ci` verde in locale (ADR-0036): è l'unico controllo prima della pubblicazione, il workflow non ne esegue.
+2. Le suite lente elencate in [`docs/dev-setup.md`](../dev-setup.md#verifiche) (integrazione del cloud, sync a due dispositivi e contract test, Playwright, cloud vero), `node scripts/pentest-inventory.mjs --check` e la checklist cross-OS (`docs/qa/`).
+3. `info.version` di `api/openapi.yaml` uguale alla versione del tag (poi `task gen-openapi`).
+4. Note di rilascio: la sezione _Unreleased_ di `CHANGELOG.md` diventa `## [X.Y.Z] - data` (se manca, `scripts/release/notes.sh` usa i messaggi di commit dall'ultimo tag).
 
 ## Tagliare un rilascio
 
@@ -24,6 +26,8 @@ Il push del tag avvia `release.yml`, che:
 3. crea e pubblica **una** GitHub Release con gli installer e `SHA256SUMS`, marcata **prerelease** se la versione ha un suffisso.
 
 Gli installer non sono firmati (Gatekeeper e SmartScreen avvisano al primo avvio) e l'updater è compilato fuori dai binari (`ALLOW_UNSIGNED_UPDATES=1`): nessun manifest di aggiornamento. La prima volta i pacchetti GHCR sono privati: renderli pubblici (Package settings, Change visibility) se non devono richiedere un login.
+
+Il workflow usa solo il `GITHUB_TOKEN` del run: `packages: write` per immagine e chart, `contents: write` per la Release; nessun segreto del repository (dettaglio in [secrets.md](secrets.md)). Le note della Release sono la sezione del `CHANGELOG.md` più i comandi `docker pull` e `helm install` e l'avviso sugli installer non firmati.
 
 ## Release candidate
 
@@ -42,9 +46,19 @@ sha256sum -c SHA256SUMS
 - `scripts/release/package-linux.sh` richiede `nfpm` e `appimagetool` su Linux.
 - Icone: generate da `assets/logo.png` con `scripts/brand/gen-brand-assets.py` (vedi `assets/brand/README.md`). Wails ricava `iconfile.icns` da `apps/desktop/build/appicon.png` e usa `build/windows/icon.ico` così com'è; il pacchetto Linux prende `build/linux/memobrain.{png,svg}`.
 
-## Ruotare la chiave di aggiornamento
+## Da riattivare
 
-> Vale solo se la pipeline torna a firmare il manifest di aggiornamento: oggi `release.yml` non lo pubblica.
+Tolti dalla pipeline nella 1.2.2 e da ripristinare in `release.yml` quando servono (segreti e variabili relativi in [secrets.md](secrets.md#da-riattivare)):
+
+- **firma degli installer:** Developer ID e notarizzazione per macOS, Authenticode per Windows (`memobrain.exe` e installer); senza, gli avvisi del sistema operativo restano;
+- **immagine e chart:** firma cosign keyless, SBOM e attestazioni di provenienza;
+- **aggiornamento automatico:** manifest firmato (ed25519) per i canali stable e beta, updater compilato nei binari;
+- **verifiche automatiche:** un workflow che esegua `task ci` su push e pull request (ADR-0036 lo lascia come opzione se i contributori aumentano);
+- **installer arm64:** Windows arm64 (tolto nella 1.2.3) e Linux arm64 (serve un runner arm64).
+
+Le sezioni seguenti valgono solo quando il manifest di aggiornamento torna a essere firmato e pubblicato.
+
+### Ruotare la chiave di aggiornamento
 
 La chiave pubblica è compilata nei client: una rotazione richiede che i client già installati si fidino della nuova chiave **prima** che la vecchia sia ritirata.
 
@@ -55,6 +69,6 @@ La chiave pubblica è compilata nei client: una rotazione richiede che i client 
 
 **Compromissione della privata**: chi la possiede può firmare manifest che tutti i client accettano; deve però controllare anche l'hosting del canale (o il DNS) per farli arrivare, e l'hash degli artefatti nel manifest è firmato, non sostituibile. Risposta: fermare subito la pubblicazione sul canale, ruotare come sopra distribuendo però la versione di transizione **fuori canale** (sito, e-mail), e pubblicare un avviso. Per questo la privata vive solo nei segreti del repository (ambiente protetto con approvazione consigliata) e in una copia offline cifrata.
 
-## Rollback di un rilascio
+### Rollback di un rilascio
 
-I client non scendono mai di versione (regola anti-rollback, ADR-0023). Un rilascio difettoso si corregge con una nuova versione di patch. Per impedire che un'installazione specifica continui a girare, alzare `min_version` nel manifest successivo (i client sotto la soglia vedono l'aggiornamento come obbligatorio). Ripubblicare il vecchio manifest non ha effetto sui client già aggiornati e viene rifiutato come replay.
+Oggi, senza updater, un rilascio difettoso si corregge con una nuova versione di patch che gli utenti installano a mano. Con l'updater attivo, i client non scendono mai di versione (regola anti-rollback, ADR-0023) e un rilascio difettoso si corregge con una nuova versione di patch. Per impedire che un'installazione specifica continui a girare, alzare `min_version` nel manifest successivo (i client sotto la soglia vedono l'aggiornamento come obbligatorio). Ripubblicare il vecchio manifest non ha effetto sui client già aggiornati e viene rifiutato come replay.

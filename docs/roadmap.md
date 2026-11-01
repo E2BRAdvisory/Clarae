@@ -31,7 +31,7 @@ Regole ereditate da `CLAUDE.md`: non modificare `Specifications.md` in automatic
 | UUID           | `google/uuid` v7                                                                                                               |                                                                                                                                                                                                                                                                                                                                            |
 | Log            | `zerolog` (desktop e cloud), OpenTelemetry SDK + exporter Prometheus/OTLP                                                      |                                                                                                                                                                                                                                                                                                                                            |
 | Lingua         | Codice, commit, log, messaggi API in inglese; `docs/`, ADR, runbook in italiano; UI via i18n `it`/`en`                         |                                                                                                                                                                                                                                                                                                                                            |
-| CI             | Workflow GitHub Actions in `.github/workflows/` (come da §4.1); se l'host sarà diverso si portano gli stessi job               |                                                                                                                                                                                                                                                                                                                                            |
+| CI             | Dal 2026-11-01 nessun servizio di CI: `task ci` in locale prima di merge e tag; solo `release.yml` su GitHub (ADR-0036)        |                                                                                                                                                                                                                                                                                                                                            |
 | Nome           | Nome in codice `nodus` (segnaposto); nome ufficiale **MemoBrain Notes** (identificatori `memobrain`), rebrand eseguito dopo M7 |                                                                                                                                                                                                                                                                                                                                            |
 
 ---
@@ -40,7 +40,7 @@ Regole ereditate da `CLAUDE.md`: non modificare `Specifications.md` in automatic
 
 1. **Contract-first.** Ogni endpoint nasce in `api/openapi.yaml` (e `proto/`), poi `task gen`, poi implementazione. I tipi condivisi del protocollo (op, codici errore) vivono in `shared/go/syncproto` e sono la fonte per OpenAPI (enum) e per il client.
 2. **Vertical slice per WP.** Ogni WP arriva fino a un comportamento osservabile (binding + UI minima, o endpoint + test d'integrazione), non "tutto il backend poi tutta la UI".
-3. **Gate di qualità per milestone** (bloccanti in CI): `golangci-lint`, `go test -race`, `govulncheck`, ESLint/tsc, Vitest, conformance Go+TS, integration cloud (testcontainers), build desktop su 3 OS (da M0). Copertura ≥ 80 % su `parser`, `merge`, `sync`, `sharing` misurata da M2 in poi.
+3. **Gate di qualità per milestone** (bloccanti in `task ci`, eseguito in locale: ADR-0036): `golangci-lint`, `go test -race`, `govulncheck`, ESLint/tsc, Vitest, conformance Go+TS, integration cloud (testcontainers), build desktop su 3 OS (da M0). Copertura ≥ 80 % su `parser`, `merge`, `sync`, `sharing` misurata da M2 in poi.
 4. **Spike prima dei WP rischiosi.** Gli spike (§4) sono time-boxed (≤ 1 giorno) e producono un ADR in `docs/adr/`.
 5. **Deviazioni dallo spec** → ADR + proposta all'utente; lo spec lo aggiorna l'utente. Deviazioni già note in questo piano (ciascuna → ADR): migrazioni DB incrementali; colonna `op_id` su `file_revisions` (M2-WP2); tabella `config_profile_versions` (M5-WP1); endpoint GDPR `GET /me/export` e `DELETE /me` (M7-WP2); pacchetti TS aggiuntivi `packages/config` e runner conformance in `shared/conformance/ts/` (M0-WP0/WP1).
 6. **Parallelismo.** I WP marcati ∥ possono girare in worktree separati (es. parser Go ∥ editor TS); le interfacce tra i due lati sono fissate prima (binding tipizzati, fixture conformance).
@@ -591,7 +591,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ### M9-WP7 Parità e qualità
 
-> **Stato (2026-10-29):** implementato; **i criteri di uscita di M9 sono soddisfatti solo in parte** (vedi sotto). Dettaglio e matrice in [web-workbench-parity.md](web-workbench-parity.md) (tabelle generate da `scripts/parity.mjs`, verificate in CI).
+> **Stato (2026-10-29):** implementato; **i criteri di uscita di M9 sono soddisfatti solo in parte** (vedi sotto). Dettaglio e matrice in [web-workbench-parity.md](web-workbench-parity.md) (tabelle generate da `scripts/parity.mjs`, verificate da `task parity` in `task ci`, ADR-0036).
 >
 > Verificato: 14 spec dei flussi utente del desktop (`workflows`, `keyboard`, `editor-toolbar`, `slides`, `graph`) eseguiti **sul workbench web contro il core vero** (`e2e:workbench-ui`, `E2E_TARGET=web`, lo stesso `apps/desktop/frontend/e2e/support.ts`); e2e contro un **cloud vero** (Keycloak, PostgreSQL, S3: `e2e:cloud`): login, dispositivo `web`, una nota passa da un browser all'altro e due modifiche concorrenti alla stessa nota `.md` si fondono sul client; «Dimentica questo browser» e logout cancellano le copie e i database (`forgetThisBrowser`, 1 test); un test di regressione dello shim; 81 test e2e web e 14 workbench-ui stabili su più esecuzioni, 104 e2e desktop invariati; sicurezza (build minificata, CSP di produzione).
 >
@@ -601,8 +601,8 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 - Matrice di parità `docs/web-workbench-parity.md`: eccezioni dichiarate, cosa è verificato e cosa no, e tabelle generate di 72 comandi (71 sul web) e 122 binding (13 chiamati da un test web contro il core vero: gli altri sono provati solo sotto WASM dai test del core).
 - Spec del desktop eseguiti anche sul web con un helper comune (`openVault` apre un vault sul mock o su una cartella del browser).
-- E2E web ↔ cloud vero in `web/e2e-cloud` (richiede `scripts/run-desktop-with-cloud.sh --cloud-only --keep` dopo `task web-build`; non è in CI).
-- Test Go del core sotto `GOOS=js` (`task test-wasm`, job CI `wasm-core`), con `scripts/parity.mjs --check`.
+- E2E web ↔ cloud vero in `web/e2e-cloud` (richiede `scripts/run-desktop-with-cloud.sh --cloud-only --keep` dopo `task web-build`; suite lenta, non è in `task ci`).
+- Test Go del core sotto `GOOS=js` (`task test-wasm`), con `scripts/parity.mjs --check`; il job CI `wasm-core` è stato rimosso con `ci.yml` e oggi entrambi girano in `task ci` (ADR-0036).
 - Sicurezza: blocco e cancellazione (`lockAndForget`), «Dimentica questo browser» e logout (`forgetThisBrowser`), CSP e SRI (`web/e2e-security`).
 
 **Criteri di uscita M9:**
@@ -613,9 +613,11 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ---
 
-## 13-ter. M10 — Pipeline di rilascio (esito: installer e immagini pubblicati da CI)
+## 13-ter. M10 — Pipeline di rilascio (esito: installer e immagini pubblicati da `release.yml`)
 
 > **Stato (2026-10-29):** WP1-WP3 implementati (ADR-0031); **WP4 solo in parte**: un dry run su GitHub (`0.0.0-dryrun.3`) costruisce gli installer macOS, Windows amd64 e arm64 e Linux amd64 e ha trovato tre difetti, corretti. **Non verificati**: immagine Docker (la build locale è caduta per la rete, il dry run non la include), gate CI nel release, Linux arm64, firme, GHCR, tag RC e avvio degli installer: i criteri di uscita **non sono soddisfatti**. Mancano i certificati di firma: il canale non firmato è attivo, e la firma si accende quando arrivano i segreti. Dettaglio di cosa è verificato e no in ADR-0031.
+>
+> **Aggiornamento (2026-11-01):** i workflow sono stati ridotti a uno solo. Dalla 1.2.2 `release.yml` parte da un tag, pubblica immagine multi-arch e chart Helm su GHCR, costruisce gli installer e crea la GitHub Release con `SHA256SUMS`, **senza firme, cosign, SBOM né attestazioni** e senza eseguire controlli; `ci.yml` e `security.yml` sono stati rimossi. Dalla 1.2.3 la matrice desktop è macOS universale (`macos-15`), Windows amd64 e Linux amd64: Windows arm64 è stato tolto, Linux arm64 non è mai entrato. Le verifiche si fanno in locale con `task ci` (ADR-0036). I tag dalla 1.1.0 alla 1.2.4 sono stati creati con questa pipeline (voci in `CHANGELOG.md`); l'esito delle singole run non è registrato qui. I criteri di uscita sotto che parlano di firme e di verifiche sulla push restano non soddisfatti per scelta: firma e verifiche automatiche sono da riattivare (`docs/release/secrets.md`).
 
 ### M10-WP1 Correzioni bloccanti
 
@@ -623,7 +625,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
   - niente `COPY .yarn`, che è ignorato da git;
   - cross-compilazione da `$BUILDPLATFORM` invece di QEMU;
   - stage `wasm` per M9.
-- Wails CLI installata con `scripts/install-wails.sh` in `ci.yml` e `release.yml` (incompatibilità con Go 1.27).
+- Wails CLI installata con `scripts/install-wails.sh` in `ci.yml` e `release.yml` (incompatibilità con Go 1.27); oggi resta solo `release.yml`.
 - `task build-desktop` con `-tags webkit2_41` su Linux; target `docker-build` e `docker-push`.
 
 ### M10-WP2 Canale non firmato
@@ -635,9 +637,9 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ### M10-WP3 Matrice e pubblicazione
 
-- Desktop: macOS universal, Windows amd64 e arm64, Linux amd64 e arm64 (`.deb` + AppImage).
-- Immagini GHCR: semver e `latest` dai tag; cosign, SBOM e provenance (il canale `edge` da `main` è stato tolto nella semplificazione dei workflow).
-- `ci.yml` riusabile (`workflow_call`) come gate dei workflow di rilascio.
+- Desktop: macOS universal, Windows amd64 e arm64, Linux amd64 e arm64 (`.deb` + AppImage). Dalla 1.2.3: macOS universale, Windows amd64, Linux amd64.
+- Immagini GHCR: semver dai tag (`X.Y.Z`, più `X.Y` sulle stabili); cosign, SBOM e provenance tolti nella 1.2.2 (il canale `edge` da `main` era già stato tolto nella semplificazione dei workflow).
+- `ci.yml` riusabile (`workflow_call`) come gate dei workflow di rilascio (rimosso nella 1.2.2: il gate è `task ci` in locale, ADR-0036).
 - Una sola GitHub Release per tag, in bozza salvo `RELEASE_AUTO_PUBLISH=true`.
 - Placeholder: `ghcr.io/ORG` → `ghcr.io/e2br`; `memobrain.example` → variabili `HOMEPAGE_URL` e `UPDATE_BASE_URL`.
 
@@ -653,8 +655,27 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 **Criteri di uscita M10:**
 
 - un tag produce in automatico installer per i cinque target e un'immagine multi-arch firmata su GHCR;
-- una push su `main` verifica, costruisce il desktop su tre sistemi e l'immagine (senza pubblicarla);
+- una push su `main` verifica, costruisce il desktop su tre sistemi e l'immagine (senza pubblicarla) — superato da ADR-0036: nessuna CI sulla push;
 - tutto è verificato su una run reale.
+
+---
+
+## 13-quater. Prossimi passi (post-M10): M11 — Affidabilità e parità
+
+L'analisi del 2026-11-01 (code review a più revisori su `main@70d8c0d`, con verifica avversariale dei rilievi alti e medi) ha prodotto un piano a onde. Lo si registra qui come **M11**; le decisioni sono negli ADR 0036–0039 (stato _proposta_). Ogni onda si chiude con le verifiche (`task ci` e le suite lente dell'area) e un check-in con il proprietario. Stato al 2026-11-01:
+
+| Onda                               | Contenuto                                                                                                                                                                                                                                                            | Stato                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W0 — rete di sicurezza             | ADR-0036; `task ci` ermetico e completo (typecheck, `test-wasm`, `parity`, `check-gen`, binding obbligatori, tag `webkit2_41`); `parity.mjs --check` severo                                                                                                          | fatta; per scelta del proprietario nessun `ci.yml`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| W1 — integrità dei dati nel cloud  | retention con copie di conflitto e `compaction_seq` (ADR-0038, migrazione 0007), paginazione keyset, validatore senza body binari, lock dei job su un pool dedicato, default di `TRUSTED_PROXIES`, riconciliazione sotto lock                                        | fatta; **rinviati** la quota sugli upload dei blob (PUT e tus) e il `PATCH` tus senza transazione aperta durante lo streaming                                                                                                                                                                                                                                                                                                                                 |
+| W2 — integrità dei dati nel client | candidati al merge persistenti e quarantena (ADR-0039), pull fermo su vault bloccato, lock per path in `vault.FS`, «Sovrascrivi» nei conflitti, flush delle modifiche in sospeso al teardown, merge del frontmatter, copia di conflitto prima della sovrascrittura   | fatta                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| W3 — sicurezza e host del web      | core come unico timer di blocco, cancellazione della copia su `vault:locked` con marcatori e overlay, sweep all'avvio, `CoreDeadError` e limiti di tempo nel bridge, rinnovo del token, `persist()`                                                                  | fatta; **rinviati** l'identità stabile del dispositivo web e il modello di capability esteso (oggi 4 capability)                                                                                                                                                                                                                                                                                                                                              |
+| W4 — prestazioni e osservabilità   | metriche e probe del worker, cache e dettagli di `/readyz`, migrazioni sotto advisory lock, ETag e gzip della Web UI, `sizeLimit` dello spool; desktop: chiavi dei link, risoluzione incrementale, candidati alla rinomina, ultimo scan persistito, eventi tipizzati | fatta; **rinviata** la strategia del watcher per vault grandi (fsnotify apre un descrittore per file); baseline `task perf` in [perf/README.md](perf/README.md)                                                                                                                                                                                                                                                                                               |
+| W5 — architettura di parità        | registro delle funzioni e nuovo `parity.mjs`, `Command.requires`, client Go generato e contract test, `@memobrain/cloud-features` con `CloudPort`, ciclo di vita dei vault su console e desktop (ADR-0037)                                                           | fatta (fasi A e B): registro, client Go generato e contract test, `@memobrain/cloud-features` e ciclo di vita dei vault su console, desktop e workbench; **rinviati** la migrazione nel pacchetto di dispositivi, utilizzo e condivisioni (`share.create`/`share.update` sulla console), i feature flag generati dallo schema e la matrice e2e mista                                                                                                          |
+| W6 — documentazione                | README, `CONTRIBUTING.md`, [architecture.md](architecture.md), [desktop-web-sync.md](desktop-web-sync.md), OpenAPI, CHANGELOG, documenti senza promesse di CI; riscrittura di [web-ui.md](web-ui.md) e capitolo utente sul browser                                   | fatta                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| W7 — bassa priorità                | rilievi di priorità bassa (concorrenza minore, audit e sessioni, crittografia: NFC della passphrase, ADR-0034, azzeramento delle chiavi; supply chain), a lotti                                                                                                      | lotti 1 e 2 fatti (audit, SSE, CSV, SRI del worker; NFC ed envelope v2 release N con flag spento; ordine dei lock nei commit, writer dell'indicizzatore, `openVault`, diff deterministico, fine riga, base Excalidraw; pin, versione Wails, Keycloak, segreti segnaposto, preStop); **restano** path token legato al file, azzeramento delle chiavi, tetto alla calibrazione KDF, ordine dei lock nell'eliminazione dell'account, SRI dei chunk del workbench |
+
+**Criteri di uscita M11:** `task ci` verde; suite lente verdi sulle aree toccate (`task test-integration`, `task test-desktop-e2e`, `task e2e`, `e2e:workbench-ui`, `e2e:cloud`); ADR 0036–0039 accettati o rivisti dal proprietario e recepiti nello spec; ogni funzione di gestione dei vault cloud disponibile su console, desktop e workbench secondo il registro.
 
 ---
 
@@ -665,11 +686,11 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 | Unit Go            | `go test -race ./...` (tabelle per parser, pathrules, merge, vaultcrypto, search) | tutti i moduli                                             |
 | Conformance        | fixture `shared/conformance/{markdown,merge,crypto}` eseguite da Go e TS          | `task conformance`                                         |
 | Integrazione cloud | testcontainers (PG, MinIO, Keycloak)                                              | `services/cloud/test/integration`, `task test-integration` |
-| Contratto          | risposte validate contro `openapi.yaml`                                           | `services/cloud/test/contract`                             |
+| Contratto          | richieste e risposte del client validate contro `openapi.yaml`                    | `apps/desktop/internal/sync/transport/contract_test.go`    |
 | E2E sync           | 2 engine desktop contro cloud in container                                        | `apps/desktop/internal/sync/e2e_test.go`                   |
-| Frontend           | Vitest (unit/componenti), Playwright su Wails dev server e su Web UI              | `apps/desktop/frontend/src/test`, `web/src/test`           |
-| Prestazioni        | benchmark Go (`-bench`), k6, dataset sintetici                                    | nightly                                                    |
-| Sicurezza          | govulncheck, yarn npm audit, SBOM, test CSP/no-network                            | CI                                                         |
+| Frontend           | Vitest (unit/componenti), Playwright sul mock dei binding e su Web UI             | `packages/*/src`, `apps/desktop/frontend/e2e`, `web/e2e`   |
+| Prestazioni        | benchmark Go (`-bench`), k6, dataset sintetici                                    | a mano (`task perf`, `task perf-check`)                    |
+| Sicurezza          | govulncheck, yarn npm audit, test CSP/no-network (SBOM da riattivare)             | `task vuln` in `task ci`; e2e di sicurezza a mano          |
 
 Verifica end-to-end di ogni milestone = i "Criteri di uscita" sopra, eseguiti con `task ci` + scenario manuale documentato in `docs/qa/m<N>-checklist.md`.
 

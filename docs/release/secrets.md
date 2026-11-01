@@ -1,10 +1,23 @@
 # Segreti e variabili della pipeline di rilascio
 
-Elenco completo di ciò che si può configurare nel repository GitHub (Settings, Secrets and variables, Actions) perché `release.yml` firmi. **Oggi `release.yml` non legge nessuno di questi segreti né variabili**: costruisce e pubblica senza firmare (vedi `README.md`). Il documento resta come riferimento se la firma viene reintrodotta. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
+## Cosa usa oggi `release.yml`
 
-**Nessun segreto è obbligatorio** (ADR-0031): senza certificati la pipeline produce un canale **non firmato** (installer senza firma, updater disattivato, release segnata come prerelease con la nota "unsigned"). Per tornare al comportamento rigido, in cui un segreto mancante su un tag fa fallire la pipeline, impostare la variabile `REQUIRE_SIGNING=true`. La firma si attiva da sola quando i segreti compaiono: non serve toccare i workflow.
+Dalla 1.2.2 `release.yml` **non legge nessun segreto né variabile del repository**: costruisce e pubblica senza firmare (vedi [README.md](README.md)). Usa solo il `GITHUB_TOKEN` che GitHub crea per ogni run, con permessi minimi per job:
 
-## Cosa succede con o senza ciascun segreto
+| Job                        | Permessi del `GITHUB_TOKEN`         | Uso                                                                |
+| -------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| `image` (immagine cloud)   | `contents: read`, `packages: write` | login e push su GHCR (`ghcr.io/<owner>/memobrain-cloud`)           |
+| `chart` (chart Helm)       | `contents: read`, `packages: write` | `helm registry login` e push OCI su `oci://ghcr.io/<owner>/charts` |
+| `desktop` (installer)      | `contents: read` (default del file) | nessun accesso in scrittura; gli installer sono artefatti del run  |
+| `release` (GitHub Release) | `contents: write`                   | `gh release create` con installer e `SHA256SUMS`                   |
+
+Non serve configurare nulla in Settings, Secrets and variables, Actions. I pacchetti GHCR creati al primo push sono privati: renderli pubblici (Package settings, Change visibility) o concedere l'accesso dalle impostazioni del pacchetto; il chart (`.../charts/memobrain`) è un pacchetto separato. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
+
+## Da riattivare
+
+Il resto di questo documento descrive la pipeline firmata di ADR-0023 e il canale non firmato di ADR-0031, com'erano **fino alla 1.2.1**. La 1.2.2 ha tolto da `release.yml` i passi di firma (Apple, Authenticode), notarizzazione, cosign, SBOM, attestazioni e manifest di aggiornamento: impostare oggi questi segreti **non ha alcun effetto**. Per riattivarli bisogna ripristinare quei passi nel workflow (l'ultima versione completa è quella precedente al commit `4631447`) e poi configurare i segreti sotto. Il riferimento resta utile per quel lavoro.
+
+### Cosa succedeva con o senza ciascun segreto
 
 | Manca                                                | Effetto (`REQUIRE_SIGNING` non impostata)                                                                                     | Con `REQUIRE_SIGNING=true` su un tag |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -14,9 +27,7 @@ Elenco completo di ciò che si può configurare nel repository GitHub (Settings,
 | `UPDATE_SIGNING_KEY` o variabile `UPDATE_PUBLIC_KEY` | Il desktop è compilato con l'updater **disattivato** (`updater.DisabledByBuild`) e non si pubblica nessun manifest.           | La pipeline fallisce in `meta`.      |
 | nessuno dei precedenti                               | Release in prerelease "unsigned", bozza (vedi `RELEASE_AUTO_PUBLISH`). Le immagini Docker restano firmate (cosign è keyless). | La pipeline fallisce in `meta`.      |
 
-Il rilascio parte solo da un tag: non esiste più un dry run da `workflow_dispatch`.
-
-## Variabili (pubbliche, tab Variables)
+### Variabili (pubbliche, tab Variables)
 
 | Nome                    | Uso                                                                                                                                                                                                                                                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -28,15 +39,15 @@ Il rilascio parte solo da un tag: non esiste più un dry run da `workflow_dispat
 | `LINUX_ARM64_RUNNER`    | (opzionale) etichetta di un runner arm64, es. `ubuntu-24.04-arm` (gratuito nei repository pubblici). Senza, nessun installer Linux arm64.                                                                                                                                         |
 | `WINDOWS_TIMESTAMP_URL` | (opzionale) server RFC 3161, default `http://timestamp.digicert.com`.                                                                                                                                                                                                             |
 
-## Segreti (tab Secrets)
+### Segreti (tab Secrets)
 
-### Manifest di aggiornamento (opzionale: senza, niente aggiornamenti automatici)
+#### Manifest di aggiornamento (opzionale: senza, niente aggiornamenti automatici)
 
 | Nome                 | Contenuto                                                                                                                                           |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UPDATE_SIGNING_KEY` | Chiave **privata** ed25519, base64 (64 byte o seed da 32). Generazione: vedi "Generare la chiave" sotto. Custodire anche una copia offline cifrata. |
 
-### macOS (firma e notarizzazione)
+#### macOS (firma e notarizzazione)
 
 | Nome                                   | Contenuto                                                                                    |
 | -------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -48,7 +59,7 @@ Il rilascio parte solo da un tag: non esiste più un dry run da `workflow_dispat
 
 Alternativa locale a `APPLE_API_*`: `NOTARY_KEYCHAIN_PROFILE` (profilo di `xcrun notarytool store-credentials`) oppure `APPLE_ID` + `APPLE_APP_PASSWORD` + `APPLE_TEAM_ID` (`scripts/release/package-macos.sh` accetta tutte e tre le forme).
 
-### Windows (Authenticode)
+#### Windows (Authenticode)
 
 | Nome                      | Contenuto                                                                 |
 | ------------------------- | ------------------------------------------------------------------------- |
@@ -57,11 +68,11 @@ Alternativa locale a `APPLE_API_*`: `NOTARY_KEYCHAIN_PROFILE` (profilo di `xcrun
 
 Un certificato EV su token hardware non è utilizzabile da un runner ospitato da GitHub: serve un runner self-hosted o un servizio di firma in cloud (in quel caso definire direttamente `MEMOBRAIN_SIGNTOOL_CMD`, vedi `build/windows/installer/project.nsi`).
 
-### Immagini OCI e chart Helm
+#### Immagini OCI e chart Helm
 
-Nessun segreto aggiuntivo: la firma `cosign` è **keyless** (identità OIDC del workflow, permesso `id-token: write`) e il push su GHCR usa `GITHUB_TOKEN` (`packages: write`). Il pacchetto GHCR creato al primo push è privato: renderlo pubblico (Package settings, Change visibility) o concedere l'accesso al repository dalle impostazioni del pacchetto. Il package del chart (`.../charts/memobrain`) è separato e va reso pubblico a parte.
+Nessun segreto aggiuntivo: la firma `cosign` era **keyless** (identità OIDC del workflow, permesso `id-token: write`, oggi non concesso) e il push su GHCR usa `GITHUB_TOKEN` (`packages: write`), come oggi.
 
-## Generare la chiave del manifest
+### Generare la chiave del manifest
 
 Su una macchina fidata, offline (il tool stampa solo su stdout, non scrive file):
 
@@ -72,10 +83,10 @@ bin/release gen-key      # private -> segreto UPDATE_SIGNING_KEY, public -> vari
 
 Salvare la chiave privata in un password manager o in un HSM/vault e tenerne una copia offline cifrata. Per ricavare la pubblica da una privata esistente: `MEMOBRAIN_UPDATE_SIGNING_KEY=... bin/release pubkey`. Prima di impostare i segreti verificare la coppia: `bin/release gen-manifest ... && bin/release sign-manifest -in manifest.json && bin/release verify-manifest -in manifest.json -pubkey <pubblica>`.
 
-## Chiave di sviluppo
+### Chiave di sviluppo
 
 Senza `UPDATE_PUBLIC_KEY` una build locale si fida della chiave di sviluppo, derivata da una frase pubblica (`internal/updater/key.go`): **chiunque** può firmare manifest accettati da quei binari. Va bene per test locali, mai per build distribuite: per questo `--release` fallisce, a meno di `ALLOW_UNSIGNED_UPDATES=1` (la pipeline lo imposta quando mancano le chiavi), che compila l'updater **fuori** dal binario.
 
-## Rotazione e compromissione
+### Rotazione e compromissione
 
-Vedi `docs/release/README.md`, sezione "Ruotare la chiave di aggiornamento".
+Vedi [README.md](README.md), sezione «Ruotare la chiave di aggiornamento».

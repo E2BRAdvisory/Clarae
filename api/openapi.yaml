@@ -1,30 +1,172 @@
 openapi: 3.1.0
 info:
   title: MemoBrain Notes Cloud API
-  version: 1.0.0-m2
+  version: 1.3.0
   description: |
     REST contract of the MemoBrain Notes Cloud Service (Specifications.md §3.1, §3.5).
-    This file is the single source of truth: Go server stubs and the TypeScript
-    client are generated from it (`task gen`). Endpoints are added milestone by
-    milestone; see docs/roadmap.md.
+    This file is the single source of truth: the Go server stubs (strict server and
+    request validator), the Go client (`shared/go/apiclient`) and the TypeScript client
+    (`@memobrain/api-client`) are generated from it (`task gen-openapi`).
 
-    Conventions: JSON UTF-8, RFC 3339 UTC timestamps, sizes in bytes, UUID v7
-    identifiers, errors as `application/problem+json` with an application `code`.
+    **Version.** `info.version` is the product version (git tag `vX.Y.Z`) of the
+    release that ships this contract. The URL prefix `/api/v1` only changes with an
+    incompatible revision.
+
+    **Conventions.** JSON UTF-8, RFC 3339 UTC timestamps, sizes in bytes, UUID v7
+    identifiers, errors as `application/problem+json` (RFC 9457) with an application
+    `code` (enum `ErrorCode`). Every operation may also answer `default`
+    (code `INTERNAL`, HTTP 500) on an unexpected failure.
+
+    **Authentication and roles.** Operations take a Keycloak access token as a bearer
+    token (`bearerAuth`; the cloud is an OIDC resource server and validates `iss`,
+    `aud=memobrain-api` and the signature against the realm's JWKS). The
+    `openIdConnect` scheme `oidc` only documents where clients obtain such a token;
+    the issuer of a running instance is returned by `GET /client-config`. Besides a
+    valid token, the account must not be suspended (`USER_SUSPENDED`). Operations
+    marked `x-required-role: memobrain-admin` (the `admin` tag) also require that
+    Keycloak realm role in the token (`realm_access.roles`); without it they answer
+    `403 FORBIDDEN`. Groups never come from the token (D-05).
+
+    **Limits.** Every route, including those outside this contract, is rate limited
+    per client address (token bucket; the address is resolved through
+    `TRUSTED_PROXIES`): responses carry `RateLimit-Limit` and `RateLimit-Remaining`,
+    and an exhausted bucket answers `429 RATE_LIMITED` with `Retry-After` (seconds).
+    Health probes from direct internal callers are exempt. JSON operations have a
+    60 s deadline and a request body of at most 8 MiB (`413 FILE_TOO_LARGE`); the
+    operations that stream bytes (blobs, ZIP exports, personal data export) have no
+    deadline and their own size limits.
+
+    **Routes outside this contract** (ADR-0037 §3): resumable uploads (tus 1.0.0) and
+    the Server-Sent Events stream (`GET /events`) speak their own protocol, so no stub
+    or client is generated for them. They are documented in the root extension
+    `x-memobrain-external-routes`.
 servers:
   - url: /api/v1
 security:
   - bearerAuth: []
 tags:
   - name: system
-    description: Health and readiness (no authentication)
+    description: Health, readiness and public client bootstrap (no authentication)
   - name: me
-    description: Profile, devices and configuration of the authenticated user
+    description: Profile, devices, usage, effective configuration and personal data of the authenticated user
   - name: vaults
-    description: Vault lifecycle, manifest and encryption key envelopes
+    description: Vault lifecycle, tree and encryption key envelopes
   - name: sync
     description: Changelog, blob transfer and commit (§3.4)
   - name: history
     description: File revisions and restore
+  - name: directory
+    description: Users and groups the caller can share with (groups exist only in the cloud database, D-05)
+  - name: sharing
+    description: Shares of folders or whole shared vaults, grants and invitations (§3.4.7); not allowed on private vaults
+  - name: export
+    description: ZIP export of a vault, streamed or as a background job
+  - name: admin
+    description: >-
+      Administration console: users, groups, Config Profiles, storage settings and audit log.
+      Every operation requires the `memobrain-admin` realm role (`x-required-role`)
+
+x-memobrain-external-routes:
+  description: >-
+    Routes served under the same base path, with the same bearer authentication and the same
+    per-client rate limit, but outside the generated contract (ADR-0037 §3). The request
+    validator, the 60 s deadline and the 8 MiB JSON body limit do not apply to them. Errors are
+    `application/problem+json` with the codes of `ErrorCode`. Server:
+    services/cloud/internal/blobs/tus.go and services/cloud/internal/notify/sse.go; client:
+    apps/desktop/internal/sync/transport (tus.go, notify.go).
+  tus:
+    protocol: tus 1.0.0 (extensions creation, termination)
+    description: >-
+      Resumable upload of a blob larger than a single `PUT /vaults/{vaultId}/blobs/{sha256}`
+      accepts (32 MB). Chunks are stored as separate objects, so an upload survives a restart and
+      works across replicas. When the last byte arrives the server assembles the chunks, checks
+      the SHA-256 announced at creation and publishes the blob; the client then references it in
+      `commit` like any other blob. An upload expires after `uploads.expiry_hours` (default 24 h)
+      and is visible only to the user who created it (anyone else gets 404). Every request except
+      OPTIONS must send `Tus-Resumable: 1.0.0` (otherwise 400 VALIDATION_FAILED); every response
+      carries `Tus-Resumable: 1.0.0` and `Cache-Control: no-store`.
+    routes:
+      - method: OPTIONS
+        path: /vaults/{vaultId}/uploads
+        summary: Capabilities of the server
+        responses:
+          '204': 'Tus-Version: 1.0.0, Tus-Extension: creation,termination, Tus-Max-Size (files.max_size_bytes)'
+      - method: POST
+        path: /vaults/{vaultId}/uploads
+        summary: Create an upload (needs the editor level on the vault)
+        query:
+          scope: share scope, as for the other vault operations
+        requestHeaders:
+          Upload-Length: total size in bytes (required, positive, at most files.max_size_bytes)
+          Upload-Metadata: '`sha256 <base64 of the hex digest>` (required)'
+        responses:
+          '201': '`Location: /api/v1/uploads/{uploadId}`'
+          '400': VALIDATION_FAILED (missing or invalid Upload-Length or sha256 metadata)
+          '403': FORBIDDEN (not an editor of the vault)
+          '404': NOT_FOUND (vault)
+          '413': FILE_TOO_LARGE (Upload-Length above the limit)
+      - method: OPTIONS
+        path: /uploads/{uploadId}
+        summary: Capabilities of the server (same answer as above)
+      - method: HEAD
+        path: /uploads/{uploadId}
+        summary: Current offset, to resume
+        responses:
+          '200': Upload-Offset and Upload-Length
+          '404': NOT_FOUND (unknown, expired or someone else's upload)
+      - method: PATCH
+        path: /uploads/{uploadId}
+        summary: Append a chunk at the current offset
+        requestHeaders:
+          Content-Type: application/offset+octet-stream
+          Upload-Offset: offset the chunk starts at; must equal the server offset
+          Content-Length: 1 to 64 MiB
+        responses:
+          '204': new Upload-Offset; after the last chunk the blob is verified and published
+          '400': >-
+            VALIDATION_FAILED: wrong Content-Type or Content-Length, chunk beyond Upload-Length,
+            digest mismatch on the last chunk (the upload is discarded), or an offset mismatch
+            (the answer carries the server offset in the Upload-Offset header and in the
+            problem's `offset` member)
+          '404': NOT_FOUND
+      - method: DELETE
+        path: /uploads/{uploadId}
+        summary: Abandon an upload and drop its chunks (termination extension)
+        responses:
+          '204': upload removed
+          '404': NOT_FOUND
+  events:
+    protocol: Server-Sent Events (text/event-stream)
+    description: >-
+      Notification stream for networks that block the gRPC NotifyService (§3.5.3), with the same
+      events. On connect the server sends a `: connected` comment, then replays what the client
+      missed according to the query parameters, then live events. A `: ping` comment every 25 s
+      keeps proxies from closing an idle stream. The stream ends when the access token expires,
+      after a `token-expired` event: the client renews the token and reconnects. It also ends right
+      after an `account_changed` with kind `suspended`. When the request
+      ends for another reason (client gone, server draining) the stream simply closes and the
+      client reconnects. Response headers: `Cache-Control: no-store`, `X-Accel-Buffering: no`.
+    routes:
+      - method: GET
+        path: /events
+        summary: Open the notification stream of the authenticated user
+        query:
+          known: >-
+            replay positions as `vault_id:seq` pairs separated by commas; a `vault_changed` is
+            replayed for every visible vault whose last seq is higher
+          config: Config Profile revision the client holds; a newer one is replayed as `config_changed`
+        responses:
+          '200': text/event-stream
+          '401': UNAUTHENTICATED
+    eventTypes:
+      vault_changed: '`{"vault_id": "<uuid>", "seq": <int>}`: new commits up to seq (pull `changes?since`)'
+      config_changed: '`{"version": <int>}`: the effective configuration changed (`GET /config/effective`)'
+      share_changed: '`{"share_id": "<uuid>", "kind": "granted|updated|revoked"}`: a share or invitation that concerns the user changed'
+      account_changed: >-
+        `{"kind": "suspended|activated|quota_changed"}`: the account changed; after `suspended` (also sent
+        when the account is deleted) the stream ends and a reconnect is refused
+      token-expired: '`{}`: the access token expired; the stream closes right after'
+      heartbeat: 'the comment line `: ping`, every 25 s (not an event: no `event:` field)'
 
 paths:
   /healthz:
@@ -40,6 +182,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
   /readyz:
     get:
       tags: [system]
@@ -53,12 +199,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '503':
           description: Not ready
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /client-config:
     get:
@@ -74,6 +224,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClientConfig'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /me:
     get:
@@ -96,6 +250,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [me]
       operationId: deleteMyAccount
@@ -125,8 +281,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '429':
           $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /me/devices:
     get:
@@ -152,6 +312,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [me]
       operationId: registerDevice
@@ -179,6 +343,12 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /me/devices/{deviceId}:
     parameters:
@@ -198,6 +368,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /config/effective:
     get:
@@ -229,6 +403,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /me/usage:
     get:
@@ -248,6 +426,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /me/export:
     get:
@@ -278,6 +460,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults:
     get:
@@ -286,6 +470,17 @@ paths:
       security:
         - bearerAuth: []
       summary: Own vaults (and, from M4, shared mounts)
+      parameters:
+        - name: include_deleted
+          in: query
+          required: false
+          description: >-
+            Also list the caller's soft-deleted vaults that can still be restored
+            (deleted within the retention period, `deleted_at` set); they never
+            appear in `mounts`
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: Vaults
@@ -297,6 +492,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [vaults]
       operationId: createVault
@@ -326,6 +525,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}:
     parameters:
@@ -347,6 +552,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     patch:
       tags: [vaults]
       operationId: updateVault
@@ -374,6 +583,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [vaults]
       operationId: deleteVault
@@ -387,6 +602,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}:restore:
     parameters:
@@ -398,20 +617,24 @@ paths:
         - bearerAuth: []
       summary: Restore a soft-deleted vault within the retention period (owner)
       responses:
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '200':
           description: Restored
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Vault'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/tree:
     parameters:
@@ -437,6 +660,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/key-envelopes:
     parameters:
@@ -448,18 +675,22 @@ paths:
         - bearerAuth: []
       summary: Wrapped VMK envelopes of a private vault (owner)
       responses:
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '200':
           description: Envelopes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/KeyEnvelopes'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/key-envelopes/{kind}:
     parameters:
@@ -496,6 +727,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/changes:
     parameters:
@@ -524,14 +761,14 @@ paths:
             default: 500
         - $ref: '#/components/parameters/Scope'
       responses:
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '200':
           description: Changes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Changes'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -544,6 +781,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/blobs:check:
     parameters:
@@ -577,6 +818,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/blobs/{sha256}:
     parameters:
@@ -614,6 +861,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     get:
       tags: [sync]
       operationId: getBlob
@@ -670,6 +921,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/commit:
     parameters:
@@ -680,6 +935,12 @@ paths:
       security:
         - bearerAuth: []
       summary: Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
+      description: >-
+        Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict`
+        or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected`
+        operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and
+        `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the
+        request as a whole (validation, access, body size).
       parameters:
         - $ref: '#/components/parameters/Scope'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -704,6 +965,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/files/{fileId}/revisions:
     parameters:
@@ -743,6 +1010,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/files/{fileId}/revisions/{rev}/content:
     parameters:
@@ -776,6 +1047,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/files/{fileId}/revisions/{rev}:restore:
     parameters:
@@ -792,14 +1067,14 @@ paths:
         - $ref: '#/components/parameters/Scope'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '200':
           description: Restored; the result carries the new revision
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpResult'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -808,6 +1083,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /me/groups:
     get:
@@ -827,6 +1106,10 @@ paths:
                   $ref: '#/components/schemas/GroupMembership'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /directory/users:
     get:
@@ -848,6 +1131,10 @@ paths:
                   $ref: '#/components/schemas/DirectoryUser'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /directory/groups:
     get:
@@ -869,6 +1156,10 @@ paths:
                   $ref: '#/components/schemas/DirectoryGroup'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /shares:
     get:
@@ -897,6 +1188,10 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [sharing]
       operationId: createShare
@@ -924,6 +1219,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /shares/{shareId}:
     parameters:
@@ -945,6 +1246,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     patch:
       tags: [sharing]
       operationId: updateShare
@@ -972,6 +1277,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [sharing]
       operationId: revokeShare
@@ -987,6 +1298,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /shares/{shareId}/grants/{principalType}/{principalId}:
     parameters:
@@ -1020,6 +1335,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [sharing]
       operationId: deleteGrant
@@ -1035,6 +1356,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /shares/{shareId}:accept:
     parameters:
@@ -1056,6 +1381,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /shares/{shareId}:decline:
     parameters:
@@ -1079,6 +1408,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /shared-with-me:
     get:
@@ -1098,11 +1431,16 @@ paths:
                   $ref: '#/components/schemas/Mount'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users:
     get:
       tags: [admin]
       operationId: adminListUsers
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Users, paginated and filtered
@@ -1155,15 +1493,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUserList'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [admin]
       operationId: adminCreateUser
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Create a user (also in Keycloak, with required actions)
@@ -1180,14 +1523,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}:
     parameters:
@@ -1195,6 +1544,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetUser
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: One user
@@ -1211,9 +1561,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     patch:
       tags: [admin]
       operationId: adminUpdateUser
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Change the profile of a user
@@ -1224,31 +1579,36 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateAdminUser'
       responses:
-        '409':
-          $ref: '#/components/responses/Conflict'
         '200':
           description: Updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [admin]
       operationId: adminDeleteUser
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: 'Delete a user: disabled in Keycloak, their vaults enter the retention period'
       responses:
-        '409':
-          $ref: '#/components/responses/Conflict'
         '204':
           description: Deleted
         '401':
@@ -1257,6 +1617,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}:suspend:
     parameters:
@@ -1264,12 +1630,11 @@ paths:
     post:
       tags: [admin]
       operationId: adminSuspendUser
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: 'Suspend: Keycloak account disabled, sessions revoked, access ends within 30 s'
       responses:
-        '409':
-          $ref: '#/components/responses/Conflict'
         '200':
           description: Suspended
           content:
@@ -1282,6 +1647,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}:activate:
     parameters:
@@ -1289,12 +1660,11 @@ paths:
     post:
       tags: [admin]
       operationId: adminActivateUser
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Activate a suspended user
       responses:
-        '409':
-          $ref: '#/components/responses/Conflict'
         '200':
           description: Activated
           content:
@@ -1307,6 +1677,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}:reset-password:
     parameters:
@@ -1314,12 +1690,11 @@ paths:
     post:
       tags: [admin]
       operationId: adminResetPassword
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Require a new password at the next login (and send the e-mail when Keycloak can)
       responses:
-        '409':
-          $ref: '#/components/responses/Conflict'
         '200':
           description: Done
           content:
@@ -1332,6 +1707,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}/role:
     parameters:
@@ -1339,6 +1720,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetUserRole
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Set the global role
@@ -1349,22 +1731,28 @@ paths:
             schema:
               $ref: '#/components/schemas/SetRole'
       responses:
-        '409':
-          $ref: '#/components/responses/Conflict'
         '200':
           description: Updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}/quota:
     parameters:
@@ -1372,6 +1760,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetUserQuota
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: 'Set the quota override: null = default, -1 = unlimited'
@@ -1388,14 +1777,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}/vaults:
     parameters:
@@ -1403,6 +1798,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUserVaults
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Vault metadata only (name, kind, size)
@@ -1421,6 +1817,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}/devices:
     parameters:
@@ -1428,6 +1828,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUserDevices
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Active devices of a user
@@ -1446,6 +1847,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}/sessions:
     parameters:
@@ -1453,6 +1858,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUserSessions
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Open Keycloak sessions of a user
@@ -1471,6 +1877,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/users/{userId}/config/effective:
     parameters:
@@ -1478,6 +1888,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminUserEffectiveConfig
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Preview of the configuration a user receives
@@ -1494,11 +1905,16 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/groups:
     get:
       tags: [admin]
       operationId: adminListGroups
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Groups
@@ -1515,9 +1931,14 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [admin]
       operationId: adminCreateGroup
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Create a group
@@ -1534,14 +1955,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminGroup'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/groups/{groupId}:
     parameters:
@@ -1549,6 +1976,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetGroup
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: One group
@@ -1565,9 +1993,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     patch:
       tags: [admin]
       operationId: adminUpdateGroup
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Rename or describe a group
@@ -1584,19 +2017,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminGroup'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [admin]
       operationId: adminDeleteGroup
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Delete a group with its memberships, grants and assignments
@@ -1609,6 +2049,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/groups/{groupId}/members:
     parameters:
@@ -1616,6 +2060,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListGroupMembers
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Members of a group
@@ -1634,6 +2079,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/groups/{groupId}/members/{userId}:
     parameters:
@@ -1642,6 +2091,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetGroupMember
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Add a member or change their role
@@ -1654,17 +2104,24 @@ paths:
       responses:
         '204':
           description: Done
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [admin]
       operationId: adminRemoveGroupMember
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Remove a member
@@ -1677,6 +2134,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/groups/{groupId}/config-profiles:
     parameters:
@@ -1684,6 +2145,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetGroupProfiles
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Profiles assigned to a group
@@ -1702,9 +2164,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     put:
       tags: [admin]
       operationId: adminSetGroupProfiles
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Replace the profiles assigned to a group
@@ -1717,19 +2184,26 @@ paths:
       responses:
         '204':
           description: Done
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/config-profiles:
     get:
       tags: [admin]
       operationId: adminListConfigProfiles
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Profiles
@@ -1746,9 +2220,14 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [admin]
       operationId: adminCreateConfigProfile
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Create a profile (validated against the schema)
@@ -1765,14 +2244,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigProfile'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/config-profiles/{profileId}:
     parameters:
@@ -1780,6 +2265,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetConfigProfile
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: One profile
@@ -1796,9 +2282,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     put:
       tags: [admin]
       operationId: adminUpdateConfigProfile
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: 'Replace a profile: its version grows and the old one goes to the history'
@@ -1815,19 +2306,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigProfile'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     delete:
       tags: [admin]
       operationId: adminDeleteConfigProfile
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Delete a profile and its assignments
@@ -1840,6 +2338,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/config-profiles/{profileId}/versions:
     parameters:
@@ -1847,6 +2349,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListProfileVersions
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: History of a profile, newest first
@@ -1865,6 +2368,10 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/config-profiles/{profileId}/versions/{version}:restore:
     parameters:
@@ -1873,6 +2380,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminRestoreProfileVersion
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: 'Roll back: an old version becomes the new current one'
@@ -1889,11 +2397,16 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/settings/storage:
     get:
       tags: [admin]
       operationId: adminGetStorageSettings
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Default quota, thresholds, retention
@@ -1908,9 +2421,14 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
     put:
       tags: [admin]
       operationId: adminPutStorageSettings
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Change the storage settings
@@ -1927,17 +2445,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorageSettings'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/storage/overview:
     get:
       tags: [admin]
       operationId: adminStorageOverview
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Totals, top consumers, users over the thresholds, trend
@@ -1952,11 +2477,16 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/storage/bulk-quota:
     post:
       tags: [admin]
       operationId: adminBulkQuota
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Set the quota override of several users at once
@@ -1973,17 +2503,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkQuotaResult'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/audit-log:
     get:
       tags: [admin]
       operationId: adminAuditLog
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: Audit trail, newest first
@@ -2036,17 +2573,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /admin/audit-log.csv:
     get:
       tags: [admin]
       operationId: adminAuditLogCsv
+      x-required-role: memobrain-admin
       security:
         - bearerAuth: []
       summary: The audit trail as CSV (same filters, up to 50000 rows)
@@ -2086,12 +2628,16 @@ paths:
             text/csv:
               schema:
                 type: string
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/export.zip:
     parameters:
@@ -2122,6 +2668,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/exports:
     parameters:
@@ -2145,6 +2695,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/exports/{exportId}:
     parameters:
@@ -2167,6 +2721,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
   /vaults/{vaultId}/exports/{exportId}/download:
     parameters:
@@ -2194,6 +2752,10 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
 
 components:
   securitySchemes:
@@ -2202,6 +2764,15 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Keycloak access token with `aud=memobrain-api`
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://keycloak.example.com/realms/memobrain/.well-known/openid-configuration
+      description: >-
+        Where clients obtain the access token used as `bearerAuth` (documentation only: no operation
+        references this scheme). The URL is `<issuer>/.well-known/openid-configuration`, where the
+        issuer is the Keycloak realm URL (`OIDC_ISSUER`, also returned by `GET /client-config`). The
+        desktop uses Authorization Code + PKCE with its own public client, the Web UI another public
+        client (`desktop_client_id`, `web_client_id`).
 
   parameters:
     VaultId:
@@ -2353,11 +2924,34 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     RateLimited:
-      description: Too many requests (code RATE_LIMITED); honour Retry-After
+      description: >-
+        Too many requests from this client address (code RATE_LIMITED; the problem carries
+        `retry_after`). Applies to every route; retry after the given number of seconds
       headers:
         Retry-After:
+          description: Seconds to wait before retrying
           schema:
             type: integer
+        RateLimit-Limit:
+          description: Size of the client's bucket (burst)
+          schema:
+            type: integer
+        RateLimit-Remaining:
+          description: Requests left in the bucket (0 on this answer)
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PayloadTooLarge:
+      description: Request body larger than 8 MiB (code FILE_TOO_LARGE)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server failure (code INTERNAL, HTTP 500); the problem carries the request id to quote
       content:
         application/problem+json:
           schema:
@@ -2659,7 +3253,7 @@ components:
             $ref: '#/components/schemas/Vault'
         mounts:
           type: array
-          description: "Shared mounts of other owners' vaults (empty until M4)"
+          description: 'Always empty: shares received from other owners are listed by GET /shares?scope=received (kept for compatibility)'
           items:
             $ref: '#/components/schemas/Vault'
 
@@ -2720,7 +3314,7 @@ components:
         wrapped_vmk:
           type: string
           format: byte
-          description: 'nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag, standard base64 (60 bytes)'
+          description: 'Standard base64. v1 (60 bytes): nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag; v2 (61 bytes, ADR-0034): 0x02 ‖ nonce ‖ AES-256-GCM(KEK, VMK; AAD) ‖ tag'
 
     KeyEnvelope:
       allOf:

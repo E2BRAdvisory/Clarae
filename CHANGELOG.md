@@ -2,6 +2,90 @@
 
 Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file: il workflow di release le allega alla release (`scripts/release/notes.sh`).
 
+Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
+
+## [Unreleased]
+
+Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancellazione per le copie dei vault privati nel browser, prestazioni e osservabilità del worker, e le basi della parità desktop/web/console. Le decisioni sono negli ADR 0036–0039, ancora in stato di proposta.
+
+### Verifiche (ADR-0036)
+
+- **Nessun servizio di CI:** `task ci` è il controllo ufficiale da eseguire prima di ogni merge e di ogni tag. Ora comprende anche typecheck di tutti i pacchetti TypeScript, test del core in WebAssembly, controllo di parità e controllo del codice generato (`task check-gen`), e funziona su un clone pulito e su Linux. Il test che confronta dispatcher e binding generati fallisce invece di essere saltato.
+
+### Cloud
+
+- **Retention dello storico** (ADR-0038): non si blocca più su una copia di conflitto (migrazione `0007_retention_fixes.sql`); quando cancella un'operazione strutturale fa avanzare `compaction_seq`, così un client rimasto indietro riceve `410 CURSOR_EXPIRED` e riparte dall'albero invece di applicare un changelog con dei buchi; scorre i candidati con una paginazione keyset.
+- **Memoria:** il validatore delle richieste non legge più in memoria il corpo degli upload dei blob.
+- **Job del worker:** gli advisory lock usano un pool dedicato (prima un pool piccolo poteva bloccare lo scheduler); la riconciliazione di quote e riferimenti ai blob corregge riga per riga sotto lock invece di scrivere uno snapshot vecchio.
+- **Limite per IP dietro un proxy:** il chart Helm e il compose impostano un default per `TRUSTED_PROXIES` (reti private); prima tutti gli utenti dietro l'ingress condividevano un solo contatore.
+- **Osservabilità del worker:** `/metrics`, `/healthz` e `/readyz` su un listener interno (`METRICS_LISTEN_ADDR`, default `127.0.0.1:18083`); il worker aspetta lo schema e le migrazioni sono serializzate da un advisory lock. `/readyz` tiene in cache i controlli per 2 s e dà il dettaglio solo ai chiamanti interni; l'etichetta del metodo HTTP nelle metriche ha un insieme chiuso di valori.
+- **Web UI incorporata:** asset con ETag e compressione gzip; i file temporanei di upload ed export lasciati da un processo interrotto vengono rimossi all'avvio, e lo spool ha un `sizeLimit` nel chart.
+- **API:** `GET /vaults?include_deleted=true` elenca anche i vault eliminati ancora ripristinabili. Lo stream SSE termina subito dopo la sospensione dell'account, come quello gRPC.
+- **Contratto OpenAPI** (`info.version` ora segue la versione del prodotto, 1.3.0): risposte `429`, `413` e `default` documentate su tutte le operazioni, `x-required-role: memobrain-admin` sulle operazioni di amministrazione, schema `openIdConnect`, upload tus e stream SSE descritti nell'estensione `x-memobrain-external-routes`.
+
+### Client desktop e workbench
+
+- **Sync senza perdite** (ADR-0039): i candidati al merge sono salvati in `sync.db` nella stessa transazione del cursore (`pending_remote`); un vault bloccato a metà ciclo ferma il pull prima che il cursore avanzi; un path che non si decifra va in quarantena invece di essere saltato o di mandare nel cestino il file locale; la copia di conflitto si scrive prima di sovrascrivere l'originale, con nomi troncati su confini UTF-8.
+- **Scritture concorrenti:** un lock per path in `vault.FS` impedisce che la sync e il salvataggio dall'editor si sovrascrivano a vicenda.
+- **Editor:** «Sovrascrivi» in un conflitto con una modifica esterna funziona; le modifiche ancora in attesa di salvataggio vengono scritte prima di chiudere il vault, la finestra o un tab, prima di caricare un workspace e prima di tornare alla console.
+- **Merge del frontmatter:** chiavi duplicate o righe ambigue producono un conflitto invece di essere scartate in un merge «pulito» (nuove fixture in `shared/conformance/merge`).
+- **Prestazioni:** chiavi dei link nell'indice e risoluzione incrementale (niente più risoluzione di tutto il vault a ogni creazione o cancellazione), candidati alla rinomina dall'indice, il primo scan della sync non ricalcola più l'hash di tutto il vault, eventi `vault:file-changed` tipizzati (create, modify, delete) con aggiornamenti mirati dell'interfaccia, meno perdite di memoria negli embed.
+
+### Workbench web
+
+- **Copie in chiaro dei vault privati:** il core è l'unico timer di inattività e rispetta il profilo; quando il vault si blocca, la copia nel browser viene cancellata se il cloud ha tutto, altrimenti resta con un avviso bloccante (sblocca, elimina comunque, torna alla console). All'avvio si rimuovono le copie lasciate da un tab chiuso, tranne quelle con modifiche non inviate; logout e «Dimentica questo browser» avvisano se una copia ha modifiche non inviate (D-04).
+- **Affidabilità:** se il core si ferma la pagina lo dice invece di restare bloccata; le chiamate di avvio hanno un limite di tempo; il token si rinnova senza ricaricare la pagina e, se il rinnovo fallisce, le modifiche vengono scritte prima del login.
+
+### Parità e contratti (ADR-0037, in corso)
+
+- **Registro delle funzioni** `shared/parity/features.yaml`, con un `scripts/parity.mjs` che legge i comandi a runtime e verifica funzioni, comandi, binding e operazioni REST (`task parity`); campo `Command.requires` per i comandi che dipendono da una capability.
+- **Client Go generato** da `api/openapi.yaml` (`shared/go/apiclient`), usato dal trasporto della sync del core; contract test del client contro il server reale e test che allinea l'enum `ErrorCode` ai codici di `shared/go/syncproto`.
+- **`@memobrain/cloud-features`:** la gestione dei vault cloud scritta una volta per console, desktop e workbench, dietro l'interfaccia `CloudPort`. In corso: il ciclo di vita dei vault (creazione, rinomina, eliminazione logica e ripristino) su console e desktop.
+
+### Documentazione
+
+- Nuovi `CONTRIBUTING.md`, `docs/architecture.md` e `docs/desktop-web-sync.md`; README con struttura del repository e indice della documentazione; i documenti non promettono più una CI (ADR-0036).
+- ADR in stato di proposta: 0036 (verifiche locali), 0037 (registro delle funzioni e cloud-features), 0038 (retention e changelog), 0039 (`sync.db`).
+
+### Sviluppo
+
+- Linux: `task dev-desktop` e `task build-desktop` usano il tag `webkit2_41` dove c'è solo `webkit2gtk-4.1`; il runtime JavaScript di Wails in `apps/desktop/frontend/wailsjs/runtime` è versionato.
+
+## [1.2.4] - 2026-10-31
+
+Solo la pipeline di rilascio: nessuna modifica all'app o al cloud.
+
+### Rilascio
+
+- Tutte le action di `release.yml` passano alla major che gira su Node.js 24: sparisce l'avviso di deprecazione di Node.js 20.
+
+## [1.2.3] - 2026-10-31
+
+Solo la pipeline di rilascio.
+
+### Rilascio
+
+- **macOS:** la build gira su `macos-15`, dopo il fermo programmato del runner `macos-14`.
+- **Windows arm64:** l'installer non viene più prodotto. Restano macOS universale, Windows amd64 e Linux amd64.
+
+## [1.2.2] - 2026-10-31
+
+Un solo workflow, che costruisce e pubblica.
+
+### Rilascio
+
+- `release.yml`, su un tag, pubblica l'immagine multi-arch del cloud e il chart Helm su GHCR, costruisce gli installer desktop e crea la GitHub Release con `SHA256SUMS`. Non firma nulla: niente cosign, SBOM, attestazioni né manifest di aggiornamento, e l'updater resta compilato fuori dai binari.
+- Rimossi `ci.yml` e `security.yml`: lint, test e scansioni si eseguono in locale con `task ci` (poi ADR-0036).
+
+## [1.2.1] - 2026-10-31
+
+Correzioni della pipeline di rilascio dopo il cambio del nome del prodotto.
+
+### Rilascio
+
+- Nome dei file degli installer e ricerca del bundle dell'app corretti dopo il cambio del nome del prodotto in `wails.json` (installer NSIS, `.dmg`, script di avvio).
+- Allineamenti per la verifica: due test con errori di tipo, la specifica OpenAPI incorporata nel binario rigenerata, il controllo del codice generato esteso ai pacchetti sqlc di ogni modulo.
+
 ## [1.2.0] - 2026-10-30
 
 Correzioni di affidabilità nel cloud e nella sync, ricerca più pertinente, footnote inline, template per le nuove note e import di Google Keep in HTML. Dentro, il cloud separa l'accesso ai dati per modulo.

@@ -1,65 +1,202 @@
-# Web UI (M4-WP5)
+# Web UI
 
-Single page application React 19 + TypeScript (esbuild, ADR-0025), compilata e incorporata nel binario cloud. In M4 contiene solo l'**area utente**; la console admin arriva in M5 (`/admin` è un segnaposto visibile solo al ruolo realm `memobrain-admin`).
+La Web UI è un'applicazione React 19 + TypeScript costruita con esbuild ([ADR-0025](adr/0025-desktop-frontend-esbuild.md)). La build di produzione (`web/dist`) viene copiata in `services/cloud/web-embed/dist` e incorporata nel binario del cloud con `go:embed`. Il router del cloud passa alla SPA ogni percorso che l'API non gestisce (`NotFound` in `services/cloud/internal/httpserver/server.go`, `httpserver.Deps.WebUI`), quindi `/api/*`, `/metrics` e `/events` non cambiano.
+
+Ha tre parti:
+
+| Parte                   | Pagina                                     | Per chi                                                                                                                                                                                                                                                                 |
+| ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Console utente**      | `index.html` (SPA)                         | ogni utente autenticato: vault, dispositivi, condivisioni, spazio, account                                                                                                                                                                                              |
+| **Console admin**       | `index.html`, sotto `/admin`               | ruolo realm `memobrain-admin`. La UI nasconde solo le voci: l'autorizzazione vera è sul server (ogni operazione con `x-required-role: memobrain-admin` in `api/openapi.yaml` risponde `FORBIDDEN` senza il ruolo, `admin()` in `services/cloud/internal/admin/http.go`) |
+| **Workbench del vault** | `workbench.html`, rotta `/vaults/:id/open` | la stessa UI del desktop (`@memobrain/workbench`) sul core Go del desktop compilato in WebAssembly ([ADR-0029](adr/0029-web-workbench.md), [ADR-0030](adr/0030-desktop-core-wasm.md)). Guida per gli sviluppatori: [desktop-web-sync.md](desktop-web-sync.md)           |
+
+Console e workbench sono due documenti HTML distinti, con bundle, foglio di stile e CSP propri: lo stile globale della UI desktop non deve toccare la console, e la console mantiene la politica più stretta. Si passa dall'una all'altro sempre con un caricamento completo della pagina.
 
 ## Struttura
 
-| Percorso                   | Contenuto                                                                                                                                            |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web/`                     | App (`@memobrain/web`): `src/auth` (OIDC, guardie), `src/api` (hook react-query), `src/pages`, `src/layout`, `src/i18n` (it/en), `e2e/` (Playwright) |
-| `packages/ui`              | Design system (`@memobrain/ui`): token CSS chiaro/scuro, tabella, form, bottone, dialog, badge, barra quota, empty state, toast, errore inline       |
-| `packages/api-client`      | Client openapi-fetch generato da `api/openapi.yaml`; `unwrap()` lancia `ApiError` con `status` e `code` RFC 9457                                     |
-| `services/cloud/web-embed` | Pacchetto Go con `go:embed` di `dist/`, fallback SPA, CSP, header di sicurezza, cache                                                                |
+| Percorso                   | Contenuto                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `web/` (`@memobrain/web`)  | `src/auth` (OIDC, guardie, doppio di test), `src/api` (hook react-query, errori), `src/pages` (pagine della console utente, `pages/admin/*` per l'amministrazione), `src/layout` (`Shell`, tema, `ForgetBrowser`), `src/workbench` (host del browser del workbench), `src/export` (download ZIP), `src/i18n` (it/en); test Playwright in `e2e/`, `e2e-cloud/`, `e2e-security/` |
+| `packages/ui`              | design system (`@memobrain/ui`): componenti React e CSS senza runtime. `styles.css` (token `--nd-*` chiaro/scuro e regole globali, per la console) importa `components.css` (solo classi `nd-*`), che il workbench può caricare da solo senza le regole globali                                                                                                                |
+| `packages/cloud-features`  | gestione dei vault cloud scritta una volta per console, desktop e workbench ([ADR-0037 §2](adr/0037-registro-funzioni-e-cloud-features.md)): `CloudPort`, `RestCloudPort`, `CloudVaultsTable`, `NewVaultDialog`. Dettagli e regole nel [README del pacchetto](../packages/cloud-features/README.md)                                                                            |
+| `packages/api-client`      | client `openapi-fetch` generato da `api/openapi.yaml` (`src/gen/schema.d.ts`, non editare a mano); `createClient` aggiunge il bearer token, `unwrap()` lancia `ApiError` con `status` e `code` (RFC 9457)                                                                                                                                                                      |
+| `packages/vaultcrypto-web` | crittografia dei vault privati in TypeScript (Argon2id con `hash-wasm`, envelope v1/v2, path, blob, ZIP in streaming), verificata con i test vector condivisi con Go. La console la usa solo per l'export ZIP dei vault privati                                                                                                                                                |
+| `packages/sqlite-bridge`   | bridge sincrono tra il driver `database/sql` del core in WebAssembly (`apps/desktop/internal/sqlitejs`) e sqlite-wasm, nello stesso worker                                                                                                                                                                                                                                     |
+| `services/cloud/web-embed` | pacchetto Go che serve la build incorporata: scelta della pagina, fallback SPA, CSP e header di sicurezza, cache, gzip. `cmd/webembed-serve` serve solo la Web UI con l'handler di produzione (per i test di sicurezza nel browser)                                                                                                                                            |
 
-Rotte: `/usage` (Spazio utilizzato), `/vaults`, `/devices`, `/shares`, `/admin` (placeholder), `/auth/callback` (pubblica). Il download ZIP è rinviato a M5.
+## Rotte
 
-## Flusso di autenticazione
+Rotte della console (`web/src/App.tsx`, tutte dentro `RequireAuth` tranne il callback):
 
-1. All'avvio la SPA legge `GET /api/v1/client-config` (pubblico): `issuer`, `web_client_id` (default `memobrain-web`, env `OIDC_WEB_CLIENT_ID`), `audience`.
-2. `oidc-client-ts` esegue Authorization Code + PKCE (S256) contro Keycloak con il client pubblico `memobrain-web`; redirect `<origin>/auth/callback`. Le redirect URI del realm (`deploy/keycloak/realm-memobrain.json`) coprono `http://localhost:5174/*` e `http://localhost:18081/*`.
-3. Token e stato PKCE stanno solo in `sessionStorage` (spariscono alla chiusura della scheda). Il rinnovo è automatico con il refresh token (nessun iframe: la CSP lo vieterebbe); se il rinnovo fallisce, a scadenza del token l'utente viene scollegato localmente e la guardia lo rimanda al login. Una risposta `401` dall'API riavvia il login.
-4. `RequireAuth` reindirizza gli anonimi al login ricordando il percorso richiesto (`state.returnTo`, accettati solo percorsi same-origin). `RequireRole` mostra "Non consentito" senza il ruolo; l'admin è letto da `realm_access.roles` dell'access token (solo per la UI: l'autorizzazione vera resta sul server).
+| Rotta                                                                    | Pagina                                                                                                 | Ruolo             |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------- |
+| `/auth/callback`                                                         | scambio del codice OIDC                                                                                | pubblica          |
+| `/`                                                                      | reindirizza a `/usage`                                                                                 | autenticato       |
+| `/usage`, `/vaults`, `/devices`, `/shares`, `/account`                   | spazio, vault, dispositivi, condivisioni, account                                                      | autenticato       |
+| `/admin` → `/admin/storage`                                              | console admin (`AdminLayout`)                                                                          | `memobrain-admin` |
+| `/admin/storage`, `/admin/limits`                                        | spazio del server; quota predefinita, soglie, conservazione dello storico, dimensione massima dei file | `memobrain-admin` |
+| `/admin/users`, `/admin/users/:id`, `/admin/groups`, `/admin/groups/:id` | utenti (con quote di massa) e gruppi                                                                   | `memobrain-admin` |
+| `/admin/config`, `/admin/config/:id`, `/admin/audit`                     | Config Profile (con versioni); registro di audit (con export CSV)                                      | `memobrain-admin` |
+| altro                                                                    | "Pagina non trovata"                                                                                   | autenticato       |
 
-## CSP, SRI, cache
+L'uso delle funzioni admin è descritto nella [guida dell'amministratore](admin-guide/README.md).
 
-`web-embed` risponde con `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' <origine dell'issuer>; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'`, più `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy`. HSTS non è impostato dall'app (il TLS termina all'ingress).
+Rotte del workbench (pagina `workbench.html`, `web/src/workbench/main.tsx`):
 
-- Niente script o stile inline: la barra quota usa `<progress>` (nativo), il build non emette `<style>`/`style=`, `modulePreload.polyfill` è disattivato.
-- **SRI**: lo script `web/scripts/esbuild.mjs` (plugin `index-html`) aggiunge `integrity="sha384-…"` e `crossorigin` a script e stylesheet di `index.html` dopo la scrittura del bundle.
-- Cache: `/assets/*` (nome con hash) `public, max-age=31536000, immutable`; `index.html` e gli altri file `no-cache`. Percorsi non-API senza estensione → `index.html` (fallback SPA); file mancante con estensione → 404; `/api/*` non è mai oscurato (404 `problem+json` dell'API).
-- Il router monta la SPA nel `NotFound` (`httpserver.Deps.WebUI`), quindi `/api/*`, `/metrics` e `/events` restano invariati.
+| Rotta                                  | Cosa apre                                                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `/vaults/:id/open`                     | il vault cloud `:id`, collegato a questo browser come dispositivo                                                                    |
+| `/vaults/:id/open?share=<id>`          | una condivisione ricevuta, come mount (`SharingAPI.OpenMount`)                                                                       |
+| `/vaults/new/open?kind=private&name=…` | creazione di un vault privato nel browser (vedi sotto); altri valori di `kind` o un nome vuoto o oltre 120 caratteri danno un errore |
 
-Hook di test OIDC: con `MEMOBRAIN_E2E=1` (solo dev server/Playwright) `main.tsx` carica `auth/e2e.ts`, che legge l'utente da `sessionStorage['memobrain.e2e.user']`. `import.meta.env.MEMOBRAIN_E2E` è una costante (`define` di esbuild) di build: nei build di produzione il ramo e il modulo spariscono (verificabile con `grep -r "memobrain.e2e" web/dist`).
+Nelle build E2E il workbench accetta anche `?local` (apre una cartella del browser senza cloud) e `?fstrace` (log delle chiamate al file system).
 
-## Workbench del vault (M9-WP5, ADR-0029/0030)
+**Instradamento lato server** (`web-embed`; il dev server di `web/scripts/esbuild.mjs` sceglie la pagina allo stesso modo e inoltra `/api/` al cloud):
 
-Dalla Web UI si apre un vault nel browser con la stessa interfaccia del desktop. È una **pagina a sé** (`/vaults/:id/open`, con `?share=<id>` per un mount): ha un proprio HTML (`workbench.html`) e un proprio foglio di stile, perché lo stile globale della UI desktop non deve toccare la console. "Apri" nella tabella dei vault e nelle condivisioni accettate è un link, quindi un caricamento completo della pagina.
+- un percorso che corrisponde a `^/vaults/[^/]+/open/?$` riceve `workbench.html` con la sua CSP; se la build non ha `workbench.html` riceve la console;
+- `/api` e `/api/*` non sono mai serviti dalla SPA (404 semplice; un percorso sconosciuto sotto `/api/v1` riceve dal router il 404 `problem+json` dell'API);
+- un file esistente nella build viene servito così com'è;
+- un percorso inesistente **con** estensione è un 404 (un asset sbagliato non diventa HTML);
+- ogni altro percorso riceve `index.html` (fallback SPA), compreso `/auth/callback`;
+- solo `GET` e `HEAD`; gli altri metodi rispondono 405.
 
-| Pezzo          | Dove                                     | Cosa fa                                                                                                                                |
-| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Entry e lancio | `web/src/workbench/{main.tsx,launch.ts}` | login OIDC, blocco a una scheda (Web Locks), avvio del core, collegamento del vault (`OpenVault` + `LinkExisting`), montaggio della UI |
-| Worker         | `web/src/workbench/worker.ts`            | file system su OPFS, SQLite (`opfs-sahpool`), host, programma Go                                                                       |
-| `fs` su OPFS   | `web/src/workbench/opfs-fs.ts`           | fornisce a Go `fs`, `path` e `process`: il pacchetto `os` del core non cambia                                                          |
-| Bridge         | `web/src/workbench/bridge.ts`            | RPC verso il worker, installa `window.go` e `window.runtime` per i moduli Wails generati                                               |
-| Inattività     | `web/src/workbench/idle.ts`              | dopo 15 min senza input un vault **privato** si blocca, la copia in chiaro si cancella dal browser e si torna alla console             |
+## Autenticazione
 
-- **Build:** `task web-build` costruisce prima il core (`task wasm-core`) e i binding Wails (`packages/workbench/wailsjs`, se mancano), poi la SPA. `web/scripts/esbuild.mjs` emette `index.html` e `workbench.html`, il worker (`assets/core-worker-<hash>.js`) e `core/*.wasm.gz` con il nome contenente l'hash; l'integrità SHA-384 dei WASM è nel bundle e il worker la verifica con `fetch(..., { integrity })`. Senza il core (nessuna toolchain Go) la pagina lo dice invece di fallire.
-- **Budget** (ADR-0020): console 700/1000 kB; workbench 2500/23000 kB; core ≤ 8 MB e sqlite ≤ 1,5 MB, misurati in gzip.
-- **Serving** (`services/cloud/web-embed`): `/vaults/:id/open` risponde con `workbench.html` e una CSP dedicata (`style-src 'unsafe-inline'` per CodeMirror/KaTeX/Excalidraw, `worker-src 'self'`, `img-src data: blob:`, `connect-src` con l'issuer e `blob:`; mai script inline, mai `eval`, mai altre origini). I `.wasm` si conservano come `.wasm.gz` e si servono così a chi accetta gzip, decompressi agli altri. La console mantiene la CSP stretta.
-- **Una scheda sola:** i file e i database del browser si tengono con handle sincroni esclusivi, quindi un solo workbench per browser (qualsiasi vault). La seconda scheda mostra "già aperto in un'altra scheda".
-- **Test:** `web/e2e/opfs-fs.spec.ts` (lo shim `fs`, in un worker vero), `web/e2e/workbench.spec.ts` (UI + core vero: scrittura, ricerca FTS, link, rinomina, storia, download ZIP, grafo, persistenza al reload, blocco e cancellazione), `web/e2e-security/workbench-csp.spec.ts` (build minificata servita dall'handler Go di produzione, senza violazioni CSP né richieste esterne). In build E2E `?local` apre una cartella del browser senza cloud.
+1. All'avvio la SPA legge `GET /api/v1/client-config` (pubblico, [ADR-0008](adr/0008-client-config-endpoint.md)): `issuer`, `web_client_id` (default `memobrain-web`, variabile `OIDC_WEB_CLIENT_ID`) e `audience`.
+2. `oidc-client-ts` esegue Authorization Code + PKCE contro Keycloak con il client pubblico `memobrain-web`; redirect su `<origin>/auth/callback`, scope `openid profile email`. Le redirect URI del realm di sviluppo (`deploy/keycloak/realm-memobrain.json`) coprono `http://localhost:5174/*` e `http://localhost:18081/*`.
+3. Token e stato PKCE stanno solo in `sessionStorage` e spariscono alla chiusura della scheda.
+4. **Rinnovo** (`web/src/auth/oidc.ts`), sempre con il refresh token e mai con un iframe nascosto (la CSP lo vieterebbe):
+   - `automaticSilentRenew` di oidc-client-ts rinnova prima della scadenza;
+   - `getUser()` rinnova anche quando il token scade entro `RENEW_MARGIN_S` = 30 secondi, o è già scaduto (per esempio dopo la sospensione del portatile). I chiamanti concorrenti, compreso il core del workbench che chiede token, condividono un solo rinnovo;
+   - se il rinnovo fallisce, un token ancora valido si usa finché dura; un token scaduto fa uscire l'utente localmente;
+   - all'evento di token scaduto si tenta un ultimo rinnovo, poi l'utente viene rimosso e la guardia lo rimanda al login.
+5. Una risposta `401` dall'API (query o mutation) riavvia il login sul percorso corrente.
+6. **Workbench:** quando il core chiede un token e la sessione non si può rinnovare, la pagina scrive prima le modifiche in sospeso (`flush()` del workbench, al massimo 5 s) e poi va al login, una volta sola (`getToken` in `web/src/workbench/launch.ts`).
+7. **Guardie** (`web/src/auth/guards.tsx`): `RequireAuth` manda gli anonimi al login ricordando percorso e query; `RequireRole` mostra "Non consentito" senza il ruolo. I ruoli si leggono da `realm_access.roles` dell'access token, solo per la UI.
+8. **`returnTo`:** viaggia nello `state` OIDC e al ritorno si accettano solo percorsi same-origin (che iniziano con `/` ma non con `//`), altrimenti `/`. Se il percorso è una rotta del workbench, `/auth/callback` lo carica con `location.replace` invece di navigare nel router della console.
+
+**Doppio di test.** Con `MEMOBRAIN_E2E=1` (dev server di Playwright e build E2E) `main.tsx` e `workbench/main.tsx` caricano `auth/e2e.ts`, che legge l'utente da `sessionStorage['memobrain.e2e.user']` e manda il login su `/e2e-signin` (intercettato dai test). `import.meta.env.MEMOBRAIN_E2E` è una costante di build (`define` di esbuild): nelle build di produzione il ramo e il modulo spariscono. Si verifica con `command grep -r "memobrain.e2e" web/dist`, che non deve trovare nulla.
+
+## Gestione dei vault nella console
+
+| Funzione               | Dove                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Elenco e ciclo di vita | `/vaults` (`web/src/pages/Vaults.tsx`) monta `CloudVaultsTable` su un `RestCloudPort`: elenco (`GET /vaults`) con dimensione, file e data di creazione; _Apri_ (link a `/vaults/:id/open`); _Rinomina_ (`PATCH`); _Elimina_ con conferma (`DELETE`, eliminazione logica con conservazione); sezione _Vault eliminati_ (`GET /vaults?include_deleted=true`) con _Ripristina_ (`POST /vaults/{id}:restore`). L'API non espone i giorni di conservazione, quindi la console non mostra la data di rimozione definitiva. Dopo ogni modifica si invalidano le query `vaults` e `usage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Nuovo vault            | un vault **condiviso** si crea via REST (`POST /vaults` con `Idempotency-Key`); un vault **privato** apre il workbench sulla rotta di creazione `/vaults/new/open?kind=private&name=…`, perché envelope e chiave di recupero li produce il core Go e la console non duplica la crittografia ([ADR-0037 §2](adr/0037-registro-funzioni-e-cloud-features.md)). Con `web_workbench` spento la creazione di vault privati e _Apri_ non sono offerti                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Condivisi con me       | sezione costruita dalle condivisioni ricevute e accettate (`GET /shares?scope=received`, `my_status = accepted`), ognuna aperta come mount con `/vaults/<vault_id>/open?share=<id>`. Il campo `mounts` di `GET /vaults` non viene usato: il server lo restituisce sempre vuoto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Download ZIP           | colonna aggiuntiva della tabella (`VaultExport.tsx`). **Condiviso:** prima lo stream diretto `GET /vaults/{id}/export.zip`; se il server risponde `409 INVALID_STATE` (vault troppo grande) crea un job (`POST /vaults/{id}/exports`) e lo interroga ogni 2 s fino al link di download (`web/src/export/sharedExport.ts`). **Privato:** passphrase o chiave di recupero, poi `key-envelopes`, `tree` e blob cifrati dall'API, decifrati e compressi nel browser da `@memobrain/vaultcrypto-web` (`web/src/export/privateExport.ts`). Apre envelope v1 e v2 ([ADR-0034](adr/0034-envelope-aad.md), [crypto-design.md §5.3](security/crypto-design.md#53-envelope-della-vmk-v1-e-v2-adr-0034)) e prova la passphrase normalizzata NFC prima delle forme grezze ([§5.4](security/crypto-design.md#54-normalizzazione-della-passphrase)); rifiuta parametri KDF deboli. Lo ZIP va su disco in streaming con la File System Access API, altrimenti in un Blob (avviso oltre 500 MB). Le chiavi restano in memoria e si cancellano alla chiusura del dialogo |
+| Dispositivi            | `/devices`: elenco e revoca                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Spazio                 | `/usage`: spazio usato e quota (barra con soglie)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Condivisioni           | `/shares`: condivisioni dei propri vault (grant a utenti e gruppi con ricerca nella directory, permessi `viewer`/`editor`/`manager`, revoca), inviti ricevuti da accettare o rifiutare, apertura di quelli accettati nel workbench                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Account                | `/account`: export dei dati personali (GDPR, `GET /me/export`, file JSON); _Dimentica questo browser_; eliminazione dell'account (`DELETE /me`, conferma con lo username e, se ci sono vault privati, presa d'atto della perdita dei dati)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+**Dimentica questo browser** (`web/src/layout/ForgetBrowser.tsx`, `web/src/workbench/forget.ts`) cancella le copie dei vault che il workbench tiene in OPFS (cartelle `fs` e `memobrain-sqlite`) e i loro marker. Lo usano sia il pulsante della pagina Account sia **Esci** (`Shell`), che esce comunque anche se la cancellazione fallisce.
+
+- Se i marker dicono che una copia ha modifiche non caricate o conflitti, un dialogo elenca i vault e chiede conferma prima di cancellare (D-04).
+- Se un workbench aperto in un'altra scheda tiene i file (`NoModificationAllowedError`/`InvalidStateError`), il risultato è `busy` e il dialogo offre _Riprova_ o _Chiudi quella scheda e riprova_. Quest'ultima manda la richiesta `leave` sul `BroadcastChannel` `memobrain-workbench`: la scheda carica, blocca e cancella ciò che può, poi torna alla console. La console riprova ogni secondo per al massimo 20 s; se la scheda resta aperta (perché conserva modifiche) lo dice.
+
+**Ancora implementati due volte.** Del pacchetto condiviso esiste solo il ciclo di vita dei vault (fase B di ADR-0037). Dispositivi, spazio e condivisioni sono ancora pagine della console (`web/src/pages/{Devices,Usage,Shares}.tsx`) e, separatamente, componenti del workbench (`packages/workbench/src/settings/AccountDevices.tsx`, `packages/workbench/src/sharing`). Passeranno in `@memobrain/cloud-features` nelle fasi successive (`DevicesPanel`, `UsagePanel`, `SharesManager`…). Una funzione nuova di gestione dei vault cloud nasce comunque lì, non in `web/src/pages`.
+
+## Host del workbench nel browser
+
+Il codice sta in `web/src/workbench`. Il funzionamento è descritto in [desktop-web-sync.md, «Host del browser»](desktop-web-sync.md#host-del-browser); in breve:
+
+- **Ingresso e avvio** (`main.tsx`, `launch.ts`): login OIDC, un solo workbench per browser con il Web Lock `memobrain-workbench` (gli handle sincroni di OPFS sono esclusivi, la seconda scheda mostra un messaggio), avvio del core e cancellazione delle copie private lasciate da una scheda chiusa (_sweep_ all'avvio). Poi controllo del flag `web_workbench`: se è spento (`ConfigAPI.Effective`) la pagina lo dice, anche se l'indirizzo è stato digitato a mano. Infine apertura e collegamento del vault (`OpenVault` + `LinkExisting`, oppure `OpenMount`) e montaggio della UI con `kind: 'web'`. Le chiamate di avvio hanno un limite di tempo (`callWithin`).
+- **Worker** (`worker.ts`, bundle autosufficiente): shim `fs`/`path`/`process` su OPFS (`opfs-fs.ts`), sqlite-wasm con il VFS `opfs-sahpool`, host per il core, poi il programma Go (`wasm_exec.js` è incluso nel bundle).
+- **Bridge** (`bridge.ts`): RPC verso il worker, `window.go` e `window.runtime` per i moduli Wails generati. Se il worker o il programma Go muore, le chiamate rifiutano con `CoreDeadError` e la pagina mostra un overlay fatale con _Ricarica_; un limite superato dà `CoreTimeoutError`.
+- **Copie private** (`guard.ts`, `markers.ts`, `overlay.ts`): i marker in `localStorage` (`memobrain.workbench.vaults`) registrano per ogni copia nome, tipo, cartella, `pending`, `conflicts` e `dirty`. Il blocco del vault privato (manuale o per inattività, un solo timer: quello del core) cancella la copia in chiaro se non ci sono modifiche non caricate, altrimenti un overlay bloccante chiede cosa fare. Una copia conservata va sbloccata prima che il workbench la mostri (_unlock gate_).
+
+**Creazione di un vault privato** (`create.ts`, `runCreation`):
+
+1. La pagina crea la cartella `/vaults/new-<uuid>` con un marker privato: se la scheda si chiude durante la creazione, lo sweep successivo cancella la copia vuota.
+2. Apre la cartella e monta la procedura guidata del workbench (`mountCreateCloudVault`): passphrase due volte (almeno 12 caratteri), `SyncAPI.LinkNew`, chiave di recupero mostrata una volta.
+3. A creazione riuscita il marker passa all'id cloud (con `localPath` sulla cartella `new-…`) e l'indirizzo diventa `/vaults/<cloudId>/open` (`history.replaceState`). Il lancio prosegue come un'apertura normale. Le aperture successive trovano la copia nella cartella registrata dal marker (`folderOf`).
+4. Annullando, la cartella e il marker si cancellano e si torna a `/vaults`.
+
+## Header di sicurezza
+
+`web-embed` aggiunge a ogni risposta: `Content-Security-Policy` (una delle due sotto), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()`. HSTS non è impostato dall'app perché il TLS termina all'ingress.
+
+**CSP della console** (`CSP()` in `services/cloud/web-embed/webembed.go`; `<issuer-origin>` è l'origine dell'issuer OIDC, omessa se l'issuer non è un URL):
+
+```text
+default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' <issuer-origin>; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+```
+
+`'wasm-unsafe-eval'` serve solo a compilare WebAssembly (Argon2id di `hash-wasm` nell'export dei vault privati); `eval` e codice inline restano vietati. Nessuno stile inline: la barra della quota usa `<progress>`, il build non emette `<style>` né `style=`.
+
+**CSP del workbench** (`WorkbenchCSP()`), servita solo con `workbench.html`:
+
+```text
+default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: <issuer-origin>; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+```
+
+È la politica di rilascio del desktop più ciò che serve per raggiungere API e issuer:
+
+- `style-src 'unsafe-inline'` perché CodeMirror, KaTeX ed Excalidraw calcolano gli stili; gli script inline restano vietati;
+- `worker-src 'self' blob:` perché `new Worker()` non accetta `integrity`: la pagina scarica lo script del worker del core con SRI e lo avvia da un URL `blob:` dei byte verificati (`VerifiedWorker` in `bridge.ts`);
+- `img-src`/`media-src` con `blob:` e `data:` per le risorse del vault, `connect-src blob:` per download e risorse del vault.
+
+Nessuna delle due politiche ammette risorse di altre origini (D-01, V-02).
+
+**SRI** (dettagli e lacune in [ADR-0029, sezione «Esito dell'implementazione»](adr/0029-web-workbench.md)):
+
+| Cosa                                     | Copertura                                                                                                                                                                                                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script e CSS d'ingresso delle due pagine | `integrity="sha384-…"` e `crossorigin` aggiunti dal plugin `index-html` di `web/scripts/esbuild.mjs` sui byte scritti in `dist/` (solo in produzione)                                                                                                    |
+| Console                                  | costruita **senza code splitting**: un solo JS e un CSS, entrambi coperti dal tag. Tutto il codice della console è verificato                                                                                                                            |
+| Worker del core                          | SHA-384 calcolato dalla build e incluso nel bundle del workbench; `fetch(url, { integrity })` e poi avvio da `blob:`. La build fallisce se il worker importa altri file                                                                                  |
+| WASM (core e sqlite)                     | integrità registrata dalla build e verificata nel worker (`fetch` con `integrity`); un hash mancante è un errore, ammesso solo nelle build E2E                                                                                                           |
+| Lacune residue (workbench)               | chunk JS statici e lazy (Excalidraw, mermaid, pdf.js, KaTeX…), `/excalidraw-assets/excalidraw.js`, `/assets/layout.worker.js` e il worker di pdf.js sono caricati senza `integrity`. Il code splitting resta perché senza supererebbe il budget iniziale |
+
+I test Go `TestBuiltIndexPinsEverySubresourceWithSRI` e `TestBuiltWorkbenchPinsEverySubresourceWithSRI` controllano le pagine incorporate. Senza la build vengono saltati; con `MEMOBRAIN_REQUIRE_WEB_BUILD=1` sono obbligatori.
+
+## Cache, compressione e budget
+
+- **Cache-Control:** i file sotto `assets/` e `core/` hanno `public, max-age=31536000, immutable` (in produzione hanno l'hash nel nome, tranne `assets/layout.worker.js`, che ha un URL fisso). Tutto il resto, comprese le pagine e il fallback SPA, ha `no-cache`.
+- **ETag forte** per ogni file (SHA-256 calcolato alla prima richiesta), con un valore diverso per ogni rappresentazione (`-gz`, `-id`): le rivalidazioni rispondono 304.
+- **gzip:** i file di testo (`.html`, `.js`, `.mjs`, `.css`, `.svg`, `.json`, `.webmanifest`, `.map`, `.txt`, `.xml`, `.wasm`, `.ttf`, `.otf`) da 512 byte in su sono compressi una volta, alla prima richiesta. La copia resta in memoria solo se risparmia almeno il 10% e si serve ai client che accettano gzip (`Vary: Accept-Encoding`).
+- **WebAssembly:** la build conserva solo `core/<nome>-<hash>.wasm.gz` (il core è circa 36 MB non compresso). Una richiesta di `<nome>.wasm` riceve il `.gz` così com'è se il client accetta gzip; altrimenti lo riceve decompresso in streaming, senza bufferizzarlo, con `Content-Length` letto dal trailer gzip e senza supporto ai range.
+- **Placeholder:** `dist/` è ignorato da git tranne `services/cloud/web-embed/dist/index.html`, così `go build` funziona senza costruire la SPA (la pagina mostra solo un avviso). Dopo `task web-build` il placeholder risulta modificato: non va committato (`task web-clean` lo ripristina).
+
+**Budget** (`BUDGET` e `checkBudget` in `web/scripts/esbuild.mjs`, [ADR-0020](adr/0020-performance-details.md)): la build di produzione fallisce se un limite è superato.
+
+| Parte                 | Misura                                                                         | Limite                                |
+| --------------------- | ------------------------------------------------------------------------------ | ------------------------------------- |
+| Console               | kB minificati raggiungibili da `src/main.tsx`: import statici / anche dinamici | iniziale ≤ 700 kB, totale ≤ 1000 kB   |
+| Workbench JS          | kB minificati da `src/workbench/main.tsx` (CSS compreso), totale con il worker | iniziale ≤ 2500 kB, totale ≤ 23000 kB |
+| WASM `memobrain-core` | dimensione gzip (livello 9)                                                    | ≤ 8192 kB                             |
+| WASM `sqlite3`        | dimensione gzip                                                                | ≤ 1536 kB                             |
+
+Il core è vicino al limite: `build/wasm/memobrain-core.wasm` del 1° novembre 2026 (39,2 MB) pesa circa 8085 kB con `gzip -9`, meno del 2% sotto gli 8192 kB.
 
 ## Comandi
 
 ```sh
-task dev-web          # esbuild su :5174, proxy /api -> :18081 (serve task stack-up + task dev-cloud)
-task web-build        # build + copia in services/cloud/web-embed/dist (poi task build-cloud)
-task web-clean        # ripristina il placeholder index.html (richiede il file tracciato in git)
-yarn workspace @memobrain/web run test     # Vitest + Testing Library
-yarn workspace @memobrain/ui run test
-task e2e-web          # Playwright (Chromium), API mockata con page.route
+task dev-web          # dev server esbuild su :5174 con live reload, proxy /api -> :18081
+task web-build        # task wasm-core, task wailsjs (solo se mancano i binding), build di produzione, copia in services/cloud/web-embed/dist
+task build-cloud      # binario del cloud con la build incorporata (dopo web-build)
+task web-clean        # rimuove la build incorporata e ripristina il placeholder tracciato
+task e2e-web          # Playwright sulla console con l'API simulata (dev server :5175, MEMOBRAIN_E2E=1)
+yarn workspace @memobrain/web run test             # Vitest + Testing Library
+yarn workspace @memobrain/web run e2e:workbench-ui # spec del desktop sul workbench web (:5176), prima task wasm-core
+yarn workspace @memobrain/web run e2e:security     # CSP/SRI sulla build di produzione, prima task web-build
+yarn workspace @memobrain/web run e2e:cloud        # contro un cloud vero su :18081 (vedi sotto)
 ```
 
-`dist/` è ignorato da git tranne il placeholder `services/cloud/web-embed/dist/index.html`, così `go build` funziona senza costruire la SPA (la pagina mostra solo un avviso). Dopo `task web-build` il placeholder risulta modificato: non committarlo.
+`task web-build` esegue sempre `task wasm-core`, quindi serve la toolchain Go. Senza il core, la build di `yarn workspace @memobrain/web run build` lo segnala e la pagina del workbench dice che il motore manca.
 
-Sviluppo con login reale: `task stack-up`, poi `task dev-cloud` (avvia anche la Web UI su :5174, `WEB=0` per saltarla; log in `.dev/logs/web.log`) oppure `yarn dev:cloud:k3d` (stessa cosa, `--no-web` per saltarla; la Web UI si ferma con `down`/`delete`); `task dev-web` serve solo per avviarla da sola, poi `http://localhost:5174` (utenti `user1`/`user2`/`admin`, password `memobrain-dev-password`). Per provare il binario con la SPA incorporata: `task web-build build-cloud` e aprire `http://127.0.0.1:18081`.
+**Sviluppo con login reale:** `task stack-up`, poi `task dev-cloud`, che avvia anche la Web UI su `:5174` (`WEB=0` per saltarla, log in `.dev/logs/web.log`). In alternativa `yarn dev:cloud:k3d` (`--no-web` per saltarla; la Web UI si ferma con `down`/`delete`). `task dev-web` serve solo ad avviare la Web UI da sola. Aprire `http://localhost:5174` (utenti `user1`/`user2`/`admin`, password `memobrain-dev-password`). Per provare il binario con la SPA incorporata: `task web-build build-cloud`, poi `http://localhost:18081`.
+
+## Test
+
+| Livello                 | Dove                                                                                                                                                                                                        | Comando e prerequisiti                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Unità (Vitest)          | `web/src/**/*.test.ts(x)`: guardie, OIDC, pagine, export, i18n, host del workbench (bridge, guard, markers, overlay, create); `packages/{ui,cloud-features,vaultcrypto-web,sqlite-bridge}`                  | `yarn workspace @memobrain/web run test`, o `task test-ts` per tutti i pacchetti (in `task ci`)                                |
+| Go di `web-embed`       | instradamento, header, CSP, cache e gzip, WASM; SRI sulle pagine incorporate                                                                                                                                | `go test ./web-embed/...` in `services/cloud` (`MEMOBRAIN_REQUIRE_WEB_BUILD=1` dopo `task web-build`)                          |
+| E2E con API simulata    | `web/e2e`: app, vault, account, admin, tastiera, a11y ([a11y-web.md](qa/a11y-web.md)); `opfs-fs.spec.ts` e `workbench.spec.ts` girano sul core vero in una cartella del browser                             | `task e2e-web` (gli spec del workbench vogliono `task wasm-core`)                                                              |
+| Workbench sul core vero | gli spec del desktop (`workflows`, `keyboard`, `editor-toolbar`, `slides`, `graph`) con `E2E_TARGET=web`                                                                                                    | `yarn workspace @memobrain/web run e2e:workbench-ui` (prima `task wasm-core`)                                                  |
+| Cloud vero              | `web/e2e-cloud`: sync tra due browser con merge (`web-sync`); vault privato: blocco manuale, offline e per inattività (`web-private`); creazione dalla console e annullamento (`web-create-private`)        | `yarn workspace @memobrain/web run e2e:cloud`, dopo `task web-build` e `scripts/run-desktop-with-cloud.sh --cloud-only --keep` |
+| Sicurezza e CSP         | `web/e2e-security`: console (`csp.spec.ts`) e workbench (`workbench-csp.spec.ts`) serviti da `webembed-serve`, senza violazioni CSP né richieste esterne; Excalidraw offline (`excalidraw-offline.spec.ts`) | `yarn workspace @memobrain/web run e2e:security` (dopo `task web-build`; la build E2E del workbench vuole `task wasm-core`)    |
+
+Le suite Playwright non sono in `task ci` ([ADR-0036](adr/0036-verifiche-locali-senza-ci.md)). Si eseguono quando si tocca la Web UI e prima di un rilascio; l'elenco con i prerequisiti è in [dev-setup.md](dev-setup.md#verifiche).
