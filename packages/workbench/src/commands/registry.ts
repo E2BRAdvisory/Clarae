@@ -30,7 +30,9 @@ import { startSlideshow } from '../slides/actions';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import type { EditorView } from '@codemirror/view';
-import { can } from '../platform';
+import { can, type Capabilities } from '../platform';
+import { saveWorkspaceNow } from '../shell/useVaultSession';
+import { settleNotes } from '../workspaces/flush';
 
 export type CommandGroup = 'file' | 'navigate' | 'view' | 'editor' | 'app';
 
@@ -40,6 +42,13 @@ export interface Command {
   defaults: readonly string[];
   /** Hidden from the palette (still bindable). */
   hidden?: boolean;
+  /**
+   * Capabilities of the host the command needs (ADR-0037). Without them the command is never
+   * enabled, whatever `enabled` says; scripts/parity.mjs reads this field to tell, per platform,
+   * which commands exist.
+   */
+  requires?: readonly (keyof Capabilities)[];
+  /** Whether the command applies right now (open vault, note, selection…). */
   enabled?: () => boolean;
   run: () => void | Promise<void>;
 }
@@ -251,7 +260,7 @@ export const commands: Command[] = [
     id: 'update:check',
     group: 'file',
     defaults: [],
-    enabled: () => can('updater'),
+    requires: ['updater'],
     run: () => useUpdater.getState().check(),
   },
   {
@@ -279,6 +288,9 @@ export const commands: Command[] = [
     run: async () => {
       const v = store().vault;
       if (!v) return;
+      // Pending edits and the workspace are written while the vault is still open.
+      if (!(await settleNotes())) return;
+      await saveWorkspaceNow(v.id);
       await api.vault.close(v.id);
       store().setVault(null);
     },
@@ -716,8 +728,13 @@ commands.push(...notesCommands, ...sceneCommands, ...toolCommands);
 
 export const commandById = new Map(commands.map((c) => [c.id, c]));
 
+/** The host offers everything the command requires (its `requires` capabilities). */
+export function isAvailable(c: Command): boolean {
+  return (c.requires ?? []).every((name) => can(name));
+}
+
 export function isEnabled(c: Command): boolean {
-  return c.enabled ? c.enabled() : true;
+  return isAvailable(c) && (c.enabled ? c.enabled() : true);
 }
 
 /** Effective combos per command given the user's overrides. */

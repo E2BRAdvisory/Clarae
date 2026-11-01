@@ -27,6 +27,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/apiclient"
 )
 
 // Status of the session.
@@ -308,7 +309,7 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 		return fmt.Errorf("oidc discovery: %w", err)
 	}
 	cfg := &oauth2.Config{
-		ClientID: cc.DesktopClientID,
+		ClientID: cc.DesktopClientId,
 		Endpoint: provider.Endpoint(),
 		Scopes:   []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess},
 	}
@@ -388,7 +389,7 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	s.mu.Lock()
 	s.provider, s.oauth = provider, cfg
 	s.access, s.expiry, s.refresh = tok.AccessToken, tok.Expiry, tok.RefreshToken
-	s.session = &persisted{ServerURL: serverURL, Issuer: cc.Issuer, ClientID: cc.DesktopClientID, Audience: cc.Audience, GRPCEndpoint: cc.GRPCEndpoint}
+	s.session = &persisted{ServerURL: serverURL, Issuer: cc.Issuer, ClientID: cc.DesktopClientId, Audience: cc.Audience, GRPCEndpoint: cc.GrpcEndpoint}
 	s.mu.Unlock()
 
 	if err := s.secrets.Set(serverURL, tok.RefreshToken); err != nil {
@@ -444,17 +445,21 @@ func (s *Service) completeSession(ctx context.Context) error {
 	if sess == nil {
 		return errors.New("not signed in")
 	}
-	if sess.Profile.UserID != "" && sess.Profile.UserID != me.ID {
+	if sess.Profile.UserID != "" && sess.Profile.UserID != me.Id.String() {
 		sess.DeviceID = "" // the registered device belongs to the previous account
 	}
 	if sess.DeviceID == "" {
-		dev, err := client.RegisterDevice(ctx, transport.DeviceRegistration{Name: s.opts.DeviceName, Platform: s.opts.Platform, AppVersion: s.opts.AppVersion})
+		reg := transport.DeviceRegistration{Name: s.opts.DeviceName, Platform: apiclient.DeviceRegistrationPlatform(s.opts.Platform)}
+		if s.opts.AppVersion != "" {
+			reg.AppVersion = &s.opts.AppVersion
+		}
+		dev, err := client.RegisterDevice(ctx, reg)
 		if err != nil {
 			return fmt.Errorf("register device: %w", err)
 		}
-		sess.DeviceID = dev.ID
+		sess.DeviceID = dev.Id.String()
 	}
-	sess.Profile = Profile{UserID: me.ID, Username: me.Username, Email: me.Email, Role: me.Role}
+	sess.Profile = Profile{UserID: me.Id.String(), Username: me.Username, Email: string(me.Email), Role: string(me.Role)}
 	if me.DisplayName != nil {
 		sess.Profile.DisplayName = *me.DisplayName
 	}

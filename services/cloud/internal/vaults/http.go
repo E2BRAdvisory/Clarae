@@ -33,9 +33,10 @@ func ToAPI(v vaultsdb.Vault) api.Vault {
 	}
 }
 
-// ListVaults implements GET /vaults.
-func (h *HTTP) ListVaults(ctx context.Context, _ api.ListVaultsRequestObject) (api.ListVaultsResponseObject, error) {
-	rows, err := h.svc.List(ctx, auth.MustPrincipal(ctx).UserID)
+// ListVaults implements GET /vaults (include_deleted adds the restorable soft-deleted vaults).
+func (h *HTTP) ListVaults(ctx context.Context, req api.ListVaultsRequestObject) (api.ListVaultsResponseObject, error) {
+	includeDeleted := req.Params.IncludeDeleted != nil && *req.Params.IncludeDeleted
+	rows, err := h.svc.List(ctx, auth.MustPrincipal(ctx).UserID, includeDeleted)
 	if err != nil {
 		return nil, err
 	}

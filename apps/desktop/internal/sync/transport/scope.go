@@ -1,8 +1,9 @@
 package transport
 
 import (
-	"net/url"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // Ref addresses a vault for the client methods that take a vault id: either the
@@ -21,14 +22,12 @@ func splitRef(ref string) (vault, scope string) {
 	return vault, scope
 }
 
-// withScope appends the scope parameter to a request path.
-func withScope(path, scope string) string {
-	if scope == "" {
-		return path
+// vaultRef parses a Ref into the vault id and the optional scope parameter.
+func vaultRef(ref string) (uuid.UUID, *string, error) {
+	vault, scope := splitRef(ref)
+	id, err := parseID("vault", vault)
+	if err != nil {
+		return uuid.UUID{}, nil, err
 	}
-	sep := "?"
-	if strings.Contains(path, "?") {
-		sep = "&"
-	}
-	return path + sep + "scope=" + url.QueryEscape(scope)
+	return id, ptrIf(scope), nil
 }

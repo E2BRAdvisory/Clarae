@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://memobrain.dev/schemas/parity/features.schema.json",
+  "title": "MemoBrain Notes feature registry (ADR-0037)",
+  "description": "One entry per user-facing feature, with what realizes it on the desktop, in the web workbench and in the web console. Checked by scripts/parity.mjs --check.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "features", "server_only"],
+  "properties": {
+    "version": { "const": 1 },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/feature" }
+    },
+    "server_only": {
+      "description": "Operations of api/openapi.yaml that are not a user feature (probes, public bootstrap).",
+      "type": "array",
+      "items": { "$ref": "#/definitions/serverOnly" }
+    }
+  },
+  "definitions": {
+    "reason": { "type": "string", "minLength": 3 },
+    "commandId": { "type": "string", "pattern": "^[a-z0-9-]+:[a-z0-9-]+$" },
+    "binding": {
+      "description": "Service.Method of the generated Wails bindings (packages/workbench/wailsjs/go/app).",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*\\.[A-Z][A-Za-z0-9]*$"
+    },
+    "operationId": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
+    "route": { "type": "string", "pattern": "^/" },
+    "testRef": {
+      "description": "A test file, relative to the repository root.",
+      "type": "string",
+      "minLength": 1
+    },
+    "requiresReason": {
+      "if": { "properties": { "status": { "const": "yes" } } },
+      "then": {},
+      "else": { "required": ["reason"] }
+    },
+    "client": {
+      "description": "Desktop or workbench. On the workbench, commands, bindings, operationIds and capability default to the desktop's when omitted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["yes", "partial", "exception", "console-only", "missing"] },
+        "reason": { "$ref": "#/definitions/reason" },
+        "note": { "type": "string" },
+        "commands": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/commandId" }
+        },
+        "bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/binding" }
+        },
+        "operationIds": {
+          "description": "REST operations the Go core calls for this feature.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/operationId" }
+        },
+        "capability": {
+          "description": "The platform capability (packages/workbench/src/platform) the feature needs.",
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z]*$"
+        }
+      },
+      "allOf": [{ "$ref": "#/definitions/requiresReason" }]
+    },
+    "console": {
+      "description": "The web console (web/src). Omitted when the feature is about the content of an open vault, which the console leaves to the workbench (ADR-0029).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["yes", "partial", "exception", "missing"] },
+        "reason": { "$ref": "#/definitions/reason" },
+        "note": { "type": "string" },
+        "routes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/route" }
+        },
+        "operationIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/operationId" }
+        }
+      },
+      "allOf": [{ "$ref": "#/definitions/requiresReason" }]
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "desktop": { "type": "array", "items": { "$ref": "#/definitions/testRef" } },
+        "web": { "type": "array", "items": { "$ref": "#/definitions/testRef" } },
+        "cloud": { "type": "array", "items": { "$ref": "#/definitions/testRef" } }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "desktop", "workbench"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)*$" },
+        "title": { "type": "string", "minLength": 3 },
+        "notes": { "type": "string" },
+        "desktop": { "$ref": "#/definitions/client" },
+        "workbench": { "$ref": "#/definitions/client" },
+        "console": { "$ref": "#/definitions/console" },
+        "tests": { "$ref": "#/definitions/tests" }
+      }
+    },
+    "serverOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "reason"],
+      "properties": {
+        "operationId": { "$ref": "#/definitions/operationId" },
+        "reason": { "$ref": "#/definitions/reason" }
+      }
+    }
+  }
+}

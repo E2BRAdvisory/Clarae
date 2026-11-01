@@ -3,66 +3,48 @@ package transport
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 	"time"
 
-	"github.com/google/uuid"
-
+	"memobrain/shared/apiclient"
 	"memobrain/shared/syncproto"
 )
 
-// --- API types (mirror api/openapi.yaml) ----------------------------------
+// API types of the vault endpoints (generated from api/openapi.yaml).
+type (
+	// Vault is a cloud vault; DeletedAt is set on a soft-deleted one.
+	Vault = apiclient.Vault
+	// KeyEnvelope is a wrapped VMK of a private vault; WrappedVmk travels as
+	// standard base64 (a []byte marshals exactly like that).
+	KeyEnvelope = apiclient.KeyEnvelope
+	// KDF is the "kdf" object of a key envelope.
+	KDF = apiclient.KdfParams
+)
 
-// Vault is a cloud vault.
-type Vault struct {
-	ID         string     `json:"id"`
-	OwnerID    string     `json:"owner_id"`
-	Name       string     `json:"name"`
-	Kind       string     `json:"kind"` // private | shared
-	LastSeq    int64      `json:"last_seq"`
-	TotalBytes int64      `json:"total_bytes"`
-	FileCount  int        `json:"file_count"`
-	CreatedAt  time.Time  `json:"created_at"`
-	DeletedAt  *time.Time `json:"deleted_at"`
-}
-
-// KDF is the "kdf" object of a key envelope.
-type KDF struct {
-	Alg  string `json:"alg"`
-	T    uint32 `json:"t,omitempty"`
-	MKiB uint32 `json:"m_kib,omitempty"`
-	P    uint8  `json:"p,omitempty"`
-	Salt string `json:"salt"`
-}
-
-// KeyEnvelope is a wrapped VMK; WrappedVMK is standard base64 on the wire
-// (a []byte marshals exactly like that).
-type KeyEnvelope struct {
-	Kind       string    `json:"kind"`
-	KDF        KDF       `json:"kdf"`
-	WrappedVMK []byte    `json:"wrapped_vmk"`
-	CreatedAt  time.Time `json:"created_at,omitempty"`
-}
+// --- sync payloads as the engine sees them ----------------------------------------
+//
+// The engine keeps file ids and paths as strings (sync.db) and treats absent
+// optional fields as zero values, so the changelog, manifest and history are
+// converted from the generated types instead of being exposed as they are.
+// Change is also the format of the remote changes parked in sync.db
+// (pending_remote), hence its JSON tags: keep them stable.
 
 // TreeEntry is one current file of the manifest.
 type TreeEntry struct {
-	Path   string `json:"path"`
-	FileID string `json:"file_id"`
-	Rev    int    `json:"rev"`
-	Hash   string `json:"hash"`
-	Size   int64  `json:"size"`
-	Kind   string `json:"kind"`
+	Path   string
+	FileID string
+	Rev    int
+	Hash   string
+	Size   int64
+	Kind   string
 }
 
 // Tree is GET /vaults/{id}/tree.
 type Tree struct {
-	Items   []TreeEntry `json:"items"`
-	AsOfSeq int64       `json:"as_of_seq"`
+	Items   []TreeEntry
+	AsOfSeq int64
 }
 
 // Change is one changelog entry.
@@ -83,171 +65,360 @@ type Change struct {
 
 // Changes is GET /vaults/{id}/changes.
 type Changes struct {
-	Items   []Change `json:"items"`
-	NextSeq int64    `json:"next_seq"`
-	HasMore bool     `json:"has_more"`
+	Items   []Change
+	NextSeq int64
+	HasMore bool
 }
 
 // Revision is one entry of a file's history.
 type Revision struct {
-	Rev        int       `json:"rev"`
-	Seq        int64     `json:"seq"`
-	Op         string    `json:"op"`
-	Path       string    `json:"path"`
-	PrevPath   string    `json:"prev_path"`
-	BlobHash   string    `json:"blob_hash"`
-	Size       int64     `json:"size"`
-	AuthorID   string    `json:"author_id"`
-	DeviceID   string    `json:"device_id"`
-	ServerTime time.Time `json:"server_time"`
-	ConflictOf string    `json:"conflict_of"`
+	Rev        int
+	Seq        int64
+	Op         string
+	Path       string
+	PrevPath   string
+	BlobHash   string
+	Size       int64
+	AuthorID   string
+	DeviceID   string
+	ServerTime time.Time
+	ConflictOf string
 }
 
-// Usage is GET /me/usage.
-type Usage struct {
-	UsedBytes  int64  `json:"used_bytes"`
-	QuotaBytes int64  `json:"quota_bytes"`
-	Level      string `json:"level"`
+func changeFromAPI(c apiclient.Change) Change {
+	return Change{
+		Seq: c.Seq, FileID: c.FileId.String(), Op: string(c.Op), Path: c.Path, PrevPath: deref(c.PrevPath),
+		Rev: c.Rev, BlobHash: deref(c.BlobHash), Size: c.Size, AuthorID: c.AuthorId.String(),
+		DeviceID: idString(c.DeviceId), ServerTime: c.ServerTime, ConflictOf: idString(c.ConflictOf),
+	}
+}
+
+func revisionFromAPI(r apiclient.Revision) Revision {
+	return Revision{
+		Rev: r.Rev, Seq: r.Seq, Op: string(r.Op), Path: r.Path, PrevPath: deref(r.PrevPath),
+		BlobHash: deref(r.BlobHash), Size: r.Size, AuthorID: r.AuthorId.String(),
+		DeviceID: idString(r.DeviceId), ServerTime: r.ServerTime, ConflictOf: idString(r.ConflictOf),
+	}
+}
+
+func envelopeInput(e KeyEnvelope) apiclient.KeyEnvelopeInput {
+	return apiclient.KeyEnvelopeInput{Kind: e.Kind, Kdf: e.Kdf, WrappedVmk: e.WrappedVmk}
 }
 
 // --- vaults ------------------------------------------------------------------
 
 // CreateVault creates a vault; private vaults carry both key envelopes.
 func (c *Client) CreateVault(ctx context.Context, name, kind string, envelopes []KeyEnvelope) (Vault, error) {
-	body := map[string]any{"name": name, "kind": kind}
+	body := apiclient.CreateVault{Name: name, Kind: apiclient.VaultKind(kind)}
 	if len(envelopes) > 0 {
-		body["key_envelopes"] = envelopes
+		in := make([]apiclient.KeyEnvelopeInput, 0, len(envelopes))
+		for _, e := range envelopes {
+			in = append(in, envelopeInput(e))
+		}
+		body.KeyEnvelopes = &in
 	}
-	var out Vault
-	err := c.Do(ctx, http.MethodPost, "/vaults", body, &out, true)
-	return out, err
+	res, err := c.api.CreateVaultWithResponse(ctx, &apiclient.CreateVaultParams{IdempotencyKey: idempotencyKey()}, body)
+	if err != nil {
+		return Vault{}, err
+	}
+	return want(res.HTTPResponse, res.Body, res.JSON201)
 }
 
-// ListVaults returns the caller's vaults.
+// ListVaults returns the caller's vaults (not the soft-deleted ones).
 func (c *Client) ListVaults(ctx context.Context) ([]Vault, error) {
-	var out struct {
-		Items []Vault `json:"items"`
+	return c.listVaults(ctx, false)
+}
+
+// ListDeletedVaults returns the caller's soft-deleted vaults that can still be
+// restored with RestoreVault (deleted within the server's retention period).
+func (c *Client) ListDeletedVaults(ctx context.Context) ([]Vault, error) {
+	all, err := c.listVaults(ctx, true)
+	if err != nil {
+		return nil, err
 	}
-	err := c.Do(ctx, http.MethodGet, "/vaults", nil, &out, true)
-	return out.Items, err
+	out := make([]Vault, 0, len(all))
+	for _, v := range all {
+		if v.DeletedAt != nil {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+func (c *Client) listVaults(ctx context.Context, includeDeleted bool) ([]Vault, error) {
+	params := &apiclient.ListVaultsParams{}
+	if includeDeleted {
+		params.IncludeDeleted = &includeDeleted
+	}
+	res, err := c.api.ListVaultsWithResponse(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	list, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	return list.Items, err
 }
 
 // GetVault returns one vault.
 func (c *Client) GetVault(ctx context.Context, id string) (Vault, error) {
-	var out Vault
-	err := c.Do(ctx, http.MethodGet, "/vaults/"+id, nil, &out, true)
-	return out, err
+	vid, err := parseID("vault", id)
+	if err != nil {
+		return Vault{}, err
+	}
+	res, err := c.api.GetVaultWithResponse(ctx, vid)
+	if err != nil {
+		return Vault{}, err
+	}
+	return want(res.HTTPResponse, res.Body, res.JSON200)
 }
 
-// DeleteVault soft-deletes a vault.
+// RenameVault renames a vault (owner). A name already used by another of the
+// owner's vaults yields an error matching CodeError(NAME_IN_USE).
+func (c *Client) RenameVault(ctx context.Context, id, name string) (Vault, error) {
+	vid, err := parseID("vault", id)
+	if err != nil {
+		return Vault{}, err
+	}
+	res, err := c.api.UpdateVaultWithResponse(ctx, vid, apiclient.UpdateVault{Name: name})
+	if err != nil {
+		return Vault{}, err
+	}
+	return want(res.HTTPResponse, res.Body, res.JSON200)
+}
+
+// DeleteVault soft-deletes a vault (owner): the server keeps it, restorable
+// with RestoreVault, for the retention period and purges it afterwards.
 func (c *Client) DeleteVault(ctx context.Context, id string) error {
-	return c.Do(ctx, http.MethodDelete, "/vaults/"+id, nil, nil, true)
+	vid, err := parseID("vault", id)
+	if err != nil {
+		return err
+	}
+	res, err := c.api.DeleteVaultWithResponse(ctx, vid)
+	if err != nil {
+		return err
+	}
+	return ok(res.HTTPResponse, res.Body)
+}
+
+// RestoreVault undoes a soft delete within the retention period (owner). A
+// vault past it, or not the caller's, yields NOT_FOUND; a name taken in the
+// meantime yields NAME_IN_USE (rename the other vault first).
+func (c *Client) RestoreVault(ctx context.Context, id string) (Vault, error) {
+	vid, err := parseID("vault", id)
+	if err != nil {
+		return Vault{}, err
+	}
+	res, err := c.api.RestoreVaultWithResponse(ctx, vid)
+	if err != nil {
+		return Vault{}, err
+	}
+	return want(res.HTTPResponse, res.Body, res.JSON200)
 }
 
 // GetKeyEnvelopes returns the envelopes of a private vault.
 func (c *Client) GetKeyEnvelopes(ctx context.Context, id string) ([]KeyEnvelope, error) {
-	var out struct {
-		Items []KeyEnvelope `json:"items"`
+	vid, err := parseID("vault", id)
+	if err != nil {
+		return nil, err
 	}
-	err := c.Do(ctx, http.MethodGet, "/vaults/"+id+"/key-envelopes", nil, &out, true)
-	return out.Items, err
+	res, err := c.api.GetKeyEnvelopesWithResponse(ctx, vid)
+	if err != nil {
+		return nil, err
+	}
+	list, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	return list.Items, err
 }
 
-// PutKeyEnvelope replaces one envelope.
+// PutKeyEnvelope replaces one envelope (its Kind selects which).
 func (c *Client) PutKeyEnvelope(ctx context.Context, id string, env KeyEnvelope) error {
-	return c.Do(ctx, http.MethodPut, "/vaults/"+id+"/key-envelopes/"+env.Kind, env, nil, true)
+	vid, err := parseID("vault", id)
+	if err != nil {
+		return err
+	}
+	res, err := c.api.PutKeyEnvelopeWithResponse(ctx, vid, env.Kind, envelopeInput(env))
+	if err != nil {
+		return err
+	}
+	_, err = want(res.HTTPResponse, res.Body, res.JSON200)
+	return err
 }
+
+// --- sync --------------------------------------------------------------------
 
 // GetTree returns the manifest.
 func (c *Client) GetTree(ctx context.Context, ref string) (Tree, error) {
-	id, scope := splitRef(ref)
-	var out Tree
-	err := c.Do(ctx, http.MethodGet, withScope("/vaults/"+id+"/tree", scope), nil, &out, true)
-	return out, err
+	vid, scope, err := vaultRef(ref)
+	if err != nil {
+		return Tree{}, err
+	}
+	res, err := c.api.GetVaultTreeWithResponse(ctx, vid, &apiclient.GetVaultTreeParams{Scope: scope})
+	if err != nil {
+		return Tree{}, err
+	}
+	t, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return Tree{}, err
+	}
+	out := Tree{AsOfSeq: t.AsOfSeq, Items: make([]TreeEntry, 0, len(t.Items))}
+	for _, e := range t.Items {
+		out.Items = append(out.Items, TreeEntry{Path: e.Path, FileID: e.FileId.String(), Rev: e.Rev, Hash: e.Hash, Size: e.Size, Kind: e.Kind})
+	}
+	return out, nil
 }
 
 // GetChanges returns changelog entries after since. A cursor older than the
 // compaction window yields an error matching CodeError(CURSOR_EXPIRED).
 func (c *Client) GetChanges(ctx context.Context, ref string, since int64, limit int) (Changes, error) {
-	id, scope := splitRef(ref)
-	var out Changes
-	q := url.Values{"since": {strconv.FormatInt(since, 10)}}
-	if scope != "" {
-		q.Set("scope", scope)
+	vid, scope, err := vaultRef(ref)
+	if err != nil {
+		return Changes{}, err
 	}
-	if limit > 0 {
-		q.Set("limit", strconv.Itoa(limit))
+	res, err := c.api.GetChangesWithResponse(ctx, vid, &apiclient.GetChangesParams{Since: since, Limit: ptrIf(limit), Scope: scope})
+	if err != nil {
+		return Changes{}, err
 	}
-	err := c.Do(ctx, http.MethodGet, "/vaults/"+id+"/changes?"+q.Encode(), nil, &out, true)
-	return out, err
+	page, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return Changes{}, err
+	}
+	out := Changes{NextSeq: page.NextSeq, HasMore: page.HasMore, Items: make([]Change, 0, len(page.Items))}
+	for _, ch := range page.Items {
+		out.Items = append(out.Items, changeFromAPI(ch))
+	}
+	return out, nil
 }
 
 // CheckBlobs returns the hashes the server does not have.
 func (c *Client) CheckBlobs(ctx context.Context, ref string, hashes []string) ([]string, error) {
-	id, scope := splitRef(ref)
-	var out struct {
-		Missing []string `json:"missing"`
+	vid, scope, err := vaultRef(ref)
+	if err != nil {
+		return nil, err
 	}
-	err := c.Do(ctx, http.MethodPost, withScope("/vaults/"+id+"/blobs:check", scope), map[string]any{"hashes": hashes}, &out, true)
-	return out.Missing, err
+	res, err := c.api.CheckBlobsWithResponse(ctx, vid, &apiclient.CheckBlobsParams{Scope: scope}, apiclient.BlobCheck{Hashes: hashes})
+	if err != nil {
+		return nil, err
+	}
+	r, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	return r.Missing, err
 }
 
-// Commit sends a batch of operations.
+// Commit sends a batch of operations. Retries reuse one Idempotency-Key.
 func (c *Client) Commit(ctx context.Context, ref string, req syncproto.CommitRequest) (syncproto.CommitResponse, error) {
-	id, scope := splitRef(ref)
-	var out syncproto.CommitResponse
-	err := c.Do(ctx, http.MethodPost, withScope("/vaults/"+id+"/commit", scope), req, &out, true)
-	return out, err
+	vid, scope, err := vaultRef(ref)
+	if err != nil {
+		return syncproto.CommitResponse{}, err
+	}
+	body, err := commitToAPI(req)
+	if err != nil {
+		return syncproto.CommitResponse{}, err
+	}
+	res, err := c.api.CommitWithResponse(ctx, vid, &apiclient.CommitParams{Scope: scope, IdempotencyKey: idempotencyKey()}, body)
+	if err != nil {
+		return syncproto.CommitResponse{}, err
+	}
+	r, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return syncproto.CommitResponse{}, err
+	}
+	out := syncproto.CommitResponse{LastSeq: r.LastSeq, Results: make([]syncproto.OpResult, 0, len(r.Results))}
+	for _, o := range r.Results {
+		out.Results = append(out.Results, opResultFromAPI(o))
+	}
+	return out, nil
 }
+
+func commitToAPI(req syncproto.CommitRequest) (apiclient.CommitRequest, error) {
+	dev, err := parseID("device", req.DeviceID)
+	if err != nil {
+		return apiclient.CommitRequest{}, err
+	}
+	out := apiclient.CommitRequest{DeviceId: dev, Ops: make([]apiclient.CommitOp, 0, len(req.Ops))}
+	for _, o := range req.Ops {
+		opID, err := parseID("operation", o.OpID)
+		if err != nil {
+			return apiclient.CommitRequest{}, err
+		}
+		op := apiclient.CommitOp{
+			OpId: opID, Op: apiclient.CommitOpKind(o.Op), Path: ptrIf(o.Path), PathKey: ptrIf(o.PathKey),
+			BaseRev: o.BaseRev, BlobHash: ptrIf(o.BlobHash), Size: ptrIf(o.Size), ClientMtime: o.ClientMtime,
+			From: ptrIf(o.From), To: ptrIf(o.To),
+		}
+		if o.FileID != "" {
+			id, err := parseID("file", o.FileID)
+			if err != nil {
+				return apiclient.CommitRequest{}, err
+			}
+			op.FileId = &id
+		}
+		if o.ConflictOf != "" {
+			id, err := parseID("file", o.ConflictOf)
+			if err != nil {
+				return apiclient.CommitRequest{}, err
+			}
+			op.ConflictOf = &id
+		}
+		out.Ops = append(out.Ops, op)
+	}
+	return out, nil
+}
+
+func opResultFromAPI(o apiclient.OpResult) syncproto.OpResult {
+	r := syncproto.OpResult{
+		OpID: o.OpId.String(), Status: syncproto.OpStatus(o.Status), FileID: idString(o.FileId),
+		Rev: deref(o.Rev), Seq: deref(o.Seq), Detail: deref(o.Detail),
+		CurrentRev: deref(o.CurrentRev), CurrentHash: deref(o.CurrentHash), CurrentSeq: deref(o.CurrentSeq),
+	}
+	if o.Code != nil {
+		r.Code = syncproto.Code(*o.Code)
+	}
+	return r
+}
+
+// --- history -----------------------------------------------------------------
 
 // ListRevisions returns the history of a file, newest first.
 func (c *Client) ListRevisions(ctx context.Context, ref, file string, limit int, cursor string) (items []Revision, next string, err error) {
-	vault, scope := splitRef(ref)
-	var out struct {
-		Items      []Revision `json:"items"`
-		NextCursor string     `json:"next_cursor"`
+	vid, scope, err := vaultRef(ref)
+	if err != nil {
+		return nil, "", err
 	}
-	q := url.Values{}
-	if limit > 0 {
-		q.Set("limit", strconv.Itoa(limit))
+	fid, err := parseID("file", file)
+	if err != nil {
+		return nil, "", err
 	}
-	if cursor != "" {
-		q.Set("cursor", cursor)
+	res, err := c.api.ListRevisionsWithResponse(ctx, vid, fid, &apiclient.ListRevisionsParams{Scope: scope, Limit: ptrIf(limit), Cursor: ptrIf(cursor)})
+	if err != nil {
+		return nil, "", err
 	}
-	if scope != "" {
-		q.Set("scope", scope)
+	list, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return nil, "", err
 	}
-	err = c.Do(ctx, http.MethodGet, "/vaults/"+vault+"/files/"+file+"/revisions?"+q.Encode(), nil, &out, true)
-	return out.Items, out.NextCursor, err
+	items = make([]Revision, 0, len(list.Items))
+	for _, r := range list.Items {
+		items = append(items, revisionFromAPI(r))
+	}
+	return items, deref(list.NextCursor), nil
 }
 
-// RestoreRevision restores a revision as a new one.
+// RestoreRevision restores a revision as a new one. Retries reuse one Idempotency-Key.
 func (c *Client) RestoreRevision(ctx context.Context, ref, file string, rev int) (syncproto.OpResult, error) {
-	vault, scope := splitRef(ref)
-	var out syncproto.OpResult
-	err := c.Do(ctx, http.MethodPost, withScope(fmt.Sprintf("/vaults/%s/files/%s/revisions/%d:restore", vault, file, rev), scope), nil, &out, true)
-	return out, err
-}
-
-// GetUsage returns the storage usage of the caller.
-func (c *Client) GetUsage(ctx context.Context) (Usage, error) {
-	var out Usage
-	err := c.Do(ctx, http.MethodGet, "/me/usage", nil, &out, true)
-	return out, err
-}
-
-// ListDevices returns the caller's active devices.
-func (c *Client) ListDevices(ctx context.Context) ([]Device, error) {
-	var out struct {
-		Items []Device `json:"items"`
+	vid, scope, err := vaultRef(ref)
+	if err != nil {
+		return syncproto.OpResult{}, err
 	}
-	err := c.Do(ctx, http.MethodGet, "/me/devices", nil, &out, true)
-	return out.Items, err
-}
-
-// RevokeDevice revokes a device.
-func (c *Client) RevokeDevice(ctx context.Context, id string) error {
-	return c.Do(ctx, http.MethodDelete, "/me/devices/"+id, nil, nil, true)
+	fid, err := parseID("file", file)
+	if err != nil {
+		return syncproto.OpResult{}, err
+	}
+	res, err := c.api.RestoreRevisionWithResponse(ctx, vid, fid, rev, &apiclient.RestoreRevisionParams{Scope: scope, IdempotencyKey: idempotencyKey()})
+	if err != nil {
+		return syncproto.OpResult{}, err
+	}
+	r, err := want(res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return syncproto.OpResult{}, err
+	}
+	return opResultFromAPI(r), nil
 }
 
 // --- binary transfers --------------------------------------------------------
@@ -255,92 +426,63 @@ func (c *Client) RevokeDevice(ctx context.Context, id string) error {
 // MaxSingleUpload is the largest blob sent with one PUT; bigger ones use tus.
 const MaxSingleUpload = 32 << 20
 
-// raw performs an authenticated request with a binary body or response,
-// retrying like Do. body may be nil; for retries it must be re-readable, so
-// only byte slices are accepted.
-func (c *Client) raw(ctx context.Context, method, path string, body []byte, headers map[string]string) (*http.Response, error) {
-	var lastErr error
-	for attempt := 0; attempt <= c.Retries; attempt++ {
-		if attempt > 0 {
-			if err := sleepCtx(ctx, backoff(attempt, lastErr)); err != nil {
-				return nil, err
-			}
-		}
-		var rdr io.Reader
-		if body != nil {
-			rdr = bytes.NewReader(body)
-		}
-		req, err := http.NewRequestWithContext(ctx, method, c.base.String()+BasePath+path, rdr)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", c.userAgent)
-		req.Header.Set("X-Request-Id", uuid.NewString())
-		tok, err := c.tokens.Token(ctx)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Authorization", "Bearer "+tok)
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
-		resp, err := c.http.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
-			lastErr = decode(resp, nil)
-			continue
-		}
-		return resp, nil
-	}
-	return nil, lastErr
-}
-
 // PutBlob uploads a blob of at most MaxSingleUpload bytes.
 func (c *Client) PutBlob(ctx context.Context, ref, hash string, data []byte) error {
-	vault, scope := splitRef(ref)
 	if len(data) > MaxSingleUpload {
 		return fmt.Errorf("blob of %d bytes needs a resumable upload", len(data))
 	}
-	resp, err := c.raw(ctx, http.MethodPut, withScope("/vaults/"+vault+"/blobs/"+hash, scope), data, map[string]string{"Content-Type": "application/octet-stream"})
+	vid, scope, err := vaultRef(ref)
 	if err != nil {
 		return err
 	}
-	return decode(resp, nil)
+	res, err := c.api.PutBlobWithBodyWithResponse(ctx, vid, hash, &apiclient.PutBlobParams{Scope: scope}, "application/octet-stream", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	return ok(res.HTTPResponse, res.Body)
 }
 
 // GetBlob downloads a blob into w and returns its size.
 func (c *Client) GetBlob(ctx context.Context, ref, hash string, w io.Writer) (int64, error) {
-	vault, scope := splitRef(ref)
-	resp, err := c.raw(ctx, http.MethodGet, withScope("/vaults/"+vault+"/blobs/"+hash, scope), nil, nil)
+	vid, scope, err := vaultRef(ref)
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 400 {
-		return 0, decode(resp, nil)
+	resp, err := c.api.GetBlob(ctx, vid, hash, &apiclient.GetBlobParams{Scope: scope}, acceptBinary)
+	if err != nil {
+		return 0, err
 	}
-	return io.Copy(w, resp.Body)
+	return copyBody(resp, w)
 }
 
 // GetRevisionContent downloads the blob of a revision into w.
 func (c *Client) GetRevisionContent(ctx context.Context, ref, file string, rev int, w io.Writer) (int64, error) {
-	vault, scope := splitRef(ref)
-	resp, err := c.raw(ctx, http.MethodGet, withScope(fmt.Sprintf("/vaults/%s/files/%s/revisions/%d/content", vault, file, rev), scope), nil, nil)
+	vid, scope, err := vaultRef(ref)
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 400 {
-		return 0, decode(resp, nil)
+	fid, err := parseID("file", file)
+	if err != nil {
+		return 0, err
 	}
-	return io.Copy(w, resp.Body)
+	resp, err := c.api.GetRevisionContent(ctx, vid, fid, rev, &apiclient.GetRevisionContentParams{Scope: scope}, acceptBinary)
+	if err != nil {
+		return 0, err
+	}
+	return copyBody(resp, w)
 }
 
-// IsCode reports whether err is an API problem with the given code.
-func IsCode(err error, code syncproto.Code) bool {
-	var pe *ProblemError
-	return errors.As(err, &pe) && pe.Problem.Code == code
+// acceptBinary asks for the content (or a problem document) of a download.
+func acceptBinary(_ context.Context, req *http.Request) error {
+	req.Header.Set("Accept", "application/octet-stream, application/problem+json")
+	return nil
+}
+
+// copyBody streams a download into w, or decodes its problem.
+func copyBody(resp *http.Response, w io.Writer) (int64, error) {
+	if resp.StatusCode >= 400 {
+		return 0, decodeProblem(resp)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return io.Copy(w, resp.Body)
 }

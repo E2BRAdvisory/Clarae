@@ -108,6 +108,9 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 
 func itoa(n int32) string { return strconv.Itoa(int(n)) }
 
+// testDeviceID is the id the fake cloud gives the registered device.
+const testDeviceID = "0190a0a0-0000-7000-8000-0000000000d1"
+
 // fakeCloud serves /client-config, /me and /me/devices.
 func newFakeCloud(t *testing.T, issuer string) *httptest.Server {
 	t.Helper()
@@ -128,14 +131,14 @@ func newFakeCloud(t *testing.T, issuer string) *httptest.Server {
 		if !authed(w, r) {
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "u1", "username": "user1", "email": "user1@memobrain.local", "display_name": "Uno", "role": "user", "status": "active", "quota_bytes": 1, "used_bytes": 0, "config_version": 0, "created_at": time.Now()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "0190a0a0-0000-7000-8000-0000000000a1", "username": "user1", "email": "user1@memobrain.local", "display_name": "Uno", "role": "user", "status": "active", "quota_bytes": 1, "used_bytes": 0, "config_version": 0, "created_at": time.Now()})
 	})
 	mux.HandleFunc("/api/v1/me/devices", func(w http.ResponseWriter, r *http.Request) {
 		if !authed(w, r) {
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "dev-1", "name": "x", "platform": "macos", "created_at": time.Now()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": testDeviceID, "name": "x", "platform": "macos", "created_at": time.Now()})
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -187,7 +190,7 @@ func TestLoginLoopbackRefreshLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := svc.State()
-	if st.Status != StatusReady || st.Profile.Username != "user1" || st.DeviceID != "dev-1" || st.ServerURL != cloud.URL {
+	if st.Status != StatusReady || st.Profile.Username != "user1" || st.DeviceID != testDeviceID || st.ServerURL != cloud.URL {
 		t.Fatalf("state after login: %+v", st)
 	}
 	if rt, _ := secrets.Get(cloud.URL); rt != "rt-1" {
@@ -267,7 +270,7 @@ func TestLoginSchemeFallbackAndRestore(t *testing.T) {
 	for restored.State().Status != StatusReady && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
-	if st := restored.State(); st.Status != StatusReady || st.Profile.Username != "user1" || st.DeviceID != "dev-1" {
+	if st := restored.State(); st.Status != StatusReady || st.Profile.Username != "user1" || st.DeviceID != testDeviceID {
 		t.Fatalf("restored state: %+v", st)
 	}
 

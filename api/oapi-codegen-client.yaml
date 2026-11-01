@@ -1,0 +1,21 @@
+# oapi-codegen configuration of the Go client (ADR-0037 §3): models and request
+# builders for the end-user operations, shared by every Go consumer of the REST
+# API (today the sync transport of the desktop/WASM core). Run from shared/go
+# (see Taskfile.yml gen-openapi).
+#
+# Not generated: the admin operations (only the Web UI uses them, through the
+# TypeScript client) and the routes outside the contract, tus uploads and the
+# SSE stream (/events), which sync/transport implements by hand.
+package: apiclient
+output: apiclient/apiclient.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  skip-prune: false
+  nullable-type: false
+  # The parsed response of operation X is XReply: the default suffix
+  # ("Response") collides with schemas such as CommitResponse.
+  response-type-suffix: Reply
+  exclude-tags:
+    - admin

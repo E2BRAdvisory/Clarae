@@ -3,8 +3,13 @@
 // desktop sync engine: operations, commit and changes payloads, application
 // error codes and the RFC 9457 problem document.
 //
-// api/openapi.yaml is the normative contract; these Go types must stay
-// field-for-field compatible with it (contract tests enforce it).
+// api/openapi.yaml is the normative contract. These are the domain types of
+// both sides; the HTTP layers convert them to and from the types generated from
+// the spec (services/cloud/internal/api on the server, memobrain/shared/apiclient
+// in the desktop transport), so a schema change breaks the build there rather
+// than the wire. Problem is the exception, written as is by the server: the
+// cloud integration tests validate those responses against the spec, and
+// TestCodesMatchOpenAPI keeps the Code constants equal to the ErrorCode enum.
 package syncproto
 
 import "net/http"

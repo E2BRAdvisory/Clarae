@@ -9,10 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"memobrain/apps/desktop/internal/config"
 	"memobrain/apps/desktop/internal/features"
 	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/apiclient"
 )
 
 // ErrReadOnly is the error of a write on a vault the user may only read.
@@ -70,17 +73,32 @@ type DirectoryEntry struct {
 
 func toShareInfo(s transport.Share) ShareInfo {
 	out := ShareInfo{
-		ID: s.ID, VaultID: s.VaultID, VaultName: s.VaultName, ResourceType: s.ResourceType, PathPrefix: s.PathPrefix,
+		ID: s.Id.String(), VaultID: s.VaultId.String(), VaultName: s.VaultName, ResourceType: string(s.ResourceType), PathPrefix: deref(s.PathPrefix),
 		DisplayName: s.DisplayName, OwnerName: s.OwnerName, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339),
-		MyPermission: s.MyPermission, MyStatus: s.MyStatus, Grants: []GrantInfo{},
+		MyPermission: string(deref(s.MyPermission)), MyStatus: string(deref(s.MyStatus)), Grants: []GrantInfo{},
+	}
+	if s.Id == (uuid.UUID{}) {
+		out.ID, out.VaultID = "", "" // the zero Share of a failed call
 	}
 	if s.ExpiresAt != nil {
 		out.ExpiresAt = s.ExpiresAt.UTC().Format(time.RFC3339)
 	}
-	for _, g := range s.Grants {
-		out.Grants = append(out.Grants, GrantInfo{PrincipalType: g.PrincipalType, PrincipalID: g.PrincipalID, PrincipalName: g.PrincipalName, Permission: g.Permission, Status: g.Status})
+	for _, g := range deref(s.Grants) {
+		out.Grants = append(out.Grants, toGrantInfo(g))
 	}
 	return out
+}
+
+func toGrantInfo(g transport.Grant) GrantInfo {
+	return GrantInfo{PrincipalType: string(g.PrincipalType), PrincipalID: g.PrincipalId.String(), PrincipalName: g.PrincipalName, Permission: string(g.Permission), Status: string(g.Status)}
+}
+
+func deref[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
 }
 
 // SharingAPI exposes shares and mounts to the frontend (§2.6.4). Changes also arrive as
@@ -215,7 +233,11 @@ func (s *SharingAPI) CreateShare(vaultID, path string, isDir bool, name string, 
 	}
 	gs := make([]transport.NewGrant, 0, len(grants))
 	for _, g := range grants {
-		gs = append(gs, transport.NewGrant{PrincipalType: g.PrincipalType, PrincipalID: g.PrincipalID, Permission: g.Permission})
+		pid, err := uuid.Parse(g.PrincipalID)
+		if err != nil {
+			return ShareInfo{}, fmt.Errorf("invalid: principal id %q", g.PrincipalID)
+		}
+		gs = append(gs, transport.NewGrant{PrincipalType: apiclient.NewGrantPrincipalType(g.PrincipalType), PrincipalId: pid, Permission: apiclient.SharePermission(g.Permission)})
 	}
 	sh, err := s.app.sync.CreateShare(context.Background(), vaultID, path, isDir, name, gs, exp)
 	return toShareInfo(sh), bindingError(err)
@@ -255,7 +277,10 @@ func (s *SharingAPI) SetGrant(shareID, principalType, principalID, permission st
 		return GrantInfo{}, err
 	}
 	g, err := c.PutGrant(context.Background(), shareID, principalType, principalID, permission)
-	return GrantInfo{PrincipalType: g.PrincipalType, PrincipalID: g.PrincipalID, PrincipalName: g.PrincipalName, Permission: g.Permission, Status: g.Status}, bindingError(err)
+	if err != nil {
+		return GrantInfo{}, bindingError(err)
+	}
+	return toGrantInfo(g), nil
 }
 
 // RemoveGrant takes a recipient out of a share.
@@ -285,13 +310,13 @@ func (s *SharingAPI) Directory(query string) ([]DirectoryEntry, error) {
 	out := make([]DirectoryEntry, 0, len(users)+len(groups))
 	for _, u := range users {
 		label := u.Username
-		if u.DisplayName != "" {
-			label = u.DisplayName + " (" + u.Username + ")"
+		if dn := deref(u.DisplayName); dn != "" {
+			label = dn + " (" + u.Username + ")"
 		}
-		out = append(out, DirectoryEntry{Type: "user", ID: u.ID, Name: u.Username, Label: label})
+		out = append(out, DirectoryEntry{Type: "user", ID: u.Id.String(), Name: u.Username, Label: label})
 	}
 	for _, g := range groups {
-		out = append(out, DirectoryEntry{Type: "group", ID: g.ID, Name: g.Name, Label: g.Name})
+		out = append(out, DirectoryEntry{Type: "group", ID: g.Id.String(), Name: g.Name, Label: g.Name})
 	}
 	return out, nil
 }

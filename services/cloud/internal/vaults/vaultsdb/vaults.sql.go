@@ -7,6 +7,7 @@ package vaultsdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -23,6 +24,21 @@ type AddVaultUsageParams struct {
 
 func (q *Queries) AddVaultUsage(ctx context.Context, arg AddVaultUsageParams) error {
 	_, err := q.db.Exec(ctx, addVaultUsage, arg.ID, arg.TotalBytes, arg.FileCount)
+	return err
+}
+
+const advanceCompaction = `-- name: AdvanceCompaction :exec
+UPDATE vaults SET compaction_seq = GREATEST(compaction_seq, $2::bigint) WHERE id = $1
+`
+
+type AdvanceCompactionParams struct {
+	ID  uuid.UUID
+	Seq int64
+}
+
+// Changelog entries up to seq are no longer served (cursors before it expire).
+func (q *Queries) AdvanceCompaction(ctx context.Context, arg AdvanceCompactionParams) error {
+	_, err := q.db.Exec(ctx, advanceCompaction, arg.ID, arg.Seq)
 	return err
 }
 
@@ -148,6 +164,50 @@ func (q *Queries) ListOwnedVaults(ctx context.Context, ownerID uuid.UUID) ([]Vau
 	return items, nil
 }
 
+const listOwnedVaultsWithDeleted = `-- name: ListOwnedVaultsWithDeleted :many
+SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults
+WHERE owner_id = $1 AND (deleted_at IS NULL OR deleted_at > $2::timestamptz)
+ORDER BY lower(name), created_at
+`
+
+type ListOwnedVaultsWithDeletedParams struct {
+	OwnerID      uuid.UUID
+	DeletedAfter time.Time
+}
+
+// The owner's vaults plus the soft-deleted ones still restorable (deleted after
+// deleted_after, i.e. within the retention period).
+func (q *Queries) ListOwnedVaultsWithDeleted(ctx context.Context, arg ListOwnedVaultsWithDeletedParams) ([]Vault, error) {
+	rows, err := q.db.Query(ctx, listOwnedVaultsWithDeleted, arg.OwnerID, arg.DeletedAfter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Vault{}
+	for rows.Next() {
+		var i Vault
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Name,
+			&i.Kind,
+			&i.LastSeq,
+			&i.CompactionSeq,
+			&i.TotalBytes,
+			&i.FileCount,
+			&i.CreatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTree = `-- name: ListTree :many
 SELECT id, path, kind, current_rev, blob_hash, size FROM files
 WHERE vault_id = $1 AND NOT is_deleted ORDER BY path_key
@@ -187,6 +247,20 @@ func (q *Queries) ListTree(ctx context.Context, vaultID uuid.UUID) ([]ListTreeRo
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockVault = `-- name: LockVault :one
+SELECT id FROM vaults WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// Takes the same per-vault row lock as NextVaultSeq up front. FOR NO KEY
+// UPDATE (what an UPDATE of non-key columns takes) leaves the foreign-key
+// checks of rows referencing the vault (blob uploads, shares) unblocked.
+func (q *Queries) LockVault(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockVault, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const nextVaultSeq = `-- name: NextVaultSeq :one

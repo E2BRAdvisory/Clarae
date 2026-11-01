@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/apiclient"
 	"memobrain/shared/syncproto"
 )
 
@@ -45,7 +48,7 @@ func (m *Manager) Invitations(ctx context.Context) ([]transport.Share, error) {
 	}
 	out := make([]transport.Share, 0, len(all))
 	for _, s := range all {
-		if s.MyStatus == "pending" {
+		if s.MyStatus != nil && *s.MyStatus == apiclient.GrantStatusPending {
 			out = append(out, s)
 		}
 	}
@@ -66,16 +69,17 @@ func (m *Manager) Mounts(ctx context.Context, mountsDir string) ([]MountState, e
 	out := make([]MountState, 0, len(remote))
 	seen := map[string]bool{}
 	for _, r := range remote {
-		seen[r.ShareID] = true
+		mm := MountOf(r)
+		seen[mm.ShareID] = true
 		st := MountState{
-			ShareID: r.ShareID, CloudVaultID: r.VaultID, Name: r.DisplayName, OwnerName: r.OwnerName,
-			ResourceType: r.ResourceType, Permission: r.Permission,
+			ShareID: mm.ShareID, CloudVaultID: mm.CloudVaultID, Name: mm.Name, OwnerName: mm.OwnerName,
+			ResourceType: mm.ResourceType, Permission: mm.Permission,
 		}
-		dir := MountDir(mountsDir, r.ShareID)
+		dir := MountDir(mountsDir, mm.ShareID)
 		if _, err := os.Stat(dir); err == nil {
 			st.Path, st.Mounted = dir, true
 		}
-		st.VaultID = open[r.ShareID]
+		st.VaultID = open[mm.ShareID]
 		out = append(out, st)
 	}
 	// Mount folders whose share is gone (revoked, expired, deleted): still on disk until the user decides.
@@ -127,16 +131,17 @@ func (m *Manager) AcceptShare(ctx context.Context, shareID, mountsDir string) (M
 		return MountState{}, err
 	}
 	for _, r := range remote {
-		if r.ShareID != shareID {
+		mm := MountOf(r)
+		if mm.ShareID != shareID {
 			continue
 		}
 		dir := MountDir(mountsDir, shareID)
-		if err := PrepareMount(ctx, dir, MountOf(r), info); err != nil {
+		if err := PrepareMount(ctx, dir, mm, info); err != nil {
 			return MountState{}, err
 		}
 		return MountState{
-			ShareID: r.ShareID, CloudVaultID: r.VaultID, Name: r.DisplayName, OwnerName: r.OwnerName,
-			ResourceType: r.ResourceType, Permission: r.Permission, Path: dir, Mounted: true,
+			ShareID: mm.ShareID, CloudVaultID: mm.CloudVaultID, Name: mm.Name, OwnerName: mm.OwnerName,
+			ResourceType: mm.ResourceType, Permission: mm.Permission, Path: dir, Mounted: true,
 		}, nil
 	}
 	return MountState{}, fmt.Errorf("the share %s was accepted but is not listed as a mount", shareID)
@@ -163,9 +168,9 @@ func (m *Manager) EnsureMount(ctx context.Context, shareID, mountsDir string) (s
 		return "", err
 	}
 	for _, r := range remote {
-		if r.ShareID == shareID {
+		if mm := MountOf(r); mm.ShareID == shareID {
 			dir := MountDir(mountsDir, shareID)
-			return dir, PrepareMount(ctx, dir, MountOf(r), info)
+			return dir, PrepareMount(ctx, dir, mm, info)
 		}
 	}
 	return "", errors.New("this share is not available any more")
@@ -183,9 +188,10 @@ func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, e
 	if err != nil {
 		return 0, err
 	}
-	byShare := make(map[string]transport.Mount, len(remote))
+	byShare := make(map[string]MountMeta, len(remote))
 	for _, r := range remote {
-		byShare[r.ShareID] = r
+		mm := MountOf(r)
+		byShare[mm.ShareID] = mm
 	}
 	open := m.openMounts(ctx)
 	entries, _ := os.ReadDir(mountsDir)
@@ -207,8 +213,8 @@ func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, e
 				continue
 			}
 			switch {
-			case live && (cur.Permission != r.Permission || cur.Name != r.DisplayName || cur.Revoked):
-				if err := m.UpdateMount(ctx, local, MountOf(r)); err == nil {
+			case live && (cur.Permission != r.Permission || cur.Name != r.Name || cur.Revoked):
+				if err := m.UpdateMount(ctx, local, r); err == nil {
 					changed++
 				}
 			case !live && !cur.Revoked:
@@ -223,8 +229,8 @@ func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, e
 			continue
 		}
 		switch {
-		case live && (cur.Permission != r.Permission || cur.Name != r.DisplayName || cur.Revoked):
-			if PrepareMount(ctx, dir, MountOf(r), info) == nil {
+		case live && (cur.Permission != r.Permission || cur.Name != r.Name || cur.Revoked):
+			if PrepareMount(ctx, dir, r, info) == nil {
 				changed++
 			}
 		case !live && !cur.Revoked:
@@ -303,10 +309,25 @@ func (m *Manager) CreateShare(ctx context.Context, localID, path string, isDir b
 			name = "Shared"
 		}
 	}
-	return c.CreateShare(ctx, transport.CreateShare{
-		VaultID: t.CloudVaultID, ResourceType: t.ResourceType, PathPrefix: t.PathPrefix, FileID: t.FileID,
-		DisplayName: name, ExpiresAt: expires, Grants: grants,
-	})
+	vaultID, err := uuid.Parse(t.CloudVaultID)
+	if err != nil {
+		return transport.Share{}, fmt.Errorf("cloud vault id: %w", err)
+	}
+	in := transport.CreateShare{VaultId: vaultID, ResourceType: apiclient.ResourceType(t.ResourceType), DisplayName: name, ExpiresAt: expires}
+	if t.PathPrefix != "" {
+		in.PathPrefix = &t.PathPrefix
+	}
+	if t.FileID != "" {
+		fileID, err := uuid.Parse(t.FileID)
+		if err != nil {
+			return transport.Share{}, fmt.Errorf("file id: %w", err)
+		}
+		in.FileId = &fileID
+	}
+	if len(grants) > 0 {
+		in.Grants = &grants
+	}
+	return c.CreateShare(ctx, in)
 }
 
 // VaultShares lists the shares of the connected vault's cloud copy that the caller owns.
@@ -325,7 +346,7 @@ func (m *Manager) VaultShares(ctx context.Context, localID string) ([]transport.
 	}
 	out := make([]transport.Share, 0, len(all))
 	for _, s := range all {
-		if s.VaultID == mv.cloudID {
+		if s.VaultId.String() == mv.cloudID {
 			out = append(out, s)
 		}
 	}

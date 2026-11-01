@@ -1,12 +1,12 @@
 package transport
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -15,7 +15,8 @@ import (
 // enough that a lost connection costs little.
 const tusChunk = 8 << 20
 
-// TusUpload sends data with the resumable protocol (tus 1.0.0): it creates an
+// TusUpload sends data with the resumable protocol (tus 1.0.0, outside the
+// OpenAPI contract, hence built by hand on the same request pipeline): it creates an
 // upload, asks the server for the offset (so an interrupted run can resume
 // when called again with the same upload URL) and sends the rest in chunks.
 // progress, if set, is called with the bytes sent so far. resumeURL may be
@@ -39,14 +40,18 @@ func (c *Client) TusUpload(ctx context.Context, ref, hash string, data []byte, r
 	}
 	if loc == "" {
 		meta := "sha256 " + base64.StdEncoding.EncodeToString([]byte(hash))
-		resp, err := c.raw(ctx, http.MethodPost, withScope("/vaults/"+vault+"/uploads", scope), nil, tusHeaders(map[string]string{
+		path := "/vaults/" + url.PathEscape(vault) + "/uploads"
+		if scope != "" {
+			path += "?" + url.Values{"scope": {scope}}.Encode()
+		}
+		resp, err := c.raw(ctx, http.MethodPost, path, nil, tusHeaders(map[string]string{
 			"Upload-Length": strconv.Itoa(len(data)), "Upload-Metadata": meta,
 		}))
 		if err != nil {
 			return "", err
 		}
 		if resp.StatusCode != http.StatusCreated {
-			return "", decode(resp, nil)
+			return "", decodeProblem(resp)
 		}
 		_ = resp.Body.Close()
 		loc = resp.Header.Get("Location")
@@ -65,7 +70,7 @@ func (c *Client) TusUpload(ctx context.Context, ref, hash string, data []byte, r
 			return loc, err
 		}
 		if resp.StatusCode != http.StatusNoContent {
-			return loc, decode(resp, nil)
+			return loc, decodeProblem(resp)
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
@@ -84,5 +89,3 @@ func tusHeaders(h map[string]string) map[string]string {
 	}
 	return out
 }
-
-var _ = bytes.NewReader

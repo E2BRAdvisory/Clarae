@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { commands, commandTitle, currentCombos } from '../commands/registry';
+import { commands, commandTitle, currentCombos, isAvailable } from '../commands/registry';
 import { comboFromEvent, comboIndex, formatCombo } from '../commands/hotkeys';
 import { useSettings } from '../state/settings';
 import { Icon } from '../shell/icons';
@@ -30,8 +30,9 @@ export function HotkeysEditor() {
     setHotkeys(next);
   };
 
-  const rows = commands.filter((c) =>
-    commandTitle(c.id).toLowerCase().includes(filter.toLowerCase()),
+  // A command the host cannot offer (the updater in the browser) has no hotkey to set.
+  const rows = commands.filter(
+    (c) => isAvailable(c) && commandTitle(c.id).toLowerCase().includes(filter.toLowerCase()),
   );
 
   return (

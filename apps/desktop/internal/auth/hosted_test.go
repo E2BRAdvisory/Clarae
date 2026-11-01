@@ -28,7 +28,7 @@ func TestHostedSessionUsesThePageToken(t *testing.T) {
 		t.Fatalf("hosted login: %v", err)
 	}
 	st := svc.State()
-	if st.Status != StatusReady || st.Profile.Username != "user1" || st.DeviceID != "dev-1" || st.ServerURL != cloud.URL {
+	if st.Status != StatusReady || st.Profile.Username != "user1" || st.DeviceID != testDeviceID || st.ServerURL != cloud.URL {
 		t.Fatalf("state after login = %+v", st)
 	}
 	if asked.Load() == 0 {
@@ -50,8 +50,8 @@ func TestHostedSessionUsesThePageToken(t *testing.T) {
 	}
 	again := newHosted()
 	again.Restore(context.Background())
-	if got := again.State().DeviceID; got != "dev-1" {
-		t.Fatalf("restored device id = %q, want dev-1", got)
+	if got := again.State().DeviceID; got != testDeviceID {
+		t.Fatalf("restored device id = %q, want %s", got, testDeviceID)
 	}
 	// Restore finishes the sign-in in the background; let it end before the directory goes away.
 	deadline := time.Now().Add(5 * time.Second)
@@ -104,7 +104,7 @@ func TestDeviceIsDroppedWhenTheAccountChanges(t *testing.T) {
 	if err := svc.Login(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := svc.State().DeviceID; got != "dev-1" {
-		t.Fatalf("device id = %q, want a new registration (dev-1) for the new account", got)
+	if got := svc.State().DeviceID; got != testDeviceID {
+		t.Fatalf("device id = %q, want a new registration (%s) for the new account", got, testDeviceID)
 	}
 }

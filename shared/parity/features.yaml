@@ -1,0 +1,1597 @@
+# Registro delle funzioni (ADR-0037 §1): una voce per funzione utente, con ciò che la realizza su
+# desktop, nel workbench web e nella console web. È l'unica fonte della parità:
+# `node scripts/parity.mjs --check` (in `task parity` e `task ci`) fallisce se un comando, un
+# binding o un'operazione OpenAPI non compare in nessuna voce, se una voce rimanda a qualcosa che
+# non esiste o se uno stato diverso da `yes` non ha motivazione. Schema: features.schema.json.
+# Come aggiungere una voce: docs/dev-setup.md, "Registro delle funzioni".
+#
+# Stati: yes | partial | exception (eccezione dichiarata, ADR-0029) | console-only (solo
+# desktop/workbench: la funzione sta nella console) | missing. `reason` è obbligatoria se lo stato
+# non è `yes`; `note` aggiunge un'informazione anche quando lo stato è `yes`.
+# Il workbench eredita commands, bindings, operationIds e capability del desktop se non li elenca
+# (stessa UI e stesso core, ADR-0029). `console` si omette per le funzioni sul contenuto di un
+# vault aperto, che la console affida al workbench (rotta /vaults/:id/open).
+# I test sono file relativi alla radice: desktop = UI (packages/workbench), e2e sul mock
+# (apps/desktop/frontend/e2e) e core Go; web = console e workbench (web/); cloud = services/cloud.
+version: 1
+
+features:
+  # ---- vault -------------------------------------------------------------------------------------
+  - id: vault.local-folder
+    title: Vault su una cartella del computer
+    desktop:
+      status: yes
+      capability: localFolders
+      bindings: [VaultAPI.PickFolder]
+    workbench:
+      status: exception
+      reason: si aprono vault del cloud, copiati nel browser (OPFS); il browser non apre una cartella del computer come vault
+    tests:
+      desktop:
+        - packages/workbench/src/platform/platform.test.tsx
+        - apps/desktop/internal/vault/fs_test.go
+
+  - id: vault.open
+    title: Apertura, cambio e chiusura del vault
+    desktop:
+      status: yes
+      commands: [vault:switch, vault:close]
+      bindings: [VaultAPI.OpenVault, VaultAPI.CloseVault, VaultAPI.ListRecent]
+    workbench:
+      status: yes
+      note: il vault si apre dalla console («Apri», rotta /vaults/:id/open)
+    console:
+      status: yes
+      routes: [/vaults, /vaults/:id/open]
+    tests:
+      desktop:
+        - packages/workbench/src/shell/VaultSwitcher.test.tsx
+        - packages/workbench/src/app/teardown.test.tsx
+      web:
+        - web/e2e/workbench.spec.ts
+        - web/src/pages/Vaults.test.tsx
+        - web/src/workbench/guard.test.ts
+
+  - id: vault.multi-open
+    title: Più vault aperti insieme
+    desktop:
+      status: yes
+      bindings: [VaultAPI.ListOpen]
+    workbench:
+      status: exception
+      reason: un vault per browser, perché gli handle sincroni di OPFS sono esclusivi
+    tests:
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: vault.list
+    title: Elenco dei vault cloud
+    desktop:
+      status: yes
+      note: Impostazioni → Cloud, `CloudVaultsTable` di @memobrain/cloud-features (ADR-0037 §2)
+      bindings: [SyncAPI.ListCloudVaults]
+      operationIds: [listVaults, getVault]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      note: '`CloudVaultsTable` con `RestCloudPort`; le condivisioni accettate si aprono come mount (`?share=`)'
+      routes: [/vaults]
+      operationIds: [listVaults]
+    notes: una sola UI (@memobrain/cloud-features) su due adattatori, binding e REST (ADR-0037 §2)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Vaults.test.tsx
+      cloud:
+        - services/cloud/internal/vaults/service_test.go
+        - services/cloud/test/integration/api_test.go
+
+  - id: vault.create
+    title: Creazione di un vault cloud
+    desktop:
+      status: yes
+      note: dalla procedura di collegamento di un vault locale («Collega al cloud»), che anche «Nuovo vault» di Impostazioni → Cloud apre
+      commands: [sync:connect]
+      bindings: [SyncAPI.LinkNew]
+      operationIds: [createVault, putKeyEnvelope]
+    workbench:
+      status: yes
+      note: solo vault privati, sulla rotta di creazione /vaults/new/open?kind=private&name=… aperta dalla console; la procedura guidata del workbench chiede la passphrase e mostra la chiave di recupero (la crittografia resta nel core Go)
+      commands: []
+      bindings: [SyncAPI.LinkNew]
+      operationIds: [createVault]
+    console:
+      status: yes
+      note: «Nuovo vault»; un vault condiviso con la REST, uno privato aprendo il workbench sulla rotta di creazione
+      routes: [/vaults, /vaults/:id/open]
+      operationIds: [createVault]
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_test.go
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Vaults.test.tsx
+        - web/src/workbench/create.test.ts
+        - web/e2e/vaults.spec.ts
+      cloud:
+        - services/cloud/internal/vaults/service_test.go
+        - services/cloud/web-embed/workbench_test.go
+
+  - id: vault.rename
+    title: Rinomina di un vault cloud
+    desktop:
+      status: yes
+      note: Impostazioni → Cloud; un vault locale collegato mostra il nuovo nome nel collegamento, le cartelle non cambiano nome
+      bindings: [SyncAPI.RenameCloudVault]
+      operationIds: [updateVault]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      routes: [/vaults]
+      operationIds: [updateVault]
+    tests:
+      desktop:
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_vaults_test.go
+        - apps/desktop/internal/sync/e2e_vaults_test.go
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/e2e/vaults.spec.ts
+      cloud:
+        - services/cloud/internal/vaults/service_test.go
+
+  - id: vault.delete
+    title: Eliminazione logica di un vault cloud
+    desktop:
+      status: yes
+      note: dopo l'eliminazione sul server il vault locale collegato si scollega e conserva i file (D-04)
+      bindings: [SyncAPI.DeleteCloudVault]
+      operationIds: [deleteVault]
+    workbench:
+      status: yes
+      note: il vault aperto nella pagina non si elimina da lì (si torna alla console)
+    console:
+      status: yes
+      routes: [/vaults]
+      operationIds: [deleteVault]
+    tests:
+      desktop:
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_vaults_test.go
+        - apps/desktop/internal/sync/e2e_vaults_test.go
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Vaults.test.tsx
+        - web/e2e/vaults.spec.ts
+      cloud:
+        - services/cloud/internal/vaults/service_test.go
+
+  - id: vault.restore
+    title: Ripristino di un vault cloud eliminato
+    desktop:
+      status: yes
+      note: sezione «Vault eliminati»; il vault ripristinato non si ricollega da solo
+      bindings: [SyncAPI.ListDeletedCloudVaults, SyncAPI.RestoreCloudVault]
+      operationIds: [listVaults, restoreVault]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      note: la data di rimozione definitiva compare solo se il client conosce la conservazione (l'API non la espone)
+      routes: [/vaults]
+      operationIds: [listVaults, restoreVault]
+    tests:
+      desktop:
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_vaults_test.go
+        - apps/desktop/internal/sync/e2e_vaults_test.go
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Vaults.test.tsx
+        - web/e2e/vaults.spec.ts
+      cloud:
+        - services/cloud/internal/vaults/service_test.go
+
+  - id: vault.system-trash
+    title: Cestino di sistema per i file eliminati
+    desktop:
+      status: yes
+      bindings: [VaultAPI.Trash]
+    workbench:
+      status: exception
+      reason: i file eliminati vanno in `.trash/` del vault, perché il browser non ha un cestino
+    tests:
+      desktop:
+        - apps/desktop/internal/vault/fs_test.go
+
+  - id: index.rebuild
+    title: Ricostruzione dell'indice del vault
+    desktop:
+      status: yes
+      commands: [index:rebuild]
+      bindings: [VaultAPI.RebuildIndex]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/indexer/indexer_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: settings.vault
+    title: Configurazione del vault (.memobrain/)
+    desktop:
+      status: yes
+      bindings: [VaultAPI.ReadConfig, VaultAPI.WriteConfig]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/app/bindings_test.go
+        - packages/workbench/src/workspace/layout.test.ts
+
+  # ---- sincronizzazione ----------------------------------------------------------------------------
+  - id: sync.link
+    title: Collegamento di un vault locale a un vault cloud
+    desktop:
+      status: yes
+      commands: [sync:connect]
+      bindings: [SyncAPI.LinkExisting, SyncAPI.Unlink, SyncAPI.Info]
+      operationIds: [getVaultTree]
+    workbench:
+      status: yes
+      note: sul web il collegamento avviene da solo all'apertura del vault (web/src/workbench/launch.ts)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+        - apps/desktop/internal/sync/manager_test.go
+      web:
+        - web/e2e-cloud/web-sync.spec.ts
+
+  - id: sync.engine
+    title: Sincronizzazione del vault (stato, pausa, sincronizza ora)
+    desktop:
+      status: yes
+      commands: [sync:now, sync:settings]
+      bindings: [SyncAPI.SyncNow, SyncAPI.Status, SyncAPI.SetPaused, SyncAPI.SetPollInterval]
+      operationIds: [getChanges, checkBlobs, putBlob, getBlob, commit]
+    workbench:
+      status: yes
+      note: le modifiche fatte offline restano in coda finché la scheda è aperta (ADR-0029)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+        - apps/desktop/internal/sync/e2e_test.go
+        - apps/desktop/internal/sync/push_test.go
+        - apps/desktop/internal/sync/scan_test.go
+      web:
+        - web/e2e-cloud/web-sync.spec.ts
+      cloud:
+        - services/cloud/test/integration/sync_test.go
+        - services/cloud/test/integration/tus_test.go
+
+  - id: conflicts
+    title: Conflitti di sincronizzazione
+    desktop:
+      status: yes
+      commands: [sync:conflicts]
+      bindings: [SyncAPI.Conflicts, SyncAPI.ConflictTexts, SyncAPI.ResolveConflict]
+    workbench:
+      status: yes
+      note: dal browser è provata solo la fusione di un `.md`, non la copia di conflitto di `.canvas` ed `.excalidraw`
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+        - packages/workbench/src/sync/diff.test.ts
+        - apps/desktop/internal/sync/e2e_drawings_test.go
+      web:
+        - web/e2e-cloud/web-sync.spec.ts
+
+  - id: revisions
+    title: Storico delle revisioni nel cloud
+    desktop:
+      status: yes
+      commands: [sync:history]
+      bindings: [SyncAPI.History, SyncAPI.RevisionText, SyncAPI.RestoreRevision]
+      operationIds: [listRevisions, getRevisionContent, restoreRevision]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+      cloud:
+        - services/cloud/test/integration/history_test.go
+        - services/cloud/internal/revisions/retention_test.go
+
+  - id: history.local
+    title: Storico locale delle note
+    desktop:
+      status: yes
+      commands: [recovery:open]
+      bindings:
+        [
+          HistoryAPI.List,
+          HistoryAPI.Read,
+          HistoryAPI.Restore,
+          HistoryAPI.GetSettings,
+          HistoryAPI.SetSettings,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/recovery/recovery.test.tsx
+        - apps/desktop/internal/history/history_test.go
+        - apps/desktop/internal/app/bindings_history_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: trash
+    title: File eliminati e loro ripristino
+    desktop:
+      status: yes
+      commands: [recovery:deleted]
+      bindings: [HistoryAPI.ListDeleted, HistoryAPI.Restore]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/recovery/recovery.test.tsx
+        - apps/desktop/internal/history/history_test.go
+
+  # ---- vault privati (E2EE) ----------------------------------------------------------------------
+  - id: crypto.unlock
+    title: Sblocco e blocco di un vault privato
+    desktop:
+      status: yes
+      commands: [sync:unlock]
+      bindings:
+        [
+          VaultCryptoAPI.Unlock,
+          VaultCryptoAPI.Lock,
+          VaultCryptoAPI.Activity,
+          VaultCryptoAPI.SetPassphrase,
+        ]
+      operationIds: [getKeyEnvelopes]
+    workbench:
+      status: yes
+      note: al blocco la copia in chiaro nel browser viene cancellata (ADR-0029)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+        - apps/desktop/internal/crypto/crypto_test.go
+        - apps/desktop/internal/sync/lock_test.go
+      web:
+        - web/e2e-cloud/web-private.spec.ts
+        - web/e2e/workbench.spec.ts
+
+  - id: crypto.change-passphrase
+    title: Cambio della passphrase di un vault privato
+    desktop:
+      status: yes
+      bindings: [VaultCryptoAPI.ChangePassphrase]
+      operationIds: [putKeyEnvelope]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/crypto/crypto_test.go
+
+  - id: crypto.recovery-key
+    title: Nuova recovery key di un vault privato
+    desktop:
+      status: yes
+      bindings: [VaultCryptoAPI.RegenerateRecoveryKey]
+      operationIds: [putKeyEnvelope]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/crypto/crypto_test.go
+
+  - id: crypto.disk-check
+    title: Avviso sul disco non cifrato
+    desktop:
+      status: yes
+      capability: diskEncryptionCheck
+      bindings: [VaultCryptoAPI.DiskEncryption]
+    workbench:
+      status: exception
+      reason: nel browser non c'è un disco di cui parlare (il binding non viene chiamato)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+
+  # ---- condivisione ------------------------------------------------------------------------------
+  - id: share.create
+    title: Creazione di una condivisione (vault, cartella o file)
+    desktop:
+      status: yes
+      commands: [sharing:share]
+      bindings: [SharingAPI.CreateShare]
+      operationIds: [createShare]
+    workbench:
+      status: yes
+    console:
+      status: missing
+      reason: ADR-0037, fase B. La console non crea condivisioni (`createShare` non è chiamata); oggi si creano dal client, scegliendo cartella o file nel vault
+      routes: [/shares]
+      operationIds: [createShare]
+    tests:
+      desktop:
+        - packages/workbench/src/sharing/sharing.test.tsx
+        - apps/desktop/internal/sync/e2e_sharing_test.go
+      cloud:
+        - services/cloud/test/integration/sharing_test.go
+
+  - id: share.manage
+    title: Elenco e revoca delle condivisioni create
+    desktop:
+      status: yes
+      commands: [sharing:open]
+      bindings: [SharingAPI.VaultShares, SharingAPI.Share, SharingAPI.RevokeShare]
+      operationIds: [listShares, getShare, revokeShare]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      routes: [/shares]
+      operationIds: [listShares, revokeShare]
+    notes: implementata due volte, workbench con i binding e console con la REST (ADR-0037 §2)
+    tests:
+      desktop:
+        - packages/workbench/src/sharing/sharing.test.tsx
+      web:
+        - web/src/pages/Shares.test.tsx
+        - web/e2e/app.spec.ts
+      cloud:
+        - services/cloud/test/integration/sharing_test.go
+
+  - id: share.update
+    title: Rinomina e scadenza di una condivisione
+    desktop:
+      status: missing
+      reason: ADR-0037, fase B. `PATCH /shares/{id}` (`updateShare`) non è mai chiamato; il client Go ha `UpdateShare` ma nessun binding lo espone
+    workbench:
+      status: missing
+      reason: ADR-0037, fase B
+    console:
+      status: missing
+      reason: ADR-0037, fase B
+      routes: [/shares]
+      operationIds: [updateShare]
+    tests:
+      cloud:
+        - services/cloud/test/integration/sharing_test.go
+
+  - id: share.grants
+    title: Permessi di utenti e gruppi su una condivisione
+    desktop:
+      status: yes
+      bindings: [SharingAPI.SetGrant, SharingAPI.RemoveGrant, SharingAPI.Directory]
+      operationIds: [putGrant, deleteGrant, searchDirectoryUsers, searchDirectoryGroups]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      routes: [/shares]
+      operationIds: [putGrant, deleteGrant, searchDirectoryUsers, searchDirectoryGroups]
+    notes: implementata due volte, workbench con i binding e console con la REST (ADR-0037 §2)
+    tests:
+      desktop:
+        - packages/workbench/src/sharing/sharing.test.tsx
+      web:
+        - web/src/pages/Shares.test.tsx
+      cloud:
+        - services/cloud/test/integration/sharing_test.go
+        - services/cloud/internal/access/access_test.go
+
+  - id: invitations
+    title: Inviti ricevuti (accetta, rifiuta)
+    desktop:
+      status: yes
+      bindings: [SharingAPI.Invitations, SharingAPI.AcceptShare, SharingAPI.DeclineShare]
+      operationIds: [listSharedWithMe, acceptShare, declineShare]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      routes: [/shares]
+      operationIds: [listShares, acceptShare, declineShare]
+    notes: implementata due volte, workbench con i binding e console con la REST (ADR-0037 §2)
+    tests:
+      desktop:
+        - packages/workbench/src/sharing/sharing.test.tsx
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      web:
+        - web/src/pages/Shares.test.tsx
+        - web/e2e/app.spec.ts
+      cloud:
+        - services/cloud/test/integration/sharing_test.go
+
+  - id: mounts
+    title: Mount delle condivisioni ricevute
+    desktop:
+      status: yes
+      bindings: [SharingAPI.Mounts, SharingAPI.OpenMount, SharingAPI.RemoveMount]
+      operationIds: [listSharedWithMe]
+    workbench:
+      status: yes
+      note: un mount si apre con /vaults/:id/open?share=; non ancora provato contro un cloud vero
+    console:
+      status: yes
+      routes: [/shares, /vaults/:id/open]
+    tests:
+      desktop:
+        - packages/workbench/src/sharing/sharing.test.tsx
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+        - apps/desktop/internal/sync/e2e_sharing_test.go
+      web:
+        - web/src/pages/Shares.test.tsx
+
+  # ---- account e dispositivi ---------------------------------------------------------------------
+  - id: account.login
+    title: Accesso al cloud e sessione
+    desktop:
+      status: yes
+      bindings: [AuthAPI.Login, AuthAPI.Logout, AuthAPI.Status]
+      operationIds: [getMe]
+    workbench:
+      status: yes
+      note: sul web la sessione OIDC è quella della pagina, che passa il token al core
+    console:
+      status: yes
+      routes: [/auth/callback, /account]
+      operationIds: [getMe]
+    tests:
+      desktop:
+        - packages/workbench/src/settings/CloudSection.test.tsx
+        - packages/workbench/src/shell/AccountButton.test.tsx
+        - apps/desktop/internal/auth/auth_test.go
+      web:
+        - web/src/auth/oidc.test.ts
+        - web/src/auth/guards.test.tsx
+        - web/e2e/app.spec.ts
+      cloud:
+        - services/cloud/internal/auth/verifier_test.go
+
+  - id: account.data
+    title: Esportazione dei dati personali ed eliminazione dell'account
+    desktop:
+      status: console-only
+      reason: funzione dell'account, nella console (pagina Account)
+    workbench:
+      status: console-only
+      reason: funzione dell'account, nella console (pagina Account)
+    console:
+      status: yes
+      routes: [/account]
+      operationIds: [exportMyData, deleteMyAccount]
+    tests:
+      web:
+        - web/src/pages/Account.test.tsx
+        - web/e2e/account.spec.ts
+      cloud:
+        - services/cloud/test/integration/privacy_test.go
+
+  - id: account.groups
+    title: I miei gruppi
+    desktop:
+      status: console-only
+      reason: informazione dell'account, che spetta alla console
+    workbench:
+      status: console-only
+      reason: informazione dell'account, che spetta alla console
+    console:
+      status: missing
+      reason: nessuna pagina mostra i gruppi dell'utente; `GET /me/groups` (`listMyGroups`, spec §3.5) non è chiamata da nessun client
+      routes: [/account]
+      operationIds: [listMyGroups]
+
+  - id: devices
+    title: Dispositivi collegati e revoca
+    desktop:
+      status: yes
+      bindings: [SyncAPI.Devices, SyncAPI.RevokeDevice]
+      operationIds: [listMyDevices, revokeDevice, registerDevice]
+    workbench:
+      status: yes
+      note: il browser si registra come dispositivo `web` (ADR-0029)
+    console:
+      status: yes
+      routes: [/devices]
+      operationIds: [listMyDevices, revokeDevice]
+    notes: implementata due volte, workbench con i binding e console con la REST; la protezione del dispositivo corrente differisce (ADR-0037)
+    tests:
+      web:
+        - web/src/pages/Devices.test.tsx
+      cloud:
+        - services/cloud/test/integration/api_test.go
+
+  - id: usage
+    title: Spazio occupato e quota
+    desktop:
+      status: yes
+      bindings: [SyncAPI.Usage]
+      operationIds: [getMyUsage]
+    workbench:
+      status: yes
+    console:
+      status: yes
+      routes: [/usage]
+      operationIds: [getMyUsage]
+    notes: implementata due volte; il livello della quota differisce (soglia locale nella console, livello del server nel workbench, ADR-0037)
+    tests:
+      web:
+        - web/src/pages/Usage.test.tsx
+        - web/e2e/app.spec.ts
+      cloud:
+        - services/cloud/internal/quota/quota_test.go
+
+  - id: config.flags
+    title: Configurazione distribuita e feature flag
+    desktop:
+      status: yes
+      bindings: [ConfigAPI.Effective, ConfigAPI.Refresh]
+      operationIds: [getEffectiveConfig]
+    workbench:
+      status: yes
+    console:
+      status: partial
+      reason: la console legge solo il flag `web_workbench` e ignora `sharing` e gli altri; nomi e default dei flag sono definiti in tre punti (ADR-0037)
+      operationIds: [getEffectiveConfig]
+    tests:
+      desktop:
+        - packages/workbench/src/state/managed.test.ts
+        - apps/desktop/internal/app/managed_test.go
+        - apps/desktop/internal/config/config_test.go
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      web:
+        - web/src/pages/Vaults.test.tsx
+      cloud:
+        - services/cloud/test/integration/config_test.go
+
+  # ---- applicazione ------------------------------------------------------------------------------
+  - id: settings
+    title: Impostazioni dell'applicazione
+    desktop:
+      status: yes
+      commands: [settings:open]
+      bindings: [SettingsAPI.Get, SettingsAPI.Set, SettingsAPI.Info]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/settings/locations.test.ts
+        - apps/desktop/internal/app/bindings_test.go
+
+  - id: appearance
+    title: Tema e aspetto
+    desktop:
+      status: yes
+      commands: [theme:toggle]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/app/App.test.tsx
+
+  - id: hotkeys
+    title: Scorciatoie da tastiera personalizzabili
+    desktop:
+      status: yes
+      commands: [settings:hotkeys]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/commands/hotkeys.test.ts
+        - packages/workbench/src/commands/registry.test.ts
+
+  - id: command-palette
+    title: Palette dei comandi
+    desktop:
+      status: yes
+      commands: [palette:open]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/commands/registry.test.ts
+        - apps/desktop/frontend/e2e/keyboard.spec.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+
+  - id: app.updater
+    title: Aggiornamento automatico dell'applicazione
+    desktop:
+      status: yes
+      capability: updater
+      commands: [update:check]
+      bindings:
+        [
+          UpdaterAPI.Check,
+          UpdaterAPI.GetSettings,
+          UpdaterAPI.Install,
+          UpdaterAPI.SetSettings,
+          UpdaterAPI.Skip,
+          UpdaterAPI.Status,
+        ]
+    workbench:
+      status: exception
+      reason: la Web UI la serve il cloud ed è sempre aggiornata (il core riporta gli aggiornamenti come disattivati)
+    tests:
+      desktop:
+        - packages/workbench/src/updater/updater.test.tsx
+        - packages/workbench/src/commands/parity.test.ts
+        - apps/desktop/internal/updater/service_test.go
+        - apps/desktop/internal/updater/apply_test.go
+
+  - id: window.native
+    title: Finestra nativa (schermo intero, link esterni nel browser di sistema)
+    desktop:
+      status: yes
+      capability: nativeWindow
+    workbench:
+      status: exception
+      reason: nessuna finestra nativa; solo la Fullscreen API dell'elemento, e i link esterni si aprono in una nuova scheda
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/fullscreen.spec.ts
+        - packages/workbench/src/platform/platform.test.tsx
+
+  - id: deeplink
+    title: Link memobrain://
+    desktop:
+      status: yes
+    workbench:
+      status: exception
+      reason: schema di URL del sistema operativo, sostituito dalla rotta /vaults/:id/open
+    tests:
+      desktop:
+        - apps/desktop/internal/platform/urls_test.go
+
+  # ---- note e file -------------------------------------------------------------------------------
+  - id: note.create
+    title: Creazione di note e cartelle
+    desktop:
+      status: yes
+      commands: [note:new, note:new-tab, folder:new]
+      bindings: [VaultAPI.CreateFolder]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+        - packages/workbench/src/app/App.test.tsx
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: note.edit
+    title: Lettura e salvataggio delle note
+    desktop:
+      status: yes
+      bindings: [VaultAPI.ReadNote, VaultAPI.WriteNote]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/editor/useNoteDocument.test.tsx
+        - apps/desktop/internal/vault/fs_test.go
+        - apps/desktop/internal/vault/concurrency_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+        - web/e2e/opfs-fs.spec.ts
+
+  - id: note.rename
+    title: Rinomina e spostamento con aggiornamento dei link
+    desktop:
+      status: yes
+      commands: [note:rename]
+      bindings: [VaultAPI.Rename, LinksAPI.PlanRename, LinksAPI.ApplyRename]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+        - apps/desktop/frontend/e2e/keyboard.spec.ts
+        - apps/desktop/internal/links/links_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: note.delete
+    title: Eliminazione di note e file
+    desktop:
+      status: yes
+      commands: [note:delete]
+      bindings: [VaultAPI.Trash]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/vault/fs_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: files.explorer
+    title: Esplora file
+    desktop:
+      status: yes
+      commands: [sidebar:files]
+      bindings: [VaultAPI.ListTree]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/sidebar/trees.test.ts
+        - packages/workbench/src/sidebar/explorerCollapsed.test.tsx
+        - apps/desktop/frontend/e2e/keyboard.spec.ts
+
+  - id: attachments
+    title: Allegati e media
+    desktop:
+      status: yes
+      bindings: [VaultAPI.ReadBinary, VaultAPI.SaveAttachment]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/embeds/media.test.ts
+        - packages/workbench/src/embeds/hydrate.test.ts
+
+  - id: note.random
+    title: Apertura rapida e nota casuale
+    desktop:
+      status: yes
+      commands: [switcher:open, note:random]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/commands/registry.test.ts
+
+  - id: search
+    title: Ricerca nel vault
+    desktop:
+      status: yes
+      commands: [search:vault]
+      bindings: [SearchAPI.Query, SearchAPI.Explain]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/search/highlight.test.ts
+        - apps/desktop/internal/search/search_test.go
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+      web:
+        - web/e2e/workbench.spec.ts
+
+  # ---- editor e vista ----------------------------------------------------------------------------
+  - id: editor.formatting
+    title: Formattazione nell'editor
+    desktop:
+      status: yes
+      commands:
+        [
+          editor:bold,
+          editor:italic,
+          editor:highlight,
+          editor:strike,
+          editor:code,
+          editor:comment,
+          editor:link,
+          editor:wikilink,
+          editor:heading-1,
+          editor:heading-2,
+          editor:heading-3,
+          editor:heading-4,
+          editor:heading-5,
+          editor:heading-6,
+          editor:bullet,
+          editor:numbered,
+          editor:quote,
+          editor:task,
+          separator:insert,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/editor/commands.test.ts
+        - apps/desktop/frontend/e2e/editor-toolbar.spec.ts
+
+  - id: editor.modes
+    title: Live Preview, sorgente e lettura
+    desktop:
+      status: yes
+      commands: [mode:toggle-reading, mode:toggle-source, mode:live, mode:source, mode:reading]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/editor/livePreview.test.ts
+        - packages/workbench/src/reading/render.test.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+
+  - id: editor.links
+    title: Link e completamento automatico
+    desktop:
+      status: yes
+      bindings: [LinksAPI.Resolve, LinksAPI.Suggest]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/editor/completions.test.ts
+        - apps/desktop/internal/links/links_test.go
+
+  - id: workspace.layout
+    title: Schede, pannelli divisi e barre laterali
+    desktop:
+      status: yes
+      commands:
+        [
+          tab:next,
+          tab:prev,
+          tab:close,
+          tab:pin,
+          tab:close-right,
+          tab:close-left,
+          tab:close-others,
+          tab:close-all,
+          pane:close,
+          pane:split-right,
+          pane:split-down,
+          pane:link,
+          sidebar:left,
+          sidebar:right,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/workspace/layout.test.ts
+        - packages/workbench/src/workspace/TabBar.test.tsx
+        - packages/workbench/src/shell/tabs.test.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+
+  - id: outline
+    title: Struttura della nota
+    desktop:
+      status: yes
+      commands: [sidebar:outline]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/sidebar/flatten.test.ts
+
+  - id: links.backlinks
+    title: Backlink, link in uscita e menzioni non collegate
+    desktop:
+      status: yes
+      commands: [sidebar:backlinks]
+      bindings: [LinksAPI.Backlinks, LinksAPI.Outgoing, LinksAPI.UnlinkedMentions]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/sidebar/BacklinksPanel.test.tsx
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+
+  - id: tags
+    title: Tag
+    desktop:
+      status: yes
+      commands: [sidebar:tags]
+      bindings: [TagsAPI.List]
+    workbench:
+      status: yes
+
+  - id: properties
+    title: Proprietà delle note
+    desktop:
+      status: yes
+      commands: [sidebar:properties]
+      bindings:
+        [
+          PropertiesAPI.Keys,
+          PropertiesAPI.Remove,
+          PropertiesAPI.Schema,
+          PropertiesAPI.SetType,
+          PropertiesAPI.Update,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/properties/properties_test.go
+
+  - id: note.stats
+    title: Statistiche della nota
+    desktop:
+      status: yes
+      commands: [sidebar:stats]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/sidebar/StatsPanel.test.tsx
+        - packages/workbench/src/sidebar/noteStats.test.ts
+
+  - id: graph
+    title: Grafo del vault e grafo locale
+    desktop:
+      status: yes
+      commands: [graph:open, graph:open-local]
+      bindings: [GraphAPI.Build]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/graph/GraphView.test.tsx
+        - apps/desktop/frontend/e2e/graph.spec.ts
+        - apps/desktop/internal/graph/graph_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+
+  - id: slides
+    title: Presentazioni da una nota
+    desktop:
+      status: yes
+      commands: [slides:start, slides:start-here, sidebar:slides]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/slides/SlideShow.test.tsx
+        - packages/workbench/src/sidebar/SlidesPanel.test.tsx
+        - apps/desktop/frontend/e2e/slides.spec.ts
+
+  - id: bookmarks
+    title: Segnalibri
+    desktop:
+      status: yes
+      commands:
+        [
+          bookmark:note,
+          bookmark:heading,
+          bookmark:block,
+          bookmark:search,
+          bookmark:graph,
+          bookmark:new-group,
+          bookmark:open,
+          sidebar:bookmarks,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/bookmarks/BookmarksPanel.test.tsx
+        - packages/workbench/src/bookmarks/model.test.ts
+        - packages/workbench/src/bookmarks/locate.test.ts
+
+  - id: workspaces
+    title: Workspace salvati
+    desktop:
+      status: yes
+      commands: [workspace:save, workspace:load, workspace:manage]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/workspaces/actions.test.ts
+        - packages/workbench/src/workspaces/model.test.ts
+
+  - id: preview
+    title: Anteprima dei link
+    desktop:
+      status: yes
+      commands: [preview:link, preview:toggle]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/preview/popover.test.ts
+        - packages/workbench/src/preview/target.test.ts
+
+  - id: daily
+    title: Note giornaliere
+    desktop:
+      status: yes
+      commands: [daily:open-today, daily:previous, daily:next]
+      bindings:
+        [
+          TemplatesAPI.OpenDaily,
+          TemplatesAPI.DailyAdjacent,
+          TemplatesAPI.ReadSettings,
+          TemplatesAPI.WriteSettings,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/daily/daily.test.tsx
+        - apps/desktop/internal/templates/templates_test.go
+
+  - id: templates
+    title: Modelli e note con identificativo unico
+    desktop:
+      status: yes
+      commands: [template:insert, template:new-from, unique:new]
+      bindings:
+        [
+          TemplatesAPI.List,
+          TemplatesAPI.Expand,
+          TemplatesAPI.CreateFromTemplate,
+          TemplatesAPI.NewUnique,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/app/bindings_templates_test.go
+        - apps/desktop/internal/templates/templates_test.go
+
+  - id: composer
+    title: Unione ed estrazione di note
+    desktop:
+      status: yes
+      commands: [composer:merge, composer:extract]
+      bindings:
+        [
+          ComposerAPI.ApplyMerge,
+          ComposerAPI.Extract,
+          ComposerAPI.PlanMerge,
+          ComposerAPI.SuggestTitle,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/composer/composer_test.go
+
+  - id: canvas
+    title: Canvas
+    desktop:
+      status: yes
+      commands: [canvas:new]
+    workbench:
+      status: yes
+      note: gli spec del canvas non girano ancora sul web
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/canvas.spec.ts
+        - packages/workbench/src/canvas/model.test.ts
+        - apps/desktop/internal/canvas/canvas_test.go
+
+  - id: bases
+    title: Basi (viste tabellari delle note)
+    desktop:
+      status: yes
+      commands: [bases:new]
+      bindings:
+        [
+          BasesAPI.Load,
+          BasesAPI.NewBaseContent,
+          BasesAPI.Run,
+          BasesAPI.UpdateProperty,
+          BasesAPI.UpdateView,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/bases/BaseView.test.tsx
+        - apps/desktop/internal/bases/bases_test.go
+        - apps/desktop/internal/app/bindings_bases_test.go
+
+  # ---- disegni (Excalidraw) ----------------------------------------------------------------------
+  - id: drawing.edit
+    title: Disegni Excalidraw
+    desktop:
+      status: yes
+      commands: [drawing:new, drawing:insert, drawing:tools-panel, drawing:describe]
+      bindings: [DrawingAPI.ReadPreview, DrawingAPI.SavePreview]
+    workbench:
+      status: yes
+      note: gli spec di disegno non girano ancora sul web; Excalidraw offline è verificato dalla CSP del workbench
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/drawing.spec.ts
+        - apps/desktop/frontend/e2e/drawing-tools.spec.ts
+        - packages/workbench/src/drawing/commands.test.tsx
+        - packages/workbench/src/drawing/describe.test.ts
+        - apps/desktop/internal/drawing/drawing_test.go
+      web:
+        - web/e2e-security/excalidraw-offline.spec.ts
+
+  - id: drawing.scene-actions
+    title: Azioni sulla scena di un disegno (script Excalidraw)
+    desktop:
+      status: yes
+      commands:
+        [
+          drawing:fixed-spacing-horizontal,
+          drawing:fixed-spacing-vertical,
+          drawing:fixed-distance-centers-horizontal,
+          drawing:fixed-distance-centers-vertical,
+          drawing:expand-rectangles-horizontal,
+          drawing:expand-rectangles-horizontal-centered,
+          drawing:expand-rectangles-vertical,
+          drawing:expand-rectangles-vertical-centered,
+          drawing:set-dimensions-position,
+          drawing:golden-ratio,
+          drawing:grid-images,
+          drawing:auto-layout,
+          drawing:darken-background,
+          drawing:lighten-background,
+          drawing:background-opacity,
+          drawing:invert-colors,
+          drawing:set-stroke-width,
+          drawing:set-font-family,
+          drawing:set-text-alignment,
+          drawing:box-selected-elements,
+          drawing:box-each-selected-group,
+          drawing:ellipse-selected-elements,
+          drawing:change-shape,
+          drawing:boolean-union,
+          drawing:boolean-intersection,
+          drawing:boolean-difference,
+          drawing:boolean-xor,
+          drawing:split-ellipse,
+          drawing:connect-elements,
+          drawing:elbow-connectors,
+          drawing:normalize-arrows,
+          drawing:add-connector-point,
+          drawing:add-next-step,
+          drawing:split-text-by-lines,
+          drawing:concatenate-lines,
+          drawing:text-to-sticky-notes,
+          drawing:convert-text-to-link,
+          drawing:repeat-elements,
+          drawing:convert-freedraw-to-line,
+          drawing:zoom-to-fit-selected,
+          drawing:toggle-grid,
+          drawing:set-grid-size,
+          drawing:select-elements-of-type,
+          drawing:copy-styles-to-defaults,
+          drawing:pen-fine,
+          drawing:pen-marker,
+          drawing:pen-highlighter,
+          drawing:laser-pointer,
+          drawing:mindmap-from-text,
+          drawing:calendar-year,
+          drawing:calendar-linear,
+          drawing:comic-panels,
+          drawing:speech-bubble,
+          drawing:apply-color-scheme,
+          drawing:organic-line,
+          drawing:reset-latex-size,
+          drawing:reverse-arrows,
+          drawing:bullet-points,
+          drawing:cycle-stroke-width,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/drawing/actions/actions.test.ts
+        - packages/workbench/src/drawing/actions/more.test.ts
+        - apps/desktop/frontend/e2e/drawing-actions.spec.ts
+        - apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts
+
+  - id: drawing.embeds
+    title: Immagini, note e disegni dentro un disegno
+    desktop:
+      status: yes
+      commands:
+        [
+          drawing:insert-image,
+          drawing:insert-drawing,
+          drawing:insert-note,
+          drawing:create-note-and-embed,
+          drawing:deconstruct-into-new-drawing,
+          drawing:refresh-note-cards,
+        ]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/drawing-embed.spec.ts
+        - packages/workbench/src/drawing/embed/insert.test.ts
+        - packages/workbench/src/drawing/embed/tools.test.ts
+
+  - id: drawing.latex-mermaid
+    title: Formule LaTeX e diagrammi Mermaid nei disegni
+    desktop:
+      status: yes
+      commands: [drawing:insert-latex, drawing:insert-mermaid, drawing:edit-latex]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/drawing/latex/insert.test.ts
+        - packages/workbench/src/drawing/mermaid/insert.test.ts
+
+  - id: drawing.export
+    title: Esportazione automatica di un disegno (PNG, SVG)
+    desktop:
+      status: yes
+      commands: [drawing:set-auto-export]
+      bindings: [DrawingAPI.WriteExport]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/drawing-export.spec.ts
+        - packages/workbench/src/drawing/export/options.test.ts
+
+  - id: drawing.slideshow
+    title: Presentazione di un disegno
+    desktop:
+      status: yes
+      commands: [drawing:slideshow, drawing:set-slide-notes]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/drawing-slideshow-panel.spec.ts
+        - packages/workbench/src/drawing/slides.test.ts
+
+  - id: drawing.library
+    title: Libreria di forme Excalidraw
+    desktop:
+      status: yes
+      commands: [drawing:import-library, drawing:export-library]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
+
+  - id: drawing.legacy
+    title: Conversione dei disegni Obsidian (.excalidraw.md)
+    desktop:
+      status: yes
+      commands: [drawing:import-legacy]
+      bindings: [DrawingAPI.ImportLegacy]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - apps/desktop/internal/drawing/legacy_test.go
+
+  # ---- esportazione e importazione ---------------------------------------------------------------
+  - id: export.zip
+    title: Download del vault come ZIP
+    desktop:
+      status: yes
+      commands: [vault:export-zip]
+      bindings: [VaultAPI.ExportZip]
+    workbench:
+      status: yes
+      note: lo ZIP lo scarica il browser
+    console:
+      status: yes
+      routes: [/vaults]
+      operationIds:
+        [
+          exportVaultZip,
+          createExport,
+          getExport,
+          downloadExport,
+          getVaultTree,
+          getKeyEnvelopes,
+          getBlob,
+        ]
+      note: un vault privato si decifra nel browser (`packages/vaultcrypto-web`)
+    tests:
+      desktop:
+        - packages/workbench/src/commands/export.test.tsx
+        - apps/desktop/internal/vault/export_test.go
+      web:
+        - web/e2e/workbench.spec.ts
+        - web/src/pages/VaultExport.test.tsx
+        - web/src/export/sharedExport.test.ts
+        - web/e2e/admin.spec.ts
+      cloud:
+        - services/cloud/test/integration/export_test.go
+        - services/cloud/internal/export/service_test.go
+
+  - id: export.note
+    title: Esportazione di una nota (PDF, immagine, HTML)
+    desktop:
+      status: yes
+      commands: [note:export-pdf, note:export-image, note:export-html]
+      bindings: [ExportAPI.Print, ExportAPI.SaveFile, ExportAPI.SaveHTML]
+    workbench:
+      status: yes
+      note: al posto dei dialoghi nativi il download del browser e `window.print()` (ADR-0029)
+    tests:
+      desktop:
+        - packages/workbench/src/export/export.test.tsx
+        - apps/desktop/internal/app/bindings_export_test.go
+
+  - id: import
+    title: Importazione da altre applicazioni
+    desktop:
+      status: yes
+      capability: localFolders
+      commands: [import:open]
+      bindings:
+        [
+          ImporterAPI.Cancel,
+          ImporterAPI.DefaultFolder,
+          ImporterAPI.Detect,
+          ImporterAPI.ListSources,
+          ImporterAPI.PickFile,
+          ImporterAPI.Preview,
+          ImporterAPI.Report,
+          ImporterAPI.Run,
+        ]
+    workbench:
+      status: partial
+      reason: solo le sorgenti da file; l'importer da cartella richiede una cartella locale (riattivabile con `showDirectoryPicker`)
+    tests:
+      desktop:
+        - packages/workbench/src/importer/ImportWizard.test.tsx
+        - apps/desktop/internal/importer/importer_test.go
+        - apps/desktop/internal/app/bindings_importer_test.go
+
+  # ---- amministrazione (solo console) ------------------------------------------------------------
+  - id: admin.users
+    title: Amministrazione degli utenti
+    desktop:
+      status: console-only
+      reason: amministrazione, solo nella console
+    workbench:
+      status: console-only
+      reason: amministrazione, solo nella console
+    console:
+      status: yes
+      routes: [/admin/users, /admin/users/:id]
+      operationIds:
+        [
+          adminListUsers,
+          adminCreateUser,
+          adminGetUser,
+          adminUpdateUser,
+          adminDeleteUser,
+          adminSuspendUser,
+          adminActivateUser,
+          adminResetPassword,
+          adminSetUserRole,
+          adminListUserVaults,
+          adminListUserDevices,
+          adminListUserSessions,
+        ]
+    tests:
+      web:
+        - web/src/pages/admin/Users.test.tsx
+        - web/e2e/admin.spec.ts
+      cloud:
+        - services/cloud/test/integration/admin_test.go
+        - services/cloud/internal/admin/service_test.go
+
+  - id: admin.groups
+    title: Amministrazione dei gruppi
+    desktop:
+      status: console-only
+      reason: amministrazione, solo nella console (i gruppi esistono solo nel cloud, D-05)
+    workbench:
+      status: console-only
+      reason: amministrazione, solo nella console
+    console:
+      status: yes
+      routes: [/admin/groups, /admin/groups/:id]
+      operationIds:
+        [
+          adminListGroups,
+          adminCreateGroup,
+          adminGetGroup,
+          adminUpdateGroup,
+          adminDeleteGroup,
+          adminListGroupMembers,
+          adminSetGroupMember,
+          adminRemoveGroupMember,
+        ]
+    tests:
+      web:
+        - web/src/pages/admin/Groups.test.tsx
+      cloud:
+        - services/cloud/test/integration/admin_test.go
+
+  - id: admin.config
+    title: Config Profile e configurazione effettiva
+    desktop:
+      status: console-only
+      reason: amministrazione, solo nella console
+    workbench:
+      status: console-only
+      reason: amministrazione, solo nella console
+    console:
+      status: yes
+      routes: [/admin/config, /admin/config/:id, /admin/groups/:id, /admin/users/:id]
+      operationIds:
+        [
+          adminListConfigProfiles,
+          adminCreateConfigProfile,
+          adminGetConfigProfile,
+          adminUpdateConfigProfile,
+          adminDeleteConfigProfile,
+          adminListProfileVersions,
+          adminRestoreProfileVersion,
+          adminGetGroupProfiles,
+          adminSetGroupProfiles,
+          adminUserEffectiveConfig,
+        ]
+    tests:
+      web:
+        - web/src/pages/admin/Config.test.tsx
+      cloud:
+        - services/cloud/test/integration/config_test.go
+        - services/cloud/internal/configprofiles/schema_test.go
+
+  - id: admin.storage
+    title: Spazio, quote e limiti
+    desktop:
+      status: console-only
+      reason: amministrazione, solo nella console
+    workbench:
+      status: console-only
+      reason: amministrazione, solo nella console
+    console:
+      status: yes
+      routes: [/admin/storage, /admin/limits, /admin/users/:id]
+      operationIds:
+        [
+          adminGetStorageSettings,
+          adminPutStorageSettings,
+          adminStorageOverview,
+          adminBulkQuota,
+          adminSetUserQuota,
+        ]
+    tests:
+      web:
+        - web/src/pages/admin/Storage.test.tsx
+        - web/src/pages/admin/Limits.test.tsx
+        - web/e2e/admin.spec.ts
+      cloud:
+        - services/cloud/internal/quota/quota_test.go
+        - services/cloud/test/integration/admin_test.go
+
+  - id: admin.audit
+    title: Registro di audit
+    desktop:
+      status: console-only
+      reason: amministrazione, solo nella console
+    workbench:
+      status: console-only
+      reason: amministrazione, solo nella console
+    console:
+      status: yes
+      routes: [/admin/audit]
+      operationIds: [adminAuditLog, adminAuditLogCsv]
+    tests:
+      web:
+        - web/src/pages/admin/Audit.test.tsx
+      cloud:
+        - services/cloud/test/integration/admin_test.go
+
+server_only:
+  - operationId: healthz
+    reason: sonda di liveness per l'orchestratore, nessuna funzione utente
+  - operationId: readyz
+    reason: sonda di readiness per l'orchestratore, nessuna funzione utente
+  - operationId: getClientConfig
+    reason: configurazione pubblica letta all'avvio da desktop, workbench e console (issuer OIDC, client id), nessuna funzione utente
