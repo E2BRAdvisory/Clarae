@@ -70,3 +70,32 @@ topologySpreadConstraints:
       matchLabels: {{- include "memobrain.selector" (dict "root" .root "role" .role) | nindent 8 }}
 {{- end }}
 {{- end -}}
+
+{{/* "true" when the cluster supports the preStop sleep action (on by default from Kubernetes 1.30), else empty. */}}
+{{- define "memobrain.preStopSleepSupported" -}}
+{{- if semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+Fails the render when the chart would create the Secret (no existingSecret, no externalSecret) with an empty
+required value, or with a placeholder of the templates (change-me, change-me-too, changeme) unless
+config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS is "1"/"true" (the service applies the same rule at start).
+*/}}
+{{- define "memobrain.checkSecretValues" -}}
+{{- $values := default (dict) .Values.secret.values -}}
+{{- $allow := has (lower (toString (default "" .Values.config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS))) (list "1" "true") -}}
+{{- $placeholders := list "change-me" "change-me-too" "changeme" -}}
+{{- range $key := list "DATABASE_URL" "S3_ACCESS_KEY" "S3_SECRET_KEY" "KC_ADMIN_CLIENT_SECRET" -}}
+{{- $v := trim (toString (default "" (get $values $key))) -}}
+{{- if not $v -}}
+{{- fail (printf "secret.values.%s is empty: set it, or point secret.existingSecret / externalSecret at a managed Secret (recommended)" $key) -}}
+{{- end -}}
+{{- $bad := has (lower $v) $placeholders -}}
+{{- if eq $key "DATABASE_URL" -}}
+{{- $bad = regexMatch "(?i)(:(change-me|change-me-too|changeme)@|password=['\"]?(change-me|change-me-too|changeme)(['\"&[:space:]]|$))" $v -}}
+{{- end -}}
+{{- if and $bad (not $allow) -}}
+{{- fail (printf "secret.values.%s holds a placeholder (change-me...): set a real secret" $key) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

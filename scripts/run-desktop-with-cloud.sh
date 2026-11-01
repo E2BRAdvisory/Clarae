@@ -76,7 +76,7 @@ export MEMOBRAIN_DEFAULT_SERVER_URL="$CLOUD_URL"
 DESKTOP_PIDS=""
 if [ "$TWO" = 1 ]; then
   log "Building desktop (production) for two instances"
-  (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean $WAILS_TAGS -ldflags "-X main.Version=dev-cloud")
+  (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -nosyncgomod $WAILS_TAGS -ldflags "-X main.Version=dev-cloud")
   case "$(uname -s)" in
     Darwin) BIN="$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)/Contents/MacOS/memobrain" ;;
     *) BIN="$ROOT/apps/desktop/build/bin/memobrain" ;;
@@ -95,5 +95,5 @@ else
   [ "$DEMO" = 1 ] && seed_demo_vault "$d/vaults/Demo"
   log "Starting desktop in dev mode (data: ${d#$ROOT/})"
   cd "$ROOT/apps/desktop"
-  MEMOBRAIN_DATA_DIR="$d" wails dev $WAILS_TAGS
+  MEMOBRAIN_DATA_DIR="$d" wails dev -nosyncgomod $WAILS_TAGS
 fi

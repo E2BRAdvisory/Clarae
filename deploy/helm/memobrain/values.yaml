@@ -16,9 +16,15 @@ serviceAccount:
 # Settings shared by the two roles are set per role below; anything not listed uses the chart defaults.
 api:
   replicas: 2 # ignored while autoscaling is enabled
+  # ephemeral-storage covers the /tmp volume below (blob uploads are spooled there) plus the logs.
   resources:
-    requests: { cpu: 100m, memory: 128Mi }
-    limits: { cpu: '1', memory: 512Mi }
+    requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 256Mi }
+    limits: { cpu: '1', memory: 512Mi, ephemeral-storage: 3Gi }
+  # /tmp (emptyDir) of the API: blob uploads (PUT and tus) are spooled here before reaching S3, one file
+  # per upload in progress. Size it for the concurrent uploads (each at most the max blob size); past the
+  # limit the kubelet evicts the pod. Keep it within resources.limits.ephemeral-storage.
+  tmp:
+    sizeLimit: 2Gi
   autoscaling:
     enabled: false
     minReplicas: 2
@@ -32,7 +38,9 @@ api:
     maxUnavailable: null # use instead of minAvailable when set
   # Must exceed SHUTDOWN_TIMEOUT (default 15 s) + preStopSleepSeconds, or the pod is killed mid-drain.
   terminationGracePeriodSeconds: 30
-  # Delays SIGTERM so the endpoint is removed from the Service first (Kubernetes sleep action, >= 1.30).
+  # Delays SIGTERM so the endpoint is removed from the Service first. Rendered only on Kubernetes >= 1.30
+  # (the preStop sleep action, no shell needed in the distroless image); on older clusters SHUTDOWN_DRAIN
+  # (config, default 5s) does the same inside the process: /readyz fails while it keeps serving.
   preStopSleepSeconds: 5
   probes:
     startup: { periodSeconds: 2, failureThreshold: 30 } # up to 60 s to reach /healthz (migrations run at start)
@@ -53,8 +61,17 @@ worker:
   # Keep 1 unless the worker jobs are known to be safe with several instances.
   replicas: 1
   resources:
-    requests: { cpu: 50m, memory: 128Mi }
-    limits: { cpu: 500m, memory: 512Mi }
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 512Mi }
+    limits: { cpu: 500m, memory: 512Mi, ephemeral-storage: 11Gi }
+  # /tmp (emptyDir) of the worker: each export archive (the ZIP of a whole vault) is built here before the
+  # upload to S3. Size it above the largest vault; past the limit the kubelet evicts the pod.
+  tmp:
+    sizeLimit: 10Gi
+  # Internal listener (METRICS_LISTEN_ADDR): /metrics for Prometheus, /healthz and /readyz for the probes.
+  metricsPort: 18083
+  probes:
+    liveness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 } # the job scheduler ticks
+    readiness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 } # the jobs run (schema migrated)
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -97,17 +114,23 @@ config:
   WEB_UI_ORIGIN: https://memobrain.example.com
   # Address desktop clients use for the notification stream (gRPC needs TLS + HTTP/2 end to end).
   PUBLIC_GRPC_ADDR: notify.memobrain.example.com:443
+  # Networks of the ingress controller / reverse proxies whose X-Forwarded-For is believed. Without it
+  # every request seems to come from the ingress pods and all users share one per-IP rate-limit bucket.
+  # The default trusts the private ranges; narrow it to the pod CIDR of the ingress controller if you can.
+  TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7
   LOG_LEVEL: info
 
 # Secrets. Three ways, in order of preference:
 #   1. secret.existingSecret: a Secret you manage (sealed-secrets, SOPS, Vault injector...).
 #   2. externalSecret.enabled: the chart renders an ExternalSecret (External Secrets Operator CRD).
 #   3. secret.values: the chart creates the Secret (development only: values end up in Helm history).
-# The Secret must hold DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, KC_ADMIN_CLIENT_SECRET.
+# The Secret must hold DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, KC_ADMIN_CLIENT_SECRET. With option 3 the
+# render fails while one is empty or a placeholder (change-me...), and so does the service at start;
+# config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS: '1' lifts the placeholder check (throwaway tests only).
 secret:
   existingSecret: ''
   values:
-    DATABASE_URL: postgres://memobrain:change-me@postgres:5432/memobrain?sslmode=require
+    DATABASE_URL: '' # e.g. postgres://memobrain:<password>@postgres:5432/memobrain?sslmode=require
     S3_ACCESS_KEY: ''
     S3_SECRET_KEY: ''
     KC_ADMIN_CLIENT_SECRET: ''
@@ -160,6 +183,9 @@ networkPolicy:
         matchLabels:
           kubernetes.io/metadata.name: ingress-nginx
     - podSelector: {}
+  # Who may scrape /metrics (API HTTP port, worker metricsPort), e.g. the Prometheus namespace:
+  # - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+  metricsFrom: []
   # Restrict outbound traffic to DNS plus `egressTo` (PostgreSQL, S3, Keycloak); off = unrestricted.
   restrictEgress: false
   egressTo: []
@@ -173,3 +199,8 @@ podSecurityContext:
   seccompProfile: { type: RuntimeDefault }
 
 podAnnotations: {}
+
+metrics:
+  # prometheus.io/scrape, /port and /path annotations on the pods of both roles (API: the HTTP port,
+  # worker: metricsPort). Scrape the pods, not the ingress: /metrics answers 404 to proxied requests.
+  podAnnotations: true

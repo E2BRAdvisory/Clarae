@@ -40,11 +40,11 @@ export MEMOBRAIN_DATA_DIR="$DATA_DIR"
 unset MEMOBRAIN_DEFAULT_SERVER_URL
 if [ "$BUILD" = 1 ]; then
   log "Building (production)"
-  (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean $WAILS_TAGS -ldflags "-X main.Version=dev-standalone")
+  (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -nosyncgomod $WAILS_TAGS -ldflags "-X main.Version=dev-standalone")
   case "$(uname -s)" in
     Darwin) exec "$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)/Contents/MacOS/memobrain" ;;
     *) exec "$ROOT/apps/desktop/build/bin/memobrain" ;;
   esac
 else
-  cd "$ROOT/apps/desktop" && exec wails dev $WAILS_TAGS
+  cd "$ROOT/apps/desktop" && exec wails dev -nosyncgomod $WAILS_TAGS
 fi

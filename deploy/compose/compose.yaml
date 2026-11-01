@@ -26,11 +26,53 @@ x-cloud-env: &cloud-env
   PUBLIC_GRPC_ADDR: ${NOTIFY_HOST:?set NOTIFY_HOST in .env}:${PUBLIC_GRPC_PORT:-443}
   LISTEN_ADDR: 0.0.0.0:18081
   GRPC_LISTEN_ADDR: 0.0.0.0:18082
+  METRICS_LISTEN_ADDR: 0.0.0.0:18083 # worker only: /metrics, /healthz, /readyz
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Caddy reaches the API from a Docker bridge address and replaces any client-supplied X-Forwarded-For,
+  # so the bridge ranges can be trusted: without this all users would share one per-IP rate-limit bucket.
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
+  # The service refuses to start while a secret is still a placeholder of .env.example; "1" allows it (tests only).
+  MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS: ${MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS:-}
 
 services:
+  # One-shot check before anything stores a secret: every password and key of .env must have been replaced
+  # (the placeholders of .env.example are rejected). PostgreSQL, the object store and Keycloak wait for it.
+  preflight:
+    image: busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+    restart: 'no'
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    environment:
+      MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS: ${MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD in .env}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        bad=""
+        for name in POSTGRES_PASSWORD KEYCLOAK_DB_PASSWORD KC_BOOTSTRAP_ADMIN_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY KC_ADMIN_CLIENT_SECRET; do
+          case "$$(printenv "$$name" | tr 'A-Z' 'a-z')" in
+            change-me | change-me-too | changeme) bad="$$bad $$name" ;;
+          esac
+        done
+        if [ -z "$$bad" ]; then echo "preflight: secrets set"; exit 0; fi
+        if [ "$$MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS" = 1 ]; then
+          echo "preflight: WARNING placeholder secrets allowed (MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS=1):$$bad"
+          exit 0
+        fi
+        echo "preflight: still the placeholder of .env.example:$$bad"
+        echo "preflight: generate each with: openssl rand -base64 24 | tr -d '=+/'"
+        exit 1
+
   proxy:
-    image: caddy:2.10-alpine
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     restart: unless-stopped
     ports:
       - '${HTTP_PORT:-80}:80'
@@ -41,6 +83,9 @@ services:
       NOTIFY_SITE: ${NOTIFY_SITE:-${NOTIFY_HOST}}
       AUTH_SITE: ${AUTH_SITE:-${AUTH_HOST}}
       CADDY_GLOBAL: ${CADDY_GLOBAL:-}
+      # Networks (space separated CIDRs) allowed to reach the Keycloak administration (/admin, realm
+      # master) through the proxy. The default matches no external client: administration is closed.
+      KEYCLOAK_ADMIN_FROM: ${KEYCLOAK_ADMIN_FROM:-127.0.0.1/32}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data # certificates (keep!)
@@ -63,7 +108,13 @@ services:
     command: ['--role=api']
     environment: *cloud-env
     read_only: true
-    tmpfs: [/tmp]
+    # Blob uploads are spooled to /tmp before reaching the object store: a RAM disk, bounded so that a
+    # burst of large uploads cannot take the host's memory (raise it for many concurrent large uploads).
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: ${API_TMP_SIZE:-2g}
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     depends_on:
@@ -80,14 +131,21 @@ services:
     command: ['--role=worker']
     environment: *cloud-env
     read_only: true
-    tmpfs: [/tmp]
+    # Export archives (the ZIP of a whole vault) are built in /tmp before the upload: on disk, not in RAM.
+    # Leftovers of a crash are swept at start (files untouched for 6 h).
+    volumes:
+      - worker_tmp:/tmp
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
+    # The worker waits by itself until the API has migrated the database schema.
     depends_on:
       cloud-api: { condition: service_started }
+    # Internal listener for Prometheus and health checks (not published):
+    #   docker compose exec proxy wget -qO- http://cloud-worker:18083/healthz
+    expose: ['18083']
 
   postgres:
-    image: postgres:17
+    image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     restart: unless-stopped
     environment:
       POSTGRES_USER: memobrain
@@ -97,6 +155,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro # creates the keycloak database on first start
+    depends_on:
+      preflight: { condition: service_completed_successfully }
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U memobrain -d memobrain']
       interval: 5s
@@ -104,7 +164,7 @@ services:
       retries: 20
 
   s3:
-    image: rustfs/rustfs:latest # S3-compatible; any S3 service (AWS, Ceph, MinIO-compatible) can replace it
+    image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2 # S3-compatible; any S3 service (AWS, Ceph, MinIO-compatible) can replace it
     restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
@@ -114,6 +174,8 @@ services:
       RUSTFS_CONSOLE_ENABLE: 'false'
     volumes:
       - s3data:/data
+    depends_on:
+      preflight: { condition: service_completed_successfully }
     healthcheck:
       # The S3 root answers 403 without credentials: any HTTP answer means the server is up.
       test:
@@ -126,7 +188,7 @@ services:
       retries: 20
 
   s3-init:
-    image: amazon/aws-cli:latest
+    image: amazon/aws-cli:2.39.3@sha256:d557b3524475d70dd3104cf44d96568ee3188897b73a6ece2b37aa50e1af362f
     depends_on:
       s3: { condition: service_healthy }
     environment:
@@ -144,7 +206,7 @@ services:
     restart: 'no'
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7
+    image: quay.io/keycloak/keycloak:26.7.5@sha256:37dbaf6f0722c9ec246335f36e1ef8b2e6cb960f7c27e0d8c615121a3d475a85
     restart: unless-stopped
     command: ['start', '--import-realm']
     environment:
@@ -166,6 +228,7 @@ services:
       # roles). Production variant of deploy/keycloak: no test users, secret and web origin from the environment.
       - ../keycloak-prod:/opt/keycloak/data/import:ro
     depends_on:
+      preflight: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
     healthcheck:
       test:
@@ -181,7 +244,7 @@ services:
   # On demand: docker compose --profile backup run --rm pg-backup   (dump into ./backups)
   pg-backup:
     profiles: [backup]
-    image: postgres:17
+    image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -196,3 +259,4 @@ volumes:
   s3data:
   caddy_data:
   caddy_config:
+  worker_tmp: # scratch space of the worker (export archives): no backup needed

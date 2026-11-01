@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -29,8 +30,11 @@ type Config struct {
 
 	ListenAddr     string
 	GRPCListenAddr string
-	WebUIOrigin    string
-	LogLevel       string
+	// MetricsListenAddr is the internal listener of the worker role
+	// (/metrics, /healthz, /readyz); the API role serves them on ListenAddr.
+	MetricsListenAddr string
+	WebUIOrigin       string
+	LogLevel          string
 	// TrustedProxies are the networks of the reverse proxies whose
 	// X-Forwarded-For header is believed when resolving the client address
 	// (rate limiting). Empty: the TCP peer is the client.
@@ -53,6 +57,10 @@ type Config struct {
 	// ShutdownDrain is how long the API keeps serving after readiness turned
 	// unavailable, so the load balancer drops the pod before connections are refused.
 	ShutdownDrain time.Duration
+
+	// AllowPlaceholderSecrets lets the process start although a secret still
+	// holds a sample value of the deployment templates (tests and demos only).
+	AllowPlaceholderSecrets bool
 }
 
 // S3Config configures the object store.
@@ -99,16 +107,19 @@ type KeycloakConfig struct {
 // Load reads the configuration from the environment and validates it.
 func Load(role Role, version string) (Config, error) {
 	c := Config{
-		Role:            role,
-		Version:         version,
-		ListenAddr:      env("LISTEN_ADDR", "127.0.0.1:18081"),
-		GRPCListenAddr:  env("GRPC_LISTEN_ADDR", "127.0.0.1:18082"),
-		WebUIOrigin:     env("WEB_UI_ORIGIN", ""),
-		LogLevel:        env("LOG_LEVEL", "info"),
-		DatabaseURL:     env("DATABASE_URL", ""),
-		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
-		ShutdownDrain:   envDuration("SHUTDOWN_DRAIN", 5*time.Second),
-		StorageDir:      env("STORAGE_DIR", ""),
+		Role:              role,
+		Version:           version,
+		ListenAddr:        env("LISTEN_ADDR", "127.0.0.1:18081"),
+		GRPCListenAddr:    env("GRPC_LISTEN_ADDR", "127.0.0.1:18082"),
+		MetricsListenAddr: env("METRICS_LISTEN_ADDR", "127.0.0.1:18083"),
+		WebUIOrigin:       env("WEB_UI_ORIGIN", ""),
+		LogLevel:          env("LOG_LEVEL", "info"),
+		DatabaseURL:       env("DATABASE_URL", ""),
+		ShutdownTimeout:   envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
+		ShutdownDrain:     envDuration("SHUTDOWN_DRAIN", 5*time.Second),
+		StorageDir:        env("STORAGE_DIR", ""),
+		// The escape hatch for the placeholder check below: never set it in production.
+		AllowPlaceholderSecrets: envBool("MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS", false),
 		S3: S3Config{
 			Endpoint:       env("S3_ENDPOINT", ""),
 			AccessKey:      env("S3_ACCESS_KEY", ""),
@@ -178,7 +189,62 @@ func (c Config) validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("unknown role %q", c.Role))
 	}
+	if names := c.PlaceholderSecrets(); len(names) > 0 && !c.AllowPlaceholderSecrets {
+		errs = append(errs, fmt.Errorf("placeholder secret of the deployment template (%[2]s) in %[1]s: "+
+			"set real secrets (MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS=1 skips this check, for tests only)",
+			strings.Join(names, ", "), strings.Join(placeholderValues, ", ")))
+	}
 	return errors.Join(errs...)
+}
+
+// placeholderValues are the sample secrets of deploy/compose/.env.example and of
+// the Helm chart: a deployment still using one was never configured.
+var placeholderValues = []string{"change-me", "change-me-too", "changeme"}
+
+func isPlaceholder(v string) bool {
+	v = strings.TrimSpace(v)
+	for _, p := range placeholderValues {
+		if strings.EqualFold(v, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// PlaceholderSecrets names the secret settings that still hold a placeholder
+// value (whether or not AllowPlaceholderSecrets lets the process start).
+func (c Config) PlaceholderSecrets() []string {
+	var names []string
+	if isPlaceholder(databasePassword(c.DatabaseURL)) {
+		names = append(names, "DATABASE_URL (password)")
+	}
+	for _, s := range []struct{ name, value string }{
+		{"S3_ACCESS_KEY", c.S3.AccessKey},
+		{"S3_SECRET_KEY", c.S3.SecretKey},
+		{"KC_ADMIN_CLIENT_SECRET", c.Keycloak.ClientSecret},
+	} {
+		if isPlaceholder(s.value) {
+			names = append(names, s.name)
+		}
+	}
+	return names
+}
+
+// databasePassword returns the password of a PostgreSQL connection string, in URL
+// (postgres://user:password@host/db, or ?password=) or keyword/value form.
+func databasePassword(dsn string) string {
+	if u, err := url.Parse(dsn); err == nil && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		if p, ok := u.User.Password(); ok {
+			return p
+		}
+		return u.Query().Get("password")
+	}
+	for _, field := range strings.Fields(dsn) {
+		if k, v, ok := strings.Cut(field, "="); ok && k == "password" {
+			return strings.Trim(v, "'")
+		}
+	}
+	return ""
 }
 
 // ServesAPI reports whether this process runs the HTTP and gRPC servers.

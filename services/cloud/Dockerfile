@@ -5,7 +5,7 @@
 # typed against (generated from the Go code) and the desktop core compiled to WebAssembly.
 
 # 1. The Wails bindings (packages/workbench/wailsjs): TypeScript generated from the Go API.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS bindings
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS bindings
 RUN apk add --no-cache git bash ca-certificates
 WORKDIR /src
 COPY go.work go.work.sum ./
@@ -22,7 +22,7 @@ RUN mkdir -p apps/desktop/frontend/dist packages/workbench && touch apps/desktop
     && cd apps/desktop && /go/bin/wails generate module
 
 # 2. The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core), run in a Web Worker by the browser.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS wasm
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS wasm
 WORKDIR /src
 COPY go.work go.work.sum ./
 COPY shared/go/go.mod shared/go/go.sum shared/go/
@@ -37,7 +37,7 @@ RUN mkdir -p /out && cd apps/desktop \
     && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm_exec.js
 
 # 3. The Web UI: the console and the vault workbench.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS web
+FROM --platform=$BUILDPLATFORM node:24.22.2-alpine3.24@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS web
 WORKDIR /src
 RUN corepack enable
 COPY package.json yarn.lock .yarnrc.yml tsconfig.base.json ./
@@ -56,7 +56,7 @@ RUN MEMOBRAIN_VERSION=${VERSION} yarn workspace @memobrain/web run build
 
 # 4. The cloud binary, with the Web UI embedded. It runs on the build machine and cross-compiles for the
 # target (CGO is off), so a multi-arch image needs no emulation: the Go compiler is the same speed for both.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
@@ -74,10 +74,11 @@ ARG VERSION=dev
 RUN cd services/cloud && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath \
     -ldflags "-s -w -X main.Version=${VERSION}" -o /out/memobrain-cloud ./cmd/memobrain-cloud
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/memobrain-cloud /memobrain-cloud
 USER nonroot:nonroot
-EXPOSE 18081 18082
-ENV LISTEN_ADDR=0.0.0.0:18081 GRPC_LISTEN_ADDR=0.0.0.0:18082
+# 18083: internal listener of --role=worker (/metrics, /healthz, /readyz).
+EXPOSE 18081 18082 18083
+ENV LISTEN_ADDR=0.0.0.0:18081 GRPC_LISTEN_ADDR=0.0.0.0:18082 METRICS_LISTEN_ADDR=0.0.0.0:18083
 ENTRYPOINT ["/memobrain-cloud"]
 CMD ["--role=all"]

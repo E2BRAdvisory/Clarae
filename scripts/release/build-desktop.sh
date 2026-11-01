@@ -73,9 +73,9 @@ jq --arg v "$NUMERIC" '.info.productVersion = $v' "$SAVE/wails.json" > "$DESKTOP
 
 cd "$DESKTOP"
 case "$TARGET" in
-  darwin)  wails build -clean -platform darwin/universal -ldflags "$LDFLAGS" ;;
+  darwin)  wails build -clean -nosyncgomod -platform darwin/universal -ldflags "$LDFLAGS" ;;
   windows) need makensis
-           wails build -clean -platform "windows/$ARCH" -ldflags "$LDFLAGS"
+           wails build -clean -nosyncgomod -platform "windows/$ARCH" -ldflags "$LDFLAGS"
            EXE="build/bin/memobrain.exe"
            [ -f "$EXE" ] || die "wails did not produce $EXE"
            if [ -n "${MEMOBRAIN_SIGNTOOL_CMD:-}" ]; then
@@ -87,12 +87,17 @@ case "$TARGET" in
            fi
            # makensis is run here rather than through `wails build -nsis` so the exe is signed first.
            upper="$(printf '%s' "$ARCH" | tr '[:lower:]' '[:upper:]')"
-           # The installer bootstraps WebView2 with Microsoft's evergreen setup, which wails downloads here.
+           # The installer bootstraps WebView2 with Microsoft's evergreen setup. The copy embedded in the Wails
+           # module is used (as `wails build -nsis` does): go.sum pins its hash, while the fwlink URL serves a
+           # file that changes with every Microsoft update and so cannot be pinned.
            mkdir -p build/windows/installer/tmp
-           curl -fsSL --retry 3 -o build/windows/installer/tmp/MicrosoftEdgeWebview2Setup.exe "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+           WV2="$(go list -m -f '{{.Dir}}' github.com/wailsapp/wails/v2)/internal/webview2runtime/MicrosoftEdgeWebview2Setup.exe"
+           command -v cygpath >/dev/null 2>&1 && WV2="$(cygpath -u "$WV2")" # Git Bash on the Windows runner
+           [ -f "$WV2" ] || die "WebView2 bootstrapper not found in the Wails module ($WV2)"
+           cp "$WV2" build/windows/installer/tmp/MicrosoftEdgeWebview2Setup.exe
            GOWORK=off go run "$ROOT/scripts/release/nsis-render.go" wails.json build/windows/installer/wails_tools.nsh
            (cd build/windows/installer && makensis -V2 "-DARG_WAILS_${upper}_BINARY=..\\..\\bin\\memobrain.exe" project.nsi) ;;
-  linux)   wails build -clean -platform "linux/$ARCH" -tags webkit2_41 -ldflags "$LDFLAGS" ;;
+  linux)   wails build -clean -nosyncgomod -platform "linux/$ARCH" -tags webkit2_41 -ldflags "$LDFLAGS" ;;
 esac
 ok "built $TARGET $VERSION in apps/desktop/build/bin"
 ls -la build/bin

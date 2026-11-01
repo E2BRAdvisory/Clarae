@@ -31,6 +31,17 @@
 	}
 }
 
+# Keycloak. The clients need only the realm "memobrain" (/realms/memobrain/...: OIDC endpoints, login and
+# account pages) and the theme assets (/resources/...). The administration console and its REST API (/admin)
+# and the realm "master" (where the server administrator logs in) answer 403 unless the client address is in
+# KEYCLOAK_ADMIN_FROM (space separated CIDRs; the default 127.0.0.1/32 matches no external client). The cloud
+# service calls the Admin REST API directly on keycloak:8080, not through this site.
 {$AUTH_SITE} {
+	@kc_admin {
+		# ";*": Keycloak (JAX-RS) ignores matrix parameters, so /admin;x/ is the console too.
+		path /admin /admin/* /admin;* /realms/master /realms/master/* /realms/master;*
+		not remote_ip {$KEYCLOAK_ADMIN_FROM:127.0.0.1/32}
+	}
+	respond @kc_admin 403
 	reverse_proxy keycloak:8080
 }

@@ -107,7 +107,7 @@ kubectl --context "$CTX" -n kube-system rollout restart deploy/coredns >/dev/nul
 
 log "Building the cloud image from the working tree (memobrain-cloud:chaos)"
 docker build -q -f "$ROOT/scripts/chaos/Dockerfile.cloud" -t memobrain-cloud:chaos "$ROOT" >/dev/null || die "image build failed"
-for img in memobrain-cloud:chaos postgres:17 rustfs/rustfs:latest quay.io/keycloak/keycloak:26.7; do
+for img in memobrain-cloud:chaos $(awk '$1 == "image:" { print $2 }' "$ROOT/deploy/k3d/deps.yaml"); do
   docker image inspect "$img" >/dev/null 2>&1 && k3d image import "$img" -c "$CLUSTER" >/dev/null 2>&1 || true
 done
 

@@ -25,6 +25,12 @@ No Ingress was created (ingress.enabled=false): reach the Service "{{ include "m
 
 NOTE: the chart created the Secret from secret.values. For production use secret.existingSecret or externalSecret.
 {{- end }}
+{{- if and (gt (int .Values.api.preStopSleepSeconds) 0) (not (include "memobrain.preStopSleepSupported" .)) }}
+
+NOTE: Kubernetes {{ .Capabilities.KubeVersion.Version }} has no preStop sleep action (1.30+): api.preStopSleepSeconds is
+not rendered. The API still drains on SIGTERM for SHUTDOWN_DRAIN (default 5s): keep it below
+api.terminationGracePeriodSeconds minus SHUTDOWN_TIMEOUT.
+{{- end }}
 {{- if and .Values.api.pdb.enabled (le (int .Values.api.replicas) 1) (not .Values.api.autoscaling.enabled) }}
 
 WARNING: api.pdb.enabled with a single API replica blocks node drains: set api.pdb.enabled=false or run 2+ replicas.

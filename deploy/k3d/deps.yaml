@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:17
+          image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
           env:
             - { name: POSTGRES_USER, value: memobrain }
             - { name: POSTGRES_PASSWORD, value: memobrain }
@@ -53,7 +53,7 @@ spec:
     spec:
       containers:
         - name: rustfs
-          image: rustfs/rustfs:latest
+          image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
           env:
             - { name: RUSTFS_ACCESS_KEY, value: memobrain }
             - { name: RUSTFS_SECRET_KEY, value: memobrain-secret }
@@ -86,7 +86,7 @@ spec:
     spec:
       containers:
         - name: keycloak
-          image: quay.io/keycloak/keycloak:26.7
+          image: quay.io/keycloak/keycloak:26.7.5@sha256:37dbaf6f0722c9ec246335f36e1ef8b2e6cb960f7c27e0d8c615121a3d475a85
           args: [start-dev, --import-realm, --http-port=18080]
           env:
             - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }

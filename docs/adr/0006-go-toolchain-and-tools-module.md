@@ -29,3 +29,5 @@ La CI usa `tools/go.mod` come `go-version-file`. Aggiornare un tool = `cd tools 
 ## Aggiornamento
 
 Il toolchain è passato a **Go 1.27.3** (`go.work`, i moduli, `tools/`, immagini Docker, CI), anche per le correzioni della libreria standard che `govulncheck` segnalava sulla 1.26.0; i test sono rimasti verdi. Le decisioni di questo ADR restano valide.
+
+**Wails CLI (2026-11).** La CLI di Wails non è in `tools/go.mod`: la sua versione è quella della libreria in `apps/desktop/go.mod` (oggi v2.17.0), unica fonte di verità. `scripts/install-wails.sh` la legge da lì e installa `github.com/wailsapp/wails/v2/cmd/wails@<versione>` con il Go del repository, senza più sostituire `golang.org/x/tools` (la v2.17 compila con Go 1.27 così com'è pubblicata); `--check` blocca `task gen-wails`, `dev-desktop` e `build-desktop` se la CLI installata è di un'altra versione, e `wails dev`/`wails build` girano con `-nosyncgomod`.

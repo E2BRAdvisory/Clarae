@@ -12,14 +12,14 @@ Stack per un singolo host: reverse proxy Caddy (TLS automatico, HTTP/2 per gRPC)
 
 ## Primo avvio
 
-1. `cp .env.example .env` e modificarlo: nomi host, `MEMOBRAIN_VERSION`, e **tutti i segreti** (`openssl rand -base64 24 | tr -d '=+/'`). `.env` non va committato.
+1. `cp .env.example .env` e modificarlo: nomi host, `MEMOBRAIN_VERSION`, e **tutti i segreti** (`openssl rand -base64 24 | tr -d '=+/'`). `.env` non va committato. Finché un segreto vale ancora il segnaposto di `.env.example` (`change-me`, `change-me-too`) il servizio one-shot `preflight` termina con errore e PostgreSQL, S3 e Keycloak non partono (`docker compose logs preflight` elenca le variabili da cambiare); anche il Cloud Service rifiuta di avviarsi. `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS=1` salta entrambi i controlli: solo per prove usa e getta.
 2. `docker compose config -q` per controllare che non manchi nessuna variabile obbligatoria.
-3. `docker compose up -d`. L'ordine è garantito dai healthcheck: PostgreSQL (crea anche il database `keycloak` solo al primo avvio con volume vuoto), S3 e creazione bucket, Keycloak, poi API, worker e proxy. Il Cloud Service applica le migrazioni DB all'avvio.
-4. Verifica: `curl https://memobrain.example.com/api/v1/readyz` deve rispondere `{"status":"ok",...}` con `database` e `storage` a `ok`.
+3. `docker compose up -d`. L'ordine è garantito dai healthcheck: PostgreSQL (crea anche il database `keycloak` solo al primo avvio con volume vuoto), S3 e creazione bucket, Keycloak, poi API, worker e proxy. Il Cloud Service applica le migrazioni DB all'avvio di `cloud-api`; `cloud-worker` attende da solo che lo schema sia aggiornato prima di eseguire i job.
+4. Verifica: `curl https://memobrain.example.com/api/v1/readyz` deve rispondere `{"status":"ok",...}`. Tramite il proxy la risposta non riporta il dettaglio per dipendenza; per vederlo: `docker compose exec proxy wget -qO- http://cloud-api:18081/api/v1/readyz` (`database` e `storage` a `ok`). Il worker: `docker compose exec proxy wget -qO- http://cloud-worker:18083/healthz`.
 
 ### Keycloak: realm, utente admin, client
 
-- Al primo avvio Keycloak importa il realm `memobrain` da `deploy/keycloak/realm-memobrain.json` (client `memobrain-desktop`, `memobrain-web`, `memobrain-admin-svc`, ruoli). L'utente amministratore del **server Keycloak** è `KC_BOOTSTRAP_ADMIN_*` (console su `https://auth.example.com/admin`).
+- Al primo avvio Keycloak importa il realm `memobrain` da `deploy/keycloak/realm-memobrain.json` (client `memobrain-desktop`, `memobrain-web`, `memobrain-admin-svc`, ruoli). L'utente amministratore del **server Keycloak** è `KC_BOOTSTRAP_ADMIN_*` (console su `https://auth.example.com/admin`). La console e il realm `master` **non sono pubblici**: il proxy risponde `403` a meno che l'IP del client sia in `KEYCLOAK_ADMIN_FROM` (CIDR separati da spazio, per esempio la VPN degli amministratori). Per il primo avvio impostarla in `.env`, `docker compose up -d proxy`, configurare il realm, poi rimuoverla e ripetere il comando (dettagli in `docs/admin-guide/keycloak.md`). I client usano solo `/realms/memobrain/...` e `/resources/...`, che restano pubblici.
 - Questo stack importa il realm di **produzione** `deploy/keycloak-prod/realm-memobrain.json`: nessun utente di prova (il realm di sviluppo `deploy/keycloak/` resta per `task stack-up` e k3d), il secret di `memobrain-admin-svc` è `KC_ADMIN_CLIENT_SECRET` del `.env` e l'origine della Web UI è `WEB_UI_ORIGIN`, sostituiti da Keycloak all'import. Creare i veri utenti (o federare l'IdP aziendale) dalla console. Se cambiano le definizioni in `deploy/keycloak/`, riportarle nella variante di produzione (stessi client e ruoli).
 - Il primo amministratore **MemoBrain Notes** è l'utente a cui si assegna il ruolo di realm `memobrain-admin` (gli utenti normali hanno `memobrain-user`): assegnarlo dalla console Keycloak, poi accedere alla Web UI. Non eliminare l'utente di servizio `service-account-memobrain-admin-svc`.
 - Il realm si importa solo su database vuoto: modifiche successive al file JSON non hanno effetto, si fanno dalla console.
@@ -47,9 +47,11 @@ Nelle impostazioni Cloud del client inserire `https://memobrain.example.com`. Lo
 1. Leggere le note di rilascio, cambiare `MEMOBRAIN_VERSION` in `.env`.
 2. `docker compose pull && docker compose up -d`. Le migrazioni sono in avanti: **il rollback dell'immagine dopo una migrazione richiede il ripristino del backup**, quindi fare un dump prima.
 
+Nota per chi aggiorna un'installazione esistente a questa versione del compose: la `/tmp` di `cloud-api` è ora un tmpfs limitato (`API_TMP_SIZE`, default `2g`: la RAM effettivamente usata è solo quella occupata dagli upload in corso) e quella di `cloud-worker` è il nuovo volume `worker_tmp` su disco (prima entrambe erano tmpfs senza limite, cioè fino a metà della RAM). `docker compose up -d` crea il volume da solo; non contiene dati da salvare e può essere eliminato con `docker volume rm <progetto>_worker_tmp` a stack fermo. Lo spazio libero sul disco di Docker deve bastare per l'archivio di export del vault più grande.
+
 ## Hardening già applicato
 
-Container MemoBrain Notes con filesystem root in sola lettura, `cap_drop: ALL`, `no-new-privileges`, utente non root (immagine distroless); PostgreSQL, S3 e Keycloak non pubblicano porte sull'host; la console S3 è disattivata.
+Container MemoBrain Notes con filesystem root in sola lettura, `/tmp` limitata (tmpfs di `API_TMP_SIZE` per l'API, volume dedicato per il worker; i file temporanei abbandonati da un crash si eliminano all'avvio), `cap_drop: ALL`, `no-new-privileges`, utente non root (immagine distroless); PostgreSQL, S3 e Keycloak non pubblicano porte sull'host; la console S3 è disattivata; console di amministrazione di Keycloak e realm `master` chiusi sul proxy (`KEYCLOAK_ADMIN_FROM`); avvio rifiutato con i segreti segnaposto (`preflight`); immagini di terze parti fissate per versione e digest (aggiornamento: `deploy/PINS.md`).
 
 ## Limiti noti
 

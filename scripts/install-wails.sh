@@ -1,29 +1,56 @@
 #!/usr/bin/env bash
-# Builds the Wails CLI with the repository's Go toolchain and a current golang.org/x/tools.
+# Installs the Wails CLI at the version of the Wails library required by apps/desktop/go.mod (the only
+# place the version is written), built with the repository's Go toolchain.
 #
-# Wails v2.12.0 pins x/tools v0.30, which cannot read the export data of Go 1.27: `wails dev`
-# stops at "internal error: package "crypto/sha256" without types was imported from ...".
-# The CLI itself is unchanged; only the x/tools it is linked with is newer.
+# CLI and library must match: otherwise `wails dev` / `wails build` rewrite go.mod to the CLI's own
+# version (the repository also passes -nosyncgomod everywhere as a safety net). Since v2.17 the CLI
+# links an x/tools that reads Go 1.27 export data, so the module is built exactly as published:
+# dependencies come from its own go.sum (checked against the checksum database), nothing is overridden.
 #
-#   scripts/install-wails.sh [version]     default v2.12.0; installs into $(go env GOBIN) or GOPATH/bin
+#   scripts/install-wails.sh             install into $(go env GOBIN), or GOPATH/bin
+#   scripts/install-wails.sh --check     fail unless the wails on PATH (or in GOBIN) has that version
+#   scripts/install-wails.sh --version   print the version
 set -euo pipefail
 
-VERSION="${1:-v2.12.0}"
-GOVERSION="$(sed -n 's/^go \([0-9.]*\)$/\1/p' "$(dirname "$0")/../go.work")"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+VERSION="$(awk '{ for (i = 1; i < NF; i++) if ($i == "github.com/wailsapp/wails/v2" && $(i + 1) != "=>") { print $(i + 1); exit } }' \
+  "$root/apps/desktop/go.mod")"
+[ -n "$VERSION" ] || { echo "install-wails: github.com/wailsapp/wails/v2 not found in apps/desktop/go.mod" >&2; exit 1; }
+
+gobin() {
+  local bin
+  bin="$(go env GOBIN)"
+  echo "${bin:-$(go env GOPATH)/bin}"
+}
+
+case "${1:-}" in
+  --version)
+    echo "$VERSION"
+    exit 0
+    ;;
+  --check)
+    cli="$(command -v wails 2>/dev/null || true)"
+    [ -n "$cli" ] || cli="$(gobin)/wails"
+    have="$([ -x "$cli" ] && "$cli" version 2>/dev/null | head -n 1 || true)"
+    if [ "$have" != "$VERSION" ]; then
+      echo "install-wails: ${cli} is ${have:-missing}, apps/desktop/go.mod requires Wails ${VERSION}: run 'task wails-cli'" >&2
+      exit 1
+    fi
+    exit 0
+    ;;
+  "") ;;
+  *)
+    echo "usage: $0 [--check|--version]  (the version comes from apps/desktop/go.mod)" >&2
+    exit 2
+    ;;
+esac
+
+GOVERSION="$(sed -n 's/^go \([0-9.]*\)$/\1/p' "$root/go.work")"
 export GOTOOLCHAIN="go${GOVERSION}"
-export GOFLAGS=-mod=mod
+# Outside the workspace: `go install pkg@version` uses the Wails module's own go.mod and go.sum.
+export GOWORK=off GOFLAGS=-mod=readonly
 
-work="$(mktemp -d)"
-trap 'chmod -R u+w "$work"; rm -rf "$work"' EXIT
-
-src="$(go mod download -json "github.com/wailsapp/wails/v2@${VERSION}" | sed -n 's/.*"Dir": "\(.*\)",/\1/p')"
-cp -R "$src/." "$work"
-chmod -R u+w "$work"
-
-cd "$work"
-go get golang.org/x/tools@latest
-bin="$(go env GOBIN)"
-bin="${bin:-$(go env GOPATH)/bin}"
+bin="$(gobin)"
 mkdir -p "$bin"
-go build -o "$bin/wails" ./cmd/wails
-echo "wails ${VERSION} (Go ${GOVERSION}, x/tools $(go list -m -f '{{.Version}}' golang.org/x/tools)) installed in $bin"
+GOBIN="$bin" go install "github.com/wailsapp/wails/v2/cmd/wails@${VERSION}"
+echo "wails ${VERSION} (Go ${GOVERSION}) installed in $bin"

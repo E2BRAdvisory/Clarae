@@ -3,6 +3,7 @@ package config
 import (
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,71 @@ func TestLoadRejectsInvalidTrustedProxies(t *testing.T) {
 	c, err := Load(RoleAll, "test")
 	if err != nil || len(c.TrustedProxies) != 2 {
 		t.Fatalf("got %v (%v)", c.TrustedProxies, err)
+	}
+}
+
+// minimalEnv sets the variables Load requires, with real-looking secrets.
+func minimalEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATABASE_URL", "postgres://memobrain:s3cr3t-Value@db:5432/memobrain?sslmode=require")
+	t.Setenv("OIDC_ISSUER", "https://issuer")
+	t.Setenv("S3_ENDPOINT", "http://s3:9000")
+	t.Setenv("S3_ACCESS_KEY", "memobrain")
+	t.Setenv("S3_SECRET_KEY", "memobrain-secret")
+	t.Setenv("KC_ADMIN_CLIENT_SECRET", "dev-admin-svc-secret")
+	t.Setenv("MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS", "")
+}
+
+func TestLoadRejectsPlaceholderSecrets(t *testing.T) {
+	cases := map[string][2]string{
+		"database url password":    {"DATABASE_URL", "postgres://memobrain:change-me@postgres:5432/memobrain?sslmode=require"},
+		"database url query":       {"DATABASE_URL", "postgres://memobrain@postgres/memobrain?password=change-me"},
+		"database keyword dsn":     {"DATABASE_URL", "host=postgres user=memobrain password='change-me' dbname=memobrain"},
+		"s3 access key":            {"S3_ACCESS_KEY", "change-me"},
+		"s3 secret key":            {"S3_SECRET_KEY", "change-me-too"},
+		"keycloak client secret":   {"KC_ADMIN_CLIENT_SECRET", "change-me"},
+		"case and spaces ignored":  {"KC_ADMIN_CLIENT_SECRET", " Change-Me "},
+		"placeholder without dash": {"S3_SECRET_KEY", "changeme"},
+	}
+	for name, kv := range cases {
+		t.Run(name, func(t *testing.T) {
+			minimalEnv(t)
+			t.Setenv(kv[0], kv[1])
+			_, err := Load(RoleAll, "test")
+			if err == nil || !strings.Contains(err.Error(), "placeholder") || !strings.Contains(err.Error(), kv[0]) {
+				t.Fatalf("%s=%q: got %v, want a placeholder error naming %s", kv[0], kv[1], err, kv[0])
+			}
+			// The explicit escape hatch lets it start, and the setting is still reported.
+			t.Setenv("MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS", "1")
+			c, err := Load(RoleAll, "test")
+			if err != nil {
+				t.Fatalf("with MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS=1: %v", err)
+			}
+			if got := c.PlaceholderSecrets(); len(got) != 1 || !strings.HasPrefix(got[0], kv[0]) {
+				t.Fatalf("PlaceholderSecrets() = %v", got)
+			}
+		})
+	}
+}
+
+// The development and test setups (deploy/docker/cloud.dev.env, k3d, testcontainers) must keep starting.
+func TestLoadAcceptsDevelopmentSecrets(t *testing.T) {
+	minimalEnv(t)
+	for _, dsn := range []string{
+		"postgres://memobrain:memobrain@127.0.0.1:5433/memobrain?sslmode=disable",
+		"postgres://memobrain:memobrain@postgres:5432/memobrain?sslmode=disable",
+		"postgres://memobrain@127.0.0.1/memobrain", // no password at all
+		"postgres://memobrain:change-me-not@db/memobrain",
+	} {
+		t.Setenv("DATABASE_URL", dsn)
+		if _, err := Load(RoleAll, "test"); err != nil {
+			t.Errorf("DATABASE_URL=%s: %v", dsn, err)
+		}
+	}
+	t.Setenv("S3_ACCESS_KEY", "")
+	t.Setenv("S3_SECRET_KEY", "")
+	t.Setenv("KC_ADMIN_CLIENT_SECRET", "")
+	if _, err := Load(RoleAll, "test"); err != nil {
+		t.Errorf("empty optional secrets: %v", err)
 	}
 }

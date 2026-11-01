@@ -59,7 +59,15 @@ EOF
   chmod +x "$APPDIR/AppRun"
   # $APPIMAGE (set by the runtime) tells the updater it can replace the file in place.
   AI_ARCH=x86_64; [ "$ARCH" = arm64 ] && AI_ARCH=aarch64
-  ARCH="$AI_ARCH" appimagetool --appimage-extract-and-run "$APPDIR" "$OUT/memobrain-$VERSION-linux-$GO_ARCH.AppImage"
+  # Without --runtime-file appimagetool downloads the runtime from the moving "continuous" release of
+  # AppImage/type2-runtime: release.yml passes a pinned, checksum-verified copy (scripts/release/checksums.sha256).
+  RUNTIME=()
+  if [ -n "${APPIMAGE_RUNTIME_FILE:-}" ]; then
+    RUNTIME=(--runtime-file "$APPIMAGE_RUNTIME_FILE")
+  else
+    warn "APPIMAGE_RUNTIME_FILE not set: appimagetool downloads an unpinned AppImage runtime"
+  fi
+  ARCH="$AI_ARCH" appimagetool --appimage-extract-and-run "${RUNTIME[@]}" "$APPDIR" "$OUT/memobrain-$VERSION-linux-$GO_ARCH.AppImage"
 fi
 ok "packages in $OUT"
 ls -la "$OUT"

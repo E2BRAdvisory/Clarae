@@ -197,7 +197,8 @@ BUILD_LOG="$(mktemp)"
 BUILD_PID=$!
 log "Building the cloud image in the background (memobrain-cloud:dev)"
 # Images already in the local Docker cache are copied in instead of pulled from the registries.
-for img in postgres:17 rustfs/rustfs:latest quay.io/keycloak/keycloak:26.7; do
+# The list is the pinned references of deploy/k3d/deps.yaml (name:tag@digest).
+for img in $(awk '$1 == "image:" { print $2 }' "$ROOT/deploy/k3d/deps.yaml"); do
   docker image inspect "$img" >/dev/null 2>&1 && k3d image import "$img" -c "$CLUSTER" >/dev/null 2>&1 &
 done
 

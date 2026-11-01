@@ -2,6 +2,10 @@ name: Release
 
 # On a tag X.Y.Z or X.Y.Z-rc.N or vX.Y.Z or vX.Y.Z-rc.N: cloud image and Helm chart on GHCR, desktop installers for every OS,
 # all attached to one GitHub Release. Nothing is signed: the updater is compiled out (ADR-0031).
+#
+# Supply chain: every action is pinned to a full commit SHA (the comment names its release), every
+# downloaded binary is checked against scripts/release/checksums.sha256, Go tools come from go.sum-verified
+# modules. Refreshing the pins: deploy/PINS.md.
 
 on:
   push:
@@ -22,9 +26,11 @@ concurrency:
 
 env:
   GOTOOLCHAIN: auto
-  WAILS_VERSION: v2.12.0
   NFPM_VERSION: v2.43.0
+  HELM_VERSION: v4.3.1
+  # Both files are verified against scripts/release/checksums.sha256 (bump version and checksum together).
   APPIMAGETOOL_VERSION: '1.9.0'
+  APPIMAGE_RUNTIME_VERSION: '20251108'
 
 jobs:
   image:
@@ -37,25 +43,25 @@ jobs:
       # The two-architecture build does not fit in the ~14 GB the runner leaves free.
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: |
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/memobrain-cloud" >> "$GITHUB_ENV"
           echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
           # semver patterns skip the minor and latest tags on a prerelease.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: services/cloud/Dockerfile
@@ -74,8 +80,10 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
       - name: Package and push the chart
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -103,34 +111,38 @@ jobs:
       ARCH: ${{ matrix.arch }}
       ALLOW_UNSIGNED_UPDATES: '1'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tools/go.mod
           cache-dependency-path: apps/desktop/go.sum
       # setup-node replaces the Node on PATH, so corepack is enabled after it (on Windows the shim is lost otherwise).
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - run: corepack enable
         shell: bash
       - run: yarn install --immutable
         shell: bash
-      # Wails v2.12.0 does not build with Go 1.27 as published: scripts/install-wails.sh links a current x/tools.
+      # The CLI version is the Wails library version in apps/desktop/go.mod (scripts/install-wails.sh reads it):
+      # the cache key follows that file, so a library bump rebuilds the CLI.
       - name: Wails CLI (cached)
         id: wails-cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/bin/wails*
-          key: wails-${{ env.WAILS_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/go.mod', 'scripts/install-wails.sh') }}
+          key: wails-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/go.mod', 'go.work', 'tools/go.mod', 'scripts/install-wails.sh') }}
       - name: Wails CLI (build)
         if: steps.wails-cache.outputs.cache-hit != 'true'
         shell: bash
-        run: bash scripts/install-wails.sh "$WAILS_VERSION"
+        run: bash scripts/install-wails.sh
       - shell: bash
         run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: Wails CLI (version check)
+        shell: bash
+        run: bash scripts/install-wails.sh --check
 
       - name: macOS (.dmg)
         if: matrix.os_name == 'darwin'
@@ -156,12 +168,22 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev desktop-file-utils
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${{ env.NFPM_VERSION }}
-          sudo curl -fsSL -o /usr/local/bin/appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
-          sudo chmod +x /usr/local/bin/appimagetool
+          pins="$RUNNER_TEMP/appimage"; mkdir -p "$pins"
+          curl -fsSL --retry 3 -o "$pins/appimagetool-${APPIMAGETOOL_VERSION}-x86_64.AppImage" \
+            "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          curl -fsSL --retry 3 -o "$pins/runtime-${APPIMAGE_RUNTIME_VERSION}-x86_64" \
+            "https://github.com/AppImage/type2-runtime/releases/download/${APPIMAGE_RUNTIME_VERSION}/runtime-x86_64"
+          # Both files must have a checksum line: a version bumped without its checksum fails here.
+          grep -e "  appimagetool-${APPIMAGETOOL_VERSION}-x86_64.AppImage\$" -e "  runtime-${APPIMAGE_RUNTIME_VERSION}-x86_64\$" \
+            scripts/release/checksums.sha256 > "$pins/SHA256SUMS"
+          test "$(wc -l < "$pins/SHA256SUMS")" -eq 2
+          (cd "$pins" && sha256sum -c SHA256SUMS)
+          sudo install -m 0755 "$pins/appimagetool-${APPIMAGETOOL_VERSION}-x86_64.AppImage" /usr/local/bin/appimagetool
+          export APPIMAGE_RUNTIME_FILE="$pins/runtime-${APPIMAGE_RUNTIME_VERSION}-x86_64"
           bash scripts/release/build-desktop.sh linux "$VERSION" --release
           bash scripts/release/package-linux.sh all "$VERSION"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installers-${{ matrix.id }}
           path: dist/memobrain-*
@@ -174,10 +196,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: installers-*
           path: dist
@@ -195,7 +217,7 @@ jobs:
             echo; echo "## Cloud service"
             echo; echo '```sh'
             echo "docker pull ghcr.io/${owner}/memobrain-cloud:${version}"
-            echo "helm install memobrain oci://ghcr.io/${owner}/charts/memobrain --version ${version}"
+            echo "helm install memobrain oci://ghcr.io/${owner}/charts/memobrain --version ${version} -f my-values.yaml"
             echo '```'
             echo; echo "The desktop installers are not code-signed: macOS Gatekeeper and Windows SmartScreen warn on first launch. Verify the download against \`SHA256SUMS\`."
           } >> notes.md

@@ -48,6 +48,15 @@ Il servizio impedisce di rimuovere o sospendere l'**ultimo amministratore** (err
 
 I gruppi di MemoBrain Notes (condivisione, config profile) vivono nel database del servizio e **non** sono i gruppi di Keycloak: nessun claim di gruppo nel token, nessuna importazione da LDAP/Keycloak (D-05). Se usate LDAP/AD come fonte utenti federata in Keycloak, gli utenti compaiono in MemoBrain Notes al primo accesso; l'appartenenza ai gruppi MemoBrain Notes si gestisce dalla console.
 
+## Console di amministrazione non pubblica
+
+La console di Keycloak e la sua API REST (`/admin/...`) e il realm `master` (dove accede l'amministratore del server) non servono ai client: desktop e Web UI usano solo `/realms/memobrain/...` (endpoint OIDC, pagine di login e account) e gli asset dei temi (`/resources/...`); il servizio cloud chiama l'API admin direttamente su Keycloak, non tramite il proxy pubblico.
+
+- **Compose on-premise:** il proxy Caddy risponde `403` su `/admin` e `/realms/master` (anche con varianti di maiuscole, slash doppi, codifica `%xx` o parametri `;`) a meno che l'indirizzo del client sia in `KEYCLOAK_ADMIN_FROM` (CIDR separati da spazio; il default `127.0.0.1/32` non corrisponde a nessun client esterno). Per amministrare: impostare in `.env` la rete degli amministratori (VPN, ufficio), `docker compose up -d proxy`, lavorare, poi togliere la variabile e ripetere il comando. Caddy deve vedere l'IP reale del client: con un altro proxy o NAT davanti, verificare `remote_ip` nei log (`docker compose logs proxy`); le connessioni dall'host stesso (per esempio un tunnel SSH verso la porta 443) arrivano dall'indirizzo del bridge Docker, che non va aperto per intero.
+- **Kubernetes:** Keycloak è esterno al chart. Applicare la stessa regola sull'ingress o sul proxy di Keycloak (pubblicare solo `/realms/memobrain` e `/resources`, oppure esporre la console su un host o una porta interna, opzione `hostname-admin` di Keycloak).
+
+Il primo avvio richiede comunque la console (ruolo `memobrain-admin` al primo amministratore, utenti, rotazione del segreto di `memobrain-admin-svc`): aprirla con `KEYCLOAK_ADMIN_FROM` per il tempo necessario.
+
 ## Verifica rapida
 
 ```sh
