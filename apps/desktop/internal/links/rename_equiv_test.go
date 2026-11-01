@@ -23,7 +23,8 @@ import (
 // A generated vault full of ambiguity: duplicate base names, names that
 // differ only in case, aliases equal to other notes' names, relative and
 // path-qualified targets, escaped Markdown links, attachments, ghost links
-// (some of which a rename makes resolvable) and drawings.
+// (some of which a rename makes resolvable), property links, drawings and
+// canvases with file nodes.
 var (
 	eqFolders = []string{"", "A", "A/B", "C", "D/E"}
 	eqNames   = []string{"Alpha", "alpha", "Beta", "Gamma", "My Note", "Index", "Delta", "Odd.md"}
@@ -88,8 +89,11 @@ func (v *eqVault) link() string {
 
 func (v *eqVault) note() string {
 	var sb strings.Builder
-	if v.rng.IntN(2) == 0 {
+	switch v.rng.IntN(4) {
+	case 0:
 		fmt.Fprintf(&sb, "---\naliases: [%q]\n---\n", v.pick(eqAliases))
+	case 1: // property links: rewritten, not indexed as links
+		fmt.Fprintf(&sb, "---\naliases: [%q]\nrelated: \"[[%s]]\"\nup:\n  - \"[[%s|up]]\"\n---\n", v.pick(eqAliases), v.pick(eqTargets), v.pick(eqTargets))
 	}
 	for i, n := 0, 1+v.rng.IntN(5); i < n; i++ {
 		fmt.Fprintf(&sb, "Line %d %s.\n", i, v.link())
@@ -108,6 +112,16 @@ func (v *eqVault) drawing() string {
 		t1, v.pick(eqTargets), v.pick(eqTargets))
 }
 
+// canvas shows an existing file (or a missing one) and links from a text node.
+func (v *eqVault) canvas() string {
+	file := "Ghost.md"
+	if files := v.files(); len(files) > 0 && v.rng.IntN(4) != 0 {
+		file = v.pick(files)
+	}
+	return fmt.Sprintf(`{"nodes":[{"id":"f","type":"file","file":%q,"x":0,"y":0,"width":10,"height":10},`+
+		`{"id":"t","type":"text","text":"see [[%s]]","x":20,"y":0,"width":10,"height":10}],"edges":[]}`, file, v.pick(eqTargets))
+}
+
 func (v *eqVault) create() {
 	for {
 		dir := v.pick(eqFolders)
@@ -118,6 +132,8 @@ func (v *eqVault) create() {
 			name, body = "img.png", "PNG"
 		case 1:
 			name, body = v.pick(eqNames)+".excalidraw", v.drawing()
+		case 2:
+			name, body = v.pick(eqNames)+".canvas", v.canvas()
 		}
 		p := path.Join(dir, name)
 		if !v.free(p) {

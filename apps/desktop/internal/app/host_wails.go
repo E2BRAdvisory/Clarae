@@ -68,7 +68,7 @@ func wailsFilters(in []FileFilter) []runtime.FileFilter {
 // was launched with these arguments (Windows/Linux deliver memobrain:// URLs
 // this way). The running window is brought to the front.
 func (a *App) OnSecondInstance(data options.SecondInstanceData) {
-	a.logger.Info().Strs("args", data.Args).Msg("second instance launch")
+	a.logger.Info().Strs("args", redactArgs(data.Args)).Msg("second instance launch")
 	if a.ctx != nil {
 		a.host.ShowWindow(a.ctx)
 	}

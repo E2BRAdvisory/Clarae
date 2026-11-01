@@ -12,7 +12,10 @@ import (
 // DefaultCacheBudget bounds the note text kept in memory by the candidate
 // cache (bytes of indexed body text). Above it the engine falls back to
 // streaming the bodies out of index.db on every query (correct, slower).
-const DefaultCacheBudget int64 = 512 << 20
+// 512 MB on the desktop; smaller in the browser (cache_budget_js.go), where
+// the bodies, a second snapshot during a refresh and sqlite-wasm share the
+// worker's heap.
+const DefaultCacheBudget int64 = defaultCacheBudget
 
 // The candidate cache (M7-WP1, ADR-0020). A query used to read every candidate
 // body from SQLite; at 50,000 notes that is about 170 MB of page reads and
@@ -98,7 +101,7 @@ func (e *Engine) snapshot(ctx context.Context) (*snapshot, error) {
 	var fp fingerprint
 	if err := tx.QueryRowContext(ctx, `
 		SELECT count(*), COALESCE(max(indexed_at), ''),
-		       COALESCE(sum(CASE WHEN kind IN ('md', 'canvas', 'excalidraw') THEN size END), 0)
+		       COALESCE(sum(CASE WHEN kind IN ('md', 'canvas', 'excalidraw') THEN COALESCE(body_bytes, size) END), 0)
 		FROM files`).Scan(&fp.count, &fp.maxStamp, &fp.textBytes); err != nil {
 		return nil, err
 	}

@@ -194,7 +194,7 @@ func (v *VaultAPI) ReadNote(vaultID, relPath string) (NoteContent, error) {
 	}
 	c, err := ov.FS.ReadFile(relPath)
 	if err != nil {
-		return NoteContent{}, err
+		return NoteContent{}, bindingError(err)
 	}
 	return NoteContent{Path: c.Path, Content: string(c.Data), Hash: c.Hash, Size: c.Size}, nil
 }
@@ -209,6 +209,11 @@ func (v *VaultAPI) WriteNote(vaultID, relPath, content, expectedHash string) (Wr
 	ov, err := v.app.vault(vaultID)
 	if err != nil {
 		return WriteResult{}, err
+	}
+	if expectedHash == "" {
+		if err := portableName(relPath); err != nil {
+			return WriteResult{}, err
+		}
 	}
 	c, err := ov.FS.WriteFile(relPath, []byte(content), expectedHash, expectedHash == "")
 	if err != nil {
@@ -227,6 +232,9 @@ func (v *VaultAPI) CreateFolder(vaultID, relPath string) error {
 	if err != nil {
 		return err
 	}
+	if err := portableName(relPath); err != nil {
+		return err
+	}
 	return bindingError(ov.FS.Mkdir(relPath))
 }
 
@@ -239,11 +247,25 @@ func (v *VaultAPI) Rename(vaultID, fromPath, toPath string) error {
 	if err != nil {
 		return err
 	}
+	if err := portableName(toPath); err != nil {
+		return err
+	}
 	if err := ov.FS.Rename(fromPath, toPath); err != nil {
 		return bindingError(err)
 	}
 	v.app.sync.Renamed(context.Background(), vaultID, fromPath, toPath)
-	return ov.Indexer.Update(context.Background(), []string{fromPath, toPath})
+	v.app.refreshIndex(ov, fromPath, toPath)
+	return nil
+}
+
+// refreshIndex re-indexes paths after a file operation that has succeeded.
+// An index failure (a busy database) is logged, not returned: the operation
+// is done, a retry would fail on its own result, and the watcher's
+// reconciliation catches the index up.
+func (a *App) refreshIndex(ov *openVault, paths ...string) {
+	if err := ov.Indexer.Update(context.Background(), paths); err != nil {
+		a.logger.Warn().Err(err).Strs("paths", paths).Msg("index refresh after a file operation")
+	}
 }
 
 // Trash deletes a file or folder recoverably: to the OS trash or to the
@@ -291,7 +313,7 @@ func (v *VaultAPI) RebuildIndex(vaultID string) error {
 	if err != nil {
 		return err
 	}
-	return ov.Indexer.Rebuild(context.Background())
+	return bindingError(ov.Indexer.Rebuild(context.Background()))
 }
 
 // SearchAPI exposes full-text search.
@@ -390,25 +412,6 @@ func (s *SettingsAPI) Info() map[string]string {
 	}
 }
 
-// bindingError maps file-system errors to stable messages the frontend can
-// branch on (the message is the contract until typed errors exist in Wails v2).
-func bindingError(err error) error {
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, vault.ErrHashMismatch):
-		return errors.New("conflict: file changed on disk")
-	case errors.Is(err, vault.ErrExists):
-		return errors.New("exists: destination already exists")
-	case errors.Is(err, vault.ErrNotFound):
-		return errors.New("not-found: no such file")
-	case errors.Is(err, vault.ErrOutsideVault):
-		return errors.New("invalid-path: outside the vault")
-	default:
-		return err
-	}
-}
-
 // LinksAPI exposes link resolution queries (§2.5 "links").
 type LinksAPI struct{ app *App }
 
@@ -449,6 +452,9 @@ func (l *LinksAPI) PlanRename(vaultID, from, to string) (links.Plan, error) {
 	if err != nil {
 		return links.Plan{}, err
 	}
+	if err := portableName(to); err != nil {
+		return links.Plan{}, err
+	}
 	plan, err := links.PlanRename(context.Background(), ov.Indexer.DB(), ov.FS, from, to)
 	return plan, bindingError(err)
 }
@@ -462,6 +468,9 @@ func (l *LinksAPI) ApplyRename(vaultID, from, to string) (links.Plan, error) {
 	}
 	ov, err := l.app.vault(vaultID)
 	if err != nil {
+		return links.Plan{}, err
+	}
+	if err := portableName(to); err != nil {
 		return links.Plan{}, err
 	}
 	ctx := context.Background()
@@ -479,7 +488,8 @@ func (l *LinksAPI) ApplyRename(vaultID, from, to string) (links.Plan, error) {
 	for _, f := range plan.Files {
 		touched = append(touched, f.Path)
 	}
-	return plan, ov.Indexer.Update(ctx, touched)
+	l.app.refreshIndex(ov, touched...)
+	return plan, nil
 }
 
 // Resolve returns the vault path a link written in fromPath points to ("" when unresolved).

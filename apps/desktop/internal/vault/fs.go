@@ -426,11 +426,15 @@ func (f *FS) Rename(fromRel, toRel string) error {
 func (f *FS) rename(from, to string) error {
 	unlock := f.lockTree()
 	defer unlock()
-	if _, err := os.Lstat(from); err != nil {
+	fromInfo, err := os.Lstat(from)
+	if err != nil {
 		return err
 	}
-	if _, err := os.Lstat(to); err == nil {
-		if !strings.EqualFold(from, to) { // allow case-only renames on case-insensitive file systems
+	if toInfo, err := os.Lstat(to); err == nil {
+		// A case-only rename on a case-insensitive file system finds the
+		// source itself under the new name; on a case-sensitive one the
+		// other name may be a different file, which os.Rename would replace.
+		if !strings.EqualFold(from, to) || !sameEntry(fromInfo, toInfo, to) {
 			return ErrExists
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
@@ -440,6 +444,32 @@ func (f *FS) rename(from, to string) error {
 		return err
 	}
 	return os.Rename(from, to)
+}
+
+// sameEntry reports whether to, which differs from the source only in case,
+// names the source itself rather than another file. The folder listing is
+// the portable test: a case-insensitive file system lists the entry under its
+// actual name only, while a distinct file shows up with to's exact name. The
+// browser's file system has no inode numbers, so os.SameFile is an extra
+// check only on the others.
+func sameEntry(fromInfo, toInfo fs.FileInfo, to string) bool {
+	if runtime.GOOS != "js" && !os.SameFile(fromInfo, toInfo) {
+		return false
+	}
+	base := filepath.Base(to)
+	if fromInfo.Name() == base {
+		return true // the very same name: nothing to rename
+	}
+	entries, err := os.ReadDir(filepath.Dir(to))
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.Name() == base {
+			return false
+		}
+	}
+	return true
 }
 
 // Trash moves a file or folder into the vault's .trash/ folder, keeping the
@@ -531,6 +561,27 @@ type Entry struct {
 // paths. Returning fs.SkipDir from fn for a folder skips its contents.
 func (f *FS) Walk(fn func(e Entry) error) error {
 	return f.walk(f.root, "", fn)
+}
+
+// WalkDir is Walk restricted to what lies below the folder rel (rel itself is
+// not visited); "" walks the whole vault. An excluded folder yields nothing.
+func (f *FS) WalkDir(rel string, fn func(e Entry) error) error {
+	if rel == "" {
+		return f.Walk(fn)
+	}
+	abs, normalized, err := f.Resolve(rel)
+	if err != nil {
+		return err
+	}
+	if pathrules.IsExcluded(normalized, false) {
+		return nil
+	}
+	if st, err := os.Lstat(abs); err != nil {
+		return err
+	} else if st.Mode()&fs.ModeSymlink != 0 || !st.IsDir() {
+		return nil // Walk does not follow symlinks either
+	}
+	return f.walk(abs, normalized, fn)
 }
 
 func (f *FS) walk(absDir, relDir string, fn func(e Entry) error) error {

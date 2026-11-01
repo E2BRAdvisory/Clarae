@@ -11,13 +11,16 @@ import (
 
 // persisted is the non-secret part of the session (<dataDir>/auth.json).
 type persisted struct {
-	ServerURL    string  `json:"server_url"`
-	Issuer       string  `json:"issuer"`
-	ClientID     string  `json:"client_id"`
-	Audience     string  `json:"audience"`
-	GRPCEndpoint string  `json:"grpc_endpoint"`
-	DeviceID     string  `json:"device_id"`
-	Profile      Profile `json:"profile"`
+	ServerURL    string `json:"server_url"`
+	Issuer       string `json:"issuer"`
+	ClientID     string `json:"client_id"`
+	Audience     string `json:"audience"`
+	GRPCEndpoint string `json:"grpc_endpoint"`
+	DeviceID     string `json:"device_id"`
+	// DeviceRevoked: the cloud refused DeviceID as revoked; the session stays
+	// signed in but does not sync until ReregisterDevice replaces the device.
+	DeviceRevoked bool    `json:"device_revoked,omitempty"`
+	Profile       Profile `json:"profile"`
 }
 
 const sessionFile = "auth.json"

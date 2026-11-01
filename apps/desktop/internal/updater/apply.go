@@ -103,7 +103,7 @@ func (a *SystemApplier) PreferredKinds(goos string) []string {
 func (a *SystemApplier) Apply(_ context.Context, staged string, art updatemanifest.Artifact) (Result, error) {
 	switch {
 	case a.OS == "windows" && art.Kind == updatemanifest.KindNSIS:
-		name, args := windowsInstallerCommand(staged, a.Exe)
+		name, args := windowsInstallerCommand(staged, a.Exe, os.Getpid(), os.Getenv("SystemRoot"))
 		if err := a.Runner.Start(name, args...); err != nil {
 			return a.reveal(staged, err)
 		}
@@ -154,11 +154,45 @@ func (a *SystemApplier) reveal(staged string, cause error) (Result, error) {
 	return Result{Method: MethodReveal, Path: staged, Message: msg}, nil
 }
 
-// windowsInstallerCommand waits ~3 s for the app to exit, runs the NSIS
-// installer silently and starts the new executable afterwards.
-func windowsInstallerCommand(installer, exe string) (string, []string) {
-	script := fmt.Sprintf(`ping -n 4 127.0.0.1 >nul & "%s" /S & start "" "%s"`, installer, exe)
-	return "cmd.exe", []string{"/C", script}
+// windowsInstallerCommand waits for the app (pid) to exit, runs the NSIS
+// installer silently and starts the executable again afterwards.
+//
+// It is a one-line PowerShell script, not a cmd.exe /C string: Go escapes a
+// Windows argument holding quotes by writing them as \", which cmd.exe does
+// not understand, so the installer never ran. The script holds no double
+// quote (the paths are PowerShell single-quoted literals, and a Windows path
+// cannot contain one), so Go's escaping only wraps it in quotes and
+// PowerShell, which splits its command line like CommandLineToArgvW, gets it
+// back unchanged. Start-Process goes through ShellExecute, so an installer
+// that requires elevation shows the UAC prompt instead of failing with
+// ERROR_ELEVATION_REQUIRED, and -Wait keeps the restart after the
+// installation. A failed or refused installation still restarts the (old)
+// executable.
+func windowsInstallerCommand(installer, exe string, pid int, systemRoot string) (string, []string) {
+	script := fmt.Sprintf(`$ErrorActionPreference = 'SilentlyContinue'; Wait-Process -Id %d -Timeout 60; try { Start-Process -FilePath %s -ArgumentList '/S' -Wait } catch {}; Start-Process -FilePath %s`,
+		pid, psQuote(installer), psQuote(exe))
+	name := "powershell.exe"
+	if systemRoot != "" {
+		name = systemRoot + `\System32\WindowsPowerShell\v1.0\powershell.exe`
+	}
+	return name, []string{"-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script}
+}
+
+// psQuote makes s a PowerShell single-quoted string literal: inside one only
+// a single quote is special (PowerShell also treats the typographic single
+// quotes as such), and it is escaped by doubling it.
+func psQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('\'')
+	for _, r := range s {
+		switch r {
+		case '\'', '\u2018', '\u2019', '\u201a', '\u201b':
+			b.WriteRune(r)
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('\'')
+	return b.String()
 }
 
 // macAppBundle returns "/Applications/MemoBrain Notes.app" for ".../MemoBrain Notes.app/Contents/MacOS/memobrain".

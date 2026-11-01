@@ -293,11 +293,22 @@ func (h *History) Take(path string, reason Reason) (Snapshot, bool, error) {
 	if err != nil {
 		return Snapshot{}, false, err
 	}
-	if c.Size > int64(h.settings.MaxFileMB)<<20 || !isText(c.Data) {
+	limit, textOnly := int64(h.settings.MaxFileMB)<<20, true
+	if reason == ReasonPreSyncOverride {
+		// What a sync merge is about to replace may exist nowhere else (it
+		// was never uploaded): binary and large files are kept too, up to
+		// PreSyncMaxBytes.
+		limit, textOnly = max(limit, PreSyncMaxBytes), false
+	}
+	if c.Size > limit || (textOnly && !isText(c.Data)) {
 		return Snapshot{}, false, ErrSkipped
 	}
 	return h.takeDataLocked(path, c.Data, c.Hash, reason)
 }
+
+// PreSyncMaxBytes caps the files kept before a sync overwrites them
+// (whatever MaxFileMB says, which caps the periodic snapshots).
+const PreSyncMaxBytes = 64 << 20
 
 func (h *History) takeDataLocked(path string, data []byte, hash string, reason Reason) (Snapshot, bool, error) {
 	if s, ok := h.latest(path); ok && s.Hash == hash {

@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -163,15 +162,16 @@ func (ix *Indexer) full(ctx context.Context) error {
 	}
 	ix.wmu.Lock()
 	defer ix.wmu.Unlock()
-	removed := 0
+	var gone []string
 	for p := range known {
 		if !seen[p] && !ix.updated[p] {
-			if _, err := ix.remove(ctx, p); err != nil {
-				return err
-			}
-			removed++
+			gone = append(gone, p)
 		}
 	}
+	if _, err := ix.removeMany(ctx, gone); err != nil {
+		return err
+	}
+	removed := len(gone)
 	ix.invalidateResolver()
 	if err := links.ResolveAll(ctx, ix.db); err != nil {
 		return err
@@ -254,6 +254,15 @@ func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known m
 	workers := min(runtime.NumCPU(), 8)
 	in := make(chan vault.Entry)
 	out := make(chan job, workers*2)
+	// On an early return (a failed batch, a cancelled context) the feeder
+	// stops and the workers' last jobs are drained: none may stay blocked
+	// on out once this returns.
+	feedCtx, stopFeed := context.WithCancel(ctx)
+	defer func() {
+		stopFeed()
+		for range out {
+		}
+	}()
 	var wg sync.WaitGroup
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
@@ -275,7 +284,7 @@ func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known m
 		for _, e := range todo {
 			select {
 			case in <- e:
-			case <-ctx.Done():
+			case <-feedCtx.Done():
 				return
 			}
 		}
@@ -343,8 +352,9 @@ func (ix *Indexer) Update(ctx context.Context, paths []string) error {
 			return err
 		}
 		if st.IsDir() {
-			if err := ix.fs.Walk(func(e vault.Entry) error {
-				if !e.IsDir && pathrules.HasPrefix(e.Path, normalized) {
+			// Only the folder is walked, not the whole vault.
+			if err := ix.fs.WalkDir(normalized, func(e vault.Entry) error {
+				if !e.IsDir {
 					entries = append(entries, e)
 				}
 				return nil
@@ -358,7 +368,14 @@ func (ix *Indexer) Update(ctx context.Context, paths []string) error {
 	for _, e := range entries {
 		ix.markUpdated(e.Path)
 	}
-	st, err := ix.indexBatches(ctx, entries, map[string]fileRow{}, 0, len(entries), ix.applyBatch)
+	// The stored hashes let identical content through as a touch (stat
+	// columns only): the watcher reports every write a binding has already
+	// indexed, and parsing and rewriting the FTS row again would be wasted.
+	known, err := ix.knownRows(ctx, entries)
+	if err != nil {
+		return err
+	}
+	st, err := ix.indexBatches(ctx, entries, known, 0, len(entries), ix.applyBatch)
 	if err != nil {
 		return err
 	}
@@ -457,6 +474,37 @@ func (ix *Indexer) loadRows(ctx context.Context) (map[string]fileRow, error) {
 		out[p] = r
 	}
 	return out, rows.Err()
+}
+
+// knownRowsAllAbove: past this many entries one scan of the files table is
+// cheaper than a lookup per path.
+const knownRowsAllAbove = 500
+
+// knownRows returns the stored stat and hash of the entries that are indexed.
+func (ix *Indexer) knownRows(ctx context.Context, entries []vault.Entry) (map[string]fileRow, error) {
+	if len(entries) > knownRowsAllAbove {
+		return ix.loadRows(ctx)
+	}
+	out := make(map[string]fileRow, len(entries))
+	if len(entries) == 0 {
+		return out, nil
+	}
+	stmt, err := ix.db.PrepareContext(ctx, `SELECT mtime_ns, size, hash FROM files WHERE path = ?`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = stmt.Close() }()
+	for _, e := range entries {
+		var r fileRow
+		switch err := stmt.QueryRowContext(ctx, e.Path).Scan(&r.mtimeNs, &r.size, &r.hash); {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return nil, err
+		default:
+			out[e.Path] = r
+		}
+	}
+	return out, nil
 }
 
 // prepare reads and parses one file without touching the database.
@@ -664,15 +712,16 @@ func (w *txWriter) apply(ctx context.Context, j job, outID *int64, outExists *bo
 		newAliases = j.doc.Aliases
 	}
 	up, err := w.stmt(ctx, `
-		INSERT INTO files (path, kind, mtime_ns, size, hash, title, word_count, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO files (path, kind, mtime_ns, size, hash, title, word_count, indexed_at, body_bytes)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET kind=excluded.kind, mtime_ns=excluded.mtime_ns, size=excluded.size,
-		  hash=excluded.hash, title=excluded.title, word_count=excluded.word_count, indexed_at=excluded.indexed_at
+		  hash=excluded.hash, title=excluded.title, word_count=excluded.word_count, indexed_at=excluded.indexed_at,
+		  body_bytes=excluded.body_bytes
 		RETURNING id`)
 	if err != nil {
 		return delta{}, err
 	}
-	if err := up.QueryRowContext(ctx, e.Path, string(e.Kind), e.Mtime.UnixNano(), e.Size, j.hash, j.title, wordCount, now).Scan(&id); err != nil {
+	if err := up.QueryRowContext(ctx, e.Path, string(e.Kind), e.Mtime.UnixNano(), e.Size, j.hash, j.title, wordCount, now, len(j.body)).Scan(&id); err != nil {
 		return delta{}, err
 	}
 	if doc := j.doc; doc != nil {
@@ -756,68 +805,92 @@ func sameSet(a, b []string) bool {
 	return true
 }
 
-// remove drops a file from the index and returns how that changed the file set.
-func (ix *Indexer) remove(ctx context.Context, path string) (delta, error) {
+// removeChunk bounds the files removed in one transaction (removing a large
+// folder must not hold one huge write transaction either).
+const removeChunk = 500
+
+// removeMany drops files from the index, in transactions of removeChunk
+// files, and returns how that changed the file set.
+func (ix *Indexer) removeMany(ctx context.Context, paths []string) (delta, error) {
+	var d delta
+	for len(paths) > 0 {
+		n := min(len(paths), removeChunk)
+		r, err := ix.removeTx(ctx, paths[:n])
+		if err != nil {
+			return d, err
+		}
+		d.merge(r)
+		paths = paths[n:]
+	}
+	return d, nil
+}
+
+// removeTx drops files from the index in one transaction.
+func (ix *Indexer) removeTx(ctx context.Context, paths []string) (delta, error) {
 	tx, err := ix.db.BeginTx(ctx, nil)
 	if err != nil {
 		return delta{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	var aliases []string
-	rows, err := tx.QueryContext(ctx, `SELECT name FROM aliases WHERE path = ?`, path)
-	if err != nil {
-		return delta{}, err
-	}
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			_ = rows.Close()
+	w := &txWriter{tx: tx, stmts: map[string]*sql.Stmt{}}
+	defer w.close()
+	var d delta
+	for _, path := range paths {
+		var aliases []string
+		sel, err := w.stmt(ctx, `SELECT name FROM aliases WHERE path = ?`)
+		if err != nil {
 			return delta{}, err
 		}
-		aliases = append(aliases, n)
-	}
-	if err := rows.Close(); err != nil {
-		return delta{}, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM fts_content WHERE rowid = (SELECT id FROM files WHERE path = ?)`, path); err != nil {
-		return delta{}, err
-	}
-	for _, table := range []string{"aliases", "tags", "links", "headings", "properties", "tasks", "block_ids", "files"} {
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE path = ?", table), path); err != nil {
+		rows, err := sel.QueryContext(ctx, path)
+		if err != nil {
 			return delta{}, err
 		}
+		for rows.Next() {
+			var n string
+			if err := rows.Scan(&n); err != nil {
+				_ = rows.Close()
+				return delta{}, err
+			}
+			aliases = append(aliases, n)
+		}
+		if err := rows.Close(); err != nil {
+			return delta{}, err
+		}
+		if err := w.exec(ctx, `DELETE FROM fts_content WHERE rowid = (SELECT id FROM files WHERE path = ?)`, path); err != nil {
+			return delta{}, err
+		}
+		for _, table := range []string{"aliases", "tags", "links", "headings", "properties", "tasks", "block_ids", "files"} {
+			if err := w.exec(ctx, "DELETE FROM "+table+" WHERE path = ?", path); err != nil {
+				return delta{}, err
+			}
+		}
+		d.merge(delta{tokens: links.FileTokens(path, aliases), removed: []string{path}, any: true})
 	}
 	if err := tx.Commit(); err != nil {
 		return delta{}, err
 	}
-	return delta{tokens: links.FileTokens(path, aliases), removed: []string{path}, any: true}, nil
+	return d, nil
 }
 
 // removePrefix removes a path and, if it was a folder, everything under it.
 func (ix *Indexer) removePrefix(ctx context.Context, path string) (delta, error) {
-	var d delta
 	rows, err := ix.db.QueryContext(ctx, `SELECT path FROM files WHERE path = ? OR path LIKE ? ESCAPE '\'`, path, escapeLike(path)+"/%")
 	if err != nil {
-		return d, err
+		return delta{}, err
 	}
 	var paths []string
 	for rows.Next() {
 		var p string
 		if err := rows.Scan(&p); err != nil {
 			_ = rows.Close()
-			return d, err
+			return delta{}, err
 		}
 		paths = append(paths, p)
 	}
-	_ = rows.Close()
-	for _, p := range paths {
-		r, err := ix.remove(ctx, p)
-		if err != nil {
-			return d, err
-		}
-		d.merge(r)
+	if err := rows.Close(); err != nil {
+		return delta{}, err
 	}
-	return d, nil
+	return ix.removeMany(ctx, paths)
 }
 
 func escapeLike(s string) string {

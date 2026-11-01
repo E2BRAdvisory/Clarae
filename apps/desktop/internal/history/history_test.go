@@ -133,6 +133,22 @@ func TestSkipsBinaryLargeAndExcluded(t *testing.T) {
 	}
 }
 
+// What a sync merge is about to overwrite is kept even when it is binary or
+// larger than the periodic cap.
+func TestPreSyncSnapshotKeepsBinaryAndLarge(t *testing.T) {
+	h, fsys, _ := newHist(t)
+	if _, err := h.SetSettings(Settings{MaxFileMB: 1}); err != nil {
+		t.Fatal(err)
+	}
+	write(t, fsys, "img.excalidraw", "a\x00b")
+	write(t, fsys, "big.md", strings.Repeat("x", 1<<20+1))
+	for _, p := range []string{"img.excalidraw", "big.md"} {
+		if _, created, err := h.Take(p, ReasonPreSyncOverride); err != nil || !created {
+			t.Fatalf("%s: %v %v", p, created, err)
+		}
+	}
+}
+
 func TestReadOnlyVaultTakesNothing(t *testing.T) {
 	fsys, err := vault.NewFS(t.TempDir())
 	if err != nil {

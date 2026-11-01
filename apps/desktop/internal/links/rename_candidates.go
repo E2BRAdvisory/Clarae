@@ -25,8 +25,11 @@ import (
 //   - every note changed on disk since it was indexed (another size or mtime,
 //     e.g. an external edit the watcher has not delivered yet): its indexed
 //     links may be out of date;
-//   - every drawing: a rename rewrites the [[links]] found anywhere in its JSON
-//     (scanDrawingLinks), more than the index extracts from its elements.
+//   - every drawing and every canvas: a rename rewrites the [[links]] found
+//     anywhere in their JSON (scanDrawingLinks), more than the index extracts
+//     from their elements, and the file nodes of a canvas;
+//   - the notes with a property whose value holds a "[[": the links of the
+//     properties are rewritten (scanFrontmatterLinks) but not indexed.
 //
 // Markdown link keys also cover the URL-unescaped target PlanRename resolves.
 func renameCandidates(ctx context.Context, db *sql.DB, fsys *vault.FS, files []File, moves map[string]string) (map[string]bool, error) {
@@ -35,7 +38,7 @@ func renameCandidates(ctx context.Context, db *sql.DB, fsys *vault.FS, files []F
 	for _, f := range files {
 		np, ok := moves[f.Path]
 		if !ok {
-			if f.Kind == "excalidraw" {
+			if f.Kind == "excalidraw" || f.Kind == "canvas" {
 				out[f.Path] = true
 			}
 			continue
@@ -83,10 +86,30 @@ func renameCandidates(ctx context.Context, db *sql.DB, fsys *vault.FS, files []F
 	if err := collectIn("target_resolved", moved); err != nil {
 		return nil, err
 	}
+	if err := addPropertyLinks(ctx, db, out); err != nil {
+		return nil, err
+	}
 	if err := addStale(ctx, db, fsys, out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// addPropertyLinks adds the notes with a property value that holds a wikilink.
+func addPropertyLinks(ctx context.Context, db *sql.DB, out map[string]bool) error {
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT path FROM properties WHERE instr(value, '[[') > 0`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return err
+		}
+		out[p] = true
+	}
+	return rows.Err()
 }
 
 // addStale adds the notes whose size or mtime on disk differ from the index.

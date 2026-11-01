@@ -114,7 +114,7 @@ func planRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string
 
 	oldR, newR := NewResolver(files), NewResolver(newFiles)
 	for _, f := range files {
-		if f.Kind != "md" && f.Kind != "excalidraw" {
+		if !rewritableKind(f.Kind) {
 			continue
 		}
 		if include != nil && !include[f.Path] {
@@ -128,49 +128,72 @@ func planRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string
 		if np, ok := moves[f.Path]; ok {
 			newSelf = np
 		}
-		var fileLinks []parser.Link
-		if f.Kind == "excalidraw" {
-			fileLinks = scanDrawingLinks(content.Data)
-		} else {
-			fileLinks = parser.Parse(strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path)), content.Data).Links
-		}
 		var edits []Edit
-		for _, l := range fileLinks {
+		for _, l := range rewritableLinks(f, content.Data, strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path))) {
 			if l.Kind == parser.LinkExternal || l.Target == "" || l.TargetEnd <= l.TargetStart {
 				continue
 			}
-			target := l.Target
-			if l.Kind == parser.LinkMarkdown {
-				target = unescapeURL(target)
+			var text string
+			if l.exact {
+				np, ok := moves[l.Target]
+				if !ok {
+					continue // a canvas file node names its file by path: only a move changes it
+				}
+				text = np
+			} else {
+				target := l.Target
+				if l.Kind == parser.LinkMarkdown {
+					target = unescapeURL(target)
+				}
+				oldTarget := oldR.Resolve(f.Path, target)
+				if oldTarget == "" {
+					continue // ghost link: leave it alone
+				}
+				newTarget := oldTarget
+				if np, ok := moves[oldTarget]; ok {
+					newTarget = np
+				}
+				if newR.Resolve(newSelf, target) == newTarget {
+					continue // still resolves to the right file
+				}
+				text = bestTarget(newR, newSelf, newTarget, l.Kind == parser.LinkMarkdown, target)
+				if l.Kind == parser.LinkMarkdown {
+					text = escapeURL(text)
+				}
 			}
-			oldTarget := oldR.Resolve(f.Path, target)
-			if oldTarget == "" {
-				continue // ghost link: leave it alone
+			if l.safe != nil && !l.safe(text) {
+				continue // would need escaping where it is written: leave the link as it is
 			}
-			newTarget := oldTarget
-			if np, ok := moves[oldTarget]; ok {
-				newTarget = np
-			}
-			if newR.Resolve(newSelf, target) == newTarget {
-				continue // still resolves to the right file
-			}
-			text := bestTarget(newR, newSelf, newTarget, l.Kind == parser.LinkMarkdown, target)
-			if l.Kind == parser.LinkMarkdown {
-				text = escapeURL(text)
-			}
-			old := string(content.Data[l.TargetStart:l.TargetEnd])
-			if f.Kind == "excalidraw" && !jsonSafe(text) {
-				continue // would need escaping inside the JSON string: leave the link as it is
-			}
-			if text != old {
+			if old := string(content.Data[l.TargetStart:l.TargetEnd]); text != old {
 				edits = append(edits, Edit{Line: l.Line, Start: l.TargetStart, End: l.TargetEnd, Old: old, New: text})
 			}
 		}
 		if len(edits) > 0 {
-			plan.Files = append(plan.Files, FileEdit{Path: f.Path, Hash: content.Hash, Edits: edits})
+			plan.Files = append(plan.Files, FileEdit{Path: f.Path, Hash: content.Hash, Edits: dedupeEdits(edits)})
 		}
 	}
 	return plan, nil
+}
+
+// rewritableKind reports the kinds of files whose links a rename rewrites.
+func rewritableKind(kind string) bool {
+	return kind == "md" || kind == "excalidraw" || kind == "canvas"
+}
+
+// dedupeEdits drops an edit of a range another edit already covers (a link
+// found by two scanners) and keeps them in file order.
+func dedupeEdits(edits []Edit) []Edit {
+	sort.SliceStable(edits, func(i, j int) bool { return edits[i].Start < edits[j].Start })
+	out := edits[:0]
+	end := -1
+	for _, e := range edits {
+		if e.Start < end {
+			continue
+		}
+		out = append(out, e)
+		end = e.End
+	}
+	return out
 }
 
 // bestTarget picks the text to write inside a link so that it resolves to
@@ -212,46 +235,76 @@ func unescapeURL(s string) string { return strings.ReplaceAll(s, "%20", " ") }
 func escapeURL(s string) string   { return strings.ReplaceAll(s, " ", "%20") }
 
 // ApplyRename executes the plan: rewrites the affected notes (at their old
-// paths), then moves the file or folder. If anything fails, rewritten notes
-// are restored, so a rename is all or nothing. The caller refreshes the index.
+// paths), then moves the file or folder. If anything fails, the rewritten
+// notes are restored, so a rename is all or nothing; a note that changed
+// again meanwhile (a sync pull, an editor) is not overwritten by the restore,
+// and every note that could not be restored is named in the error. The caller
+// refreshes the index.
 func ApplyRename(fsys *vault.FS, plan Plan) error {
-	type saved struct {
-		path string
-		data []byte
+	restore, err := writeEdits(fsys, plan.Files)
+	if err != nil {
+		return err
 	}
-	var done []saved
-	rollback := func() {
-		for i := len(done) - 1; i >= 0; i-- {
-			_, _ = fsys.WriteFile(done[i].path, done[i].data, "", false)
-		}
-	}
-	for _, fe := range plan.Files {
-		cur, err := fsys.ReadFile(fe.Path)
-		if err != nil {
-			rollback()
-			return err
-		}
-		if cur.Hash != fe.Hash {
-			rollback()
-			return fmt.Errorf("%w: %s", ErrStalePlan, fe.Path)
-		}
-		data, err := applyEdits(cur.Data, fe.Edits)
-		if err != nil {
-			rollback()
-			return err
-		}
-		if _, err := fsys.WriteFile(fe.Path, data, fe.Hash, false); err != nil {
-			rollback()
-			return err
-		}
-		done = append(done, saved{fe.Path, cur.Data})
+	if testHookBeforeMove != nil {
+		testHookBeforeMove()
 	}
 	if err := fsys.Rename(plan.From, plan.To); err != nil {
-		rollback()
-		return err
+		return restore(err)
 	}
 	return nil
 }
+
+// testHookBeforeMove runs between the rewrites and the move of ApplyRename (tests).
+var testHookBeforeMove func()
+
+// writeEdits rewrites the files of a plan, all or nothing: on failure the
+// files already written are restored and the error says so. On success it
+// returns restore, which undoes the writes if a later step (cause) fails.
+func writeEdits(fsys *vault.FS, files []FileEdit) (restore func(cause error) error, err error) {
+	type saved struct {
+		path    string
+		data    []byte
+		written string // hash of what this rename wrote
+	}
+	var done []saved
+	restore = func(cause error) error {
+		var failed []error
+		for i := len(done) - 1; i >= 0; i-- {
+			// Conditional on what was written: content changed since then
+			// is newer than the rename and must not be lost (D-04).
+			if _, err := fsys.WriteFile(done[i].path, done[i].data, done[i].written, false); err != nil {
+				failed = append(failed, fmt.Errorf("%s not restored: %w", done[i].path, err))
+			}
+		}
+		if len(failed) == 0 {
+			return cause
+		}
+		return errors.Join(append([]error{cause, ErrPartialRollback}, failed...)...)
+	}
+	for _, fe := range files {
+		cur, err := fsys.ReadFile(fe.Path)
+		if err != nil {
+			return nil, restore(err)
+		}
+		if cur.Hash != fe.Hash {
+			return nil, restore(fmt.Errorf("%w: %s", ErrStalePlan, fe.Path))
+		}
+		data, err := applyEdits(cur.Data, fe.Edits)
+		if err != nil {
+			return nil, restore(err)
+		}
+		c, err := fsys.WriteFile(fe.Path, data, fe.Hash, false)
+		if err != nil {
+			return nil, restore(err)
+		}
+		done = append(done, saved{fe.Path, cur.Data, c.Hash})
+	}
+	return restore, nil
+}
+
+// ErrPartialRollback means a failed rename or merge could not restore every
+// note it had already rewritten (the error lists them).
+var ErrPartialRollback = errors.New("some rewritten notes could not be restored")
 
 func applyEdits(data []byte, edits []Edit) ([]byte, error) {
 	sorted := append([]Edit(nil), edits...)

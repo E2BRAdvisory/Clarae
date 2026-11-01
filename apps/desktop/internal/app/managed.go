@@ -8,15 +8,12 @@ import (
 
 	"memobrain/apps/desktop/internal/auth"
 	"memobrain/apps/desktop/internal/history"
+	flags "memobrain/shared/features"
 )
 
 // Configuration keys the backend applies itself (the frontend handles the others).
 const (
 	cfgVaultLock = "security.vault_lock_minutes"
-	// cfgEnvelopeV2 switches the writing of v2 key envelopes (ADR-0034). Off
-	// unless the administrator turns it on: release N reads both formats and
-	// writes v1, so devices that are not updated yet keep unlocking.
-	cfgEnvelopeV2 = "features.envelope_v2"
 	// maxVaultLockMinutes bounds the idle timeout of private vaults (one day).
 	maxVaultLockMinutes = 1440
 )
@@ -83,11 +80,19 @@ func (a *App) applyLockTimeout() {
 	a.sync.SetLockTimeout(time.Duration(minutes) * time.Minute)
 }
 
-// envelopeV2Enabled reads features.envelope_v2 (default off).
+// envelopeV2Enabled reads features.envelope_v2, which switches the writing of
+// v2 key envelopes (ADR-0034). Off unless the administrator turns it on (the
+// schema's default): release N reads both formats and writes v1, so devices
+// that are not updated yet keep unlocking.
 func envelopeV2Enabled(cfg map[string]any) bool {
-	v, _ := configValue(cfg, cfgEnvelopeV2)
-	on, _ := v.(bool)
-	return on
+	return flags.Enabled(cfg, flags.EnvelopeV2)
+}
+
+// pathV2Enabled reads features.path_v2, which switches the writing of enc2
+// path tokens of private vaults (ADR-0042). Off by default like envelope_v2:
+// release N reads both formats and writes enc1.
+func pathV2Enabled(cfg map[string]any) bool {
+	return flags.Enabled(cfg, flags.PathV2)
 }
 
 // envRedirectMode is the redirect mode forced from the environment
@@ -106,7 +111,14 @@ func (a *App) snapshotBeforeOverwrite(vaultID, path string) {
 		return // not open in this window: nothing to snapshot with
 	}
 	_, _, err = v.History.Take(path, history.ReasonPreSyncOverride)
-	if err != nil && !errors.Is(err, history.ErrSkipped) && !errors.Is(err, history.ErrReadOnly) && !os.IsNotExist(err) {
+	switch {
+	case err == nil, errors.Is(err, history.ErrReadOnly), os.IsNotExist(err):
+	case errors.Is(err, history.ErrSkipped):
+		// Too large (or not a vault file): the merge goes on without a
+		// local copy, which must at least be on record.
+		a.logger.Warn().Str("vault", vaultID).Str("path", path).Int64("maxBytes", history.PreSyncMaxBytes).
+			Msg("pre-sync snapshot skipped: the local version is not kept in the history")
+	default:
 		a.logger.Warn().Err(err).Str("vault", vaultID).Str("path", path).Msg("pre-sync snapshot")
 	}
 }

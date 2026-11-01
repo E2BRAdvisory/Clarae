@@ -137,3 +137,20 @@ func TestEnvelopeV2FromProfile(t *testing.T) {
 		t.Fatal("a non-boolean value must leave v2 writing off")
 	}
 }
+
+// ADR-0042: enc2 path tokens are written only when the Config Profile turns
+// features.path_v2 on; release N reads both formats and writes enc1.
+func TestPathV2FromProfile(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	if a.crypto.PathV2() {
+		t.Fatal("enc2 paths must be off by default")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"path_v2": true}})
+	if !a.crypto.PathV2() {
+		t.Fatal("features.path_v2 not applied")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{}})
+	if a.crypto.PathV2() {
+		t.Fatal("removing the flag must turn enc2 writing off")
+	}
+}

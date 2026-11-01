@@ -20,9 +20,159 @@ func TestApplyWindowsRunsInstallerSilentlyAfterExit(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	c := fr.calls[0]
-	if c[0] != "cmd.exe" || !strings.Contains(c[2], `memobrain-1.1.0.exe" /S`) || !strings.Contains(c[2], `start "" "C:\Program Files\MemoBrain Notes\memobrain.exe"`) {
+	if !strings.HasSuffix(strings.ToLower(c[0]), "powershell.exe") || c[len(c)-2] != "-Command" {
 		t.Fatalf("command: %v", c)
 	}
+	script := c[len(c)-1]
+	if !strings.Contains(script, `Start-Process -FilePath 'C:\data\updates\memobrain-1.1.0.exe' -ArgumentList '/S' -Wait`) ||
+		!strings.Contains(script, `Start-Process -FilePath 'C:\Program Files\MemoBrain Notes\memobrain.exe'`) ||
+		!strings.Contains(script, "Wait-Process -Id ") {
+		t.Fatalf("script: %s", script)
+	}
+}
+
+// The installer command line as Windows builds it from Go's arguments
+// (syscall.makeCmdLine) splits back into the same arguments, and the script
+// reaches PowerShell intact, whatever the paths hold: spaces, quotes, &,
+// %VAR%, carets, non-ASCII.
+func TestWindowsInstallerCommandLineRoundTrip(t *testing.T) {
+	paths := [][2]string{
+		{`C:\Users\Ada\AppData\Local\MemoBrain\updates\memobrain-1.1.0.exe`, `C:\Program Files\MemoBrain Notes\memobrain.exe`},
+		{`C:\Users\O'Brien & Co\%TEMP%\up^date\setup (1).exe`, `D:\Apps\Mémo ‘Brain’\memobrain.exe`},
+		{`\\server\share\dir\`, `C:\trailing\`},
+	}
+	for _, p := range paths {
+		name, args := windowsInstallerCommand(p[0], p[1], 4242, `C:\Windows`)
+		if name != `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` {
+			t.Fatalf("name %q", name)
+		}
+		var line []byte
+		for i, a := range append([]string{name}, args...) {
+			if i > 0 {
+				line = append(line, ' ')
+			}
+			line = appendWindowsArg(line, a)
+		}
+		if strings.Contains(string(line), `\"`) {
+			t.Fatalf("escaped quote in the command line: %s", line)
+		}
+		got := splitWindowsCommandLine(string(line))
+		want := append([]string{name}, args...)
+		if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+			t.Fatalf("round trip:\n got %q\nwant %q", got, want)
+		}
+		script := args[len(args)-1]
+		for _, path := range p {
+			if !strings.Contains(script, psQuote(path)) {
+				t.Fatalf("%q not quoted in %s", path, script)
+			}
+		}
+	}
+	if q := psQuote("a'b‘c"); q != "'a''b‘‘c'" {
+		t.Fatalf("psQuote = %s", q)
+	}
+}
+
+// appendWindowsArg is syscall.appendEscapeArg (Go 1.27, windows).
+func appendWindowsArg(b []byte, s string) []byte {
+	if s == "" {
+		return append(b, `""`...)
+	}
+	needsBackslash, hasSpace := false, false
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '"', '\\':
+			needsBackslash = true
+		case ' ', '\t':
+			hasSpace = true
+		}
+	}
+	if !needsBackslash && !hasSpace {
+		return append(b, s...)
+	}
+	if !needsBackslash {
+		b = append(b, '"')
+		b = append(b, s...)
+		return append(b, '"')
+	}
+	if hasSpace {
+		b = append(b, '"')
+	}
+	slashes := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		default:
+			slashes = 0
+		case '\\':
+			slashes++
+		case '"':
+			for ; slashes > 0; slashes-- {
+				b = append(b, '\\')
+			}
+			b = append(b, '\\')
+		}
+		b = append(b, c)
+	}
+	if hasSpace {
+		for ; slashes > 0; slashes-- {
+			b = append(b, '\\')
+		}
+		b = append(b, '"')
+	}
+	return b
+}
+
+// splitWindowsCommandLine follows CommandLineToArgvW (and the CRT): 2n
+// backslashes before a quote give n and toggle quoting, 2n+1 give n and a
+// literal quote, other backslashes are literal.
+func splitWindowsCommandLine(s string) []string {
+	var out []string
+	var cur []byte
+	inArg, quoted := false, false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '\\':
+			n := 0
+			for i < len(s) && s[i] == '\\' {
+				n++
+				i++
+			}
+			if i < len(s) && s[i] == '"' {
+				cur = append(cur, strings.Repeat("\\", n/2)...)
+				if n%2 == 1 {
+					cur = append(cur, '"')
+				} else {
+					quoted = !quoted
+				}
+			} else {
+				cur = append(cur, strings.Repeat("\\", n)...)
+				i--
+			}
+			inArg = true
+		case c == '"':
+			if quoted && i+1 < len(s) && s[i+1] == '"' {
+				cur = append(cur, '"')
+				i++
+			} else {
+				quoted = !quoted
+			}
+			inArg = true
+		case (c == ' ' || c == '\t') && !quoted:
+			if inArg {
+				out = append(out, string(cur))
+				cur, inArg = cur[:0], false
+			}
+		default:
+			cur = append(cur, c)
+			inArg = true
+		}
+	}
+	if inArg {
+		out = append(out, string(cur))
+	}
+	return out
 }
 
 func TestApplyAppImageReplacesInPlace(t *testing.T) {

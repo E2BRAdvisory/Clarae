@@ -42,76 +42,56 @@ func PlanRedirect(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to stri
 	oldR, newR := NewResolver(files), NewResolver(after)
 	plan := Plan{From: from, To: to, Moves: []Move{}, Files: []FileEdit{}}
 	for _, f := range after {
-		if f.Kind != "md" {
+		if !rewritableKind(f.Kind) {
 			continue
 		}
 		content, err := fsys.ReadFile(f.Path)
 		if err != nil {
 			continue // disappeared since indexing
 		}
-		doc := parser.Parse(strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path)), content.Data)
 		var edits []Edit
-		for _, l := range doc.Links {
+		for _, l := range rewritableLinks(f, content.Data, strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path))) {
 			if l.Kind == parser.LinkExternal || l.Target == "" || l.TargetEnd <= l.TargetStart {
 				continue
 			}
-			target := l.Target
-			if l.Kind == parser.LinkMarkdown {
-				target = unescapeURL(target)
+			var text string
+			if l.exact {
+				if l.Target != from {
+					continue
+				}
+				text = to
+			} else {
+				target := l.Target
+				if l.Kind == parser.LinkMarkdown {
+					target = unescapeURL(target)
+				}
+				if oldR.Resolve(f.Path, target) != from {
+					continue
+				}
+				text = bestTarget(newR, f.Path, to, l.Kind == parser.LinkMarkdown, target)
+				if l.Kind == parser.LinkMarkdown {
+					text = escapeURL(text)
+				}
 			}
-			if oldR.Resolve(f.Path, target) != from {
+			if l.safe != nil && !l.safe(text) {
 				continue
 			}
-			text := bestTarget(newR, f.Path, to, l.Kind == parser.LinkMarkdown, target)
-			if l.Kind == parser.LinkMarkdown {
-				text = escapeURL(text)
-			}
-			old := string(content.Data[l.TargetStart:l.TargetEnd])
-			if text != old {
+			if old := string(content.Data[l.TargetStart:l.TargetEnd]); text != old {
 				edits = append(edits, Edit{Line: l.Line, Start: l.TargetStart, End: l.TargetEnd, Old: old, New: text})
 			}
 		}
 		if len(edits) > 0 {
-			plan.Files = append(plan.Files, FileEdit{Path: f.Path, Hash: content.Hash, Edits: edits})
+			plan.Files = append(plan.Files, FileEdit{Path: f.Path, Hash: content.Hash, Edits: dedupeEdits(edits)})
 		}
 	}
 	return plan, nil
 }
 
 // ApplyEdits writes the edits of a plan (without moving anything). If a note changed
-// since planning or a write fails, the notes already rewritten are restored, so the
-// call is all or nothing. The caller refreshes the index.
+// since planning or a write fails, the notes already rewritten are restored (unless
+// they changed again meanwhile), so the call is all or nothing; notes that could not
+// be restored are named in the error. The caller refreshes the index.
 func ApplyEdits(fsys *vault.FS, plan Plan) error {
-	type saved struct {
-		path string
-		data []byte
-	}
-	var done []saved
-	rollback := func() {
-		for i := len(done) - 1; i >= 0; i-- {
-			_, _ = fsys.WriteFile(done[i].path, done[i].data, "", false)
-		}
-	}
-	for _, fe := range plan.Files {
-		cur, err := fsys.ReadFile(fe.Path)
-		if err != nil {
-			rollback()
-			return err
-		}
-		if cur.Hash != fe.Hash {
-			rollback()
-			return fmt.Errorf("%w: %s", ErrStalePlan, fe.Path)
-		}
-		data, err := applyEdits(cur.Data, fe.Edits)
-		if err != nil {
-			rollback()
-			return err
-		}
-		if _, err := fsys.WriteFile(fe.Path, data, fe.Hash, false); err != nil {
-			rollback()
-			return err
-		}
-		done = append(done, saved{fe.Path, cur.Data})
-	}
-	return nil
+	_, err := writeEdits(fsys, plan.Files)
+	return err
 }

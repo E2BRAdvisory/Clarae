@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -438,5 +439,206 @@ func TestParseRedirectMode(t *testing.T) {
 		if got := ParseRedirectMode(in); got != want {
 			t.Errorf("ParseRedirectMode(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// flakyStore is a keychain that can be made unavailable.
+type flakyStore struct {
+	*MemoryStore
+	mu      sync.Mutex
+	failGet bool
+	failSet bool
+}
+
+func (f *flakyStore) Get(server string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failGet {
+		return "", errors.New("secret service locked")
+	}
+	return f.MemoryStore.Get(server)
+}
+
+func (f *flakyStore) Set(server, v string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failSet {
+		return errors.New("secret service locked")
+	}
+	return f.MemoryStore.Set(server, v)
+}
+
+func (f *flakyStore) set(get, set bool) {
+	f.mu.Lock()
+	f.failGet, f.failSet = get, set
+	f.mu.Unlock()
+}
+
+func waitStatus(t *testing.T, svc *Service, want Status) State {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for svc.State().Status != want && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	st := svc.State()
+	if st.Status != want {
+		t.Fatalf("status %s, want %s (%+v)", st.Status, want, st)
+	}
+	return st
+}
+
+// A keychain that cannot be read at startup keeps the session and the device
+// registration; once it answers, the session resumes. Only a missing entry
+// signs out.
+func TestRestoreKeepsSessionOnKeychainError(t *testing.T) {
+	idp := newFakeIdP(t)
+	cloud := newFakeCloud(t, idp.srv.URL)
+	br := &browser{t: t, follow: true}
+	svc, mem := newService(t, RedirectAuto, br)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := svc.Login(ctx, cloud.URL); err != nil {
+		t.Fatal(err)
+	}
+	store := &flakyStore{MemoryStore: mem}
+	store.set(true, false)
+	restored := New(Options{DataDir: svc.opts.DataDir, Logger: zerolog.Nop(), Secrets: store, AppVersion: "test"})
+	restored.keychainRetry = 20 * time.Millisecond
+	restored.Restore(ctx)
+	if st := restored.State(); st.Status != StatusDisconnected || st.DeviceID != testDeviceID || st.Error == "" {
+		t.Fatalf("state with the keychain locked: %+v", st)
+	}
+	if p, _ := loadSession(svc.opts.DataDir); p == nil || p.DeviceID != testDeviceID {
+		t.Fatal("the session file must survive a keychain error")
+	}
+	time.Sleep(60 * time.Millisecond)
+	store.set(false, false)
+	if st := waitStatus(t, restored, StatusReady); st.DeviceID != testDeviceID {
+		t.Fatalf("a new device was registered: %+v", st)
+	}
+
+	// A keychain that answers with no entry does sign out (in another data
+	// directory: the restored session above may still be saving its own).
+	dir := t.TempDir()
+	if err := saveSession(dir, &persisted{ServerURL: cloud.URL, Issuer: idp.srv.URL, ClientID: "c", DeviceID: testDeviceID}); err != nil {
+		t.Fatal(err)
+	}
+	again := New(Options{DataDir: dir, Logger: zerolog.Nop(), Secrets: NewMemoryStore(), AppVersion: "test"})
+	again.Restore(ctx)
+	if again.State().Status != StatusSignedOut {
+		t.Fatalf("missing entry: %+v", again.State())
+	}
+	if p, _ := loadSession(dir); p != nil {
+		t.Fatal("a missing refresh token must remove the session")
+	}
+}
+
+// A rotated refresh token the keychain refused is stored at the next refresh.
+func TestRotatedRefreshTokenStoredLater(t *testing.T) {
+	idp := newFakeIdP(t)
+	cloud := newFakeCloud(t, idp.srv.URL)
+	mem := NewMemoryStore()
+	store := &flakyStore{MemoryStore: mem}
+	svc := New(Options{DataDir: t.TempDir(), Logger: zerolog.Nop(), OpenURL: (&browser{t: t, follow: true}).open, Secrets: store, AppVersion: "test", DeviceName: "d", Platform: "linux"})
+	ctx := context.Background()
+	if err := svc.Login(ctx, cloud.URL); err != nil {
+		t.Fatal(err)
+	}
+	expire := func() {
+		svc.mu.Lock()
+		svc.expiry = time.Now()
+		svc.mu.Unlock()
+	}
+	store.set(false, true)
+	expire()
+	if _, err := svc.Token(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if rt, _ := mem.Get(cloud.URL); rt != "rt-1" {
+		t.Fatalf("keychain = %q", rt)
+	}
+	store.set(false, false)
+	expire()
+	if _, err := svc.Token(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if rt, _ := mem.Get(cloud.URL); rt != "rt-3" {
+		t.Fatalf("keychain after retry = %q", rt)
+	}
+}
+
+// OIDC discovery after a restore must not hold the state lock: State and
+// Client answer while discovery hangs.
+func TestDiscoveryDoesNotBlockState(t *testing.T) {
+	release := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+		http.Error(w, "down", http.StatusServiceUnavailable)
+	}))
+	defer slow.Close()
+	defer close(release)
+	dir := t.TempDir()
+	if err := saveSession(dir, &persisted{ServerURL: "http://cloud.invalid", Issuer: slow.URL, ClientID: "c", DeviceID: testDeviceID}); err != nil {
+		t.Fatal(err)
+	}
+	mem := NewMemoryStore()
+	_ = mem.Set("http://cloud.invalid", "rt-0")
+	svc := New(Options{DataDir: dir, Logger: zerolog.Nop(), Secrets: mem, AppVersion: "test"})
+	svc.Restore(context.Background())
+	time.Sleep(50 * time.Millisecond) // the restore goroutine is inside discovery
+	done := make(chan struct{})
+	go func() {
+		_ = svc.State()
+		_ = svc.Client()
+		_ = svc.GRPCEndpoint()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("State/Client blocked behind OIDC discovery")
+	}
+}
+
+func TestDesktopDeviceRevokedSurvivesRestart(t *testing.T) {
+	idp := newFakeIdP(t)
+	cloud := newFakeCloud(t, idp.srv.URL)
+	br := &browser{t: t, follow: true}
+	svc, secrets := newService(t, RedirectAuto, br)
+	if err := svc.Login(context.Background(), cloud.URL); err != nil {
+		t.Fatal(err)
+	}
+	svc.DeviceRevoked(testDeviceID)
+	if st := svc.State(); st.Status != StatusDeviceRevoked {
+		t.Fatalf("state = %+v", st)
+	}
+
+	// A restart comes back revoked, also once the background refresh has completed the session.
+	again := New(Options{DataDir: svc.opts.DataDir, Logger: zerolog.Nop(), Secrets: secrets, OpenURL: br.open, Platform: "linux"})
+	again.Restore(context.Background())
+	if st := again.State(); st.Status != StatusDeviceRevoked || st.DeviceID != testDeviceID {
+		t.Fatalf("restored = %+v", st)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for idp.tokens.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if st := again.State(); st.Status != StatusDeviceRevoked {
+		t.Fatalf("after the background refresh: %+v", st)
+	}
+
+	// Registering again renews the token silently and registers a device: ready.
+	if err := again.ReregisterDevice(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if st := again.State(); st.Status != StatusReady || st.DeviceID != testDeviceID || st.Error != "" {
+		t.Fatalf("after registering again: %+v", st)
+	}
+	if p, _ := loadSession(svc.opts.DataDir); p == nil || p.DeviceRevoked {
+		t.Fatalf("persisted: %+v", p)
 	}
 }

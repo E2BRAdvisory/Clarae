@@ -82,19 +82,22 @@ type state struct {
 
 // Status is what the UI shows.
 type Status struct {
-	State     string    `json:"state"`
-	Current   string    `json:"current"`
-	Latest    string    `json:"latest"`
-	Channel   string    `json:"channel"`
-	Notes     string    `json:"notes"`
-	NotesURL  string    `json:"notesUrl"`
-	Released  time.Time `json:"released"`
-	Required  bool      `json:"required"` // the running version is below the revocation floor
-	Skipped   bool      `json:"skipped"`
-	Kind      string    `json:"kind"` // artifact kind that will be installed
-	Size      int64     `json:"size"`
-	Done      int64     `json:"done"` // bytes downloaded
-	Error     string    `json:"error"`
+	State    string    `json:"state"`
+	Current  string    `json:"current"`
+	Latest   string    `json:"latest"`
+	Channel  string    `json:"channel"`
+	Notes    string    `json:"notes"`
+	NotesURL string    `json:"notesUrl"`
+	Released time.Time `json:"released"`
+	Required bool      `json:"required"` // the running version is below the revocation floor
+	Skipped  bool      `json:"skipped"`
+	Kind     string    `json:"kind"` // artifact kind that will be installed
+	Size     int64     `json:"size"`
+	Done     int64     `json:"done"` // bytes downloaded
+	Error    string    `json:"error"`
+	// Warning is a problem that does not stop the update, e.g. a manifest
+	// past its expires_at (the update server may be frozen on an old one).
+	Warning   string    `json:"warning,omitempty"`
 	CheckedAt time.Time `json:"checkedAt"`
 	// Disabled is a non-empty reason when updates cannot run at all (managed, dev build).
 	Disabled string `json:"disabled"`
@@ -393,6 +396,11 @@ func (s *Service) evaluate(m *updatemanifest.Manifest) (Status, error) {
 		return s.Status(), err
 	}
 	base := Status{Current: s.opts.CurrentVersion, Channel: m.Channel, Latest: m.Version, CheckedAt: s.opts.Now()}
+	if err := m.CheckFresh(s.opts.Now()); err != nil {
+		// Signed and newer than what was seen, but no longer refreshed:
+		// keep working (a dead server must not block the app) and say so.
+		base.Warning = "the update information has expired (" + err.Error() + "): newer releases may not be announced"
+	}
 	if cmp <= 0 { // same or older release: never a downgrade
 		base.State = StateUpToDate
 		s.setStatus(func(st *Status) { *st = base })

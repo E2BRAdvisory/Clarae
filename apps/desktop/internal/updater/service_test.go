@@ -364,3 +364,22 @@ func TestDevKeyIsDefault(t *testing.T) {
 		t.Fatal("dev public key")
 	}
 }
+
+// A manifest past its expires_at still works but the status carries a warning.
+func TestExpiredManifestWarns(t *testing.T) {
+	s := newServer(t)
+	released := time.Now().UTC().Add(-48 * time.Hour)
+	expires := released.Add(24 * time.Hour)
+	s.manifest.ReleasedAt, s.manifest.ExpiresAt = released, &expires
+	svc, _ := s.service(t, "1.0.0")
+	st, err := svc.Check(context.Background())
+	if err != nil || st.State != StateAvailable || !strings.Contains(st.Warning, "expired") {
+		t.Fatalf("expired manifest: %+v %v", st, err)
+	}
+	fresh := time.Now().UTC().Add(24 * time.Hour)
+	s.manifest.ExpiresAt = &fresh
+	s.manifest.Sequence++
+	if st, err := svc.Check(context.Background()); err != nil || st.Warning != "" {
+		t.Fatalf("fresh manifest: %+v %v", st, err)
+	}
+}

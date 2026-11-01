@@ -147,3 +147,66 @@ func TestRenameTrashWalk(t *testing.T) {
 		t.Fatalf("hash: %s %d %v", hash, n, err)
 	}
 }
+
+// A case-only rename works on a case-insensitive file system and never
+// replaces another file on a case-sensitive one.
+func TestRenameCaseOnly(t *testing.T) {
+	f := newTestFS(t)
+	root := f.Root()
+	if _, err := f.WriteFile("idea.md", []byte("lower"), "", true); err != nil {
+		t.Fatal(err)
+	}
+	_, statErr := os.Stat(filepath.Join(root, "IDEA.md"))
+	caseInsensitive := statErr == nil
+	if caseInsensitive {
+		if err := f.Rename("idea.md", "Idea.md"); err != nil {
+			t.Fatalf("case-only rename: %v", err)
+		}
+		entries, _ := os.ReadDir(root)
+		found := false
+		for _, e := range entries {
+			found = found || e.Name() == "Idea.md"
+		}
+		if !found {
+			t.Fatalf("not renamed: %v", entries)
+		}
+		return
+	}
+	if _, err := f.WriteFile("Idea.md", []byte("upper"), "", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Rename("idea.md", "Idea.md"); !errors.Is(err, ErrExists) {
+		t.Fatalf("expected ErrExists, got %v", err)
+	}
+	for name, want := range map[string]string{"idea.md": "lower", "Idea.md": "upper"} {
+		if c, err := f.ReadFile(name); err != nil || string(c.Data) != want {
+			t.Fatalf("%s = %q, %v", name, c.Data, err)
+		}
+	}
+}
+
+// Trashing the same path twice within a second keeps both copies.
+func TestTrashSameNameTwice(t *testing.T) {
+	f := newTestFS(t)
+	var dests []string
+	for _, body := range []string{"one", "two", "three"} {
+		if _, err := f.WriteFile("n.md", []byte(body), "", true); err != nil {
+			t.Fatal(err)
+		}
+		d, err := f.Trash("n.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		dests = append(dests, d)
+	}
+	seen := map[string]bool{}
+	for i, d := range dests {
+		if seen[d] {
+			t.Fatalf("trash destination reused: %v", dests)
+		}
+		seen[d] = true
+		if c, err := f.ReadFile(d); err != nil || string(c.Data) != []string{"one", "two", "three"}[i] {
+			t.Fatalf("%s = %q, %v", d, c.Data, err)
+		}
+	}
+}

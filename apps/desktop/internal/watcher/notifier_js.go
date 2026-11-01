@@ -8,6 +8,7 @@ import "github.com/fsnotify/fsnotify"
 // and the core reports its own writes through Watcher.Notify.
 type noSource struct{}
 
+func (noSource) Recursive() bool               { return true }
 func (noSource) Add(string) error              { return nil }
 func (noSource) Close() error                  { return nil }
 func (noSource) Events() <-chan fsnotify.Event { return nil } // a nil channel blocks forever in select

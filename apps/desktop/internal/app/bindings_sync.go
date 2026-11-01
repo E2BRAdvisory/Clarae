@@ -49,7 +49,10 @@ type DeviceInfo struct {
 	Platform   string     `json:"platform"`
 	AppVersion string     `json:"appVersion"`
 	LastSeenAt *time.Time `json:"lastSeenAt"`
-	Current    bool       `json:"current"`
+	// CreatedAt is when the device registered; RevokedAt is set on a revoked one (RFC 3339, "" if not).
+	CreatedAt string `json:"createdAt"`
+	RevokedAt string `json:"revokedAt"`
+	Current   bool   `json:"current"`
 }
 
 // UsageInfo is the storage usage of the account.
@@ -214,7 +217,14 @@ func (s *SyncAPI) Devices() ([]DeviceInfo, error) {
 			v = *d.AppVersion
 		}
 		id := d.Id.String()
-		out = append(out, DeviceInfo{ID: id, Name: d.Name, Platform: d.Platform, AppVersion: v, LastSeenAt: d.LastSeenAt, Current: id == current})
+		info := DeviceInfo{ID: id, Name: d.Name, Platform: d.Platform, AppVersion: v, LastSeenAt: d.LastSeenAt, Current: id == current}
+		if !d.CreatedAt.IsZero() {
+			info.CreatedAt = d.CreatedAt.UTC().Format(time.RFC3339)
+		}
+		if d.RevokedAt != nil {
+			info.RevokedAt = d.RevokedAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, info)
 	}
 	return out, nil
 }

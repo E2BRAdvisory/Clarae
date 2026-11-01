@@ -9,8 +9,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +108,7 @@ func New(opts Options) *App {
 		}
 	}
 	a := &App{opts: opts, host: opts.Host, logger: opts.Logger, vaults: map[string]*openVault{}, config: config.New(nil)}
+	setBindingLogger(opts.Logger)
 	a.auth = auth.New(auth.Options{
 		Hosted:       hosted,
 		DataDir:      opts.DataDir,
@@ -134,6 +137,9 @@ func New(opts Options) *App {
 		Config:          func(int) { go a.refreshConfigQuietly() },
 		ConfigVersion:   func() int { return a.config.Version() },
 		BeforeOverwrite: a.snapshotBeforeOverwrite,
+		// The cloud refused this device: the session says so (auth:state device_revoked) and the
+		// workbench offers to register the device again.
+		DeviceRevoked: a.auth.DeviceRevoked,
 	})
 	return a
 }
@@ -145,6 +151,10 @@ func (s sessionAdapter) Client() *transport.Client { return s.a.auth.Client() }
 
 func (s sessionAdapter) Info() (syncpkg.SessionInfo, bool) {
 	st := s.a.auth.State()
+	if st.Status == auth.StatusDeviceRevoked {
+		// Signed in, but nothing may sync until the device is registered again.
+		return syncpkg.SessionInfo{ServerURL: st.ServerURL, DeviceID: st.DeviceID, UserID: st.Profile.UserID, DeviceRevoked: true}, false
+	}
 	if st.Status != auth.StatusReady && st.Status != auth.StatusDisconnected {
 		return syncpkg.SessionInfo{}, false
 	}
@@ -207,7 +217,11 @@ func (a *App) Shutdown(_ context.Context) {
 func (a *App) HandleURL(raw string) {
 	u, err := platform.ParseSchemeURL(raw)
 	if err != nil {
-		a.logger.Warn().Err(err).Str("url", raw).Msg("ignored url")
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err // url.Error repeats the whole URL, query included
+		}
+		a.logger.Warn().Err(err).Str("url", redactURL(raw)).Msg("ignored url")
 		return
 	}
 	if a.ctx == nil {
@@ -226,6 +240,38 @@ func (a *App) HandleURL(raw string) {
 	case platform.URLAuthLogout:
 		a.logger.Info().Msg("logout redirect received")
 	}
+}
+
+// redactURL drops the query and fragment of a URL before it is logged: an
+// auth callback carries the authorization code and the state, and the logs
+// end up in support bundles. Anything that does not parse is replaced.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" {
+		return "[redacted]"
+	}
+	out := u.Scheme + "://" + u.Host + u.EscapedPath()
+	if u.Opaque != "" {
+		out = u.Scheme + ":[opaque]"
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		out += "?[redacted]"
+	}
+	return out
+}
+
+// redactArgs is the argv of a second instance as it may be logged: URLs
+// without their query, other arguments only counted (they can be paths).
+func redactArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		if strings.Contains(a, "://") {
+			out = append(out, redactURL(a))
+		} else {
+			out = append(out, "[arg]")
+		}
+	}
+	return out
 }
 
 // --- vault lifecycle ------------------------------------------------------

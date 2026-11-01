@@ -39,7 +39,13 @@ const (
 	StatusSigningIn    Status = "signing_in"
 	StatusReady        Status = "ready"
 	StatusDisconnected Status = "disconnected" // credentials exist but the server is unreachable or the token could not be refreshed yet
+	// StatusDeviceRevoked: signed in, but the cloud refuses this device (revoked from the device
+	// list). Nothing syncs, local data and pending changes are kept; ReregisterDevice resumes.
+	StatusDeviceRevoked Status = "device_revoked"
 )
+
+// DeviceRevokedMessage is State.Error while the device is revoked.
+const DeviceRevokedMessage = "this device was revoked from your account: register it again to resume synchronization"
 
 // RedirectMode selects how the authorization code comes back (D-08).
 type RedirectMode string
@@ -128,6 +134,8 @@ type Service struct {
 	logger  zerolog.Logger
 	secrets SecretStore
 	hc      *http.Client
+	// keychainRetry is defaultKeychainRetry (shorter in tests).
+	keychainRetry time.Duration
 
 	// refreshMu serializes token refreshes: the refresh token rotates, so two concurrent
 	// refreshes with the same token make the second one fail (reuse detection) and sign out.
@@ -141,7 +149,12 @@ type Service struct {
 	access   string
 	expiry   time.Time
 	refresh  string
-	pending  *attempt
+	// refreshUnsaved marks a rotated refresh token the keychain refused.
+	refreshUnsaved bool
+	// keychainTried is when the keychain was last read for a session
+	// restored without its refresh token (zero: not pending).
+	keychainTried time.Time
+	pending       *attempt
 	// managedMode is the redirect mode of the Config Profile ("" = none).
 	managedMode RedirectMode
 }
@@ -182,7 +195,7 @@ func New(opts Options) *Service {
 	if opts.Platform == "" {
 		opts.Platform = platformName()
 	}
-	return &Service{opts: opts, logger: opts.Logger, secrets: opts.Secrets, hc: opts.HTTPClient, state: State{Status: StatusSignedOut}}
+	return &Service{opts: opts, logger: opts.Logger, secrets: opts.Secrets, hc: opts.HTTPClient, state: State{Status: StatusSignedOut}, keychainRetry: defaultKeychainRetry}
 }
 
 func platformName() string {
@@ -389,6 +402,7 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	s.mu.Lock()
 	s.provider, s.oauth = provider, cfg
 	s.access, s.expiry, s.refresh = tok.AccessToken, tok.Expiry, tok.RefreshToken
+	s.refreshUnsaved, s.keychainTried = false, time.Time{}
 	s.session = &persisted{ServerURL: serverURL, Issuer: cc.Issuer, ClientID: cc.DesktopClientId, Audience: cc.Audience, GRPCEndpoint: cc.GrpcEndpoint}
 	s.mu.Unlock()
 
@@ -448,6 +462,11 @@ func (s *Service) completeSession(ctx context.Context) error {
 	if sess.Profile.UserID != "" && sess.Profile.UserID != me.Id.String() {
 		sess.DeviceID = "" // the registered device belongs to the previous account
 	}
+	s.mu.Lock()
+	if sess.DeviceID == "" {
+		sess.DeviceRevoked = false // a new registration follows
+	}
+	s.mu.Unlock()
 	if sess.DeviceID == "" {
 		reg := transport.DeviceRegistration{Name: s.opts.DeviceName, Platform: apiclient.DeviceRegistrationPlatform(s.opts.Platform)}
 		if s.opts.AppVersion != "" {
@@ -468,8 +487,90 @@ func (s *Service) completeSession(ctx context.Context) error {
 	}
 	s.setState(func(st *State) {
 		st.Status, st.ServerURL, st.Profile, st.DeviceID, st.Error = StatusReady, sess.ServerURL, sess.Profile, sess.DeviceID, ""
+		if sess.DeviceRevoked {
+			st.Status, st.Error = StatusDeviceRevoked, DeviceRevokedMessage
+		}
 	})
 	return nil
+}
+
+// revokedLocked reports whether the session's device is revoked (s.mu held).
+func (s *Service) revokedLocked() bool { return s.session != nil && s.session.DeviceRevoked }
+
+// setDisconnected shows a failure to reach the server or renew the token. A
+// revoked device keeps showing the revocation: that is what the user must act on.
+func (s *Service) setDisconnected(err error) {
+	s.setState(func(st *State) {
+		if s.revokedLocked() {
+			return
+		}
+		st.Status, st.Error = StatusDisconnected, err.Error()
+	})
+}
+
+// DeviceRevoked records that the cloud refused the device id as revoked (from the console or
+// from another device). The account stays signed in and keeps its tokens; the state becomes
+// device_revoked, persisted so a restart does not try to sync with the dead id, until
+// ReregisterDevice registers a new device. id is the device the refusal was about: a late
+// report about a device already replaced is ignored ("" means the current one).
+func (s *Service) DeviceRevoked(id string) {
+	s.mu.Lock()
+	sess := s.session
+	if sess == nil || sess.DeviceRevoked || sess.DeviceID == "" || id != "" && sess.DeviceID != id {
+		s.mu.Unlock()
+		return
+	}
+	sess.DeviceRevoked = true
+	snapshot := *sess
+	s.mu.Unlock()
+	s.logger.Warn().Str("device", snapshot.DeviceID).Msg("the cloud refuses this device as revoked; synchronization stops")
+	if err := saveSession(s.opts.DataDir, &snapshot); err != nil {
+		s.logger.Warn().Err(err).Msg("could not persist the revoked device")
+	}
+	s.setState(func(st *State) { st.Status, st.Error = StatusDeviceRevoked, DeviceRevokedMessage })
+}
+
+// ReregisterDevice replaces a revoked device with a new registration ("Register this device
+// again"): the same account, a new device id, then ready, so synchronization resumes and pushes
+// what waited meanwhile. The token is renewed silently; when the account itself was signed out
+// (refresh token refused) the session ends and the user signs in again, which registers a new
+// device as well. On any other failure the device stays revoked.
+func (s *Service) ReregisterDevice(ctx context.Context) error {
+	s.mu.Lock()
+	sess := s.session
+	if sess == nil {
+		s.mu.Unlock()
+		return errNotSignedIn
+	}
+	oldID, oldRevoked := sess.DeviceID, sess.DeviceRevoked
+	sess.DeviceID, sess.DeviceRevoked = "", false
+	s.mu.Unlock()
+	var err error
+	if s.opts.Hosted != nil {
+		err = s.hostedLogin(ctx)
+	} else {
+		s.setState(func(st *State) { st.Status = StatusSigningIn; st.Error = "" })
+		err = s.completeSession(ctx)
+	}
+	if err == nil {
+		return nil
+	}
+	s.logger.Warn().Err(err).Msg("register the device again")
+	s.mu.Lock()
+	current := s.session == sess
+	if current && sess.DeviceID == "" {
+		sess.DeviceID, sess.DeviceRevoked = oldID, oldRevoked
+	}
+	s.mu.Unlock()
+	if current {
+		s.setState(func(st *State) {
+			st.Status, st.DeviceID, st.Error = StatusDisconnected, oldID, err.Error()
+			if oldRevoked {
+				st.Status, st.Error = StatusDeviceRevoked, DeviceRevokedMessage+" ("+err.Error()+")"
+			}
+		})
+	}
+	return err
 }
 
 func (s *Service) serveLoopback(att *attempt) {
@@ -533,12 +634,29 @@ func (s *Service) Token(ctx context.Context) (string, error) {
 		s.mu.Unlock()
 		return tok, nil
 	}
-	if err := s.ensureOAuthLocked(ctx); err != nil {
-		s.mu.Unlock()
-		s.setState(func(st *State) { st.Status = StatusDisconnected; st.Error = err.Error() })
+	sess := s.session
+	s.mu.Unlock()
+	// Neither discovery nor the keychain run under s.mu: on a black-holed
+	// network discovery takes up to the client timeout, and State, Client and
+	// every API call would stall behind it. refreshMu keeps them serialized.
+	if err := s.ensureOAuth(ctx, sess); err != nil {
+		s.setDisconnected(err)
 		return "", err
 	}
-	cfg, refresh := s.oauth, s.refresh
+	refresh, err := s.ensureRefresh(sess)
+	if errors.Is(err, errNotSignedIn) {
+		return "", err
+	}
+	if err != nil {
+		s.setDisconnected(err)
+		return "", err
+	}
+	s.mu.Lock()
+	if s.session != sess {
+		s.mu.Unlock()
+		return "", errors.New("not signed in")
+	}
+	cfg := s.oauth
 	s.mu.Unlock()
 
 	tok, err := cfg.TokenSource(oidc.ClientContext(ctx, s.hc), &oauth2.Token{RefreshToken: refresh}).Token()
@@ -550,21 +668,23 @@ func (s *Service) Token(ctx context.Context) (string, error) {
 			s.clearSession()
 			return "", fmt.Errorf("session revoked: %w", err)
 		}
-		s.setState(func(st *State) { st.Status = StatusDisconnected; st.Error = err.Error() })
+		s.setDisconnected(err)
 		return "", err
 	}
 	s.mu.Lock()
+	if s.session != sess { // signed out meanwhile
+		s.mu.Unlock()
+		return "", errors.New("not signed in")
+	}
 	s.access, s.expiry = tok.AccessToken, tok.Expiry
 	server := s.session.ServerURL
-	rotated := tok.RefreshToken != "" && tok.RefreshToken != s.refresh
-	if rotated {
-		s.refresh = tok.RefreshToken
+	if tok.RefreshToken != "" && tok.RefreshToken != s.refresh {
+		s.refresh, s.refreshUnsaved = tok.RefreshToken, true
 	}
+	unsaved, rt := s.refreshUnsaved, s.refresh
 	s.mu.Unlock()
-	if rotated {
-		if err := s.secrets.Set(server, tok.RefreshToken); err != nil {
-			s.logger.Error().Err(err).Msg("store rotated refresh token")
-		}
+	if unsaved {
+		s.storeRefresh(server, rt)
 	}
 	if s.State().Status == StatusDisconnected {
 		s.setState(func(st *State) { st.Status = StatusReady; st.Error = "" })
@@ -572,20 +692,92 @@ func (s *Service) Token(ctx context.Context) (string, error) {
 	return tok.AccessToken, nil
 }
 
-// ensureOAuthLocked performs discovery lazily after a Restore (the issuer may
-// have been unreachable at startup). Caller holds s.mu.
-func (s *Service) ensureOAuthLocked(ctx context.Context) error {
-	if s.oauth != nil {
+// storeRefresh keeps a rotated refresh token in the keychain. Should that
+// fail, the token stays marked unsaved and the next refresh tries again: the
+// old one is already spent (rotation), so the next start would be signed out.
+func (s *Service) storeRefresh(server, rt string) {
+	if err := s.secrets.Set(server, rt); err != nil {
+		s.logger.Error().Err(err).Msg("store rotated refresh token; will retry at the next refresh")
+		return
+	}
+	s.mu.Lock()
+	if s.refresh == rt {
+		s.refreshUnsaved = false
+	}
+	s.mu.Unlock()
+}
+
+// ensureOAuth performs discovery lazily after a Restore (the issuer may have
+// been unreachable at startup). It runs without s.mu and installs the result
+// only if sess is still the current session.
+func (s *Service) ensureOAuth(ctx context.Context, sess *persisted) error {
+	s.mu.Lock()
+	ready := s.oauth != nil
+	s.mu.Unlock()
+	if ready {
 		return nil
 	}
-	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, s.hc), s.session.Issuer)
+	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, s.hc), sess.Issuer)
 	if err != nil {
 		return fmt.Errorf("oidc discovery: %w", err)
 	}
-	s.provider = provider
-	s.oauth = &oauth2.Config{ClientID: s.session.ClientID, Endpoint: provider.Endpoint(), Scopes: []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess}}
+	cfg := &oauth2.Config{ClientID: sess.ClientID, Endpoint: provider.Endpoint(), Scopes: []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess}}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.session != sess {
+		return errors.New("not signed in")
+	}
+	if s.oauth == nil {
+		s.provider, s.oauth = provider, cfg
+	}
 	return nil
 }
+
+// defaultKeychainRetry spaces the keychain reads of a session restored while
+// the keychain was unavailable (a dismissed prompt must not come back on
+// every call).
+const defaultKeychainRetry = 30 * time.Second
+
+// ensureRefresh returns the refresh token of sess. A session restored while
+// the keychain could not be read has none yet: it is read again (at most
+// every keychainRetry), and only an entry that is really missing signs out.
+func (s *Service) ensureRefresh(sess *persisted) (string, error) {
+	s.mu.Lock()
+	refresh, last := s.refresh, s.keychainTried
+	s.mu.Unlock()
+	if refresh != "" {
+		return refresh, nil
+	}
+	if !last.IsZero() && time.Since(last) < s.keychainRetry {
+		return "", errKeychainUnavailable
+	}
+	v, err := s.secrets.Get(sess.ServerURL)
+	s.mu.Lock()
+	s.keychainTried = time.Now()
+	if s.session == sess && err == nil && v != "" {
+		s.refresh = v
+	}
+	s.mu.Unlock()
+	switch {
+	case err != nil:
+		s.logger.Warn().Err(err).Msg("keychain unavailable; refresh token not read")
+		return "", errKeychainUnavailable
+	case v == "":
+		s.logger.Info().Msg("no refresh token in keychain; signed out")
+		s.mu.Lock()
+		current := s.session == sess
+		s.mu.Unlock()
+		if current {
+			s.clearSession()
+		}
+		return "", errNotSignedIn
+	}
+	return v, nil
+}
+
+var errNotSignedIn = errors.New("not signed in")
+
+var errKeychainUnavailable = errors.New("the system keychain is not available: sign-in will be retried")
 
 // Restore resumes a persisted session: the profile is shown immediately as
 // "disconnected" and a background refresh turns it into "ready".
@@ -602,23 +794,49 @@ func (s *Service) Restore(ctx context.Context) {
 		return
 	}
 	refresh, err := s.secrets.Get(sess.ServerURL)
-	if err != nil || refresh == "" {
+	if err == nil && refresh == "" {
 		s.logger.Info().Msg("no refresh token in keychain; signed out")
 		_ = deleteSession(s.opts.DataDir)
 		return
 	}
+	// A keychain that cannot be read yet (Secret Service still locked at
+	// login, a dismissed prompt) keeps the session and its device
+	// registration: Token reads the keychain again later.
+	errText := ""
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("keychain unavailable at startup; session kept")
+		errText = errKeychainUnavailable.Error()
+	}
 	s.mu.Lock()
-	s.session, s.refresh = sess, refresh
+	s.session, s.refresh, s.keychainTried = sess, refresh, time.Time{}
+	if err != nil {
+		s.keychainTried = time.Now()
+	}
 	s.mu.Unlock()
 	s.setState(func(st *State) {
-		st.Status, st.ServerURL, st.Profile, st.DeviceID = StatusDisconnected, sess.ServerURL, sess.Profile, sess.DeviceID
+		st.Status, st.ServerURL, st.Profile, st.DeviceID, st.Error = StatusDisconnected, sess.ServerURL, sess.Profile, sess.DeviceID, errText
+		if sess.DeviceRevoked {
+			st.Status, st.Error = StatusDeviceRevoked, DeviceRevokedMessage
+		}
 	})
 	go func() {
-		rctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		defer cancel()
-		if _, err := s.Token(rctx); err == nil {
-			if err := s.completeSession(rctx); err != nil {
-				s.logger.Warn().Err(err).Msg("session refresh")
+		for {
+			rctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			_, err := s.Token(rctx)
+			if err == nil {
+				if err := s.completeSession(rctx); err != nil {
+					s.logger.Warn().Err(err).Msg("session refresh")
+				}
+			}
+			cancel()
+			if !errors.Is(err, errKeychainUnavailable) {
+				return
+			}
+			// The keychain may unlock later (Secret Service after login).
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(s.keychainRetry):
 			}
 		}
 	}()
@@ -658,6 +876,7 @@ func (s *Service) clearSession() {
 	}
 	s.session, s.oauth, s.provider = nil, nil, nil
 	s.access, s.refresh, s.expiry = "", "", time.Time{}
+	s.refreshUnsaved, s.keychainTried = false, time.Time{}
 	s.mu.Unlock()
 	if server != "" {
 		_ = s.secrets.Delete(server)

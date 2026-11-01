@@ -7,6 +7,8 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
+
+	"memobrain/shared/pathrules"
 )
 
 const maxNameBytes = 120 // leaves room for " (n)" and the extension within pathrules' segment limit
@@ -39,13 +41,7 @@ func sanitizeName(s string) string {
 	if out == "" {
 		return "Untitled"
 	}
-	base := out
-	if i := strings.IndexByte(out, '.'); i >= 0 {
-		base = out[:i]
-	}
-	switch strings.ToUpper(base) {
-	case "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+	if pathrules.IsWindowsReserved(out) {
 		out += "_"
 	}
 	return out
