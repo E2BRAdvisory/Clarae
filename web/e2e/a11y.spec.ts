@@ -61,7 +61,7 @@ for (const theme of themes) {
     const dialogs: [string, string, string][] = [
       ['vault ZIP (shared)', '/vaults', 'Download ZIP: Notes'],
       ['vault unlock (private)', '/vaults', 'Download ZIP, decrypted in your browser: Secrets'],
-      ['revoke share', '/shares', 'Revoke share: Project X'],
+      ['revoke share', '/shares', 'Revoke Project X'],
       ['create user', '/admin/users', 'Create user'],
       ['revoke device', '/devices', 'Revoke Laptop'],
     ];

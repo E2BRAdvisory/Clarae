@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@memobrain/ui';
+import { useSharingAllowed } from '../api/cloud';
 import { useAuth } from '../auth/AuthProvider';
 import { setLanguage, supportedLanguages, isLanguage } from '../i18n';
 import { applyTheme, loadTheme, type Theme } from './theme';
@@ -12,6 +13,7 @@ export function Shell() {
   const { user, isAdmin, signOut } = useAuth();
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const lang = isLanguage(i18n.language) ? i18n.language : 'en';
+  const sharingOn = useSharingAllowed();
   // A shared computer must not keep a clear-text copy of the vaults opened in the browser: signing out
   // removes them, after asking when one holds changes that were not uploaded.
   const forget = useForgetBrowser({
@@ -32,7 +34,7 @@ export function Shell() {
           <NavLink to="/usage">{t('nav.usage')}</NavLink>
           <NavLink to="/vaults">{t('nav.vaults')}</NavLink>
           <NavLink to="/devices">{t('nav.devices')}</NavLink>
-          <NavLink to="/shares">{t('nav.shares')}</NavLink>
+          {sharingOn && <NavLink to="/shares">{t('nav.shares')}</NavLink>}
           <NavLink to="/account">{t('nav.account')}</NavLink>
           {isAdmin && <NavLink to="/admin">{t('nav.admin')}</NavLink>}
         </nav>

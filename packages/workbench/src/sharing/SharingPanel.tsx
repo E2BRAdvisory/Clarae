@@ -1,49 +1,18 @@
-// Settings > Sharing (M4-WP4): invitations, shares received (mounts) and the ones of the open vault.
+// Settings > Sharing (M4-WP4, ADR-0037 §2): the invitations and the shares of the account come from
+// @memobrain/cloud-features, the same components as the console's; the mounts (the shares received
+// as folders on this device, opened and removed here) are the desktop's own.
+import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { api, type MountState, type ShareInfo } from '../app/api';
+import { useFeature } from '@memobrain/cloud-features/flags';
+import '@memobrain/cloud-features/workbench.css';
+import { api, type MountState } from '../app/api';
+import { CoreCloudPort } from '../cloud/CoreCloudPort';
+import { InvitationsList, SharesManager } from '../cloud/lazyPanels';
 import { useAppStore } from '../state/store';
-import { useSharing } from '../state/sharing';
 import { dialog } from '../ui/dialogs';
 import { settleNotes } from '../workspaces/flush';
-import { sharingKeys, useInvitations, useMounts, useVaultShares } from './queries';
-import { infoOf, useSync } from '../state/sync';
-
-function Invitation({ share }: { share: ShareInfo }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: sharingKeys.invitations });
-    void qc.invalidateQueries({ queryKey: sharingKeys.mounts });
-  };
-  const answer = async (accept: boolean) => {
-    try {
-      if (accept) await api.sharing.accept(share.id);
-      else await api.sharing.decline(share.id);
-      refresh();
-    } catch (e) {
-      await dialog.error(e);
-    }
-  };
-  return (
-    <li className="invitation">
-      <div>
-        <strong>{share.displayName}</strong>
-        <div className="muted small">
-          {t('sharing.invitedBy', { owner: share.ownerName })} ·{' '}
-          {t(`sharing.level_${share.myPermission || 'viewer'}`)} ·{' '}
-          {t(`sharing.type_${share.resourceType}`)}
-        </div>
-      </div>
-      <div className="actions">
-        <button className="primary" onClick={() => void answer(true)}>
-          {t('sharing.accept')}
-        </button>
-        <button onClick={() => void answer(false)}>{t('sharing.decline')}</button>
-      </div>
-    </li>
-  );
-}
+import { sharingKeys, useMounts } from './queries';
 
 function Mount({ mount }: { mount: MountState }) {
   const { t } = useTranslation();
@@ -102,58 +71,46 @@ function Mount({ mount }: { mount: MountState }) {
 }
 
 export function SharingPanel() {
-  const { t } = useTranslation();
-  const vault = useAppStore((s) => s.vault);
-  const info = useSync((s) => infoOf(s, vault?.id));
-  const { data: invitations = [] } = useInvitations();
-  const { data: mounts = [] } = useMounts();
-  const canShare = !!vault && info.linked && info.kind === 'shared' && !info.mount;
-  const { data: mine = [] } = useVaultShares(vault?.id, canShare);
+  const { t, i18n } = useTranslation();
+  const qc = useQueryClient();
+  const port = useMemo(() => new CoreCloudPort(), []);
+  const status = useAppStore((s) => s.auth?.status ?? 'signed_out');
+  const signedIn = status === 'ready' || status === 'disconnected';
+  const sharingOn = useFeature(port, 'sharing');
+  const { data: mounts = [] } = useMounts(sharingOn);
+  const refreshInvitations = () => {
+    void qc.invalidateQueries({ queryKey: sharingKeys.invitations });
+    void qc.invalidateQueries({ queryKey: sharingKeys.mounts });
+  };
   return (
     <div className="sharing-panel">
-      <h3>{t('sharing.invitations')}</h3>
-      {invitations.length === 0 ? (
-        <p className="muted">{t('sharing.noInvitations')}</p>
-      ) : (
-        <ul className="share-list">
-          {invitations.map((s) => (
-            <Invitation key={s.id} share={s} />
-          ))}
-        </ul>
+      {!signedIn && <p className="muted">{t('sharing.signIn')}</p>}
+      {signedIn && (
+        <InvitationsList
+          port={port}
+          lang={i18n.language}
+          sections={['pending']}
+          onAnswered={refreshInvitations}
+        />
       )}
-      <h3>{t('sharing.sharedWithMe')}</h3>
-      {mounts.length === 0 ? (
-        <p className="muted">{t('sharing.noMounts')}</p>
-      ) : (
-        <ul className="share-list">
-          {mounts.map((m) => (
-            <Mount key={m.shareId} mount={m} />
-          ))}
-        </ul>
-      )}
-      <h3>{t('sharing.mine')}</h3>
-      {!canShare ? (
-        <p className="muted">{t('sharing.cannotShareHere')}</p>
-      ) : (
+      {sharingOn && (
         <>
-          {mine.length === 0 && <p className="muted">{t('sharing.noShares')}</p>}
-          <ul className="share-list">
-            {mine.map((s) => (
-              <li key={s.id}>
-                <div>
-                  <strong>{s.displayName}</strong>
-                  <div className="muted small">
-                    {t(`sharing.type_${s.resourceType}`)}
-                    {s.pathPrefix ? ` · ${s.pathPrefix}` : ''} ·{' '}
-                    {t('sharing.recipientsCount', { count: s.grants.length })}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <button onClick={() => useSharing.getState().openShare({ path: '', isDir: true })}>
-            {t('sharing.shareWholeVault')}
-          </button>
+          <h3>{t('sharing.sharedWithMe')}</h3>
+          {mounts.length === 0 ? (
+            <p className="muted">{t('sharing.noMounts')}</p>
+          ) : (
+            <ul className="share-list">
+              {mounts.map((m) => (
+                <Mount key={m.shareId} mount={m} />
+              ))}
+            </ul>
+          )}
+          {signedIn && (
+            <>
+              <h3>{t('sharing.mine')}</h3>
+              <SharesManager port={port} lang={i18n.language} />
+            </>
+          )}
         </>
       )}
     </div>

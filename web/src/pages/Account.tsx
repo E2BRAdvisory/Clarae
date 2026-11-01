@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
+import { MyGroups } from '@memobrain/cloud-features';
+import { useCloudPort } from '../api/cloud';
 import { describeError } from '../api/errors';
 import { useDeleteMyAccount, useExportMyData } from '../api/account';
 import { useMe, useVaults } from '../api/queries';
@@ -9,7 +11,8 @@ import { downloadBlob } from '../export/download';
 import { useForgetBrowser } from '../layout/ForgetBrowser';
 
 export function AccountPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const port = useCloudPort();
   const toast = useToast();
   const { signOut } = useAuth();
   const me = useMe();
@@ -71,6 +74,11 @@ export function AccountPage() {
   return (
     <>
       <h1>{t('account.title')}</h1>
+
+      <section aria-labelledby="account-groups" className="nd-stack">
+        <h2 id="account-groups">{t('account.groupsTitle')}</h2>
+        <MyGroups port={port} lang={i18n.language} />
+      </section>
 
       <section aria-labelledby="account-export" className="nd-stack">
         <h2 id="account-export">{t('account.exportTitle')}</h2>

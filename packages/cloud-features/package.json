@@ -3,8 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
+    "./panels": "./src/panels.ts",
+    "./port": "./src/port.ts",
+    "./flags": "./src/featureFlags.ts",
     "./styles.css": "./src/styles.css",
     "./workbench.css": "./src/workbench.css",
     "./testing": "./src/testing/index.ts"

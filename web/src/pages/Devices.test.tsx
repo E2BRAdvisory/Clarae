@@ -1,7 +1,14 @@
+// The Devices page mounts the DevicesPanel of @memobrain/cloud-features (its behaviour is tested by
+// the package's suite on both adapters): here, the wiring to the REST API and the page.
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { problem, renderApp } from '../test/utils';
+
+// The browser workbench remembers which device this browser is (IndexedDB, ADR-0029).
+vi.mock('../workbench/device', () => ({
+  thisBrowserDevice: vi.fn((userId: string) => Promise.resolve(userId === 'u1' ? 'd-web' : null)),
+}));
 
 const laptop = {
   id: 'd1',
@@ -20,15 +27,33 @@ const old = {
 };
 
 describe('devices page', () => {
+  it('marks this browser and keeps it from being revoked here', async () => {
+    const browser = {
+      id: 'd-web',
+      name: 'Firefox',
+      platform: 'web',
+      created_at: '2026-01-01T00:00:00Z',
+    };
+    renderApp({ path: '/devices', routes: { 'GET /me/devices': { items: [laptop, browser] } } });
+    const table = await screen.findByRole('table', { name: 'Devices' });
+    const row = await within(table).findByRole('rowheader', { name: /Firefox/ });
+    await waitFor(() => expect(row).toHaveTextContent('This device'));
+    expect(screen.queryByRole('button', { name: 'Revoke Firefox' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke Laptop' })).toBeInTheDocument();
+  });
+
   it('lists devices; revoked ones have no revoke button', async () => {
     renderApp({ path: '/devices', routes: { 'GET /me/devices': { items: [laptop, old] } } });
-    expect(await screen.findByRole('rowheader', { name: 'Laptop' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Devices' })).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: 'Devices' });
+    expect(within(table).getByRole('rowheader', { name: 'Laptop' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Revoke Laptop' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Revoke Old PC' })).not.toBeInTheDocument();
     expect(screen.getByText('Revoked')).toBeInTheDocument();
+    expect(screen.getByText('macOS')).toBeInTheDocument();
   });
 
-  it('revokes after confirmation and reloads the list', async () => {
+  it('revokes after confirmation with DELETE /me/devices/{id}', async () => {
     let items = [laptop];
     const { api } = renderApp({
       path: '/devices',
@@ -46,21 +71,8 @@ describe('devices page', () => {
     expect(api.called('DELETE', '/me/devices/d1')).toHaveLength(0);
     await user.click(within(dialog).getByRole('button', { name: 'Revoke' }));
     await waitFor(() => expect(api.called('DELETE', '/me/devices/d1')).toHaveLength(1));
-    expect(await screen.findByText('Device revoked.')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('“Laptop” revoked.')).toBeInTheDocument();
     expect(await screen.findByText('Revoked')).toBeInTheDocument();
-  });
-
-  it('cancelling does not call the API', async () => {
-    const { api } = renderApp({
-      path: '/devices',
-      routes: { 'GET /me/devices': { items: [laptop] } },
-    });
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Revoke Laptop' }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(api.called('DELETE', '/me/devices/d1')).toHaveLength(0);
   });
 
   it('shows the error in the dialog when the revoke fails', async () => {
@@ -75,7 +87,7 @@ describe('devices page', () => {
     await user.click(await screen.findByRole('button', { name: 'Revoke Laptop' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke' }));
     expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
-      'Not found',
+      'The device no longer exists.',
     );
   });
 });

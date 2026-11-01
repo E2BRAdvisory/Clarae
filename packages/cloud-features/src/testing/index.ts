@@ -3,3 +3,12 @@
 // vault endpoints. Imported only by tests.
 export { cloudVaultsTableSuite, type SuiteHarness } from './suite';
 export { fakeVaultApi, seedVaults, OWNER, type FakeVaultApi, type SeedVault } from './fakeRest';
+export { cloudAccountSuite, seedShare, type AccountHarness } from './accountSuite';
+export {
+  fakeCloudApi,
+  vaultId,
+  type CloudSeed,
+  type FakeCloudApi,
+  type SeedDirectoryGroup,
+  type SeedDirectoryUser,
+} from './fakeCloud';

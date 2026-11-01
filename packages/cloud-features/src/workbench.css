@@ -15,11 +15,11 @@
   --nd-accent: var(--accent);
   --nd-accent-text: var(--accent-contrast);
   --nd-danger: var(--danger);
-  --nd-danger-bg: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  --nd-danger-bg: color-mix(in srgb, var(--danger) 8%, var(--bg));
   --nd-ok: var(--success);
-  --nd-ok-bg: color-mix(in srgb, var(--success) 12%, var(--bg));
+  --nd-ok-bg: color-mix(in srgb, var(--success) 8%, var(--bg));
   --nd-warn: var(--accent-text);
-  --nd-warn-bg: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  --nd-warn-bg: color-mix(in srgb, var(--accent) 8%, var(--bg));
   --nd-focus: var(--accent);
   --nd-radius: var(--radius);
   --nd-gap: 12px;
@@ -40,4 +40,21 @@
 }
 .mbcf-vaults {
   margin: 16px 0;
+}
+
+/* Text in a status colour on its tinted background (errors, badges, the quota message): the
+   workbench's --danger and --success are meant for icons and borders and miss 4.5:1 on a tint, more so
+   in the dark theme. Mixing them with the text colour keeps the hue and reaches WCAG 1.4.3 in both
+   themes (darker on the light one, lighter on the dark one). */
+.mbcf .nd-inline-error,
+.mbcf .nd-badge--danger,
+.mbcf .mbcf-level[data-level='critical'],
+.mbcf .mbcf-level[data-level='full'] {
+  color: color-mix(in srgb, var(--danger) 55%, var(--text));
+}
+.mbcf .nd-badge--ok {
+  color: color-mix(in srgb, var(--success) 55%, var(--text));
+}
+.mbcf .nd-badge--warn {
+  color: color-mix(in srgb, var(--accent-text) 70%, var(--text));
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button, InlineError } from '@memobrain/ui';
 import { useAuth } from '../auth/AuthProvider';
+import { isWorkbenchReturn } from '../shared/routes';
 
 /** Target of the OIDC redirect: exchanges the code, then returns to where the user came from. */
 export function CallbackPage() {
@@ -19,7 +20,7 @@ export function CallbackPage() {
     completeSignIn()
       .then((to) => {
         // The workbench is a page of its own (not a route of this app): load it, do not navigate to it.
-        if (/^\/vaults\/[^/]+\/open\/?(\?|$)/.test(to)) window.location.replace(to);
+        if (isWorkbenchReturn(to)) window.location.replace(to);
         else void navigate(to, { replace: true });
       })
       .catch(() => setFailed(true));

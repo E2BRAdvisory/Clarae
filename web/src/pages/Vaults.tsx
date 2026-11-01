@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Table } from '@memobrain/ui';
-import { CloudVaultsTable, RestCloudPort } from '@memobrain/cloud-features';
-import { useApi } from '../api/context';
+import { CloudVaultsTable } from '@memobrain/cloud-features';
+import { useCloudPort, useSharingAllowed } from '../api/cloud';
 import { keys, useShares, useWorkbenchAllowed, type Share } from '../api/queries';
+import { mountHref } from './Shares';
 import { VaultExport } from './VaultExport';
 
 /** Where the console sends the creation of a private vault: the browser workbench makes its keys. */
@@ -42,7 +42,7 @@ function SharedWithMe({ shares }: { shares: Share[] }) {
                 {/* A full page load: the workbench has its own HTML and style sheet (ADR-0029). */}
                 <a
                   className="nd-button nd-button--small"
-                  href={`/vaults/${encodeURIComponent(s.vault_id)}/open?share=${encodeURIComponent(s.id)}`}
+                  href={mountHref(s.vault_id, s.id)}
                   aria-label={t('vaults.openAria', { name: s.display_name })}
                 >
                   {t('vaults.open')}
@@ -58,14 +58,14 @@ function SharedWithMe({ shares }: { shares: Share[] }) {
 
 export function VaultsPage() {
   const { t, i18n } = useTranslation();
-  const api = useApi();
   const qc = useQueryClient();
   const canOpen = useWorkbenchAllowed();
   // The cloud vault lifecycle lives in @memobrain/cloud-features (ADR-0037 §2); a private vault is
   // created in the browser workbench, which holds the Go core's cryptography.
-  const port = useMemo(() => new RestCloudPort(api, { createPrivate: canOpen }), [api, canOpen]);
+  const port = useCloudPort();
+  const sharingOn = useSharingAllowed();
   const received = useShares('received');
-  const mounts = (received.data ?? []).filter((s) => s.my_status === 'accepted');
+  const mounts = sharingOn ? (received.data ?? []).filter((s) => s.my_status === 'accepted') : [];
 
   return (
     <>
@@ -83,7 +83,6 @@ export function VaultsPage() {
           onCreatePrivate={(name) => navigation.assign(privateCreationHref(name))}
           onChanged={() => {
             void qc.invalidateQueries({ queryKey: keys.vaults });
-            void qc.invalidateQueries({ queryKey: keys.usage });
           }}
         />
         {mounts.length > 0 && <SharedWithMe shares={mounts} />}

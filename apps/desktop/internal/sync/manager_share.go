@@ -355,3 +355,72 @@ func (m *Manager) VaultShares(ctx context.Context, localID string) ([]transport.
 
 // IsNotFound reports whether err is the server's NOT_FOUND.
 func IsNotFound(err error) bool { return transport.IsCode(err, syncproto.CodeNotFound) }
+
+// --- account-wide share management (@memobrain/cloud-features, ADR-0037 §2) -----
+
+// ListShares returns the shares the caller owns or manages ("owned") or was invited to
+// ("received"), across every vault of the account.
+func (m *Manager) ListShares(ctx context.Context, scope string) ([]transport.Share, error) {
+	if scope != "owned" && scope != "received" {
+		return nil, fmt.Errorf("invalid: share scope %q (owned or received)", scope)
+	}
+	c, _, err := m.client()
+	if err != nil {
+		return nil, err
+	}
+	return c.ListShares(ctx, scope)
+}
+
+// CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud
+// vault id: the account-wide "New share" of the settings and of the console, which need no local
+// copy. A private vault is never shareable (D-02): the server is not asked.
+func (m *Manager) CreateCloudShare(ctx context.Context, cloudVaultID, pathPrefix, name string, grants []transport.NewGrant, expires *time.Time) (transport.Share, error) {
+	c, _, err := m.client()
+	if err != nil {
+		return transport.Share{}, err
+	}
+	v, err := c.GetVault(ctx, cloudVaultID)
+	if err != nil {
+		return transport.Share{}, err
+	}
+	if string(v.Kind) != "shared" {
+		return transport.Share{}, &transport.ProblemError{
+			Problem:    syncproto.Problem{Code: syncproto.CodeVaultEncrypted, Detail: "a private (end-to-end encrypted) vault cannot be shared"},
+			StatusCode: 409,
+		}
+	}
+	name = strings.TrimSpace(name)
+	prefix := strings.Trim(strings.TrimSpace(pathPrefix), "/")
+	if name == "" {
+		name = v.Name
+		if prefix != "" {
+			name = filepath.Base(prefix)
+		}
+	}
+	in := transport.CreateShare{VaultId: v.Id, ResourceType: apiclient.ResourceType("vault"), DisplayName: name, ExpiresAt: expires}
+	if prefix != "" {
+		in.ResourceType = apiclient.ResourceType("folder")
+		in.PathPrefix = &prefix
+	}
+	if len(grants) > 0 {
+		in.Grants = &grants
+	}
+	return c.CreateShare(ctx, in)
+}
+
+// UpdateShare renames a share and sets or removes its expiry (owner or manager). An empty name
+// keeps the current one; clearExpiry wins over expires.
+func (m *Manager) UpdateShare(ctx context.Context, shareID, name string, expires *time.Time, clearExpiry bool) (transport.Share, error) {
+	c, _, err := m.client()
+	if err != nil {
+		return transport.Share{}, err
+	}
+	var n *string
+	if s := strings.TrimSpace(name); s != "" {
+		n = &s
+	}
+	if clearExpiry {
+		expires = nil
+	}
+	return c.UpdateShare(ctx, shareID, n, expires, clearExpiry)
+}

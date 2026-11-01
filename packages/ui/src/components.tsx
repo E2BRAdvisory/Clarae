@@ -13,7 +13,7 @@ import {
   type SelectHTMLAttributes,
   type TableHTMLAttributes,
 } from 'react';
-import { quotaLevel, quotaPercent } from './quota';
+import { quotaLevel, quotaPercent, type QuotaLevel } from './quota';
 
 function cx(...parts: (string | false | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -182,15 +182,27 @@ export interface QuotaBarProps {
   caption: string;
   /** Visible percentage text, already formatted. */
   percentText?: string;
+  /**
+   * The level as the server computed it from the administrator's thresholds (`Usage.level`); when
+   * absent, the default thresholds apply (quotaLevel).
+   */
+  level?: QuotaLevel | undefined;
 }
 
 /**
  * Storage quota meter. Levels: ok below 80 %, warn from 80 %, critical from 95 %,
- * full at 100 %. Rendered with a native <progress>: its fill is painted by CSS, so
- * the page needs no inline style (style-src 'self').
+ * full at 100 % (or the server's, `level`). Rendered with a native <progress>: its fill is
+ * painted by CSS, so the page needs no inline style (style-src 'self').
  */
-export function QuotaBar({ usedBytes, quotaBytes, label, caption, percentText }: QuotaBarProps) {
-  const level = quotaLevel(usedBytes, quotaBytes);
+export function QuotaBar({
+  usedBytes,
+  quotaBytes,
+  label,
+  caption,
+  percentText,
+  level: serverLevel,
+}: QuotaBarProps) {
+  const level = serverLevel ?? quotaLevel(usedBytes, quotaBytes);
   const pct = quotaPercent(usedBytes, quotaBytes);
   return (
     <div className="nd-quota" data-level={level} data-testid="quota-bar">

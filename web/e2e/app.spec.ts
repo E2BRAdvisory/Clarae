@@ -76,10 +76,10 @@ test('accepting an invitation moves it to the accepted shares', async ({ page })
     },
   });
   await page.goto('/shares');
-  await page.getByRole('button', { name: 'Accept: Budget' }).click();
-  await expect(page.getByText('Invitation accepted.')).toBeVisible();
+  await page.getByRole('button', { name: 'Accept Budget' }).click();
+  await expect(page.getByText('Invitation to “Budget” accepted.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Accepted shares' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Accept: Budget' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Accept Budget' })).toHaveCount(0);
   expect(calls).toContain('POST /shares/s1:accept');
 });
 
@@ -105,11 +105,11 @@ test('revoking a share asks for confirmation and removes it', async ({ page }) =
     },
   });
   await page.goto('/shares');
-  await page.getByRole('button', { name: 'Revoke share: Project X' }).click();
-  await expect(page.getByRole('dialog', { name: 'Revoke this share?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Revoke Project X' }).click();
+  await expect(page.getByRole('dialog', { name: 'Revoke “Project X”?' })).toBeVisible();
   expect(calls).not.toContain('DELETE /shares/s2');
-  await page.getByRole('dialog').getByRole('button', { name: 'Revoke share' }).click();
-  await expect(page.getByText('Share revoked.')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Revoke' }).click();
+  await expect(page.getByText('“Project X” revoked.')).toBeVisible();
   await expect(page.getByText('You have not shared anything yet')).toBeVisible();
   expect(calls).toContain('DELETE /shares/s2');
 });

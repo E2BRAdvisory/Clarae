@@ -48,6 +48,7 @@ type ShareInfo struct {
 	ResourceType string      `json:"resourceType"`
 	PathPrefix   string      `json:"pathPrefix"`
 	DisplayName  string      `json:"displayName"`
+	OwnerID      string      `json:"ownerId"`
 	OwnerName    string      `json:"ownerName"`
 	CreatedAt    string      `json:"createdAt"`
 	ExpiresAt    string      `json:"expiresAt"`
@@ -74,11 +75,11 @@ type DirectoryEntry struct {
 func toShareInfo(s transport.Share) ShareInfo {
 	out := ShareInfo{
 		ID: s.Id.String(), VaultID: s.VaultId.String(), VaultName: s.VaultName, ResourceType: string(s.ResourceType), PathPrefix: deref(s.PathPrefix),
-		DisplayName: s.DisplayName, OwnerName: s.OwnerName, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339),
+		DisplayName: s.DisplayName, OwnerID: s.OwnerId.String(), OwnerName: s.OwnerName, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339),
 		MyPermission: string(deref(s.MyPermission)), MyStatus: string(deref(s.MyStatus)), Grants: []GrantInfo{},
 	}
 	if s.Id == (uuid.UUID{}) {
-		out.ID, out.VaultID = "", "" // the zero Share of a failed call
+		out.ID, out.VaultID, out.OwnerID = "", "", "" // the zero Share of a failed call
 	}
 	if s.ExpiresAt != nil {
 		out.ExpiresAt = s.ExpiresAt.UTC().Format(time.RFC3339)
@@ -213,33 +214,91 @@ func (s *SharingAPI) VaultShares(vaultID string) ([]ShareInfo, error) {
 	if err != nil {
 		return nil, bindingError(err)
 	}
+	return toShareInfos(shares), nil
+}
+
+// parseExpiry reads an RFC 3339 expiry ("" for none).
+func parseExpiry(expiresAt string) (*time.Time, error) {
+	if expiresAt == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		return nil, errors.New("invalid: expiresAt must be an RFC 3339 date")
+	}
+	return &t, nil
+}
+
+// newGrants converts the recipients given by the UI.
+func newGrants(grants []GrantInput) ([]transport.NewGrant, error) {
+	gs := make([]transport.NewGrant, 0, len(grants))
+	for _, g := range grants {
+		pid, err := uuid.Parse(g.PrincipalID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid: principal id %q", g.PrincipalID)
+		}
+		gs = append(gs, transport.NewGrant{PrincipalType: apiclient.NewGrantPrincipalType(g.PrincipalType), PrincipalId: pid, Permission: apiclient.SharePermission(g.Permission)})
+	}
+	return gs, nil
+}
+
+func toShareInfos(shares []transport.Share) []ShareInfo {
 	out := make([]ShareInfo, 0, len(shares))
 	for _, sh := range shares {
 		out = append(out, toShareInfo(sh))
 	}
-	return out, nil
+	return out
 }
 
 // CreateShare shares a folder or a document (isDir false) of the open, connected vault; an empty
 // path with isDir shares the whole vault. expiresAt is RFC 3339 or "".
 func (s *SharingAPI) CreateShare(vaultID, path string, isDir bool, name string, grants []GrantInput, expiresAt string) (ShareInfo, error) {
-	var exp *time.Time
-	if expiresAt != "" {
-		t, err := time.Parse(time.RFC3339, expiresAt)
-		if err != nil {
-			return ShareInfo{}, errors.New("invalid: expiresAt must be an RFC 3339 date")
-		}
-		exp = &t
+	exp, err := parseExpiry(expiresAt)
+	if err != nil {
+		return ShareInfo{}, err
 	}
-	gs := make([]transport.NewGrant, 0, len(grants))
-	for _, g := range grants {
-		pid, err := uuid.Parse(g.PrincipalID)
-		if err != nil {
-			return ShareInfo{}, fmt.Errorf("invalid: principal id %q", g.PrincipalID)
-		}
-		gs = append(gs, transport.NewGrant{PrincipalType: apiclient.NewGrantPrincipalType(g.PrincipalType), PrincipalId: pid, Permission: apiclient.SharePermission(g.Permission)})
+	gs, err := newGrants(grants)
+	if err != nil {
+		return ShareInfo{}, err
 	}
 	sh, err := s.app.sync.CreateShare(context.Background(), vaultID, path, isDir, name, gs, exp)
+	return toShareInfo(sh), bindingError(err)
+}
+
+// ListShares lists the shares of the account: "owned" (created or managed by the user, on any of
+// their vaults) or "received" (invitations, accepted and declined ones).
+func (s *SharingAPI) ListShares(scope string) ([]ShareInfo, error) {
+	shares, err := s.app.sync.ListShares(context.Background(), scope)
+	if err != nil {
+		return nil, bindingError(err)
+	}
+	return toShareInfos(shares), nil
+}
+
+// CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud
+// vault id and without a local copy (Settings > Sharing, like the console). A private vault cannot
+// be shared (D-02). expiresAt is RFC 3339 or "".
+func (s *SharingAPI) CreateCloudShare(cloudVaultID, pathPrefix, name string, grants []GrantInput, expiresAt string) (ShareInfo, error) {
+	exp, err := parseExpiry(expiresAt)
+	if err != nil {
+		return ShareInfo{}, err
+	}
+	gs, err := newGrants(grants)
+	if err != nil {
+		return ShareInfo{}, err
+	}
+	sh, err := s.app.sync.CreateCloudShare(context.Background(), cloudVaultID, pathPrefix, name, gs, exp)
+	return toShareInfo(sh), bindingError(err)
+}
+
+// UpdateShare renames a share and sets (RFC 3339) or, with clearExpiry, removes its expiry (owner
+// or manager). An empty name keeps the current one, an empty expiresAt the current expiry.
+func (s *SharingAPI) UpdateShare(shareID, name, expiresAt string, clearExpiry bool) (ShareInfo, error) {
+	exp, err := parseExpiry(expiresAt)
+	if err != nil {
+		return ShareInfo{}, err
+	}
+	sh, err := s.app.sync.UpdateShare(context.Background(), shareID, name, exp, clearExpiry)
 	return toShareInfo(sh), bindingError(err)
 }
 

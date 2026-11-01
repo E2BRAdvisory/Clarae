@@ -1,30 +1,21 @@
+// The Sharing page mounts InvitationsList and SharesManager of @memobrain/cloud-features (their
+// behaviour is tested by the package's suite on both adapters): here, the REST calls the page makes,
+// the link to open a mount and the `sharing` flag.
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { problem, renderApp, type RecordedCall } from '../test/utils';
+import { renderApp, type RecordedCall } from '../test/utils';
 
 const ME = '11111111-1111-4111-8111-111111111111';
 const BOB = '22222222-2222-4222-8222-222222222222';
-const TEAM = '33333333-3333-4333-8333-333333333333';
-const CAROL = '44444444-4444-4444-8444-444444444444';
+const V1 = '0198f1c2-aaaa-7bbb-8ccc-000000000001';
 
 const common = {
-  vault_id: 'v1',
+  vault_id: V1,
   vault_name: 'Docs',
   resource_type: 'folder',
   created_at: '2026-01-01T00:00:00Z',
 };
-
-function ownedShare(grants: unknown[]) {
-  return {
-    ...common,
-    id: 's-own',
-    display_name: 'Project X',
-    owner_id: ME,
-    owner_name: 'Alice',
-    grants,
-  };
-}
 const invitation = {
   ...common,
   id: 's-inv',
@@ -34,42 +25,69 @@ const invitation = {
   my_permission: 'editor',
   my_status: 'pending',
 };
-const mount = {
+const mount = { ...invitation, id: 's-mnt', display_name: 'Wiki', my_status: 'accepted' };
+const owned = {
   ...common,
-  id: 's-mnt',
-  display_name: 'Wiki',
-  owner_id: BOB,
-  owner_name: 'Bob',
-  my_permission: 'viewer',
-  my_status: 'accepted',
+  id: 's-own',
+  display_name: 'Project X',
+  owner_id: ME,
+  owner_name: 'Alice',
+  grants: [],
+};
+const vaults = {
+  items: [
+    {
+      id: V1,
+      owner_id: ME,
+      name: 'Docs',
+      kind: 'shared',
+      last_seq: 1,
+      total_bytes: 0,
+      file_count: 0,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 'p1',
+      owner_id: ME,
+      name: 'Diary',
+      kind: 'private',
+      last_seq: 1,
+      total_bytes: 0,
+      file_count: 0,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+  ],
+  mounts: [],
 };
 
-function sharesRoute(owned: () => unknown, received: () => unknown) {
-  return (call: RecordedCall) => (call.query.get('scope') === 'owned' ? owned() : received());
+function sharesRoute(own: () => unknown, received: () => unknown) {
+  return (call: RecordedCall) => (call.query.get('scope') === 'owned' ? own() : received());
 }
 
-describe('shares page: received', () => {
-  it('shows invitations and accepted shares', async () => {
+describe('shares page', () => {
+  it('shows the shares received, with Open on an accepted one, and the shares created', async () => {
     renderApp({
       path: '/shares',
       routes: {
         'GET /me': { id: ME },
         'GET /shares': sharesRoute(
-          () => [],
+          () => [owned],
           () => [invitation, mount],
         ),
       },
     });
+    expect(await screen.findByRole('heading', { name: 'Shared with me' })).toBeInTheDocument();
     const inv = await screen.findByRole('region', { name: 'Budget' });
-    expect(within(inv).getByText(/From Bob/)).toBeInTheDocument();
-    expect(within(inv).getByText('Editor')).toBeInTheDocument();
-    expect(within(inv).getByRole('button', { name: 'Accept: Budget' })).toBeInTheDocument();
-    const acc = screen.getByRole('region', { name: 'Wiki' });
-    expect(within(acc).queryByRole('button', { name: /Accept/ })).not.toBeInTheDocument();
-    expect(within(acc).getByText('Accepted')).toBeInTheDocument();
+    expect(within(inv).getByRole('button', { name: 'Accept Budget' })).toBeInTheDocument();
+    const wiki = screen.getByRole('region', { name: 'Wiki' });
+    expect(within(wiki).getByRole('link', { name: 'Open Wiki in the browser' })).toHaveAttribute(
+      'href',
+      `/vaults/${V1}/open?share=s-mnt`,
+    );
+    expect(await screen.findByRole('region', { name: 'Project X' })).toBeInTheDocument();
   });
 
-  it('accepts an invitation and refreshes', async () => {
+  it('accepts an invitation with POST /shares/{id}:accept', async () => {
     let received: unknown[] = [invitation];
     const { api } = renderApp({
       path: '/shares',
@@ -85,234 +103,100 @@ describe('shares page: received', () => {
       },
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Accept: Budget' }));
+    await user.click(await screen.findByRole('button', { name: 'Accept Budget' }));
     await waitFor(() => expect(api.called('POST', '/shares/s-inv:accept')).toHaveLength(1));
-    expect(await screen.findByText('Invitation accepted.')).toBeInTheDocument();
+    expect(await screen.findByText('Invitation to “Budget” accepted.')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Accepted shares' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept: Budget' })).not.toBeInTheDocument();
   });
 
-  it('declines an invitation', async () => {
-    let received: unknown[] = [invitation];
+  it('creates a share of a folder with POST /shares; private vaults are not offered', async () => {
+    let list: unknown[] = [];
     const { api } = renderApp({
       path: '/shares',
       routes: {
         'GET /shares': sharesRoute(
+          () => list,
           () => [],
-          () => received,
         ),
-        'POST /shares/s-inv:decline': () => {
-          received = [{ ...invitation, my_status: 'declined' }];
-          return received[0];
+        'GET /vaults': vaults,
+        'POST /shares': (call: RecordedCall) => {
+          const s = { ...owned, ...(call.body as object), id: 's-new', grants: [] };
+          list = [s];
+          return new Response(JSON.stringify(s), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          });
         },
       },
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Decline: Budget' }));
-    await waitFor(() => expect(api.called('POST', '/shares/s-inv:decline')).toHaveLength(1));
-    expect(await screen.findByRole('heading', { name: 'Declined' })).toBeInTheDocument();
-  });
-
-  it('shows the API error when declining is not possible', async () => {
-    renderApp({
-      path: '/shares',
-      routes: {
-        'GET /shares': sharesRoute(
-          () => [],
-          () => [invitation],
-        ),
-        'POST /shares/s-inv:decline': () => problem(409, 'INVALID_STATE'),
-      },
+    await user.click(await screen.findByRole('button', { name: 'New share' }));
+    const dialog = screen.getByRole('dialog', { name: 'New share' });
+    await waitFor(() =>
+      expect(
+        within(within(dialog).getByLabelText('Vault'))
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Docs']),
+    );
+    await user.click(within(dialog).getByRole('radio', { name: 'A folder' }));
+    await user.type(within(dialog).getByLabelText('Folder'), 'Plans/2027');
+    await user.click(within(dialog).getByRole('button', { name: 'Share' }));
+    await waitFor(() => expect(api.called('POST', '/shares')).toHaveLength(1));
+    expect(api.called('POST', '/shares')[0]?.body).toEqual({
+      vault_id: V1,
+      display_name: '2027',
+      resource_type: 'folder',
+      path_prefix: 'Plans/2027',
     });
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Decline: Budget' }));
-    expect(
-      await screen.findByText('This is not possible in the current state.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: '2027' })).toBeInTheDocument();
   });
-});
 
-describe('shares page: owned', () => {
-  const grantBob = {
-    principal_type: 'user',
-    principal_id: BOB,
-    principal_name: 'Bob',
-    permission: 'viewer',
-    status: 'accepted',
-    created_at: '2026-01-02T00:00:00Z',
-  };
-  const grantTeam = {
-    principal_type: 'group',
-    principal_id: TEAM,
-    principal_name: 'Team',
-    permission: 'editor',
-    status: 'pending',
-    created_at: '2026-01-02T00:00:00Z',
-  };
-
-  it('revokes a share after confirmation', async () => {
-    let owned: unknown[] = [ownedShare([grantBob])];
+  it('renames a share with PATCH /shares/{id}', async () => {
+    let share = { ...owned };
     const { api } = renderApp({
       path: '/shares',
       routes: {
-        'GET /me': { id: ME },
         'GET /shares': sharesRoute(
-          () => owned,
+          () => [share],
           () => [],
         ),
-        'DELETE /shares/s-own': () => {
-          owned = [];
-          return undefined;
+        'PATCH /shares/s-own': (call: RecordedCall) => {
+          share = { ...share, ...(call.body as object) };
+          return share;
         },
       },
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Revoke share: Project X' }));
-    const dialog = screen.getByRole('dialog', { name: 'Revoke this share?' });
-    expect(api.called('DELETE', '/shares/s-own')).toHaveLength(0);
-    await user.click(within(dialog).getByRole('button', { name: 'Revoke share' }));
-    await waitFor(() => expect(api.called('DELETE', '/shares/s-own')).toHaveLength(1));
-    expect(await screen.findByText('Share revoked.')).toBeInTheDocument();
-    expect(await screen.findByText('You have not shared anything yet')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Edit Project X' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit “Project X”' });
+    await user.clear(within(dialog).getByLabelText('Name'));
+    await user.type(within(dialog).getByLabelText('Name'), 'Project Y');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.called('PATCH', '/shares/s-own')).toHaveLength(1));
+    expect(api.called('PATCH', '/shares/s-own')[0]?.body).toEqual({ display_name: 'Project Y' });
+    expect(await screen.findByRole('region', { name: 'Project Y' })).toBeInTheDocument();
   });
 
-  it('only the owner can revoke; a manager just manages', async () => {
-    const managed = {
-      ...ownedShare([grantBob]),
-      owner_id: BOB,
-      owner_name: 'Bob',
-      my_permission: 'manager',
-    };
-    renderApp({
-      path: '/shares',
-      routes: {
-        'GET /me': { id: ME },
-        'GET /shares': sharesRoute(
-          () => [managed],
-          () => [],
-        ),
-      },
-    });
-    expect(await screen.findByRole('button', { name: 'Manage access' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Revoke share/ })).not.toBeInTheDocument();
-  });
-
-  it('lists grants, changes a permission and removes a grant', async () => {
-    let grants: unknown[] = [grantBob, grantTeam];
+  it('is turned off, with its menu entry, when the administrator disables sharing', async () => {
     const { api } = renderApp({
       path: '/shares',
       routes: {
-        'GET /me': { id: ME },
-        'GET /shares': sharesRoute(
-          () => [ownedShare(grants)],
-          () => [],
-        ),
-        [`PUT /shares/s-own/grants/user/${BOB}`]: (call: RecordedCall) => {
-          grants = [{ ...grantBob, ...(call.body as object) }, grantTeam];
-          return grants[0];
+        'GET /config/effective': {
+          version: 1,
+          config: { features: { sharing: false } },
+          locked_keys: [],
         },
-        [`DELETE /shares/s-own/grants/group/${TEAM}`]: () => {
-          grants = [grantBob];
-          return undefined;
-        },
+        'GET /shares': [invitation],
       },
-    });
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Manage access' }));
-    const table = screen.getByRole('table', { name: 'Access' });
-    expect(within(table).getByRole('rowheader', { name: /Bob/ })).toBeInTheDocument();
-    expect(within(table).getByText('Pending')).toBeInTheDocument();
-
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Permission for Bob' }),
-      'editor',
-    );
-    await waitFor(() =>
-      expect(api.called('PUT', `/shares/s-own/grants/user/${BOB}`)).toHaveLength(1),
-    );
-    expect(api.called('PUT', `/shares/s-own/grants/user/${BOB}`)[0]?.body).toEqual({
-      permission: 'editor',
-    });
-    await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'Permission for Bob' })).toHaveValue('editor'),
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Remove access of Team' }));
-    await waitFor(() =>
-      expect(api.called('DELETE', `/shares/s-own/grants/group/${TEAM}`)).toHaveLength(1),
-    );
-    await waitFor(() =>
-      expect(screen.queryByRole('rowheader', { name: /Team/ })).not.toBeInTheDocument(),
-    );
-  });
-
-  it('adds a grant found through the directory search', async () => {
-    let grants: unknown[] = [grantBob];
-    const { api } = renderApp({
-      path: '/shares',
-      routes: {
-        'GET /me': { id: ME },
-        'GET /shares': sharesRoute(
-          () => [ownedShare(grants)],
-          () => [],
-        ),
-        'GET /directory/users': () => [
-          { id: CAROL, username: 'carol', display_name: 'Carol Smith' },
-          { id: BOB, username: 'bob', display_name: 'Bob' },
-        ],
-        [`PUT /shares/s-own/grants/user/${CAROL}`]: (call: RecordedCall) => {
-          const g = {
-            principal_type: 'user',
-            principal_id: CAROL,
-            principal_name: 'Carol Smith',
-            status: 'pending',
-            created_at: '2026-01-03T00:00:00Z',
-            ...(call.body as object),
-          };
-          grants = [grantBob, g];
-          return g;
-        },
-      },
-    });
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Manage access' }));
-    await user.type(screen.getByLabelText('Name or username'), 'car');
-    await user.selectOptions(screen.getByLabelText('Permission'), 'editor');
-    await user.click(screen.getByRole('button', { name: 'Search' }));
-    expect(api.called('GET', '/directory/users')[0]?.query.get('q')).toBe('car');
-    // Bob already has access: his Add button is disabled.
-    expect(await screen.findByRole('button', { name: 'Add Bob' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Add Carol Smith' }));
-    await waitFor(() =>
-      expect(api.called('PUT', `/shares/s-own/grants/user/${CAROL}`)).toHaveLength(1),
-    );
-    expect(api.called('PUT', `/shares/s-own/grants/user/${CAROL}`)[0]?.body).toEqual({
-      permission: 'editor',
     });
     expect(
-      await screen.findByRole('combobox', { name: 'Permission for Carol Smith' }),
+      await screen.findByText('Sharing is turned off by your administrator.'),
     ).toBeInTheDocument();
-  });
-
-  it('searches groups when the principal type is group', async () => {
-    const { api } = renderApp({
-      path: '/shares',
-      routes: {
-        'GET /me': { id: ME },
-        'GET /shares': sharesRoute(
-          () => [ownedShare([])],
-          () => [],
-        ),
-        'GET /directory/groups': () => [{ id: TEAM, name: 'Team', description: 'Everyone' }],
-      },
-    });
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Manage access' }));
-    expect(screen.getByText('Nobody has access yet.')).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Add a'), 'group');
-    await user.type(screen.getByLabelText('Name or username'), 'te');
-    await user.click(screen.getByRole('button', { name: 'Search' }));
-    expect(await screen.findByRole('button', { name: 'Add Team' })).toBeEnabled();
-    expect(api.called('GET', '/directory/groups')).toHaveLength(1);
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: 'Sharing' })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('region', { name: 'Budget' })).not.toBeInTheDocument();
+    expect(api.called('GET', '/shares')).toHaveLength(0);
   });
 });

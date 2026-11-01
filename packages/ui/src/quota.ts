@@ -15,3 +15,8 @@ export function quotaLevel(used: number, quota: number): QuotaLevel {
   if (pct >= 80) return 'warn';
   return 'ok';
 }
+
+/** The server's level (`Usage.level`: ok, warning, critical, full) as a QuotaLevel. */
+export function serverQuotaLevel(level: 'ok' | 'warning' | 'critical' | 'full'): QuotaLevel {
+  return level === 'warning' ? 'warn' : level;
+}

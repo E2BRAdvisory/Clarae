@@ -7,7 +7,32 @@ export {
   cloudKeys,
   describeError,
   type CloudVaultsTableProps,
+  type ErrorSubject,
 } from './CloudVaultsTable';
+export { DevicesPanel, type DevicesPanelProps } from './DevicesPanel';
+export { UsagePanel, type UsagePanelProps } from './UsagePanel';
+export { MyGroups, type MyGroupsProps } from './MyGroups';
+export { SharesManager, isOwnerOf, type SharesManagerProps } from './sharing/SharesManager';
+export {
+  InvitationsList,
+  type InvitationsListProps,
+  type InvitationSection,
+} from './sharing/InvitationsList';
+export {
+  DirectorySearch,
+  GrantEditor,
+  PERMISSIONS,
+  type DirectorySearchProps,
+  type GrantEditorProps,
+} from './sharing/GrantEditor';
+export { dayOf, expiryOf } from './sharing/ShareDialogs';
+export {
+  featureOn,
+  featuresOf,
+  useFeature,
+  useFeatureFlag,
+  type CloudFeature,
+} from './featureFlags';
 export { NewVaultDialog, type NewVaultDialogProps } from './NewVaultDialog';
 export { createT, langOf, resources, type Lang, type MessageKey, type TFunction } from './i18n';
 export { formatBytes, formatDay, purgeDate } from './format';

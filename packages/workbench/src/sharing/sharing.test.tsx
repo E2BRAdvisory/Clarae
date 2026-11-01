@@ -34,6 +34,7 @@ const invitation = (over: Partial<ShareInfo> = {}): ShareInfo => ({
   resourceType: 'folder',
   pathPrefix: '',
   displayName: 'Team docs',
+  ownerId: 'u-ada',
   ownerName: 'ada',
   createdAt: new Date().toISOString(),
   expiresAt: '',
@@ -60,12 +61,27 @@ beforeEach(async () => {
 });
 
 describe('invitations and mounts', () => {
+  beforeEach(async () => {
+    await api.auth.login('https://memobrain.test');
+    useAppStore.getState().setAuth(await api.auth.status());
+  });
+
+  it('asks to sign in first', async () => {
+    useAppStore.getState().setAuth(await api.auth.logout());
+    mock.sharing.invitations.push(invitation());
+    render(wrap(<SharingPanel />));
+    expect(await screen.findByText(/Sign in to the cloud/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Team docs' })).toBeNull();
+  });
+
   it('accepts an invitation and shows the new mount', async () => {
     mock.sharing.invitations.push(invitation());
     render(wrap(<SharingPanel />));
-    const item = (await screen.findByText('Team docs')).closest('li') as HTMLElement;
-    expect(within(item).getByText(/Shared by ada · Editor · Folder/)).toBeInTheDocument();
-    fireEvent.click(within(item).getByRole('button', { name: 'Accept' }));
+    const item = await screen.findByRole('region', { name: 'Team docs' });
+    expect(item).toHaveTextContent('From ada · in Company');
+    expect(item).toHaveTextContent('Editor');
+    expect(item).toHaveTextContent('Folder');
+    fireEvent.click(within(item).getByRole('button', { name: 'Accept Team docs' }));
     await waitFor(() => expect(screen.getByText('No invitations.')).toBeInTheDocument());
     expect(await screen.findByText(/From ada · Editor/)).toBeInTheDocument();
     expect(mock.sharing.mounts).toHaveLength(1);
@@ -74,7 +90,7 @@ describe('invitations and mounts', () => {
   it('declines an invitation', async () => {
     mock.sharing.invitations.push(invitation());
     render(wrap(<SharingPanel />));
-    fireEvent.click(await screen.findByRole('button', { name: 'Decline' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Decline Team docs' }));
     await waitFor(() => expect(mock.sharing.declined).toEqual(['sh-1']));
     expect(await screen.findByText('No invitations.')).toBeInTheDocument();
   });
@@ -83,7 +99,7 @@ describe('invitations and mounts', () => {
     mock.sharing.invitations.push(invitation({ myPermission: 'viewer' }));
     mock.sharing.mountFiles.set('sh-1', { 'Plan.md': '# plan' });
     render(wrap(<SharingPanel />));
-    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept Team docs' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
     await waitFor(() => expect(useAppStore.getState().vault?.name).toBe('Team docs'));
     const id = useAppStore.getState().vault?.id ?? '';
@@ -94,6 +110,57 @@ describe('invitations and mounts', () => {
       readOnly: true,
       ownerName: 'ada',
     });
+  });
+
+  it('lists the shares of the account and creates one for a shared vault only', async () => {
+    mock.sync.cloudVaults.push(
+      {
+        id: 'cloud-team',
+        ownerId: 'u-me',
+        name: 'Team',
+        kind: 'shared',
+        totalBytes: 0,
+        fileCount: 0,
+        lastSeq: 1,
+        createdAt: '2026-10-01T10:00:00Z',
+      },
+      {
+        id: 'cloud-diary',
+        ownerId: 'u-me',
+        name: 'Diary',
+        kind: 'private',
+        totalBytes: 0,
+        fileCount: 0,
+        lastSeq: 1,
+        createdAt: '2026-10-01T10:00:00Z',
+      },
+    );
+    render(wrap(<SharingPanel />));
+    fireEvent.click(await screen.findByRole('button', { name: 'New share' }));
+    const dialog = screen.getByRole('dialog', { name: 'New share' });
+    const vault = await within(dialog).findByLabelText('Vault');
+    await waitFor(() =>
+      expect(
+        within(vault)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Team']),
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
+    expect(await screen.findByRole('region', { name: 'Team' })).toBeInTheDocument();
+    expect(mock.sharing.owned).toMatchObject([
+      { vaultId: 'cloud-team', resourceType: 'vault', displayName: 'Team', myPermission: '' },
+    ]);
+  });
+
+  it('honours the sharing flag of the configuration', async () => {
+    mock.config = { ...mock.config, features: { sharing: false } };
+    mock.sharing.invitations.push(invitation());
+    render(wrap(<SharingPanel />));
+    expect(
+      await screen.findByText('Sharing is turned off by your administrator.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Team docs' })).toBeNull();
   });
 
   it('removes a mount after confirmation', async () => {
@@ -177,23 +244,32 @@ describe('Share dialog', () => {
       },
     });
     await api.sync.linkNew(vaultId, 'Docs', 'shared', '');
+    await useSync.getState().refresh(vaultId);
   }
 
   it('creates a share for a folder with the people found in the directory', async () => {
     await connectedVault();
     render(wrap(<ShareDialog vaultId={vaultId} target={{ path: 'Projects/Alfa', isDir: true }} />));
     expect(screen.getByRole('dialog', { name: 'Share “Projects/Alfa”' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Search people and groups…', { selector: 'input' }), {
+    const newShare = screen.getByRole('region', { name: 'New share' });
+    const search = within(newShare).getByRole('form', { name: 'Add people or groups' });
+    fireEvent.change(within(search).getByLabelText('Name or username'), {
       target: { value: 'bo' },
     });
-    fireEvent.click(await screen.findByRole('button', { name: /Bob Smith/ }));
-    fireEvent.change(screen.getAllByLabelText('Search people and groups…')[0] as HTMLElement, {
+    fireEvent.click(within(search).getByRole('button', { name: 'Search' }));
+    fireEvent.click(await within(search).findByRole('button', { name: 'Add Bob Smith' }));
+    fireEvent.change(within(search).getByLabelText('Add a'), { target: { value: 'group' } });
+    fireEvent.change(within(search).getByLabelText('Name or username'), {
       target: { value: 'eng' },
     });
-    fireEvent.click(await screen.findByRole('button', { name: /engineers/ }));
+    fireEvent.click(within(search).getByRole('button', { name: 'Search' }));
+    fireEvent.click(await within(search).findByRole('button', { name: 'Add engineers' }));
     const list = screen.getByRole('list', { name: 'Recipients' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    fireEvent.change(within(list).getByLabelText('Level of engineers'), {
+      target: { value: 'viewer' },
+    });
+    fireEvent.click(within(newShare).getByRole('button', { name: 'Share' }));
     await waitFor(() => expect(mock.sharing.owned).toHaveLength(1));
     const created = mock.sharing.owned[0];
     expect(created).toMatchObject({
@@ -203,28 +279,37 @@ describe('Share dialog', () => {
     });
     expect(created?.grants.map((g) => [g.principalType, g.permission])).toEqual([
       ['user', 'editor'],
-      ['group', 'editor'],
+      ['group', 'viewer'],
     ]);
     // It now shows among the existing shares.
     expect(await screen.findByRole('region', { name: 'Alfa' })).toBeInTheDocument();
   });
 
-  it('changes a level, removes a recipient and revokes a share', async () => {
+  it('changes a level, removes a recipient, renames and revokes a share', async () => {
     await connectedVault();
     await api.sharing.create(vaultId, 'Docs', true, 'Docs share', [
       { principalType: 'user', principalId: 'u-bob', permission: 'viewer' },
       { principalType: 'group', principalId: 'g-team', permission: 'editor' },
     ]);
     render(wrap(<ShareDialog vaultId={vaultId} target={{ path: 'Docs', isDir: true }} />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Access to Docs share' }));
     const region = await screen.findByRole('region', { name: 'Docs share' });
-    fireEvent.change(within(region).getByLabelText('Level of bob'), {
+    fireEvent.change(within(region).getByLabelText('Permission of bob'), {
       target: { value: 'manager' },
     });
     await waitFor(() => expect(mock.sharing.owned[0]?.grants[0]?.permission).toBe('manager'));
     fireEvent.click(within(region).getByRole('button', { name: 'Remove engineers' }));
     await waitFor(() => expect(mock.sharing.owned[0]?.grants).toHaveLength(1));
-    fireEvent.click(within(region).getByRole('button', { name: 'Revoke' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    fireEvent.click(within(region).getByRole('button', { name: 'Edit Docs share' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit “Docs share”' });
+    fireEvent.change(within(edit).getByLabelText('Name'), { target: { value: 'Handbook' } });
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mock.sharing.owned[0]?.displayName).toBe('Handbook'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke Handbook' }));
+    const confirm = screen.getByRole('dialog', { name: 'Revoke “Handbook”?' });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Revoke' }));
     await waitFor(() => expect(mock.sharing.revoked).toEqual(['share-1']));
   });
 

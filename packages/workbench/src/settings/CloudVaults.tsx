@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { CloudVaultsTable } from '@memobrain/cloud-features';
 import '@memobrain/cloud-features/workbench.css';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
+import { CloudVaultsTable } from '../cloud/lazyPanels';
 import { usePlatform } from '../platform';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';

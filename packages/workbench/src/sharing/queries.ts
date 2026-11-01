@@ -26,12 +26,3 @@ export function useMounts(enabled = true) {
     staleTime: 30_000,
   });
 }
-
-/** Shares of the open vault, as its owner sees them. */
-export function useVaultShares(vaultId: string | undefined, enabled = true) {
-  return useQuery({
-    queryKey: sharingKeys.vault(vaultId ?? ''),
-    queryFn: () => api.sharing.vaultShares(vaultId ?? ''),
-    enabled: enabled && !!vaultId,
-  });
-}

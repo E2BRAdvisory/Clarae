@@ -1,6 +1,20 @@
 // The console's CloudPort: the REST API through the generated client (ADR-0037 §2).
 import { unwrap, type MemobrainClient } from '@memobrain/api-client';
-import type { CloudCapabilities, CloudPort, CloudVault } from './port';
+import { featuresOf } from './featureFlags';
+import type {
+  CloudCapabilities,
+  CloudDevice,
+  CloudPort,
+  CloudUsage,
+  CloudVault,
+  DirectoryEntry,
+  GroupMembership,
+  NewShare,
+  PrincipalType,
+  Share,
+  SharePermission,
+  ShareUpdate,
+} from './port';
 
 export interface RestCloudPortOptions {
   /** Private vaults are created in the browser workbench, when the administrator allows it. */
@@ -21,6 +35,7 @@ export class RestCloudPort implements CloudPort {
       createShared: true,
       createPrivate: options.createPrivate ?? false,
       keepsLocalCopy: false,
+      myGroups: true,
       ...(options.deletedRetentionDays !== undefined
         ? { deletedRetentionDays: options.deletedRetentionDays }
         : {}),
@@ -61,5 +76,102 @@ export class RestCloudPort implements CloudPort {
     return unwrap(
       this.api.POST('/vaults/{vaultId}:restore', { params: { path: { vaultId: id } } }),
     );
+  }
+
+  async listDevices(): Promise<CloudDevice[]> {
+    return (await unwrap(this.api.GET('/me/devices'))).items;
+  }
+
+  async revokeDevice(id: string): Promise<void> {
+    await unwrap(this.api.DELETE('/me/devices/{deviceId}', { params: { path: { deviceId: id } } }));
+  }
+
+  getUsage(): Promise<CloudUsage> {
+    return unwrap(this.api.GET('/me/usage'));
+  }
+
+  listShares(scope: 'owned' | 'received'): Promise<Share[]> {
+    return unwrap(this.api.GET('/shares', { params: { query: { scope } } }));
+  }
+
+  createShare(input: NewShare): Promise<Share> {
+    const { path_prefix, expires_at, grants, ...rest } = input;
+    return unwrap(
+      this.api.POST('/shares', {
+        body: {
+          ...rest,
+          resource_type: path_prefix ? 'folder' : 'vault',
+          ...(path_prefix ? { path_prefix } : {}),
+          ...(expires_at ? { expires_at } : {}),
+          ...(grants?.length ? { grants } : {}),
+        },
+      }),
+    );
+  }
+
+  updateShare(id: string, change: ShareUpdate): Promise<Share> {
+    return unwrap(
+      this.api.PATCH('/shares/{shareId}', { params: { path: { shareId: id } }, body: change }),
+    );
+  }
+
+  async revokeShare(id: string): Promise<void> {
+    await unwrap(this.api.DELETE('/shares/{shareId}', { params: { path: { shareId: id } } }));
+  }
+
+  async putGrant(
+    shareId: string,
+    principalType: PrincipalType,
+    principalId: string,
+    permission: SharePermission,
+  ): Promise<void> {
+    await unwrap(
+      this.api.PUT('/shares/{shareId}/grants/{principalType}/{principalId}', {
+        params: { path: { shareId, principalType, principalId } },
+        body: { permission },
+      }),
+    );
+  }
+
+  async deleteGrant(
+    shareId: string,
+    principalType: PrincipalType,
+    principalId: string,
+  ): Promise<void> {
+    await unwrap(
+      this.api.DELETE('/shares/{shareId}/grants/{principalType}/{principalId}', {
+        params: { path: { shareId, principalType, principalId } },
+      }),
+    );
+  }
+
+  async acceptInvitation(shareId: string): Promise<void> {
+    await unwrap(this.api.POST('/shares/{shareId}:accept', { params: { path: { shareId } } }));
+  }
+
+  async declineInvitation(shareId: string): Promise<void> {
+    await unwrap(this.api.POST('/shares/{shareId}:decline', { params: { path: { shareId } } }));
+  }
+
+  async searchDirectory(type: PrincipalType, q: string): Promise<DirectoryEntry[]> {
+    if (type === 'user') {
+      const users = await unwrap(this.api.GET('/directory/users', { params: { query: { q } } }));
+      return users.map((u) => ({
+        type,
+        id: u.id,
+        name: u.display_name || u.username,
+        detail: u.username,
+      }));
+    }
+    const groups = await unwrap(this.api.GET('/directory/groups', { params: { query: { q } } }));
+    return groups.map((g) => ({ type, id: g.id, name: g.name, detail: g.description }));
+  }
+
+  listMyGroups(): Promise<GroupMembership[]> {
+    return unwrap(this.api.GET('/me/groups'));
+  }
+
+  async getFeatures(): Promise<Record<string, boolean>> {
+    return featuresOf((await unwrap(this.api.GET('/config/effective'))).config);
   }
 }

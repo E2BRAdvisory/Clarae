@@ -19,6 +19,24 @@ const vault = (kind: 'shared' | 'private', name: string) => ({
 afterEach(() => vi.restoreAllMocks());
 
 describe('account page', () => {
+  it('lists the groups of the user (GET /me/groups)', async () => {
+    renderApp({
+      path: '/account',
+      routes: {
+        'GET /me': me,
+        'GET /vaults': { items: [], mounts: [] },
+        'GET /me/groups': [
+          { id: 'g1', name: 'engineers', description: 'The engineers', member_role: 'member' },
+        ],
+      },
+    });
+    expect(await screen.findByRole('heading', { name: 'My groups' })).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: 'My groups' });
+    const row = within(table).getByRole('rowheader', { name: 'engineers' }).closest('tr');
+    expect(row).toHaveTextContent('The engineers');
+    expect(row).toHaveTextContent('Member');
+  });
+
   it('downloads the account data as a file', async () => {
     const create = vi.fn(() => 'blob:x');
     Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() });

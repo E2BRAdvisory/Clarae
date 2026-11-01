@@ -89,3 +89,80 @@
 .mbcf-actions {
   flex-wrap: nowrap;
 }
+
+/* Devices, usage, shares and invitations (ADR-0037 §2). */
+.mbcf-actions--start {
+  justify-content: flex-start;
+}
+.mbcf-level {
+  margin: 8px 0 4px;
+}
+.mbcf-level[data-level='critical'],
+.mbcf-level[data-level='full'] {
+  color: var(--nd-danger);
+  font-weight: 600;
+}
+.mbcf-usage > .nd-table,
+.mbcf-usage > table {
+  margin-top: 12px;
+}
+.mbcf-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mbcf-card > * + * {
+  margin-top: 8px;
+}
+.mbcf-card p {
+  margin-bottom: 0;
+}
+.mbcf-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.mbcf-card__head h3,
+.mbcf-card__head h4 {
+  margin: 0;
+}
+.mbcf-group + .mbcf-group {
+  margin-top: 16px;
+}
+.mbcf-grants > * + * {
+  margin-top: 10px;
+}
+.mbcf-search h4 {
+  margin: 0 0 6px;
+}
+.mbcf-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.mbcf-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.mbcf-results li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+.mbcf-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.mbcf-form > * + * {
+  margin-top: 8px;
+}

@@ -34,19 +34,38 @@ export const cloudKeys = {
   all: (port: CloudPort) => ['cloud-features', port.id] as const,
   vaults: (port: CloudPort) => ['cloud-features', port.id, 'vaults'] as const,
   deleted: (port: CloudPort) => ['cloud-features', port.id, 'vaults', 'deleted'] as const,
+  devices: (port: CloudPort) => ['cloud-features', port.id, 'devices'] as const,
+  usage: (port: CloudPort) => ['cloud-features', port.id, 'usage'] as const,
+  shares: (port: CloudPort) => ['cloud-features', port.id, 'shares'] as const,
+  sharesOf: (port: CloudPort, scope: 'owned' | 'received') =>
+    ['cloud-features', port.id, 'shares', scope] as const,
+  directory: (port: CloudPort, type: string, q: string) =>
+    ['cloud-features', port.id, 'directory', type, q] as const,
+  groups: (port: CloudPort) => ['cloud-features', port.id, 'groups'] as const,
 };
 
+/** What an error is about, for the words of NOT_FOUND and VALIDATION_FAILED. */
+export type ErrorSubject = 'vault' | 'share' | 'device';
+
 /** An error of a port in the user's words: the known application codes, or the message. */
-export function describeError(t: TFunction, e: unknown): string {
+export function describeError(t: TFunction, e: unknown, subject: ErrorSubject = 'vault'): string {
   switch (errorCode(e)) {
     case 'NAME_IN_USE':
       return t('errors.NAME_IN_USE');
     case 'NOT_FOUND':
-      return t('errors.NOT_FOUND');
+      return subject === 'share'
+        ? t('errors.NOT_FOUND_share')
+        : subject === 'device'
+          ? t('errors.NOT_FOUND_device')
+          : t('errors.NOT_FOUND');
     case 'VALIDATION_FAILED':
-      return t('errors.VALIDATION_FAILED');
+      return subject === 'share'
+        ? t('errors.VALIDATION_FAILED_share')
+        : t('errors.VALIDATION_FAILED');
     case 'FORBIDDEN':
       return t('errors.FORBIDDEN');
+    case 'VAULT_ENCRYPTED':
+      return t('errors.VAULT_ENCRYPTED');
     default:
       return t('errors.generic', { message: e instanceof Error ? e.message : String(e) });
   }
