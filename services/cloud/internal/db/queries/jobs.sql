@@ -19,6 +19,14 @@ FROM blobs b LEFT JOIN file_revisions r ON r.blob_hash = b.hash
 GROUP BY b.hash, b.ref_count
 HAVING b.ref_count <> COUNT(r.id);
 
+-- name: GetBlobRefForUpdate :one
+-- Reconciliation locks the blob before counting, so the count includes every
+-- change whose reference delta is already applied (see ReconcileBlobRefs).
+SELECT ref_count FROM blobs WHERE hash = $1 FOR UPDATE;
+
+-- name: CountBlobRefs :one
+SELECT COUNT(*)::int FROM file_revisions WHERE blob_hash = $1;
+
 -- name: SetBlobRef :exec
 UPDATE blobs SET ref_count = $2,
   unreferenced_since = CASE WHEN $2 = 0 THEN COALESCE(unreferenced_since, now()) ELSE NULL END
@@ -45,11 +53,17 @@ SELECT COALESCE(MAX(seq), 0)::bigint FROM file_revisions WHERE vault_id = $1 AND
 -- name: ListRevisionBlobs :many
 SELECT blob_hash FROM file_revisions WHERE vault_id = $1 AND blob_hash IS NOT NULL;
 
+-- name: GetUserUsedForUpdate :one
+SELECT used_bytes FROM users WHERE id = $1 FOR UPDATE;
+
+-- name: OwnerActualUsage :one
+-- Bytes of the live files in every vault of an owner, soft-deleted vaults
+-- included (their quota is released when they are purged).
+SELECT COALESCE(SUM(f.size), 0)::bigint FROM files f JOIN vaults v ON v.id = f.vault_id
+WHERE v.owner_id = $1 AND NOT f.is_deleted;
+
 -- name: SetUserUsed :exec
 UPDATE users SET used_bytes = $2 WHERE id = $1;
-
--- name: GetVault :one
-SELECT * FROM vaults WHERE id = $1;
 
 -- name: GetVaultForUpdate :one
 SELECT * FROM vaults WHERE id = $1 FOR UPDATE;
@@ -67,10 +81,16 @@ DELETE FROM vaults WHERE id = $1;
 -- Source of truth for the nightly usage reconciliation.
 SELECT v.id AS vault_id,
        v.owner_id,
+       v.total_bytes AS stored_bytes,
+       v.file_count AS stored_files,
        COALESCE(SUM(f.size) FILTER (WHERE NOT f.is_deleted), 0)::bigint AS bytes,
        COUNT(f.id) FILTER (WHERE NOT f.is_deleted)::int AS files
 FROM vaults v LEFT JOIN files f ON f.vault_id = v.id
-GROUP BY v.id, v.owner_id;
+GROUP BY v.id, v.owner_id, v.total_bytes, v.file_count;
+
+-- name: VaultActualTotals :one
+SELECT COALESCE(SUM(size), 0)::bigint AS bytes, COUNT(*)::int AS files
+FROM files WHERE vault_id = $1 AND NOT is_deleted;
 
 -- name: SetVaultTotals :exec
 UPDATE vaults SET total_bytes = $2, file_count = $3 WHERE id = $1;

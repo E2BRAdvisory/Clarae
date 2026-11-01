@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countBlobRefs = `-- name: CountBlobRefs :one
+SELECT COUNT(*)::int FROM file_revisions WHERE blob_hash = $1
+`
+
+func (q *Queries) CountBlobRefs(ctx context.Context, blobHash *string) (int32, error) {
+	row := q.db.QueryRow(ctx, countBlobRefs, blobHash)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteCollectableBlob = `-- name: DeleteCollectableBlob :one
 DELETE FROM blobs
 WHERE hash = $1 AND ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $2
@@ -41,26 +52,28 @@ func (q *Queries) DeleteVault(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const getVault = `-- name: GetVault :one
-SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults WHERE id = $1
+const getBlobRefForUpdate = `-- name: GetBlobRefForUpdate :one
+SELECT ref_count FROM blobs WHERE hash = $1 FOR UPDATE
 `
 
-func (q *Queries) GetVault(ctx context.Context, id uuid.UUID) (Vault, error) {
-	row := q.db.QueryRow(ctx, getVault, id)
-	var i Vault
-	err := row.Scan(
-		&i.ID,
-		&i.OwnerID,
-		&i.Name,
-		&i.Kind,
-		&i.LastSeq,
-		&i.CompactionSeq,
-		&i.TotalBytes,
-		&i.FileCount,
-		&i.CreatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
+// Reconciliation locks the blob before counting, so the count includes every
+// change whose reference delta is already applied (see ReconcileBlobRefs).
+func (q *Queries) GetBlobRefForUpdate(ctx context.Context, hash string) (int32, error) {
+	row := q.db.QueryRow(ctx, getBlobRefForUpdate, hash)
+	var ref_count int32
+	err := row.Scan(&ref_count)
+	return ref_count, err
+}
+
+const getUserUsedForUpdate = `-- name: GetUserUsedForUpdate :one
+SELECT used_bytes FROM users WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetUserUsedForUpdate(ctx context.Context, id uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserUsedForUpdate, id)
+	var used_bytes int64
+	err := row.Scan(&used_bytes)
+	return used_bytes, err
 }
 
 const getVaultForUpdate = `-- name: GetVaultForUpdate :one
@@ -286,17 +299,21 @@ func (q *Queries) ListUsersWithUsage(ctx context.Context) ([]ListUsersWithUsageR
 const listVaultTotals = `-- name: ListVaultTotals :many
 SELECT v.id AS vault_id,
        v.owner_id,
+       v.total_bytes AS stored_bytes,
+       v.file_count AS stored_files,
        COALESCE(SUM(f.size) FILTER (WHERE NOT f.is_deleted), 0)::bigint AS bytes,
        COUNT(f.id) FILTER (WHERE NOT f.is_deleted)::int AS files
 FROM vaults v LEFT JOIN files f ON f.vault_id = v.id
-GROUP BY v.id, v.owner_id
+GROUP BY v.id, v.owner_id, v.total_bytes, v.file_count
 `
 
 type ListVaultTotalsRow struct {
-	VaultID uuid.UUID
-	OwnerID uuid.UUID
-	Bytes   int64
-	Files   int32
+	VaultID     uuid.UUID
+	OwnerID     uuid.UUID
+	StoredBytes int64
+	StoredFiles int32
+	Bytes       int64
+	Files       int32
 }
 
 // Source of truth for the nightly usage reconciliation.
@@ -312,6 +329,8 @@ func (q *Queries) ListVaultTotals(ctx context.Context) ([]ListVaultTotalsRow, er
 		if err := rows.Scan(
 			&i.VaultID,
 			&i.OwnerID,
+			&i.StoredBytes,
+			&i.StoredFiles,
 			&i.Bytes,
 			&i.Files,
 		); err != nil {
@@ -345,6 +364,20 @@ type MaxSeqBeforeParams struct {
 
 func (q *Queries) MaxSeqBefore(ctx context.Context, arg MaxSeqBeforeParams) (int64, error) {
 	row := q.db.QueryRow(ctx, maxSeqBefore, arg.VaultID, arg.ServerTime)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const ownerActualUsage = `-- name: OwnerActualUsage :one
+SELECT COALESCE(SUM(f.size), 0)::bigint FROM files f JOIN vaults v ON v.id = f.vault_id
+WHERE v.owner_id = $1 AND NOT f.is_deleted
+`
+
+// Bytes of the live files in every vault of an owner, soft-deleted vaults
+// included (their quota is released when they are purged).
+func (q *Queries) OwnerActualUsage(ctx context.Context, ownerID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, ownerActualUsage, ownerID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -421,4 +454,21 @@ type SetVaultTotalsParams struct {
 func (q *Queries) SetVaultTotals(ctx context.Context, arg SetVaultTotalsParams) error {
 	_, err := q.db.Exec(ctx, setVaultTotals, arg.ID, arg.TotalBytes, arg.FileCount)
 	return err
+}
+
+const vaultActualTotals = `-- name: VaultActualTotals :one
+SELECT COALESCE(SUM(size), 0)::bigint AS bytes, COUNT(*)::int AS files
+FROM files WHERE vault_id = $1 AND NOT is_deleted
+`
+
+type VaultActualTotalsRow struct {
+	Bytes int64
+	Files int32
+}
+
+func (q *Queries) VaultActualTotals(ctx context.Context, vaultID uuid.UUID) (VaultActualTotalsRow, error) {
+	row := q.db.QueryRow(ctx, vaultActualTotals, vaultID)
+	var i VaultActualTotalsRow
+	err := row.Scan(&i.Bytes, &i.Files)
+	return i, err
 }

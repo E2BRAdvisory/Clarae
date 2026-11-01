@@ -4,9 +4,12 @@
 package revisions
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"maps"
+	"slices"
 	"strconv"
 	"time"
 
@@ -19,6 +22,7 @@ import (
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/revisions/revisionsdb"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/syncproto"
 )
 
@@ -38,6 +42,9 @@ type Service struct {
 	authz    access.Authorizer
 	restorer Restorer
 	blobs    BlobReader
+
+	// RetentionBatch is the page size of Prune (zero: 5000).
+	RetentionBatch int
 }
 
 // NewService wires the module.
@@ -119,61 +126,109 @@ type RetentionPolicy struct {
 	DailyDays int
 }
 
+// defaultRetentionBatch bounds the candidates of one retention transaction.
+const defaultRetentionBatch = 5000
+
 // Prune applies the policy and returns how many revisions were deleted. It
-// works in bounded batches so a huge backlog never holds a long transaction.
+// walks the candidates in bounded pages, keyed on (file, time, id), so a huge
+// backlog never holds a long transaction and pages full of survivors never
+// stop it before the files that come after them.
+//
+// Deleting a changelog entry leaves a hole in "changes since" for the
+// cursors before it. A plain content modify is superseded by the later
+// revision of the same file, which carries the whole state (the current
+// revision is never pruned); any other operation (create, move, delete,
+// restore) is not, so the vault's compaction point advances past it and
+// those cursors are refused with CURSOR_EXPIRED instead of silently missing
+// a rename or a deletion.
 func (s *Service) Prune(ctx context.Context, p RetentionPolicy, now time.Time) (int, error) {
 	fullCut := now.AddDate(0, 0, -p.FullDays)
 	dailyCut := now.AddDate(0, 0, -p.DailyDays)
-	conn := s.db.Pool
-	q := revisionsdb.New(conn)
+	batch := s.RetentionBatch
+	if batch <= 0 {
+		batch = defaultRetentionBatch
+	}
+	q := revisionsdb.New(s.db.Pool)
 	total := 0
+	var after revisionsdb.ListRevisionsForRetentionRow // keyset: the zero value sorts first
+	var carry []revisionsdb.ListRevisionsForRetentionRow
 	for {
-		cands, err := q.ListRevisionsForRetention(ctx, revisionsdb.ListRevisionsForRetentionParams{ServerTime: fullCut, Limit: 5000})
-		if err != nil {
-			return total, err
-		}
-		if len(cands) == 0 {
-			return total, nil
-		}
-		doomed := selectDoomed(cands, dailyCut)
-		if len(doomed) == 0 {
-			return total, nil
-		}
-		err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-			q := revisionsdb.New(tx)
-			hashes, err := q.DeleteRevisions(ctx, doomed)
-			if err != nil {
-				return err
-			}
-			count := map[string]int32{}
-			for _, h := range hashes {
-				if h != nil {
-					count[*h]++
-				}
-			}
-			for h, n := range count {
-				if err := blobs.AddRef(ctx, tx, h, -n); err != nil {
-					return err
-				}
-			}
-			return nil
+		rows, err := q.ListRevisionsForRetention(ctx, revisionsdb.ListRevisionsForRetentionParams{
+			Cutoff: fullCut, AfterFile: after.FileID, AfterTime: after.ServerTime, AfterID: after.ID, MaxRows: int32(batch),
 		})
 		if err != nil {
 			return total, err
 		}
-		total += len(doomed)
-		if len(cands) < 5000 {
+		more := len(rows) == batch
+		if len(rows) > 0 {
+			after = rows[len(rows)-1]
+		}
+		cands := slices.Concat(carry, rows)
+		carry = nil
+		if more {
+			// Whether the last candidate has a successor on its day is known
+			// only with the next page: it is decided there.
+			carry = []revisionsdb.ListRevisionsForRetentionRow{cands[len(cands)-1]}
+		}
+		if doomed := selectDoomed(cands, dailyCut, more); len(doomed) > 0 {
+			if err := s.deleteRevisions(ctx, doomed); err != nil {
+				return total, err
+			}
+			total += len(doomed)
+		}
+		if !more {
 			return total, nil
 		}
 	}
 }
 
+// deleteRevisions deletes one page of revisions, advances the compaction
+// point of their vaults (see Prune) and releases their blob references. The
+// vault rows are locked before the blobs, like a commit does.
+func (s *Service) deleteRevisions(ctx context.Context, ids []uuid.UUID) error {
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		deleted, err := revisionsdb.New(tx).DeleteRevisions(ctx, ids)
+		if err != nil {
+			return err
+		}
+		compaction := map[uuid.UUID]int64{}
+		refs := map[string]int32{}
+		for _, d := range deleted {
+			if d.Op != "modify" && d.Seq > compaction[d.VaultID] {
+				compaction[d.VaultID] = d.Seq
+			}
+			if d.BlobHash != nil {
+				refs[*d.BlobHash]++
+			}
+		}
+		vaultIDs := slices.SortedFunc(maps.Keys(compaction), func(a, b uuid.UUID) int { return bytes.Compare(a[:], b[:]) })
+		for _, id := range vaultIDs {
+			if err := vaults.AdvanceCompaction(ctx, tx, vaults.AdvanceCompactionParams{ID: id, Seq: compaction[id]}); err != nil {
+				return err
+			}
+		}
+		for _, h := range slices.Sorted(maps.Keys(refs)) {
+			if err := blobs.AddRef(ctx, tx, h, -refs[h]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // selectDoomed picks the revisions to delete among candidates ordered by
 // (file, time): all older than dailyCut, and within the daily window every
-// revision except the last one of its UTC day.
-func selectDoomed(cands []revisionsdb.ListRevisionsForRetentionRow, dailyCut time.Time) []uuid.UUID {
+// revision except the last one of its UTC day. With lookahead the last
+// candidate only tells whether the one before it has a successor on its day,
+// and is not decided itself.
+func selectDoomed(cands []revisionsdb.ListRevisionsForRetentionRow, dailyCut time.Time, lookahead bool) []uuid.UUID {
+	n := len(cands)
+	if lookahead {
+		n--
+	}
 	var doomed []uuid.UUID
-	for i, c := range cands {
+	for i := 0; i < n; i++ {
+		c := cands[i]
 		if c.ServerTime.Before(dailyCut) {
 			doomed = append(doomed, c.ID)
 			continue

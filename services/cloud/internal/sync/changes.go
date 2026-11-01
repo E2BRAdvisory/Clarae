@@ -72,14 +72,9 @@ func (s *Service) Changes(ctx context.Context, userID, vaultID uuid.UUID, scope 
 	items = make([]Change, 0, len(rows))
 	next = since
 	for _, r := range rows {
-		var original *uuid.UUID
-		if r.ConflictOfFile != uuid.Nil {
-			id := r.ConflictOfFile
-			original = &id
-		}
 		items = append(items, Change{
 			Seq: r.Seq, FileID: r.FileID, Op: r.Op, Path: r.Path, PrevPath: r.PrevPath, Rev: r.RevNo, BlobHash: r.BlobHash,
-			Size: r.Size, AuthorID: r.AuthorID, DeviceID: r.DeviceID, ServerTime: r.ServerTime, ConflictOf: original,
+			Size: r.Size, AuthorID: r.AuthorID, DeviceID: r.DeviceID, ServerTime: r.ServerTime, ConflictOf: r.ConflictOfFile,
 		})
 		next = r.Seq
 	}
@@ -132,17 +127,12 @@ func (s *Service) scopedChanges(ctx context.Context, acc access.Access, since in
 }
 
 // scopeChange translates one revision for a share, or reports that it is invisible to it.
-func scopeChange(sc *access.Scope, r syncdb.ListChangesRow) (Change, bool) {
+func scopeChange(sc *access.Scope, r syncdb.FileRevision) (Change, bool) {
 	inNew := sc.ContainsFile(r.FileID, r.Path)
 	inOld := r.PrevPath != nil && sc.ContainsFile(r.FileID, *r.PrevPath)
-	var original *uuid.UUID
-	if r.ConflictOfFile != uuid.Nil {
-		id := r.ConflictOfFile
-		original = &id
-	}
 	c := Change{
 		Seq: r.Seq, FileID: r.FileID, Op: r.Op, Path: sc.Rel(r.Path), Rev: r.RevNo, BlobHash: r.BlobHash, Size: r.Size,
-		AuthorID: r.AuthorID, DeviceID: r.DeviceID, ServerTime: r.ServerTime, ConflictOf: original,
+		AuthorID: r.AuthorID, DeviceID: r.DeviceID, ServerTime: r.ServerTime, ConflictOf: r.ConflictOfFile,
 	}
 	switch r.Op {
 	case "move":

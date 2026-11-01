@@ -114,7 +114,7 @@ func (q *Queries) GetFileForUpdate(ctx context.Context, arg GetFileForUpdatePara
 }
 
 const getRevision = `-- name: GetRevision :one
-SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of FROM file_revisions WHERE vault_id = $1 AND file_id = $2 AND rev_no = $3
+SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of, conflict_of_file FROM file_revisions WHERE vault_id = $1 AND file_id = $2 AND rev_no = $3
 `
 
 type GetRevisionParams struct {
@@ -144,12 +144,13 @@ func (q *Queries) GetRevision(ctx context.Context, arg GetRevisionParams) (FileR
 		&i.ClientMtime,
 		&i.ServerTime,
 		&i.ConflictOf,
+		&i.ConflictOfFile,
 	)
 	return i, err
 }
 
 const getRevisionByOpID = `-- name: GetRevisionByOpID :one
-SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of FROM file_revisions WHERE vault_id = $1 AND op_id = $2
+SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of, conflict_of_file FROM file_revisions WHERE vault_id = $1 AND op_id = $2
 `
 
 type GetRevisionByOpIDParams struct {
@@ -178,6 +179,7 @@ func (q *Queries) GetRevisionByOpID(ctx context.Context, arg GetRevisionByOpIDPa
 		&i.ClientMtime,
 		&i.ServerTime,
 		&i.ConflictOf,
+		&i.ConflictOfFile,
 	)
 	return i, err
 }
@@ -216,28 +218,29 @@ func (q *Queries) InsertFile(ctx context.Context, arg InsertFileParams) error {
 
 const insertRevision = `-- name: InsertRevision :one
 INSERT INTO file_revisions (id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size,
-                            base_rev, author_id, device_id, op_id, client_mtime, conflict_of)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-RETURNING id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of
+                            base_rev, author_id, device_id, op_id, client_mtime, conflict_of, conflict_of_file)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+RETURNING id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of, conflict_of_file
 `
 
 type InsertRevisionParams struct {
-	ID          uuid.UUID
-	FileID      uuid.UUID
-	VaultID     uuid.UUID
-	Seq         int64
-	RevNo       int32
-	Op          string
-	Path        string
-	PrevPath    *string
-	BlobHash    *string
-	Size        int64
-	BaseRev     *int32
-	AuthorID    uuid.UUID
-	DeviceID    *uuid.UUID
-	OpID        *uuid.UUID
-	ClientMtime *time.Time
-	ConflictOf  *uuid.UUID
+	ID             uuid.UUID
+	FileID         uuid.UUID
+	VaultID        uuid.UUID
+	Seq            int64
+	RevNo          int32
+	Op             string
+	Path           string
+	PrevPath       *string
+	BlobHash       *string
+	Size           int64
+	BaseRev        *int32
+	AuthorID       uuid.UUID
+	DeviceID       *uuid.UUID
+	OpID           *uuid.UUID
+	ClientMtime    *time.Time
+	ConflictOf     *uuid.UUID
+	ConflictOfFile *uuid.UUID
 }
 
 func (q *Queries) InsertRevision(ctx context.Context, arg InsertRevisionParams) (FileRevision, error) {
@@ -258,6 +261,7 @@ func (q *Queries) InsertRevision(ctx context.Context, arg InsertRevisionParams) 
 		arg.OpID,
 		arg.ClientMtime,
 		arg.ConflictOf,
+		arg.ConflictOfFile,
 	)
 	var i FileRevision
 	err := row.Scan(
@@ -278,15 +282,15 @@ func (q *Queries) InsertRevision(ctx context.Context, arg InsertRevisionParams) 
 		&i.ClientMtime,
 		&i.ServerTime,
 		&i.ConflictOf,
+		&i.ConflictOfFile,
 	)
 	return i, err
 }
 
 const listChanges = `-- name: ListChanges :many
-SELECT r.id, r.file_id, r.vault_id, r.seq, r.rev_no, r.op, r.path, r.prev_path, r.blob_hash, r.size, r.base_rev, r.author_id, r.device_id, r.op_id, r.client_mtime, r.server_time, r.conflict_of, COALESCE((SELECT c.file_id FROM file_revisions c WHERE c.id = r.conflict_of), '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS conflict_of_file
-FROM file_revisions r
-WHERE r.vault_id = $1 AND r.seq > $2
-ORDER BY r.seq LIMIT $3
+SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of, conflict_of_file FROM file_revisions
+WHERE vault_id = $1 AND seq > $2
+ORDER BY seq LIMIT $3
 `
 
 type ListChangesParams struct {
@@ -295,36 +299,17 @@ type ListChangesParams struct {
 	Limit   int32
 }
 
-type ListChangesRow struct {
-	ID             uuid.UUID
-	FileID         uuid.UUID
-	VaultID        uuid.UUID
-	Seq            int64
-	RevNo          int32
-	Op             string
-	Path           string
-	PrevPath       *string
-	BlobHash       *string
-	Size           int64
-	BaseRev        *int32
-	AuthorID       uuid.UUID
-	DeviceID       *uuid.UUID
-	OpID           *uuid.UUID
-	ClientMtime    *time.Time
-	ServerTime     time.Time
-	ConflictOf     *uuid.UUID
-	ConflictOfFile uuid.UUID
-}
-
-func (q *Queries) ListChanges(ctx context.Context, arg ListChangesParams) ([]ListChangesRow, error) {
+// conflict_of_file is stored at commit time: the revision conflict_of points
+// at may be pruned meanwhile.
+func (q *Queries) ListChanges(ctx context.Context, arg ListChangesParams) ([]FileRevision, error) {
 	rows, err := q.db.Query(ctx, listChanges, arg.VaultID, arg.Seq, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListChangesRow{}
+	items := []FileRevision{}
 	for rows.Next() {
-		var i ListChangesRow
+		var i FileRevision
 		if err := rows.Scan(
 			&i.ID,
 			&i.FileID,

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -71,6 +72,8 @@ func run(role config.Role) error {
 		logger.Info().Msg("database migrated")
 	}
 
+	sweepSpool(os.TempDir(), time.Now(), logger)
+
 	store, err := openStore(ctx, cfg)
 	if err != nil {
 		return err
@@ -98,6 +101,11 @@ func run(role config.Role) error {
 			return err
 		}
 		authn := auth.NewMiddleware(verifier, application.Users, httpserver.NewRateLimiter(20, 60), cfg.OIDC.StatusCacheTTL)
+		if len(cfg.TrustedProxies) == 0 {
+			// Behind a reverse proxy every request comes from the proxy's address,
+			// so the per-IP rate limit would become one bucket for all users.
+			logger.Warn().Msg("TRUSTED_PROXIES is empty: if the API is behind a reverse proxy or ingress, all clients share one rate-limit bucket")
+		}
 
 		drain := httpserver.NewDrain()
 		router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
@@ -109,7 +117,8 @@ func run(role config.Role) error {
 				WebClientID:     cfg.OIDC.WebClientID,
 				Audience:        cfg.OIDC.Audience,
 				GRPCEndpoint:    cfg.OIDC.PublicGRPCAddr,
-			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}, system.CheckerFunc{N: "shutdown", F: drain.Check}),
+			}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping},
+				system.CheckerFunc{N: "shutdown", F: drain.Check, Live: true}).WithLogger(logger),
 			WebUI:          webembed.Handler(webembed.Options{Issuer: cfg.OIDC.Issuer}),
 			WebUIOrigin:    cfg.WebUIOrigin,
 			TrustedProxies: cfg.TrustedProxies,
@@ -151,9 +160,39 @@ func run(role config.Role) error {
 	}
 
 	if cfg.RunsWorker() {
+		runner := application.Jobs()
+		health := &workerHealth{lastTick: runner.LastTick, heartbeat: runner.Heartbeat(), now: time.Now}
+		dedicated := cfg.Role == config.RoleWorker
+		if dedicated {
+			// Without the API listener the worker needs its own, for Prometheus
+			// (the job metrics live in this process) and the orchestrator's probes.
+			health.waiting.Store(true)
+			srv := &http.Server{Addr: cfg.MetricsListenAddr, Handler: workerHandler(health, Version), ReadHeaderTimeout: 10 * time.Second}
+			g.Go(func() error {
+				logger.Info().Str("addr", cfg.MetricsListenAddr).Msg("worker metrics and health listening")
+				if err := serveInternal(ctx, srv, cfg.ShutdownTimeout); err != nil {
+					return fmt.Errorf("worker http: %w", err)
+				}
+				return nil
+			})
+		}
 		g.Go(func() error {
+			if dedicated {
+				// Only the API migrates: the jobs must not run on a schema older
+				// than this binary expects (the worker may start first).
+				err := database.WaitForSchema(ctx, time.Second, 30*time.Second, func(err error, next time.Duration) {
+					logger.Warn().Err(err).Dur("retry_in", next).Msg("waiting for the API to migrate the database schema")
+				})
+				if err != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
+					return err
+				}
+				health.waiting.Store(false)
+			}
 			logger.Info().Msg("worker started")
-			application.Jobs().Run(ctx)
+			runner.Run(ctx)
 			return nil
 		})
 	}

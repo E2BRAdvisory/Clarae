@@ -10,10 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
 	"memobrain/services/cloud/internal/admin"
@@ -44,6 +46,38 @@ type Runner struct {
 	RetentionInterval   time.Duration
 	MaintenanceInterval time.Duration // compaction, purge, reconciliation
 	ExportsInterval     time.Duration
+
+	// First runs: loop i starts after FirstRunDelay + i*Stagger (zero values:
+	// 30 s and 5 s; a negative Stagger starts every loop together).
+	FirstRunDelay time.Duration
+	Stagger       time.Duration
+
+	// HeartbeatInterval is how often the scheduler records that it is alive
+	// (zero value: DefaultHeartbeat); see LastTick.
+	HeartbeatInterval time.Duration
+	lastTick          atomic.Int64 // unix nanoseconds, 0 when not running
+}
+
+// DefaultHeartbeat is the default HeartbeatInterval.
+const DefaultHeartbeat = 10 * time.Second
+
+// LastTick is when the scheduler last recorded that it is alive: zero before
+// Run started the job loops (or when the lock pool could not be opened) and
+// after it returned. The worker's health endpoint compares it with the
+// heartbeat interval.
+func (r *Runner) LastTick() time.Time {
+	if n := r.lastTick.Load(); n != 0 {
+		return time.Unix(0, n)
+	}
+	return time.Time{}
+}
+
+// Heartbeat returns the effective HeartbeatInterval.
+func (r *Runner) Heartbeat() time.Duration {
+	if r.HeartbeatInterval > 0 {
+		return r.HeartbeatInterval
+	}
+	return DefaultHeartbeat
 }
 
 // New creates a runner.
@@ -79,11 +113,18 @@ func (r *Runner) setting(ctx context.Context, key string, def int) int {
 	return int(settings.Int(ctx, r.db.Pool, key, int64(def)))
 }
 
-// withLock runs fn only if no other replica holds the job's lock.
-func (r *Runner) withLock(ctx context.Context, key int64, name string, fn func(context.Context) error) {
-	conn, err := r.db.Pool.Acquire(ctx)
+// withLock runs fn only if no other replica holds the job's lock. The lock is
+// a session lock held on a connection of locks, a pool of its own with one
+// connection per loop: holding it for the whole job (which spans many
+// transactions) never takes a connection from the main pool the job works on.
+// When both came from the same pool, loops starting together could take every
+// connection for their locks and then wait forever for one to work with.
+func (r *Runner) withLock(ctx context.Context, locks *pgxpool.Pool, key int64, name string, fn func(context.Context) error) {
+	conn, err := locks.Acquire(ctx)
 	if err != nil {
-		r.log.Error().Err(err).Str("job", name).Msg("job: acquire connection")
+		if ctx.Err() == nil {
+			r.log.Error().Err(err).Str("job", name).Msg("job: acquire lock connection")
+		}
 		return
 	}
 	defer conn.Release()
@@ -100,6 +141,15 @@ func (r *Runner) withLock(ctx context.Context, key int64, name string, fn func(c
 	}
 	observability.JobRun(name, time.Since(start), nil)
 	r.log.Debug().Str("job", name).Dur("took", time.Since(start)).Msg("job done")
+}
+
+// openLocks opens the pool of the advisory locks (see withLock): the main
+// pool's settings with one connection per job loop.
+func (r *Runner) openLocks(ctx context.Context, loops int) (*pgxpool.Pool, error) {
+	cfg := r.db.Pool.Config()
+	cfg.MaxConns = int32(loops) //nolint:gosec // a handful of job loops
+	cfg.MinConns = 0
+	return pgxpool.NewWithConfig(ctx, cfg)
 }
 
 // Run starts every job loop and blocks until ctx ends.
@@ -130,15 +180,50 @@ func (r *Runner) Run(ctx context.Context) {
 			return r.exports.Expire(c)
 		}})
 	}
+	locks, err := r.openLocks(ctx, len(loops))
+	if err != nil {
+		// pgxpool connects lazily: this is a configuration error, not an outage.
+		r.log.Error().Err(err).Msg("jobs: open the lock pool; background jobs disabled")
+		<-ctx.Done()
+		return
+	}
+	defer locks.Close()
+	first, stagger := r.FirstRunDelay, r.Stagger
+	if first <= 0 {
+		first = 30 * time.Second
+	}
+	if stagger < 0 {
+		stagger = 0
+	} else if stagger == 0 {
+		stagger = 5 * time.Second
+	}
 	done := make(chan struct{})
-	for _, l := range loops {
+	// The heartbeat runs beside the loops: a job can take hours, while the
+	// scheduler itself must show it is alive every few seconds.
+	r.lastTick.Store(time.Now().UnixNano())
+	defer r.lastTick.Store(0)
+	go func() {
+		t := time.NewTicker(r.Heartbeat())
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				done <- struct{}{}
+				return
+			case <-t.C:
+				r.lastTick.Store(time.Now().UnixNano())
+			}
+		}
+	}()
+	for i, l := range loops {
 		every := l.every
 		if every <= 0 {
 			every = l.def
 		}
 		go func() {
-			// The first run is delayed so a restarting fleet does not stampede.
-			t := time.NewTimer(30 * time.Second)
+			// The first run is delayed so a restarting fleet does not stampede,
+			// and the loops start one after the other rather than all at once.
+			t := time.NewTimer(first + time.Duration(i)*stagger)
 			defer t.Stop()
 			for {
 				select {
@@ -146,13 +231,13 @@ func (r *Runner) Run(ctx context.Context) {
 					done <- struct{}{}
 					return
 				case <-t.C:
-					r.withLock(ctx, l.lock, l.name, l.run)
+					r.withLock(ctx, locks, l.lock, l.name, l.run)
 					t.Reset(every)
 				}
 			}
 		}()
 	}
-	for range loops {
+	for range len(loops) + 1 { // the loops and the heartbeat
 		<-done
 	}
 }
@@ -364,6 +449,13 @@ func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID) error {
 
 // ReconcileUsage recomputes per-vault and per-user counters from the files
 // table and corrects any drift (e.g. after a crash between steps).
+//
+// The snapshot of all totals only selects the candidates. Each correction
+// then locks the counter row and recomputes the actual value afterwards, in
+// its own short transaction: every change that moves a counter holds the same
+// row lock and applies its delta in the transaction that changes the files,
+// so the recomputed value accounts for exactly the deltas already applied,
+// and a commit running meanwhile is never overwritten by an older snapshot.
 func (r *Runner) ReconcileUsage(ctx context.Context) error {
 	q := jobsdb.New(r.db.Pool)
 	totals, err := q.ListVaultTotals(ctx)
@@ -373,13 +465,8 @@ func (r *Runner) ReconcileUsage(ctx context.Context) error {
 	perOwner := map[uuid.UUID]int64{}
 	for _, v := range totals {
 		perOwner[v.OwnerID] += v.Bytes
-		cur, err := q.GetVault(ctx, v.VaultID)
-		if err != nil {
-			return err
-		}
-		if cur.TotalBytes != v.Bytes || int(cur.FileCount) != int(v.Files) {
-			r.log.Warn().Str("vault", v.VaultID.String()).Int64("stored", cur.TotalBytes).Int64("actual", v.Bytes).Msg("usage drift corrected")
-			if err := q.SetVaultTotals(ctx, jobsdb.SetVaultTotalsParams{ID: v.VaultID, TotalBytes: v.Bytes, FileCount: v.Files}); err != nil {
+		if v.StoredBytes != v.Bytes || v.StoredFiles != v.Files {
+			if err := r.reconcileVault(ctx, v.VaultID); err != nil {
 				return err
 			}
 		}
@@ -389,9 +476,8 @@ func (r *Runner) ReconcileUsage(ctx context.Context) error {
 		return err
 	}
 	for _, u := range users {
-		if want := perOwner[u.ID]; u.UsedBytes != want {
-			r.log.Warn().Str("user", u.ID.String()).Int64("stored", u.UsedBytes).Int64("actual", want).Msg("user usage drift corrected")
-			if err := q.SetUserUsed(ctx, jobsdb.SetUserUsedParams{ID: u.ID, UsedBytes: want}); err != nil {
+		if u.UsedBytes != perOwner[u.ID] {
+			if err := r.reconcileUser(ctx, u.ID); err != nil {
 				return err
 			}
 		}
@@ -399,16 +485,86 @@ func (r *Runner) ReconcileUsage(ctx context.Context) error {
 	return nil
 }
 
-// ReconcileBlobRefs recomputes blob reference counts from the revisions.
+// reconcileVault corrects the counters of one vault under its row lock, the
+// lock a commit takes first (NextVaultSeq).
+func (r *Runner) reconcileVault(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := jobsdb.New(tx)
+		cur, err := q.GetVaultForUpdate(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // purged meanwhile
+		}
+		if err != nil {
+			return err
+		}
+		actual, err := q.VaultActualTotals(ctx, id)
+		if err != nil {
+			return err
+		}
+		if cur.TotalBytes == actual.Bytes && cur.FileCount == actual.Files {
+			return nil
+		}
+		r.log.Warn().Str("vault", id.String()).Int64("stored", cur.TotalBytes).Int64("actual", actual.Bytes).
+			Int32("stored_files", cur.FileCount).Int32("actual_files", actual.Files).Msg("usage drift corrected")
+		return q.SetVaultTotals(ctx, jobsdb.SetVaultTotalsParams{ID: id, TotalBytes: actual.Bytes, FileCount: actual.Files})
+	})
+}
+
+// reconcileUser corrects the used bytes of one user under the row lock that
+// every quota charge and release takes.
+func (r *Runner) reconcileUser(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := jobsdb.New(tx)
+		stored, err := q.GetUserUsedForUpdate(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		actual, err := q.OwnerActualUsage(ctx, id)
+		if err != nil {
+			return err
+		}
+		if stored == actual {
+			return nil
+		}
+		r.log.Warn().Str("user", id.String()).Int64("stored", stored).Int64("actual", actual).Msg("user usage drift corrected")
+		return q.SetUserUsed(ctx, jobsdb.SetUserUsedParams{ID: id, UsedBytes: actual})
+	})
+}
+
+// ReconcileBlobRefs recomputes blob reference counts from the revisions. Like
+// ReconcileUsage, the snapshot only selects the candidates: each count is
+// taken again after locking the blob row, which every reference change
+// (commit, retention, purge) updates in the transaction that adds or removes
+// the revisions.
 func (r *Runner) ReconcileBlobRefs(ctx context.Context) error {
-	q := jobsdb.New(r.db.Pool)
-	rows, err := q.ListBlobRefCounts(ctx)
+	rows, err := jobsdb.New(r.db.Pool).ListBlobRefCounts(ctx)
 	if err != nil {
 		return err
 	}
 	for _, b := range rows {
-		r.log.Warn().Str("blob", b.Hash).Int32("stored", b.RefCount).Int32("actual", b.Actual).Msg("blob ref count corrected")
-		if err := q.SetBlobRef(ctx, jobsdb.SetBlobRefParams{Hash: b.Hash, RefCount: b.Actual}); err != nil {
+		err := r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			q := jobsdb.New(tx)
+			stored, err := q.GetBlobRefForUpdate(ctx, b.Hash)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil // collected meanwhile
+			}
+			if err != nil {
+				return err
+			}
+			actual, err := q.CountBlobRefs(ctx, &b.Hash)
+			if err != nil {
+				return err
+			}
+			if stored == actual {
+				return nil
+			}
+			r.log.Warn().Str("blob", b.Hash).Int32("stored", stored).Int32("actual", actual).Msg("blob ref count corrected")
+			return q.SetBlobRef(ctx, jobsdb.SetBlobRefParams{Hash: b.Hash, RefCount: actual})
+		})
+		if err != nil {
 			return err
 		}
 	}

@@ -37,8 +37,8 @@ WHERE vault_id = $1 AND NOT is_deleted AND (path_key = sqlc.arg(exact)::text OR 
 
 -- name: InsertRevision :one
 INSERT INTO file_revisions (id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size,
-                            base_rev, author_id, device_id, op_id, client_mtime, conflict_of)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                            base_rev, author_id, device_id, op_id, client_mtime, conflict_of, conflict_of_file)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 RETURNING *;
 
 -- name: GetRevisionByOpID :one
@@ -51,7 +51,8 @@ SELECT * FROM file_revisions WHERE vault_id = $1 AND file_id = $2 AND rev_no = $
 SELECT id FROM file_revisions WHERE file_id = $1 AND rev_no = $2;
 
 -- name: ListChanges :many
-SELECT r.*, COALESCE((SELECT c.file_id FROM file_revisions c WHERE c.id = r.conflict_of), '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS conflict_of_file
-FROM file_revisions r
-WHERE r.vault_id = $1 AND r.seq > $2
-ORDER BY r.seq LIMIT $3;
+-- conflict_of_file is stored at commit time: the revision conflict_of points
+-- at may be pruned meanwhile.
+SELECT * FROM file_revisions
+WHERE vault_id = $1 AND seq > $2
+ORDER BY seq LIMIT $3;

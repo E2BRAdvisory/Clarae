@@ -25,21 +25,22 @@ type File struct {
 }
 
 type FileRevision struct {
-	ID          uuid.UUID
-	FileID      uuid.UUID
-	VaultID     uuid.UUID
-	Seq         int64
-	RevNo       int32
-	Op          string
-	Path        string
-	PrevPath    *string
-	BlobHash    *string
-	Size        int64
-	BaseRev     *int32
-	AuthorID    uuid.UUID
-	DeviceID    *uuid.UUID
-	OpID        *uuid.UUID
-	ClientMtime *time.Time
-	ServerTime  time.Time
-	ConflictOf  *uuid.UUID
+	ID             uuid.UUID
+	FileID         uuid.UUID
+	VaultID        uuid.UUID
+	Seq            int64
+	RevNo          int32
+	Op             string
+	Path           string
+	PrevPath       *string
+	BlobHash       *string
+	Size           int64
+	BaseRev        *int32
+	AuthorID       uuid.UUID
+	DeviceID       *uuid.UUID
+	OpID           *uuid.UUID
+	ClientMtime    *time.Time
+	ServerTime     time.Time
+	ConflictOf     *uuid.UUID
+	ConflictOfFile *uuid.UUID
 }
