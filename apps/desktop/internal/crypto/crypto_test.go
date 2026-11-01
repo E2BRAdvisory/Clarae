@@ -3,6 +3,7 @@ package crypto
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,16 +55,30 @@ func TestCreateUnlockAndRoundTrip(t *testing.T) {
 	if _, err := c.DecryptBlob(uuid.NewString(), ct); err == nil {
 		t.Fatal("blob decrypted for a different file id")
 	}
-	tok, key, err := c.EncryptPath("Journal/Day 1.md")
-	if err != nil || key == "" {
+	tok, key, err := c.EncryptPath(file, "Journal/Day 1.md", false)
+	if err != nil || key == "" || !strings.HasPrefix(tok, "enc1:") {
 		t.Fatal(err)
 	}
 	if got, err := c.DecryptPath(tok); err != nil || got != "Journal/Day 1.md" {
 		t.Fatalf("path: %q %v", got, err)
 	}
-	_, key2, _ := c.EncryptPath("journal/day 1.md")
+	if got, err := c.DecryptFilePath(file, tok); err != nil || got != "Journal/Day 1.md" {
+		t.Fatalf("enc1 path through DecryptFilePath: %q %v", got, err)
+	}
+	_, key2, _ := c.EncryptPath(file, "journal/day 1.md", false)
 	if key != key2 {
 		t.Error("case variants must share the path key")
+	}
+	// enc2 (ADR-0042): bound to the file, same uniqueness key.
+	tok2, key3, err := c.EncryptPath(file, "Journal/Day 1.md", true)
+	if err != nil || key3 != key || !strings.HasPrefix(tok2, "enc2:") {
+		t.Fatalf("enc2: %q %q %v", tok2, key3, err)
+	}
+	if got, err := c.DecryptFilePath(file, tok2); err != nil || got != "Journal/Day 1.md" {
+		t.Fatalf("enc2 path: %q %v", got, err)
+	}
+	if _, err := c.DecryptFilePath(uuid.NewString(), tok2); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Fatalf("enc2 token opened for another file: %v", err)
 	}
 
 	// A second device unlocks with the passphrase and reads the same data.
@@ -165,6 +180,85 @@ func TestKeychainRestoreAndLock(t *testing.T) {
 	}
 }
 
+// TestLockWipesKeys checks the key hygiene of no-key-zeroization: the subkeys
+// of a locked vault are zeroed, an operation holding them finishes first, and
+// one that starts later gets ErrLocked rather than working with zero keys.
+func TestLockWipesKeys(t *testing.T) {
+	m, _, _ := newManager(t)
+	mat, _ := m.NewMaterial("correct horse battery staple")
+	if err := m.Adopt(vaultID, mat); err != nil {
+		t.Fatal(err)
+	}
+	u, err := m.key(vaultID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Unlocking again with the same VMK keeps the same key material.
+	if err := m.Adopt(vaultID, mat); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := m.key(vaultID); again != u {
+		t.Fatal("re-unlock with the same VMK replaced the key material")
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- u.use(func(s *vaultcrypto.Subkeys) error {
+			close(started)
+			<-release
+			if s.Wiped() {
+				return errors.New("wiped under a running operation")
+			}
+			return nil
+		})
+	}()
+	<-started
+	locked := make(chan error, 1)
+	go func() { locked <- m.Lock(vaultID) }()
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-locked; err != nil {
+		t.Fatal(err)
+	}
+	if !u.sub.Wiped() || u.sub.PathEnc != [32]byte{} || u.sub.PathKey != [32]byte{} {
+		t.Fatal("subkeys not wiped by Lock")
+	}
+	if err := u.use(func(*vaultcrypto.Subkeys) error { return nil }); !errors.Is(err, ErrLocked) {
+		t.Fatalf("use after wipe: %v", err)
+	}
+	// A different VMK replaces (and wipes) the previous key material.
+	if err := m.Adopt(vaultID, mat); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := m.key(vaultID)
+	other, _ := m.NewMaterial("another correct horse battery")
+	if err := m.Adopt(vaultID, other); err != nil {
+		t.Fatal(err)
+	}
+	if !first.sub.Wiped() {
+		t.Fatal("replaced key material not wiped")
+	}
+	other.Wipe()
+	if other.vmk != (vaultcrypto.VMK{}) || other.keks[KindPassphrase] != [32]byte{} {
+		t.Fatal("material not wiped")
+	}
+}
+
+// TestPathV2Flag checks the features.path_v2 switch the sync engine reads.
+func TestPathV2Flag(t *testing.T) {
+	m, _, _ := newManager(t)
+	c := m.Cipher(vaultID)
+	if c.PathV2() {
+		t.Fatal("enc2 writing must be off by default (release N)")
+	}
+	m.SetPathV2(true)
+	if !c.PathV2() || !NewManager(Options{PathV2: true}).PathV2() {
+		t.Fatal("flag not applied")
+	}
+}
+
 func TestIdleTimeoutLocks(t *testing.T) {
 	m, _, now := newManager(t)
 	m.SetLockTimeout(10 * time.Minute)
@@ -212,7 +306,7 @@ func TestBackgroundUseDoesNotExtendIdle(t *testing.T) {
 		if _, err := c.DecryptBlob(file, ct); err != nil {
 			t.Fatal(err)
 		}
-		tok, _, err := c.EncryptPath("a.md")
+		tok, _, err := c.EncryptPath(file, "a.md", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -231,7 +325,7 @@ func TestBackgroundUseDoesNotExtendIdle(t *testing.T) {
 	if c.Locked() {
 		t.Fatal("the engine lost the key before the drain")
 	}
-	if _, _, err := c.EncryptPath("b.md"); err != nil {
+	if _, _, err := c.EncryptPath(file, "b.md", true); err != nil {
 		t.Fatalf("drain encryption: %v", err)
 	}
 	if ok, _ := m.Restore(vaultID); ok {

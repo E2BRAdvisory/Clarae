@@ -49,7 +49,33 @@ var (
 	ErrWeakKDF = errors.New("vaultcrypto: unacceptable KDF parameters")
 	// ErrRecoveryKey means the recovery key text is malformed or its checksum fails.
 	ErrRecoveryKey = errors.New("vaultcrypto: invalid recovery key")
+	// ErrWiped means the subkeys were wiped (the vault was locked): nothing
+	// is ever encrypted or decrypted under a zeroed key.
+	ErrWiped = errors.New("vaultcrypto: key material wiped")
 )
+
+// Key hygiene. Secrets are fixed-size arrays the caller owns: Wipe and
+// WipeKey zero them, and the package zeroes its own intermediate buffers
+// (Argon2id and HKDF outputs, unwrapped plaintext) once copied. This is best
+// effort: the Go runtime may already have copied an array (a value passed or
+// returned, a stack that grew, a heap move by the garbage collector), the AES
+// key schedule inside crypto/cipher cannot be reached, and strings (the
+// passphrase) are immutable. The goal is fewer copies alive for less time,
+// not a guarantee (docs/security/crypto-design.md §4).
+
+// WipeKey zeroes a key in place.
+func WipeKey(k *[KeySize]byte) {
+	if k != nil {
+		clear(k[:])
+	}
+}
+
+// Wipe zeroes the VMK in place.
+func (v *VMK) Wipe() {
+	if v != nil {
+		clear(v[:])
+	}
+}
 
 // VMK is the Vault Master Key: 256 random bits per vault.
 type VMK [KeySize]byte
@@ -86,6 +112,15 @@ const (
 	maxP    = 16
 )
 
+// MaxCalibratedMKiB is the ceiling of CalibratePassphraseKDF (256 MiB). The
+// parameters chosen on the device that creates a vault are used by every
+// device that opens it, including the slowest one: the browser (Web UI
+// export, hash-wasm) runs the p lanes one after the other in single-threaded
+// WebAssembly and needs m KiB of linear memory. 256 MiB keeps that within
+// reach of ordinary machines; native clients still accept envelopes up to
+// maxMKiB, so envelopes calibrated earlier (up to 512 MiB) keep opening.
+const MaxCalibratedMKiB = 256 * 1024
+
 func randomBytes(n int) []byte {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
@@ -107,19 +142,28 @@ func NewPassphraseKDF(t, mKiB uint32, p uint8) KDFParams {
 }
 
 // CalibratePassphraseKDF raises the memory cost above the minimum until one
-// derivation takes about target on this device (never above 512 MiB), so
-// stronger hardware gets stronger parameters. The result is stored in the
-// envelope and used on every device.
+// derivation takes about target on this device, never above
+// MaxCalibratedMKiB, so stronger hardware gets stronger parameters within
+// what the weakest supported client can still derive. The result is stored in
+// the envelope and used on every device.
 func CalibratePassphraseKDF(target time.Duration) KDFParams {
+	return calibrate(target, func(p KDFParams, salt []byte) {
+		_ = argon2.IDKey([]byte("calibration"), salt, p.T, p.MKiB, p.P, KeySize)
+	})
+}
+
+// calibrate doubles the memory cost while one run of derive takes less than
+// target, up to MaxCalibratedMKiB.
+func calibrate(target time.Duration, derive func(p KDFParams, salt []byte)) KDFParams {
 	p := NewPassphraseKDF(MinT, MinMKiB, MinP)
 	salt, _ := base64.StdEncoding.DecodeString(p.Salt)
-	for p.MKiB < 512*1024 {
+	for p.MKiB < MaxCalibratedMKiB {
 		start := time.Now()
-		_ = argon2.IDKey([]byte("calibration"), salt, p.T, p.MKiB, p.P, KeySize)
+		derive(p, salt)
 		if time.Since(start) >= target {
 			break
 		}
-		p.MKiB *= 2
+		p.MKiB = min(p.MKiB*2, MaxCalibratedMKiB)
 	}
 	return p
 }
@@ -144,7 +188,11 @@ func DeriveKEKPassphraseRaw(passphrase string, p KDFParams) ([KeySize]byte, erro
 	if err != nil || len(salt) < 8 {
 		return kek, fmt.Errorf("%w: bad salt", ErrWeakKDF)
 	}
-	copy(kek[:], argon2.IDKey([]byte(passphrase), salt, p.T, p.MKiB, p.P, KeySize))
+	pw := []byte(passphrase)
+	out := argon2.IDKey(pw, salt, p.T, p.MKiB, p.P, KeySize)
+	copy(kek[:], out)
+	clear(out)
+	clear(pw)
 	return kek, nil
 }
 
@@ -211,6 +259,7 @@ func DeriveKEKRecovery(rk RecoveryKey, p KDFParams) ([KeySize]byte, error) {
 		return kek, err
 	}
 	copy(kek[:], k)
+	clear(k)
 	return kek, nil
 }
 
@@ -331,6 +380,7 @@ func Unwrap(kek [KeySize]byte, wrapped []byte, vaultID [16]byte, kind EnvelopeKi
 		return vmk, ErrDecrypt
 	}
 	copy(vmk[:], pt)
+	clear(pt)
 	return vmk, nil
 }
 
@@ -381,38 +431,83 @@ func OpenWithPassphrase(passphrase string, p KDFParams, wrapped []byte, vaultID 
 		if i == 0 {
 			res.KEK = kek
 		}
-		if vmk, err := Unwrap(kek, wrapped, vaultID, KindPassphrase); err == nil {
+		vmk, err := Unwrap(kek, wrapped, vaultID, KindPassphrase)
+		WipeKey(&kek) // res.KEK keeps the NFC-form key only
+		if err == nil {
 			res.VMK, res.Legacy = vmk, i > 0
 			return res, nil
 		}
 	}
+	WipeKey(&res.KEK)
 	return PassphraseUnlock{}, ErrDecrypt
 }
 
 // Subkeys are derived from the VMK (§3.8.2); the VMK itself is not used
-// directly for data.
+// directly for data. They are handled by pointer: an unlocked vault keeps a
+// single *Subkeys (holding its only long-lived copy of the VMK) and calls Wipe
+// when it is locked. Every operation refuses wiped subkeys with ErrWiped.
 type Subkeys struct {
 	PathEnc [KeySize]byte
 	PathKey [KeySize]byte
 	vmk     VMK
+	wiped   bool
 }
 
-// DeriveSubkeys derives the path keys and keeps the VMK to derive per-file keys.
-func DeriveSubkeys(vmk VMK) Subkeys {
-	s := Subkeys{vmk: vmk}
+// DeriveSubkeys derives the path keys and keeps a copy of the VMK to derive
+// per-file keys. The caller may wipe its own VMK afterwards.
+func DeriveSubkeys(vmk VMK) *Subkeys {
+	s := &Subkeys{vmk: vmk}
 	enc, _ := hkdf.Key(sha256.New, vmk[:], nil, infoPathEnc, KeySize)
 	key, _ := hkdf.Key(sha256.New, vmk[:], nil, infoPathKey, KeySize)
 	copy(s.PathEnc[:], enc)
 	copy(s.PathKey[:], key)
+	clear(enc)
+	clear(key)
 	return s
 }
 
+// Wipe zeroes the path keys and the VMK copy. It is idempotent; the subkeys
+// are unusable afterwards (ErrWiped). Callers must make sure no operation is
+// using them concurrently.
+func (s *Subkeys) Wipe() {
+	if s == nil {
+		return
+	}
+	clear(s.PathEnc[:])
+	clear(s.PathKey[:])
+	s.vmk.Wipe()
+	s.wiped = true
+}
+
+// VMK returns a copy of the VMK the subkeys were derived from, to re-wrap it
+// under a new passphrase or recovery key; the caller wipes the copy.
+func (s *Subkeys) VMK() (VMK, error) {
+	if err := s.usable(); err != nil {
+		return VMK{}, err
+	}
+	return s.vmk, nil
+}
+
+// Wiped reports whether Wipe was called.
+func (s *Subkeys) Wiped() bool { return s == nil || s.wiped }
+
+// usable refuses nil or wiped subkeys.
+func (s *Subkeys) usable() error {
+	if s.Wiped() {
+		return ErrWiped
+	}
+	return nil
+}
+
 // FileKey derives K_file for one file and one salt (a new salt per revision
-// means a new key, so counter nonces never repeat under the same key).
-func (s Subkeys) FileKey(fileID [16]byte, salt [SaltSize]byte) [KeySize]byte {
+// means a new key, so counter nonces never repeat under the same key). The
+// caller wipes the result when done. On wiped subkeys the result would be
+// derived from a zero VMK: the operations of this package check usable first.
+func (s *Subkeys) FileKey(fileID [16]byte, salt [SaltSize]byte) [KeySize]byte {
 	info := append(append([]byte(infoFile), fileID[:]...), salt[:]...)
 	k, _ := hkdf.Key(sha256.New, s.vmk[:], nil, string(info), KeySize)
 	var out [KeySize]byte
 	copy(out[:], k)
+	clear(k)
 	return out
 }

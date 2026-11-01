@@ -34,9 +34,12 @@ type negBlob struct {
 	Expect  string `json:"expect"`
 }
 
+// negPath is opened as the path token of FileID in VaultID (FileID defaults
+// to the vector file; it only matters for enc2 tokens).
 type negPath struct {
 	Name    string `json:"name"`
 	VaultID string `json:"vault_id"`
+	FileID  string `json:"file_id,omitempty"`
 	Token   string `json:"token"`
 	Expect  string `json:"expect"`
 }
@@ -146,13 +149,26 @@ func generateNegative(t *testing.T) negVectors {
 	}
 	mid := len(tok) / 2
 	tampered := tok[:mid] + string(swap(tok[mid])) + tok[mid+1:]
+	tok2, err := vaultcrypto.EncryptPathV2WithNonce(sk, mustUUID(vecVault), mustUUID(vecFile), "Projects/Alfa/riunione.md", bytes.Repeat([]byte{0x68}, 12))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mid2 := len(tok2) / 2
+	tampered2 := tok2[:mid2] + string(swap(tok2[mid2])) + tok2[mid2+1:]
 	v.Paths = []negPath{
-		{"tampered token", vecVault, tampered, "decrypt"},
-		{"token bound to another vault (AAD)", negOtherVault, tok, "decrypt"},
-		{"wrong prefix", vecVault, "enc2:" + strings.TrimPrefix(tok, "enc1:"), "format"},
-		{"deterministic key used as token", vecVault, "hmac1:" + strings.Repeat("00", 32), "format"},
-		{"truncated below nonce and tag", vecVault, "enc1:AAAA", "format"},
-		{"not base64url", vecVault, "enc1:!!!!", "format"},
+		{"tampered token", vecVault, "", tampered, "decrypt"},
+		{"token bound to another vault (AAD)", negOtherVault, "", tok, "decrypt"},
+		{"unknown prefix", vecVault, "", "enc3:" + strings.TrimPrefix(tok, "enc1:"), "format"},
+		{"enc1 body relabelled enc2 (upgrade forgery)", vecVault, "", "enc2:" + strings.TrimPrefix(tok, "enc1:"), "decrypt"},
+		{"deterministic key used as token", vecVault, "", "hmac1:" + strings.Repeat("00", 32), "format"},
+		{"truncated below nonce and tag", vecVault, "", "enc1:AAAA", "format"},
+		{"not base64url", vecVault, "", "enc1:!!!!", "format"},
+		{"enc2 tampered token", vecVault, "", tampered2, "decrypt"},
+		{"enc2 token of another file (swapped file id)", vecVault, negOtherFile, tok2, "decrypt"},
+		{"enc2 token bound to another vault (AAD)", negOtherVault, "", tok2, "decrypt"},
+		{"enc2 body relabelled enc1 (downgrade)", vecVault, "", "enc1:" + strings.TrimPrefix(tok2, "enc2:"), "decrypt"},
+		{"enc2 truncated below nonce and tag", vecVault, "", "enc2:AAAA", "format"},
+		{"enc2 not base64url", vecVault, "", "enc2:!!!!", "format"},
 	}
 
 	w, _ := vaultcrypto.WrapWithNonce(arr32(vecKEK), vaultcrypto.VMK(arr32(vecVMK)), unhex("303132333435363738393a3b"))
@@ -265,7 +281,11 @@ func TestNegativeVectors(t *testing.T) {
 	s := vaultcrypto.DeriveSubkeys(vaultcrypto.VMK(arr32(vecVMK)))
 	for _, c := range v.Paths {
 		t.Run("path/"+c.Name, func(t *testing.T) {
-			_, err := vaultcrypto.DecryptPath(s, mustUUID(c.VaultID), c.Token)
+			fid := vecFile
+			if c.FileID != "" {
+				fid = c.FileID
+			}
+			_, err := vaultcrypto.DecryptPathFor(s, mustUUID(c.VaultID), mustUUID(fid), c.Token)
 			classify(t, err, c.Expect)
 		})
 	}

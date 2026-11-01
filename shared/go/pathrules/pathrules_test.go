@@ -6,6 +6,31 @@ import (
 	"testing"
 )
 
+func TestNormalizePortable(t *testing.T) {
+	for _, bad := range []string{
+		"COM0.md", "lpt0.txt", "COM\u00b9.md", "lpt\u00b2.md", "Notes/LPT\u00b3", "CONIN$.md", "conout$",
+		"NUL .md", "CON  .txt", "aux.tar.gz", "Notes/com1 .md/x.md", "PRN",
+	} {
+		if _, err := NormalizePortable(bad); err == nil || !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "reserved") {
+			t.Errorf("NormalizePortable(%q) = %v, want reserved", bad, err)
+		}
+	}
+	for _, ok := range []string{"COM10.md", "CONTRACT.md", "NUL-file.md", "LPT.md", "COM\u2074.md", "Notes/console$.md", " CON.md", "CONIN.md"} {
+		if got, err := NormalizePortable(ok); err != nil || got != ok {
+			t.Errorf("NormalizePortable(%q) = %q, %v", ok, got, err)
+		}
+	}
+	if _, err := NormalizePortable("a:b.md"); err == nil {
+		t.Error("NormalizePortable must apply the Normalize rules too")
+	}
+	// Normalize keeps its original set: files already in a vault stay visible.
+	for _, legacy := range []string{"COM0.md", "COM\u00b9.md", "CONIN$.md", "NUL .md"} {
+		if _, err := Normalize(legacy); err != nil {
+			t.Errorf("Normalize(%q) must stay accepted: %v", legacy, err)
+		}
+	}
+}
+
 func TestNormalize(t *testing.T) {
 	long := strings.Repeat("a", 256)
 	tests := []struct {

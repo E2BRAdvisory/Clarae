@@ -31,7 +31,7 @@ func mustUUID(s string) [16]byte {
 	return id
 }
 
-func testSubkeys(t *testing.T) vaultcrypto.Subkeys {
+func testSubkeys(t *testing.T) *vaultcrypto.Subkeys {
 	t.Helper()
 	vmk, err := vaultcrypto.GenerateVMK()
 	if err != nil {
@@ -70,7 +70,7 @@ func TestBlobRejectsTamperingAndMisuse(t *testing.T) {
 	}
 	blob := buf.Bytes()
 	const hdr, chunk = 25, 32 + 16
-	dec := func(b []byte, v, f [16]byte, k vaultcrypto.Subkeys) error {
+	dec := func(b []byte, v, f [16]byte, k *vaultcrypto.Subkeys) error {
 		return vaultcrypto.DecryptBlob(&bytes.Buffer{}, bytes.NewReader(b), k, v, f)
 	}
 	if err := dec(blob, vaultID, fileID, s); err != nil {
@@ -302,6 +302,99 @@ func TestPaths(t *testing.T) {
 	if _, err := vaultcrypto.EncryptPath(s, vaultID, "bad:name.md"); err == nil {
 		t.Error("invalid path must be rejected before encryption")
 	}
+	if _, err := vaultcrypto.EncryptPathV2(s, vaultID, fileID, "Notes/COM\u00b9.md"); err == nil {
+		t.Error("a Windows device name must be rejected before encryption")
+	}
+}
+
+// TestPathsV2 covers the enc2 tokens of ADR-0042: bound to vault and file,
+// read alongside enc1, never opened under the other version's AAD.
+func TestPathsV2(t *testing.T) {
+	s := testSubkeys(t)
+	otherFile := mustUUID("0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a11")
+	otherVault := mustUUID("0194f0a8-0000-7000-8000-00000000bbbb")
+	const p = "Projects/Alfa/riunione.md"
+	tok, err := vaultcrypto.EncryptPathV2(s, vaultID, fileID, p)
+	if err != nil || !strings.HasPrefix(tok, "enc2:") || vaultcrypto.PathTokenVersion(tok) != 2 {
+		t.Fatalf("encrypt: %v %q", err, tok)
+	}
+	if got, err := vaultcrypto.DecryptPathFor(s, vaultID, fileID, tok); err != nil || got != p {
+		t.Fatalf("decrypt: %v %q", err, got)
+	}
+	if _, err := vaultcrypto.DecryptPathFor(s, vaultID, otherFile, tok); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("token of another file: %v, want ErrDecrypt", err)
+	}
+	if _, err := vaultcrypto.DecryptPathFor(s, otherVault, fileID, tok); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("token of another vault: %v, want ErrDecrypt", err)
+	}
+	if _, err := vaultcrypto.DecryptPath(s, vaultID, tok); !errors.Is(err, vaultcrypto.ErrFormat) {
+		t.Errorf("enc1-only reader must refuse enc2: %v", err)
+	}
+	// Relabelled tokens never open: the AADs of the two versions differ.
+	down := "enc1:" + strings.TrimPrefix(tok, "enc2:")
+	if _, err := vaultcrypto.DecryptPathFor(s, vaultID, fileID, down); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("enc2 relabelled enc1: %v, want ErrDecrypt", err)
+	}
+	v1, _ := vaultcrypto.EncryptPath(s, vaultID, p)
+	if got, err := vaultcrypto.DecryptPathFor(s, vaultID, otherFile, v1); err != nil || got != p {
+		t.Errorf("enc1 must still open whatever the file id: %v %q", err, got)
+	}
+	up := "enc2:" + strings.TrimPrefix(v1, "enc1:")
+	if _, err := vaultcrypto.DecryptPathFor(s, vaultID, fileID, up); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("enc1 relabelled enc2: %v, want ErrDecrypt", err)
+	}
+	if _, err := vaultcrypto.DecryptPathFor(s, vaultID, fileID, "enc3:AAAA"); !errors.Is(err, vaultcrypto.ErrFormat) {
+		t.Errorf("unknown prefix: %v, want ErrFormat", err)
+	}
+	if vaultcrypto.PathTokenVersion(v1) != 1 || vaultcrypto.PathTokenVersion("hmac1:00") != 0 {
+		t.Error("PathTokenVersion")
+	}
+	// The uniqueness key does not depend on the token version.
+	k, _ := vaultcrypto.PathKey(s, p)
+	if k2, _ := vaultcrypto.PathKey(s, "projects/alfa/RIUNIONE.md"); k != k2 {
+		t.Error("path key changed")
+	}
+}
+
+// TestWipe checks that wiped subkeys are zero and refused by every operation.
+func TestWipe(t *testing.T) {
+	vmk, _ := vaultcrypto.GenerateVMK()
+	s := vaultcrypto.DeriveSubkeys(vmk)
+	blob, _ := vaultcrypto.Encrypt(s, vaultID, fileID, []byte("x"))
+	tok, _ := vaultcrypto.EncryptPathV2(s, vaultID, fileID, "a.md")
+	s.Wipe()
+	s.Wipe() // idempotent
+	if !s.Wiped() || s.PathEnc != [32]byte{} || s.PathKey != [32]byte{} {
+		t.Fatal("subkeys not zeroed")
+	}
+	if _, err := vaultcrypto.Encrypt(s, vaultID, fileID, []byte("x")); !errors.Is(err, vaultcrypto.ErrWiped) {
+		t.Errorf("encrypt after wipe: %v", err)
+	}
+	if _, err := vaultcrypto.Decrypt(s, vaultID, fileID, blob); !errors.Is(err, vaultcrypto.ErrWiped) {
+		t.Errorf("decrypt after wipe: %v", err)
+	}
+	if _, err := vaultcrypto.EncryptPath(s, vaultID, "a.md"); !errors.Is(err, vaultcrypto.ErrWiped) {
+		t.Errorf("encrypt path after wipe: %v", err)
+	}
+	if _, err := vaultcrypto.DecryptPathFor(s, vaultID, fileID, tok); !errors.Is(err, vaultcrypto.ErrWiped) {
+		t.Errorf("decrypt path after wipe: %v", err)
+	}
+	if _, err := vaultcrypto.PathKey(s, "a.md"); !errors.Is(err, vaultcrypto.ErrWiped) {
+		t.Errorf("path key after wipe: %v", err)
+	}
+	var nilKeys *vaultcrypto.Subkeys
+	if _, err := vaultcrypto.Encrypt(nilKeys, vaultID, fileID, nil); !errors.Is(err, vaultcrypto.ErrWiped) {
+		t.Errorf("nil subkeys: %v", err)
+	}
+	vmk.Wipe()
+	if vmk != (vaultcrypto.VMK{}) {
+		t.Error("VMK not zeroed")
+	}
+	k := [32]byte{1, 2, 3}
+	vaultcrypto.WipeKey(&k)
+	if k != [32]byte{} {
+		t.Error("key not zeroed")
+	}
 }
 
 // vectors mirrors shared/conformance/crypto/vectors.json.
@@ -333,8 +426,9 @@ type vectors struct {
 		Salt    string `json:"salt"`
 		File    string `json:"file"`
 	} `json:"subkeys"`
-	Blobs []blobVector `json:"blobs"`
-	Paths []pathVector `json:"paths"`
+	Blobs   []blobVector   `json:"blobs"`
+	Paths   []pathVector   `json:"paths"`
+	PathsV2 []pathV2Vector `json:"paths_v2"`
 }
 
 type blobVector struct {
@@ -383,6 +477,19 @@ type pathVector struct {
 	Key     string `json:"key"`
 }
 
+// pathV2Vector is an ADR-0042 token: "enc2:" + base64url(nonce ‖
+// AES-256-GCM(K_path_enc, path; AAD) ‖ tag), AAD = "memobrain/v2/path" ‖
+// vault_id ‖ file_id. Key is the hmac1 path key, the same as for enc1.
+type pathV2Vector struct {
+	VaultID string `json:"vault_id"`
+	FileID  string `json:"file_id"`
+	Path    string `json:"path"`
+	Nonce   string `json:"nonce"`
+	AAD     string `json:"aad"`
+	Enc     string `json:"enc"`
+	Key     string `json:"key"`
+}
+
 const (
 	vecVMK   = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 	vecKEK   = "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
@@ -409,7 +516,7 @@ func pattern(n int) []byte {
 	return b
 }
 
-func blobFor(t *testing.T, sk vaultcrypto.Subkeys, v blobVector) []byte {
+func blobFor(t *testing.T, sk *vaultcrypto.Subkeys, v blobVector) []byte {
 	t.Helper()
 	var salt [16]byte
 	copy(salt[:], unhex(v.Salt))
@@ -501,6 +608,20 @@ func generate(t *testing.T) vectors {
 		enc, _ := vaultcrypto.EncryptPathWithNonce(sk, mustUUID(vecVault), p, unhex(nonce))
 		key, _ := vaultcrypto.PathKey(sk, p)
 		v.Paths = append(v.Paths, pathVector{VaultID: vecVault, Path: p, Nonce: nonce, Enc: enc, Key: key})
+	}
+	for i, c := range []struct{ file, path string }{
+		{vecFile, "Projects/Alfa/riunione.md"},
+		{vecFile, "Notes/Straße.md"},
+		{"0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a11", "Projects/Alfa/riunione.md"},
+	} {
+		nonce := hex.EncodeToString(bytes.Repeat([]byte{byte(0x68 + i)}, 12))
+		enc, err := vaultcrypto.EncryptPathV2WithNonce(sk, mustUUID(vecVault), mustUUID(c.file), c.path, unhex(nonce))
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, _ := vaultcrypto.PathKey(sk, c.path)
+		aad := hex.EncodeToString(vaultcrypto.PathAADV2(mustUUID(vecVault), mustUUID(c.file)))
+		v.PathsV2 = append(v.PathsV2, pathV2Vector{VaultID: vecVault, FileID: c.file, Path: c.path, Nonce: nonce, AAD: aad, Enc: enc, Key: key})
 	}
 	return v
 }
@@ -624,6 +745,28 @@ func TestVectors(t *testing.T) {
 		}
 		if key, _ := vaultcrypto.PathKey(sk, p.Path); key != p.Key {
 			t.Errorf("path %q: key mismatch", p.Path)
+		}
+		if got, err := vaultcrypto.DecryptPathFor(sk, mustUUID(p.VaultID), mustUUID(vecFile), p.Enc); err != nil || got != p.Path {
+			t.Errorf("path %q: enc1 through DecryptPathFor %q %v", p.Path, got, err)
+		}
+	}
+	if len(v.PathsV2) == 0 {
+		t.Fatal("paths_v2 vectors missing")
+	}
+	for _, p := range v.PathsV2 {
+		vid, fid := mustUUID(p.VaultID), mustUUID(p.FileID)
+		if aad := hex.EncodeToString(vaultcrypto.PathAADV2(vid, fid)); aad != p.AAD {
+			t.Errorf("path v2 %q: AAD mismatch", p.Path)
+		}
+		enc, err := vaultcrypto.EncryptPathV2WithNonce(sk, vid, fid, p.Path, unhex(p.Nonce))
+		if err != nil || enc != p.Enc {
+			t.Errorf("path v2 %q: enc mismatch (%v)", p.Path, err)
+		}
+		if got, err := vaultcrypto.DecryptPathFor(sk, vid, fid, p.Enc); err != nil || got != p.Path {
+			t.Errorf("path v2 %q: decrypt %q %v", p.Path, got, err)
+		}
+		if key, _ := vaultcrypto.PathKey(sk, p.Path); key != p.Key {
+			t.Errorf("path v2 %q: key mismatch", p.Path)
 		}
 	}
 }

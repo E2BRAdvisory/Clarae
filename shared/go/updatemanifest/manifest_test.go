@@ -81,6 +81,61 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+// TestFreshness covers expires_at (manifest-no-freshness): optional and
+// backward compatible, bounded at validation, reported by CheckFresh.
+func TestFreshness(t *testing.T) {
+	m := sample()
+	released := m.ReleasedAt
+	if err := m.CheckFresh(released.Add(10 * 365 * 24 * time.Hour)); err != nil {
+		t.Fatalf("a manifest without expires_at never expires: %v", err)
+	}
+	// A legacy manifest (no expires_at) still verifies and parses; an old
+	// client ignores the new field.
+	pub, priv := keys(t)
+	raw, _ := json.Marshal(m)
+	if strings.Contains(string(raw), "expires_at") {
+		t.Fatal("expires_at must be omitted when unset")
+	}
+	sig, _ := Sign(priv, raw)
+	if _, err := VerifyAndParse(pub, raw, []byte(sig)); err != nil {
+		t.Fatal(err)
+	}
+	exp := released.Add(DefaultValidity)
+	m.ExpiresAt = &exp
+	raw, _ = json.Marshal(m)
+	sig, _ = Sign(priv, raw)
+	got, err := VerifyAndParse(pub, raw, []byte(sig))
+	if err != nil || got.ExpiresAt == nil || !got.ExpiresAt.Equal(exp) {
+		t.Fatalf("signed expires_at: %v", err)
+	}
+	var legacy struct {
+		Version  string `json:"version"`
+		Sequence int64  `json:"sequence"`
+	}
+	if err := json.Unmarshal(raw, &legacy); err != nil || legacy.Version != m.Version {
+		t.Fatalf("an older client must still parse it: %v", err)
+	}
+	if err := got.CheckFresh(exp.Add(-time.Second)); err != nil {
+		t.Fatalf("fresh manifest reported %v", err)
+	}
+	if err := got.CheckFresh(exp.Add(time.Second)); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expired manifest: %v", err)
+	}
+	for _, bad := range []time.Time{released, released.Add(-time.Hour), released.Add(MaxValidity + time.Second)} {
+		c := sample()
+		c.ExpiresAt = &bad
+		if c.Validate() == nil {
+			t.Errorf("expires_at %s accepted", bad)
+		}
+	}
+	c := sample()
+	c.ReleasedAt = time.Time{}
+	c.ExpiresAt = &exp
+	if c.Validate() == nil {
+		t.Error("expires_at without released_at accepted")
+	}
+}
+
 func TestSelect(t *testing.T) {
 	m := sample()
 	if a, ok := m.Select("darwin", "arm64", []string{KindDMG}); !ok || a.Arch != "universal" {

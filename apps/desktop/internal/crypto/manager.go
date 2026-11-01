@@ -6,6 +6,7 @@
 package crypto
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -39,11 +40,56 @@ const (
 	KindRecovery   = "recovery"
 )
 
+// unlocked is the key material of one unlocked vault: a single *Subkeys,
+// which holds the only long-lived copy of the VMK, wiped when the vault is
+// locked (best effort, see vaultcrypto's key hygiene notes).
 type unlocked struct {
-	sub     vaultcrypto.Subkeys
-	vmk     vaultcrypto.VMK
+	// kmu guards sub: crypto operations hold it for reading and wipe for
+	// writing, so a lock never zeroes the keys under a running operation, and
+	// an operation that starts after the wipe gets ErrLocked instead of
+	// working with zeroed keys.
+	kmu     sync.RWMutex
+	sub     *vaultcrypto.Subkeys
 	vaultID [16]byte
 	used    time.Time
+}
+
+// use runs fn with the subkeys; a wiped vault is ErrLocked.
+func (u *unlocked) use(fn func(s *vaultcrypto.Subkeys) error) error {
+	u.kmu.RLock()
+	defer u.kmu.RUnlock()
+	if u.sub.Wiped() {
+		return ErrLocked
+	}
+	return fn(u.sub)
+}
+
+// vmk returns a copy of the VMK (to re-wrap it); the caller wipes it.
+func (u *unlocked) vmk() (vaultcrypto.VMK, error) {
+	var out vaultcrypto.VMK
+	err := u.use(func(s *vaultcrypto.Subkeys) error {
+		var err error
+		out, err = s.VMK()
+		return err
+	})
+	return out, err
+}
+
+// sameVMK reports, in constant time, whether u holds vmk.
+func (u *unlocked) sameVMK(vmk *vaultcrypto.VMK) bool {
+	cur, err := u.vmk()
+	defer cur.Wipe()
+	return err == nil && subtle.ConstantTimeCompare(cur[:], vmk[:]) == 1
+}
+
+// wipe zeroes the key material once no operation is using it. Safe on nil.
+func (u *unlocked) wipe() {
+	if u == nil {
+		return
+	}
+	u.kmu.Lock()
+	u.sub.Wipe()
+	u.kmu.Unlock()
 }
 
 // Manager holds the unlocked vaults.
@@ -64,6 +110,9 @@ type Manager struct {
 	// on the server (seen in a download or pinned by the sync manager), so a
 	// re-wrap never downgrades them to v1.
 	seenV2 map[string]map[string]bool
+	// pathV2 writes ADR-0042 enc2 path tokens (features.path_v2); the sync
+	// engine also writes them for a vault pinned to enc2.
+	pathV2 bool
 }
 
 // Options configure the manager.
@@ -79,6 +128,9 @@ type Options struct {
 	// EnvelopeV2 writes key envelopes in format v2 (ADR-0034, release N+1
 	// behavior). Default off: release N reads both formats and writes v1.
 	EnvelopeV2 bool
+	// PathV2 writes path tokens in format enc2 (ADR-0042, release N+1
+	// behavior). Default off: release N reads both formats and writes enc1.
+	PathV2 bool
 }
 
 // NewManager creates a manager.
@@ -92,7 +144,22 @@ func NewManager(o Options) *Manager {
 	if o.KDFTarget == 0 {
 		o.KDFTarget = 500 * time.Millisecond
 	}
-	return &Manager{store: o.Store, now: o.Now, vaults: map[string]*unlocked{}, timeout: o.LockTimeout, remember: !o.DontRemember, kdfTarget: o.KDFTarget, envelopeV2: o.EnvelopeV2, seenV2: map[string]map[string]bool{}}
+	return &Manager{store: o.Store, now: o.Now, vaults: map[string]*unlocked{}, timeout: o.LockTimeout, remember: !o.DontRemember, kdfTarget: o.KDFTarget, envelopeV2: o.EnvelopeV2, seenV2: map[string]map[string]bool{}, pathV2: o.PathV2}
+}
+
+// SetPathV2 switches the writing of enc2 path tokens (ADR-0042; the Config
+// Profile flag features.path_v2).
+func (m *Manager) SetPathV2(on bool) {
+	m.mu.Lock()
+	m.pathV2 = on
+	m.mu.Unlock()
+}
+
+// PathV2 reports whether new path tokens are written in format enc2.
+func (m *Manager) PathV2() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pathV2
 }
 
 // SetEnvelopeV2 switches the writing of v2 key envelopes (ADR-0034; the
@@ -162,6 +229,18 @@ type Material struct {
 	// keks keeps the key-encryption key of each envelope (by kind) so
 	// UpgradeMaterial can re-wrap in format v2 once the vault has an id.
 	keks map[string][vaultcrypto.KeySize]byte
+}
+
+// Wipe zeroes the VMK and key-encryption keys the material holds. The caller
+// calls it once the vault is created and adopted (and upgraded): the material
+// is unusable afterwards. Copies of the Material value share keks but not vmk,
+// so Wipe the copy that was used last.
+func (mat *Material) Wipe() {
+	mat.vmk.Wipe()
+	for k, kek := range mat.keks {
+		vaultcrypto.WipeKey(&kek)
+		mat.keks[k] = kek
+	}
 }
 
 // ValidatePassphrase enforces the minimum length (strength is estimated in the UI).
@@ -317,15 +396,31 @@ func (m *Manager) Adopt(cloudVaultID string, mat Material) error {
 	return m.activate(cloudVaultID, mat.vmk)
 }
 
+// activate makes vmk the key of the vault. Unlocking a vault already
+// unlocked with the same VMK only restarts its idle timer, so operations in
+// flight keep their keys; a different VMK replaces the old key material,
+// which is wiped.
 func (m *Manager) activate(cloudVaultID string, vmk vaultcrypto.VMK) error {
 	vid, err := vaultcrypto.ParseUUID(cloudVaultID)
 	if err != nil {
 		return err
 	}
 	m.mu.Lock()
-	m.vaults[cloudVaultID] = &unlocked{sub: vaultcrypto.DeriveSubkeys(vmk), vmk: vmk, vaultID: vid, used: m.now()}
+	cur := m.vaults[cloudVaultID]
+	m.mu.Unlock()
+	// sameVMK takes cur.kmu, which is never taken under m.mu.
+	same := cur != nil && cur.sameVMK(&vmk)
+	var old *unlocked
+	m.mu.Lock()
+	if same && m.vaults[cloudVaultID] == cur {
+		cur.used = m.now()
+	} else {
+		old = m.vaults[cloudVaultID]
+		m.vaults[cloudVaultID] = &unlocked{sub: vaultcrypto.DeriveSubkeys(vmk), vaultID: vid, used: m.now()}
+	}
 	remember := m.remember
 	m.mu.Unlock()
+	old.wipe()
 	if remember {
 		return m.store.Set(account(cloudVaultID), base64.StdEncoding.EncodeToString(vmk[:]))
 	}
@@ -357,6 +452,8 @@ func (m *Manager) Restore(cloudVaultID string) (bool, error) {
 	}
 	var vmk vaultcrypto.VMK
 	copy(vmk[:], raw)
+	clear(raw)
+	defer vmk.Wipe()
 	return true, m.activate(cloudVaultID, vmk)
 }
 
@@ -433,6 +530,8 @@ func (m *Manager) UnlockWith(cloudVaultID string, envs []transport.KeyEnvelope, 
 	}
 	var vmk vaultcrypto.VMK
 	var kek [vaultcrypto.KeySize]byte
+	defer vmk.Wipe()
+	defer vaultcrypto.WipeKey(&kek)
 	if recovery {
 		rk, perr := vaultcrypto.ParseRecoveryKey(secret)
 		if perr != nil {
@@ -453,6 +552,8 @@ func (m *Manager) UnlockWith(cloudVaultID string, envs []transport.KeyEnvelope, 
 			return UnlockResult{}, oerr
 		}
 		vmk, kek, res.Legacy = open.VMK, open.KEK, open.Legacy
+		open.VMK.Wipe()
+		vaultcrypto.WipeKey(&open.KEK)
 	}
 	if m.EnvelopeV2() && (res.Version == 1 || res.Legacy) {
 		if w, werr := wrapChecked(kek, vmk, &vid, res.Kind); werr == nil {
@@ -475,7 +576,13 @@ func (m *Manager) NewPassphraseEnvelope(cloudVaultID, newPassphrase string) (tra
 	if err != nil {
 		return transport.KeyEnvelope{}, err
 	}
-	env, _, err := m.passphraseEnvelope(u.vmk, newPassphrase, m.v2Target(u, cloudVaultID, KindPassphrase))
+	vmk, err := u.vmk()
+	if err != nil {
+		return transport.KeyEnvelope{}, err
+	}
+	defer vmk.Wipe()
+	env, kek, err := m.passphraseEnvelope(vmk, newPassphrase, m.v2Target(u, cloudVaultID, KindPassphrase))
+	vaultcrypto.WipeKey(&kek)
 	return env, err
 }
 
@@ -487,11 +594,18 @@ func (m *Manager) NewRecoveryEnvelope(cloudVaultID string) (transport.KeyEnvelop
 	if err != nil {
 		return transport.KeyEnvelope{}, "", err
 	}
+	vmk, err := u.vmk()
+	if err != nil {
+		return transport.KeyEnvelope{}, "", err
+	}
+	defer vmk.Wipe()
 	rk, err := vaultcrypto.GenerateRecoveryKey()
 	if err != nil {
 		return transport.KeyEnvelope{}, "", err
 	}
-	env, _, err := recoveryEnvelope(u.vmk, rk, m.v2Target(u, cloudVaultID, KindRecovery))
+	defer clear(rk[:])
+	env, kek, err := recoveryEnvelope(vmk, rk, m.v2Target(u, cloudVaultID, KindRecovery))
+	vaultcrypto.WipeKey(&kek)
 	return env, rk.String(), err
 }
 
@@ -507,7 +621,9 @@ func (m *Manager) VerifyPassphrase(cloudVaultID string, envs []transport.KeyEnve
 		return err
 	}
 	m.noteEnvelopes(cloudVaultID, envs)
-	_, err = vaultcrypto.OpenWithPassphrase(passphrase, kdfFromTransport(env.Kdf), env.WrappedVmk, vid)
+	open, err := vaultcrypto.OpenWithPassphrase(passphrase, kdfFromTransport(env.Kdf), env.WrappedVmk, vid)
+	open.VMK.Wipe()
+	vaultcrypto.WipeKey(&open.KEK)
 	if errors.Is(err, vaultcrypto.ErrDecrypt) {
 		return ErrWrongSecret
 	}
@@ -518,8 +634,10 @@ func (m *Manager) VerifyPassphrase(cloudVaultID string, envs []transport.KeyEnve
 // recovery key is needed again.
 func (m *Manager) Lock(cloudVaultID string) error {
 	m.mu.Lock()
+	u := m.vaults[cloudVaultID]
 	delete(m.vaults, cloudVaultID)
 	m.mu.Unlock()
+	u.wipe()
 	return m.store.Delete(account(cloudVaultID))
 }
 
@@ -595,6 +713,7 @@ func (m *Manager) LockExpired(cloudVaultID string) (bool, error) {
 	}
 	delete(m.vaults, cloudVaultID)
 	m.mu.Unlock()
+	u.wipe()
 	return true, m.store.Delete(account(cloudVaultID))
 }
 
@@ -654,27 +773,70 @@ func (c *Cipher) Locked() bool {
 	return err != nil
 }
 
-// EncryptPath implements sync.Cipher.
-func (c *Cipher) EncryptPath(path string) (string, string, error) {
+// PathV2 implements sync.Cipher: the features.path_v2 flag (ADR-0042).
+func (c *Cipher) PathV2() bool { return c.m.PathV2() }
+
+// EncryptPath implements sync.Cipher: the token of the file's path, enc2
+// (bound to the file) when v2 is set, enc1 otherwise, and its uniqueness key.
+func (c *Cipher) EncryptPath(fileID, path string, v2 bool) (string, string, error) {
 	u, err := c.m.key(c.id)
 	if err != nil {
 		return "", "", err
 	}
-	tok, err := vaultcrypto.EncryptPath(u.sub, u.vaultID, path)
-	if err != nil {
-		return "", "", err
-	}
-	key, err := vaultcrypto.PathKey(u.sub, path)
+	var tok, key string
+	err = u.use(func(s *vaultcrypto.Subkeys) error {
+		var err error
+		if v2 {
+			fid, perr := vaultcrypto.ParseUUID(fileID)
+			if perr != nil {
+				return perr
+			}
+			tok, err = vaultcrypto.EncryptPathV2(s, u.vaultID, fid, path)
+		} else {
+			tok, err = vaultcrypto.EncryptPath(s, u.vaultID, path)
+		}
+		if err != nil {
+			return err
+		}
+		key, err = vaultcrypto.PathKey(s, path)
+		return err
+	})
 	return tok, key, err
 }
 
-// DecryptPath implements sync.Cipher.
+// DecryptFilePath implements sync.Cipher: an enc1 or enc2 token of the file.
+func (c *Cipher) DecryptFilePath(fileID, token string) (string, error) {
+	u, err := c.m.key(c.id)
+	if err != nil {
+		return "", err
+	}
+	fid, err := vaultcrypto.ParseUUID(fileID)
+	if err != nil {
+		return "", err
+	}
+	var out string
+	err = u.use(func(s *vaultcrypto.Subkeys) error {
+		var err error
+		out, err = vaultcrypto.DecryptPathFor(s, u.vaultID, fid, token)
+		return err
+	})
+	return out, err
+}
+
+// DecryptPath implements sync.Cipher: an enc1 token only, for callers that
+// do not know the file id (an enc2 token is a format error here).
 func (c *Cipher) DecryptPath(token string) (string, error) {
 	u, err := c.m.key(c.id)
 	if err != nil {
 		return "", err
 	}
-	return vaultcrypto.DecryptPath(u.sub, u.vaultID, token)
+	var out string
+	err = u.use(func(s *vaultcrypto.Subkeys) error {
+		var err error
+		out, err = vaultcrypto.DecryptPath(s, u.vaultID, token)
+		return err
+	})
+	return out, err
 }
 
 // EncryptBlob implements sync.Cipher.
@@ -687,7 +849,13 @@ func (c *Cipher) EncryptBlob(fileID string, plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return vaultcrypto.Encrypt(u.sub, u.vaultID, fid, plaintext)
+	var out []byte
+	err = u.use(func(s *vaultcrypto.Subkeys) error {
+		var err error
+		out, err = vaultcrypto.Encrypt(s, u.vaultID, fid, plaintext)
+		return err
+	})
+	return out, err
 }
 
 // DecryptBlob implements sync.Cipher.
@@ -700,5 +868,11 @@ func (c *Cipher) DecryptBlob(fileID string, blob []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return vaultcrypto.Decrypt(u.sub, u.vaultID, fid, blob)
+	var out []byte
+	err = u.use(func(s *vaultcrypto.Subkeys) error {
+		var err error
+		out, err = vaultcrypto.Decrypt(s, u.vaultID, fid, blob)
+		return err
+	})
+	return out, err
 }

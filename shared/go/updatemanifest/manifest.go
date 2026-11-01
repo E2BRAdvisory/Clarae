@@ -6,6 +6,19 @@
 //
 // The signature covers the exact manifest bytes prefixed with a domain
 // separator; callers MUST verify it before parsing (VerifyAndParse does).
+//
+// Freshness. Sequence and min_version stop a mirror from serving an older
+// manifest, but not from serving the latest one it has forever (a freeze
+// attack: clients never learn about a security release). A manifest can
+// therefore carry a signed expires_at; the publisher re-signs it (a new
+// sequence, same release) before it expires, every DefaultValidity or so. A
+// client that finds it expired cannot tell a frozen mirror from a publisher
+// that stopped re-signing, so it keeps working and warns the user (CheckFresh
+// reports ErrExpired). The field is optional and lives in schema 1: older
+// clients ignore it (unknown JSON field, the signature still covers it) and
+// manifests without it, published before, never expire. A client that has
+// seen an expiring manifest on a channel may treat a later one without
+// expires_at as stale too.
 package updatemanifest
 
 import (
@@ -25,6 +38,14 @@ const SchemaVersion = 1
 
 // signContext is prepended to the manifest bytes before signing (domain separation).
 const signContext = "memobrain-update-manifest-v1\n"
+
+// Validity of a manifest (expires_at - released_at). DefaultValidity is what
+// the release tool should sign; MaxValidity bounds what clients accept, so a
+// signing mistake cannot produce a manifest that is fresh for years.
+const (
+	DefaultValidity = 30 * 24 * time.Hour
+	MaxValidity     = 400 * 24 * time.Hour
+)
 
 // MaxArtifactSize is a hard cap on any single artifact (2 GiB).
 const MaxArtifactSize int64 = 2 << 30
@@ -64,17 +85,23 @@ type Manifest struct {
 	// MinVersion is the revocation floor: versions below it must not be
 	// offered or installed. Clients remember the highest floor seen; a client
 	// older than the floor is told the update is required.
-	MinVersion string     `json:"min_version,omitempty"`
-	ReleasedAt time.Time  `json:"released_at"`
-	Notes      string     `json:"notes,omitempty"` // Markdown release notes
-	NotesURL   string     `json:"notes_url,omitempty"`
-	Artifacts  []Artifact `json:"artifacts"`
+	MinVersion string    `json:"min_version,omitempty"`
+	ReleasedAt time.Time `json:"released_at"`
+	// ExpiresAt, when set, ends the manifest's freshness (see the package
+	// documentation). It must follow ReleasedAt by at most MaxValidity.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Notes     string     `json:"notes,omitempty"` // Markdown release notes
+	NotesURL  string     `json:"notes_url,omitempty"`
+	Artifacts []Artifact `json:"artifacts"`
 }
 
 // Errors returned by verification and validation.
 var (
 	ErrBadSignature = errors.New("updatemanifest: signature verification failed")
 	ErrBadKey       = errors.New("updatemanifest: invalid key")
+	// ErrExpired means the manifest is past its expires_at: the update
+	// server may be frozen on an old manifest (CheckFresh).
+	ErrExpired = errors.New("updatemanifest: manifest expired")
 )
 
 // Sign returns the base64 detached signature of the manifest bytes.
@@ -165,6 +192,14 @@ func (m *Manifest) Validate() error {
 	if m.Sequence < 1 {
 		return errors.New("updatemanifest: sequence must be positive")
 	}
+	if m.ExpiresAt != nil {
+		if m.ReleasedAt.IsZero() || !m.ExpiresAt.After(m.ReleasedAt) {
+			return errors.New("updatemanifest: expires_at must follow released_at")
+		}
+		if m.ExpiresAt.Sub(m.ReleasedAt) > MaxValidity {
+			return fmt.Errorf("updatemanifest: expires_at more than %s after released_at", MaxValidity)
+		}
+	}
 	if len(m.Artifacts) == 0 {
 		return errors.New("updatemanifest: no artifacts")
 	}
@@ -201,6 +236,16 @@ func (a Artifact) validate() error {
 	}
 	if a.Size <= 0 || a.Size > MaxArtifactSize {
 		return fmt.Errorf("invalid size %d", a.Size)
+	}
+	return nil
+}
+
+// CheckFresh reports ErrExpired when now is past the manifest's expires_at.
+// A manifest without expires_at (published before the field existed) is
+// always fresh. Callers warn rather than fail: see the package documentation.
+func (m *Manifest) CheckFresh(now time.Time) error {
+	if m.ExpiresAt != nil && now.After(*m.ExpiresAt) {
+		return fmt.Errorf("%w on %s", ErrExpired, m.ExpiresAt.UTC().Format(time.RFC3339))
 	}
 	return nil
 }

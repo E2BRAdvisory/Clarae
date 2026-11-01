@@ -48,12 +48,41 @@ func invalid(path, reason string) error { return &Error{Path: path, Reason: reas
 // characters are rejected separately.
 const forbiddenChars = "\\:*?\"<>|"
 
-// windowsReserved lists device names that Windows refuses as file names,
-// regardless of extension and case.
+// windowsReserved lists the device names Normalize refuses, regardless of
+// extension and case. It is the original subset of windowsDevices and must
+// not grow: Normalize also decides which files of an existing vault are
+// visible to the app, and a synced file that became invisible would be taken
+// for a local deletion. New paths get the complete check (NormalizePortable).
 var windowsReserved = map[string]struct{}{
 	"CON": {}, "PRN": {}, "AUX": {}, "NUL": {},
 	"COM1": {}, "COM2": {}, "COM3": {}, "COM4": {}, "COM5": {}, "COM6": {}, "COM7": {}, "COM8": {}, "COM9": {},
 	"LPT1": {}, "LPT2": {}, "LPT3": {}, "LPT4": {}, "LPT5": {}, "LPT6": {}, "LPT7": {}, "LPT8": {}, "LPT9": {},
+}
+
+// windowsDevices is every device name Windows reserves (Win32 "Naming
+// Files, Paths, and Namespaces"): CON, PRN, AUX, NUL, COM0-9 and LPT0-9, the
+// superscript digits ¹ ² ³ that Windows also matches (COM¹, LPT³), and the
+// console names CONIN$ and CONOUT$.
+var windowsDevices = func() map[string]struct{} {
+	m := map[string]struct{}{"CON": {}, "PRN": {}, "AUX": {}, "NUL": {}, "CONIN$": {}, "CONOUT$": {}}
+	for _, d := range []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\u00b9", "\u00b2", "\u00b3"} {
+		m["COM"+d] = struct{}{}
+		m["LPT"+d] = struct{}{}
+	}
+	return m
+}()
+
+// IsWindowsReserved reports whether a path segment names a Windows device:
+// its part before the first dot, with trailing spaces removed (Windows strips
+// them, so "NUL .md" is NUL), compared case-insensitively with every name in
+// windowsDevices.
+func IsWindowsReserved(seg string) bool {
+	base := seg
+	if i := strings.IndexByte(seg, '.'); i >= 0 {
+		base = seg[:i]
+	}
+	_, ok := windowsDevices[strings.ToUpper(strings.TrimRight(base, " "))]
+	return ok
 }
 
 // Normalize validates p and returns its canonical form: UTF-8, NFC, '/'
@@ -110,6 +139,25 @@ func checkSegment(path, seg string) error {
 		return invalid(path, "reserved name "+seg)
 	}
 	return nil
+}
+
+// NormalizePortable is Normalize plus the complete Windows device-name check
+// (IsWindowsReserved) on every segment. It is the rule for a path entering a
+// vault (create, rename or move, import): such a name would be accepted on
+// macOS and Linux but could never be created by a Windows client, which would
+// fail on it at every sync. Paths already in a vault keep being read with
+// Normalize (see windowsReserved).
+func NormalizePortable(p string) (string, error) {
+	n, err := Normalize(p)
+	if err != nil {
+		return "", err
+	}
+	for _, seg := range strings.Split(n, "/") {
+		if IsWindowsReserved(seg) {
+			return "", invalid(p, "reserved name "+seg)
+		}
+	}
+	return n, nil
 }
 
 // Validate reports whether p is acceptable without returning its normal form.

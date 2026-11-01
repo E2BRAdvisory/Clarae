@@ -49,7 +49,7 @@ func chunkNonce(index uint64) []byte {
 }
 
 // EncryptBlob encrypts r to w with a fresh salt and the default chunk size.
-func EncryptBlob(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]byte) error {
+func EncryptBlob(w io.Writer, r io.Reader, s *Subkeys, vaultID, fileID [16]byte) error {
 	var salt [SaltSize]byte
 	if _, err := rand.Read(salt[:]); err != nil {
 		return err
@@ -58,12 +58,16 @@ func EncryptBlob(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]byte) 
 }
 
 // EncryptBlobWith is EncryptBlob with explicit salt and chunk size (vectors, tests).
-func EncryptBlobWith(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]byte, salt [SaltSize]byte, chunkSize int) error {
+func EncryptBlobWith(w io.Writer, r io.Reader, s *Subkeys, vaultID, fileID [16]byte, salt [SaltSize]byte, chunkSize int) error {
 	if chunkSize <= 0 || chunkSize > maxChunkSize {
 		return fmt.Errorf("vaultcrypto: invalid chunk size %d", chunkSize)
 	}
+	if err := s.usable(); err != nil {
+		return err
+	}
 	key := s.FileKey(fileID, salt)
 	g, err := newGCM(key[:])
+	clear(key[:])
 	if err != nil {
 		return err
 	}
@@ -110,7 +114,10 @@ func EncryptBlobWith(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]by
 // DecryptBlob authenticates and decrypts an NDS1 blob into w. Output may
 // already have been written when an error is returned: callers writing files
 // must use a temporary and discard it on error.
-func DecryptBlob(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]byte) error {
+func DecryptBlob(w io.Writer, r io.Reader, s *Subkeys, vaultID, fileID [16]byte) error {
+	if err := s.usable(); err != nil {
+		return err
+	}
 	hdr := make([]byte, headerSize)
 	if _, err := io.ReadFull(r, hdr); err != nil {
 		return ErrFormat
@@ -126,6 +133,7 @@ func DecryptBlob(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]byte) 
 	}
 	key := s.FileKey(fileID, salt)
 	g, err := newGCM(key[:])
+	clear(key[:])
 	if err != nil {
 		return err
 	}
@@ -171,7 +179,7 @@ func DecryptBlob(w io.Writer, r io.Reader, s Subkeys, vaultID, fileID [16]byte) 
 }
 
 // Encrypt and Decrypt are in-memory conveniences for small payloads.
-func Encrypt(s Subkeys, vaultID, fileID [16]byte, plaintext []byte) ([]byte, error) {
+func Encrypt(s *Subkeys, vaultID, fileID [16]byte, plaintext []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := EncryptBlob(&buf, bytes.NewReader(plaintext), s, vaultID, fileID); err != nil {
 		return nil, err
@@ -180,7 +188,7 @@ func Encrypt(s Subkeys, vaultID, fileID [16]byte, plaintext []byte) ([]byte, err
 }
 
 // Decrypt reverses Encrypt.
-func Decrypt(s Subkeys, vaultID, fileID [16]byte, blob []byte) ([]byte, error) {
+func Decrypt(s *Subkeys, vaultID, fileID [16]byte, blob []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := DecryptBlob(&buf, bytes.NewReader(blob), s, vaultID, fileID); err != nil {
 		return nil, err

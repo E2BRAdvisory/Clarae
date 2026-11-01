@@ -24,7 +24,9 @@ const (
 
 // Hunk describes one region that could not be merged automatically.
 type Hunk struct {
-	// Where is a human-readable locator ("frontmatter key status", "lines 12-14").
+	// Where is a human-readable locator ("frontmatter key status", "lines
+	// 12-14"). Line numbers are 1-based lines of the file kept at the path
+	// (frontmatter included), where the theirs text of the hunk now is.
 	Where  string `json:"where"`
 	Ours   string `json:"ours"`
 	Theirs string `json:"theirs"`

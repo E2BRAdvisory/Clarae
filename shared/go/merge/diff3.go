@@ -82,8 +82,12 @@ func apply(base []string, hs []hunk, from, to int) []string {
 }
 
 // conflictRegion is a base range changed differently by both sides.
+// start/end index base lines; tstart/tend locate the theirs text of the
+// region in theirs, mstart/mend in merged (both 0-based, end exclusive).
 type conflictRegion struct {
 	start, end   int
+	tstart, tend int
+	mstart, mend int
 	ours, theirs []string
 }
 
@@ -104,6 +108,7 @@ func diff3(base, ours, theirs []string) (merged []string, conflicts []conflictRe
 	}
 	var out []string
 	pos := 0
+	tdelta := 0 // theirs lines minus base lines in the clusters before pos
 	i, j := 0, 0
 	for i < len(ha) || j < len(hb) {
 		// Start a cluster with the earliest remaining hunk.
@@ -148,9 +153,16 @@ func diff3(base, ours, theirs []string) (merged []string, conflicts []conflictRe
 		case strings.Join(oursText, "") == strings.Join(theirsText, ""):
 			out = append(out, oursText...)
 		default:
-			conflicts = append(conflicts, conflictRegion{start: start, end: end, ours: oursText, theirs: theirsText})
+			ts, ms := start+tdelta, len(out)
+			conflicts = append(conflicts, conflictRegion{
+				start: start, end: end,
+				tstart: ts, tend: ts + len(theirsText),
+				mstart: ms, mend: ms + len(theirsText),
+				ours: oursText, theirs: theirsText,
+			})
 			out = append(out, theirsText...)
 		}
+		tdelta += len(theirsText) - (end - start)
 		pos = end
 		i, j = ci, cj
 	}

@@ -199,10 +199,16 @@
       "expect": "decrypt"
     },
     {
-      "name": "wrong prefix",
+      "name": "unknown prefix",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc3:YGBgYGBgYGBgYGBgLYs43NXpYI2qHuuy_rvd8u8MQBF3LoziuWTFLraMlMOMTyZ0MX4HUKQ",
+      "expect": "format"
+    },
+    {
+      "name": "enc1 body relabelled enc2 (upgrade forgery)",
       "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
       "token": "enc2:YGBgYGBgYGBgYGBgLYs43NXpYI2qHuuy_rvd8u8MQBF3LoziuWTFLraMlMOMTyZ0MX4HUKQ",
-      "expect": "format"
+      "expect": "decrypt"
     },
     {
       "name": "deterministic key used as token",
@@ -220,6 +226,43 @@
       "name": "not base64url",
       "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
       "token": "enc1:!!!!",
+      "expect": "format"
+    },
+    {
+      "name": "enc2 tampered token",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc2:aGhoaGhoaGhoaGhoivMlEMyvVc70z4O31AnnafPyzWZbMvRghlzkkeEkdiP_ehj71KHRx5o",
+      "expect": "decrypt"
+    },
+    {
+      "name": "enc2 token of another file (swapped file id)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a11",
+      "token": "enc2:aGhoaGhoaGhoaGhoivMlEMyvVc70z4O31RnnafPyzWZbMvRghlzkkeEkdiP_ehj71KHRx5o",
+      "expect": "decrypt"
+    },
+    {
+      "name": "enc2 token bound to another vault (AAD)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000bbbb",
+      "token": "enc2:aGhoaGhoaGhoaGhoivMlEMyvVc70z4O31RnnafPyzWZbMvRghlzkkeEkdiP_ehj71KHRx5o",
+      "expect": "decrypt"
+    },
+    {
+      "name": "enc2 body relabelled enc1 (downgrade)",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc1:aGhoaGhoaGhoaGhoivMlEMyvVc70z4O31RnnafPyzWZbMvRghlzkkeEkdiP_ehj71KHRx5o",
+      "expect": "decrypt"
+    },
+    {
+      "name": "enc2 truncated below nonce and tag",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc2:AAAA",
+      "expect": "format"
+    },
+    {
+      "name": "enc2 not base64url",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "token": "enc2:!!!!",
       "expect": "format"
     }
   ],

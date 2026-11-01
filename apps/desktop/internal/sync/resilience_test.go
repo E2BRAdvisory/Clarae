@@ -333,12 +333,16 @@ type fakeCipher struct {
 
 func (c *fakeCipher) Locked() bool { return c.locked.Load() }
 
-func (c *fakeCipher) EncryptPath(p string) (string, string, error) {
+func (c *fakeCipher) PathV2() bool { return false }
+
+func (c *fakeCipher) EncryptPath(_, p string, _ bool) (string, string, error) {
 	if c.locked.Load() {
 		return "", "", crypto.ErrLocked
 	}
 	return "enc:" + p, "key:" + p, nil
 }
+
+func (c *fakeCipher) DecryptFilePath(_, tok string) (string, error) { return c.DecryptPath(tok) }
 
 func (c *fakeCipher) DecryptPath(tok string) (string, error) {
 	if c.lockOnDecode.CompareAndSwap(true, false) {

@@ -153,5 +153,34 @@
       "enc": "enc1:YmJiYmJiYmJiYmJiT9BVE8fRLjIy9n25Ono40taikMs",
       "key": "hmac1:f35198aecf0862f5eabae749b576a256baa6c3611a2928323d9c910bfa7b89be"
     }
+  ],
+  "paths_v2": [
+    {
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "path": "Projects/Alfa/riunione.md",
+      "nonce": "686868686868686868686868",
+      "aad": "6d656d6f627261696e2f76322f706174680194f0a800007000800000000000aaaa0194f0a85e1c7b1d9a3e2b8f4e7c1a10",
+      "enc": "enc2:aGhoaGhoaGhoaGhoivMlEMyvVc70z4O31RnnafPyzWZbMvRghlzkkeEkdiP_ehj71KHRx5o",
+      "key": "hmac1:c83238a230604ae7c7f7be33803725216ea9b187376405abba7954b449e0c169"
+    },
+    {
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a10",
+      "path": "Notes/Straße.md",
+      "nonce": "696969696969696969696969",
+      "aad": "6d656d6f627261696e2f76322f706174680194f0a800007000800000000000aaaa0194f0a85e1c7b1d9a3e2b8f4e7c1a10",
+      "enc": "enc2:aWlpaWlpaWlpaWlpbmG4i0HC18wiB3vwwDUt7kW-KawWERX8vopuClxC9fU",
+      "key": "hmac1:15246c6f00fc7904ba58452683afa194954e785c25e4ac0c42fce14a50f87d6d"
+    },
+    {
+      "vault_id": "0194f0a8-0000-7000-8000-00000000aaaa",
+      "file_id": "0194f0a8-5e1c-7b1d-9a3e-2b8f4e7c1a11",
+      "path": "Projects/Alfa/riunione.md",
+      "nonce": "6a6a6a6a6a6a6a6a6a6a6a6a",
+      "aad": "6d656d6f627261696e2f76322f706174680194f0a800007000800000000000aaaa0194f0a85e1c7b1d9a3e2b8f4e7c1a11",
+      "enc": "enc2:ampqampqampqampqWc-80C4a4G4YBzrU5C5sQ4s2yaLhVrTEEZet0g064eA_i7xBteLgyKc",
+      "key": "hmac1:c83238a230604ae7c7f7be33803725216ea9b187376405abba7954b449e0c169"
+    }
   ]
 }

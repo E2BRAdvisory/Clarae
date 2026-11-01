@@ -195,8 +195,9 @@ func mergeFrontmatterLines(base, ours, theirs string) (string, []Hunk) {
 	}
 	var conflicts []Hunk
 	for _, r := range regions {
+		// The merged block is what lands in the file, which starts with it.
 		conflicts = append(conflicts, Hunk{
-			Where:  fmt.Sprintf("frontmatter lines %d-%d", r.start+1, max(r.end, r.start+1)),
+			Where:  fmt.Sprintf("frontmatter lines %d-%d", r.mstart+1, max(r.mend, r.mstart+1)),
 			Ours:   strings.Join(r.ours, ""),
 			Theirs: strings.Join(r.theirs, ""),
 		})
@@ -279,9 +280,12 @@ func markdown3(bs, os_, ts string) Result {
 	if len(regions) > 0 {
 		res.Clean = false
 		bodyText = tb // the server keeps the path; our edits live in the copy
+		// Line numbers of the file written at the path: the merged
+		// frontmatter, then theirs' body (not of the body alone).
+		off := len(splitLines(fm))
 		for _, r := range regions {
 			res.Conflicts = append(res.Conflicts, Hunk{
-				Where:  fmt.Sprintf("lines %d-%d", r.start+1, max(r.end, r.start+1)),
+				Where:  fmt.Sprintf("lines %d-%d", off+r.tstart+1, off+max(r.tend, r.tstart+1)),
 				Ours:   strings.Join(r.ours, ""),
 				Theirs: strings.Join(r.theirs, ""),
 			})

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +109,48 @@ func TestMarkdownConflictsAreDescribed(t *testing.T) {
 	h := res.Conflicts[0]
 	if h.Ours != "B1\n" || h.Theirs != "B2\n" || h.Where != "lines 2-2" {
 		t.Errorf("hunk = %+v", h)
+	}
+}
+
+// The "lines X-Y" of a body conflict count from the top of the file kept at
+// the path (merged frontmatter, then theirs' body), and follow the lines
+// theirs inserted above the region.
+func TestMarkdownConflictLinesAreFileRelative(t *testing.T) {
+	fm := "---\ntitle: T\ntags:\n  - a\n  - b\nstatus: draft\n---\n" // 7 lines
+	base := []byte(fm + "one\ntwo\nthree\nfour\n")
+	ours := []byte(fm + "one\ntwo\nTHREE ours\nfour\n")
+	theirs := []byte(fm + "zero\nzero bis\none\ntwo\nTHREE theirs\nfour\n")
+	res := merge.Markdown(base, ours, theirs)
+	if res.Clean || len(res.Conflicts) != 1 {
+		t.Fatalf("want one conflict, got %+v", res)
+	}
+	h := res.Conflicts[0]
+	lines := strings.Split(string(res.Merged), "\n")
+	if h.Where != "lines 12-12" || lines[11] != "THREE theirs" {
+		t.Fatalf("hunk %q, line 12 of the file is %q", h.Where, lines[11])
+	}
+
+	// A frontmatter that grows in the merge shifts the body lines too.
+	base = []byte("---\nk: 1\n---\nx\n")
+	ours = []byte("---\nk: 1\na: 2\n---\nX ours\n")
+	theirs = []byte("---\nk: 1\nb: 3\n---\nX theirs\n")
+	res = merge.Markdown(base, ours, theirs)
+	lines = strings.Split(string(res.Merged), "\n")
+	if len(res.Conflicts) != 1 || res.Conflicts[0].Where != "lines 6-6" || lines[5] != "X theirs" {
+		t.Fatalf("conflicts %+v in\n%s", res.Conflicts, res.Merged)
+	}
+}
+
+// A frontmatter merged by lines (duplicate keys) reports its conflicts in
+// the lines of the merged block, which opens the file.
+func TestFrontmatterLineConflictsAreFileRelative(t *testing.T) {
+	base := []byte("---\nk: 1\nk: 2\nx: 0\n---\nbody\n")
+	ours := []byte("---\na: 1\nk: 1\nk: 2\nx: ours\n---\nbody\n")
+	theirs := []byte("---\nk: 1\nk: 2\nx: theirs\n---\nbody\n")
+	res := merge.Markdown(base, ours, theirs)
+	lines := strings.Split(string(res.Merged), "\n")
+	if len(res.Conflicts) != 1 || res.Conflicts[0].Where != "frontmatter lines 5-5" || lines[4] != "x: theirs" {
+		t.Fatalf("conflicts %+v in\n%s", res.Conflicts, res.Merged)
 	}
 }
 

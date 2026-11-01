@@ -2,17 +2,17 @@
 
 Stato: preparazione all'audit esterno (M7-WP2). **Non è stato eseguito alcun audit o penetration test**: questo documento e i test collegati servono a metterne un terzo nelle condizioni di farlo in tempi brevi. Riferimenti normativi interni: `Specifications.md` §3.8 (D-02), ADR-0011, ADR-0012.
 
-Ogni affermazione è verificata sul codice; i percorsi sono relativi alla radice del repository. Aggiornato il 2026-11-01 con l'envelope v2 (ADR-0034, rilascio N) e la normalizzazione NFC della passphrase.
+Ogni affermazione è verificata sul codice; i percorsi sono relativi alla radice del repository. Aggiornato il 2026-11-01 con l'envelope v2 (ADR-0034, rilascio N), la normalizzazione NFC della passphrase, i token di path `enc2` legati al file (ADR-0042, rilascio N), l'igiene delle chiavi in memoria e il tetto della calibrazione di Argon2id.
 
 ## 1. Perimetro e risorse da proteggere
 
-| Risorsa                                            | Dove vive                                            | Protezione                                            |
-| -------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
-| Contenuto dei file di un vault privato             | Blob su S3, sul client in chiaro                     | AES-256-GCM a chunk (`shared/go/vaultcrypto/blob.go`) |
-| Path dei file                                      | Colonne `files.path`, `file_revisions.path`          | `enc1:` AES-256-GCM; unicità via `hmac1:` (`path.go`) |
-| VMK (Vault Master Key, 256 bit)                    | Mai sul server in chiaro; keychain del SO sui client | Avvolta in due envelope (`vault_key_envelopes`)       |
-| Passphrase e recovery key                          | Solo nella testa/nei supporti dell'utente            | Mai trasmesse; solo KEK derivate localmente           |
-| Metadati (nome vault, dimensioni, conteggi, tempi) | Database del server                                  | **Non protetti** (§6)                                 |
+| Risorsa                                            | Dove vive                                            | Protezione                                                    |
+| -------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------- |
+| Contenuto dei file di un vault privato             | Blob su S3, sul client in chiaro                     | AES-256-GCM a chunk (`shared/go/vaultcrypto/blob.go`)         |
+| Path dei file                                      | Colonne `files.path`, `file_revisions.path`          | `enc1:`/`enc2:` AES-256-GCM; unicità via `hmac1:` (`path.go`) |
+| VMK (Vault Master Key, 256 bit)                    | Mai sul server in chiaro; keychain del SO sui client | Avvolta in due envelope (`vault_key_envelopes`)               |
+| Passphrase e recovery key                          | Solo nella testa/nei supporti dell'utente            | Mai trasmesse; solo KEK derivate localmente                   |
+| Metadati (nome vault, dimensioni, conteggi, tempi) | Database del server                                  | **Non protetti** (§6)                                         |
 
 Fuori perimetro della crittografia: vault condivisi (non E2EE, D-02), cifratura a riposo del disco del dispositivo (§3.8.6 dello spec), autenticazione OIDC.
 
@@ -56,6 +56,11 @@ Implementazione: `shared/go/vaultcrypto/keys.go` (Go), `packages/vaultcrypto-web
 - **Recovery key**: 256 bit CSPRNG; testo = Base32 (alfabeto RFC 4648) in gruppi da 5 con checksum SHA-256 troncato a 16 bit (`"memobrain/v1/recovery-checksum" ‖ chiave`). Il checksum rileva refusi, non è un controllo di sicurezza. KEK_rec = HKDF(recovery key, salt dell'envelope): nessuno stretching, la chiave ha già piena entropia.
 - **Passphrase**: minimo 12 caratteri e zxcvbn ≥ 3, imposti dal client desktop (`packages/workbench/src/sync/strength.ts`); il server non può verificarli. Prima di Argon2id la passphrase si normalizza in Unicode **NFC** (§5.4), così la stessa passphrase digitata con caratteri composti o scomposti (tastiere e sistemi operativi diversi) deriva la stessa KEK.
 - **Cache locale della VMK**: keychain del sistema operativo (`apps/desktop/internal/crypto/keystore.go`); la Web UI non la persiste.
+- **Igiene delle chiavi in memoria** (best effort):
+  - un vault sbloccato tiene un solo `*Subkeys` (`apps/desktop/internal/crypto/manager.go`), che contiene l'unica copia di lunga durata della VMK; le sottochiavi si passano per puntatore, non più per valore;
+  - al blocco (manuale, per inattività o allo scollegamento) `Subkeys.Wipe` azzera `K_path_enc`, `K_path_key` e la VMK. Un `RWMutex` per vault fa sì che il blocco aspetti le operazioni in corso; un'operazione che parte dopo riceve `ErrLocked`. Le funzioni di `vaultcrypto` rifiutano sottochiavi azzerate (`ErrWiped`): nulla viene mai cifrato con una chiave a zero;
+  - la libreria azzera i propri buffer intermedi appena copiati (uscite di Argon2id e HKDF, `K_file`, VMK decifrata); il gestore delle chiavi azzera KEK e copie della VMK dopo wrap, unwrap e verifica; `Material.Wipe` azzera il materiale di creazione;
+  - **limiti di Go**: il runtime può aver già copiato un array (passaggio per valore, crescita dello stack, spostamenti del garbage collector); lo schedule AES dentro `crypto/cipher`, le stringhe immutabili (passphrase, VMK in base64 verso il keychain) e la memoria lineare del WASM non si possono azzerare. Lo scopo è avere meno copie vive per meno tempo, non una garanzia (§8).
 - **Cambio passphrase / recovery key**: nuovo envelope della stessa VMK, nessuna ri-cifratura dei dati. Il formato del nuovo envelope segue le regole di migrazione di §5.3. Dopo un cambio, i vecchi envelope scaricati prima restano validi per chi conosceva la vecchia passphrase: senza rotazione della VMK una passphrase compromessa resta utile contro ciò che l'attaccante ha già copiato (§6).
 
 ## 5. Formati
@@ -79,6 +84,19 @@ AAD    : vault_id (16) ‖ file_id (16) ‖ indice (8, big endian) ‖ flag "ult
 - `path_enc` = `"enc1:" + base64url(nonce(12) ‖ AES-256-GCM(K_path_enc, path NFC; AAD = vault_id))`, nonce casuale.
 - `path_key` = `"hmac1:" + hex(HMAC-SHA256(K_path_key, NFC + casefold(path)))`, deterministico, usato dal server per l'unicità (`PATH_COLLISION`) senza conoscere il path. Rivela l'uguaglianza di due path (es. lo stesso path nelle revisioni successive) ma non il contenuto.
 - Con nonce casuali a 96 bit e una sola `K_path_enc` per vault, il limite di sicurezza di AES-GCM (≈ 2^32 cifrature) è molto sopra il numero di path realistico per vault; è un limite noto, non una vulnerabilità pratica.
+
+**Token `enc2` legati al file (ADR-0042).** `enc1` lega il path solo al vault: un server malevolo potrebbe associare al file X il token del file Y dello stesso vault. Il formato `enc2` lega il token anche al file:
+
+```text
+enc2 : "enc2:" + base64url(nonce (12) ‖ AES-256-GCM(K_path_enc, path NFC; AAD) ‖ tag (16))
+AAD  : "memobrain/v2/path" (17 B ASCII) ‖ vault_id (16 B) ‖ file_id (16 B)
+```
+
+- Stessa chiave e stesso nonce casuale di `enc1`; le due AAD differiscono per lunghezza e prefisso, quindi un token rietichettato da una versione all'altra non si apre. `path_key` (`hmac1`) non cambia: unicità e `PATH_COLLISION` restano identiche in un vault misto.
+- **Lettura**: `DecryptPathFor(sub, vault_id, file_id, token)` in Go e `decryptPathFor` in TS accettano i due formati; il motore di sync e l'export ZIP passano il `file_id` della change o della voce del manifest. Un `enc2` di un altro file o vault è `ErrDecrypt`/`DecryptError`: la change va in quarantena e il file locale non viene toccato.
+- **Prima di cifrare** un path il client applica la regola completa dei nomi riservati di Windows (`pathrules.NormalizePortable`), che per i vault privati il server non può controllare.
+- **Pinning** (client desktop e core WASM): `path_v2:<id cloud>` in `sync.db` annota che il vault ha token `enc2` (visti o scritti e accettati) e da lì i nuovi token restano `enc2`; `path_v2_file:<file_id>` annota il singolo file e da lì un suo token `enc1` è rifiutato (`ErrPathDowngrade`, quarantena).
+- **Stato della migrazione: rilascio N.** Tutti i client leggono `enc1` ed `enc2`. Si scrive ancora `enc1`, salvo con il flag del Config Profile `features.path_v2` (spento per default) o con il vault annotato. Il server deve accettare il prefisso `enc2:` prima che il flag venga acceso (oggi accetta solo `enc1:`). Nel rilascio N+1: flag acceso per default, riscrittura in background dei token rimasti `enc1`, poi rifiuto di ogni `enc1` (dettagli in ADR-0042).
 
 ### 5.3 Envelope della VMK: v1 e v2 (ADR-0034)
 
@@ -115,12 +133,14 @@ AAD: "memobrain/v2/envelope" (21 B ASCII) ‖ vault_id (16 B) ‖ kind ("passphr
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Argon2id minimo               | t=3, m=64 MiB, p=4                                                                                                                                                       | Go: `keys.go` (`MinT`, `MinMKiB`, `MinP`); TS: `keys.ts`; server: `vaults.ValidateEnvelope` (`services/cloud/internal/vaults/service.go`) |
 | Argon2id massimo              | t=12, m=1 GiB, p=16                                                                                                                                                      | idem (protegge il client da envelope ostili che causerebbero DoS)                                                                         |
-| Calibrazione                  | memoria raddoppiata fino a ≈ tempo-bersaglio, mai oltre 512 MiB (`CalibratePassphraseKDF`)                                                                               | salvata nell'envelope, usata da ogni dispositivo                                                                                          |
+| Calibrazione                  | memoria raddoppiata fino a ≈ tempo-bersaglio, mai oltre 256 MiB (`MaxCalibratedMKiB`, `CalibratePassphraseKDF`)                                                          | salvata nell'envelope, usata da ogni dispositivo                                                                                          |
 | Salt KDF                      | ≥ 8 byte (generati 16)                                                                                                                                                   | client e server                                                                                                                           |
 | `WeakKdfError` / `ErrWeakKDF` | un envelope con parametri sotto il minimo o sopra il massimo, algoritmo diverso o salt non valido **non viene derivato**: un server ostile non può declassare l'Argon2id | `DeriveKEKPassphrase` (Go), `deriveKekPassphrase` (TS)                                                                                    |
 | Chunk                         | default 64 KiB, max 16 MiB                                                                                                                                               | `blob.go`, `blob.ts`                                                                                                                      |
 
 I minimi di Argon2id sono quelli dello spec (t=3, m=64 MiB, p=4); la scelta di parametri più alti è del dispositivo che crea il vault. Non esiste una politica server per alzare i minimi sui vault esistenti.
+
+**Tetto della calibrazione: il client più debole.** I parametri scelti dal dispositivo che crea il vault valgono per tutti i dispositivi che lo aprono. Il più lento è il browser: l'export ZIP della Web UI (`hash-wasm`) esegue le p corsie una dopo l'altra in WebAssembly a thread singolo e alloca m KiB di memoria lineare, mentre Go le esegue in parallelo. Un vault calibrato su un Mac veloce a 512 MiB richiedeva al browser 512 MiB di memoria WASM e una derivazione diverse volte più lenta. Il tetto è ora 256 MiB (`MaxCalibratedMKiB`): con il tempo-bersaglio di 500 ms su un desktop nativo, il browser resta nell'ordine di pochi secondi e di una quantità di memoria disponibile sulle macchine comuni. La calibrazione stessa esegue al più due derivazioni di prova (64 e 128 MiB). Gli envelope esistenti non cambiano: il massimo accettato in lettura resta 1 GiB, quindi quelli calibrati prima fino a 512 MiB continuano ad aprirsi ovunque; un cambio di passphrase li ricalibra sotto il nuovo tetto.
 
 ## 7. Cosa vede e non vede il server
 
@@ -144,6 +164,8 @@ Un vault privato non è condivisibile: `POST /shares` risponde `409 VAULT_ENCRYP
 7. **Envelope v1 senza AAD durante la migrazione** (ADR-0034). Gli envelope v1, ancora scritti per default nel rilascio N, non sono legati a `vault_id`: un server può scambiare gli envelope di due vault dello stesso utente. La decifratura fallisce o cede la VMK dell'altro vault, mai dati di terzi. Il formato v2 chiude il problema per i vault migrati; il pinning per tipo impedisce di ripresentare un v1 a un dispositivo che ha già visto il v2. Restano esposti i vault ancora v1 e i dispositivi che non hanno mai visto il v2 (primo sblocco, export ZIP del browser), fino alla migrazione completa (rilascio N+1 e upgrade allo sblocco). Gli envelope di recovery dei vault mai recuperati restano v1 finché l'utente non rigenera la recovery key.
 8. **Troncamento in chiaro del file intero**: non rilevabile da chi non conosce lo stato precedente (stesso punto del rollback).
 9. **Cifratura dei metadati dei commit** (`op`, `base_rev`, `kind`): in chiaro per necessità del protocollo (ordinamento e concorrenza ottimistica).
+10. **Token di path `enc1` non legati al file durante la migrazione** (ADR-0042). Un server malevolo può associare a un file il token `enc1` di un altro file dello stesso vault: il client scrive il contenuto del primo al path del secondo. Il formato `enc2` chiude il problema per i file migrati; il pin di file impedisce di ripresentare un `enc1` per un file già visto in `enc2`. Restano esposti, fino alla migrazione completa del rilascio N+1, i file che hanno ancora `enc1` e che il dispositivo non ha mai visto in `enc2`, e l'export ZIP del browser (senza stato persistente) per i file `enc1`. Il danno resta dentro i dati dell'utente: il server non impara nulla.
+11. **Cancellazione delle chiavi in memoria solo best effort** (§4): Go non garantisce che una chiave non sia stata copiata prima dell'azzeramento, e lo schedule AES, le stringhe e la memoria del WASM non si possono azzerare. Un dump della memoria di un processo con un vault sbloccato espone comunque le chiavi.
 
 ## 9. Come Go e TypeScript restano uguali
 
@@ -151,8 +173,9 @@ Un vault privato non è condivisibile: `POST /shares` risponde `409 VAULT_ENCRYP
   - KEK da passphrase (Argon2id) e da recovery key;
   - wrap v1 e `wrap_v2` (passphrase e recovery, con l'AAD in esadecimale);
   - `passphrase_normalization`: input NFC e NFD con la stessa KEK, KEK grezza dell'input NFD, un envelope legacy v1 aperto da entrambe le forme, un envelope v2 corrente;
-  - sottochiavi, blob (vuoto, parziale, esatto, due chunk, chunk di default) e path.
-- **Vettori negativi** (nuovi): `shared/conformance/crypto/negative-vectors.json`, generati dal Go (`TestNegativeVectors`, stesso `UPDATE_VECTORS=1`) e verificati in Go e in TS (`packages/vaultcrypto-web/src/negative.test.ts`). Coprono tag alterato (primo e ultimo chunk), ciphertext e salt alterati, `chunk_size` alterato, troncamento al confine di chunk e dentro un tag, primo chunk rimosso, chunk riordinati/duplicati/aggiunti, dati in coda, magic/versione/chunk size non validi (zero, oltre il massimo), AAD sbagliata (vault, file), VMK sbagliata, token di path alterati/di altro vault/prefisso errato/base64 invalido, envelope alterati, KEK sbagliata, lunghezza errata, envelope v2 aperti per un altro vault, con `kind` scambiato o sconosciuto, con byte di versione alterato, troncati a 60 byte o privati del byte di versione (downgrade), con tag alterato o byte in coda, 10 casi di KDF fuori range, 5 recovery key malformate.
+  - sottochiavi, blob (vuoto, parziale, esatto, due chunk, chunk di default) e path `enc1`;
+  - `paths_v2` (ADR-0042): token `enc2` con l'AAD in esadecimale, lo stesso path per due `file_id` diversi, `hmac1` invariato.
+- **Vettori negativi** (nuovi): `shared/conformance/crypto/negative-vectors.json`, generati dal Go (`TestNegativeVectors`, stesso `UPDATE_VECTORS=1`) e verificati in Go e in TS (`packages/vaultcrypto-web/src/negative.test.ts`). Coprono tag alterato (primo e ultimo chunk), ciphertext e salt alterati, `chunk_size` alterato, troncamento al confine di chunk e dentro un tag, primo chunk rimosso, chunk riordinati/duplicati/aggiunti, dati in coda, magic/versione/chunk size non validi (zero, oltre il massimo), AAD sbagliata (vault, file), VMK sbagliata, token di path alterati/di altro vault/prefisso sconosciuto/base64 invalido, token `enc2` alterati, di un altro file (`file_id` scambiato) o di un altro vault, `enc2` rietichettato `enc1` (downgrade) ed `enc1` rietichettato `enc2`, `enc2` troncati o non base64url, envelope alterati, KEK sbagliata, lunghezza errata, envelope v2 aperti per un altro vault, con `kind` scambiato o sconosciuto, con byte di versione alterato, troncati a 60 byte o privati del byte di versione (downgrade), con tag alterato o byte in coda, 10 casi di KDF fuori range, 5 recovery key malformate.
   Ogni vettore dichiara la classe di errore (`decrypt`, `format`) oppure `any` dove le due implementazioni rifiutano ma classificano diversamente (dati in coda più corti di un tag: in TS è errore di formato, in Go è errore di autenticazione perché il chunk precedente viene autenticato per primo). **Entrambe rifiutano sempre.**
 - **Verifica** (nessun servizio di CI, ADR-0036): i test Go e TS sui vettori girano in `task ci` (`test-go`, `test-ts`). La riproducibilità dei vettori, che prima controllava il job `crypto-vectors` di `security.yml` (rimosso nella 1.2.2), si verifica a mano prima di un rilascio: rigenerare come sotto e controllare che `git diff --exit-code shared/conformance/crypto` non mostri differenze.
 - **Rigenerare**: `cd shared/go && UPDATE_VECTORS=1 go test -run 'TestVectors|TestNegativeVectors' ./vaultcrypto/`, poi eseguire i test TS e committare i JSON. Un cambio dei vettori positivi è un cambio di formato e richiede una nuova versione (`NDS2`).
@@ -163,9 +186,11 @@ Un vault privato non è condivisibile: `POST /shares` risponde `409 VAULT_ENCRYP
 - [ ] Nessun riuso di nonce: blob (nuova salt → nuova `K_file` per cifratura; contatore per chunk), path (nonce casuale, una chiave), wrap (nonce casuale, KEK per valore unico; l'upgrade a v2 ri-cifra la stessa VMK sotto la stessa KEK con un nonce nuovo).
 - [ ] Envelope v2 (§5.3): AAD con `vault_id` e `kind`, byte di versione, rifiuto di lunghezze diverse da 60/61, impossibilità di downgrade; pinning per tipo in `apps/desktop/internal/sync/manager_ops.go`; scrittura v1/v2 governata da `features.envelope_v2` (`apps/desktop/internal/crypto/manager.go`, `writeV2`).
 - [ ] Normalizzazione NFC della passphrase e ordine dei tentativi in apertura (§5.4): nessuna forma provata oltre a NFC, input esatto e NFD; il ri-avvolgimento degli envelope legacy avviene solo con il flag acceso.
+- [ ] Token di path `enc2` (§5.2, ADR-0042): AAD con `vault_id` e `file_id`, nessuna apertura incrociata tra versioni, `hmac1` invariato; pin di vault e di file in `apps/desktop/internal/sync/pull.go` (`clearPath`, `pinPathV2`, `writePathV2`); scrittura governata da `features.path_v2`.
+- [ ] Igiene delle chiavi (§4): un solo `*Subkeys` per vault sbloccato, `Wipe` al blocco sotto `RWMutex`, rifiuto di sottochiavi azzerate (`ErrWiped`), azzeramento di KEK e copie della VMK nel gestore delle chiavi.
 - [ ] L'AAD del blob copre vault, file, indice e ultimo chunk; confrontare con i casi di `negative-vectors.json`.
 - [ ] Gestione errori: nessuna differenza osservabile utile tra tag sbagliato e chiave sbagliata (`ErrDecrypt`); l'output parziale della decifratura in streaming viene scartato dal chiamante (commento in `DecryptBlob`): verificare i chiamanti in `apps/desktop/internal/sync` e `packages/vaultcrypto-web/src/export.ts`.
-- [ ] Bound e minimi dei parametri Argon2id (client e server identici) e comportamento di `DeriveKEKPassphrase` con envelope ostili.
+- [ ] Bound e minimi dei parametri Argon2id (client e server identici), tetto della calibrazione a 256 MiB (§6) e comportamento di `DeriveKEKPassphrase` con envelope ostili.
 - [ ] Confronti in tempo costante: checksum della recovery key (non segreto), tag GCM (libreria). Nessun confronto di segreti con `==` su stringhe.
 - [ ] Origine dell'entropia: `crypto/rand` (Go), `crypto.getRandomValues` (browser, `bytes.ts`).
 - [ ] Gestione della VMK in memoria e su disco: keychain del SO (desktop), nessuna persistenza in `localStorage`/IndexedDB nella Web UI (`packages/vaultcrypto-web`, `web/src/export`).
