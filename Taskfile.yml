@@ -43,7 +43,7 @@ tasks:
   ## ---- code generation -------------------------------------------------------
 
   wails-cli:
-    desc: Build the Wails CLI with the repo's Go and a current x/tools (v2.12.0 fails on Go 1.27)
+    desc: Install the Wails CLI at the library version of apps/desktop/go.mod, built with the repo's Go
     cmds:
       - scripts/install-wails.sh
 
@@ -56,12 +56,13 @@ tasks:
       - task: gen-wails
 
   gen-openapi:
-    desc: OpenAPI -> Go server stubs + TS client
+    desc: OpenAPI -> Go server stubs, Go client (shared/go/apiclient) + TS client
     preconditions:
       - sh: test -f api/openapi.yaml
         msg: api/openapi.yaml missing (M0-WP2)
     cmds:
       - cd {{.CLOUD}} && oapi-codegen -config ../../api/oapi-codegen.yaml ../../api/openapi.yaml
+      - cd shared/go && oapi-codegen -config ../../api/oapi-codegen-client.yaml ../../api/openapi.yaml
       - cmd: if [ -d packages/api-client ]; then yarn workspace @memobrain/api-client run gen; fi
         silent: true
 
@@ -85,6 +86,9 @@ tasks:
 
   gen-wails:
     desc: Wails Go bindings -> packages/workbench/wailsjs
+    preconditions: &wails-version
+      - sh: '{{.ROOT_DIR}}/scripts/install-wails.sh --check'
+        msg: The Wails CLI must match the library version in apps/desktop/go.mod (run `task wails-cli`)
     cmds:
       - cmd: mkdir -p {{.DESKTOP}}/frontend/dist
         silent: true
@@ -100,7 +104,7 @@ tasks:
     status:
       - test -f packages/workbench/wailsjs/go/models.ts
     cmds:
-      - cmd: command -v wails >/dev/null 2>&1 || [ -x "$(go env GOPATH)/bin/wails" ] || scripts/install-wails.sh
+      - cmd: scripts/install-wails.sh --check 2>/dev/null || scripts/install-wails.sh
         silent: true
       - task: gen-wails
 
@@ -139,8 +143,13 @@ tasks:
   test-go:
     desc: go test -race on all Go modules
     silent: true
+    env:
+      # Set by `task ci`: the dispatcher/bindings test fails instead of skipping when wailsjs is missing.
+      MEMOBRAIN_REQUIRE_BINDINGS: '{{.REQUIRE_BINDINGS | default ""}}'
     cmds:
-      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && go test -race -count=1 ./...) || exit 1; done
+      # apps/desktop/main.go embeds the frontend build: a placeholder lets it compile without one.
+      - mkdir -p {{.DESKTOP}}/frontend/dist && [ -e {{.DESKTOP}}/frontend/dist/index.html ] || touch {{.DESKTOP}}/frontend/dist/index.html
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && go test -race -count=1 {{.WAILS_TAGS}} ./...) || exit 1; done
 
   wasm-core:
     desc: The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core) + wasm_exec.js (ADR-0030)
@@ -169,7 +178,7 @@ tasks:
   conformance:
     desc: Shared Markdown/merge/crypto fixtures run by Go and TS
     cmds:
-      - cd shared/go && go test -race -count=1 -run Conformance ./conformance/...
+      - cd shared/go && go test -race -count=1 -run Conformance ./conformance/... ./merge/...
       - cmd: if [ -d {{.DESKTOP}}/internal/parser ]; then cd {{.DESKTOP}} && go test -race -count=1 -run Conformance ./internal/parser/...; fi
         silent: true
       - yarn workspace @memobrain/conformance run test
@@ -210,12 +219,50 @@ tasks:
     cmds:
       - yarn workspace @memobrain/web run e2e
 
+  typecheck:
+    desc: TypeScript type check in every workspace package
+    deps: [wailsjs]
+    cmds:
+      - yarn run typecheck
+
+  parity:
+    desc: Check the feature registry (shared/parity/features.yaml) and docs/web-workbench-parity.md (ADR-0029, ADR-0037)
+    deps: [wailsjs]
+    cmds:
+      - node --test 'scripts/parity/*.test.mjs'
+      - node scripts/parity.mjs --check
+
+  check-gen:
+    desc: Fail when `task gen` changes the tree (generated code out of date)
+    silent: true
+    cmds:
+      - |
+        state() { { git diff --no-ext-diff; git ls-files --others --exclude-standard | sort | xargs -I{} shasum {} ; } | shasum; }
+        before=$(state)
+        {{.TASK_EXE}} gen
+        if [ "$(state)" != "$before" ]; then
+          echo "generated code is out of date: run 'task gen' and review the diff" >&2
+          git status --short >&2
+          exit 1
+        fi
+
+  # There is no CI service (ADR-0036): this is the verification to run locally before merging and before tagging
+  # a release. Slower suites that need Docker or browsers are listed in docs/dev-setup.md (test-integration,
+  # test-desktop-e2e, e2e, `yarn workspace @memobrain/web e2e:cloud`).
   ci:
-    desc: What CI runs on every push
+    desc: Full local verification before merging or tagging (ADR-0036)
     cmds:
       - task: lint
+      - task: typecheck
       - task: vuln
-      - task: test
+      - task: wailsjs
+      - task: test-go
+        vars: { REQUIRE_BINDINGS: '1' }
+      - task: test-ts
+      - task: conformance
+      - task: test-wasm
+      - task: parity
+      - task: check-gen
 
   ## ---- run -------------------------------------------------------------------
 
@@ -251,8 +298,10 @@ tasks:
   dev-desktop:
     desc: Run the desktop app with live reload (esbuild, no HMR)
     dir: '{{.DESKTOP}}'
+    preconditions: *wails-version
     cmds:
-      - wails dev {{.WAILS_TAGS}}
+      # -nosyncgomod: never let the CLI rewrite go.mod to its own Wails version.
+      - wails dev -nosyncgomod {{.WAILS_TAGS}}
 
   dev-web:
     desc: Web UI on :5174 with live reload, proxying /api to the cloud on :18081
@@ -305,8 +354,9 @@ tasks:
   build-desktop:
     desc: Build the desktop app for the current OS
     dir: '{{.DESKTOP}}'
+    preconditions: *wails-version
     cmds:
-      - wails build -clean {{.WAILS_TAGS}} -ldflags "-X main.Version={{.VERSION}}"
+      - wails build -clean -nosyncgomod {{.WAILS_TAGS}} -ldflags "-X main.Version={{.VERSION}}"
 
   docker-build:
     desc: Build the cloud image (Web UI + workbench embedded) for this machine and load it as IMAGE:VERSION
@@ -327,11 +377,23 @@ tasks:
       - GOWORK=off go build -o ../../bin/release .
 
   helm-check:
-    desc: helm lint + template for the chart with every values file
+    desc: helm lint + template for the chart with every values file, on Kubernetes 1.27 (oldest supported) and 1.30
+    dir: deploy/helm/memobrain
+    silent: true
     cmds:
-      - helm lint deploy/helm/memobrain
-      - cmd: for f in deploy/helm/memobrain/values-k3d.yaml deploy/helm/memobrain/ci/*.yaml; do helm lint deploy/helm/memobrain -f $f >/dev/null && helm template ci deploy/helm/memobrain -f $f >/dev/null && echo "ok $f" || exit 1; done
-        silent: true
+      # The defaults hold no secret: the chart must refuse to create an empty Secret.
+      - if helm template ci . >/dev/null 2>&1; then echo "the default values rendered a Secret without values" >&2; exit 1; fi; echo "ok defaults refused (no secret)"
+      - |
+        for kv in 1.27.0 1.30.0; do
+          for f in values-k3d.yaml values-k3d.yaml,values-chaos.yaml ci/*.yaml; do
+            args=""; for v in $(echo "$f" | tr , ' '); do args="$args -f $v"; done
+            helm lint . --kube-version "$kv" $args >/dev/null && helm template ci . --kube-version "$kv" $args >/dev/null || exit 1
+            echo "ok k8s $kv $f"
+          done
+        done
+      # The preStop sleep action exists from Kubernetes 1.30 only.
+      - if helm template ci . -f ci/values-ha.yaml --kube-version 1.27.0 | grep -q 'sleep:'; then echo "preStop sleep rendered for Kubernetes 1.27" >&2; exit 1; fi
+      - if ! helm template ci . -f ci/values-ha.yaml --kube-version 1.30.0 | grep -q 'sleep:'; then echo "preStop sleep missing for Kubernetes 1.30" >&2; exit 1; fi; echo "ok preStop sleep only on 1.30+"
 
   release-desktop:
     desc: 'Local installer build: task release-desktop OS=darwin|windows|linux V=1.0.0-rc.1'
