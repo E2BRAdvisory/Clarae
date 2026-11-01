@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "e2e:security": "playwright test -c playwright.security.config.ts",
-    "e2e:workbench-ui": "E2E_TARGET=web E2E_ORIGIN=http://localhost:5176 playwright test -c playwright.workbench-ui.config.ts",
+    "e2e:workbench-ui": "playwright test -c playwright.workbench-ui.config.ts",
     "e2e:cloud": "playwright test -c playwright.cloud.config.ts"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, listVaultFiles, readVaultFile, test } from './support';
 import {
   answerPrompt,
   openDrawing,
@@ -8,7 +8,6 @@ import {
   selectAll,
   shape,
   waitSaved,
-  type MockWindow,
   watchNetwork,
 } from './drawingHelpers';
 
@@ -75,12 +74,12 @@ test('the tools panel searches, runs a generator and remembers favorites', async
   await expect(panel.getByRole('button', { name: /calendar/ })).toHaveCount(0);
 
   await panel.getByRole('button', { name: /Add insert comic panels to favorites/ }).click();
-  const favorites = () =>
-    page.evaluate(() => {
-      const w = window as unknown as MockWindow;
-      const raw = [...w.__mock.vaults.values()][0]?.files.get('.memobrain/drawing.json') ?? '{}';
-      return (JSON.parse(raw) as { toolFavorites?: string[] }).toolFavorites ?? [];
-    });
+  const favorites = async () =>
+    (
+      JSON.parse((await readVaultFile(page, '.memobrain/drawing.json')) || '{}') as {
+        toolFavorites?: string[];
+      }
+    ).toolFavorites ?? [];
   await expect.poll(favorites).toEqual(['comic-panels']);
 
   await panel.getByRole('button', { name: 'insert comic panels', exact: true }).click();
@@ -144,14 +143,7 @@ test('an Obsidian .excalidraw.md is converted into a drawing and opened', async 
     .getByRole('listbox', { name: 'Convert an Obsidian drawing' })
     .getByRole('button', { name: 'Old.excalidraw.md' })
     .click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const w = window as unknown as MockWindow;
-        return [...w.__mock.vaults.values()][0]?.files.has('Old.excalidraw') ?? false;
-      }),
-    )
-    .toBe(true);
+  await expect.poll(async () => (await listVaultFiles(page)).includes('Old.excalidraw')).toBe(true);
   await expect(page.getByRole('tab', { name: /Old/ }).first()).toBeVisible();
 });
 
@@ -174,13 +166,13 @@ test('importing a .excalidrawlib merges its shapes into the library', async ({ p
     .click();
   await expect(page.getByText('1 shapes imported into the library.')).toBeVisible();
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const w = window as unknown as MockWindow;
-        const raw =
-          [...w.__mock.vaults.values()][0]?.files.get('.memobrain/excalidraw-library.json') ?? '{}';
-        return (JSON.parse(raw) as { libraryItems?: unknown[] }).libraryItems?.length ?? 0;
-      }),
+    .poll(
+      async () =>
+        (
+          JSON.parse((await readVaultFile(page, '.memobrain/excalidraw-library.json')) || '{}') as {
+            libraryItems?: unknown[];
+          }
+        ).libraryItems?.length ?? 0,
     )
     .toBe(1);
 });

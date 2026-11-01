@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, skipOnWeb, test } from './support';
 import {
   binaries,
   openDrawing,
@@ -42,6 +43,10 @@ const lastFileExport = (page: Page) =>
 test('Save as… writes a valid PNG through the native dialog, with the chosen scale', async ({
   page,
 }) => {
+  skipOnWeb(
+    'drawing.export',
+    'the spec reads the files the Wails mock captures from the save dialog (window.__mock.fileExports); in the browser an export is a download',
+  );
   const external = watchNetwork(page);
   await openDrawing(page, WITH_FRAME);
 
@@ -73,6 +78,10 @@ test('Save as… writes a valid PNG through the native dialog, with the chosen s
 test('exporting a frame covers only the frame and embeds the scene when asked', async ({
   page,
 }) => {
+  skipOnWeb(
+    'drawing.export',
+    'the spec reads the files the Wails mock captures from the save dialog (window.__mock.fileExports); in the browser an export is a download',
+  );
   await openDrawing(page, WITH_FRAME);
 
   // Whole drawing, SVG.
@@ -114,6 +123,10 @@ test('the selection is exportable only when something is selected', async ({ pag
 test('Save to vault names the file after the options and cancelling the dialog writes nothing', async ({
   page,
 }) => {
+  skipOnWeb(
+    'drawing.export',
+    'the spec cancels the save dialog of the Wails mock (window.__mock.exportCancelled); the browser has no save dialog to cancel',
+  );
   await openDrawing(page, WITH_FRAME);
   const dialog = await openExport(page);
   await dialog.getByLabel('Dark theme').check();
@@ -135,6 +148,10 @@ test('Save to vault names the file after the options and cancelling the dialog w
 test('auto-export writes the PNG and SVG variants next to the drawing after a save', async ({
   page,
 }) => {
+  skipOnWeb(
+    'drawing.export',
+    'the spec reads the exports the Wails mock captures (window.__mock.drawingExports)',
+  );
   await openDrawing(page, WITH_FRAME);
 
   // Turn it on in Settings > Drawings.

@@ -333,6 +333,50 @@ function tests(f) {
 }
 
 /**
+ * Coverage of the e2e matrix (web/playwright.workbench-ui.config.ts, P7 of the W8 review): every spec
+ * of apps/desktop/frontend/e2e runs on the desktop mock and on the web core, unless it calls
+ * `skipOnWeb('<feature id>', '<reason>')` (e2e/support.ts): at file level (not indented) the whole
+ * spec is skipped on the web, inside a test only that test. A top-level `test.skip(!X, …)` marks an
+ * opt-in benchmark. `specs`: [{ file, text }]; `featureIds`: the ids of the registry.
+ * Returns { rows: [{ file, tests, desktop, web, skips: [{ feature, reason, scope }] }], errors }.
+ */
+export function specCoverage(specs, featureIds) {
+  const known = new Set(featureIds);
+  const rows = [];
+  const errors = [];
+  const skipRe = /^([ \t]*)skipOnWeb\(\s*(['"])([^'"]+)\2,\s*(['"])((?:(?!\4)[^\\]|\\.)*)\4/gm;
+  for (const { file, text } of specs) {
+    const tests = (text.match(/^[ \t]*test\(/gm) ?? []).length;
+    const optIn = /^test\.skip\(!/m.test(text);
+    const skips = [...text.matchAll(skipRe)].map((m) => ({
+      feature: m[3],
+      reason: m[5].replace(/\\(['"])/g, '$1'),
+      scope: m[1] === '' ? 'file' : 'test',
+    }));
+    for (const s of skips)
+      if (!known.has(s.feature))
+        errors.push(
+          `${file}: skipOnWeb names '${s.feature}', which is not a feature of the registry`,
+        );
+    const fileSkip = skips.find((s) => s.scope === 'file');
+    const testSkips = skips.filter((s) => s.scope === 'test');
+    const web = fileSkip
+      ? 'no'
+      : testSkips.length
+        ? `partial (${testSkips.length} of ${tests} skipped)`
+        : 'yes';
+    rows.push({
+      file,
+      tests,
+      desktop: optIn ? 'opt-in' : 'yes',
+      web: optIn && !fileSkip ? 'opt-in' : web,
+      skips,
+    });
+  }
+  return { rows, errors };
+}
+
+/**
  * The generated part of docs/web-workbench-parity.md (markers included).
  * `inputs`: { registry, commands, bindings, operations, calledByWebTests(binding) → bool,
  * calledByConsole: Set<operationId> }.
@@ -381,6 +425,25 @@ export function render(inputs) {
       : (refs.operations.get(o.operationId) ?? []).map(code).join(', '),
     calledByConsole.has(o.operationId) ? 'yes' : '—',
   ]);
+  const specRows = (inputs.specs ?? []).map((r) => [
+    code(r.file),
+    String(r.tests),
+    r.desktop,
+    r.web,
+    r.skips
+      .map((x) => `${code(x.feature)}${x.scope === 'test' ? ' (un test)' : ''}: ${x.reason}`)
+      .join(' · ') || '—',
+  ]);
+  const specSection = specRows.length
+    ? [
+        `### Spec e2e per target (${specRows.length})`,
+        '',
+        `Gli spec di \`apps/desktop/frontend/e2e\` girano su entrambi i target della matrice (\`web/playwright.workbench-ui.config.ts\`: \`desktop-mock\` = UI sul mock Wails, \`web-core\` = workbench sul core WebAssembly). Sul web: **${specRows.filter((r) => r[3] === 'yes').length}** interi, **${specRows.filter((r) => r[3].startsWith('partial')).length}** in parte, **${specRows.filter((r) => r[3] === 'no').length}** esclusi; \`opt-in\` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con \`skipOnWeb(<funzione>, <motivo>)\`; i test sono contati nel sorgente (un ciclo conta una volta).`,
+        '',
+        table(specRows, ['Spec', 'Test', 'Desktop (mock)', 'Web (core)', 'Esclusioni sul web']),
+        '',
+      ]
+    : [];
   const nCalled = bindRows.filter((r) => r[2] === 'yes').length;
   const nWeb = commands.filter((c) => c.platforms?.web !== false).length;
   const nConsole = opRows.filter((r) => r[3] === 'yes').length;
@@ -419,6 +482,7 @@ export function render(inputs) {
     '',
     table(opRows, ['Operazione', 'Metodo e percorso', 'Funzione', 'Chiamata dalla console']),
     '',
+    ...specSection,
     END,
   ].join('\n');
 }

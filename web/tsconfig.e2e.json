@@ -11,9 +11,11 @@
     "e2e",
     "e2e-security",
     "e2e-cloud",
+    "e2e-mixed",
     "playwright.config.ts",
     "playwright.security.config.ts",
     "playwright.workbench-ui.config.ts",
-    "playwright.cloud.config.ts"
+    "playwright.cloud.config.ts",
+    "playwright.mixed.config.ts"
   ]
 }

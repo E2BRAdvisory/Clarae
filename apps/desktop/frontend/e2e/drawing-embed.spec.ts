@@ -1,8 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, listVaultFiles, readVaultFile, test } from './support';
 import {
   answerPrompt,
   openDrawing,
-  type MockWindow,
   runCommand,
   savedDrawing,
   scene,
@@ -195,15 +194,13 @@ test('the default style of the vault applies to new drawings', async ({ page }) 
   await expect
     .poll(
       () =>
-        page.evaluate(() => {
-          const w = window as unknown as MockWindow;
-          const v = [...w.__mock.vaults.values()][0]!;
-          const name = [...v.files.keys()].find((k) => /^Drawing .*\.excalidraw$/.test(k));
-          const doc = JSON.parse(v.files.get(name ?? '') ?? '{"elements":[]}') as {
-            elements: { strokeColor: string }[];
-          };
+        (async () => {
+          const name = (await listVaultFiles(page)).find((k) => /^Drawing .*\.excalidraw$/.test(k));
+          const doc = JSON.parse(
+            (name && (await readVaultFile(page, name))) || '{"elements":[]}',
+          ) as { elements: { strokeColor: string }[] };
           return doc.elements[0]?.strokeColor;
-        }),
+        })(),
       { timeout: 15_000 },
     )
     .toBe('#e03131');

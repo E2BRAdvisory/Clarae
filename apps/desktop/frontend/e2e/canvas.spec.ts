@@ -1,11 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-
-interface MockWindow {
-  __mock: {
-    vaults: Map<string, { info: { id: string }; files: Map<string, string> }>;
-    emit(name: string, payload: unknown): void;
-  };
-}
+import type { Page } from '@playwright/test';
+import { appOrigin, expect, listVaultFiles, openVault, readVaultFile, test } from './support';
 
 const MAP = JSON.stringify({
   nodes: [
@@ -16,36 +10,19 @@ const MAP = JSON.stringify({
   edges: [],
 });
 
-async function openVault(page: Page, files: Record<string, string>): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open folder as vault' }).click();
-  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
-  await page.evaluate((seed) => {
-    const w = window as unknown as MockWindow;
-    const v = [...w.__mock.vaults.values()][0];
-    if (!v) throw new Error('vault not open');
-    for (const [p, c] of Object.entries(seed)) v.files.set(p, c);
-    w.__mock.emit('vault:file-changed', { vaultId: v.info.id, paths: Object.keys(seed) });
-  }, files);
-}
-
 interface Canvas {
   nodes: { id: string; type: string; text?: string; x: number }[];
   edges: { fromNode: string; toNode: string; label?: string }[];
 }
 const canvasOf = async (page: Page, path: string): Promise<Canvas> =>
-  JSON.parse(
-    await page.evaluate((p) => {
-      const w = window as unknown as MockWindow;
-      return [...w.__mock.vaults.values()][0]?.files.get(p) ?? '{}';
-    }, path),
-  ) as Canvas;
+  JSON.parse((await readVaultFile(page, path)) || '{}') as Canvas;
 
 test('a canvas: cards, connections, labels, undo and autosave, all offline', async ({ page }) => {
   const external: string[] = [];
+  const origin = appOrigin();
   page.on('request', (r) => {
     const u = new URL(r.url());
-    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== 'http://localhost:5199')
+    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== origin)
       external.push(r.url());
   });
   await openVault(page, { 'Map.canvas': MAP, 'Plan.md': '# Plan\n\nthe plan body\n' });
@@ -138,14 +115,9 @@ test('New canvas from the palette creates the file and embeds it in the open not
   await page.keyboard.press('Enter');
   await expect(page.getByRole('tab', { name: /Canvas \d{4}/ })).toBeVisible();
   await expect(page.getByRole('application', { name: 'Canvas' })).toBeVisible();
-  expect(
-    await page.evaluate(() => {
-      const w = window as unknown as MockWindow;
-      return [...(w.__mock.vaults.values().next().value?.files.keys() ?? [])].filter((p) =>
-        p.endsWith('.canvas'),
-      ).length;
-    }),
-  ).toBe(1);
+  await expect
+    .poll(async () => (await listVaultFiles(page)).filter((p) => p.endsWith('.canvas')).length)
+    .toBe(1);
 });
 
 test('a canvas goes full screen and Escape leaves it', async ({ page }) => {
@@ -162,4 +134,43 @@ test('a canvas goes full screen and Escape leaves it', async ({ page }) => {
   });
   await page.keyboard.press('Escape');
   await expect(page.locator('.canvas-view.fullscreen')).toHaveCount(0);
+});
+
+test('a link in a canvas card does not navigate the app away', async ({ page }) => {
+  const map = JSON.stringify({
+    nodes: [
+      {
+        id: 'l',
+        type: 'text',
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 120,
+        text: 'See [the site](https://example.com/page) and [the plan](Plan.md)',
+      },
+    ],
+    edges: [],
+  });
+  await openVault(page, { 'Links.canvas': map, 'Plan.md': '# Plan\n\nthe plan body\n' });
+  await page.locator('.tree .node', { hasText: 'Links' }).click();
+  const card = page.locator('[data-node="l"]');
+  await expect(card.getByRole('link', { name: 'the site' })).toBeVisible();
+
+  // Nothing leaves the page: no navigation of the main frame and no request to the external site.
+  const before = page.url();
+  let navigations = 0;
+  page.on('framenavigated', (f) => {
+    if (f === page.mainFrame()) navigations++;
+  });
+  const external: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().startsWith('https://example.com')) external.push(r.url());
+  });
+  await card.getByRole('link', { name: 'the site' }).click();
+  await card.getByRole('link', { name: 'the plan' }).click();
+  await page.waitForTimeout(500);
+  expect(page.url()).toBe(before);
+  expect(navigations).toBe(0);
+  expect(external).toEqual([]);
+  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
 });

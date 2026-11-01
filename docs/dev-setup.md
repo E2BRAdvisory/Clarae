@@ -82,15 +82,16 @@ Non c'è un servizio di CI ([ADR-0036](adr/0036-verifiche-locali-senza-ci.md)). 
 
 **Suite lente**, fuori da `task ci`: si eseguono quando si tocca l'area relativa e comunque prima di un rilascio.
 
-| Comando                                          | Cosa                                                                                                  | Prerequisiti                                                                  |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `task test-integration`                          | cloud con testcontainers (PostgreSQL, MinIO, Keycloak)                                                | Docker                                                                        |
-| `task test-desktop-e2e`                          | sync a due dispositivi e contract test del client REST (`internal/sync/...` con il tag `integration`) | Docker (costruisce il binario del cloud, PostgreSQL in container)             |
-| `task e2e`                                       | Playwright: UI desktop sul mock, spec di disegno/grafo/canvas sul bundle di produzione, Web UI        | Chromium di Playwright                                                        |
-| `yarn workspace @memobrain/web e2e:workbench-ui` | gli spec del desktop eseguiti sul workbench web contro il core vero                                   | `task wasm-core`                                                              |
-| `yarn workspace @memobrain/web e2e:cloud`        | workbench contro un cloud vero: login, sync tra browser, vault privato nel browser                    | `task web-build`, poi `scripts/run-desktop-with-cloud.sh --cloud-only --keep` |
-| `yarn workspace @memobrain/web e2e:security`     | CSP, SRI e richieste esterne sulla build di produzione servita dall'handler Go                        | `task web-build`                                                              |
-| `task perf` / `task perf-check`                  | suite di prestazioni del desktop e confronto con la baseline (vedi sotto)                             | dataset sintetico (`task perf-data`)                                          |
+| Comando                                      | Cosa                                                                                                  | Prerequisiti                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `task test-integration`                      | cloud con testcontainers (PostgreSQL, MinIO, Keycloak)                                                | Docker                                                                        |
+| `task test-desktop-e2e`                      | sync a due dispositivi e contract test del client REST (`internal/sync/...` con il tag `integration`) | Docker (costruisce il binario del cloud, PostgreSQL in container)             |
+| `task e2e`                                   | Playwright: UI desktop sul mock, spec di disegno/grafo/canvas sul bundle di produzione, Web UI        | Chromium di Playwright                                                        |
+| `task e2e-matrix`                            | matrice e2e: tutti gli spec di `apps/desktop/frontend/e2e` su `desktop-mock` e `web-core` (sotto)     | Chromium di Playwright (`task wasm-core` è una dipendenza)                    |
+| `task e2e-mixed`                             | client misti sullo stesso cloud: dispositivo desktop headless e workbench web (sotto)                 | Docker, porte 5434, 8080, 9010-9012, 18091-18093 libere                       |
+| `yarn workspace @memobrain/web e2e:cloud`    | workbench contro un cloud vero: login, sync tra browser, vault privato nel browser                    | `task web-build`, poi `scripts/run-desktop-with-cloud.sh --cloud-only --keep` |
+| `yarn workspace @memobrain/web e2e:security` | CSP, SRI e richieste esterne sulla build di produzione servita dall'handler Go                        | `task web-build`                                                              |
+| `task perf` / `task perf-check`              | suite di prestazioni del desktop e confronto con la baseline (vedi sotto)                             | dataset sintetico (`task perf-data`)                                          |
 
 Con la build della Web UI presente (`task web-build`), `MEMOBRAIN_REQUIRE_WEB_BUILD=1 go test ./web-embed/...` in `services/cloud` rende obbligatori i controlli di CSP e SRI sugli asset incorporati invece di saltarli.
 
@@ -106,6 +107,25 @@ task web-clean       # rimuove la build incorporata e ripristina il segnaposto
 ```
 
 Per un singolo pacchetto sotto WASM: `cd apps/desktop && GOOS=js GOARCH=wasm go test -exec "$PWD/../../scripts/go-js-exec.sh" ./internal/store/...`. Il codice di `apps/desktop/internal` deve compilare anche per `js/wasm`: ciò che dipende dall'host va dietro l'interfaccia `Host` o in file `*_js.go` / `*_native.go`.
+
+## Matrice e2e e client misti
+
+**Matrice** (`web/playwright.workbench-ui.config.ts`, `task e2e-matrix` o `yarn workspace @memobrain/web e2e:workbench-ui`): ogni spec di `apps/desktop/frontend/e2e` gira in due progetti, `desktop-mock` (la UI sul mock dei binding, server su :5199) e `web-core` (il workbench nel browser sul core WebAssembly, OPFS, server su :5176); un solo target con `--project web-core`. I due server si costruiscono una volta sola (`--no-watch`): con il watch una modifica ai sorgenti ricaricherebbe le pagine dei test in corso. I server servono build proprie (`MEMOBRAIN_DIST`), perché `web/dist` e `apps/desktop/frontend/dist` vengono ricostruiti da altre build. Due esecuzioni contemporanee (più worktree) vogliono porte diverse: `E2E_MATRIX_DESKTOP_PORT=5299 E2E_MATRIX_WEB_PORT=5276 task e2e-matrix`. Build, artefatti e trace in `.dev/e2e-matrix/<porta desktop>-<porta web>/`.
+
+Gli spec importano `test` ed `expect` da `e2e/support.ts`, che espone l'opzione `target` e gli helper che dipendono dal target (`openVault`, `seedVault`, `readVaultFile`, `listVaultFiles`, `vaultBinaries`, `appOrigin`): sul mock leggono e scrivono `window.__mock`, sul web chiamano i binding del core. Uno spec, o un singolo test, che non può girare sul web lo dichiara con `skipOnWeb('<id del registro>', '<motivo>')`: a livello di file esclude tutto lo spec, come prima istruzione di un test solo quel test. `node scripts/parity.mjs` riporta la copertura per target nella tabella «Spec e2e per target» di [web-workbench-parity.md](web-workbench-parity.md) e fallisce se l'id non è una voce di `shared/parity/features.yaml`.
+
+**Client misti** (`task e2e-mixed`, cioè `scripts/e2e-mixed.sh`): il dispositivo A è il core del desktop senza finestra (`apps/desktop/cmd/e2e-device`, tag di build `e2e`: gli stessi binding di Wails, il motore di sync vero e cartelle del vault su disco, comandato da Playwright con una piccola API HTTP su loopback), il dispositivo B è il workbench web in Chromium, entrambi sullo stesso cloud. Scenari (`web/e2e-mixed/mixed.spec.ts`): merge di modifiche concorrenti a un `.md`, copia di conflitto di un `.canvas` e merge per elemento di un `.excalidraw`, vault privato creato sul desktop e sbloccato nel browser, condivisione creata sul desktop e accettata, montata e revocata nel browser, profilo con `features.web_workbench = false`, revoca del dispositivo dal browser.
+
+Lo script usa uno stack usa e getta, mai quello di sviluppo: progetto compose `memobrain-w8e2e` (`deploy/docker/compose.e2e-mixed.yaml` sopra `compose.dev.yaml`) con PostgreSQL :5434, S3 :9010/:9011, Keycloak :8080 (management :9012) e il cloud su :18091 (gRPC :18092). Keycloak importa una copia del realm di sviluppo in `.dev/e2e-mixed/realm`, con l'origine :18091 su `memobrain-web` e il password grant su `memobrain-desktop`, con cui il dispositivo headless ottiene i token (mai nel realm distribuito). Le build stanno sotto `.dev/e2e-mixed` (core WASM, Web UI con `MEMOBRAIN_DIST`, cloud compilato in una copia del modulo con la Web UI incorporata): `build/wasm`, `web/dist` e `services/cloud/web-embed/dist` non vengono toccati.
+
+```sh
+task e2e-mixed                     # stack, build, cloud, test, poi down -v
+KEEP=1 task e2e-mixed              # lascia lo stack acceso; poi:
+task e2e-mixed -- test --grep canvas   # di nuovo i soli test (SKIP_BUILD=1 riusa i binari con `all`)
+task e2e-mixed -- down             # ferma il cloud, rimuove stack e volumi
+```
+
+Log in `.dev/e2e-mixed/logs` (`cloud.log`, `compose.log`, `web-build.log`); `MEMOBRAIN_E2E_DEVICE_VERBOSE=1` manda il log del core del dispositivo su stderr.
 
 ## Contract test
 
@@ -142,6 +162,16 @@ Ogni funzione utente ha una voce in `shared/parity/features.yaml` (ADR-0037 §1)
 5. **Comandi che dipendono dalla piattaforma.** Se il comando esiste solo dove c'è una capability (`packages/workbench/src/platform`), dichiaralo con `requires: ['updater']` nel `Command` invece di un controllo in `enabled`. Il controllo legge `requires` e rifiuta un `yes` sul workbench per un comando che il browser non ha.
 6. **Un'operazione che non è una funzione utente** (sonda, bootstrap pubblico) va in `server_only`, con il motivo.
 7. **Rigenera e verifica:** `node scripts/parity.mjs` aggiorna le tabelle di `docs/web-workbench-parity.md`; `task parity` esegue i test del controllo e `node scripts/parity.mjs --check`.
+
+## Flag e chiavi del Config Profile
+
+`api/config-profile.schema.json` è l'unica fonte delle chiavi del Config Profile: ogni flag `features.*` ha `type`, `default` e `description`, e le altre chiavi un `default` se il prodotto ne ha uno. `task gen` (`task gen-features`, `go run ./features/gen` in `shared/go`) ne genera:
+
+- `shared/go/features/features_gen.go`: le costanti Go dei flag (`features.WebWorkbench`, …), `Known`, `Defaults`, `Descriptions` e i default del prodotto (`features.ProductDefaults()`, distribuiti dal cloud come base della configurazione effettiva); il pacchetto, importabile da cloud e core del desktop, aggiunge `Flags` ed `Enabled`;
+- `shared/go/features/config-profile.schema.json`: la copia dello schema incorporata (il cloud valida i profili con questa);
+- `packages/api-client/src/gen/features.ts`: l'unione TypeScript `Feature`, `FEATURES` e `FEATURE_DEFAULTS`, esportati con `featureEnabled` da `@memobrain/api-client/features` (senza dipendenze: lo usano workbench, console e `@memobrain/cloud-features`).
+
+Per un flag nuovo: aggiungilo allo schema con default e descrizione, `task gen`, una riga nella tabella «Chiavi del profilo» di [admin-guide/profili-quote-audit.md](admin-guide/profili-quote-audit.md), poi usalo con la costante (`featureOn(m.features, Feature.X)` nel workbench, `features.Enabled(cfg, features.X)` in Go). I test di `shared/go/features` falliscono se i file generati non corrispondono allo schema o se la tabella della guida non elenca esattamente le chiavi dello schema con tipo e default; `featureOn` accetta solo nomi dello schema (`Feature`), quindi un refuso non compila.
 
 ## Struttura
 

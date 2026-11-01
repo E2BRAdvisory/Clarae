@@ -1,5 +1,6 @@
-// Shared helpers of the drawing e2e specs (the UI runs against the in-memory Wails mock).
-import { expect, type Page } from '@playwright/test';
+// Shared helpers of the drawing e2e specs (on both targets, see support.ts).
+import type { Page } from '@playwright/test';
+import { appOrigin, expect, openVault, readVaultFile, vaultBinaries } from './support';
 
 export interface MockWindow {
   __mock: {
@@ -70,10 +71,11 @@ export const scene = (elements: El[]): string =>
 /** Fails the offline gate when the page asks for anything outside the app itself. */
 export function watchNetwork(page: Page): string[] {
   const external: string[] = [];
+  const origin = appOrigin();
   page.on('request', (req) => {
     const url = new URL(req.url());
     if (url.protocol === 'data:' || url.protocol === 'blob:') return;
-    if (url.origin !== 'http://localhost:5199') external.push(req.url());
+    if (url.origin !== origin) external.push(req.url());
   });
   return external;
 }
@@ -84,26 +86,7 @@ export async function openDrawing(
   sceneJson: string,
   extra: { files?: Record<string, string>; binaries?: Record<string, string> } = {},
 ): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open folder as vault' }).click();
-  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
-  await page.evaluate(
-    ({ seed, more }) => {
-      const w = window as unknown as MockWindow;
-      const v = [...w.__mock.vaults.values()][0];
-      if (!v) throw new Error('vault not open');
-      v.files.set('Board.excalidraw', seed);
-      for (const [p, c] of Object.entries(more.files ?? {})) v.files.set(p, c);
-      for (const [p, c] of Object.entries(more.binaries ?? {})) v.binaries.set(p, c);
-      const paths = [
-        'Board.excalidraw',
-        ...Object.keys(more.files ?? {}),
-        ...Object.keys(more.binaries ?? {}),
-      ];
-      w.__mock.emit('vault:file-changed', { vaultId: v.info.id, paths });
-    },
-    { seed: sceneJson, more: extra },
-  );
+  await openVault(page, { 'Board.excalidraw': sceneJson, ...extra.files }, extra.binaries);
   await page.locator('.tree .node', { hasText: 'Board' }).click();
   await expect(page.locator('.drawing-canvas .excalidraw canvas.interactive')).toBeVisible({
     timeout: 60_000,
@@ -147,19 +130,11 @@ export interface Saved {
   files: Record<string, { mimeType: string; dataURL: string }>;
 }
 
-export const savedDrawing = (page: Page): Promise<Saved> =>
-  page.evaluate(() => {
-    const w = window as unknown as MockWindow;
-    const raw = [...w.__mock.vaults.values()][0]?.files.get('Board.excalidraw') ?? '{}';
-    return JSON.parse(raw) as never;
-  });
+export const savedDrawing = async (page: Page): Promise<Saved> =>
+  JSON.parse((await readVaultFile(page, 'Board.excalidraw')) || '{}') as Saved;
 
 export const waitSaved = (page: Page) =>
   expect(page.locator('.save-state')).toHaveText('Saved', { timeout: 15_000 });
 
 /** The vault's binary (attachment) files by path. */
-export const binaries = (page: Page): Promise<Record<string, string>> =>
-  page.evaluate(() => {
-    const w = window as unknown as MockWindow;
-    return Object.fromEntries([...w.__mock.vaults.values()][0]?.binaries ?? []);
-  });
+export const binaries = (page: Page): Promise<Record<string, string>> => vaultBinaries(page);

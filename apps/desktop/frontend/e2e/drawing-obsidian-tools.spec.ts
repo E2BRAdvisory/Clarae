@@ -1,5 +1,6 @@
 // The tools of the Obsidian Excalidraw plugin: draw to shape, bucket fill and lasso selection.
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './support';
 import { openDrawing, savedDrawing, scene, shape, waitSaved } from './drawingHelpers';
 
 const canvas = (page: Page) => page.locator('.drawing-canvas .excalidraw canvas.interactive');

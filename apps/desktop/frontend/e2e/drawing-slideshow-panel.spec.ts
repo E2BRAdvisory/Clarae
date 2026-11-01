@@ -1,5 +1,6 @@
 // The Slideshow tab of the right sidebar for a drawing: the frames as slides.
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './support';
 import { openDrawing, savedDrawing, scene, shape, waitSaved } from './drawingHelpers';
 
 const frames = () =>

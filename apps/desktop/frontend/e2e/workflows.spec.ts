@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openVault } from './support';
+import { expect, test, openVault } from './support';
 
 test('create notes, link them, see the backlink, rename with link update', async ({ page }) => {
   await openVault(page);

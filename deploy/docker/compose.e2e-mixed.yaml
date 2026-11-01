@@ -1,0 +1,24 @@
+# Throwaway stack of the mixed-client e2e suite (scripts/e2e-mixed.sh, `task e2e-mixed`): the
+# services and images of compose.dev.yaml, with other host ports and its own project name, so
+# it never touches the development stack (memobrain-dev and its volumes) nor a local k3d cluster
+# that holds :9000 and :18080-18082. Use it only as an override of compose.dev.yaml:
+#   docker compose -p memobrain-w8e2e -f compose.dev.yaml -f compose.e2e-mixed.yaml up -d --wait
+# Keycloak imports a copy of the dev realm written by the script (E2E_MIXED_REALM_DIR): it adds
+# the cloud's test origin to memobrain-web and enables the password grant on memobrain-desktop,
+# which the headless desktop device uses (never in the shipped realm).
+services:
+  postgres:
+    ports: !override
+      - '5434:5432'
+
+  s3:
+    ports: !override
+      - '9010:9000'
+      - '9011:9001'
+
+  keycloak:
+    ports: !override
+      - '8080:8080' # the issuer is http://localhost:8080/realms/memobrain, as in development
+      - '9012:9000'
+    volumes: !override
+      - ${E2E_MIXED_REALM_DIR:?set by scripts/e2e-mixed.sh}:/opt/keycloak/data/import:ro

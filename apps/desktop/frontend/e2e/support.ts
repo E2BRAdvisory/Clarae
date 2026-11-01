@@ -1,19 +1,69 @@
-import { expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 
 /**
- * The same specs run twice (ADR-0029): against the desktop UI on the in-memory Wails mock (this
- * package's config), and against the vault workbench in the browser on the real Go core compiled to
- * WebAssembly (web/playwright.workbench-ui.config.ts sets E2E_TARGET=web). Only how a vault is opened
- * and filled differs; everything the specs do afterwards is the UI, identical in both.
+ * The same specs run on two targets (ADR-0029, P7 of the W8 review):
+ *  - `desktop`: the desktop UI on the in-memory Wails mock (this package's playwright.config.ts, and
+ *    the `desktop-mock` project of web/playwright.workbench-ui.config.ts);
+ *  - `web`: the vault workbench in the browser on the real Go core compiled to WebAssembly (OPFS,
+ *    sqlite-wasm; the `web-core` project of web/playwright.workbench-ui.config.ts).
+ * Only how a vault is opened, filled and read differs (the helpers below); everything a spec does
+ * afterwards is the UI, identical on both. A spec that cannot run on the web says why with
+ * `skipOnWeb(<feature id of shared/parity/features.yaml>, <reason>)`; scripts/parity.mjs reports
+ * the coverage of each target from those calls.
  */
-export const onWeb = process.env['E2E_TARGET'] === 'web';
+export type Target = 'desktop' | 'web';
+
+const envTarget: Target = process.env['E2E_TARGET'] === 'web' ? 'web' : 'desktop';
+
+export const test = base.extend<object, { target: Target }>({
+  target: [envTarget, { option: true, scope: 'worker' }],
+});
+
+export { expect };
+
+/** The target of the running test (from its project; E2E_TARGET for the single-target configs). */
+export function target(): Target {
+  return (test.info().project.use as { target?: Target }).target ?? envTarget;
+}
+
+/** Whether the running test is on the web workbench. */
+export const onWeb = (): boolean => target() === 'web';
 
 /** Origin the app is served from (the specs check that nothing else is requested). */
-export const appOrigin = process.env['E2E_ORIGIN'] ?? 'http://localhost:5199';
+export function appOrigin(): string {
+  const url =
+    test.info().project.use.baseURL ?? process.env['E2E_ORIGIN'] ?? 'http://localhost:5199';
+  return new URL(url).origin;
+}
+
+/**
+ * Skips the spec (called at file or describe level) or one test (called first in its body) on the web
+ * workbench.
+ * `feature` is the id of the entry of shared/parity/features.yaml the skipped flow belongs to, and
+ * `reason` why the web cannot run it (an exception of the registry, or what the spec needs from
+ * the Wails mock that the real core does not expose).
+ */
+export function skipOnWeb(feature: string, reason: string): void {
+  const message = `${feature}: ${reason}`;
+  let inTest = true;
+  try {
+    test.info();
+  } catch {
+    inTest = false; // declared at file or describe level
+  }
+  if (inTest) test.skip(onWeb(), message);
+  else test.skip(({ target }) => target === 'web', message);
+}
+
+interface MockVault {
+  info: { id: string };
+  files: Map<string, string>;
+  binaries: Map<string, string>;
+}
 
 interface MockWindow {
   __mock: {
-    vaults: Map<string, { info: { id: string }; files: Map<string, string> }>;
+    vaults: Map<string, MockVault>;
     emit(name: string, payload: unknown): void;
   };
 }
@@ -22,32 +72,146 @@ interface CoreWindow {
   go: { app: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> };
 }
 
+/** Seeds files: text by path, and binaries (base64) by path. */
+export interface Seed {
+  files?: Record<string, string>;
+  binaries?: Record<string, string>;
+}
+
+/** Writes files into the open vault, through the core's bindings on the web, into the mock otherwise. */
+export async function seedVault(page: Page, seed: Seed): Promise<void> {
+  const files = seed.files ?? {};
+  const binaries = seed.binaries ?? {};
+  if (Object.keys(files).length + Object.keys(binaries).length === 0) return;
+  if (onWeb()) {
+    await page.evaluate(
+      async ({ files, binaries }) => {
+        const app = (window as unknown as CoreWindow).go.app;
+        const vault = ((await app['VaultAPI']!['ListOpen']!()) as { id: string }[])[0];
+        if (!vault) throw new Error('vault not open');
+        for (const [path, content] of Object.entries(files)) {
+          const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+          if (dir) await app['VaultAPI']!['CreateFolder']!(vault.id, dir).catch(() => undefined);
+          // Replacing a file needs its current hash (WriteNote refuses to overwrite blindly).
+          const hash = await app['VaultAPI']!['ReadNote']!(vault.id, path).then(
+            (n) => (n as { hash: string }).hash,
+            () => '',
+          );
+          await app['VaultAPI']!['WriteNote']!(vault.id, path, content, hash);
+        }
+        for (const [path, b64] of Object.entries(binaries)) {
+          const cut = path.lastIndexOf('/');
+          await app['VaultAPI']!['SaveAttachment']!(
+            vault.id,
+            cut < 0 ? '' : path.slice(0, cut),
+            path.slice(cut + 1),
+            b64,
+          );
+        }
+      },
+      { files, binaries },
+    );
+    return;
+  }
+  await page.evaluate(
+    ({ files, binaries }) => {
+      const w = window as unknown as MockWindow;
+      const v = [...w.__mock.vaults.values()][0];
+      if (!v) throw new Error('vault not open');
+      for (const [p, c] of Object.entries(files)) v.files.set(p, c);
+      for (const [p, c] of Object.entries(binaries)) v.binaries.set(p, c);
+      w.__mock.emit('vault:file-changed', {
+        vaultId: v.info.id,
+        paths: [...Object.keys(files), ...Object.keys(binaries)],
+      });
+    },
+    { files, binaries },
+  );
+}
+
 /** Opens a vault with the Files tab showing; optionally seeds notes first. */
-export async function openVault(page: Page, files: Record<string, string> = {}): Promise<void> {
-  if (onWeb) {
+export async function openVault(
+  page: Page,
+  files: Record<string, string> = {},
+  binaries: Record<string, string> = {},
+): Promise<void> {
+  if (onWeb()) {
     // A folder of this browser, without a cloud (E2E builds only); a fresh name per test keeps vaults apart.
     const name = `ui-${Math.random().toString(36).slice(2, 10)}`;
     await page.goto(`/vaults/${name}/open?local`);
     await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible({ timeout: 90_000 });
-    if (Object.keys(files).length === 0) return;
-    await page.evaluate(async (seed) => {
+  } else {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open folder as vault' }).click();
+    await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
+  }
+  await seedVault(page, { files, binaries });
+}
+
+/** The text of a file of the open vault ('' when it does not exist). */
+export async function readVaultFile(page: Page, path: string): Promise<string> {
+  if (onWeb()) {
+    return page.evaluate(async (p) => {
       const app = (window as unknown as CoreWindow).go.app;
       const vault = ((await app['VaultAPI']!['ListOpen']!()) as { id: string }[])[0];
-      if (!vault) throw new Error('vault not open');
-      for (const [path, content] of Object.entries(seed))
-        await app['VaultAPI']!['WriteNote']!(vault.id, path, content, '');
-    }, files);
-    return;
+      if (!vault) return '';
+      try {
+        if (p.startsWith('.memobrain/'))
+          return (await app['VaultAPI']!['ReadConfig']!(vault.id, p.slice(11))) as string;
+        return ((await app['VaultAPI']!['ReadNote']!(vault.id, p)) as { content: string }).content;
+      } catch {
+        return '';
+      }
+    }, path);
   }
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open folder as vault' }).click();
-  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
-  if (Object.keys(files).length === 0) return;
-  await page.evaluate((seed) => {
-    const w = window as unknown as MockWindow;
-    const v = [...w.__mock.vaults.values()][0];
-    if (!v) throw new Error('vault not open');
-    for (const [p, c] of Object.entries(seed)) v.files.set(p, c);
-    w.__mock.emit('vault:file-changed', { vaultId: v.info.id, paths: Object.keys(seed) });
-  }, files);
+  return page.evaluate(
+    (p) => [...(window as unknown as MockWindow).__mock.vaults.values()][0]?.files.get(p) ?? '',
+    path,
+  );
+}
+
+/** The paths of the files of the open vault (text and binary, without folders). */
+export async function listVaultFiles(page: Page): Promise<string[]> {
+  if (onWeb()) {
+    return page.evaluate(async () => {
+      const app = (window as unknown as CoreWindow).go.app;
+      const id = ((await app['VaultAPI']!['ListOpen']!()) as { id: string }[])[0]?.id;
+      if (!id) return [];
+      const entries = (await app['VaultAPI']!['ListTree']!(id)) as {
+        path: string;
+        isDir: boolean;
+      }[];
+      return entries
+        .filter((e) => !e.isDir)
+        .map((e) => e.path)
+        .sort();
+    });
+  }
+  return page.evaluate(() => {
+    const v = [...(window as unknown as MockWindow).__mock.vaults.values()][0];
+    return v ? [...v.files.keys(), ...v.binaries.keys()].sort() : [];
+  });
+}
+
+/** The binary files of the open vault (base64 by path). */
+export async function vaultBinaries(page: Page): Promise<Record<string, string>> {
+  if (onWeb()) {
+    const paths = await listVaultFiles(page);
+    return page.evaluate(async (ps) => {
+      const app = (window as unknown as CoreWindow).go.app;
+      const id = ((await app['VaultAPI']!['ListOpen']!()) as { id: string }[])[0]?.id;
+      const out: Record<string, string> = {};
+      if (!id) return out;
+      for (const p of ps) {
+        if (/\.(md|canvas|base|excalidraw)$/.test(p)) continue;
+        out[p] = ((await app['VaultAPI']!['ReadBinary']!(id, p)) as { data: string }).data;
+      }
+      return out;
+    }, paths);
+  }
+  return page.evaluate(() =>
+    Object.fromEntries(
+      [...(window as unknown as MockWindow).__mock.vaults.values()][0]?.binaries ?? [],
+    ),
+  );
 }

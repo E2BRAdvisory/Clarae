@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support';
 import { openDrawing, scene, shape } from './drawingHelpers';
 
 test('a presenting drawing covers the whole window', async ({ page }) => {

@@ -1,13 +1,13 @@
-import { expect, test } from '@playwright/test';
-import { appOrigin, openVault } from './support';
+import { expect, test, appOrigin, openVault } from './support';
 
 test('the graph view opens from the keyboard, lays out in a worker and draws the notes', async ({
   page,
 }) => {
   const external: string[] = [];
+  const origin = appOrigin();
   page.on('request', (r) => {
     const u = new URL(r.url());
-    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== appOrigin)
+    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== origin)
       external.push(r.url());
   });
   await openVault(page, {

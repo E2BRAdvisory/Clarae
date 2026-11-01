@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test, appOrigin, openVault } from './support';
 import AxeBuilder from '@axe-core/playwright';
-import { appOrigin, openVault } from './support';
 
 const DECK = [
   '---',
@@ -34,9 +34,10 @@ test('present a note from the command palette: slides, presenter view, no networ
   page,
 }) => {
   const external: string[] = [];
+  const origin = appOrigin();
   page.on('request', (r) => {
     const u = new URL(r.url());
-    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== appOrigin)
+    if (u.protocol !== 'data:' && u.protocol !== 'blob:' && u.origin !== origin)
       external.push(r.url());
   });
   await openDeck(page);

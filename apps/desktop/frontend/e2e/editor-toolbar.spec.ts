@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { openVault } from './support';
+import type { Page } from '@playwright/test';
+import { expect, test, openVault } from './support';
 
 async function openNote(page: Page): Promise<void> {
   await openVault(page, { 'Note.md': 'hello' });

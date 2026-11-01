@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openVault } from './support';
+import { expect, test, openVault } from './support';
 
 test('sidebar tabs use a roving tabindex and arrow keys', async ({ page }) => {
   await openVault(page);

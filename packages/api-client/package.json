@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./features": "./src/features.ts"
   },
   "scripts": {
     "gen": "openapi-typescript ../../api/openapi.yaml -o src/gen/schema.d.ts",

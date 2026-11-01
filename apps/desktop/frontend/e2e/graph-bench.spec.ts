@@ -5,11 +5,16 @@
 //
 // The synthetic graph comes from the Wails mock (window.__MEMOBRAIN_GRAPH_FIXTURE__); the
 // layout runs in the real Web Worker. See docs/qa/m6-graph-benchmark.md.
-import { expect, test } from '@playwright/test';
+import { expect, skipOnWeb, test } from './support';
 
 const N = Number(process.env['MEMOBRAIN_GRAPH_BENCH'] ?? 0);
 
 test.skip(!N, 'set MEMOBRAIN_GRAPH_BENCH=<nodes> to run the graph benchmark');
+
+skipOnWeb(
+  'graph',
+  'the synthetic graph comes from the Wails mock (window.__MEMOBRAIN_GRAPH_FIXTURE__)',
+);
 
 interface Stats {
   frames: number[];

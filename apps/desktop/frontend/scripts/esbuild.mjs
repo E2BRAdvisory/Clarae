@@ -1,6 +1,7 @@
 // Build and dev server of the desktop frontend (esbuild). Usage:
 //   node scripts/esbuild.mjs build            production bundle in dist/
-//   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload (Wails dev, Playwright)
+//   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload (Wails dev, Playwright;
+//                                             --no-watch builds once, for the e2e matrix)
 //   node scripts/esbuild.mjs preview [--port N]   production bundle in node_modules/.preview/, served as is (Playwright)
 // MEMOBRAIN_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
 import * as esbuild from 'esbuild';
@@ -15,7 +16,11 @@ const root = dirname(fileURLToPath(import.meta.url)) + '/..';
 const mode = process.argv[2] ?? 'build';
 const dev = mode === 'dev';
 // `preview` builds the production bundle somewhere else, so it never touches the embedded dist/.
-const dist = join(root, mode === 'preview' ? 'node_modules/.preview' : 'dist');
+// MEMOBRAIN_DIST (relative to this package) builds elsewhere: the e2e matrix keeps its own copy.
+const dist = join(
+  root,
+  process.env['MEMOBRAIN_DIST'] ?? (mode === 'preview' ? 'node_modules/.preview' : 'dist'),
+);
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5173;
 const e2e = process.env['MEMOBRAIN_E2E'] === '1';
@@ -175,8 +180,10 @@ if (dev) {
   );
   const app = await esbuild.context(options);
   const worker = await esbuild.context(workerOptions);
-  await app.watch();
-  await worker.watch();
+  // --no-watch builds once: the e2e matrix keeps its pages from reloading while sources change.
+  const once = process.argv.includes('--no-watch');
+  await (once ? app.rebuild() : app.watch());
+  await (once ? worker.rebuild() : worker.watch());
   await serve(port);
   console.log(`Local: http://127.0.0.1:${port}/`);
 } else {

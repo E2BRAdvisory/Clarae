@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, listVaultFiles, readVaultFile, seedVault, skipOnWeb, test } from './support';
 import {
   answerPrompt,
   openDrawing,
@@ -138,19 +138,14 @@ test('deconstruct moves the selection into a new drawing and opens it', async ({
   await expect(page.getByRole('tab', { name: /Board - part\.excalidraw/ })).toBeVisible({
     timeout: 15_000,
   });
-  const read = () =>
-    page.evaluate(() => {
-      const w = window as unknown as MockWindow;
-      const v = [...w.__mock.vaults.values()][0]!;
-      return {
-        part: JSON.parse(v.files.get('Board - part.excalidraw') ?? '{}') as {
-          elements: { id: string }[];
-        },
-        board: JSON.parse(v.files.get('Board.excalidraw') ?? '{}') as {
-          elements: { id: string; isDeleted?: boolean }[];
-        },
-      };
-    });
+  const read = async () => ({
+    part: JSON.parse((await readVaultFile(page, 'Board - part.excalidraw')) || '{}') as {
+      elements: { id: string }[];
+    },
+    board: JSON.parse((await readVaultFile(page, 'Board.excalidraw')) || '{}') as {
+      elements: { id: string; isDeleted?: boolean }[];
+    },
+  });
   expect((await read()).part.elements.map((e) => e.id).sort()).toEqual(['keep', 'move']);
   // The source drawing saves the removal before the new tab opens (Excalidraw writes only live elements).
   await expect
@@ -165,10 +160,7 @@ test('create a new note and embed it adds the note file and its card', async ({ 
   await runCommand(page, 'create a new note and add its card');
   await answerPrompt(page, 'Meeting: notes');
   await expect.poll(async () => (await live(page)).length, { timeout: 15_000 }).toBe(2);
-  const note = await page.evaluate(() => {
-    const w = window as unknown as MockWindow;
-    return [...[...w.__mock.vaults.values()][0]!.files.keys()].filter((k) => k.endsWith('.md'));
-  });
+  const note = (await listVaultFiles(page)).filter((k) => k.endsWith('.md'));
   expect(note).toEqual(['Meeting- notes.md']);
   const card = (await live(page)).find((e) => e.type === 'rectangle')!;
   expect(card['link']).toBe('[[Meeting- notes]]');
@@ -185,10 +177,7 @@ test('refresh note cards re-reads the notes into the cards', async ({ page }) =>
   await expect.poll(async () => (await live(page)).length, { timeout: 15_000 }).toBe(2);
   await waitSaved(page);
 
-  await page.evaluate(() => {
-    const w = window as unknown as MockWindow;
-    [...w.__mock.vaults.values()][0]!.files.set('Plan.md', '# Plan\n\nBrand new content now.\n');
-  });
+  await seedVault(page, { files: { 'Plan.md': '# Plan\n\nBrand new content now.\n' } });
   await selectAll(page);
   await runCommand(page, 'update the selected note cards');
   await expect
@@ -203,6 +192,10 @@ test('refresh note cards re-reads the notes into the cards', async ({ page }) =>
 test('the auto-export of one drawing overrides the vault setting and lives in the file', async ({
   page,
 }) => {
+  skipOnWeb(
+    'drawing.export',
+    'the spec reads the exports the Wails mock captures (window.__mock.drawingExports)',
+  );
   await openDrawing(page, scene([shape('a', 0, 0, 50, 50)]));
   // Vault setting: PNG and SVG; this drawing: PNG only.
   await page.getByRole('button', { name: 'Settings' }).click();
@@ -244,6 +237,10 @@ test('the auto-export of one drawing overrides the vault setting and lives in th
 test('Print / PDF puts the drawing on the print layer and asks the system to print', async ({
   page,
 }) => {
+  skipOnWeb(
+    'drawing.export',
+    'in headless Chromium the print dialog of the browser returns at once and the print layer goes on afterprint; the Wails mock keeps it to inspect',
+  );
   await openDrawing(page, scene([shape('a', 0, 0, 100, 60, { backgroundColor: '#ffc9c9' })]));
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByRole('button', { name: 'Print / PDF…' }).click();

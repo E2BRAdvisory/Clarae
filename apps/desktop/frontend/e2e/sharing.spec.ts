@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, skipOnWeb, test } from './support';
 
 interface MockWindow {
   __mock: {
@@ -17,6 +18,10 @@ async function openVault(page: Page): Promise<void> {
 test('accept an invitation, open the mount as a viewer: named after the share and read-only', async ({
   page,
 }) => {
+  skipOnWeb(
+    'invitations',
+    'the spec drives the invitations and the mount files of the Wails mock (window.__mock.sharing); a vault of this browser has no cloud: web/e2e-mixed covers share, accept, mount and revoke against a real cloud',
+  );
   await openVault(page);
   await page.evaluate(() => {
     const w = window as unknown as MockWindow;
@@ -37,11 +42,20 @@ test('accept an invitation, open the mount as a viewer: named after the share an
     w.__mock.sharing.mountFiles.set('sh-1', { 'Plan.md': '# Plan\n\nread me' });
     w.__mock.emit('shares:changed', { shareId: 'sh-1', kind: 'granted' });
   });
-  // The invitation shows up in the status bar and in Settings > Sharing.
+  // Settings > Sharing lists the invitations of the account: sign in to the (mock) cloud first.
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Cloud', exact: true }).click();
+  await page.getByLabel('Server address').fill('https://memobrain.test');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText(/Signed in as/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  // The invitation shows up in the status bar and in Settings > Sharing (InvitationsList).
   await page.getByRole('button', { name: /1 invitation/ }).click();
-  await expect(page.getByText('Shared by ada')).toBeVisible();
-  await page.getByRole('button', { name: 'Accept' }).click();
-  await page.getByRole('button', { name: 'Open' }).click();
+  const invitation = page.getByRole('region', { name: 'Team docs' });
+  await expect(invitation).toContainText('From ada · in Company');
+  await invitation.getByRole('button', { name: 'Accept Team docs' }).click();
+  await expect(page.getByText('Invitation to “Team docs” accepted.')).toBeVisible();
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
 
   await expect(page.locator('.titlebar .title')).toHaveText('Team docs');
   await expect(page.locator('.vault-status .badge.permission')).toHaveText('Viewer · read-only');
@@ -61,6 +75,10 @@ test('accept an invitation, open the mount as a viewer: named after the share an
 });
 
 test('an administrator locks a setting: it is disabled and says so', async ({ page }) => {
+  skipOnWeb(
+    'config.flags',
+    'the spec pushes a configuration through the Wails mock (config:updated); a vault of this browser has no cloud: web/e2e-mixed covers a Config Profile against a real cloud',
+  );
   await openVault(page);
   await page.evaluate(() => {
     const w = window as unknown as MockWindow;

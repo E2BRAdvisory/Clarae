@@ -1,6 +1,7 @@
 // The configuration distributed by the cloud (§2.6.6) as the UI uses it: which keys an
 // administrator manages, which are locked, which features are on. Resolution order, last wins:
 //   product defaults -> managed defaults -> the user's own settings -> locked keys (forced).
+import { featureEnabled, type Feature } from '@memobrain/api-client/features';
 import { create } from 'zustand';
 import { api, type ConfigState } from '../app/api';
 import type { AppearanceSettings, EditorSettings } from './settings';
@@ -126,14 +127,17 @@ export const useManaged = create<ManagedStore>((set, get) => ({
   },
 }));
 
-/** Whether a feature is available (a flag missing from the configuration is on). */
-export function featureOn(features: Record<string, boolean>, name: string): boolean {
-  return features[name] ?? true;
+/**
+ * Whether a feature is available: the value the configuration sets, otherwise the schema's default
+ * (api/config-profile.schema.json, generated into @memobrain/api-client/features by `task gen`).
+ * `name` is typed by the schema, so a flag that does not exist there does not compile.
+ */
+export function featureOn(features: Record<string, boolean>, name: Feature): boolean {
+  return featureEnabled(features, name);
 }
 
 /** The sub-flags of the drawing editor; each only applies while "drawings" is on. */
-export type DrawingFeature =
-  'drawing_latex' | 'drawing_mermaid' | 'drawing_auto_export' | 'drawing_actions';
+export type DrawingFeature = Extract<Feature, `drawing_${string}`>;
 
 /** Whether a function of the drawing editor is available (the live flags of the open vault). */
 export function drawingFeatureOn(name?: DrawingFeature): boolean {

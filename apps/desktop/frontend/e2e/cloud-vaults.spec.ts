@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, skipOnWeb, test } from './support';
 
 // Settings > Cloud: the account's cloud vaults (ADR-0037 §2, @memobrain/cloud-features over the
 // bindings). Deleting the cloud vault the open folder is connected to disconnects the folder and
@@ -24,6 +25,10 @@ async function openCloudSettings(page: Page): Promise<void> {
 }
 
 test('rename, delete and restore cloud vaults from the settings', async ({ page }) => {
+  skipOnWeb(
+    'vault.rename',
+    'the spec drives the cloud vaults of the Wails mock (window.__mock.sync); a vault of this browser has no cloud, the console manages cloud vaults (web/e2e)',
+  );
   await openVault(page);
   await openCloudSettings(page);
   await page.getByLabel('Server address').fill('https://memobrain.test');

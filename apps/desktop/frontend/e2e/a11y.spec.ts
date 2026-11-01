@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { appendFileSync } from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, onWeb, openVault as openVaultOn, test } from './support';
 import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 
 // Automated WCAG 2.1 A/AA scan of the app chrome on the Wails mock, light and dark.
@@ -45,6 +46,11 @@ async function scan(page: Page, label: string) {
 
 async function openVault(page: Page, theme: 'light' | 'dark') {
   await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+  if (onWeb()) {
+    // The web has no welcome screen: the console opens the vault (scanned in web/e2e).
+    await openVaultOn(page);
+    return;
+  }
   await page.goto('/');
   await scan(page, 'welcome');
   await page.getByRole('button', { name: 'Open folder as vault' }).click();

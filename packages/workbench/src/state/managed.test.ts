@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FEATURES, FEATURE_DEFAULTS, Feature } from '@memobrain/api-client/features';
 import {
   featureOn,
   fromState,
@@ -36,9 +37,14 @@ describe('managed configuration', () => {
     expect(managedTheme({})).toBeUndefined();
   });
 
-  it('a feature missing from the configuration is on', () => {
+  it('a feature missing from the configuration takes the default of the schema', () => {
     expect(featureOn({}, 'drawings')).toBe(true);
     expect(featureOn({ drawings: false }, 'drawings')).toBe(false);
+    // Off by default in api/config-profile.schema.json: the chat placeholder and the ADR-0034 switches.
+    expect(featureOn({}, Feature.Chat)).toBe(false);
+    expect(featureOn({}, Feature.EnvelopeV2)).toBe(false);
+    expect(featureOn({ chat: true }, Feature.Chat)).toBe(true);
+    for (const f of FEATURES) expect(featureOn({}, f)).toBe(FEATURE_DEFAULTS[f]);
   });
 });
 

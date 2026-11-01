@@ -50,10 +50,17 @@ tasks:
   gen:
     desc: Regenerate all generated code
     cmds:
+      - task: gen-features
       - task: gen-openapi
       - task: gen-proto
       - task: gen-sqlc
       - task: gen-wails
+
+  gen-features:
+    desc: Config Profile schema -> Go flags and defaults (shared/go/features), TS flags (@memobrain/api-client/features)
+    dir: shared/go
+    cmds:
+      - go run ./features/gen
 
   gen-openapi:
     desc: OpenAPI -> Go server stubs, Go client (shared/go/apiclient) + TS client
@@ -218,6 +225,17 @@ tasks:
     desc: Web UI on the esbuild dev server with the API mocked (OIDC test double)
     cmds:
       - yarn workspace @memobrain/web run e2e
+
+  e2e-matrix:
+    desc: The desktop UI specs on both targets, desktop-mock and web-core (web/playwright.workbench-ui.config.ts)
+    deps: [wasm-core]
+    cmds:
+      - yarn workspace @memobrain/web run e2e:workbench-ui {{.CLI_ARGS}}
+
+  e2e-mixed:
+    desc: 'Mixed clients on one cloud: headless desktop device + web workbench, on a throwaway stack (scripts/e2e-mixed.sh; args: all|up|build|cloud|test|down)'
+    cmds:
+      - scripts/e2e-mixed.sh {{.CLI_ARGS}}
 
   typecheck:
     desc: TypeScript type check in every workspace package

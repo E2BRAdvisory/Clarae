@@ -1,11 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-
-interface MockWindow {
-  __mock: {
-    vaults: Map<string, { info: { id: string }; files: Map<string, string> }>;
-    emit(name: string, payload: unknown): void;
-  };
-}
+import type { Page } from '@playwright/test';
+import { appOrigin, expect, listVaultFiles, openVault, readVaultFile, test } from './support';
 
 const SKETCH = JSON.stringify({
   type: 'excalidraw',
@@ -48,33 +42,17 @@ const SKETCH = JSON.stringify({
 /** Fails the test when the page asks for anything outside the app itself (M3 offline gate). */
 function watchNetwork(page: Page): { external: string[]; assets: number } {
   const seen = { external: [] as string[], assets: 0 };
+  const origin = appOrigin();
   page.on('request', (req) => {
     const url = new URL(req.url());
     if (url.protocol === 'data:' || url.protocol === 'blob:') return;
-    if (url.origin !== 'http://localhost:5199') seen.external.push(req.url());
+    if (url.origin !== origin) seen.external.push(req.url());
     if (url.pathname.startsWith('/excalidraw-assets/')) seen.assets++;
   });
   return seen;
 }
 
-async function openVault(page: Page, files: Record<string, string>): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open folder as vault' }).click();
-  await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
-  await page.evaluate((seed) => {
-    const w = window as unknown as MockWindow;
-    const v = [...w.__mock.vaults.values()][0];
-    if (!v) throw new Error('vault not open');
-    for (const [p, c] of Object.entries(seed)) v.files.set(p, c);
-    w.__mock.emit('vault:file-changed', { vaultId: v.info.id, paths: Object.keys(seed) });
-  }, files);
-}
-
-const fileOf = (page: Page, path: string) =>
-  page.evaluate((p) => {
-    const w = window as unknown as MockWindow;
-    return [...w.__mock.vaults.values()][0]?.files.get(p) ?? '';
-  }, path);
+const fileOf = (page: Page, path: string) => readVaultFile(page, path);
 
 test('a drawing opens, saves edits and makes no request outside the app', async ({ page }) => {
   const net = watchNetwork(page);
@@ -126,11 +104,11 @@ test('New drawing and New canvas are in the file explorer menu', async ({ page }
   await page.locator('.tree .node', { hasText: 'Folder' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New drawing' }).click();
   await expect(page.getByRole('tab', { name: /Drawing \d{4}.*excalidraw/ })).toBeVisible();
-  const created = await page.evaluate(() => {
-    const w = window as unknown as MockWindow;
-    return [...(w.__mock.vaults.values().next().value?.files.keys() ?? [])];
-  });
-  expect(created.some((p) => /^Folder\/Drawing .*\.excalidraw$/.test(p))).toBe(true);
+  await expect
+    .poll(async () =>
+      (await listVaultFiles(page)).some((p) => /^Folder\/Drawing .*\.excalidraw$/.test(p)),
+    )
+    .toBe(true);
 
   await page.locator('.tree .node', { hasText: 'Folder' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New canvas' }).click();

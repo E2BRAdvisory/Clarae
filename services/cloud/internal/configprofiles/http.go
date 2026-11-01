@@ -13,6 +13,7 @@ import (
 
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
+	"memobrain/shared/features"
 )
 
 // HTTP implements GET /config/effective.
@@ -21,24 +22,10 @@ type HTTP struct{ svc *Service }
 // NewHTTP returns the handler.
 func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
-// ProductDefaults are the built-in defaults every client starts from. Keys
-// are dotted; the schema (api/config-profile.schema.json) is defined in M4.
-func ProductDefaults() map[string]any {
-	return map[string]any{
-		"features": map[string]any{
-			"audio_recorder": false,
-			"web_viewer":     false,
-			"chat":           false,
-		},
-		"sync": map[string]any{
-			"interval_seconds":    30,
-			"max_file_size_bytes": 104857600,
-		},
-		"auth": map[string]any{
-			"redirect_mode": "auto",
-		},
-	}
-}
+// ProductDefaults are the built-in defaults every client starts from: the "default" keywords of
+// api/config-profile.schema.json (every feature flag, the sync interval and file limit, the
+// redirect mode), generated into package memobrain/shared/features by `task gen`.
+func ProductDefaults() map[string]any { return features.ProductDefaults() }
 
 // GetEffectiveConfig implements GET /config/effective with ETag support.
 func (h *HTTP) GetEffectiveConfig(ctx context.Context, req api.GetEffectiveConfigRequestObject) (api.GetEffectiveConfigResponseObject, error) {

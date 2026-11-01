@@ -3,7 +3,6 @@ package configprofiles
 import (
 	"bytes"
 	"context"
-	_ "embed" // the JSON Schema is part of the binary
 	"encoding/json"
 	"errors"
 	"slices"
@@ -22,14 +21,13 @@ import (
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/notify"
 	"memobrain/services/cloud/internal/settings"
+	"memobrain/shared/features"
 	"memobrain/shared/syncproto"
 )
 
-// schemaJSON is a copy of api/config-profile.schema.json (a test keeps them identical):
-// the module cannot embed a file outside its own tree.
-//
-//go:embed schema.json
-var schemaJSON []byte
+// schemaJSON is api/config-profile.schema.json, embedded by package features (its copy is
+// written by `task gen` and checked by the features tests).
+var schemaJSON = features.SchemaJSON
 
 var (
 	schemaOnce sync.Once

@@ -16,6 +16,7 @@ import {
   parseOperations,
   parseRoutes,
   render,
+  specCoverage,
   splice,
 } from './lib.mjs';
 
@@ -285,5 +286,42 @@ describe('the real registry', () => {
     const other = registry();
     other.features[0].desktop.status = 'maybe';
     assert.equal(validate(other), false);
+  });
+});
+
+describe('specCoverage (the e2e matrix)', () => {
+  const specs = [
+    { file: 'e2e/both.spec.ts', text: "test('a', () => {});\ntest('b', () => {});\n" },
+    {
+      file: 'e2e/mock-only.spec.ts',
+      text: "skipOnWeb(\n  'mounts',\n  'drives the mock',\n);\ntest('a', () => {});\n",
+    },
+    {
+      file: 'e2e/partial.spec.ts',
+      text: "test('a', () => {\n  skipOnWeb('drawing.export', \"reads the mock's exports\");\n});\ntest('b', () => {});\n",
+    },
+    { file: 'e2e/bench.spec.ts', text: "test.skip(!N, 'set N');\ntest('x', () => {});\n" },
+    { file: 'e2e/typo.spec.ts', text: "skipOnWeb('no.such', 'why');\n" },
+  ];
+  const { rows, errors } = specCoverage(specs, ['mounts', 'drawing.export']);
+  const by = Object.fromEntries(rows.map((r) => [r.file, r]));
+
+  it('tells full, partial and skipped specs apart', () => {
+    assert.equal(by['e2e/both.spec.ts'].web, 'yes');
+    assert.equal(by['e2e/both.spec.ts'].tests, 2);
+    assert.equal(by['e2e/mock-only.spec.ts'].web, 'no');
+    assert.deepEqual(by['e2e/mock-only.spec.ts'].skips, [
+      { feature: 'mounts', reason: 'drives the mock', scope: 'file' },
+    ]);
+    assert.equal(by['e2e/partial.spec.ts'].web, 'partial (1 of 2 skipped)');
+    assert.equal(by['e2e/partial.spec.ts'].skips[0].reason, "reads the mock's exports");
+    assert.equal(by['e2e/bench.spec.ts'].desktop, 'opt-in');
+    assert.equal(by['e2e/bench.spec.ts'].web, 'opt-in');
+  });
+
+  it('refuses a feature id that is not in the registry', () => {
+    assert.deepEqual(errors, [
+      "e2e/typo.spec.ts: skipOnWeb names 'no.such', which is not a feature of the registry",
+    ]);
   });
 });

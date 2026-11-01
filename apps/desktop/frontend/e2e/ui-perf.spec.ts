@@ -11,13 +11,19 @@
 // Options: MEMOBRAIN_UI_BENCH_NOTES (tree size), MEMOBRAIN_UI_BENCH_NOTE_KB (note size, default 1000),
 // MEMOBRAIN_UI_BENCH_OUT (write the numbers as JSON).
 import { writeFileSync } from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, skipOnWeb, test } from './support';
 
 const ON = !!process.env['MEMOBRAIN_UI_BENCH'];
 const NOTES = Number(process.env['MEMOBRAIN_UI_BENCH_NOTES'] ?? 10000);
 const NOTE_KB = Number(process.env['MEMOBRAIN_UI_BENCH_NOTE_KB'] ?? 1000);
 
 test.skip(!ON, 'set MEMOBRAIN_UI_BENCH=1 to run the UI performance harness');
+
+skipOnWeb(
+  'files.explorer',
+  'the harness seeds 10 000 notes into the Wails mock and its budgets are calibrated on it (docs/qa)',
+);
 test.describe.configure({ mode: 'serial' });
 
 interface MockWindow {

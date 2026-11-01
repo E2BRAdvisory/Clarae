@@ -2,9 +2,12 @@ package configprofiles
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
+
+	"memobrain/shared/features"
 )
 
 func TestEmbeddedSchemaMatchesTheContract(t *testing.T) {
@@ -13,7 +16,24 @@ func TestEmbeddedSchemaMatchesTheContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(want, schemaJSON) {
-		t.Fatal("internal/configprofiles/schema.json differs from api/config-profile.schema.json: copy the api file over it")
+		t.Fatal("the schema embedded by memobrain/shared/features differs from api/config-profile.schema.json: run `task gen`")
+	}
+}
+
+// Every product default is a valid profile, and the flags the clients know are all there.
+func TestProductDefaultsFollowTheSchema(t *testing.T) {
+	b, err := json.Marshal(ProductDefaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(b); err != nil {
+		t.Fatalf("product defaults: %v", err)
+	}
+	f, _ := ProductDefaults()["features"].(map[string]any)
+	for _, k := range features.Known {
+		if f[k] != features.Defaults[k] {
+			t.Errorf("features.%s = %v, want %v", k, f[k], features.Defaults[k])
+		}
 	}
 }
 
