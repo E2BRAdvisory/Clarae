@@ -58,7 +58,8 @@ type App struct {
 	emitterMu sync.RWMutex                   // guards emitter (tests swap it while indexing runs)
 	mu        sync.Mutex
 	vaults    map[string]*openVault
-	pending   []string // memobrain:// URLs received before the frontend was ready
+	opening   map[string]*vaultOpening // opens in progress, by vault id (guarded by mu)
+	pending   []string                 // memobrain:// URLs received before the frontend was ready
 	updater   *updater.Service
 	updaterMu sync.Mutex
 }
@@ -72,6 +73,15 @@ type openVault struct {
 	Watcher *watcher.Watcher
 	History *history.History
 	cancel  context.CancelFunc
+}
+
+// vaultOpening is an open in progress: concurrent opens of the same vault wait
+// for it and share its result instead of building a second indexer, watcher
+// and history that nobody would ever close.
+type vaultOpening struct {
+	done chan struct{}
+	info VaultInfo
+	err  error
 }
 
 // VaultInfo is the public description of a vault.
@@ -238,7 +248,9 @@ func (a *App) vault(id string) (*openVault, error) {
 	return v, nil
 }
 
-// openVault opens (or returns the already open) vault at path.
+// openVault opens (or returns the already open) vault at path. Concurrent
+// calls for the same vault share one open; a failed open leaves nothing
+// behind, so a later call tries again.
 func (a *App) openVault(path string) (VaultInfo, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -250,8 +262,36 @@ func (a *App) openVault(path string) (VaultInfo, error) {
 		a.mu.Unlock()
 		return v.Info, nil
 	}
+	if op, ok := a.opening[id]; ok {
+		a.mu.Unlock()
+		<-op.done
+		return op.info, op.err
+	}
+	op := &vaultOpening{done: make(chan struct{})}
+	if a.opening == nil {
+		a.opening = map[string]*vaultOpening{}
+	}
+	a.opening[id] = op
 	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		delete(a.opening, id)
+		a.mu.Unlock()
+		close(op.done)
+	}()
+	op.info, op.err = a.doOpenVault(abs, id)
+	return op.info, op.err
+}
 
+// testHookOpenVault runs at the start of every actual open (tests).
+var testHookOpenVault func()
+
+// doOpenVault builds and registers an open vault; openVault makes sure only
+// one call per id runs at a time.
+func (a *App) doOpenVault(abs, id string) (VaultInfo, error) {
+	if testHookOpenVault != nil {
+		testHookOpenVault()
+	}
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return VaultInfo{}, err
 	}
@@ -333,11 +373,12 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 				a.sync.Kick(v.Info.ID)
 				continue
 			}
+			changes := classifyChanges(ctx, v, ch.Paths) // before the index learns of the batch
 			if err := v.Indexer.Update(ctx, ch.Paths); err != nil {
 				a.logger.Warn().Err(err).Msg("index update")
 			}
 			v.History.Observe(ch.Paths)
-			a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: ch.Paths})
+			a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: ch.Paths, Changes: changes})
 			a.sync.Kick(v.Info.ID)
 		}
 	}

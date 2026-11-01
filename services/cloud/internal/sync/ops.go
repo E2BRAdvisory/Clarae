@@ -62,10 +62,12 @@ func (s *Service) create(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return syncproto.OpResult{}, err
 	}
-	var conflictRev *uuid.UUID
+	var conflictRev, conflictFile *uuid.UUID
 	if op.ConflictOf != "" {
 		if cid, perr := uuid.Parse(op.ConflictOf); perr == nil {
 			if cf, gerr := q.GetFile(ctx, syncdb.GetFileParams{ID: cid, VaultID: env.vault.ID}); gerr == nil {
+				// The file id is kept on its own: retention may prune the revision later.
+				conflictFile = ptr(cf.ID)
 				if rid, rerr := q.GetCurrentRevisionID(ctx, syncdb.GetCurrentRevisionIDParams{FileID: cf.ID, RevNo: cf.CurrentRev}); rerr == nil {
 					conflictRev = &rid
 				}
@@ -76,7 +78,7 @@ func (s *Service) create(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 		return syncproto.OpResult{}, err
 	}
 	f := syncdb.File{ID: fileID, VaultID: env.vault.ID, Path: path, PathKey: key, Kind: string(kind), BlobHash: ptr(op.BlobHash), Size: size}
-	seq, err := s.record(ctx, tx, env, recordArgs{file: f, rev: 1, op: "create", clientMtm: mtime(op), opID: &opID, conflict: conflictRev})
+	seq, err := s.record(ctx, tx, env, recordArgs{file: f, rev: 1, op: "create", clientMtm: mtime(op), opID: &opID, conflict: conflictRev, conflictFile: conflictFile})
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}

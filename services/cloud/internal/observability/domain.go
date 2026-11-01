@@ -20,6 +20,10 @@ var (
 		Namespace: "memobrain", Subsystem: "sync", Name: "ops_total",
 		Help: "Sync operations by result status (accepted, conflict, rejected).",
 	}, []string{"status"})
+	syncCommitFallbacks = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "memobrain", Subsystem: "sync", Name: "commit_fallbacks_total",
+		Help: "Commit batches replayed one operation per transaction after losing a race, by reason (unique, quota, serialization, deadlock, other).",
+	}, []string{"reason"})
 	streams = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "memobrain", Subsystem: "notify", Name: "streams_active",
 		Help: "Open notification streams (gRPC and SSE) on this process.",
@@ -51,6 +55,9 @@ func SyncCommit(err error, statuses []string) {
 		syncOps.WithLabelValues(s).Inc()
 	}
 }
+
+// SyncCommitFallback records a commit batch that fell back to the slow path.
+func SyncCommitFallback(reason string) { syncCommitFallbacks.WithLabelValues(reason).Inc() }
 
 // StreamOpened tracks an active notification stream.
 func StreamOpened() { streams.Inc() }

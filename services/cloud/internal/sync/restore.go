@@ -35,6 +35,10 @@ func (s *Service) RestoreRevision(ctx context.Context, userID, vaultID uuid.UUID
 	var res syncproto.OpResult
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := syncdb.New(tx)
+		// Vault row before the file row, like a commit (see Commit).
+		if err := vaults.LockVault(ctx, tx, vaultID); err != nil {
+			return err
+		}
 		if prev, err := q.GetRevisionByOpID(ctx, syncdb.GetRevisionByOpIDParams{VaultID: vaultID, OpID: &opID}); err == nil {
 			res = accepted(op.OpID, prev.FileID, prev.RevNo, prev.Seq)
 			return nil

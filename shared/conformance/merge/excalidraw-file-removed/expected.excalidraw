@@ -1,0 +1,50 @@
+{
+ "type": "excalidraw",
+ "version": 2,
+ "source": "memobrain",
+ "elements": [
+  {
+   "id": "I1",
+   "type": "image",
+   "x": 0,
+   "y": 0,
+   "width": 10,
+   "height": 10,
+   "version": 1,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "f1",
+   "status": "saved"
+  },
+  {
+   "id": "I2",
+   "type": "image",
+   "x": 40,
+   "y": 0,
+   "width": 10,
+   "height": 10,
+   "version": 2,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "fileId": "f3",
+   "status": "saved"
+  }
+ ],
+ "appState": {
+  "viewBackgroundColor": "#ffffff"
+ },
+ "files": {
+  "f1": {
+   "id": "f1",
+   "mimeType": "image/png",
+   "dataURL": "data:image/png;base64,AAAAf1",
+   "created": 1
+  },
+  "f3": {
+   "id": "f3",
+   "mimeType": "image/png",
+   "dataURL": "data:image/png;base64,AAAAf3",
+   "created": 1
+  }
+ }
+}

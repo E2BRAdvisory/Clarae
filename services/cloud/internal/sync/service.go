@@ -93,9 +93,14 @@ func (s *Service) MaxFileBytes(ctx context.Context) int64 { return s.maxFileByte
 // operation performs all its checks before its first write, so a business
 // rejection leaves the transaction untouched; SAVEPOINTs are avoided on
 // purpose: beyond 64 subtransactions PostgreSQL slows down dramatically.
-// When a concurrent writer wins a race (unique violation, deadlock) the batch
-// is rolled back and replayed operation by operation, each in its own
-// transaction; operation ids make that replay idempotent.
+// When a concurrent writer wins a race (unique violation, quota consumed
+// meanwhile) the batch is rolled back and replayed operation by operation,
+// each in its own transaction; operation ids make that replay idempotent.
+//
+// Lock order: every writer of a vault takes the vault row first (LockVault),
+// then file rows, the owner's usage and blob rows (sorted). Two batches over
+// overlapping files therefore queue on the vault row instead of deadlocking
+// on each other's file rows.
 func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUID, scope string, deviceID uuid.UUID, ops []syncproto.Op) (resp syncproto.CommitResponse, err error) {
 	defer func() { recordCommit(resp, err) }()
 	if len(ops) == 0 || len(ops) > syncproto.MaxOpsPerCommit {
@@ -130,6 +135,7 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 
 	resp, err = s.commitBatch(ctx, env, ops)
 	if isRace(err) {
+		observability.SyncCommitFallback(raceReason(err))
 		resp, err = s.commitEach(ctx, env, ops)
 	}
 	if err != nil {
@@ -184,6 +190,9 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 		return resp, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := vaults.LockVault(ctx, tx, env.vault.ID); err != nil {
+		return resp, err
+	}
 	used, err := quota.UsedBytes(ctx, tx, env.vault.OwnerID)
 	if err != nil {
 		return resp, err
@@ -238,22 +247,36 @@ func (s *Service) flushBatch(ctx context.Context, tx db.DBTX, env commitEnv) err
 	return nil
 }
 
+// opAttempts bounds how often the slow path runs one operation again after a
+// deadlock or serialization failure (PostgreSQL rolled the transaction back:
+// running it again is safe, and the op id keeps it idempotent).
+const opAttempts = 5
+
 // commitEach is the slow path: one transaction per operation.
 func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto.Op) (syncproto.CommitResponse, error) {
 	resp := syncproto.CommitResponse{Results: make([]syncproto.OpResult, 0, len(ops))}
 	for _, op := range ops {
 		var res syncproto.OpResult
-		err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-			var err error
-			res, err = s.execOp(ctx, tx, env, op)
-			if err != nil {
-				return err
+		var err error
+		for attempt := 1; ; attempt++ {
+			err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+				if err := vaults.LockVault(ctx, tx, env.vault.ID); err != nil {
+					return err
+				}
+				var err error
+				res, err = s.execOp(ctx, tx, env, op)
+				if err != nil {
+					return err
+				}
+				if res.Status == syncproto.StatusAccepted && res.Seq > 0 {
+					return s.notify(ctx, tx, env.vault.ID, res.Seq)
+				}
+				return nil
+			})
+			if attempt >= opAttempts || !isRetryable(err) || ctx.Err() != nil {
+				break
 			}
-			if res.Status == syncproto.StatusAccepted && res.Seq > 0 {
-				return s.notify(ctx, tx, env.vault.ID, res.Seq)
-			}
-			return nil
-		})
+		}
 		switch {
 		case isUnique(err, "files_path_uq"):
 			res, err = syncproto.OpResult{OpID: op.OpID, Status: syncproto.StatusRejected, Code: syncproto.CodePathCollision, Detail: "another file already uses this path"}, nil
@@ -382,6 +405,32 @@ func isRace(err error) bool {
 	return false
 }
 
+// isRetryable reports a transaction PostgreSQL aborted only because of
+// concurrency (deadlock, serialization failure): running it again can succeed.
+func isRetryable(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && (pg.Code == "40001" || pg.Code == "40P01")
+}
+
+// raceReason labels why the fast path fell back to the slow one (metrics).
+func raceReason(err error) string {
+	if errors.Is(err, errChargeRace) {
+		return "quota"
+	}
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) {
+		switch pg.Code {
+		case "23505":
+			return "unique"
+		case "40001":
+			return "serialization"
+		case "40P01":
+			return "deadlock"
+		}
+	}
+	return "other"
+}
+
 func isUnique(err error, constraint string) bool {
 	var pg *pgconn.PgError
 	return errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == constraint
@@ -494,7 +543,10 @@ type recordArgs struct {
 	baseRev   *int32
 	clientMtm *timePtr
 	opID      *uuid.UUID
-	conflict  *uuid.UUID
+	conflict  *uuid.UUID // revision of the original, for conflict copies
+	// file of the original, for conflict copies: served by the changelog even
+	// after retention prunes the revision
+	conflictFile *uuid.UUID
 }
 
 func (s *Service) record(ctx context.Context, tx db.DBTX, env commitEnv, a recordArgs) (seq int64, err error) {
@@ -530,7 +582,7 @@ func (s *Service) record(ctx context.Context, tx db.DBTX, env commitEnv, a recor
 	if _, err := q.InsertRevision(ctx, syncdb.InsertRevisionParams{
 		ID: revID, FileID: f.ID, VaultID: env.vault.ID, Seq: seq, RevNo: a.rev, Op: a.op, Path: f.Path, PrevPath: a.prevPath,
 		BlobHash: f.BlobHash, Size: f.Size, BaseRev: a.baseRev, AuthorID: env.userID, DeviceID: devPtr, OpID: a.opID,
-		ClientMtime: a.clientMtm.get(), ConflictOf: a.conflict,
+		ClientMtime: a.clientMtm.get(), ConflictOf: a.conflict, ConflictOfFile: a.conflictFile,
 	}); err != nil {
 		return 0, err
 	}

@@ -90,9 +90,15 @@ func excalidrawVersion(el json.RawMessage) (version, nonce int64) {
 
 // Excalidraw merges two drawings of the same author by element id: the
 // element with the higher version wins, ties go to the lower versionNonce
-// (Excalidraw's own reconciliation); ids are united, deleted elements stay
-// deleted (isDeleted is just a field of the winning version) and the files
-// map is united. Other top-level keys follow the side that changed them.
+// (Excalidraw's own reconciliation); deleted elements stay deleted (isDeleted
+// is just a field of the winning version). Ids present on one side only
+// follow the same three-way rule as Canvas: an id that base had, that one
+// side removed outright and the other left untouched is a deletion; if the
+// other side changed it the edit wins and the element is kept; an id base
+// did not have was added and is kept. The files map (keyed by file id) is
+// merged by the same rule, except that a file still referenced by a
+// non-deleted merged element is never dropped. Other top-level keys follow
+// the side that changed them.
 func Excalidraw(base, ours, theirs []byte) (Result, error) {
 	bo, err := decodeObject(base)
 	if err != nil {
@@ -124,6 +130,11 @@ func Excalidraw(base, ours, theirs []byte) (Result, error) {
 		}
 	}
 
+	// A malformed base only loses the deletion detection (plain union).
+	_, bEls, err := elementsByID(bo["elements"])
+	if err != nil {
+		bEls = map[string]json.RawMessage{}
+	}
 	oOrder, oEls, err := elementsByID(oo["elements"])
 	if err != nil {
 		return Result{}, fmt.Errorf("ours: %w", err)
@@ -132,37 +143,83 @@ func Excalidraw(base, ours, theirs []byte) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("theirs: %w", err)
 	}
-	order := append([]string(nil), tOrder...)
+	// removedUntouched: base had the id, one side dropped it, the other
+	// (present) side still has it exactly as in base.
+	removedUntouched := func(present json.RawMessage, b map[string]json.RawMessage, id string) bool {
+		bel, inB := b[id]
+		return inB && jsonEqual(present, bel)
+	}
+	var order []string
 	merged := map[string]json.RawMessage{}
-	for id, el := range tEls {
-		merged[id] = el
+	for _, id := range tOrder {
+		tel := tEls[id]
+		oel, both := oEls[id]
+		switch {
+		case !both && removedUntouched(tel, bEls, id): // ours deleted it
+			continue
+		case !both:
+			merged[id] = tel
+		default:
+			ov, on := excalidrawVersion(oel)
+			tv, tn := excalidrawVersion(tel)
+			if ov > tv || (ov == tv && on < tn) {
+				merged[id] = oel
+			} else {
+				merged[id] = tel
+			}
+		}
+		order = append(order, id)
 	}
 	for _, id := range oOrder {
-		oel := oEls[id]
-		tel, both := tEls[id]
-		if !both {
-			order = append(order, id)
-			merged[id] = oel
+		if _, inT := tEls[id]; inT {
 			continue
 		}
-		ov, on := excalidrawVersion(oel)
-		tv, tn := excalidrawVersion(tel)
-		if ov > tv || (ov == tv && on < tn) {
-			merged[id] = oel
+		oel := oEls[id]
+		if removedUntouched(oel, bEls, id) { // theirs deleted it
+			continue
 		}
+		order = append(order, id)
+		merged[id] = oel
 	}
 	out["elements"] = marshalElements(order, merged)
 
+	// Files referenced by a live element must survive whatever the rule says.
+	live := map[string]bool{}
+	for _, el := range merged {
+		var ref struct {
+			FileID    string `json:"fileId"`
+			IsDeleted bool   `json:"isDeleted"`
+		}
+		if json.Unmarshal(el, &ref) == nil && ref.FileID != "" && !ref.IsDeleted {
+			live[ref.FileID] = true
+		}
+	}
+	fileMap := func(raw json.RawMessage) map[string]json.RawMessage {
+		var m map[string]json.RawMessage
+		if len(raw) > 0 && json.Unmarshal(raw, &m) == nil && m != nil {
+			return m
+		}
+		return map[string]json.RawMessage{}
+	}
+	bf, of, tf := fileMap(bo["files"]), fileMap(oo["files"]), fileMap(to["files"])
 	files := map[string]json.RawMessage{}
-	for _, src := range []json.RawMessage{oo["files"], to["files"]} {
-		if len(src) == 0 {
+	for k, tv := range tf {
+		ov, both := of[k]
+		switch {
+		case both && !jsonEqual(ov, tv) && removedUntouched(tv, bf, k): // only ours changed it
+			files[k] = ov
+		case both:
+			files[k] = tv
+		case live[k] || !removedUntouched(tv, bf, k):
+			files[k] = tv
+		}
+	}
+	for k, ov := range of {
+		if _, inT := tf[k]; inT {
 			continue
 		}
-		var m map[string]json.RawMessage
-		if json.Unmarshal(src, &m) == nil {
-			for k, v := range m {
-				files[k] = v
-			}
+		if live[k] || !removedUntouched(ov, bf, k) {
+			files[k] = ov
 		}
 	}
 	if len(files) > 0 || oo["files"] != nil || to["files"] != nil {

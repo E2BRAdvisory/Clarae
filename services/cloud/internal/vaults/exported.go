@@ -15,8 +15,9 @@ import (
 
 // Types of the exported queries.
 type (
-	AddVaultUsageParams = vaultsdb.AddVaultUsageParams
-	Vault               = vaultsdb.Vault
+	AddVaultUsageParams     = vaultsdb.AddVaultUsageParams
+	AdvanceCompactionParams = vaultsdb.AdvanceCompactionParams
+	Vault                   = vaultsdb.Vault
 )
 
 // GetVault runs the GetVault query on tx.
@@ -34,7 +35,25 @@ func NextVaultSeq(ctx context.Context, tx db.DBTX, id uuid.UUID) (int64, error) 
 	return vaultsdb.New(tx).NextVaultSeq(ctx, id)
 }
 
+// LockVault takes the vault's row lock (the one NextVaultSeq takes) on tx,
+// held until tx ends. A commit takes it before any file row so that every
+// writer of a vault locks in the same order: vault row, file rows, owner
+// usage, blob rows (retention and the reconciliation jobs lock the vault
+// before the blobs too).
+func LockVault(ctx context.Context, tx db.DBTX, id uuid.UUID) error {
+	_, err := vaultsdb.New(tx).LockVault(ctx, id)
+	return err
+}
+
 // AddVaultUsage runs the AddVaultUsage query on tx.
 func AddVaultUsage(ctx context.Context, tx db.DBTX, arg AddVaultUsageParams) error {
 	return vaultsdb.New(tx).AddVaultUsage(ctx, arg)
+}
+
+// AdvanceCompaction runs the AdvanceCompaction query on tx: cursors before seq
+// expire (CURSOR_EXPIRED) and their clients bootstrap from the manifest. The
+// revisions module calls it when retention deletes changelog entries that a
+// later entry does not supersede.
+func AdvanceCompaction(ctx context.Context, tx db.DBTX, arg AdvanceCompactionParams) error {
+	return vaultsdb.New(tx).AdvanceCompaction(ctx, arg)
 }

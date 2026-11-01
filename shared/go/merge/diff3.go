@@ -1,9 +1,8 @@
 package merge
 
 import (
+	"math"
 	"strings"
-
-	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 // splitLines splits keeping the line terminators, so that joining the pieces
@@ -25,43 +24,46 @@ type hunk struct {
 	lines      []string
 }
 
-// lineHunks diffs base against other by lines.
-func lineHunks(base, other []string) []hunk {
-	dmp := diffmatchpatch.New()
-	a, b, table := dmp.DiffLinesToChars(strings.Join(base, ""), strings.Join(other, ""))
-	diffs := dmp.DiffMain(a, b, false)
-	diffs = dmp.DiffCharsToLines(diffs, table)
+// lineIDs interns lines so that equal lines (across all the versions being
+// merged) share an id.
+type lineIDs map[string]int32
 
-	var out []hunk
-	pos := 0
-	var cur *hunk
-	flush := func() {
-		if cur != nil {
-			out = append(out, *cur)
-			cur = nil
-		}
-	}
-	for _, d := range diffs {
-		ls := splitLines(d.Text)
-		switch d.Type {
-		case diffmatchpatch.DiffEqual:
-			flush()
-			pos += len(ls)
-		case diffmatchpatch.DiffDelete:
-			if cur == nil {
-				cur = &hunk{start: pos, end: pos}
+func (t lineIDs) of(lines []string) ([]int32, error) {
+	out := make([]int32, len(lines))
+	for i, l := range lines {
+		id, ok := t[l]
+		if !ok {
+			if len(t) == math.MaxInt32 {
+				return nil, errTooLarge
 			}
-			cur.end += len(ls)
-			pos += len(ls)
-		case diffmatchpatch.DiffInsert:
-			if cur == nil {
-				cur = &hunk{start: pos, end: pos}
-			}
-			cur.lines = append(cur.lines, ls...)
+			id = int32(len(t)) //nolint:gosec // bounded by the check above
+			t[l] = id
 		}
+		out[i] = id
 	}
-	flush()
-	return out
+	return out, nil
+}
+
+// lineHunks diffs base against other by lines (deterministic, bounded by
+// diffBudget).
+func lineHunks(ids lineIDs, base, other []string) ([]hunk, error) {
+	a, err := ids.of(base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := ids.of(other)
+	if err != nil {
+		return nil, err
+	}
+	spans, err := diffIDs(a, b)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]hunk, len(spans))
+	for i, s := range spans {
+		out[i] = hunk{start: s.aStart, end: s.aEnd, lines: other[s.bStart:s.bEnd]}
+	}
+	return out, nil
 }
 
 // apply rewrites base[from:to] with the hunks that fall inside it.
@@ -88,10 +90,18 @@ type conflictRegion struct {
 // diff3 merges ours and theirs against base line by line. Changes in
 // separate regions are combined; regions touched by both sides with
 // different results are reported. When conflicts exist, merged takes the
-// theirs version of each conflicting region.
-func diff3(base, ours, theirs []string) (merged []string, conflicts []conflictRegion) {
-	ha := lineHunks(base, ours)
-	hb := lineHunks(base, theirs)
+// theirs version of each conflicting region. errTooLarge means the versions
+// could not be diffed within diffBudget: treat the whole file as conflicting.
+func diff3(base, ours, theirs []string) (merged []string, conflicts []conflictRegion, err error) {
+	ids := lineIDs{}
+	ha, err := lineHunks(ids, base, ours)
+	if err != nil {
+		return nil, nil, err
+	}
+	hb, err := lineHunks(ids, base, theirs)
+	if err != nil {
+		return nil, nil, err
+	}
 	var out []string
 	pos := 0
 	i, j := 0, 0
@@ -145,5 +155,5 @@ func diff3(base, ours, theirs []string) (merged []string, conflicts []conflictRe
 		i, j = ci, cj
 	}
 	out = append(out, base[pos:]...)
-	return out, conflicts
+	return out, conflicts, nil
 }
