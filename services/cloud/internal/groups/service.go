@@ -223,10 +223,12 @@ func (s *Service) OfUser(ctx context.Context, userID uuid.UUID) ([]groupsdb.List
 
 // SearchUsers finds active users by name or e-mail (minimal fields).
 func (s *Service) SearchUsers(ctx context.Context, q string) ([]users.SearchDirectoryUsersRow, error) {
-	return users.SearchDirectoryUsers(ctx, s.db.Pool, users.SearchDirectoryUsersParams{Q: strings.TrimSpace(q), MaxRows: DirectoryLimit})
+	return users.SearchDirectoryUsers(ctx, s.db.Pool, strings.TrimSpace(q), DirectoryLimit)
 }
 
 // SearchGroups finds groups by name.
 func (s *Service) SearchGroups(ctx context.Context, q string) ([]groupsdb.SearchDirectoryGroupsRow, error) {
-	return groupsdb.New(s.db.Pool).SearchDirectoryGroups(ctx, groupsdb.SearchDirectoryGroupsParams{Q: strings.TrimSpace(q), MaxRows: DirectoryLimit})
+	// The LIKE wildcards in q are literal characters of a name.
+	q = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.TrimSpace(q))
+	return groupsdb.New(s.db.Pool).SearchDirectoryGroups(ctx, groupsdb.SearchDirectoryGroupsParams{Q: q, MaxRows: DirectoryLimit})
 }

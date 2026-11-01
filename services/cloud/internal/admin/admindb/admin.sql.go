@@ -233,7 +233,7 @@ func (q *Queries) ListStorageSnapshots(ctx context.Context, days int32) ([]Stora
 
 const listUsersAdmin = `-- name: ListUsersAdmin :many
 
-SELECT u.id, u.keycloak_sub, u.username, u.email, u.display_name, u.role, u.status, u.quota_bytes_override, u.used_bytes, u.created_at, u.updated_at, u.last_login_at, u.deleted_at, u.purged_at, COUNT(*) OVER()::int AS total FROM users u
+SELECT u.id, u.keycloak_sub, u.username, u.email, u.display_name, u.role, u.status, u.quota_bytes_override, u.used_bytes, u.created_at, u.updated_at, u.last_login_at, u.deleted_at, u.purged_at, u.role_changed_at, COUNT(*) OVER()::int AS total FROM users u
 WHERE u.status <> 'deleted'
   AND ($1::text = ''
        OR u.username ILIKE '%' || $1::text || '%'
@@ -275,6 +275,7 @@ type ListUsersAdminRow struct {
 	LastLoginAt        *time.Time
 	DeletedAt          *time.Time
 	PurgedAt           *time.Time
+	RoleChangedAt      *time.Time
 	Total              int32
 }
 
@@ -311,6 +312,7 @@ func (q *Queries) ListUsersAdmin(ctx context.Context, arg ListUsersAdminParams) 
 			&i.LastLoginAt,
 			&i.DeletedAt,
 			&i.PurgedAt,
+			&i.RoleChangedAt,
 			&i.Total,
 		); err != nil {
 			return nil, err

@@ -1,8 +1,10 @@
 -- Queries of the privacy module (ADR-0033: one sqlc package per module).
 
--- name: LockActiveAdmins :many
--- Serialises concurrent deletions of administrators (last-admin guard).
-SELECT id FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id FOR UPDATE;
+-- name: ListVaultIDsOfOwner :many
+-- Every vault of the account, deleted ones included, in the order their row
+-- locks are taken (account deletion locks them before the user row, as a
+-- commit does: vault first, then the owner's usage).
+SELECT id FROM vaults WHERE owner_id = $1 ORDER BY id;
 
 -- name: TombstoneUser :one
 -- Replaces every personal field by a tombstone; ids, role and timestamps stay so audit
@@ -37,7 +39,17 @@ DELETE FROM uploads WHERE user_id = $1;
 -- name: DeleteMembershipsOfUser :execrows
 DELETE FROM group_members WHERE user_id = $1;
 
+-- name: ReattributeForeignGrants :many
+-- Grants the account gave as a manager on vaults of other owners stay valid:
+-- the vault owner becomes their grantor (ADR-0041). Returns the shares touched.
+UPDATE share_grants g SET granted_by = v.owner_id
+FROM shares s JOIN vaults v ON v.id = s.vault_id
+WHERE g.share_id = s.id AND g.granted_by = $1 AND v.owner_id <> $1
+RETURNING g.share_id, v.owner_id;
+
 -- name: DeleteGrantsGrantedBy :execrows
+-- Runs after ReattributeForeignGrants: what is left sits on the account's own
+-- vaults, which the deletion puts in retention.
 DELETE FROM share_grants WHERE granted_by = $1;
 
 -- name: ExpireExportsOfUser :execrows

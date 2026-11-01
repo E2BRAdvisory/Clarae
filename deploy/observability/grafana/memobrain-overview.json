@@ -727,7 +727,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (job, result) (rate(memobrain_jobs_runs_total[$__rate_interval]))",
+          "expr": "sum by (job, result) (label_replace(rate(memobrain_jobs_runs_total[$__rate_interval]), \"job\", \"$1\", \"exported_job\", \"(.+)\"))",
           "legendFormat": "{{job}} {{result}}",
           "refId": "A"
         }
@@ -770,7 +770,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (job) (rate(memobrain_jobs_run_duration_seconds_sum[$__rate_interval])) / sum by (job) (rate(memobrain_jobs_run_duration_seconds_count[$__rate_interval]))",
+          "expr": "sum by (job) (label_replace(rate(memobrain_jobs_run_duration_seconds_sum[$__rate_interval]), \"job\", \"$1\", \"exported_job\", \"(.+)\")) / sum by (job) (label_replace(rate(memobrain_jobs_run_duration_seconds_count[$__rate_interval]), \"job\", \"$1\", \"exported_job\", \"(.+)\"))",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -813,7 +813,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "time() - max by (job) (memobrain_jobs_last_success_timestamp_seconds)",
+          "expr": "time() - max by (job) (label_replace(memobrain_jobs_last_success_timestamp_seconds, \"job\", \"$1\", \"exported_job\", \"(.+)\"))",
           "legendFormat": "{{job}}",
           "refId": "A"
         }

@@ -5,11 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/rs/zerolog"
 
+	"memobrain/services/cloud/internal/api"
 	"memobrain/shared/syncproto"
 )
 
@@ -18,16 +21,19 @@ const blobPath = "/api/v1/vaults/0190f3c4-0000-7000-8000-000000000001/blobs/" +
 
 func TestIsStreaming(t *testing.T) {
 	for path, want := range map[string]bool{
-		blobPath:                                true,
-		"/api/v1/vaults/v1/export.zip":          true,
-		"/api/v1/vaults/v1/exports/e1/download": true,
-		"/api/v1/me/export":                     true,
-		"/api/v1/vaults/v1/blobs:check":         false,
-		"/api/v1/vaults/v1/commit":              false,
-		"/api/v1/vaults/v1/exports/e1":          false,
-		"/api/v1/vaults":                        false,
-		"/api/v1/me":                            false,
-		"/vaults/v1/export.zip":                 false,
+		blobPath:                                         true,
+		"/api/v1/vaults/v1/export.zip":                   true,
+		"/api/v1/vaults/v1/exports/e1/download":          true,
+		"/api/v1/me/export":                              true,
+		"/api/v1/vaults/v1/files/f1/revisions/3/content": true,
+		"/api/v1/vaults/v1/files/f1/revisions":           false,
+		"/api/v1/vaults/v1/files/f1/revisions/3":         false,
+		"/api/v1/vaults/v1/blobs:check":                  false,
+		"/api/v1/vaults/v1/commit":                       false,
+		"/api/v1/vaults/v1/exports/e1":                   false,
+		"/api/v1/vaults":                                 false,
+		"/api/v1/me":                                     false,
+		"/vaults/v1/export.zip":                          false,
 	} {
 		if got := isStreaming(path); got != want {
 			t.Errorf("isStreaming(%q) = %v, want %v", path, got, want)
@@ -46,6 +52,7 @@ func TestAPILimitsDeadlineOnlyOnJSONOperations(t *testing.T) {
 		"/api/v1/vaults/v1/commit":     true,
 		blobPath:                       false,
 		"/api/v1/vaults/v1/export.zip": false,
+		"/api/v1/vaults/v1/files/f1/revisions/2/content": false,
 	} {
 		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil))
 		if hasDeadline != want {
@@ -124,5 +131,51 @@ func assertProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, cod
 	}
 	if rec.Code != status || p.Code != code {
 		t.Fatalf("got %d %s, want %d %s", rec.Code, p.Code, status, code)
+	}
+}
+
+// Regression (W8): the 60 s deadline cut large revision downloads because the
+// hand-written list missed that route. Every operation of the contract with a
+// binary request or response body must be classified as streaming; the CSV of
+// the audit trail is built in memory and keeps the deadline.
+func TestStreamingRoutesMatchOpenAPI(t *testing.T) {
+	spec, err := api.GetSwagger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary := func(content openapi3.Content) bool {
+		for mt := range content {
+			if mt == "application/octet-stream" || mt == "application/zip" || mt == "application/offset+octet-stream" {
+				return true
+			}
+		}
+		return false
+	}
+	param := regexp.MustCompile(`\{[^}]+\}`)
+	checked := 0
+	for path, item := range spec.Paths.Map() {
+		for method, op := range item.Operations() {
+			streams := op.RequestBody != nil && op.RequestBody.Value != nil && binary(op.RequestBody.Value.Content)
+			for _, ref := range op.Responses.Map() {
+				if ref.Value != nil && binary(ref.Value.Content) {
+					streams = true
+				}
+			}
+			if !streams {
+				continue
+			}
+			checked++
+			concrete := BasePath + param.ReplaceAllString(path, "x1")
+			if strings.Contains(path, "{sha256}") {
+				concrete = BasePath + strings.ReplaceAll(param.ReplaceAllString(strings.ReplaceAll(path, "{sha256}", "HASH"), "x1"), "HASH",
+					"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+			}
+			if !isStreaming(concrete) {
+				t.Errorf("%s %s has a binary body but isStreaming(%q) is false: the API timeout would cut it", method, path, concrete)
+			}
+		}
+	}
+	if checked < 4 {
+		t.Fatalf("found only %d binary operations in the contract", checked)
 	}
 }

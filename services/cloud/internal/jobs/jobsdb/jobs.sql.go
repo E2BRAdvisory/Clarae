@@ -12,6 +12,31 @@ import (
 	"github.com/google/uuid"
 )
 
+const compactVaults = `-- name: CompactVaults :execrows
+UPDATE vaults v SET compaction_seq = m.seq
+FROM (
+  SELECT r.vault_id, MAX(r.seq)::bigint AS seq FROM file_revisions r
+  WHERE r.vault_id = ANY($1::uuid[]) AND r.server_time < $2::timestamptz
+  GROUP BY r.vault_id
+) m
+WHERE v.id = m.vault_id AND m.seq > v.compaction_seq
+`
+
+type CompactVaultsParams struct {
+	Ids    []uuid.UUID
+	Before time.Time
+}
+
+// Advances compaction_seq of a batch of vaults to the last changelog entry
+// older than the window, in one statement; it never moves backwards.
+func (q *Queries) CompactVaults(ctx context.Context, arg CompactVaultsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, compactVaults, arg.Ids, arg.Before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countBlobRefs = `-- name: CountBlobRefs :one
 SELECT COUNT(*)::int FROM file_revisions WHERE blob_hash = $1
 `
@@ -122,29 +147,37 @@ func (q *Queries) ListAllVaultIDsOfOwner(ctx context.Context, ownerID uuid.UUID)
 	return items, nil
 }
 
-const listBlobRefCounts = `-- name: ListBlobRefCounts :many
-SELECT b.hash, b.ref_count, COUNT(r.id)::int AS actual
-FROM blobs b LEFT JOIN file_revisions r ON r.blob_hash = b.hash
-GROUP BY b.hash, b.ref_count
-HAVING b.ref_count <> COUNT(r.id)
+const listBlobRefCountsAfter = `-- name: ListBlobRefCountsAfter :many
+SELECT b.hash, b.ref_count,
+       (SELECT COUNT(*) FROM file_revisions r WHERE r.blob_hash = b.hash)::int AS actual
+FROM blobs b
+WHERE b.hash > $1::text
+ORDER BY b.hash
+LIMIT $2::int
 `
 
-type ListBlobRefCountsRow struct {
+type ListBlobRefCountsAfterParams struct {
+	After   string
+	MaxRows int32
+}
+
+type ListBlobRefCountsAfterRow struct {
 	Hash     string
 	RefCount int32
 	Actual   int32
 }
 
-// Reconciliation: actual number of revisions referencing each blob.
-func (q *Queries) ListBlobRefCounts(ctx context.Context) ([]ListBlobRefCountsRow, error) {
-	rows, err := q.db.Query(ctx, listBlobRefCounts)
+// Reconciliation, one keyset page of blobs at a time: the stored and the
+// actual number of revisions referencing each blob (file_revisions_blob_ix).
+func (q *Queries) ListBlobRefCountsAfter(ctx context.Context, arg ListBlobRefCountsAfterParams) ([]ListBlobRefCountsAfterRow, error) {
+	rows, err := q.db.Query(ctx, listBlobRefCountsAfter, arg.After, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListBlobRefCountsRow{}
+	items := []ListBlobRefCountsAfterRow{}
 	for rows.Next() {
-		var i ListBlobRefCountsRow
+		var i ListBlobRefCountsAfterRow
 		if err := rows.Scan(&i.Hash, &i.RefCount, &i.Actual); err != nil {
 			return nil, err
 		}
@@ -296,18 +329,58 @@ func (q *Queries) ListUsersWithUsage(ctx context.Context) ([]ListUsersWithUsageR
 	return items, nil
 }
 
-const listVaultTotals = `-- name: ListVaultTotals :many
+const listVaultIDsAfter = `-- name: ListVaultIDsAfter :many
+SELECT id FROM vaults WHERE id > $1::uuid ORDER BY id LIMIT $2::int
+`
+
+type ListVaultIDsAfterParams struct {
+	After   uuid.UUID
+	MaxRows int32
+}
+
+// Keyset pagination over every vault (maintenance batches).
+func (q *Queries) ListVaultIDsAfter(ctx context.Context, arg ListVaultIDsAfterParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listVaultIDsAfter, arg.After, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVaultTotalsAfter = `-- name: ListVaultTotalsAfter :many
 SELECT v.id AS vault_id,
        v.owner_id,
        v.total_bytes AS stored_bytes,
        v.file_count AS stored_files,
-       COALESCE(SUM(f.size) FILTER (WHERE NOT f.is_deleted), 0)::bigint AS bytes,
-       COUNT(f.id) FILTER (WHERE NOT f.is_deleted)::int AS files
-FROM vaults v LEFT JOIN files f ON f.vault_id = v.id
-GROUP BY v.id, v.owner_id, v.total_bytes, v.file_count
+       COALESCE(t.bytes, 0)::bigint AS bytes,
+       COALESCE(t.files, 0)::int AS files
+FROM vaults v
+LEFT JOIN LATERAL (
+  SELECT SUM(f.size) AS bytes, COUNT(*) AS files FROM files f WHERE f.vault_id = v.id AND NOT f.is_deleted
+) t ON true
+WHERE v.id > $1::uuid
+ORDER BY v.id
+LIMIT $2::int
 `
 
-type ListVaultTotalsRow struct {
+type ListVaultTotalsAfterParams struct {
+	After   uuid.UUID
+	MaxRows int32
+}
+
+type ListVaultTotalsAfterRow struct {
 	VaultID     uuid.UUID
 	OwnerID     uuid.UUID
 	StoredBytes int64
@@ -316,16 +389,17 @@ type ListVaultTotalsRow struct {
 	Files       int32
 }
 
-// Source of truth for the nightly usage reconciliation.
-func (q *Queries) ListVaultTotals(ctx context.Context) ([]ListVaultTotalsRow, error) {
-	rows, err := q.db.Query(ctx, listVaultTotals)
+// Source of truth for the nightly usage reconciliation, one keyset page of
+// vaults at a time (files_vault_ix serves each vault's live files).
+func (q *Queries) ListVaultTotalsAfter(ctx context.Context, arg ListVaultTotalsAfterParams) ([]ListVaultTotalsAfterRow, error) {
+	rows, err := q.db.Query(ctx, listVaultTotalsAfter, arg.After, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListVaultTotalsRow{}
+	items := []ListVaultTotalsAfterRow{}
 	for rows.Next() {
-		var i ListVaultTotalsRow
+		var i ListVaultTotalsAfterRow
 		if err := rows.Scan(
 			&i.VaultID,
 			&i.OwnerID,
@@ -353,22 +427,6 @@ func (q *Queries) MarkUserPurged(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const maxSeqBefore = `-- name: MaxSeqBefore :one
-SELECT COALESCE(MAX(seq), 0)::bigint FROM file_revisions WHERE vault_id = $1 AND server_time < $2
-`
-
-type MaxSeqBeforeParams struct {
-	VaultID    uuid.UUID
-	ServerTime time.Time
-}
-
-func (q *Queries) MaxSeqBefore(ctx context.Context, arg MaxSeqBeforeParams) (int64, error) {
-	row := q.db.QueryRow(ctx, maxSeqBefore, arg.VaultID, arg.ServerTime)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const ownerActualUsage = `-- name: OwnerActualUsage :one
 SELECT COALESCE(SUM(f.size), 0)::bigint FROM files f JOIN vaults v ON v.id = f.vault_id
 WHERE v.owner_id = $1 AND NOT f.is_deleted
@@ -383,14 +441,24 @@ func (q *Queries) OwnerActualUsage(ctx context.Context, ownerID uuid.UUID) (int6
 	return column_1, err
 }
 
-const purgeDeletedFiles = `-- name: PurgeDeletedFiles :execrows
-DELETE FROM files f WHERE f.is_deleted AND f.vault_id = $1
-  AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id)
+const purgeDeletedFilesBatch = `-- name: PurgeDeletedFilesBatch :execrows
+DELETE FROM files WHERE id IN (
+  SELECT f.id FROM files f
+  WHERE f.is_deleted
+    AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id)
+    AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+  ORDER BY f.id
+  LIMIT $1::int
+  FOR UPDATE SKIP LOCKED
+)
 `
 
-// Tombstones whose every revision is gone.
-func (q *Queries) PurgeDeletedFiles(ctx context.Context, vaultID uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, purgeDeletedFiles, vaultID)
+// Tombstones whose every revision is gone, across all vaults, one bounded
+// batch at a time. Rows a commit holds are skipped (the next run takes them)
+// rather than waited for, and a tombstone a file share still points at stays:
+// deleting it would violate shares.file_id.
+func (q *Queries) PurgeDeletedFilesBatch(ctx context.Context, maxRows int32) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeDeletedFilesBatch, maxRows)
 	if err != nil {
 		return 0, err
 	}
@@ -424,20 +492,6 @@ type SetUserUsedParams struct {
 
 func (q *Queries) SetUserUsed(ctx context.Context, arg SetUserUsedParams) error {
 	_, err := q.db.Exec(ctx, setUserUsed, arg.ID, arg.UsedBytes)
-	return err
-}
-
-const setVaultCompaction = `-- name: SetVaultCompaction :exec
-UPDATE vaults SET compaction_seq = GREATEST(compaction_seq, $2) WHERE id = $1
-`
-
-type SetVaultCompactionParams struct {
-	ID            uuid.UUID
-	CompactionSeq int64
-}
-
-func (q *Queries) SetVaultCompaction(ctx context.Context, arg SetVaultCompactionParams) error {
-	_, err := q.db.Exec(ctx, setVaultCompaction, arg.ID, arg.CompactionSeq)
 	return err
 }
 

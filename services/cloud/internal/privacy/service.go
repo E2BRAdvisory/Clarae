@@ -181,83 +181,155 @@ type DeleteRequest struct {
 
 // Delete deletes the caller's account: see the package comment.
 func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteRequest) error {
-	var sub string
+	var res Deletion
 	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		q := privacydb.New(tx)
-		cur, err := users.GetUserByID(ctx, tx, userID)
-		if err != nil {
-			return err
-		}
-		if cur.Status == "deleted" {
-			return httpproblem.NotFound("user")
-		}
-		if req.Confirm != cur.Username {
-			return httpproblem.Errorf(syncproto.CodeValidationFailed, "confirm must equal your username")
-		}
-		if cur.Role == "admin" && cur.Status == "active" {
-			// Lock every active admin so two administrators cannot delete themselves concurrently.
-			if _, err := q.LockActiveAdmins(ctx); err != nil {
-				return err
+		var err error
+		res, err = DeleteAccount(ctx, tx, userID, func(cur users.User, private int) error {
+			if req.Confirm != cur.Username {
+				return httpproblem.Errorf(syncproto.CodeValidationFailed, "confirm must equal your username")
 			}
-			n, err := users.CountActiveAdmins(ctx, tx)
-			if err != nil {
-				return err
+			if private > 0 && !req.AcknowledgeDataLoss {
+				return httpproblem.Errorf(syncproto.CodeValidationFailed,
+					"you own %d private (end-to-end encrypted) vault(s): their content cannot be recovered by anyone once deleted; set acknowledge_data_loss to confirm", private)
 			}
-			if n <= 1 {
-				return httpproblem.Errorf(syncproto.CodeInvalidState, "this is the last active administrator: promote another administrator first")
-			}
-		}
-		private, err := q.CountLivePrivateVaultsOfOwner(ctx, userID)
+			return nil
+		})
 		if err != nil {
 			return err
 		}
-		if private > 0 && !req.AcknowledgeDataLoss {
-			return httpproblem.Errorf(syncproto.CodeValidationFailed,
-				"you own %d private (end-to-end encrypted) vault(s): their content cannot be recovered by anyone once deleted; set acknowledge_data_loss to confirm", private)
-		}
-		sub = cur.KeycloakSub
-		deleted, err := vaults.SoftDeleteVaultsOfOwner(ctx, tx, userID)
-		if err != nil {
-			return err
-		}
-		if err := Anonymise(ctx, tx, userID); err != nil {
-			return err
-		}
-		memberships, err := q.DeleteMembershipsOfUser(ctx, userID)
-		if err != nil {
-			return err
-		}
-		if err := sharing.DeleteGrantsOfPrincipal(ctx, tx, "user", userID); err != nil {
-			return err
-		}
-		if _, err := q.DeleteGrantsGrantedBy(ctx, userID); err != nil {
-			return err
-		}
-		if _, err := q.DeleteUploadsOfUser(ctx, userID); err != nil {
-			return err
-		}
-		if _, err := q.ExpireExportsOfUser(ctx, userID); err != nil {
-			return err
-		}
-		// Written after Anonymise: it must not bring the address back.
-		if err := audit.Record(audit.WithoutClientIP(ctx), tx, userID, "account.delete", "user", userID.String(), map[string]any{
-			"vaults": deleted, "private_vaults": private, "memberships": memberships,
-		}); err != nil {
-			return err
-		}
-		return notify.PublishAccount(ctx, tx, notify.AccountEvent{User: userID, Kind: notify.AccountSuspended})
+		// Written after the anonymisation: it must not bring the address back.
+		return audit.Record(audit.WithoutClientIP(ctx), tx, userID, "account.delete", "user", userID.String(), map[string]any{
+			"vaults": res.Vaults, "private_vaults": res.PrivateVaults, "memberships": res.Memberships, "reattributed_grants": res.ReattributedGrants,
+		})
 	})
 	if err != nil {
 		return err
 	}
 	if s.inv != nil {
-		s.inv.Invalidate(sub)
+		s.inv.Invalidate(res.Subject)
 	}
-	if err := s.kc.SetEnabled(ctx, sub, false); err != nil && !errors.Is(err, keycloak.ErrDisabled) && !errors.Is(err, keycloak.ErrNotFound) {
+	if err := s.kc.SetEnabled(ctx, res.Subject, false); err != nil && !errors.Is(err, keycloak.ErrDisabled) && !errors.Is(err, keycloak.ErrNotFound) {
 		// The account is already deleted and unusable here; the operator can disable it in Keycloak.
 		return fmt.Errorf("account deleted but the identity provider could not be updated: %w", err)
 	}
 	return nil
+}
+
+// Deletion reports what DeleteAccount did.
+type Deletion struct {
+	// Subject is the identity provider subject of the account, which the
+	// caller disables there and drops from the authentication cache.
+	Subject            string
+	Vaults             int64
+	PrivateVaults      int
+	Memberships        int64
+	ReattributedGrants int
+}
+
+// DeleteAccount deletes an account inside tx: the one implementation behind
+// both self-deletion (DELETE /me, GDPR art. 17) and deletion by an
+// administrator (DELETE /admin/users/{id}), so the two cannot drift apart.
+//
+// check runs once the account is loaded and locked, with the number of live
+// private vaults it owns; an error from it aborts the deletion. The last
+// active administrator cannot be deleted.
+//
+// Lock order: the account's vault rows first, then user rows. A commit locks
+// its vault row and then the owner's row (usage), so taking them the other
+// way round would deadlock against a commit in one of the account's vaults.
+//
+// The account row is anonymised at once, the vaults enter the retention
+// period (the purge job removes them afterwards), memberships, received
+// grants, pending uploads and ready exports are removed, and the grants the
+// account gave as a manager on other owners' vaults are re-attributed to the
+// vault owner, so their recipients keep access (ADR-0041); each such share is
+// audited and notified as updated. The caller records its own audit entry
+// and publishes nothing else.
+func DeleteAccount(ctx context.Context, tx pgx.Tx, userID uuid.UUID, check func(cur users.User, privateVaults int) error) (Deletion, error) {
+	q := privacydb.New(tx)
+	ids, err := q.ListVaultIDsOfOwner(ctx, userID)
+	if err != nil {
+		return Deletion{}, err
+	}
+	for _, id := range ids {
+		if err := vaults.LockVault(ctx, tx, id); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return Deletion{}, err
+		}
+	}
+	cur, err := users.GetUserByID(ctx, tx, userID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.Status == "deleted") {
+		return Deletion{}, httpproblem.NotFound("user")
+	}
+	if err != nil {
+		return Deletion{}, err
+	}
+	if cur.Role == "admin" {
+		// Locks every active administrator so two removals cannot both pass.
+		n, err := users.LockActiveAdmins(ctx, tx)
+		if err != nil {
+			return Deletion{}, err
+		}
+		// Read again under the lock: a concurrent change may have committed.
+		if cur, err = users.GetUserByID(ctx, tx, userID); err != nil {
+			return Deletion{}, err
+		}
+		if cur.Role == "admin" && cur.Status == "active" && n <= 1 {
+			return Deletion{}, httpproblem.Errorf(syncproto.CodeInvalidState, "this is the last active administrator: promote another administrator first")
+		}
+	}
+	private, err := q.CountLivePrivateVaultsOfOwner(ctx, userID)
+	if err != nil {
+		return Deletion{}, err
+	}
+	if check != nil {
+		if err := check(cur, int(private)); err != nil {
+			return Deletion{}, err
+		}
+	}
+	res := Deletion{Subject: cur.KeycloakSub, PrivateVaults: int(private)}
+	if res.Vaults, err = vaults.SoftDeleteVaultsOfOwner(ctx, tx, userID); err != nil {
+		return Deletion{}, err
+	}
+	if err := Anonymise(ctx, tx, userID); err != nil {
+		return Deletion{}, err
+	}
+	if res.Memberships, err = q.DeleteMembershipsOfUser(ctx, userID); err != nil {
+		return Deletion{}, err
+	}
+	if err := sharing.DeleteGrantsOfPrincipal(ctx, tx, "user", userID); err != nil {
+		return Deletion{}, err
+	}
+	moved, err := q.ReattributeForeignGrants(ctx, userID)
+	if err != nil {
+		return Deletion{}, err
+	}
+	res.ReattributedGrants = len(moved)
+	perShare := map[uuid.UUID]uuid.UUID{}
+	for _, m := range moved {
+		perShare[m.ShareID] = m.OwnerID
+	}
+	for share, owner := range perShare {
+		if err := audit.Record(audit.WithoutClientIP(ctx), tx, userID, "share.grants_reattributed", "share", share.String(),
+			map[string]any{"from": userID, "to": owner}); err != nil {
+			return Deletion{}, err
+		}
+		if err := notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareUpdated, Share: share}); err != nil {
+			return Deletion{}, err
+		}
+	}
+	if _, err := q.DeleteGrantsGrantedBy(ctx, userID); err != nil {
+		return Deletion{}, err
+	}
+	if _, err := q.DeleteUploadsOfUser(ctx, userID); err != nil {
+		return Deletion{}, err
+	}
+	if _, err := q.ExpireExportsOfUser(ctx, userID); err != nil {
+		return Deletion{}, err
+	}
+	if err := notify.PublishAccount(ctx, tx, notify.AccountEvent{User: userID, Kind: notify.AccountSuspended}); err != nil {
+		return Deletion{}, err
+	}
+	return res, nil
 }
 
 // Anonymise replaces the personal data of a user with a tombstone and removes

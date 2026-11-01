@@ -20,13 +20,22 @@ Formato: **sintomo → verifica → rimedio**. Prima di ogni caso, i tre strumen
 
 **Rimedio:** correggere la variabile o il realm, riavviare l'API (`kubectl rollout restart deploy/memobrain-api`).
 
+## Un utente riceve 409 INVALID_STATE a ogni richiesta
+
+**Sintomo:** un utente riesce ad autenticarsi in Keycloak ma ogni chiamata all'API risponde `409` con codice `INVALID_STATE` e il messaggio "this sign-in cannot be linked to your MemoBrain account…".
+
+1. È un conflitto di identità (vedi [Keycloak](keycloak.md#ruoli-di-realm)): l'e-mail del token appartiene già a un altro account MemoBrain Notes non eliminato, collegato a un altro `sub` (tipicamente un account Keycloak eliminato e ricreato).
+2. Console → **Utenti**, cercare l'e-mail: compare l'account precedente (attivo o sospeso).
+
+**Rimedio:** se l'account precedente è della stessa persona e non serve più, eliminarlo dalla console (i suoi vault entrano nel periodo di conservazione); altrimenti cambiarne l'e-mail dalla console. Il nuovo accesso si collega alla richiesta successiva, al più dopo `OIDC_STATUS_CACHE_TTL` (il rifiuto è memorizzato per quel tempo per non interrogare il database a ogni tentativo). Per recuperare i vault dell'account precedente non c'è una funzione di ricollegamento: va chiesto all'utente di esportarli prima dell'eliminazione.
+
 ## La sincronizzazione è bloccata o lenta
 
 **Sintomo:** i client mostrano "sync in corso" a lungo, errori di rete, o le modifiche arrivano in ritardo.
 
 1. Dashboard → _Sincronizzazione_: commit/s con `outcome="error"` > 0? Latenza p95 alta? Pool del database saturo?
 2. `rejected` in aumento: leggere il campo `code` nelle risposte (`QUOTA_EXCEEDED`, `PATH_COLLISION`, `VAULT_ENCRYPTED`…): non è un guasto ma una regola; vedi [Quota esaurita](#quota-esaurita).
-3. Solo notifiche in ritardo: lo stream (gRPC o SSE) può essere interrotto da proxy. Verificare `memobrain_notify_streams_active` e che l'ingress inoltri HTTP/2 per gRPC (host dedicato `grpcHost` nel chart); il client ripiega su SSE e su un polling periodico, quindi il ritardo è limitato ma non nullo.
+3. Solo notifiche in ritardo: lo stream (gRPC o SSE) può essere interrotto da proxy. Dopo una caduta della connessione `LISTEN` verso PostgreSQL (failover, riavvio) il servizio si ricollega da solo e riallinea gli stream aperti dal database (log `notify listener reconnected` e `notify: subscribers resynced`): le notifiche emesse nel frattempo arrivano come posizioni aggiornate dei vault. Un utente può aprire al massimo 32 stream per replica (gli ulteriori sono rifiutati con `RESOURCE_EXHAUSTED` su gRPC o `429` su SSE) e ogni connessione gRPC viene chiusa e riaperta dal client ogni 30 minuti circa, così le connessioni si ridistribuiscono tra le repliche. Verificare `memobrain_notify_streams_active` e che l'ingress inoltri HTTP/2 per gRPC (host dedicato `grpcHost` nel chart); il client ripiega su SSE e su un polling periodico, quindi il ritardo è limitato ma non nullo.
 4. Un solo vault: confrontare `last_seq` del vault (pagina Vault utente nella console) con il cursore dei client; un client rimasto indietro oltre `sync.changelog_window_days` riparte dal manifesto (comportamento normale, più lento).
 5. Un file in conflitto continuo: il merge è sul client; per i tipi diversi da `.md` il server produce copie di conflitto. Nessun dato viene perso (le versioni scartate restano nello storico).
 6. Blocchi sul database: query lente o lock (`pg_stat_activity`); il commit tiene lock di riga sul proprietario del vault (quota) per microsecondi, un lock prolungato indica una transazione ferma.

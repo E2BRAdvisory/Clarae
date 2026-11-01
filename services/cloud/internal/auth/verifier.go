@@ -25,6 +25,9 @@ type Claims struct {
 	AuthorizedParty   string
 	RealmRoles        []string
 	Expiry            time.Time
+	// IssuedAt is the iat claim: provisioning trusts the realm roles of a
+	// token only when it was issued after the last role change (ADR-0041).
+	IssuedAt time.Time
 }
 
 // rawClaims mirrors the Keycloak access token layout.
@@ -91,5 +94,6 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Claims, error) 
 		AuthorizedParty:   rc.AuthorizedParty,
 		RealmRoles:        rc.RealmAccess.Roles,
 		Expiry:            tok.Expiry,
+		IssuedAt:          tok.IssuedAt,
 	}, nil
 }

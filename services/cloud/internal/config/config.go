@@ -104,8 +104,12 @@ type KeycloakConfig struct {
 	ClientSecret string
 }
 
-// Load reads the configuration from the environment and validates it.
+// Load reads the configuration from the environment and validates it. A
+// duration or boolean that does not parse is an error naming the variable,
+// never a silent fallback to the default.
 func Load(role Role, version string) (Config, error) {
+	var p envParser
+	envDuration, envBool := p.duration, p.boolean
 	c := Config{
 		Role:              role,
 		Version:           version,
@@ -148,7 +152,7 @@ func Load(role Role, version string) (Config, error) {
 	}
 	proxies, err := parsePrefixes(envList("TRUSTED_PROXIES", ""))
 	c.TrustedProxies = proxies
-	return c, errors.Join(err, c.validate())
+	return c, errors.Join(errors.Join(p.errs...), err, c.validate())
 }
 
 // parsePrefixes reads CIDRs or bare addresses (a single host).
@@ -188,6 +192,17 @@ func (c Config) validate() error {
 	case RoleAPI, RoleWorker, RoleAll:
 	default:
 		errs = append(errs, fmt.Errorf("unknown role %q", c.Role))
+	}
+	if c.ShutdownTimeout <= 0 {
+		errs = append(errs, fmt.Errorf("SHUTDOWN_TIMEOUT must be positive, got %s", c.ShutdownTimeout))
+	}
+	if c.ShutdownDrain < 0 {
+		errs = append(errs, fmt.Errorf("SHUTDOWN_DRAIN cannot be negative, got %s", c.ShutdownDrain))
+	}
+	// §1.3: a suspension takes effect within 30 s; a longer cache breaks that
+	// promise, a negative one makes no sense (0 disables the cache).
+	if c.OIDC.StatusCacheTTL < 0 || c.OIDC.StatusCacheTTL > 5*time.Minute {
+		errs = append(errs, fmt.Errorf("OIDC_STATUS_CACHE_TTL must be between 0 and 5m, got %s", c.OIDC.StatusCacheTTL))
 	}
 	if names := c.PlaceholderSecrets(); len(names) > 0 && !c.AllowPlaceholderSecrets {
 		errs = append(errs, fmt.Errorf("placeholder secret of the deployment template (%[2]s) in %[1]s: "+
@@ -260,25 +275,31 @@ func env(key, def string) string {
 	return def
 }
 
-func envBool(key string, def bool) bool {
+// envParser reads typed variables and collects the ones that do not parse,
+// so Load reports all of them at once.
+type envParser struct{ errs []error }
+
+func (p *envParser) boolean(key string, def bool) bool {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
 		return def
 	}
 	b, err := strconv.ParseBool(v)
 	if err != nil {
+		p.errs = append(p.errs, fmt.Errorf("%s=%q is not a boolean (use true/false, 1/0)", key, v))
 		return def
 	}
 	return b
 }
 
-func envDuration(key string, def time.Duration) time.Duration {
+func (p *envParser) duration(key string, def time.Duration) time.Duration {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
 		return def
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil {
+		p.errs = append(p.errs, fmt.Errorf("%s=%q is not a duration (use a unit, e.g. 15s or 2m)", key, v))
 		return def
 	}
 	return d

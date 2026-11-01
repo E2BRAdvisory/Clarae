@@ -42,7 +42,11 @@ Al service account vanno assegnati **solo** questi ruoli del client `realm-manag
 | `memobrain-user`  | Utente standard.                                                                                                                           |
 | `memobrain-admin` | Accesso alla console di amministrazione (Web UI) e agli endpoint `/admin/*`. Assegnabile dalla console (azione `user.role`) o in Keycloak. |
 
-Il servizio impedisce di rimuovere o sospendere l'**ultimo amministratore** (errore `invalidState`).
+Il servizio impedisce di rimuovere, sospendere o eliminare l'**ultimo amministratore** (errore `INVALID_STATE`); il controllo prende un lock sulle righe degli amministratori attivi, quindi due amministratori che si rimuovono a vicenda nello stesso istante non possono lasciare il servizio senza amministratori.
+
+**Cambio di ruolo e token già emessi (ADR-0041).** Il ruolo vive in Keycloak ed è rispecchiato nel database a ogni accesso. Quando lo si cambia dalla console, il servizio lo aggiorna in Keycloak e nel database e da quel momento il database prevale sui token emessi **prima** del cambio: una revoca del ruolo `memobrain-admin` vale dalla richiesta successiva (al più `OIDC_STATUS_CACHE_TTL` sulle altre repliche) anche se il token dell'utente porta ancora il ruolo, e una promozione vale senza attendere un nuovo token. I token emessi dopo il cambio tornano a rispecchiare Keycloak, quindi un ruolo assegnato o tolto in seguito direttamente in Keycloak prevale al primo rinnovo del token. Per questo il cambio di ruolo dalla console richiede l'Admin API di Keycloak (`KC_ADMIN_*`): senza, la console risponde `INVALID_STATE` invece di applicare un ruolo che il token successivo annullerebbe.
+
+**Conflitto di identità.** Il collegamento tra account Keycloak e account MemoBrain Notes avviene per `sub`, mai per e-mail. Se un account Keycloak viene eliminato e ricreato con la stessa e-mail (nuovo `sub`) mentre l'account MemoBrain Notes precedente è ancora attivo o sospeso, il nuovo accesso non può creare una seconda riga con la stessa e-mail: ogni richiesta risponde `409 INVALID_STATE` con un messaggio esplicito (non più `500`), senza scrivere nulla. Il servizio non ricollega automaticamente l'account per e-mail, perché chi controlla un indirizzo e-mail nel provider di identità otterrebbe i vault di un altro account. Rimedio nel [runbook](runbook.md#un-utente-riceve-409-invalid_state-a-ogni-richiesta).
 
 ## Gruppi
 

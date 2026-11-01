@@ -137,7 +137,7 @@ func run(role config.Role) error {
 		})
 
 		g.Go(func() error { return application.Hub.Run(ctx) })
-		grpcSrv := grpcserver.New(authn, application.Hub)
+		grpcSrv := grpcserver.New(authn, application.Hub, grpcserver.WithLogger(logger))
 		lis, err := net.Listen("tcp", cfg.GRPCListenAddr)
 		if err != nil {
 			return fmt.Errorf("grpc listen: %w", err)
@@ -148,13 +148,9 @@ func run(role config.Role) error {
 		})
 		g.Go(func() error {
 			<-ctx.Done()
-			done := make(chan struct{})
-			go func() { grpcSrv.GracefulStop(); close(done) }()
-			select {
-			case <-done:
-			case <-time.After(cfg.ShutdownTimeout):
-				grpcSrv.Stop()
-			}
+			// Ends the notification streams first (clients reconnect to another
+			// replica and replay), then stops within the shutdown timeout.
+			grpcSrv.Shutdown(cfg.ShutdownTimeout)
 			return nil
 		})
 	}

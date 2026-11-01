@@ -2,9 +2,14 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 
 	"memobrain/services/cloud/internal/auth/authtest"
 )
@@ -72,5 +77,48 @@ func TestVerifier(t *testing.T) {
 		}
 	})
 
-	_ = time.Second
+	t.Run("issued at is exposed", func(t *testing.T) {
+		at := time.Now().Add(-time.Minute).Truncate(time.Second)
+		c, err := v.Verify(ctx, iss.Token(t, authtest.TokenOptions{IssuedAt: at}))
+		if err != nil || !c.IssuedAt.Equal(at) {
+			t.Fatalf("iat %v (%v), want %v", c.IssuedAt, err, at)
+		}
+	})
+
+	t.Run("signed by another key", func(t *testing.T) {
+		// Same issuer URL and claims, but a key the JWKS does not hold.
+		other := authtest.New(t)
+		raw := other.Token(t, authtest.TokenOptions{Issuer: iss.URL()})
+		if _, err := v.Verify(ctx, raw); !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("expected ErrInvalidToken, got %v", err)
+		}
+	})
+
+	t.Run("alg none", func(t *testing.T) {
+		claims := fmt.Sprintf(`{"iss":%q,"sub":"x","aud":"memobrain-api","exp":%d,"azp":"memobrain-desktop"}`, iss.URL(), time.Now().Add(time.Hour).Unix())
+		raw := b64(`{"alg":"none","typ":"JWT"}`) + "." + b64(claims) + "."
+		if _, err := v.Verify(ctx, raw); !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("expected ErrInvalidToken, got %v", err)
+		}
+	})
+
+	t.Run("HS256 with a shared secret", func(t *testing.T) {
+		signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: []byte("0123456789abcdef0123456789abcdef")},
+			(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", "test-key"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := jwt.Signed(signer).Claims(jwt.Claims{
+			Issuer: iss.URL(), Subject: "x", Audience: jwt.Audience{"memobrain-api"},
+			Expiry: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		}).Claims(map[string]any{"azp": "memobrain-desktop"}).Serialize()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := v.Verify(ctx, raw); !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("expected ErrInvalidToken, got %v", err)
+		}
+	})
 }
+
+func b64(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }

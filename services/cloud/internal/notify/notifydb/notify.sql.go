@@ -36,20 +36,34 @@ func (q *Queries) GetShare(ctx context.Context, id uuid.UUID) (Share, error) {
 	return i, err
 }
 
-const getVaultOwner = `-- name: GetVaultOwner :one
-SELECT owner_id, deleted_at FROM vaults WHERE id = $1
+const getVaultOwners = `-- name: GetVaultOwners :many
+SELECT id, owner_id, deleted_at FROM vaults WHERE id = ANY($1::uuid[])
 `
 
-type GetVaultOwnerRow struct {
+type GetVaultOwnersRow struct {
+	ID        uuid.UUID
 	OwnerID   uuid.UUID
 	DeletedAt *time.Time
 }
 
-func (q *Queries) GetVaultOwner(ctx context.Context, id uuid.UUID) (GetVaultOwnerRow, error) {
-	row := q.db.QueryRow(ctx, getVaultOwner, id)
-	var i GetVaultOwnerRow
-	err := row.Scan(&i.OwnerID, &i.DeletedAt)
-	return i, err
+func (q *Queries) GetVaultOwners(ctx context.Context, ids []uuid.UUID) ([]GetVaultOwnersRow, error) {
+	rows, err := q.db.Query(ctx, getVaultOwners, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetVaultOwnersRow{}
+	for rows.Next() {
+		var i GetVaultOwnersRow
+		if err := rows.Scan(&i.ID, &i.OwnerID, &i.DeletedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listShareRecipients = `-- name: ListShareRecipients :many
@@ -117,40 +131,6 @@ func (q *Queries) ListSharedVaultSeqs(ctx context.Context, principalID uuid.UUID
 	return items, nil
 }
 
-const listVaultRecipients = `-- name: ListVaultRecipients :many
-SELECT DISTINCT u FROM (
-  SELECT g.principal_id AS u FROM share_grants g JOIN shares s ON s.id = g.share_id
-  WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
-    AND g.status = 'accepted' AND g.principal_type = 'user'
-  UNION
-  SELECT m.user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
-  JOIN group_members m ON m.group_id = g.principal_id
-  WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
-    AND g.status = 'accepted' AND g.principal_type = 'group'
-) r
-`
-
-// Users who may read the vault through an accepted grant on a live share.
-func (q *Queries) ListVaultRecipients(ctx context.Context, vaultID uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listVaultRecipients, vaultID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var u uuid.UUID
-		if err := rows.Scan(&u); err != nil {
-			return nil, err
-		}
-		items = append(items, u)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listVaultsOfOwners = `-- name: ListVaultsOfOwners :many
 SELECT id, owner_id, last_seq FROM vaults WHERE owner_id = $1 AND deleted_at IS NULL
 `
@@ -171,6 +151,46 @@ func (q *Queries) ListVaultsOfOwners(ctx context.Context, ownerID uuid.UUID) ([]
 	for rows.Next() {
 		var i ListVaultsOfOwnersRow
 		if err := rows.Scan(&i.ID, &i.OwnerID, &i.LastSeq); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVaultsRecipients = `-- name: ListVaultsRecipients :many
+SELECT DISTINCT r.vault_id, r.user_id FROM (
+  SELECT s.vault_id, g.principal_id AS user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
+  WHERE s.vault_id = ANY($1::uuid[]) AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+    AND g.status = 'accepted' AND g.principal_type = 'user'
+  UNION
+  SELECT s.vault_id, m.user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
+  JOIN group_members m ON m.group_id = g.principal_id
+  WHERE s.vault_id = ANY($1::uuid[]) AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+    AND g.status = 'accepted' AND g.principal_type = 'group'
+) r
+`
+
+type ListVaultsRecipientsRow struct {
+	VaultID uuid.UUID
+	UserID  uuid.UUID
+}
+
+// Users who may read each of the vaults through an accepted grant on a live
+// share (one query for a whole batch of notifications).
+func (q *Queries) ListVaultsRecipients(ctx context.Context, ids []uuid.UUID) ([]ListVaultsRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, listVaultsRecipients, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVaultsRecipientsRow{}
+	for rows.Next() {
+		var i ListVaultsRecipientsRow
+		if err := rows.Scan(&i.VaultID, &i.UserID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

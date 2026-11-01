@@ -46,8 +46,9 @@ func apiLimits(next http.Handler) http.Handler {
 }
 
 // isStreaming reports the operations whose request or response body is a
-// byte stream: blob upload and download, vault ZIP, export download, and the
-// personal data export.
+// byte stream: blob upload and download, revision content, vault ZIP, export
+// download, and the personal data export. TestStreamingRoutesMatchOpenAPI
+// keeps it in line with the binary responses of the contract.
 func isStreaming(path string) bool {
 	p, ok := strings.CutPrefix(path, BasePath)
 	if !ok {
@@ -70,6 +71,8 @@ func isStreaming(path string) bool {
 	case strings.HasPrefix(sub, "blobs/"): // not blobs:check, which is JSON
 		return true
 	case strings.HasPrefix(sub, "exports/") && strings.HasSuffix(sub, "/download"):
+		return true
+	case strings.HasPrefix(sub, "files/") && strings.Contains(sub, "/revisions/") && strings.HasSuffix(sub, "/content"):
 		return true
 	}
 	return false

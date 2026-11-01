@@ -82,7 +82,7 @@ func toMe(m Me) api.Me {
 		Status:        api.UserStatus(u.Status),
 		QuotaBytes:    m.QuotaBytes,
 		UsedBytes:     u.UsedBytes,
-		ConfigVersion: m.ConfigVersion,
+		ConfigVersion: int(m.ConfigVersion),
 		CreatedAt:     u.CreatedAt,
 		LastLoginAt:   u.LastLoginAt,
 	}

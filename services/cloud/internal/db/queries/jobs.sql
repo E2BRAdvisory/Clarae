@@ -12,12 +12,15 @@ DELETE FROM blobs
 WHERE hash = $1 AND ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $2
 RETURNING storage_key;
 
--- name: ListBlobRefCounts :many
--- Reconciliation: actual number of revisions referencing each blob.
-SELECT b.hash, b.ref_count, COUNT(r.id)::int AS actual
-FROM blobs b LEFT JOIN file_revisions r ON r.blob_hash = b.hash
-GROUP BY b.hash, b.ref_count
-HAVING b.ref_count <> COUNT(r.id);
+-- name: ListBlobRefCountsAfter :many
+-- Reconciliation, one keyset page of blobs at a time: the stored and the
+-- actual number of revisions referencing each blob (file_revisions_blob_ix).
+SELECT b.hash, b.ref_count,
+       (SELECT COUNT(*) FROM file_revisions r WHERE r.blob_hash = b.hash)::int AS actual
+FROM blobs b
+WHERE b.hash > sqlc.arg(after)::text
+ORDER BY b.hash
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: GetBlobRefForUpdate :one
 -- Reconciliation locks the blob before counting, so the count includes every
@@ -32,10 +35,20 @@ UPDATE blobs SET ref_count = $2,
   unreferenced_since = CASE WHEN $2 = 0 THEN COALESCE(unreferenced_since, now()) ELSE NULL END
 WHERE hash = $1;
 
--- name: PurgeDeletedFiles :execrows
--- Tombstones whose every revision is gone.
-DELETE FROM files f WHERE f.is_deleted AND f.vault_id = $1
-  AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id);
+-- name: PurgeDeletedFilesBatch :execrows
+-- Tombstones whose every revision is gone, across all vaults, one bounded
+-- batch at a time. Rows a commit holds are skipped (the next run takes them)
+-- rather than waited for, and a tombstone a file share still points at stays:
+-- deleting it would violate shares.file_id.
+DELETE FROM files WHERE id IN (
+  SELECT f.id FROM files f
+  WHERE f.is_deleted
+    AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id)
+    AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+  ORDER BY f.id
+  LIMIT sqlc.arg(max_rows)::int
+  FOR UPDATE SKIP LOCKED
+);
 
 -- name: MarkUserPurged :exec
 UPDATE users SET purged_at = now(), keycloak_sub = 'purged:' || id::text, updated_at = now() WHERE id = $1;
@@ -46,9 +59,6 @@ WHERE status = 'deleted' AND purged_at IS NULL AND COALESCE(deleted_at, updated_
 
 -- name: ListAllVaultIDsOfOwner :many
 SELECT id FROM vaults WHERE owner_id = $1;
-
--- name: MaxSeqBefore :one
-SELECT COALESCE(MAX(seq), 0)::bigint FROM file_revisions WHERE vault_id = $1 AND server_time < $2;
 
 -- name: ListRevisionBlobs :many
 SELECT blob_hash FROM file_revisions WHERE vault_id = $1 AND blob_hash IS NOT NULL;
@@ -68,8 +78,20 @@ UPDATE users SET used_bytes = $2 WHERE id = $1;
 -- name: GetVaultForUpdate :one
 SELECT * FROM vaults WHERE id = $1 FOR UPDATE;
 
--- name: SetVaultCompaction :exec
-UPDATE vaults SET compaction_seq = GREATEST(compaction_seq, $2) WHERE id = $1;
+-- name: ListVaultIDsAfter :many
+-- Keyset pagination over every vault (maintenance batches).
+SELECT id FROM vaults WHERE id > sqlc.arg(after)::uuid ORDER BY id LIMIT sqlc.arg(max_rows)::int;
+
+-- name: CompactVaults :execrows
+-- Advances compaction_seq of a batch of vaults to the last changelog entry
+-- older than the window, in one statement; it never moves backwards.
+UPDATE vaults v SET compaction_seq = m.seq
+FROM (
+  SELECT r.vault_id, MAX(r.seq)::bigint AS seq FROM file_revisions r
+  WHERE r.vault_id = ANY(sqlc.arg(ids)::uuid[]) AND r.server_time < sqlc.arg(before)::timestamptz
+  GROUP BY r.vault_id
+) m
+WHERE v.id = m.vault_id AND m.seq > v.compaction_seq;
 
 -- name: ListDeletedVaultsBefore :many
 SELECT id FROM vaults WHERE deleted_at IS NOT NULL AND deleted_at < $1;
@@ -77,16 +99,22 @@ SELECT id FROM vaults WHERE deleted_at IS NOT NULL AND deleted_at < $1;
 -- name: DeleteVault :exec
 DELETE FROM vaults WHERE id = $1;
 
--- name: ListVaultTotals :many
--- Source of truth for the nightly usage reconciliation.
+-- name: ListVaultTotalsAfter :many
+-- Source of truth for the nightly usage reconciliation, one keyset page of
+-- vaults at a time (files_vault_ix serves each vault's live files).
 SELECT v.id AS vault_id,
        v.owner_id,
        v.total_bytes AS stored_bytes,
        v.file_count AS stored_files,
-       COALESCE(SUM(f.size) FILTER (WHERE NOT f.is_deleted), 0)::bigint AS bytes,
-       COUNT(f.id) FILTER (WHERE NOT f.is_deleted)::int AS files
-FROM vaults v LEFT JOIN files f ON f.vault_id = v.id
-GROUP BY v.id, v.owner_id, v.total_bytes, v.file_count;
+       COALESCE(t.bytes, 0)::bigint AS bytes,
+       COALESCE(t.files, 0)::int AS files
+FROM vaults v
+LEFT JOIN LATERAL (
+  SELECT SUM(f.size) AS bytes, COUNT(*) AS files FROM files f WHERE f.vault_id = v.id AND NOT f.is_deleted
+) t ON true
+WHERE v.id > sqlc.arg(after)::uuid
+ORDER BY v.id
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: VaultActualTotals :one
 SELECT COALESCE(SUM(size), 0)::bigint AS bytes, COUNT(*)::int AS files

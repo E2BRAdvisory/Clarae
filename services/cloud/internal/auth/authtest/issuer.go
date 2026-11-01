@@ -32,6 +32,8 @@ type TokenOptions struct {
 	Audience  []string
 	Roles     []string
 	ExpiresIn time.Duration
+	// IssuedAt overrides the iat claim (default: now).
+	IssuedAt time.Time
 	// Issuer overrides the iss claim (to test rejection).
 	Issuer string
 }
@@ -103,11 +105,15 @@ func (i *Issuer) Token(t *testing.T, o TokenOptions) string {
 		issuer = i.Server.URL
 	}
 	now := time.Now()
+	iat := now
+	if !o.IssuedAt.IsZero() {
+		iat = o.IssuedAt
+	}
 	claims := jwt.Claims{
 		Issuer:    issuer,
 		Subject:   o.Subject,
 		Audience:  jwt.Audience(o.Audience),
-		IssuedAt:  jwt.NewNumericDate(now),
+		IssuedAt:  jwt.NewNumericDate(iat),
 		Expiry:    jwt.NewNumericDate(now.Add(o.ExpiresIn)),
 		NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)),
 	}

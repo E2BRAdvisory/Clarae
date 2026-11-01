@@ -55,6 +55,8 @@ const deleteGrantsGrantedBy = `-- name: DeleteGrantsGrantedBy :execrows
 DELETE FROM share_grants WHERE granted_by = $1
 `
 
+// Runs after ReattributeForeignGrants: what is left sits on the account's own
+// vaults, which the deletion puts in retention.
 func (q *Queries) DeleteGrantsGrantedBy(ctx context.Context, grantedBy uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteGrantsGrantedBy, grantedBy)
 	if err != nil {
@@ -260,6 +262,35 @@ func (q *Queries) ListSharesOfUserExport(ctx context.Context, createdBy uuid.UUI
 	return items, nil
 }
 
+const listVaultIDsOfOwner = `-- name: ListVaultIDsOfOwner :many
+
+SELECT id FROM vaults WHERE owner_id = $1 ORDER BY id
+`
+
+// Queries of the privacy module (ADR-0033: one sqlc package per module).
+// Every vault of the account, deleted ones included, in the order their row
+// locks are taken (account deletion locks them before the user row, as a
+// commit does: vault first, then the owner's usage).
+func (q *Queries) ListVaultIDsOfOwner(ctx context.Context, ownerID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listVaultIDsOfOwner, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVaultsOfOwnerExport = `-- name: ListVaultsOfOwnerExport :many
 SELECT id, name, kind, total_bytes, file_count, created_at, deleted_at
 FROM vaults WHERE owner_id = $1 ORDER BY created_at
@@ -303,26 +334,33 @@ func (q *Queries) ListVaultsOfOwnerExport(ctx context.Context, ownerID uuid.UUID
 	return items, nil
 }
 
-const lockActiveAdmins = `-- name: LockActiveAdmins :many
-
-SELECT id FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id FOR UPDATE
+const reattributeForeignGrants = `-- name: ReattributeForeignGrants :many
+UPDATE share_grants g SET granted_by = v.owner_id
+FROM shares s JOIN vaults v ON v.id = s.vault_id
+WHERE g.share_id = s.id AND g.granted_by = $1 AND v.owner_id <> $1
+RETURNING g.share_id, v.owner_id
 `
 
-// Queries of the privacy module (ADR-0033: one sqlc package per module).
-// Serialises concurrent deletions of administrators (last-admin guard).
-func (q *Queries) LockActiveAdmins(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, lockActiveAdmins)
+type ReattributeForeignGrantsRow struct {
+	ShareID uuid.UUID
+	OwnerID uuid.UUID
+}
+
+// Grants the account gave as a manager on vaults of other owners stay valid:
+// the vault owner becomes their grantor (ADR-0041). Returns the shares touched.
+func (q *Queries) ReattributeForeignGrants(ctx context.Context, grantedBy uuid.UUID) ([]ReattributeForeignGrantsRow, error) {
+	rows, err := q.db.Query(ctx, reattributeForeignGrants, grantedBy)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []uuid.UUID{}
+	items := []ReattributeForeignGrantsRow{}
 	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
+		var i ReattributeForeignGrantsRow
+		if err := rows.Scan(&i.ShareID, &i.OwnerID); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -349,7 +387,7 @@ UPDATE users SET
   display_name = NULL,
   updated_at   = now()
 WHERE id = $1
-RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 // Replaces every personal field by a tombstone; ids, role and timestamps stay so audit
@@ -372,6 +410,7 @@ func (q *Queries) TombstoneUser(ctx context.Context, id uuid.UUID) (User, error)
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }

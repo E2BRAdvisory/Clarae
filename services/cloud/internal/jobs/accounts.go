@@ -15,8 +15,9 @@ import (
 // PurgeDeletedAccounts finishes the deletion of accounts that were deleted longer
 // ago than privacy.account_purge_days (default 30; ADR-0021): every vault they
 // still own is purged (releasing blob references, which the blob GC then removes),
-// the personal data is anonymised again (accounts deleted by an administrator are
-// only soft-deleted until now), and the row becomes a permanent tombstone whose id
+// the personal data is anonymised again (idempotent: both deletion paths already
+// anonymise through privacy.DeleteAccount, but rows deleted by an administrator
+// before that change were only soft-deleted), and the row becomes a permanent tombstone whose id
 // keeps audit entries and revisions in other users' vaults consistent.
 func (r *Runner) PurgeDeletedAccounts(ctx context.Context) (int, error) {
 	retention := time.Duration(r.setting(ctx, "privacy.account_purge_days", 30)) * 24 * time.Hour

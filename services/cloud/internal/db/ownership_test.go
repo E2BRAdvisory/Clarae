@@ -1,11 +1,16 @@
 package db
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -46,8 +51,9 @@ var readExceptions = map[string][]string{
 	"configprofiles": {"group_members"},
 	// Member names in the member list.
 	"groups": {"users"},
-	// Maintenance reconciles counters and purges across the data plane.
-	"jobs": {"file_revisions"},
+	// Maintenance reconciles counters and purges across the data plane; the
+	// tombstone purge keeps files that a file share still points at.
+	"jobs": {"file_revisions", "shares"},
 	// Fan-out of events: notify cannot depend on the modules that publish through it.
 	"notify": {"group_members", "share_grants", "shares", "vaults"},
 	// The personal data export collects everything about one account (GDPR art. 15).
@@ -69,8 +75,14 @@ var writeExceptions = map[string][]string{
 
 var (
 	createTable = regexp.MustCompile(`(?i)CREATE TABLE (?:IF NOT EXISTS )?(\w+)`)
-	writeStmt   = regexp.MustCompile(`(?i)\b(?:INSERT INTO|UPDATE|DELETE FROM)\s+(\w+)`)
-	sqlComment  = regexp.MustCompile(`--[^\n]*`)
+	// writeStmt names the table a statement changes; a schema prefix
+	// (public.users) and ONLY are skipped so they cannot hide the table.
+	writeStmt  = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|MERGE\s+INTO)\s+(?:ONLY\s+)?(?:\w+\.)?(\w+)`)
+	sqlComment = regexp.MustCompile(`--[^\n]*`)
+	// rawSQL finds a table used by SQL written in a Go string literal. The
+	// keywords are matched in upper case only, as the code writes SQL, so
+	// prose in messages ("cannot update users") does not count.
+	rawSQL = regexp.MustCompile(`\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|MERGE\s+INTO|FROM|JOIN)\s+(?:ONLY\s+)?(?:\w+\.)?(\w+)`)
 )
 
 func schemaTables(t *testing.T) []string {
@@ -157,5 +169,73 @@ func TestEveryTableHasAnOwner(t *testing.T) {
 	sort.Strings(orphans)
 	if len(orphans) > 0 {
 		t.Fatalf("tables without an owning module: %v", orphans)
+	}
+}
+
+// TestWriteStmtSeesThroughSchemaAndVariants guards the checker itself.
+func TestWriteStmtSeesThroughSchemaAndVariants(t *testing.T) {
+	for stmt, want := range map[string]string{
+		"UPDATE public.users SET x = 1":     "users",
+		"DELETE FROM ONLY share_grants":     "share_grants",
+		"insert into public.devices values": "devices",
+		"TRUNCATE TABLE audit_log":          "audit_log",
+		"TRUNCATE vaults":                   "vaults",
+		"MERGE INTO files f USING x":        "files",
+	} {
+		m := writeStmt.FindStringSubmatch(stmt)
+		if m == nil || strings.ToLower(m[1]) != want {
+			t.Errorf("%q: got %v, want table %s", stmt, m, want)
+		}
+	}
+}
+
+// TestNoRawSQLOnTablesOutsideQueryFiles keeps every table access in the
+// checked query files: SQL in a Go string literal (tx.Exec(ctx, "UPDATE
+// users ...")) would bypass both sqlc and the ownership check above. The
+// generated packages (*db) and tests are exempt; statements that touch no
+// table (pg_notify, advisory locks, LISTEN) are fine.
+func TestNoRawSQLOnTablesOutsideQueryFiles(t *testing.T) {
+	tables := schemaTables(t)
+	fset := token.NewFileSet()
+	for _, root := range []string{"..", "../../cmd"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				// The sqlc output, and this package (migrations, the runner).
+				if strings.HasSuffix(d.Name(), "db") && path != root {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			f, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+			if err != nil {
+				return err
+			}
+			ast.Inspect(f, func(n ast.Node) bool {
+				lit, ok := n.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return true
+				}
+				v, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					return true
+				}
+				for _, m := range rawSQL.FindAllStringSubmatch(v, -1) {
+					if slices.Contains(tables, strings.ToLower(m[1])) {
+						t.Errorf("%s: SQL on table %s in Go code: move it to a queries/<module>.sql file", fset.Position(lit.Pos()), m[1])
+					}
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

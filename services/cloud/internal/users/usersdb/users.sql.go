@@ -7,6 +7,7 @@ package usersdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -125,7 +126,7 @@ func (q *Queries) GetUserBrief(ctx context.Context, id uuid.UUID) (GetUserBriefR
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at FROM users WHERE id = $1
+SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -146,6 +147,36 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
+	)
+	return i, err
+}
+
+const getUserBySub = `-- name: GetUserBySub :one
+SELECT id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at FROM users WHERE keycloak_sub = $1
+`
+
+// The read path of just-in-time provisioning: most requests find the row
+// unchanged and write nothing.
+func (q *Queries) GetUserBySub(ctx context.Context, keycloakSub string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserBySub, keycloakSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.KeycloakSub,
+		&i.Username,
+		&i.Email,
+		&i.DisplayName,
+		&i.Role,
+		&i.Status,
+		&i.QuotaBytesOverride,
+		&i.UsedBytes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }
@@ -153,7 +184,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 const insertProvisionedUser = `-- name: InsertProvisionedUser :one
 
 INSERT INTO users (id, keycloak_sub, username, email, display_name, role, status)
-VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 type InsertProvisionedUserParams struct {
@@ -193,6 +224,7 @@ func (q *Queries) InsertProvisionedUser(ctx context.Context, arg InsertProvision
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }
@@ -232,6 +264,33 @@ func (q *Queries) ListDevices(ctx context.Context, userID uuid.UUID) ([]Device, 
 	return items, nil
 }
 
+const lockActiveAdmins = `-- name: LockActiveAdmins :many
+SELECT id FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id FOR UPDATE
+`
+
+// Takes the row lock of every active administrator, in id order, so the
+// operations that can remove one (suspension, deletion, demotion) serialise
+// their last-admin check: the count that follows sees every committed change.
+func (q *Queries) LockActiveAdmins(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockActiveAdmins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeDevice = `-- name: RevokeDevice :execrows
 UPDATE devices SET revoked_at = now()
 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
@@ -254,15 +313,16 @@ const searchDirectoryUsers = `-- name: SearchDirectoryUsers :many
 SELECT id, username, display_name FROM users
 WHERE status = 'active'
   AND ($1::text = ''
-       OR username ILIKE '%' || $1::text || '%'
-       OR email::text ILIKE '%' || $1::text || '%'
-       OR display_name ILIKE '%' || $1::text || '%')
+       OR username ILIKE '%' || $2::text || '%'
+       OR display_name ILIKE '%' || $2::text || '%'
+       OR email = $1::citext)
 ORDER BY lower(username)
-LIMIT $2::int
+LIMIT $3::int
 `
 
 type SearchDirectoryUsersParams struct {
 	Q       string
+	Pattern string
 	MaxRows int32
 }
 
@@ -272,8 +332,11 @@ type SearchDirectoryUsersRow struct {
 	DisplayName *string
 }
 
+// Substring match on username and display name (pattern is q with the LIKE
+// wildcards escaped); the e-mail matches only exactly, case-insensitively, so
+// the directory cannot be used to guess addresses piece by piece (ADR-0041).
 func (q *Queries) SearchDirectoryUsers(ctx context.Context, arg SearchDirectoryUsersParams) ([]SearchDirectoryUsersRow, error) {
-	rows, err := q.db.Query(ctx, searchDirectoryUsers, arg.Q, arg.MaxRows)
+	rows, err := q.db.Query(ctx, searchDirectoryUsers, arg.Q, arg.Pattern, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +356,7 @@ func (q *Queries) SearchDirectoryUsers(ctx context.Context, arg SearchDirectoryU
 }
 
 const setUserQuotaOverride = `-- name: SetUserQuotaOverride :one
-UPDATE users SET quota_bytes_override = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+UPDATE users SET quota_bytes_override = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 type SetUserQuotaOverrideParams struct {
@@ -319,12 +382,14 @@ func (q *Queries) SetUserQuotaOverride(ctx context.Context, arg SetUserQuotaOver
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }
 
 const setUserRole = `-- name: SetUserRole :one
-UPDATE users SET role = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+UPDATE users SET role = $2, role_changed_at = now(), updated_at = now()
+WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 type SetUserRoleParams struct {
@@ -332,6 +397,8 @@ type SetUserRoleParams struct {
 	Role string
 }
 
+// role_changed_at makes the new role authoritative over tokens issued before
+// the change (see UpsertUserFromToken).
 func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error) {
 	row := q.db.QueryRow(ctx, setUserRole, arg.ID, arg.Role)
 	var i User
@@ -350,12 +417,13 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User,
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }
 
 const setUserStatus = `-- name: SetUserStatus :one
-UPDATE users SET status = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+UPDATE users SET status = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 type SetUserStatusParams struct {
@@ -381,6 +449,7 @@ func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (U
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }
@@ -404,7 +473,7 @@ func (q *Queries) TouchDevice(ctx context.Context, arg TouchDeviceParams) error 
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users SET display_name = COALESCE($2, display_name),
                  email = COALESCE($3, email), updated_at = now()
-WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+WHERE id = $1 AND status <> 'deleted' RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 type UpdateUserProfileParams struct {
@@ -431,22 +500,27 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }
 
 const upsertUserFromToken = `-- name: UpsertUserFromToken :one
 INSERT INTO users (id, keycloak_sub, username, email, display_name, role, status, last_login_at)
-VALUES ($1, $2, $3, $4, $5, $6, 'active', now())
+VALUES ($1, $2, $3, $4, $5,
+        $6, 'active', now())
 ON CONFLICT (keycloak_sub) DO UPDATE SET
   -- A deleted account keeps its tombstone: a token must never write personal data back.
   username      = CASE WHEN users.status = 'deleted' THEN users.username      ELSE EXCLUDED.username     END,
   email         = CASE WHEN users.status = 'deleted' THEN users.email         ELSE EXCLUDED.email        END,
   display_name  = CASE WHEN users.status = 'deleted' THEN users.display_name  ELSE EXCLUDED.display_name END,
-  role          = CASE WHEN users.status = 'deleted' THEN users.role          ELSE EXCLUDED.role         END,
-  last_login_at = CASE WHEN users.status = 'deleted' THEN users.last_login_at ELSE now()                 END,
+  role          = CASE WHEN users.status = 'deleted' THEN users.role
+                       WHEN users.role_changed_at IS NOT NULL AND $7::timestamptz <= users.role_changed_at THEN users.role
+                       ELSE EXCLUDED.role END,
+  -- A suspended account does not log in: its last login stays the real one.
+  last_login_at = CASE WHEN users.status IN ('deleted', 'suspended') THEN users.last_login_at ELSE now() END,
   updated_at    = CASE WHEN users.status = 'deleted' THEN users.updated_at    ELSE now()                 END
-RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at
+RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
 type UpsertUserFromTokenParams struct {
@@ -456,10 +530,14 @@ type UpsertUserFromTokenParams struct {
 	Email       string
 	DisplayName *string
 	Role        string
+	IssuedAt    time.Time
 }
 
 // Just-in-time provisioning on login: creates the user on first sight and
-// refreshes profile fields and the realm role mirror afterwards.
+// refreshes profile fields and the realm role mirror afterwards. The role
+// comes from the token only when the token was issued after the last role
+// change made by an administrator (issued_at is the token's iat): an older
+// token still carries the previous role and must not restore it (ADR-0041).
 func (q *Queries) UpsertUserFromToken(ctx context.Context, arg UpsertUserFromTokenParams) (User, error) {
 	row := q.db.QueryRow(ctx, upsertUserFromToken,
 		arg.ID,
@@ -468,6 +546,7 @@ func (q *Queries) UpsertUserFromToken(ctx context.Context, arg UpsertUserFromTok
 		arg.Email,
 		arg.DisplayName,
 		arg.Role,
+		arg.IssuedAt,
 	)
 	var i User
 	err := row.Scan(
@@ -485,6 +564,7 @@ func (q *Queries) UpsertUserFromToken(ctx context.Context, arg UpsertUserFromTok
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.PurgedAt,
+		&i.RoleChangedAt,
 	)
 	return i, err
 }

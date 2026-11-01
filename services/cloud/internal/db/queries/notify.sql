@@ -12,16 +12,17 @@ SELECT DISTINCT u FROM (
   WHERE g.share_id = $1 AND g.principal_type = 'group'
 ) r;
 
--- name: ListVaultRecipients :many
--- Users who may read the vault through an accepted grant on a live share.
-SELECT DISTINCT u FROM (
-  SELECT g.principal_id AS u FROM share_grants g JOIN shares s ON s.id = g.share_id
-  WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+-- name: ListVaultsRecipients :many
+-- Users who may read each of the vaults through an accepted grant on a live
+-- share (one query for a whole batch of notifications).
+SELECT DISTINCT r.vault_id, r.user_id FROM (
+  SELECT s.vault_id, g.principal_id AS user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
+  WHERE s.vault_id = ANY(sqlc.arg(ids)::uuid[]) AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
     AND g.status = 'accepted' AND g.principal_type = 'user'
   UNION
-  SELECT m.user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
+  SELECT s.vault_id, m.user_id FROM share_grants g JOIN shares s ON s.id = g.share_id
   JOIN group_members m ON m.group_id = g.principal_id
-  WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+  WHERE s.vault_id = ANY(sqlc.arg(ids)::uuid[]) AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
     AND g.status = 'accepted' AND g.principal_type = 'group'
 ) r;
 
@@ -37,5 +38,5 @@ WHERE g.status = 'accepted' AND s.revoked_at IS NULL AND (s.expires_at IS NULL O
 -- name: ListVaultsOfOwners :many
 SELECT id, owner_id, last_seq FROM vaults WHERE owner_id = $1 AND deleted_at IS NULL;
 
--- name: GetVaultOwner :one
-SELECT owner_id, deleted_at FROM vaults WHERE id = $1;
+-- name: GetVaultOwners :many
+SELECT id, owner_id, deleted_at FROM vaults WHERE id = ANY(sqlc.arg(ids)::uuid[]);

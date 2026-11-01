@@ -19,6 +19,13 @@ import (
 // service (status suspended or deleted).
 var ErrSuspended = errors.New("user suspended")
 
+// ErrIdentityConflict is returned by a Provisioner when the token's identity
+// cannot be linked to an account: another live account already uses its
+// e-mail address (typically an identity provider account deleted and
+// recreated while its MemoBrain account still exists). An administrator
+// resolves it; the provisioner never relinks accounts by e-mail.
+var ErrIdentityConflict = errors.New("identity conflicts with an existing account")
+
 // Provisioner resolves token claims to a Principal, creating or updating the
 // user record (just-in-time provisioning). Implemented by the users module.
 type Provisioner interface {
@@ -44,10 +51,18 @@ type Middleware struct {
 	cache map[string]cachedPrincipal // keyed by subject
 }
 
+// cachedPrincipal is the outcome of one provisioning: a principal, or the
+// error that refused it (suspension, identity conflict), which is cached for
+// the same TTL so a refused client that keeps retrying costs no database work.
 type cachedPrincipal struct {
 	p       Principal
+	err     error
 	expires time.Time
 }
+
+// cacheSweepAt is the cache size above which a store first drops the expired
+// entries, so subjects that stopped calling do not accumulate.
+const cacheSweepAt = 4096
 
 // NewMiddleware wires the verifier and provisioner. cacheTTL bounds how long
 // a user's status is trusted without re-reading it (§1.3: 30 s); the limiter
@@ -85,6 +100,9 @@ func (m *Middleware) Protect(next http.Handler) http.Handler {
 		case errors.Is(err, ErrSuspended):
 			httpproblem.Write(w, r, syncproto.CodeUserSuspended, "account suspended", nil)
 			return
+		case errors.Is(err, ErrIdentityConflict):
+			httpproblem.Write(w, r, syncproto.CodeInvalidState, IdentityConflictDetail, nil)
+			return
 		case errors.Is(err, ErrInvalidToken):
 			zerolog.Ctx(ctx).Debug().Err(err).Msg("token rejected")
 			w.Header().Set("WWW-Authenticate", `Bearer realm="memobrain", error="invalid_token"`)
@@ -118,47 +136,67 @@ func (m *Middleware) AuthenticateExp(ctx context.Context, raw string) (Principal
 	if err != nil {
 		return Principal{}, time.Time{}, err
 	}
-	if p, ok := m.cached(claims.Subject); ok {
-		return p, claims.Expiry, nil
+	if c, ok := m.cached(claims.Subject); ok {
+		if c.err != nil {
+			return Principal{}, time.Time{}, c.err
+		}
+		return c.p, claims.Expiry, nil
 	}
 	p, err := m.provisioner.Provision(ctx, claims)
+	if errors.Is(err, ErrSuspended) || errors.Is(err, ErrIdentityConflict) {
+		m.store(claims.Subject, cachedPrincipal{err: err})
+		return Principal{}, time.Time{}, err
+	}
 	if err != nil {
 		return Principal{}, time.Time{}, err
 	}
-	m.store(p)
+	m.store(p.Subject, cachedPrincipal{p: p})
 	return p, claims.Expiry, nil
 }
 
-// Invalidate drops the cached status of a user (called after suspension so
-// the change applies immediately on this replica; other replicas expire it
-// within cacheTTL).
+// IdentityConflictDetail is the problem detail of ErrIdentityConflict.
+const IdentityConflictDetail = "this sign-in cannot be linked to your MemoBrain account: another account already uses " +
+	"the same e-mail address; ask an administrator to resolve it"
+
+// Invalidate drops the cached status of a user (called after a suspension, an
+// activation or a role change, so it applies immediately on this replica;
+// other replicas expire it within cacheTTL).
 func (m *Middleware) Invalidate(subject string) {
 	m.mu.Lock()
 	delete(m.cache, subject)
 	m.mu.Unlock()
 }
 
-func (m *Middleware) cached(subject string) (Principal, bool) {
+func (m *Middleware) cached(subject string) (cachedPrincipal, bool) {
 	if m.cacheTTL <= 0 {
-		return Principal{}, false
+		return cachedPrincipal{}, false
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c, ok := m.cache[subject]
 	if !ok || time.Now().After(c.expires) {
 		delete(m.cache, subject)
-		return Principal{}, false
+		return cachedPrincipal{}, false
 	}
-	return c.p, true
+	return c, true
 }
 
-func (m *Middleware) store(p Principal) {
+func (m *Middleware) store(subject string, c cachedPrincipal) {
 	if m.cacheTTL <= 0 {
 		return
 	}
+	now := time.Now()
+	c.expires = now.Add(m.cacheTTL)
 	m.mu.Lock()
-	m.cache[p.Subject] = cachedPrincipal{p: p, expires: time.Now().Add(m.cacheTTL)}
-	m.mu.Unlock()
+	defer m.mu.Unlock()
+	if len(m.cache) >= cacheSweepAt {
+		for k, e := range m.cache {
+			if now.After(e.expires) {
+				delete(m.cache, k)
+			}
+		}
+	}
+	m.cache[subject] = c
 }
 
 func bearerToken(r *http.Request) (string, bool) {

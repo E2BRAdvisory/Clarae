@@ -6,6 +6,7 @@ package users
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -20,7 +21,6 @@ type (
 	GetDeviceParams             = usersdb.GetDeviceParams
 	GetUserBriefRow             = usersdb.GetUserBriefRow
 	InsertProvisionedUserParams = usersdb.InsertProvisionedUserParams
-	SearchDirectoryUsersParams  = usersdb.SearchDirectoryUsersParams
 	SearchDirectoryUsersRow     = usersdb.SearchDirectoryUsersRow
 	SetUserQuotaOverrideParams  = usersdb.SetUserQuotaOverrideParams
 	SetUserRoleParams           = usersdb.SetUserRoleParams
@@ -38,6 +38,17 @@ func GetUserByID(ctx context.Context, tx db.DBTX, id uuid.UUID) (User, error) {
 // CountActiveAdmins runs the CountActiveAdmins query on tx.
 func CountActiveAdmins(ctx context.Context, tx db.DBTX) (int32, error) {
 	return usersdb.New(tx).CountActiveAdmins(ctx)
+}
+
+// LockActiveAdmins takes the row lock of every active administrator on tx
+// (held until tx ends) and returns how many there are. Every operation that
+// can take an administrator out of service (suspension, demotion, deletion)
+// calls it before deciding, so two of them running at once cannot both see
+// a second administrator and leave none: the later one waits and then counts
+// the committed result.
+func LockActiveAdmins(ctx context.Context, tx db.DBTX) (int, error) {
+	ids, err := usersdb.New(tx).LockActiveAdmins(ctx)
+	return len(ids), err
 }
 
 // InsertProvisionedUser runs the InsertProvisionedUser query on tx.
@@ -70,9 +81,17 @@ func UpdateUserProfile(ctx context.Context, tx db.DBTX, arg UpdateUserProfilePar
 	return usersdb.New(tx).UpdateUserProfile(ctx, arg)
 }
 
-// SearchDirectoryUsers runs the SearchDirectoryUsers query on tx.
-func SearchDirectoryUsers(ctx context.Context, tx db.DBTX, arg SearchDirectoryUsersParams) ([]SearchDirectoryUsersRow, error) {
-	return usersdb.New(tx).SearchDirectoryUsers(ctx, arg)
+// SearchDirectoryUsers finds active users for the sharing directory: q
+// matches a substring of the username or display name, or the whole e-mail
+// address (case-insensitive). The e-mail is never matched in part, so the
+// directory cannot confirm addresses piece by piece (ADR-0041).
+func SearchDirectoryUsers(ctx context.Context, tx db.DBTX, q string, limit int32) ([]SearchDirectoryUsersRow, error) {
+	return usersdb.New(tx).SearchDirectoryUsers(ctx, usersdb.SearchDirectoryUsersParams{Q: q, Pattern: likeEscape(q), MaxRows: limit})
+}
+
+// likeEscape makes the LIKE wildcards of s literal (the default escape character is backslash).
+func likeEscape(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 // GetUserBrief runs the GetUserBrief query on tx.

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"memobrain/services/cloud/internal/auth"
+	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/shared/syncproto"
 )
 
 // SSEHandler serves GET /events, the fallback for networks that block gRPC
@@ -25,7 +27,11 @@ func (h *Hub) SSEHandler() http.Handler {
 			return
 		}
 		p := auth.MustPrincipal(r.Context())
-		sub := h.Subscribe(p.UserID)
+		sub, err := h.Open(p.UserID)
+		if err != nil {
+			httpproblem.Write(w, r, syncproto.CodeRateLimited, err.Error(), nil)
+			return
+		}
 		defer h.Unsubscribe(sub)
 
 		known := map[string]int64{}
@@ -37,21 +43,23 @@ func (h *Hub) SSEHandler() http.Handler {
 			}
 		}
 		cfgVersion, _ := strconv.ParseInt(r.URL.Query().Get("config"), 10, 64)
-		replay, err := h.Snapshot(r.Context(), p.UserID, known, cfgVersion)
-		if err != nil {
+		if err := h.Replay(r.Context(), sub, known, cfgVersion); err != nil {
 			http.Error(w, "replay failed", http.StatusInternalServerError)
 			return
 		}
+		// Every write gets a deadline: a client that stopped reading (its TCP
+		// window full) must not hold the handler forever. The server's own
+		// WriteTimeout is off for this long-lived response.
+		rc := http.NewResponseController(w)
+		writeDeadline := func() { _ = rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)) }
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Accel-Buffering", "no")
+		writeDeadline()
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, ": connected\n\n")
 		flusher.Flush()
-		for _, ev := range replay {
-			sub.Push(ev)
-		}
 
 		ctx := r.Context()
 		if exp := auth.TokenExpiryFrom(ctx); !exp.IsZero() {
@@ -82,6 +90,7 @@ func (h *Hub) SSEHandler() http.Handler {
 				// Only an expired token deserves the event; a closed request (client gone,
 				// server draining) just ends the stream and the client reconnects.
 				if r.Context().Err() == nil {
+					writeDeadline()
 					_, _ = fmt.Fprint(w, "event: token-expired\ndata: {}\n\n")
 					flusher.Flush()
 				}
@@ -90,18 +99,25 @@ func (h *Hub) SSEHandler() http.Handler {
 				if !ok {
 					return
 				}
+				writeDeadline()
 				end := writeSSEBatch(w, batch)
-				flusher.Flush()
-				if end {
+				if err := rc.Flush(); err != nil || end {
 					return
 				}
 			case <-heartbeat.C:
+				writeDeadline()
 				_, _ = fmt.Fprint(w, ": ping\n\n")
-				flusher.Flush()
+				if err := rc.Flush(); err != nil {
+					return
+				}
 			}
 		}
 	})
 }
+
+// sseWriteTimeout bounds one write of the event stream (an event batch or a
+// heartbeat) to a client that stopped reading.
+const sseWriteTimeout = 30 * time.Second
 
 // writeSSEBatch writes the events of one batch and reports whether the stream
 // must end; events queued after the one that ends it are dropped, as on gRPC.

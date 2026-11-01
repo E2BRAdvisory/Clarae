@@ -317,17 +317,23 @@ func (r *Runner) PruneRevisions(ctx context.Context) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	totals, err := jobsdb.New(r.db.Pool).ListVaultTotals(ctx)
-	if err != nil {
-		return n, err
-	}
-	for _, v := range totals {
-		if _, err := jobsdb.New(r.db.Pool).PurgeDeletedFiles(ctx, v.VaultID); err != nil {
+	// Set-based, in bounded batches across every vault: a batch skips the
+	// rows a commit holds instead of waiting for them.
+	for {
+		deleted, err := jobsdb.New(r.db.Pool).PurgeDeletedFilesBatch(ctx, maintenanceBatch)
+		if err != nil {
 			return n, err
 		}
+		if deleted < maintenanceBatch || ctx.Err() != nil {
+			return n, ctx.Err()
+		}
 	}
-	return n, nil
 }
+
+// maintenanceBatch is the number of rows (vaults, blobs, tombstones) one
+// maintenance statement handles: the jobs walk the tables in keyset pages
+// instead of one round trip per vault or one statement over everything.
+const maintenanceBatch = 500
 
 // Maintain runs the daily jobs: changelog compaction, purge of deleted
 // vaults and accounts, reconciliation of counters and the storage snapshot.
@@ -381,22 +387,20 @@ func (r *Runner) CompactChangelogs(ctx context.Context) error {
 	window := time.Duration(r.setting(ctx, "sync.changelog_window_days", 90)) * 24 * time.Hour
 	cut := r.now().Add(-window)
 	q := jobsdb.New(r.db.Pool)
-	vaults, err := q.ListVaultTotals(ctx)
-	if err != nil {
-		return err
-	}
-	for _, v := range vaults {
-		seq, err := q.MaxSeqBefore(ctx, jobsdb.MaxSeqBeforeParams{VaultID: v.VaultID, ServerTime: cut})
-		if err != nil {
+	after := uuid.Nil
+	for {
+		ids, err := q.ListVaultIDsAfter(ctx, jobsdb.ListVaultIDsAfterParams{After: after, MaxRows: maintenanceBatch})
+		if err != nil || len(ids) == 0 {
 			return err
 		}
-		if seq > 0 {
-			if err := q.SetVaultCompaction(ctx, jobsdb.SetVaultCompactionParams{ID: v.VaultID, CompactionSeq: seq}); err != nil {
-				return err
-			}
+		if _, err := q.CompactVaults(ctx, jobsdb.CompactVaultsParams{Ids: ids, Before: cut}); err != nil {
+			return err
 		}
+		if len(ids) < maintenanceBatch {
+			return nil
+		}
+		after = ids[len(ids)-1]
 	}
-	return nil
 }
 
 // PurgeDeletedVaults permanently removes vaults deleted longer ago than
@@ -458,18 +462,24 @@ func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID) error {
 // and a commit running meanwhile is never overwritten by an older snapshot.
 func (r *Runner) ReconcileUsage(ctx context.Context) error {
 	q := jobsdb.New(r.db.Pool)
-	totals, err := q.ListVaultTotals(ctx)
-	if err != nil {
-		return err
-	}
 	perOwner := map[uuid.UUID]int64{}
-	for _, v := range totals {
-		perOwner[v.OwnerID] += v.Bytes
-		if v.StoredBytes != v.Bytes || v.StoredFiles != v.Files {
-			if err := r.reconcileVault(ctx, v.VaultID); err != nil {
-				return err
+	for after := uuid.Nil; ; {
+		totals, err := q.ListVaultTotalsAfter(ctx, jobsdb.ListVaultTotalsAfterParams{After: after, MaxRows: maintenanceBatch})
+		if err != nil {
+			return err
+		}
+		for _, v := range totals {
+			perOwner[v.OwnerID] += v.Bytes
+			if v.StoredBytes != v.Bytes || v.StoredFiles != v.Files {
+				if err := r.reconcileVault(ctx, v.VaultID); err != nil {
+					return err
+				}
 			}
 		}
+		if len(totals) < maintenanceBatch {
+			break
+		}
+		after = totals[len(totals)-1].VaultID
 	}
 	users, err := q.ListUsersWithUsage(ctx)
 	if err != nil {
@@ -540,33 +550,45 @@ func (r *Runner) reconcileUser(ctx context.Context, id uuid.UUID) error {
 // (commit, retention, purge) updates in the transaction that adds or removes
 // the revisions.
 func (r *Runner) ReconcileBlobRefs(ctx context.Context) error {
-	rows, err := jobsdb.New(r.db.Pool).ListBlobRefCounts(ctx)
-	if err != nil {
-		return err
-	}
-	for _, b := range rows {
-		err := r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-			q := jobsdb.New(tx)
-			stored, err := q.GetBlobRefForUpdate(ctx, b.Hash)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil // collected meanwhile
-			}
-			if err != nil {
-				return err
-			}
-			actual, err := q.CountBlobRefs(ctx, &b.Hash)
-			if err != nil {
-				return err
-			}
-			if stored == actual {
-				return nil
-			}
-			r.log.Warn().Str("blob", b.Hash).Int32("stored", stored).Int32("actual", actual).Msg("blob ref count corrected")
-			return q.SetBlobRef(ctx, jobsdb.SetBlobRefParams{Hash: b.Hash, RefCount: actual})
-		})
+	for after := ""; ; {
+		rows, err := jobsdb.New(r.db.Pool).ListBlobRefCountsAfter(ctx, jobsdb.ListBlobRefCountsAfterParams{After: after, MaxRows: maintenanceBatch})
 		if err != nil {
 			return err
 		}
+		for _, b := range rows {
+			if b.RefCount == b.Actual {
+				continue
+			}
+			if err := r.reconcileBlob(ctx, b.Hash); err != nil {
+				return err
+			}
+		}
+		if len(rows) < maintenanceBatch {
+			return nil
+		}
+		after = rows[len(rows)-1].Hash
 	}
-	return nil
+}
+
+// reconcileBlob corrects the reference count of one blob under its row lock.
+func (r *Runner) reconcileBlob(ctx context.Context, hash string) error {
+	return r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := jobsdb.New(tx)
+		stored, err := q.GetBlobRefForUpdate(ctx, hash)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // collected meanwhile
+		}
+		if err != nil {
+			return err
+		}
+		actual, err := q.CountBlobRefs(ctx, &hash)
+		if err != nil {
+			return err
+		}
+		if stored == actual {
+			return nil
+		}
+		r.log.Warn().Str("blob", hash).Int32("stored", stored).Int32("actual", actual).Msg("blob ref count corrected")
+		return q.SetBlobRef(ctx, jobsdb.SetBlobRefParams{Hash: hash, RefCount: actual})
+	})
 }

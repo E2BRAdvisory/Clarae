@@ -1,16 +1,20 @@
 // Package grpcserver serves NotifyService (§3.6). Authentication reuses the
-// HTTP token path; the stream itself is wired to the notify module in M2 and
-// for now only stays open until the client disconnects or the token expires.
+// HTTP token path; each stream is a subscriber of the notify hub and stays
+// open until the client disconnects, the token expires, the account is
+// suspended or the server shuts down.
 package grpcserver
 
 import (
 	"context"
 	"errors"
 	"math"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
@@ -24,26 +28,78 @@ import (
 
 // Hub is what the stream needs from the notify module.
 type Hub interface {
-	Subscribe(user uuid.UUID) *notify.Sub
+	Open(user uuid.UUID) (*notify.Sub, error)
 	Unsubscribe(s *notify.Sub)
-	Snapshot(ctx context.Context, user uuid.UUID, known map[string]int64, configVersion int64) ([]notify.Event, error)
+	Replay(ctx context.Context, sub *notify.Sub, known map[string]int64, configVersion int64) error
 }
 
-// New builds the gRPC server with the auth interceptors and NotifyService.
-func New(authn *auth.Middleware, hub Hub) *grpc.Server {
-	s := grpc.NewServer(
-		grpc.UnaryInterceptor(unaryAuth(authn)),
-		grpc.StreamInterceptor(streamAuth(authn)),
-		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 10 * time.Second}),
+// Connection lifetime. Keepalive pings find dead peers; MaxConnectionAge makes
+// long-lived HTTP/2 connections reconnect now and then, which spreads them
+// over the replicas after a scale-out and bounds how long a peer that stopped
+// reading can hold a blocked Send (the grace period then closes it).
+const (
+	maxConnectionAge      = 30 * time.Minute
+	maxConnectionAgeGrace = time.Minute
+)
+
+// Server is the gRPC server with a graceful shutdown that also ends the
+// notification streams, which would otherwise keep GracefulStop waiting.
+type Server struct {
+	*grpc.Server
+	done     chan struct{}
+	stopOnce sync.Once
+}
+
+// Option configures New.
+type Option func(*options)
+
+type options struct{ log zerolog.Logger }
+
+// WithLogger sets the logger of the panic recovery.
+func WithLogger(l zerolog.Logger) Option { return func(o *options) { o.log = l } }
+
+// New builds the gRPC server with the recovery and auth interceptors and NotifyService.
+func New(authn *auth.Middleware, hub Hub, opts ...Option) *Server {
+	o := options{log: zerolog.Nop()}
+	for _, f := range opts {
+		f(&o)
+	}
+	srv := &Server{done: make(chan struct{})}
+	srv.Server = grpc.NewServer(
+		// Recovery runs outermost, so a panic in authentication is caught too.
+		grpc.ChainUnaryInterceptor(recoverUnary(o.log), unaryAuth(authn)),
+		grpc.ChainStreamInterceptor(recoverStream(o.log), streamAuth(authn)),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time: 30 * time.Second, Timeout: 10 * time.Second,
+			MaxConnectionAge: maxConnectionAge, MaxConnectionAgeGrace: maxConnectionAgeGrace,
+		}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
 	)
-	notifyv1.RegisterNotifyServiceServer(s, &notifyServer{hub: hub})
-	return s
+	notifyv1.RegisterNotifyServiceServer(srv.Server, &notifyServer{hub: hub, done: srv.done})
+	return srv
+}
+
+// Shutdown ends every notification stream (clients reconnect elsewhere and
+// replay from their known positions), waits up to timeout for the server to
+// stop gracefully, and then stops it hard.
+func (s *Server) Shutdown(timeout time.Duration) {
+	s.stopOnce.Do(func() { close(s.done) })
+	finished := make(chan struct{})
+	go func() { s.GracefulStop(); close(finished) }()
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case <-finished:
+	case <-t.C:
+		s.Stop()
+		<-finished
+	}
 }
 
 type notifyServer struct {
 	notifyv1.UnimplementedNotifyServiceServer
-	hub Hub
+	hub  Hub
+	done <-chan struct{} // closed when the server shuts down; nil never closes
 }
 
 // Subscribe streams "vault X reached seq N" events for the caller's vaults,
@@ -55,25 +111,38 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 	if !ok {
 		return status.Error(codes.Unauthenticated, "no principal")
 	}
-	expired := false
 	if exp := auth.TokenExpiryFrom(ctx); !exp.IsZero() {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, exp)
 		defer cancel()
-		defer func() { _ = expired }()
 	}
-	sub := n.hub.Subscribe(p.UserID)
-	defer n.hub.Unsubscribe(sub)
-	replay, err := n.hub.Snapshot(ctx, p.UserID, req.GetKnownSeq(), int64(req.GetConfigVersion()))
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	shutdown := make(chan struct{})
+	go func() {
+		select {
+		case <-n.done:
+			close(shutdown)
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	sub, err := n.hub.Open(p.UserID)
 	if err != nil {
-		return status.Error(codes.Internal, "replay failed")
+		return status.Error(codes.ResourceExhausted, err.Error())
 	}
-	for _, ev := range replay {
-		sub.Push(ev)
+	defer n.hub.Unsubscribe(sub)
+	if err := n.hub.Replay(ctx, sub, req.GetKnownSeq(), int64(req.GetConfigVersion())); err != nil {
+		return status.Error(codes.Internal, "replay failed")
 	}
 	for {
 		batch, err := sub.Next(ctx)
 		if err != nil {
+			select {
+			case <-shutdown:
+				return status.Error(codes.Unavailable, "server shutting down")
+			default:
+			}
 			if stream.Context().Err() != nil {
 				return nil // the client went away
 			}
@@ -116,6 +185,8 @@ func authenticate(ctx context.Context, authn *auth.Middleware) (context.Context,
 	switch {
 	case errors.Is(err, auth.ErrSuspended):
 		return nil, status.Error(codes.PermissionDenied, "account suspended")
+	case errors.Is(err, auth.ErrIdentityConflict):
+		return nil, status.Error(codes.FailedPrecondition, auth.IdentityConflictDetail)
 	case errors.Is(err, auth.ErrInvalidToken):
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	case err != nil:
@@ -141,6 +212,33 @@ func streamAuth(authn *auth.Middleware) grpc.StreamServerInterceptor {
 			return err
 		}
 		return handler(srv, &wrappedStream{ServerStream: ss, ctx: ctx})
+	}
+}
+
+// recoverUnary turns a panic of a unary handler (or of the interceptors after
+// it) into INTERNAL instead of crashing the process: grpc-go does not recover.
+func recoverUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Str("method", info.FullMethod).Bytes("stack", debug.Stack()).Msg("grpc handler panicked")
+				resp, err = nil, status.Error(codes.Internal, "internal error")
+			}
+		}()
+		return handler(ctx, req)
+	}
+}
+
+// recoverStream is recoverUnary for streaming handlers.
+func recoverStream(log zerolog.Logger) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Str("method", info.FullMethod).Bytes("stack", debug.Stack()).Msg("grpc stream panicked")
+				err = status.Error(codes.Internal, "internal error")
+			}
+		}()
+		return handler(srv, ss)
 	}
 }
 

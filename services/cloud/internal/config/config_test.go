@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParsePrefixes(t *testing.T) {
@@ -105,5 +106,56 @@ func TestLoadAcceptsDevelopmentSecrets(t *testing.T) {
 	t.Setenv("KC_ADMIN_CLIENT_SECRET", "")
 	if _, err := Load(RoleAll, "test"); err != nil {
 		t.Errorf("empty optional secrets: %v", err)
+	}
+}
+
+// Regression (W8): a malformed duration or boolean silently became the default
+// (SHUTDOWN_TIMEOUT=30 ran with 15 s). Every bad value is reported, by name.
+func TestLoadRejectsMalformedValues(t *testing.T) {
+	minimalEnv(t)
+	t.Setenv("SHUTDOWN_TIMEOUT", "30")
+	t.Setenv("SHUTDOWN_DRAIN", "5 seconds")
+	t.Setenv("S3_USE_PATH_STYLE", "yes")
+	t.Setenv("OIDC_STATUS_CACHE_TTL", "30x")
+	_, err := Load(RoleAll, "test")
+	if err == nil {
+		t.Fatal("malformed values accepted")
+	}
+	for _, name := range []string{"SHUTDOWN_TIMEOUT", "SHUTDOWN_DRAIN", "S3_USE_PATH_STYLE", "OIDC_STATUS_CACHE_TTL"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("the error does not name %s: %v", name, err)
+		}
+	}
+}
+
+func TestLoadRejectsOutOfRangeDurations(t *testing.T) {
+	for name, kv := range map[string][2]string{
+		"zero shutdown timeout": {"SHUTDOWN_TIMEOUT", "0s"},
+		"negative drain":        {"SHUTDOWN_DRAIN", "-1s"},
+		"status cache too long": {"OIDC_STATUS_CACHE_TTL", "10m"},
+		"negative status cache": {"OIDC_STATUS_CACHE_TTL", "-5s"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			minimalEnv(t)
+			t.Setenv(kv[0], kv[1])
+			if _, err := Load(RoleAll, "test"); err == nil || !strings.Contains(err.Error(), kv[0]) {
+				t.Fatalf("%s=%s: got %v", kv[0], kv[1], err)
+			}
+		})
+	}
+}
+
+func TestLoadAcceptsWellFormedValues(t *testing.T) {
+	minimalEnv(t)
+	t.Setenv("SHUTDOWN_TIMEOUT", "20s")
+	t.Setenv("SHUTDOWN_DRAIN", "0s")
+	t.Setenv("S3_USE_PATH_STYLE", "false")
+	t.Setenv("OIDC_STATUS_CACHE_TTL", "0s")
+	c, err := Load(RoleAll, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.ShutdownTimeout != 20*time.Second || c.ShutdownDrain != 0 || c.S3.UsePathStyle || c.OIDC.StatusCacheTTL != 0 {
+		t.Fatalf("got %+v", c)
 	}
 }

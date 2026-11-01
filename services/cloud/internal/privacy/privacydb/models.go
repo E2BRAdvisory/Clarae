@@ -36,4 +36,5 @@ type User struct {
 	LastLoginAt        *time.Time
 	DeletedAt          *time.Time
 	PurgedAt           *time.Time
+	RoleChangedAt      *time.Time
 }

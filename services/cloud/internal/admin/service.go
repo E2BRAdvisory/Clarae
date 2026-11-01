@@ -27,9 +27,9 @@ import (
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/keycloak"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/privacy"
 	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/users"
-	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/syncproto"
 )
 
@@ -264,16 +264,23 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id uuid.UUID, displayNa
 		t := strings.TrimSpace(*displayName)
 		dn = &t
 	}
-	if err := s.kc.UpdateUser(ctx, cur.KeycloakSub, deref(em), deref(dn)); err != nil && !tolerant(err) {
-		return UserView{}, kcError(err)
-	}
+	// The database goes first, inside the transaction: a duplicate e-mail
+	// fails there before Keycloak is touched, and a Keycloak failure rolls
+	// the row back, so the two never disagree on the address (a mismatch
+	// would lock the user out at the next login, see auth.ErrIdentityConflict).
 	var u users.User
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		if u, err = users.UpdateUserProfile(ctx, tx, users.UpdateUserProfileParams{ID: id, DisplayName: dn, Email: em}); err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, actor, "user.update", "user", id.String(), nil)
+		if err := audit.Record(ctx, tx, actor, "user.update", "user", id.String(), nil); err != nil {
+			return err
+		}
+		if err := s.kc.UpdateUser(ctx, cur.KeycloakSub, deref(em), deref(dn)); err != nil && !tolerant(err) {
+			return kcError(err)
+		}
+		return nil
 	})
 	if db.IsUniqueViolation(err) {
 		return UserView{}, httpproblem.Errorf(syncproto.CodeNameInUse, "a user with this e-mail already exists")
@@ -291,19 +298,28 @@ func deref(s *string) string {
 	return *s
 }
 
-// guardLastAdmin refuses to remove the last active administrator from service.
-func (s *Service) guardLastAdmin(ctx context.Context, tx db.DBTX, target users.User) error {
-	if target.Role != "admin" || target.Status != "active" {
-		return nil
+// lockTarget loads the user an operation may take out of service and, when
+// they are an active administrator, locks every active administrator first
+// and refuses the last one. The lock serialises concurrent suspensions,
+// demotions and deletions: two administrators acting on each other at the
+// same time cannot both see the other one and leave none. The row is read
+// again under the lock, so the decision uses committed state.
+func (s *Service) lockTarget(ctx context.Context, tx db.DBTX, id uuid.UUID) (users.User, error) {
+	cur, err := s.user(ctx, tx, id)
+	if err != nil || cur.Role != "admin" {
+		return cur, err
 	}
-	n, err := users.CountActiveAdmins(ctx, tx)
+	n, err := users.LockActiveAdmins(ctx, tx)
 	if err != nil {
-		return err
+		return users.User{}, err
 	}
-	if n <= 1 {
-		return httpproblem.Errorf(syncproto.CodeInvalidState, "this is the last active administrator")
+	if cur, err = s.user(ctx, tx, id); err != nil {
+		return users.User{}, err
 	}
-	return nil
+	if cur.Role == "admin" && cur.Status == "active" && n <= 1 {
+		return users.User{}, httpproblem.Errorf(syncproto.CodeInvalidState, "this is the last active administrator")
+	}
+	return cur, nil
 }
 
 // Suspend blocks the account: the database status stops API access (within the status
@@ -314,13 +330,10 @@ func (s *Service) Suspend(ctx context.Context, actor, id uuid.UUID) (UserView, e
 	}
 	var u users.User
 	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		cur, err := s.user(ctx, tx, id)
-		if err != nil {
+		if _, err := s.lockTarget(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := s.guardLastAdmin(ctx, tx, cur); err != nil {
-			return err
-		}
+		var err error
 		if u, err = users.SetUserStatus(ctx, tx, users.SetUserStatusParams{ID: id, Status: "suspended"}); err != nil {
 			return err
 		}
@@ -371,41 +384,33 @@ func (s *Service) Activate(ctx context.Context, actor, id uuid.UUID) (UserView, 
 	return s.view(ctx, u)
 }
 
-// Delete removes the account: it is disabled in Keycloak and the user's vaults enter the
-// retention period (the nightly job purges them afterwards, §2.6.2).
+// Delete removes the account the same way as a self-deletion
+// (privacy.DeleteAccount): the row is anonymised at once, the vaults enter the
+// retention period (the nightly job purges them afterwards, §2.6.2),
+// memberships, grants, uploads and ready exports go, and the account is
+// disabled in Keycloak. The administrator confirmed in the console; private
+// vaults need no acknowledgement here.
 func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
 	if actor == id {
 		return httpproblem.Errorf(syncproto.CodeInvalidState, "you cannot delete yourself")
 	}
-	var sub string
+	var res privacy.Deletion
 	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		cur, err := s.user(ctx, tx, id)
-		if err != nil {
+		var err error
+		if res, err = privacy.DeleteAccount(ctx, tx, id, nil); err != nil {
 			return err
 		}
-		if err := s.guardLastAdmin(ctx, tx, cur); err != nil {
-			return err
-		}
-		sub = cur.KeycloakSub
-		if _, err := users.SetUserStatus(ctx, tx, users.SetUserStatusParams{ID: id, Status: "deleted"}); err != nil {
-			return err
-		}
-		n, err := vaults.SoftDeleteVaultsOfOwner(ctx, tx, id)
-		if err != nil {
-			return err
-		}
-		if err := audit.Record(ctx, tx, actor, "user.delete", "user", id.String(), map[string]any{"vaults": n}); err != nil {
-			return err
-		}
-		return notify.PublishAccount(ctx, tx, notify.AccountEvent{User: id, Kind: notify.AccountSuspended})
+		return audit.Record(ctx, tx, actor, "user.delete", "user", id.String(), map[string]any{
+			"vaults": res.Vaults, "private_vaults": res.PrivateVaults, "memberships": res.Memberships, "reattributed_grants": res.ReattributedGrants,
+		})
 	})
 	if err != nil {
 		return err
 	}
 	if s.inv != nil {
-		s.inv.Invalidate(sub)
+		s.inv.Invalidate(res.Subject)
 	}
-	if err := s.kc.SetEnabled(ctx, sub, false); err != nil && !tolerant(err) {
+	if err := s.kc.SetEnabled(ctx, res.Subject, false); err != nil && !tolerant(err) {
 		return kcError(err)
 	}
 	return nil
@@ -426,11 +431,18 @@ func (s *Service) ResetPassword(ctx context.Context, actor, id uuid.UUID) (bool,
 	})
 }
 
-// SetRole changes the global role in Keycloak (the source of truth, read again at every
-// login) and in the database mirror.
+// SetRole changes the global role in Keycloak and in the database. The
+// database role is authoritative from then on over the tokens issued before
+// the change (role_changed_at, ADR-0041): a demotion applies at the next
+// request even though the user's access token still carries the old realm
+// role, and a token issued later mirrors Keycloak again. The Keycloak side
+// is required: without the admin API, the next token would restore the role.
 func (s *Service) SetRole(ctx context.Context, actor, id uuid.UUID, role string) (UserView, error) {
 	if role != "admin" && role != "user" {
 		return UserView{}, bad("role must be user or admin")
+	}
+	if role == "user" && actor == id {
+		return UserView{}, httpproblem.Errorf(syncproto.CodeInvalidState, "you cannot remove your own administrator role")
 	}
 	cur, err := s.user(ctx, s.db.Pool, id)
 	if err != nil {
@@ -439,20 +451,21 @@ func (s *Service) SetRole(ctx context.Context, actor, id uuid.UUID, role string)
 	if cur.Role == role {
 		return s.view(ctx, cur)
 	}
-	if role == "user" {
-		if actor == id {
-			return UserView{}, httpproblem.Errorf(syncproto.CodeInvalidState, "you cannot remove your own administrator role")
-		}
-		if err := s.guardLastAdmin(ctx, s.db.Pool, cur); err != nil {
-			return UserView{}, err
-		}
-	}
-	if err := s.kc.SetAdmin(ctx, cur.KeycloakSub, role == "admin"); err != nil && !tolerant(err) {
-		return UserView{}, kcError(err)
-	}
 	var u users.User
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		var err error
+		cur, err := s.lockTarget(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if cur.Role == role {
+			u = cur
+			return nil
+		}
+		// Inside the transaction: if Keycloak refuses, nothing changes here;
+		// the last-admin lock is held until the change commits.
+		if err := s.kc.SetAdmin(ctx, cur.KeycloakSub, role == "admin"); err != nil && !errors.Is(err, keycloak.ErrNotFound) {
+			return kcError(err)
+		}
 		if u, err = users.SetUserRole(ctx, tx, users.SetUserRoleParams{ID: id, Role: role}); err != nil {
 			return err
 		}
