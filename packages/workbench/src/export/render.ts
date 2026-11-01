@@ -16,6 +16,7 @@ import { classify, embedOptions } from '../embeds/media';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
 import { sanitizeHtml } from '../util/sanitize';
+import { safeDecodeURI } from '../util/uri';
 import { renderMermaidLight } from './mermaid';
 
 export interface ExportOptions {
@@ -211,12 +212,7 @@ async function inlineImage(ctx: Ctx, img: HTMLImageElement, fromPath: string): P
     img.replaceWith(omit(ctx, src, alt || src)); // remote (or blob:) image
     return;
   }
-  let target = src;
-  try {
-    target = decodeURI(src);
-  } catch {
-    /* keep as written */
-  }
+  const target = safeDecodeURI(src);
   let path: string;
   try {
     path = await ctx.backend.resolve(fromPath, target.split(/[?#]/)[0] ?? target);

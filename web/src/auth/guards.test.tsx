@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { fakeAuth, renderApp } from '../test/utils';
 
 const usage = { 'GET /me/usage': { used_bytes: 1, quota_bytes: 100, level: 'ok' } };
@@ -17,6 +18,27 @@ describe('auth guard', () => {
     renderApp({ path: '/', routes: usage });
     expect(await screen.findByRole('heading', { name: 'Storage used' })).toBeInTheDocument();
     expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
+  it('shows a failed sign-in with a retry instead of redirecting forever', async () => {
+    const auth = fakeAuth(null);
+    let fail = true;
+    auth.getUser = vi.fn(() =>
+      fail ? Promise.reject(new Error('client-config: 502')) : Promise.resolve(null),
+    );
+    renderApp({ path: '/vaults', auth, routes: usage });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in could not start');
+    expect(auth.signIn).not.toHaveBeenCalled();
+    fail = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(auth.signIn).toHaveBeenCalledWith('/vaults'));
+  });
+
+  it('shows a sign-in redirect that fails to start', async () => {
+    const auth = fakeAuth(null);
+    auth.signIn = vi.fn(() => Promise.reject(new Error('idp unreachable')));
+    renderApp({ path: '/vaults', auth, routes: usage });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in could not start');
   });
 
   it('keeps the callback route public', async () => {

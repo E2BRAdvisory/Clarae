@@ -168,14 +168,11 @@
     "signedOut": "Non connesso",
     "ready": "Connesso come {{name}}",
     "disconnected": "Offline — connesso come {{name}}",
+    "deviceRevoked": "Accesso come {{name}} — questo dispositivo è stato revocato",
     "role": "Ruolo",
     "placeholder": "https://memobrain.example.com",
     "storage": "Spazio",
-    "usageOf": "{{used}} su {{quota}}",
     "devices": "Dispositivi",
-    "thisDevice": "questo dispositivo",
-    "revoke": "Revoca dispositivo",
-    "revokeText": "Disconnettere «{{name}}» dal tuo account? Smetterà di sincronizzare.",
     "vaults": "Vault nel cloud"
   },
   "links": {
@@ -619,7 +616,13 @@
     "diskUnencrypted": "Il disco di questo computer non sembra cifrato. Le note sono salvate in chiaro: attiva FileVault / BitLocker / la cifratura del disco.",
     "kind_private": "privato",
     "kind_shared": "condiviso",
-    "signedOutHint": "Sessione cloud scaduta: accedi di nuovo per riprendere. Il collegamento del vault è mantenuto, non va rifatto."
+    "signedOutHint": "Sessione cloud scaduta: accedi di nuovo per riprendere. Il collegamento del vault è mantenuto, non va rifatto.",
+    "removeFromBrowser": "Rimuovi da questo browser",
+    "removeFromBrowserText": "Rimuovere la copia di questo vault da questo browser? Prima vengono caricate le modifiche in sospeso; se qualcuna non si può caricare, la copia viene conservata e potrai scegliere. Il vault nel cloud resta com'è: riaprilo dalla console.",
+    "signedOutHintWeb": "La sessione con il cloud è terminata: ricarica la pagina o accedi di nuovo dalla console per riprendere. Il vault resta collegato.",
+    "linkWarningKeychain": "Il vault è collegato e sbloccato solo per questa sessione: non è stato possibile salvarne la chiave nel portachiavi di sistema. Conserva la chiave di recupero: al prossimo avvio servirà la passphrase.",
+    "linkWarningIncomplete": "Il vault cloud è stato creato, ma il collegamento di questa cartella non è riuscito. Una chiave di recupero mostrata qui è valida: collega la cartella più tardi con «Collega a un vault cloud esistente».",
+    "linkWarningOther": "Il vault è stato creato con un avviso: {{code}}."
   },
   "drawing": {
     "loading": "Caricamento dell'editor di disegni…",
@@ -886,10 +889,7 @@
   },
   "sharing": {
     "invitations": "Inviti",
-    "noInvitations": "Nessun invito.",
-    "invitedBy": "Condiviso da {{owner}}",
-    "accept": "Accetta",
-    "decline": "Rifiuta",
+    "signIn": "Accedi al cloud (Impostazioni → Cloud) per vedere i tuoi inviti e le tue condivisioni.",
     "sharedWithMe": "Condivisi con me",
     "noMounts": "Nessuna condivisione ricevuta.",
     "from": "Da {{owner}}",
@@ -900,34 +900,18 @@
     "revokedShort": "Condivisione terminata",
     "mine": "Le mie condivisioni",
     "noShares": "Non hai ancora condiviso nulla.",
-    "cannotShareHere": "Collega questo vault al cloud come vault condiviso (non cifrato) per condividerne cartelle e documenti.",
-    "recipientsCount_one": "{{count}} destinatario",
-    "recipientsCount_other": "{{count}} destinatari",
-    "shareWholeVault": "Condividi l'intero vault…",
     "level_viewer": "Lettore",
     "level_editor": "Editor",
     "level_manager": "Gestore",
-    "type_vault": "Vault",
-    "type_folder": "Cartella",
-    "type_file": "Documento",
-    "status_pending": "In attesa",
-    "status_accepted": "Accettato",
-    "status_declined": "Rifiutato",
     "shareTitle": "Condividi «{{name}}»",
     "wholeVault": "L'intero vault",
     "newShare": "Nuova condivisione",
     "name": "Nome",
-    "level": "Livello",
     "levelOf": "Livello di {{name}}",
-    "newRecipientLevel": "Livello per i nuovi destinatari",
-    "searchPeople": "Cerca persone e gruppi…",
-    "searchResults": "Risultati",
     "recipients": "Destinatari",
     "removeRecipient": "Rimuovi {{name}}",
     "create": "Condividi",
     "existing": "Condivisioni esistenti",
-    "revoke": "Revoca",
-    "confirmRevoke": "Interrompere la condivisione di «{{name}}»? I destinatari perdono subito l'accesso.",
     "close": "Chiudi",
     "invitesN_one": "{{count}} invito",
     "invitesN_other": "{{count}} inviti",
@@ -1145,6 +1129,12 @@
     "private": "Privato",
     "shared": "Condiviso"
   },
+  "deviceRevoked": {
+    "text": "Questo dispositivo è stato revocato dal tuo account, quindi non viene sincronizzato nulla. I tuoi file e le modifiche in attesa di invio restano su questo dispositivo.",
+    "reregister": "Registra di nuovo questo dispositivo",
+    "busy": "Registrazione in corso…",
+    "failed": "Non è stato possibile registrare di nuovo il dispositivo: {{error}}"
+  },
   "account": {
     "login": "Accedi",
     "reconnect": "Riconnetti",
@@ -1289,7 +1279,8 @@
     "beta": "Beta (release candidate)",
     "checkNow": "Verifica aggiornamenti",
     "disabled": "Gli aggiornamenti sono disattivati: {{reason}}.",
-    "privacy": "L'unica richiesta è il download di un manifest firmato; non viene inviato alcun identificativo."
+    "privacy": "L'unica richiesta è il download di un manifest firmato; non viene inviato alcun identificativo.",
+    "warning": "Avviso: {{warning}}"
   },
   "toolbar": {
     "label": "Barra di modifica",
@@ -1322,5 +1313,33 @@
     "math": "Blocco matematico",
     "divider": "Linea orizzontale",
     "comment": "Commento"
+  },
+  "errors": {
+    "conflict": "Il file è cambiato su disco nel frattempo. Ricaricalo e riprova.",
+    "exists": "Esiste già un elemento con quel nome.",
+    "not-found": "Il file non esiste più: potrebbe essere stato spostato o eliminato.",
+    "invalid-path": "Il percorso è fuori dal vault.",
+    "too-large": "Il file è troppo grande.",
+    "UNAUTHENTICATED": "La sessione è scaduta: accedi di nuovo.",
+    "FORBIDDEN": "Non hai il permesso per farlo.",
+    "USER_SUSPENDED": "Il tuo account è sospeso.",
+    "NOT_FOUND": "Non trovato sul server, forse è stato rimosso.",
+    "QUOTA_EXCEEDED": "La tua quota di spazio è piena.",
+    "FILE_TOO_LARGE": "Il file è più grande di quanto il server accetti.",
+    "RATE_LIMITED": "Troppe richieste, riprova tra poco.",
+    "VAULT_ENCRYPTED": "Questo vault è cifrato end-to-end: il server non può farlo al posto tuo.",
+    "NAME_IN_USE": "Quel nome è già in uso.",
+    "INVALID_STATE": "Non è possibile nello stato attuale.",
+    "INTERNAL": "Il server ha avuto un problema. Riprova più tardi."
+  },
+  "embeds": {
+    "depthLimit": "{{label}} (limite di incorporamento)",
+    "cycle": "{{label}} (incorporamento circolare)",
+    "headingMissing": "{{label}} (intestazione non trovata)",
+    "blockMissing": "{{label}} (blocco non trovato)",
+    "partMissing": "{{label}} ({{part}} non trovato)",
+    "loadFailed": "{{label}} (impossibile caricare)",
+    "pdfPrev": "Pagina precedente",
+    "pdfNext": "Pagina successiva"
   }
 }

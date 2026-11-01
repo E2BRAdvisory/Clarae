@@ -12,7 +12,8 @@ import {
   type SqliteDatabase,
   type SqliteStatement,
 } from '@memobrain/sqlite-bridge';
-import { installOpfsFs, segments, type OpfsFs } from './opfs-fs';
+import { loadDevice, saveDevice } from './device';
+import { installOpfsFs, segments, UNLINKED_DIR, type OpfsFs } from './opfs-fs';
 import type {
   AssetRef,
   CoreAssets,
@@ -31,7 +32,15 @@ const scope = globalThis as unknown as {
 const post = (m: FromWorker, transfer: Transferable[] = []): void => scope.postMessage(m, transfer);
 
 let opfs: OpfsFs;
-let pool: { unlink(name: string): boolean; getFileNames(): string[] } | null = null;
+interface SahPool {
+  unlink(name: string): boolean;
+  getFileNames(): string[];
+  getFileCount(): number;
+  getCapacity(): number;
+  addCapacity(n: number): Promise<number>;
+  reserveMinimumCapacity(n: number): Promise<number>;
+}
+let pool: SahPool | null = null;
 
 // ---- host: what the core asks of the page -----------------------------------------------------------
 
@@ -66,14 +75,27 @@ function installHost(): void {
     print: () => void ask({ op: 'print' }),
     quit: () => void ask({ op: 'quit' }),
     error: (title: string, message: string) => void ask({ op: 'error', title, message }),
-    /** A file the core finished writing for the user to keep: hand its bytes to the page, then drop it. */
+    /**
+     * A file the core finished writing for the user to keep: hand its bytes to the page, then drop
+     * it. readFile returns a buffer of its own, which is transferred, not copied (an export can be
+     * hundreds of MB); the file goes away even when the hand-over fails (it may be a private vault's
+     * decrypted export).
+     */
     deliver: async (path: string) => {
-      const bytes = await opfs.readFile(path);
-      const name = segments(path).pop() ?? 'download';
-      const copy = bytes.slice().buffer;
-      post({ type: 'download', name, bytes: copy }, [copy]);
-      await opfs.removeTree(path);
+      try {
+        const bytes = await opfs.readFile(path);
+        const name = segments(path).pop() ?? 'download';
+        const whole = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength;
+        const buffer = (whole ? bytes.buffer : bytes.slice().buffer) as ArrayBuffer;
+        post({ type: 'download', name, bytes: buffer }, [buffer]);
+      } finally {
+        await opfs.removeTree(path).catch(() => undefined);
+      }
     },
+    /** The browser's device registration, kept in IndexedDB outside the wiped data folder (P6). */
+    loadDevice: (server: string) => loadDevice(server).catch(() => null),
+    saveDevice: (server: string, deviceId: string, userId: string) =>
+      saveDevice(server, deviceId, userId),
     /** The page shows its file picker; the chosen file is copied into the scratch area and its path returned. */
     pickFile: async (title: string, patterns: string[]) => {
       const { file } = await ask({ op: 'pickFile', title, patterns });
@@ -153,24 +175,24 @@ async function installSqlite(assets: CoreAssets): Promise<void> {
     printErr: (...a: unknown[]) => console.warn('[sqlite]', ...a),
   });
   // The "opfs-sahpool" VFS keeps every database in a pool of pre-allocated OPFS files. Each database
-  // needs a slot (plus one for its journal while a transaction runs), and slots cannot be added from
-  // synchronous code, so a generous number is reserved up front.
+  // needs a slot (plus one for its journal while a transaction runs). Slots cannot be added from the
+  // synchronous code SQLite runs in, so the pool is sized here (what is in use plus a margin) and
+  // grown before a call when it runs low (ensureSlots). Databases of a vault folder that no longer
+  // exists (a copy removed while the worker was not running) are dropped first.
   const util = await (
     sqlite3 as {
-      installOpfsSAHPoolVfs(o: object): Promise<
-        NonNullable<typeof pool> & {
-          OpfsSAHPoolDb: new (n: string) => unknown;
-          reserveMinimumCapacity(n: number): Promise<number>;
-        }
-      >;
+      installOpfsSAHPoolVfs(
+        o: object,
+      ): Promise<SahPool & { OpfsSAHPoolDb: new (n: string) => unknown }>;
     }
   ).installOpfsSAHPoolVfs({
     name: 'memobrain',
     directory: '/memobrain-sqlite',
-    initialCapacity: 64,
+    initialCapacity: POOL_MIN,
     clearOnInit: false,
   });
-  await util.reserveMinimumCapacity(64);
+  await dropStaleDatabases(util);
+  await util.reserveMinimumCapacity(Math.max(POOL_MIN, util.getFileCount() + POOL_MARGIN));
   pool = util;
   const canon = (p: string): string => '/' + segments(p).join('/');
   installBridge(
@@ -193,6 +215,41 @@ async function installSqlite(assets: CoreAssets): Promise<void> {
       },
     }),
   );
+}
+
+const POOL_MIN = 64;
+/** Free slots kept above what is in use: two databases and their journals per vault, several vaults. */
+const POOL_MARGIN = 32;
+/** Below this many free slots the pool grows by POOL_MARGIN before the next call. */
+const POOL_LOW = 8;
+
+/** Databases of vault folders (/vaults/<folder>/…) that are gone from the file system. */
+async function dropStaleDatabases(p: SahPool): Promise<void> {
+  const folders = new Map<string, boolean>();
+  for (const name of p.getFileNames()) {
+    const m = /^\/vaults\/[^/]+/.exec(name);
+    if (!m) continue;
+    const folder = m[0];
+    if (!folders.has(folder)) folders.set(folder, await opfs.exists(folder).catch(() => true));
+    if (!folders.get(folder)) p.unlink(name);
+  }
+}
+
+let growing: Promise<unknown> | null = null;
+
+/** Grows the SQLite pool when few slots are left, so the next database or journal finds one. */
+function ensureSlots(): Promise<unknown> {
+  if (!pool || growing) return growing ?? Promise.resolve();
+  if (pool.getCapacity() - pool.getFileCount() >= POOL_LOW) return Promise.resolve();
+  growing = pool
+    .addCapacity(POOL_MARGIN)
+    .catch((e: unknown) => {
+      console.warn('memobrain: the database pool cannot grow (storage full?):', e);
+    })
+    .finally(() => {
+      growing = null;
+    });
+  return growing;
 }
 
 /**
@@ -259,11 +316,17 @@ async function startGo(assets: CoreAssets, config: CoreConfig): Promise<void> {
 
 // ---- messages ---------------------------------------------------------------------------------------
 
+/** Scratch folders of the host (webHost.SaveFile, pickFile) and of the fs shim. */
+const SCRATCH = ['/tmp/memobrain-downloads', '/tmp/memobrain-uploads', UNLINKED_DIR];
+
 async function init(assets: CoreAssets, config: CoreConfig): Promise<void> {
   opfs = await installOpfsFs(
     globalThis,
     config.fsTrace ? { trace: (l) => console.debug('[fs]', l) } : {},
   );
+  // Leftovers of a page that was closed mid-way: downloads and uploads (possibly a private vault's
+  // clear text) and files removed while open. Nothing uses them before the core starts.
+  for (const dir of SCRATCH) await opfs.removeTree(dir).catch(() => undefined);
   // Go expects its temp folder and its data folder to exist.
   for (const dir of ['/tmp', config.dataDir])
     await new Promise<void>((resolve, reject) => mkdirAll(dir, (e) => (e ? reject(e) : resolve())));
@@ -291,7 +354,10 @@ scope.onmessage = (ev: MessageEvent<ToWorker>) => {
       );
       return;
     case 'call':
-      settle(m.id, (core as GoCore).call(m.service, m.method, m.args));
+      settle(
+        m.id,
+        ensureSlots().then(() => (core as GoCore).call(m.service, m.method, m.args)),
+      );
       return;
     case 'start':
       settle(
@@ -313,6 +379,8 @@ scope.onmessage = (ev: MessageEvent<ToWorker>) => {
         m.id,
         (async () => {
           await opfs.removeTree(m.prefix);
+          // Downloads and uploads may hold the clear text of the vault being wiped.
+          for (const dir of SCRATCH.slice(0, 2)) await opfs.removeTree(dir).catch(() => undefined);
           // The databases of a vault live in sqlite's own pool, not in the file system.
           for (const name of pool?.getFileNames() ?? [])
             if (name.startsWith(m.prefix + '/') || name === m.prefix) pool?.unlink(name);

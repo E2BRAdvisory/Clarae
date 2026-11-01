@@ -21,6 +21,7 @@ export function VaultSwitcher({ vaultId }: { vaultId: string }) {
   const { data: tree = [] } = useTree(vaultId);
   const { data: recent = [] } = useRecentVaults();
   const localFolders = useCan('localFolders');
+  const multiVault = useCan('multiVault');
   const button = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -47,7 +48,7 @@ export function VaultSwitcher({ vaultId }: { vaultId: string }) {
   };
   const items: MenuItem[] = [
     { label: `✓ ${vault.name}`, disabled: true, onSelect: () => undefined },
-    ...recent
+    ...(multiVault ? recent : [])
       .filter((v) => v.path !== vault.path)
       .slice(0, 8)
       .map((v) => ({ label: v.name, onSelect: () => void openVaultAt(v.path) })),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -16,6 +16,7 @@ import { HistoryView } from './HistoryView';
 import { SyncIndicator } from './SyncIndicator';
 import { UnlockDialog } from './UnlockDialog';
 import { registerNoteFlusher } from '../workspaces/flush';
+import { configurePlatform } from '../platform';
 
 const GOOD = 'correct horse battery staple orbit';
 const wrap = (ui: ReactNode) => (
@@ -114,6 +115,41 @@ describe('ConnectWizard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
     await screen.findByText(/Connected\.|Uploading/);
     expect((await api.sync.info(vaultId)).kind).toBe('shared');
+  });
+
+  it('says when the new vault is linked but its key is not in the keychain', async () => {
+    await signIn();
+    const real = api.sync.linkNew.bind(api.sync);
+    const spy = vi.spyOn(api.sync, 'linkNew').mockImplementation(async (...args) => ({
+      ...(await real(...args)),
+      warning: 'keychain-unavailable',
+    }));
+    render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Diary" />));
+    fireEvent.click(screen.getByRole('radio', { name: /Private encrypted vault/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(screen.getByLabelText('Passphrase'), { target: { value: GOOD } });
+    fireEvent.change(screen.getByLabelText('Repeat the passphrase'), { target: { value: GOOD } });
+    const create = screen.getByRole('button', { name: 'Create encrypted vault' });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    await screen.findByLabelText('Recovery key');
+    expect(screen.getByRole('alert')).toHaveTextContent(/system keychain/);
+    spy.mockRestore();
+  });
+
+  it('says when the cloud vault was created but the folder could not be linked', async () => {
+    await signIn();
+    const spy = vi.spyOn(api.sync, 'linkNew').mockResolvedValue({
+      cloudVaultId: 'cv-1',
+      recoveryKey: '',
+      warning: 'link-incomplete',
+    });
+    render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Notes" />));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /Connect to an existing cloud vault/,
+    );
+    spy.mockRestore();
   });
 
   it('explains the consequences of a private vault and walks through passphrase and recovery key', async () => {
@@ -438,6 +474,27 @@ describe('SyncSection (settings)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
     await waitFor(() => expect(mock.sync.links.has(vaultId)).toBe(false));
+  });
+
+  describe('in the browser', () => {
+    afterEach(() => configurePlatform());
+
+    it('removes the copy from the browser instead of disconnecting, and signs in from the console', async () => {
+      const remove = vi.fn();
+      await signIn();
+      await api.sync.linkNew(vaultId, 'Notes', 'shared', '');
+      await useSync.getState().refresh(vaultId);
+      useAppStore.getState().setAuth({ status: 'signed_out' } as never);
+      configurePlatform({ kind: 'web', onRemoveFromBrowser: remove });
+      render(wrap(<SyncSection />));
+      expect(await screen.findByText(/sign in again from the console/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from this browser' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+      await waitFor(() => expect(remove).toHaveBeenCalledOnce());
+      expect(mock.sync.links.has(vaultId)).toBe(true); // never unlinked: the launcher would relink it
+    });
   });
 
   it('shows the encryption controls of a private vault with the disk warning', async () => {

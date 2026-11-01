@@ -10,6 +10,8 @@ import { runCommand } from '../commands/registry';
 import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import { allPanes, emptyLayout, openPath } from '../workspace/layout';
+import { configurePlatform } from '../platform';
+import { isAvailable, commands } from '../commands/registry';
 
 let mock: WailsMock;
 let vaultId = '';
@@ -64,6 +66,22 @@ describe('vault switcher', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Home' }));
     await waitFor(() => expect(useAppStore.getState().vault?.path).toBe('/vaults/Home'));
     expect(mock.vaults.has(vaultId)).toBe(false); // the previous one is closed
+  });
+
+  it('in the browser, lists no other vault and has no `vault:switch` (one vault per page)', async () => {
+    configurePlatform({ kind: 'web' });
+    try {
+      fireEvent.click(await screen.findByRole('button', { name: /Switch vault/ }));
+      await screen.findByRole('menuitem', { name: '✓ Work' });
+      expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+        '✓ Work',
+        'Close vault',
+      ]);
+      const cmd = commands.find((c) => c.id === 'vault:switch');
+      expect(cmd && isAvailable(cmd)).toBe(false);
+    } finally {
+      configurePlatform();
+    }
   });
 
   it('opens when the command `vault:switch` asks for it', async () => {

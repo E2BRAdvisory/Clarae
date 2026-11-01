@@ -152,6 +152,66 @@ test.describe('OPFS fs shim (what Go os calls)', () => {
     expect(r).toEqual({ content: 'NEW CONTENT', tmpGone: 'ENOENT', names: ['note.md'] });
   });
 
+  test('rename over a file another descriptor has open keeps both views (POSIX)', async ({
+    page,
+  }) => {
+    const r = await inWorker(
+      page,
+      `
+      const put = async (p, s) => { const fd = await call('open', p, C.O_WRONLY | C.O_CREAT | C.O_TRUNC, 0o644); await call('write', fd, bytes(s), 0, s.length, null); await call('close', fd); };
+      const get = async (p) => { const fd = await call('open', p, C.O_RDONLY, 0); const b = new Uint8Array(64); const n = await call('read', fd, b, 0, 64, null); await call('close', fd); return text(b.subarray(0, n)); };
+      await call('mkdir', '/v', 0o755);
+      await put('/v/note.md', 'OLD');
+      const reader = await call('open', '/v/note.md', C.O_RDONLY, 0);
+      await put('/v/.memobrain-tmp-2', 'NEW CONTENT');
+      await call('rename', '/v/.memobrain-tmp-2', '/v/note.md');
+      const b = new Uint8Array(64);
+      const n = await call('read', reader, b, 0, 64, 0);
+      const fresh = await get('/v/note.md');
+      await call('close', reader);
+      await new Promise((res) => setTimeout(res, 50));
+      return { old: text(b.subarray(0, n)), fresh, names: await call('readdir', '/v'), parked: await opfs.list('/tmp/.unlinked') };
+    `,
+    );
+    expect(r).toEqual({ old: 'OLD', fresh: 'NEW CONTENT', names: ['note.md'], parked: [] });
+  });
+
+  test('an open file can be renamed and removed, and its descriptors go on (POSIX)', async ({
+    page,
+  }) => {
+    const r = await inWorker(
+      page,
+      `
+      const get = async (p) => { const fd = await call('open', p, C.O_RDONLY, 0); const b = new Uint8Array(64); const n = await call('read', fd, b, 0, 64, null); await call('close', fd); return text(b.subarray(0, n)); };
+      await call('mkdir', '/v', 0o755);
+      const fd = await call('open', '/v/a.md', C.O_RDWR | C.O_CREAT | C.O_TRUNC, 0o644);
+      await call('write', fd, bytes('one'), 0, 3, null);
+      await call('rename', '/v/a.md', '/v/b.md');
+      await call('write', fd, bytes(' two'), 0, 4, null);
+      const moved = await get('/v/b.md');
+      const oldGone = await code(() => call('stat', '/v/a.md'));
+      await call('unlink', '/v/b.md');
+      const removed = await code(() => call('stat', '/v/b.md'));
+      await call('write', fd, bytes(' three'), 0, 6, null);
+      const b = new Uint8Array(64);
+      const n = await call('read', fd, b, 0, 64, 0);
+      const parkedWhileOpen = (await opfs.list('/tmp/.unlinked')).length;
+      await call('close', fd);
+      await new Promise((res) => setTimeout(res, 50));
+      return { moved, oldGone, removed, stillOpen: text(b.subarray(0, n)), parkedWhileOpen, parked: await opfs.list('/tmp/.unlinked'), names: await call('readdir', '/v') };
+    `,
+    );
+    expect(r).toEqual({
+      moved: 'one two',
+      oldGone: 'ENOENT',
+      removed: 'ENOENT',
+      stillOpen: 'one two three',
+      parkedWhileOpen: 1,
+      parked: [],
+      names: [],
+    });
+  });
+
   test('what the shim writes and renames is what the rest of the browser sees (and keeps)', async ({
     page,
   }) => {

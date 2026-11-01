@@ -7,6 +7,8 @@ export function Welcome({ onOpen }: { onOpen: (path: string) => Promise<void> })
   const { t } = useTranslation();
   const { data: recent = [] } = useRecentVaults();
   const localFolders = useCan('localFolders');
+  // The browser opens one vault per page: its other vaults are in the console, not in a recent list.
+  const multiVault = useCan('multiVault');
   const backToConsole = usePlatform((s) => s.backToConsole);
   const pick = async () => {
     const path = await api.vault.pickFolder(t('welcome.pickTitle'));
@@ -27,7 +29,7 @@ export function Welcome({ onOpen }: { onOpen: (path: string) => Promise<void> })
             {t('app.backToConsole')}
           </button>
         )}
-        {recent.length > 0 && (
+        {multiVault && recent.length > 0 && (
           <div className="recent">
             <h3>{t('welcome.recent')}</h3>
             {recent.map((v) => (

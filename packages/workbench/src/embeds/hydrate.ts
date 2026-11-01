@@ -1,6 +1,7 @@
 // Turns the inert placeholders of rendered Markdown into live content:
 // embeds (notes, images, audio, video, PDF), math and Mermaid diagrams.
 import type { BinaryContent } from '../app/api';
+import { i18next } from '../i18n';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
 import { classify, embedOptions, loadMedia, parseSize, pdfPage, type FileStamp } from './media';
@@ -161,19 +162,21 @@ async function fill(
       }
       case 'note': {
         if (deps.depth >= MAX_EMBED_DEPTH)
-          return notice(el, 'embed-limit', `${label} (embed depth limit)`);
+          return notice(el, 'embed-limit', i18next.t('embeds.depthLimit', { label }));
         if (deps.visited.includes(path))
-          return notice(el, 'embed-cycle', `${label} (circular embed)`);
+          return notice(el, 'embed-cycle', i18next.t('embeds.cycle', { label }));
         const src = await deps.backend.readNote(path);
         if (disposed()) return;
         let md = stripFrontmatter(src);
         if (spec.heading) {
           const sec = extractSection(src, spec.heading);
-          if (sec === null) return notice(el, 'embed-missing', `${label} (heading not found)`);
+          if (sec === null)
+            return notice(el, 'embed-missing', i18next.t('embeds.headingMissing', { label }));
           md = sec;
         } else if (spec.block) {
           const blk = extractBlock(src, spec.block);
-          if (blk === null) return notice(el, 'embed-missing', `${label} (block not found)`);
+          if (blk === null)
+            return notice(el, 'embed-missing', i18next.t('embeds.blockMissing', { label }));
           md = blk;
         }
         el.className = 'embed-note';
@@ -207,7 +210,11 @@ async function fill(
           url = await deps.backend.drawingPreview?.(path, ref);
         } catch (e) {
           if (ref && e instanceof Error && e.name === 'MissingPartError')
-            return notice(el, 'embed-missing', `${label} (${ref.kind}=${ref.value} not found)`);
+            return notice(
+              el,
+              'embed-missing',
+              i18next.t('embeds.partMissing', { label, part: `${ref.kind}=${ref.value}` }),
+            );
           throw e;
         }
         if (disposed()) return;
@@ -260,7 +267,7 @@ async function fill(
         return notice(el, 'embed-other', path);
     }
   } catch {
-    if (!disposed()) notice(el, 'embed-missing', `${label} (could not be loaded)`);
+    if (!disposed()) notice(el, 'embed-missing', i18next.t('embeds.loadFailed', { label }));
   }
 }
 

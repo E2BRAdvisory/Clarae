@@ -85,8 +85,10 @@ export interface MockSharing {
   invitations: ShareInfo[];
   /** Accepted shares; accepting an invitation adds one. */
   mounts: MountState[];
-  /** Shares of the open vault, as its owner sees them. */
+  /** Shares created (or managed) by the user, on any vault; `myPermission` '' for the owner. */
   owned: ShareInfo[];
+  /** Received shares already answered (accepted or declined), as ListShares("received") lists them. */
+  received: ShareInfo[];
   directory: DirectoryEntry[];
   /** Files that appear in a mount when it is opened: share id -> path -> text. */
   mountFiles: Map<string, Record<string, string>>;
@@ -289,6 +291,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
           platform: 'macos',
           appVersion: '0.0.1',
           lastSeenAt: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          revokedAt: '',
           current: true,
         },
       ],
@@ -301,6 +305,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       invitations: [],
       mounts: [],
       owned: [],
+      received: [],
       directory: [],
       mountFiles: new Map(),
       declined: [],
@@ -878,6 +883,19 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       mock.emit('auth:state', mock.auth);
       return Promise.resolve(mock.auth);
     },
+    // A new device id for the same account; a server URL containing "fail" refuses it.
+    ReregisterDevice: (): Promise<AuthState> => {
+      if (mock.auth.status !== 'device_revoked') return Promise.resolve(mock.auth);
+      if (mock.auth.serverUrl.includes('fail')) return reject('register device: network down');
+      mock.auth = {
+        ...mock.auth,
+        status: 'ready',
+        deviceId: `${mock.auth.deviceId}-new`,
+        error: '',
+      };
+      mock.emit('auth:state', mock.auth);
+      return Promise.resolve(mock.auth);
+    },
   };
 
   // --- cloud synchronization ----------------------------------------------------
@@ -1117,6 +1135,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
     Devices: (): Promise<DeviceInfo[]> => requireSignIn() ?? Promise.resolve(sy.devices),
     RevokeDevice: (devId: string): Promise<void> => {
+      // The server lists only the active devices: a revoked one disappears.
       sy.devices = sy.devices.filter((d) => d.id !== devId);
       return Promise.resolve();
     },
@@ -1133,6 +1152,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const inv = sh.invitations.find((i) => i.id === shareId);
       if (!inv) return reject('not-found: no such invitation');
       sh.invitations = sh.invitations.filter((i) => i.id !== shareId);
+      sh.received.push({ ...inv, myStatus: 'accepted' });
       const m: MountState = {
         shareId,
         cloudVaultId: inv.vaultId,
@@ -1150,7 +1170,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve(m);
     },
     DeclineShare: (shareId: string): Promise<void> => {
+      const inv = sh.invitations.find((i) => i.id === shareId);
       sh.invitations = sh.invitations.filter((i) => i.id !== shareId);
+      if (inv) sh.received.push({ ...inv, myStatus: 'declined' });
       sh.declined.push(shareId);
       return Promise.resolve();
     },
@@ -1212,10 +1234,11 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         resourceType: !isDir ? 'file' : path ? 'folder' : 'vault',
         pathPrefix: path,
         displayName: name || path || link.name,
+        ownerId: mock.auth.profile.userId,
         ownerName: 'me',
         createdAt: new Date().toISOString(),
         expiresAt: '',
-        myPermission: 'manager',
+        myPermission: '',
         myStatus: '',
         grants: grants.map((g) => ({
           principalType: g.principalType,
@@ -1228,11 +1251,79 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       sh.owned.push(share);
       return Promise.resolve(share);
     },
+    ListShares: (scope: string): Promise<ShareInfo[]> => {
+      if (scope !== 'owned' && scope !== 'received')
+        return reject(`invalid: share scope "${scope}" (owned or received)`);
+      return (
+        requireSignIn() ??
+        Promise.resolve(
+          structuredClone(scope === 'owned' ? sh.owned : [...sh.invitations, ...sh.received]),
+        )
+      );
+    },
+    CreateCloudShare: (
+      cloudVaultId: string,
+      pathPrefix: string,
+      name: string,
+      grants: GrantInput[],
+      expiresAt: string,
+    ): Promise<ShareInfo> => {
+      const signedOut = requireSignIn();
+      if (signedOut) return signedOut;
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+      if (!v) return reject('NOT_FOUND: vault not found');
+      if (v.kind !== 'shared')
+        return reject('VAULT_ENCRYPTED: a private (end-to-end encrypted) vault cannot be shared');
+      if (expiresAt && new Date(expiresAt).getTime() <= Date.now())
+        return reject('VALIDATION_FAILED: expires_at must be in the future');
+      const prefix = pathPrefix.trim().replace(/^\/+|\/+$/g, '');
+      const share: ShareInfo = {
+        id: `share-${sh.owned.length + sh.revoked.length + 1}`,
+        vaultId: v.id,
+        vaultName: v.name,
+        resourceType: prefix ? 'folder' : 'vault',
+        pathPrefix: prefix,
+        displayName: name.trim() || (prefix ? (prefix.split('/').pop() ?? prefix) : v.name),
+        ownerId: mock.auth.profile.userId,
+        ownerName: 'me',
+        createdAt: new Date().toISOString(),
+        expiresAt,
+        myPermission: '',
+        myStatus: '',
+        grants: grants.map((g) => ({
+          principalType: g.principalType,
+          principalId: g.principalId,
+          principalName: sh.directory.find((d) => d.id === g.principalId)?.name ?? g.principalId,
+          permission: g.permission,
+          status: 'pending',
+        })),
+      };
+      sh.owned.push(share);
+      return Promise.resolve(structuredClone(share));
+    },
+    UpdateShare: (
+      id: string,
+      name: string,
+      expiresAt: string,
+      clearExpiry: boolean,
+    ): Promise<ShareInfo> => {
+      const s = sh.owned.find((x) => x.id === id);
+      if (!s) return reject('NOT_FOUND: share not found');
+      if (!clearExpiry && expiresAt && new Date(expiresAt).getTime() <= Date.now())
+        return reject('VALIDATION_FAILED: expires_at must be in the future');
+      if (name.trim()) s.displayName = name.trim();
+      if (clearExpiry) s.expiresAt = '';
+      else if (expiresAt) s.expiresAt = expiresAt;
+      return Promise.resolve(structuredClone(s));
+    },
     Share: (id: string): Promise<ShareInfo> => {
       const s = sh.owned.find((x) => x.id === id);
       return s ? Promise.resolve(s) : reject('not-found: share not found');
     },
     RevokeShare: (id: string): Promise<void> => {
+      const s = sh.owned.find((x) => x.id === id);
+      if (s?.myPermission)
+        return reject('FORBIDDEN: only the owner of the vault can revoke a share');
       sh.owned = sh.owned.filter((x) => x.id !== id);
       sh.revoked.push(id);
       return Promise.resolve();

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { create } from 'zustand';
 import { i18next } from '../i18n';
+import { errorMessage } from '../util/errors';
 
 type Request =
   | {
@@ -62,8 +63,7 @@ export const dialog = {
   pick: (title: string, items: readonly PickItem[]): Promise<string | null> =>
     new Promise((resolve) => enqueue({ kind: 'pick', title, items, resolve })),
   /** Shows a failure from the backend. */
-  error: (e: unknown): Promise<void> =>
-    dialog.alert(i18next.t('dialog.error'), e instanceof Error ? e.message : String(e)),
+  error: (e: unknown): Promise<void> => dialog.alert(i18next.t('dialog.error'), errorMessage(e)),
 };
 
 function PickBody({

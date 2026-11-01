@@ -32,6 +32,7 @@ async function setup(path = 'Deck.md', content = DECK) {
     vaultId,
     path,
     text: content,
+    current: () => content,
     prepare: async () => (await api.vault.readNote(vaultId, path)).hash,
     reload: () => reloaded.push(path),
   });

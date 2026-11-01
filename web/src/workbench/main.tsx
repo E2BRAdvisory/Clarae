@@ -2,6 +2,7 @@
 // style sheet, because the desktop UI's global styles must not reach the console (ADR-0029).
 import { mountCreateCloudVault, mountWorkbench } from '@memobrain/workbench';
 import { createOidcAuth } from '../auth/oidc';
+import { workbenchVaultId } from '../shared/routes';
 import type { AuthService } from '../auth/types';
 import { parseCreation } from './create';
 import { CANCELLED, DISABLED, launchWorkbench } from './launch';
@@ -12,15 +13,24 @@ import './shell.css';
 const status = document.getElementById('status') as HTMLElement;
 const root = document.getElementById('root') as HTMLElement;
 
-function show(text: string, opts: { error?: boolean; back?: boolean } = {}): void {
+function show(text: string, opts: { error?: boolean; back?: boolean; retry?: boolean } = {}): void {
   status.hidden = false;
   status.className = opts.error ? 'status error' : 'status';
   status.replaceChildren(Object.assign(document.createElement('p'), { textContent: text }));
+  if (opts.retry) {
+    const b = Object.assign(document.createElement('button'), {
+      type: 'button',
+      textContent: message('retry'),
+    });
+    b.addEventListener('click', () => location.reload());
+    status.append(b);
+  }
   if (opts.back) {
     const a = Object.assign(document.createElement('a'), {
       href: '/vaults',
       textContent: message('back'),
     });
+    a.setAttribute('data-allow-navigation', ''); // the workbench's link guard lets this one through
     status.append(a);
   }
 }
@@ -40,9 +50,8 @@ function takeLock(): Promise<boolean> {
 async function start(): Promise<void> {
   document.documentElement.lang = navigator.language.startsWith('it') ? 'it' : 'en';
   const params = new URLSearchParams(location.search);
-  const match = /^\/vaults\/([^/]+)\/open\/?$/.exec(location.pathname);
-  if (!match) return show(message('notFound'), { error: true, back: true });
-  const vaultId = decodeURIComponent(match[1] as string);
+  const vaultId = workbenchVaultId(location.pathname);
+  if (vaultId === null) return show(message('notFound'), { error: true, back: true });
   // /vaults/new/open?kind=private&name=…: the console sends the creation of a private vault here.
   const create = parseCreation(vaultId, params);
   if (create === 'invalid') return show(message('badCreate'), { error: true, back: true });
@@ -54,9 +63,23 @@ async function start(): Promise<void> {
   if (import.meta.env.MEMOBRAIN_E2E) auth = (await import('../auth/e2e')).createE2EAuth();
   else auth = createOidcAuth();
 
-  if (!localOnly && !(await auth.getUser())) {
-    void auth.signIn(`${location.pathname}${location.search}`);
-    return;
+  // A cloud that does not answer (its client configuration, the identity provider) is shown with a
+  // retry, never as an endless "redirecting".
+  const signInFailed = (e: unknown): void => {
+    console.error(e);
+    show(message('signInFailed'), { error: true, retry: true, back: true });
+  };
+  if (!localOnly) {
+    let user: Awaited<ReturnType<AuthService['getUser']>>;
+    try {
+      user = await auth.getUser();
+    } catch (e) {
+      return signInFailed(e);
+    }
+    if (!user) {
+      auth.signIn(`${location.pathname}${location.search}`).catch(signInFailed);
+      return;
+    }
   }
   if (!(await takeLock())) return show(message('busy'), { error: true, back: true });
 
@@ -80,9 +103,14 @@ async function start(): Promise<void> {
       assets,
       version: typeof __MEMOBRAIN_VERSION__ === 'undefined' ? 'dev' : __MEMOBRAIN_VERSION__,
       progress: (step) => show(message(step)),
-      mount: async ({ vaultPath, onBackToConsole }) => {
+      mount: async ({ vaultPath, onBackToConsole, onRemoveFromBrowser }) => {
         status.hidden = true;
-        return mountWorkbench(root, { kind: 'web', onBackToConsole, vaultPath });
+        return mountWorkbench(root, {
+          kind: 'web',
+          onBackToConsole,
+          vaultPath,
+          ...(onRemoveFromBrowser ? { onRemoveFromBrowser } : {}),
+        });
       },
     });
   } catch (e) {

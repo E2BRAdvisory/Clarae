@@ -5,7 +5,7 @@ import { drawingPreviewUrl } from '../drawing/preview';
 import { api } from '../app/api';
 import { hydrate, type EmbedBackend } from '../embeds/hydrate';
 import type { LinkSpec } from '../editor/context';
-import { openExternal } from '../util/external';
+import { handleLinkClick } from '../util/links';
 import { readingPreviewHandlers } from '../preview/hover';
 import { renderQueryInto } from '../query/env';
 import { renderMarkdown } from './render';
@@ -80,47 +80,7 @@ export function ReadingView({ vaultId, path, content, reveal, onOpenLink, onSear
   }, [reveal, html]);
 
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const wiki = target.closest<HTMLElement>('a.wikilink');
-    if (wiki) {
-      e.preventDefault();
-      onOpenLink(
-        {
-          target: wiki.dataset['target'] ?? '',
-          heading: wiki.dataset['heading'] ?? '',
-          block: wiki.dataset['block'] ?? '',
-          alias: '',
-          embed: false,
-        },
-        e.metaKey || e.ctrlKey,
-      );
-      return;
-    }
-    const tag = target.closest<HTMLElement>('a.tag');
-    if (tag) {
-      e.preventDefault();
-      onSearchTag(tag.dataset['tag'] ?? '');
-      return;
-    }
-    const a = target.closest<HTMLAnchorElement>('a[href]');
-    if (!a) return;
-    const href = a.getAttribute('href') ?? '';
-    if (href.startsWith('#')) return; // footnotes and in-page anchors
-    e.preventDefault();
-    if (/^[A-Za-z][A-Za-z0-9+.-]+:/.test(href)) {
-      openExternal(href);
-    } else {
-      onOpenLink(
-        {
-          target: decodeURI(href.split('#')[0] ?? ''),
-          heading: '',
-          block: '',
-          alias: '',
-          embed: false,
-        },
-        e.metaKey || e.ctrlKey,
-      );
-    }
+    handleLinkClick(e, { openLink: onOpenLink, searchTag: onSearchTag });
   };
 
   return (

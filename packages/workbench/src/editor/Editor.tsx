@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { i18next } from '../i18n';
+import { createStatsTracker } from './stats';
 import {
   autocompletion,
   closeBrackets,
@@ -79,8 +80,6 @@ interface Props {
   onStats(stats: EditorStats): void;
 }
 
-const words = (s: string): number => (s.match(/[\p{L}\p{N}]+/gu) ?? []).length;
-
 function settingsExtensions(s: EditorSettings): Extension[] {
   return [
     s.lineNumbers ? lineNumbers() : [],
@@ -126,6 +125,8 @@ export function Editor(props: Props) {
   // Create the view once.
   useEffect(() => {
     const p = latest.current;
+    // Word counts walk the whole note: they are debounced, line and column are immediate.
+    const stats = createStatsTracker((s) => latest.current.onStats(s));
     const view = new EditorView({
       parent: host.current as HTMLElement,
       state: EditorState.create({
@@ -179,20 +180,7 @@ export function Editor(props: Props) {
             const cur = latest.current;
             if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External)))
               cur.onChange(u.state.doc.toString());
-            if (u.docChanged || u.selectionSet) {
-              const doc = u.state.doc.toString();
-              const sel = u.state.selection.main;
-              const selText = u.state.sliceDoc(sel.from, sel.to);
-              const line = u.state.doc.lineAt(sel.head);
-              cur.onStats({
-                words: words(doc),
-                chars: doc.length,
-                selWords: words(selText),
-                selChars: selText.length,
-                line: line.number,
-                col: sel.head - line.from + 1,
-              });
-            }
+            if (u.docChanged || u.selectionSet) stats.update(u.state, u.docChanged);
           }),
           EditorView.domEventHandlers({ focus: () => (setActiveEditor(latest.current.id), false) }),
         ],
@@ -202,6 +190,7 @@ export function Editor(props: Props) {
     registerEditor(p.id, view);
     setActiveEditor(p.id);
     return () => {
+      stats.dispose();
       unregisterEditor(p.id, view);
       view.destroy();
       viewRef.current = null;

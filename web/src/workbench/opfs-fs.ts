@@ -8,6 +8,9 @@
  *
  * Differences from a real file system that the core can live with:
  *  - a file has one synchronous handle at a time; descriptors opened on the same path share it;
+ *  - renaming or removing an open file works as on POSIX: the handle is closed for the move and
+ *    reopened at the new place; a removed file stays readable through the descriptors still open on
+ *    it (it is parked in UNLINKED_DIR until the last one closes);
  *  - permissions, owners, links and symlinks do not exist (chmod/chown succeed, links are ENOSYS);
  *  - mtime has the resolution of the browser's `lastModified` (milliseconds).
  */
@@ -113,7 +116,14 @@ interface OpenFile {
   refs: number;
   /** Set when this session wrote the file: `lastModified` is not updated until the handle closes. */
   mtimeMs: number;
+  /** While a rename or unlink has the handle closed: I/O on the descriptors waits for it. */
+  moving?: Promise<void>;
+  /** Removed while open: the parked file is deleted when the last descriptor closes. */
+  unlinked?: boolean;
 }
+
+/** Where files removed while still open wait for their last descriptor (cleared at start-up). */
+export const UNLINKED_DIR = '/tmp/.unlinked';
 
 type Fd =
   | {
@@ -325,13 +335,150 @@ export async function installOpfsFs(
 
   function release(o: OpenFile): void {
     if (--o.refs > 0) return;
-    opened.delete(o.key);
+    if (o.moving) {
+      void o.moving.finally(() => {
+        if (o.refs === 0) finish(o);
+      });
+      return;
+    }
+    finish(o);
+  }
+
+  function finish(o: OpenFile): void {
+    if (opened.get(o.key) === o) opened.delete(o.key);
     try {
       o.sah.flush();
       o.sah.close();
     } catch {
       /* already closed */
     }
+    if (o.unlinked) {
+      const segs = segments(o.key);
+      void dirAt(segs.slice(0, -1))
+        .then((d) => d.removeEntry(segs[segs.length - 1] as string))
+        .catch(() => undefined);
+      mtimes.delete(o.key);
+    }
+  }
+
+  /** Moves the entry at `f` (looked up as `src`) to `t`. */
+  async function move(f: string[], t: string[], src: Entry): Promise<void> {
+    const toParent = await dirAt(t.slice(0, -1));
+    const toName = t[t.length - 1] as string;
+    const handle = src.handle as unknown as {
+      move?(dir: FileSystemDirectoryHandle, name: string): Promise<void>;
+    };
+    if (src.dir && !handle.move) {
+      // Folders cannot be moved in every browser: copy the tree, then remove the original.
+      const target = (await toParent.getDirectoryHandle(toName, { create: true })) as DirHandle;
+      await copyTree(src.handle, target);
+      const fromParent = await dirAt(f.slice(0, -1));
+      await fromParent.removeEntry(f[f.length - 1] as string, { recursive: true });
+    } else if (!handle.move) {
+      throw new FsError('ENOSYS', 'FileSystemHandle.move is not available in this browser');
+    } else {
+      await handle.move(toParent, toName);
+    }
+  }
+
+  /**
+   * Closes the handles open on `key` (a file, or everything under a folder) so the entry can be moved
+   * or removed, and holds their descriptors' I/O until `done` resolves. Returns them, to reattach.
+   */
+  function detach(key: string, done: Promise<void>): OpenFile[] {
+    const held: OpenFile[] = [];
+    for (const [k, o] of [...opened]) {
+      if (k !== key && !k.startsWith(key + '/')) continue;
+      try {
+        o.sah.flush();
+        o.sah.close();
+      } catch {
+        /* already closed */
+      }
+      opened.delete(k);
+      o.moving = done;
+      held.push(o);
+    }
+    return held;
+  }
+
+  /** Reopens a detached file at `key` (where it is now) and lets its descriptors go on. */
+  async function reattach(o: OpenFile, key: string): Promise<void> {
+    const segs = segments(key);
+    const parent = await dirAt(segs.slice(0, -1));
+    o.file = (await parent.getFileHandle(segs[segs.length - 1] as string)) as FileHandle;
+    o.sah = await o.file.createSyncAccessHandle();
+    const m = mtimes.get(o.key);
+    if (m !== undefined && o.key !== key) {
+      mtimes.delete(o.key);
+      mtimes.set(key, m);
+    }
+    o.key = key;
+    opened.set(key, o);
+  }
+
+  let parked = 0;
+
+  /**
+   * Moves a file that descriptors still have open out of the way (POSIX unlink of an open file): it
+   * goes to UNLINKED_DIR under a unique name and its handle is reopened there.
+   */
+  async function park(entryKey: string, file: FileHandle, held: OpenFile[]): Promise<void> {
+    const dirSegs = segments(UNLINKED_DIR);
+    let dir: DirHandle = root;
+    for (let i = 1; i <= dirSegs.length; i++) {
+      const k = keyOf(dirSegs.slice(0, i));
+      const hit = dirs.get(k);
+      dir = hit ?? (await dir.getDirectoryHandle(dirSegs[i - 1] as string, { create: true }));
+      dirs.set(k, dir);
+    }
+    const name = `${inode(entryKey)}-${Date.now()}-${++parked}`;
+    if (file.move) {
+      await file.move(dir, name);
+    } else {
+      // No move in this browser: keep a copy for the open descriptors, then remove the original.
+      const data = new Uint8Array(await (await file.getFile()).arrayBuffer());
+      const out = (await dir.getFileHandle(name, { create: true })) as FileHandle;
+      const sah = await out.createSyncAccessHandle();
+      try {
+        sah.write(data, { at: 0 });
+        sah.flush();
+      } finally {
+        sah.close();
+      }
+      const segs = segments(entryKey);
+      await (await dirAt(segs.slice(0, -1))).removeEntry(segs[segs.length - 1] as string);
+    }
+    for (const o of held) {
+      o.unlinked = true;
+      await reattach(o, `${UNLINKED_DIR}/${name}`);
+    }
+  }
+
+  /** Runs a move or removal with the given handles closed; they are reopened (or released) after. */
+  async function withDetached<T>(
+    keys: string[],
+    work: (held: Map<string, OpenFile[]>) => Promise<T>,
+  ): Promise<T> {
+    let done!: () => void;
+    const gate = new Promise<void>((r) => (done = r));
+    for (const k of keys) moving.set(k, gate);
+    const held = new Map(keys.map((k) => [k, detach(k, gate)] as const));
+    try {
+      return await work(held);
+    } finally {
+      for (const list of held.values())
+        for (const o of list) if (o.moving === gate) delete o.moving;
+      for (const k of keys) if (moving.get(k) === gate) moving.delete(k);
+      done();
+    }
+  }
+
+  /** Paths being moved or removed right now; an open of one of them waits for the move. */
+  const moving = new Map<string, Promise<void>>();
+
+  async function notMoving(key: string): Promise<void> {
+    for (const [k, gate] of moving) if (key === k || key.startsWith(k + '/')) await gate;
   }
 
   async function fileMtime(key: string, file: FileHandle): Promise<number> {
@@ -377,6 +524,7 @@ export async function installOpfsFs(
       op(cb, async () => {
         const segs = segments(path);
         const key = keyOf(segs);
+        if (moving.size > 0) await notMoving(key);
         const writable = (flags & (O.WRONLY | O.RDWR)) !== 0;
         let entry = await lookup(segs);
         if (entry && flags & O.CREAT && flags & O.EXCL) throw new FsError('EEXIST');
@@ -433,16 +581,17 @@ export async function installOpfsFs(
       position: number | null,
       cb: Callback<number>,
     ) {
-      op(cb, () => {
+      op(cb, async () => {
         const f = fd(n);
-        if (f.kind === 'std') return Promise.resolve(0); // stdin is empty
+        if (f.kind === 'std') return 0; // stdin is empty
         if (f.kind === 'dir') throw new FsError('EISDIR');
         if (!f.readable) throw new FsError('EBADF');
+        if (f.open.moving) await f.open.moving;
         const view = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, length);
         const at = position ?? f.pos;
         const read = f.open.sah.read(view, { at });
         if (position === null) f.pos += read;
-        return Promise.resolve(read);
+        return read;
       });
     },
 
@@ -454,7 +603,7 @@ export async function installOpfsFs(
       position: number | null,
       cb: Callback<number>,
     ) {
-      op(cb, () => {
+      op(cb, async () => {
         const f = fd(n);
         const view = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, length);
         if (f.kind === 'std') {
@@ -465,24 +614,27 @@ export async function installOpfsFs(
             onStdio(f.n as 1 | 2, stdoutLine.slice(0, i));
             stdoutLine = stdoutLine.slice(i + 1);
           }
-          return Promise.resolve(length);
+          return length;
         }
         if (f.kind === 'dir') throw new FsError('EISDIR');
         if (!f.writable) throw new FsError('EBADF');
+        if (f.open.moving) await f.open.moving;
         const at = position ?? (f.append ? f.open.sah.getSize() : f.pos);
         const wrote = f.open.sah.write(view, { at });
         if (position === null) f.pos = at + wrote;
         f.open.mtimeMs = Date.now();
         mtimes.set(f.open.key, f.open.mtimeMs);
-        return Promise.resolve(wrote);
+        return wrote;
       });
     },
 
     fsync(n: number, cb: Callback) {
-      op(cb, () => {
+      op(cb, async () => {
         const f = fd(n);
-        if (f.kind === 'file') f.open.sah.flush();
-        return Promise.resolve(undefined);
+        if (f.kind !== 'file') return undefined;
+        if (f.open.moving) await f.open.moving;
+        f.open.sah.flush();
+        return undefined;
       });
     },
 
@@ -491,6 +643,7 @@ export async function installOpfsFs(
         const f = fd(n);
         if (f.kind === 'std') return makeStats(`/dev/std${f.n}`, false, 0, Date.now());
         if (f.kind === 'dir') return makeStats(f.key, true, 4096, mtimes.get(f.key) ?? 0);
+        if (f.open.moving) await f.open.moving;
         return makeStats(
           f.open.key,
           false,
@@ -556,8 +709,16 @@ export async function installOpfsFs(
         if (!e) throw new FsError('ENOENT');
         if (e.dir) throw new FsError('EISDIR');
         const key = keyOf(segs);
-        const parent = await dirAt(segs.slice(0, -1));
-        await parent.removeEntry(segs[segs.length - 1] as string);
+        await withDetached([key], async (held) => {
+          const open = held.get(key) ?? [];
+          if (open.length > 0) {
+            // Descriptors still use it: park it until they close (POSIX keeps the inode alive).
+            await park(key, e.handle, open);
+          } else {
+            const parent = await dirAt(segs.slice(0, -1));
+            await parent.removeEntry(segs[segs.length - 1] as string);
+          }
+        });
         mtimes.delete(key);
         return undefined;
       });
@@ -575,41 +736,41 @@ export async function installOpfsFs(
         if (dst && !dst.dir && src.dir) throw new FsError('ENOTDIR');
         if (dst?.dir && !(await isEmpty(dst.handle))) throw new FsError('ENOTEMPTY');
         if (keyOf(f) === keyOf(t)) return undefined;
-        const toParent = await dirAt(t.slice(0, -1));
-        const toName = t[t.length - 1] as string;
-        const handle = src.handle as unknown as {
-          move?(dir: FileSystemDirectoryHandle, name: string): Promise<void>;
-        };
-        if (src.dir && !handle.move) {
-          // Folders cannot be moved in every browser: copy the tree, then remove the original.
-          const target = (await toParent.getDirectoryHandle(toName, { create: true })) as DirHandle;
-          await copyTree(src.handle, target);
-          const fromParent = await dirAt(f.slice(0, -1));
-          await fromParent.removeEntry(f[f.length - 1] as string, { recursive: true });
-        } else if (!handle.move) {
-          throw new FsError('ENOSYS', 'FileSystemHandle.move is not available in this browser');
-        } else {
-          await handle.move(toParent, toName);
-        }
         const fk = keyOf(f);
         const tk = keyOf(t);
-        forgetDirs(fk);
-        forgetDirs(tk);
-        const m = mtimes.get(fk);
-        mtimes.delete(fk);
-        if (m !== undefined) mtimes.set(tk, m);
+        // An open sync access handle locks its entry: close what is open on the source (and on a
+        // file it replaces), move, and reopen at the new place, as POSIX lets a rename happen
+        // under open descriptors.
+        await withDetached([fk, tk], async (held) => {
+          const replaced = held.get(tk) ?? [];
+          if (dst && !dst.dir && replaced.length > 0) await park(tk, dst.handle, replaced);
+          const moved = held.get(fk) ?? [];
+          try {
+            await move(f, t, src);
+          } catch (e) {
+            for (const o of moved) await reattach(o, o.key).catch(() => undefined);
+            throw e;
+          }
+          forgetDirs(fk);
+          forgetDirs(tk);
+          const m = mtimes.get(fk);
+          mtimes.delete(fk);
+          if (m !== undefined) mtimes.set(tk, m);
+          for (const o of moved) await reattach(o, tk + o.key.slice(fk.length));
+        });
         return undefined;
       });
     },
 
     ftruncate(n: number, length: number, cb: Callback) {
-      op(cb, () => {
+      op(cb, async () => {
         const f = fd(n);
         if (f.kind !== 'file' || !f.writable) throw new FsError('EINVAL');
+        if (f.open.moving) await f.open.moving;
         f.open.sah.truncate(length);
         f.open.mtimeMs = Date.now();
         mtimes.set(f.open.key, f.open.mtimeMs);
-        return Promise.resolve(undefined);
+        return undefined;
       });
     },
 
@@ -710,7 +871,8 @@ export async function installOpfsFs(
       if (!e) throw new FsError('ENOENT');
       if (e.dir) throw new FsError('EISDIR');
       const o = opened.get(keyOf(segs));
-      if (o) {
+      if (o?.moving) await o.moving;
+      if (o && opened.get(keyOf(segs)) === o) {
         const out = new Uint8Array(o.sah.getSize());
         o.sah.read(out, { at: 0 });
         return out;

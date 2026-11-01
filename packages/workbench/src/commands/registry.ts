@@ -14,6 +14,7 @@ import { newBase } from '../bases/commands';
 import { insertDrawing, newDrawing } from '../drawing/commands';
 import { sceneCommands, toolCommands } from '../drawing/sceneCommands';
 import { infoOf, useSync } from '../state/sync';
+import { Feature } from '@memobrain/api-client/features';
 import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
 import { useRecovery } from '../recovery/store';
@@ -61,7 +62,7 @@ const readOnlyVault = (): boolean => {
   return v ? infoOf(useSync.getState(), v.id).readOnly : false;
 };
 const canWrite = (): boolean => hasVault() && !readOnlyVault();
-const feature = (name: string): boolean => featureOn(useManaged.getState().features, name);
+const feature = (name: Feature): boolean => featureOn(useManaged.getState().features, name);
 const activePath = (): string | null => activeTab(store().layout)?.path ?? null;
 const hasNote = (): boolean => activePath() !== null;
 const syncInfo = () => infoOf(useSync.getState(), store().vault?.id);
@@ -168,14 +169,14 @@ export const commands: Command[] = [
     id: 'drawing:new',
     group: 'file',
     defaults: ['Mod-Alt-d'],
-    enabled: () => canWrite() && feature('drawings'),
+    enabled: () => canWrite() && feature(Feature.Drawings),
     run: () => guard(newDrawing()),
   },
   {
     id: 'canvas:new',
     group: 'file',
     defaults: [],
-    enabled: () => canWrite() && feature('canvas'),
+    enabled: () => canWrite() && feature(Feature.Canvas),
     run: () => guard(newCanvas()),
   },
   {
@@ -189,7 +190,7 @@ export const commands: Command[] = [
     id: 'drawing:insert',
     group: 'editor',
     defaults: [],
-    enabled: () => editorMode() && !readOnlyVault() && feature('drawings'),
+    enabled: () => editorMode() && !readOnlyVault() && feature(Feature.Drawings),
     run: () => guard(insertDrawing()),
   },
   {
@@ -210,7 +211,7 @@ export const commands: Command[] = [
     id: 'sharing:open',
     group: 'app',
     defaults: [],
-    enabled: () => feature('sharing'),
+    enabled: () => feature(Feature.Sharing),
     run: () => store().openSettings('sharing'),
   },
   {
@@ -219,7 +220,7 @@ export const commands: Command[] = [
     defaults: [],
     enabled: () => {
       const v = store().vault;
-      if (!v || !hasNote() || !feature('sharing')) return false;
+      if (!v || !hasNote() || !feature(Feature.Sharing)) return false;
       const info = infoOf(useSync.getState(), v.id);
       return info.linked && info.kind === 'shared' && !info.mount;
     },
@@ -274,6 +275,8 @@ export const commands: Command[] = [
     id: 'vault:switch',
     group: 'file',
     defaults: [],
+    // The browser opens one vault per page, chosen in the console.
+    requires: ['multiVault'],
     enabled: hasVault,
     run: () => {
       store().setLeft({ open: true });

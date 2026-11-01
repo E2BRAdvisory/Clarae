@@ -79,6 +79,12 @@ export function UpdateDialog() {
             )}
           </>
         )}
+        {/* The check worked but something about the channel is off (an expired manifest, …). */}
+        {!busy && status?.warning && (
+          <p className="warning small" role="note">
+            {t('updater.warning', { warning: status.warning })}
+          </p>
+        )}
         {error && <p role="alert">{error}</p>}
         {message && <p role="status">{message}</p>}
         <div className="actions">

@@ -17,6 +17,11 @@ function toAuthUser(u: User): AuthUser {
 /** An access token that expires within this many seconds is renewed before it is handed out. */
 export const RENEW_MARGIN_S = 30;
 
+/** Pauses between the attempts to read the client configuration (a cloud restarting, a blip). */
+export const CONFIG_RETRY_MS = [300, 1000];
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 /**
  * Authorization Code + PKCE against Keycloak via oidc-client-ts. Tokens live in
  * sessionStorage only (gone when the tab closes). Renewal uses the refresh token
@@ -26,8 +31,24 @@ export const RENEW_MARGIN_S = 30;
  * getUser; only when the renewal fails is the user signed out locally, so the
  * route guard sends them to sign in again.
  */
-export function createOidcAuth(load: () => Promise<ClientConfig> = loadClientConfig): AuthService {
+export function createOidcAuth(
+  load: () => Promise<ClientConfig> = loadClientConfig,
+  retryMs: readonly number[] = CONFIG_RETRY_MS,
+): AuthService {
   let manager: Promise<UserManager> | undefined;
+
+  /** The client configuration, retried a few times; a failure is not remembered (see getManager). */
+  const loadConfig = async (): Promise<ClientConfig> => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await load();
+      } catch (e) {
+        const wait = retryMs[attempt];
+        if (wait === undefined) throw e;
+        await sleep(wait);
+      }
+    }
+  };
   // One renewal at a time: concurrent callers (the core asks for tokens too) share it.
   let renewing: Promise<User | null> | null = null;
 
@@ -43,7 +64,7 @@ export function createOidcAuth(load: () => Promise<ClientConfig> = loadClientCon
   };
 
   const getManager = (): Promise<UserManager> => {
-    manager ??= load().then((cfg) => {
+    manager ??= loadConfig().then((cfg) => {
       const store = new WebStorageStateStore({ store: window.sessionStorage });
       const mgr = new UserManager({
         authority: cfg.issuer,
@@ -67,6 +88,11 @@ export function createOidcAuth(load: () => Promise<ClientConfig> = loadClientCon
         })();
       });
       return mgr;
+    });
+    // A failed load is not kept: the next call (a retry, the next sign-in) starts again.
+    const current = manager;
+    current.catch(() => {
+      if (manager === current) manager = undefined;
     });
     return manager;
   };

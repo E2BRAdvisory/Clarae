@@ -8,6 +8,7 @@ export function UpdateSettings() {
   const { t } = useTranslation();
   const [s, setS] = useState<Settings | null>(null);
   const disabled = useUpdater((u) => u.status?.disabled ?? '');
+  const warning = useUpdater((u) => u.status?.warning ?? '');
   useEffect(() => {
     void updaterApi.getSettings().then(setS);
   }, []);
@@ -43,6 +44,11 @@ export function UpdateSettings() {
       <p className="muted small">
         {disabled ? t('updater.disabled', { reason: disabled }) : t('updater.privacy')}
       </p>
+      {warning && (
+        <p className="warning small" role="note">
+          {t('updater.warning', { warning })}
+        </p>
+      )}
       <button onClick={() => void useUpdater.getState().check()}>{t('updater.checkNow')}</button>
     </>
   );

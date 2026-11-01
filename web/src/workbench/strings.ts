@@ -13,9 +13,17 @@ const EN = {
   failed: 'The vault could not be opened:',
   disabled: 'Your administrator has turned off opening vaults in the browser.',
   back: 'Back to the console',
+  signInFailed:
+    'Sign-in could not start: the server or the identity provider did not answer. Check the connection and try again.',
+  retry: 'Retry',
   fatal: 'The vault engine stopped. Reload the page to continue.',
   reload: 'Reload',
   locking: 'Uploading your changes and locking the vault…',
+  removing: 'Uploading your changes and removing the vault from this browser…',
+  removeKeptTitle: 'Changes not uploaded',
+  removeKeptHint:
+    'The copy in this browser was kept so they are not lost. Stay to let the sync finish, or delete the copy anyway.',
+  stay: 'Stay in the vault',
   lockedTitle: 'Vault locked',
   lockedPending_one: '{n} change not uploaded yet is kept in this browser as clear text.',
   lockedPending_other: '{n} changes not uploaded yet are kept in this browser as clear text.',
@@ -54,9 +62,17 @@ const IT: Record<keyof typeof EN, string> = {
   failed: 'Non è stato possibile aprire il vault:',
   disabled: "L'amministratore ha disattivato l'apertura dei vault nel browser.",
   back: 'Torna alla console',
+  signInFailed:
+    "Impossibile avviare l'accesso: il server o il provider di identità non ha risposto. Controlla la connessione e riprova.",
+  retry: 'Riprova',
   fatal: 'Il motore dei vault si è fermato. Ricarica la pagina per continuare.',
   reload: 'Ricarica',
   locking: 'Caricamento delle modifiche e blocco del vault…',
+  removing: 'Caricamento delle modifiche e rimozione del vault da questo browser…',
+  removeKeptTitle: 'Modifiche non caricate',
+  removeKeptHint:
+    'La copia in questo browser è stata conservata per non perderle. Resta per far finire la sincronizzazione, oppure elimina comunque la copia.',
+  stay: 'Resta nel vault',
   lockedTitle: 'Vault bloccato',
   lockedPending_one:
     '{n} modifica non ancora caricata resta in questo browser come testo in chiaro.',

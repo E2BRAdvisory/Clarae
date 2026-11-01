@@ -11,6 +11,7 @@ import type {
   HostRequest,
   ToWorker,
 } from './protocol';
+import { downloadBlob } from '../shared/download';
 
 export interface CoreOptions {
   assets: CoreAssets;
@@ -409,15 +410,7 @@ function pickFile(patterns: string[]): Promise<{ name: string; bytes: ArrayBuffe
 
 /** Starts a browser download of bytes the core produced (an export, a ZIP of the vault). */
 export function saveDownload(name: string, bytes: ArrayBuffer): void {
-  const url = URL.createObjectURL(new Blob([bytes]));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.style.display = 'none';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  downloadBlob(new Blob([bytes]), name);
 }
 
 /**

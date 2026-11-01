@@ -168,7 +168,7 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
       {n > 0 && !presenter && (
         <div className="slide-stage" onClick={() => go(at + 1)}>
           <div key={at} className={`slide-anim ${animation}`}>
-            <SlideView html={html[at]} theme={config.theme} />
+            <SlideView html={html[at]} theme={config.theme} openLinks />
           </div>
           {config.numbers && <div className="slide-number">{counter}</div>}
         </div>
@@ -177,7 +177,7 @@ function Running({ vaultId, path }: { vaultId: string; path: string }) {
       {n > 0 && presenter && (
         <div className="presenter-grid">
           <div className="presenter-current">
-            <SlideView html={html[at]} theme={config.theme} />
+            <SlideView html={html[at]} theme={config.theme} openLinks />
           </div>
           <div className="presenter-side">
             <div className="presenter-next" aria-label={t('slides.next')}>

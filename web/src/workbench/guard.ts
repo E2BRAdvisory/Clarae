@@ -9,7 +9,7 @@
  */
 import type { CoreHandle } from './bridge';
 import { readMarkers, removeMarker, unsynced, updateMarker, type VaultMarker } from './markers';
-import { showLocked, showOverlay } from './overlay';
+import { closeOverlay, confirmDelete, showLocked, showOverlay, unsyncedLines } from './overlay';
 import { message } from './strings';
 
 /**
@@ -58,6 +58,12 @@ export interface VaultGuard {
   lockAndForget(): Promise<void>;
   /** Removes the copy and its marker whatever it holds (the user confirmed), then leaves. */
   deleteCopy(): Promise<void>;
+  /**
+   * "Remove from this browser" (the web's counterpart of the desktop's Disconnect): uploads what is
+   * pending (bounded), then removes the copy and goes back to the console; when changes would be
+   * lost it keeps the copy and asks. A private vault is locked first (lockAndForget).
+   */
+  removeCopy(): Promise<void>;
   dispose(): void;
 }
 
@@ -241,6 +247,47 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     return running;
   };
 
+  const removeCopy = async (): Promise<void> => {
+    if (isPrivate) return lockAndForget();
+    if (running) return running;
+    running = (async () => {
+      showOverlay({ busy: true, lines: [message('removing')] });
+      await o.flush();
+      await core.callWithin(15_000, 'SyncAPI', 'SyncNow', info.id).catch(() => undefined);
+      await drain();
+      const s = await core
+        .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
+        .catch(() => null);
+      if (s && s.pending === 0 && s.conflicts === 0) return wipeAndLeave();
+      const counts = {
+        pending: Math.max(s?.pending ?? marker()?.pending ?? 0, 0),
+        conflicts: Math.max(s?.conflicts ?? marker()?.conflicts ?? 0, 0),
+      };
+      if (s) patch(counts);
+      // Unknown counts are kept like changes (D-04): the user decides.
+      const ask = (): void =>
+        void showOverlay({
+          title: message('removeKeptTitle'),
+          lines: [
+            ...unsyncedLines(counts.pending, counts.conflicts, !s),
+            message('removeKeptHint'),
+          ],
+          actions: [
+            { label: message('stay'), kind: 'primary', onClick: closeOverlay },
+            {
+              label: message('deleteAnyway'),
+              kind: 'danger',
+              onClick: () => confirmDelete(() => void wipeAndLeave(), ask),
+            },
+          ],
+        });
+      ask();
+    })().finally(() => {
+      running = null;
+    });
+    return running;
+  };
+
   return {
     noteUnlocked() {
       unlocked = true;
@@ -253,6 +300,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     },
     lockAndForget,
     deleteCopy: wipeAndLeave,
+    removeCopy,
     dispose() {
       offStatus();
       offChanged();

@@ -10,7 +10,7 @@ import i18next from 'i18next';
 import { followLink } from '../app/actions';
 import { hydrate, MAX_EMBED_DEPTH } from '../embeds/hydrate';
 import type { LinkSpec } from '../editor/context';
-import { openExternal } from '../util/external';
+import { interceptLinks } from '../util/links';
 import { linkKey } from './target';
 import { loadPreview, previewBackend, stripRemoteResources } from './service';
 import './preview.css';
@@ -136,25 +136,11 @@ function build(
   stripRemoteResources(body);
   root.append(head, body);
 
-  body.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement;
-    const wiki = target.closest<HTMLElement>('a.wikilink');
-    if (wiki) {
-      e.preventDefault();
-      const spec = {
-        target: wiki.dataset['target'] ?? '',
-        heading: wiki.dataset['heading'] ?? '',
-        block: wiki.dataset['block'] ?? '',
-      };
+  interceptLinks(body, {
+    openLink: (spec, newTab) => {
       hidePreview();
-      void followLink(path, spec, e.metaKey || e.ctrlKey);
-      return;
-    }
-    const a = target.closest<HTMLAnchorElement>('a[href]');
-    if (!a) return;
-    e.preventDefault();
-    const href = a.getAttribute('href') ?? '';
-    if (/^[A-Za-z][A-Za-z0-9+.-]+:/.test(href)) openExternal(href);
+      void followLink(path, spec, newTab);
+    },
   });
 
   disposeEmbeds?.();

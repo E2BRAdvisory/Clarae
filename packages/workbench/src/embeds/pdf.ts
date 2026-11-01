@@ -1,6 +1,7 @@
 // PDF embeds (![[doc.pdf#page=3]]) rendered with pdf.js, lazily loaded: one
 // page on a canvas with previous/next buttons. <embed>/<iframe> are blocked by
 // the CSP on purpose (object-src and frame-src are 'none').
+import { i18next } from '../i18n';
 
 /**
  * Renders the PDF into el; returns a disposer that stops the work and frees the pdf.js document
@@ -33,8 +34,10 @@ export function renderPdf(
     bar.className = 'embed-pdf-bar';
     const prev = document.createElement('button');
     prev.textContent = '‹';
+    prev.setAttribute('aria-label', i18next.t('embeds.pdfPrev'));
     const next = document.createElement('button');
     next.textContent = '›';
+    next.setAttribute('aria-label', i18next.t('embeds.pdfNext'));
     const label = document.createElement('span');
     const canvas = document.createElement('canvas');
     bar.append(prev, label, next);

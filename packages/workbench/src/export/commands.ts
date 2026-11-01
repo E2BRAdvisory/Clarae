@@ -24,7 +24,7 @@ async function currentNote(): Promise<{ vaultId: string; path: string; content: 
   if (!st.vault || !path || !path.toLowerCase().endsWith('.md')) return null;
   const live = useActiveNote.getState().note;
   if (live && live.path === path && live.vaultId === st.vault.id)
-    return { vaultId: st.vault.id, path, content: live.text };
+    return { vaultId: st.vault.id, path, content: live.current() };
   const read = await api.vault.readNote(st.vault.id, path);
   return { vaultId: st.vault.id, path, content: read.content };
 }

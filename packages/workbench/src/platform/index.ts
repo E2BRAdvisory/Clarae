@@ -6,7 +6,12 @@ import { create } from 'zustand';
 
 export type PlatformKind = 'desktop' | 'web';
 
-/** What the host offers. `true` = the UI shows it. */
+/**
+ * What the host offers, or how it behaves. `true` = the UI shows the control (every flag except
+ * `ephemeralPlaintext`, which describes a policy of the host). A control that only one host can
+ * honour is gated here, never on scattered checks of the environment; a command declares it in
+ * `Command.requires`, and the feature registry (shared/parity/features.yaml) names it per surface.
+ */
 export interface Capabilities {
   /** Open a folder of the computer as a vault, pick a folder to import. The browser has cloud vaults only. */
   localFolders: boolean;
@@ -16,6 +21,33 @@ export interface Capabilities {
   diskEncryptionCheck: boolean;
   /** The window itself (full screen through the OS, the system browser for external links). */
   nativeWindow: boolean;
+  /** Deleted files can go to the system trash; the browser always uses the vault's `.trash/`. */
+  osTrash: boolean;
+  /**
+   * Several vaults over time in one window: recent vaults, switching from the vault menu. The browser
+   * opens one vault per page, chosen in the console.
+   */
+  multiVault: boolean;
+  /**
+   * A local vault can be disconnected from the cloud and kept as a plain folder. In the browser the
+   * copy belongs to the cloud vault: it is removed from the browser instead.
+   */
+  unlinkVault: boolean;
+  /**
+   * The application owns the cloud session (sign-in through the system browser, sign-out, choice of
+   * the server). In the browser the session is the page's OIDC one, managed by the console.
+   */
+  ownsSession: boolean;
+  /**
+   * Policy, not a control: the clear text of a private vault must not outlive its lock (ADR-0029 §6).
+   * True in the browser, where the copy is wiped on lock; the desktop keeps the folder.
+   */
+  ephemeralPlaintext: boolean;
+  /**
+   * A folder of the computer can be picked: the native dialog on the desktop, the File System Access
+   * API in a browser that has it (detected at run time). Core-backed pickers also need localFolders.
+   */
+  directoryPicker: boolean;
 }
 
 const DESKTOP: Capabilities = {
@@ -23,6 +55,12 @@ const DESKTOP: Capabilities = {
   updater: true,
   diskEncryptionCheck: true,
   nativeWindow: true,
+  osTrash: true,
+  multiVault: true,
+  unlinkVault: true,
+  ownsSession: true,
+  ephemeralPlaintext: false,
+  directoryPicker: true,
 };
 
 const WEB: Capabilities = {
@@ -30,11 +68,21 @@ const WEB: Capabilities = {
   updater: false,
   diskEncryptionCheck: false,
   nativeWindow: false,
+  osTrash: false,
+  multiVault: false,
+  unlinkVault: false,
+  ownsSession: false,
+  ephemeralPlaintext: true,
+  directoryPicker: false,
 };
 
-export const capabilitiesFor = (kind: PlatformKind): Capabilities => ({
-  ...(kind === 'web' ? WEB : DESKTOP),
-});
+/** The browser's folder picker (File System Access API), where it exists. */
+const browserHasDirectoryPicker = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof (window as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function';
+
+export const capabilitiesFor = (kind: PlatformKind): Capabilities =>
+  kind === 'web' ? { ...WEB, directoryPicker: browserHasDirectoryPicker() } : { ...DESKTOP };
 
 export interface PlatformOptions {
   kind?: PlatformKind;
@@ -42,6 +90,13 @@ export interface PlatformOptions {
   onBackToConsole?: () => void;
   /** The vault to open as soon as the UI is up (the Web UI opens one vault per page). */
   vaultPath?: string;
+  /**
+   * Web only: removes the open vault's copy from this browser (uploading what is pending first) and
+   * goes back to the console. The sync settings offer it where the desktop offers Disconnect.
+   */
+  onRemoveFromBrowser?: () => void;
+  /** Overrides of the kind's capabilities, for what the host detects itself. */
+  capabilities?: Partial<Capabilities>;
 }
 
 interface PlatformState {
@@ -49,6 +104,8 @@ interface PlatformState {
   capabilities: Capabilities;
   /** Set when the host has a place to go back to (the Web UI console); the header then shows a button. */
   backToConsole: (() => void) | null;
+  /** Set when the host can remove the vault's copy from the browser (see PlatformOptions). */
+  removeFromBrowser: (() => void) | null;
   /** Opened by the app once its listeners are attached. */
   initialVault: string | null;
 }
@@ -57,6 +114,7 @@ export const usePlatform = create<PlatformState>(() => ({
   kind: 'desktop',
   capabilities: capabilitiesFor('desktop'),
   backToConsole: null,
+  removeFromBrowser: null,
   initialVault: null,
 }));
 
@@ -65,8 +123,9 @@ export function configurePlatform(options: PlatformOptions = {}): void {
   const kind = options.kind ?? 'desktop';
   usePlatform.setState({
     kind,
-    capabilities: capabilitiesFor(kind),
+    capabilities: { ...capabilitiesFor(kind), ...options.capabilities },
     backToConsole: options.onBackToConsole ?? null,
+    removeFromBrowser: options.onRemoveFromBrowser ?? null,
     initialVault: options.vaultPath ?? null,
   });
 }

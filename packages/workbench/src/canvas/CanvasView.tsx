@@ -14,6 +14,8 @@ import { infoOf, useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
 import { isSafeExternalUrl } from '../util/sanitize';
 import { openExternal } from '../util/external';
+import { interceptLinks } from '../util/links';
+import type { LinkSpec } from '../editor/context';
 import {
   addEdge,
   addNode,
@@ -38,6 +40,7 @@ import {
 } from './model';
 import { Icon } from '../shell/icons';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
+import { errorMessage } from '../util/errors';
 
 const AUTOSAVE_MS = 1000;
 const MIN_ZOOM = 0.1;
@@ -66,13 +69,20 @@ function MarkdownBlock({ text, vaultId, path }: { text: string; vaultId: string;
     const el = ref.current;
     if (!el) return;
     el.innerHTML = html; // already sanitized by renderMarkdown
-    return hydrate(el, {
+    const openLink = (spec: LinkSpec, newTab: boolean): void => void followLink(path, spec, newTab);
+    // Links never navigate the window: same policy as the reading view.
+    const unintercept = interceptLinks(el, { openLink });
+    const dispose = hydrate(el, {
       backend: backendFor(vaultId),
       fromPath: path,
       depth: 1,
       visited: [path],
-      openLink: (spec, newTab) => void followLink(path, spec, newTab),
+      openLink,
     });
+    return () => {
+      unintercept();
+      dispose();
+    };
   }, [html, vaultId, path]);
   return <div className="cv-markdown reading" ref={ref} />;
 }
@@ -198,7 +208,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
       setData(parseCanvas(doc.content));
       setError('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   }
 

@@ -13,12 +13,13 @@ import {
 } from './api';
 import { ImporterEvents, type ImportDonePayload, type ImportProgressPayload } from './events';
 import { useImporter } from './store';
+import { errorMessage } from '../util/errors';
 
 type Step = 'source' | 'path' | 'options' | 'preview' | 'running' | 'report';
 
 const ORDER = ['markdown-folder', 'notion', 'enex', 'roam', 'bear', 'google-keep', 'csv'];
 
-const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const errText = (e: unknown): string => errorMessage(e);
 
 /** The import wizard: source, file or folder, options, preview, run with progress, report. */
 export function ImportWizard() {

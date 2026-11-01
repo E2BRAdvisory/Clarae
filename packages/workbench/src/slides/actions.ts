@@ -20,7 +20,7 @@ export async function startSlideshow(here: boolean): Promise<void> {
       const live = useActiveNote.getState().note;
       const text =
         live && live.path === path && live.vaultId === st.vault.id
-          ? live.text
+          ? live.current()
           : (await api.vault.readNote(st.vault.id, path)).content;
       index = slideIndexAtLine(parseSlides(text), st.stats?.line ?? 1);
     } catch (e) {

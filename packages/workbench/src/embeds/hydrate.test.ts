@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderEmbedInto, MAX_EMBED_DEPTH, type EmbedBackend, type EmbedDeps } from './hydrate';
 import { classify, parseSize, pdfPage } from './media';
+import { initI18n } from '../i18n';
 
 beforeAll(() => {
+  initI18n('en');
   URL.createObjectURL = vi.fn(() => 'blob:fake');
 });
 

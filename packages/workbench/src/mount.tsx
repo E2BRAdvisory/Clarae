@@ -10,6 +10,7 @@ import { flushWorkbench, installLifecycle } from './app/lifecycle';
 import { initI18n } from './i18n';
 import { configurePlatform, type PlatformOptions } from './platform';
 import { queryClient } from './state/queryClient';
+import { installLinkGuard } from './util/links';
 import './style.css';
 
 export type WorkbenchOptions = PlatformOptions;
@@ -46,6 +47,8 @@ export async function mountWorkbench(
     (window as unknown as { __mock: unknown }).__mock = installWailsMock();
   }
   installLifecycle(options.kind ?? 'desktop');
+  // No rendered link may navigate the window away from the app (each view routes its own links).
+  installLinkGuard();
   createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>

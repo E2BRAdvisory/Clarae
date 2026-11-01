@@ -266,16 +266,19 @@ export function SettingsPanel() {
                 onChange={(e) => setEditor({ attachmentsFolder: e.target.value })}
               />
             </Row>
-            <Row label={t('settings.trashMode')} htmlFor="trashMode">
-              <select
-                id="trashMode"
-                value={settings.trashMode || 'system'}
-                onChange={(e) => void update({ trashMode: e.target.value })}
-              >
-                <option value="system">{t('settings.trashSystem')}</option>
-                <option value="vault">{t('settings.trashVault')}</option>
-              </select>
-            </Row>
+            {/* The browser has no system trash: deleted files always go to the vault's .trash/. */}
+            {can('osTrash') && (
+              <Row label={t('settings.trashMode')} htmlFor="trashMode">
+                <select
+                  id="trashMode"
+                  value={settings.trashMode || 'system'}
+                  onChange={(e) => void update({ trashMode: e.target.value })}
+                >
+                  <option value="system">{t('settings.trashSystem')}</option>
+                  <option value="vault">{t('settings.trashVault')}</option>
+                </select>
+              </Row>
+            )}
             <HistorySettings />
             <FilesExtra />
             <Row label={t('settings.importNotes')} htmlFor="importNotes">

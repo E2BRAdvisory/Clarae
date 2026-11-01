@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { extract } from '@memobrain/markdown';
+import { parseProperties } from '@memobrain/markdown';
 import { api } from '../app/api';
 import { dialog } from '../ui/dialogs';
 import { Icon } from '../shell/icons';
@@ -109,7 +109,8 @@ export function NoteProperties({ vaultId, path, text, prepare, onChanged }: Prop
   const { t } = useTranslation();
   const [schema, setSchema] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(true);
-  const props = extract(path, text).properties;
+  // Only the frontmatter block is parsed, not the whole note.
+  const props = useMemo(() => parseProperties(text), [text]);
   const entries = Object.entries(props);
 
   useEffect(() => {

@@ -39,7 +39,7 @@ func (h webHost) Session() *auth.Hosted {
 	if host := js.Global().Get(hostName); host.Type() == js.TypeObject && host.Get("serverURL").Type() == js.TypeString {
 		server = host.Get("serverURL").String()
 	}
-	return &auth.Hosted{ServerURL: server, Token: func(ctx context.Context) (string, error) {
+	hosted := &auth.Hosted{ServerURL: server, Token: func(ctx context.Context) (string, error) {
 		res, err := h.call("token")
 		if err != nil {
 			return "", err
@@ -50,6 +50,47 @@ func (h webHost) Session() *auth.Hosted {
 		}
 		return v.String(), nil
 	}}
+	return hosted.WithDevice(webDevice{h})
+}
+
+// webDevice keeps the browser's device registration with the page (IndexedDB), outside the data
+// directory that signing out and "forget this browser" wipe: the browser stays one device.
+type webDevice struct{ h webHost }
+
+func (d webDevice) available(method string) bool {
+	host := js.Global().Get(hostName)
+	return host.Type() == js.TypeObject && host.Get(method).Type() == js.TypeFunction
+}
+
+func (d webDevice) LoadDevice(_ context.Context, serverURL string) (string, string, error) {
+	if !d.available("loadDevice") {
+		return "", "", nil // an older page: one registration per data directory, as before
+	}
+	res, err := d.h.call("loadDevice", serverURL)
+	if err != nil {
+		return "", "", err
+	}
+	v, err := await(res)
+	if err != nil || v.Type() != js.TypeObject {
+		return "", "", err
+	}
+	id, user := v.Get("deviceId"), v.Get("userId")
+	if id.Type() != js.TypeString || user.Type() != js.TypeString {
+		return "", "", nil
+	}
+	return id.String(), user.String(), nil
+}
+
+func (d webDevice) SaveDevice(_ context.Context, serverURL, deviceID, userID string) error {
+	if !d.available("saveDevice") {
+		return nil
+	}
+	res, err := d.h.call("saveDevice", serverURL, deviceID, userID)
+	if err != nil {
+		return err
+	}
+	_, err = await(res)
+	return err
 }
 
 func (webHost) call(method string, args ...any) (js.Value, error) {

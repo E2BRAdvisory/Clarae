@@ -168,14 +168,11 @@
     "signedOut": "Not signed in",
     "ready": "Signed in as {{name}}",
     "disconnected": "Offline — signed in as {{name}}",
+    "deviceRevoked": "Signed in as {{name}} — this device was revoked",
     "role": "Role",
     "placeholder": "https://memobrain.example.com",
     "storage": "Storage",
-    "usageOf": "{{used}} of {{quota}}",
     "devices": "Devices",
-    "thisDevice": "this device",
-    "revoke": "Revoke device",
-    "revokeText": "Sign out “{{name}}” from your account? It will stop syncing.",
     "vaults": "Cloud vaults"
   },
   "links": {
@@ -619,7 +616,13 @@
     "diskUnencrypted": "The disk of this computer does not look encrypted. Your notes are stored in clear text here: turn on FileVault / BitLocker / disk encryption.",
     "kind_private": "private",
     "kind_shared": "shared",
-    "signedOutHint": "Signed out of the cloud: sign in again to resume. The link of the vault is kept, do not reconnect it."
+    "signedOutHint": "Signed out of the cloud: sign in again to resume. The link of the vault is kept, do not reconnect it.",
+    "removeFromBrowser": "Remove from this browser",
+    "removeFromBrowserText": "Remove the copy of this vault from this browser? Pending changes are uploaded first; if some cannot be, the copy is kept and you can choose. The vault in the cloud stays as it is; open it again from the console.",
+    "signedOutHintWeb": "The session with the cloud has ended: reload the page or sign in again from the console to resume. The vault stays linked.",
+    "linkWarningKeychain": "The vault is linked and unlocked for this session only: its key could not be stored in the system keychain. Keep the recovery key safe: you will need the passphrase at the next start.",
+    "linkWarningIncomplete": "The cloud vault was created, but linking this folder to it failed. A recovery key shown here is valid: connect the folder later with “Connect to an existing cloud vault”.",
+    "linkWarningOther": "The vault was created with a warning: {{code}}."
   },
   "drawing": {
     "loading": "Loading the drawing editor…",
@@ -886,10 +889,7 @@
   },
   "sharing": {
     "invitations": "Invitations",
-    "noInvitations": "No invitations.",
-    "invitedBy": "Shared by {{owner}}",
-    "accept": "Accept",
-    "decline": "Decline",
+    "signIn": "Sign in to the cloud (Settings → Cloud) to see your invitations and shares.",
     "sharedWithMe": "Shared with me",
     "noMounts": "Nothing is shared with you yet.",
     "from": "From {{owner}}",
@@ -900,34 +900,18 @@
     "revokedShort": "Share ended",
     "mine": "My shares",
     "noShares": "Nothing is shared yet.",
-    "cannotShareHere": "Connect this vault to the cloud as a shared (not encrypted) vault to share its folders and documents.",
-    "recipientsCount_one": "{{count}} recipient",
-    "recipientsCount_other": "{{count}} recipients",
-    "shareWholeVault": "Share the whole vault…",
     "level_viewer": "Viewer",
     "level_editor": "Editor",
     "level_manager": "Manager",
-    "type_vault": "Vault",
-    "type_folder": "Folder",
-    "type_file": "Document",
-    "status_pending": "Pending",
-    "status_accepted": "Accepted",
-    "status_declined": "Declined",
     "shareTitle": "Share “{{name}}”",
     "wholeVault": "The whole vault",
     "newShare": "New share",
     "name": "Name",
-    "level": "Level",
     "levelOf": "Level of {{name}}",
-    "newRecipientLevel": "Level for new recipients",
-    "searchPeople": "Search people and groups…",
-    "searchResults": "Matches",
     "recipients": "Recipients",
     "removeRecipient": "Remove {{name}}",
     "create": "Share",
     "existing": "Existing shares",
-    "revoke": "Revoke",
-    "confirmRevoke": "Stop sharing “{{name}}”? Recipients lose access at once.",
     "close": "Close",
     "invitesN_one": "{{count}} invitation",
     "invitesN_other": "{{count}} invitations",
@@ -1145,6 +1129,12 @@
     "private": "Private",
     "shared": "Shared"
   },
+  "deviceRevoked": {
+    "text": "This device was revoked from your account, so nothing is synchronized. Your files and the changes waiting to be sent stay on this device.",
+    "reregister": "Register this device again",
+    "busy": "Registering…",
+    "failed": "The device could not be registered again: {{error}}"
+  },
   "account": {
     "login": "Log in",
     "reconnect": "Reconnect",
@@ -1289,7 +1279,8 @@
     "beta": "Beta (release candidates)",
     "checkNow": "Check for updates",
     "disabled": "Updates are turned off: {{reason}}.",
-    "privacy": "The only request is the download of a signed manifest; no identifier is sent."
+    "privacy": "The only request is the download of a signed manifest; no identifier is sent.",
+    "warning": "Warning: {{warning}}"
   },
   "toolbar": {
     "label": "Editing toolbar",
@@ -1322,5 +1313,33 @@
     "math": "Math block",
     "divider": "Horizontal rule",
     "comment": "Comment"
+  },
+  "errors": {
+    "conflict": "The file changed on disk in the meantime. Reload it and try again.",
+    "exists": "An item with that name already exists.",
+    "not-found": "The file no longer exists: it may have been moved or deleted.",
+    "invalid-path": "That path is outside the vault.",
+    "too-large": "The file is too large.",
+    "UNAUTHENTICATED": "Your session has expired: sign in again.",
+    "FORBIDDEN": "You are not allowed to do this.",
+    "USER_SUSPENDED": "Your account is suspended.",
+    "NOT_FOUND": "Not found on the server, it may have been removed.",
+    "QUOTA_EXCEEDED": "Your storage quota is full.",
+    "FILE_TOO_LARGE": "The file is larger than the server accepts.",
+    "RATE_LIMITED": "Too many requests, try again in a moment.",
+    "VAULT_ENCRYPTED": "This vault is end-to-end encrypted: the server cannot do this for you.",
+    "NAME_IN_USE": "That name is already in use.",
+    "INVALID_STATE": "This is not possible in the current state.",
+    "INTERNAL": "The server had a problem. Try again later."
+  },
+  "embeds": {
+    "depthLimit": "{{label}} (embed depth limit)",
+    "cycle": "{{label}} (circular embed)",
+    "headingMissing": "{{label}} (heading not found)",
+    "blockMissing": "{{label}} (block not found)",
+    "partMissing": "{{label}} ({{part}} not found)",
+    "loadFailed": "{{label}} (could not be loaded)",
+    "pdfPrev": "Previous page",
+    "pdfNext": "Next page"
   }
 }

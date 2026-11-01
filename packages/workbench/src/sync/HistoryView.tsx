@@ -6,8 +6,9 @@ import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
 import { diffLines } from './diff';
+import { errorMessage } from '../util/errors';
 
-const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const msg = (e: unknown): string => errorMessage(e);
 
 /** Diff of one revision against the current text (remounted when another revision is picked). */
 function RevisionDiff({

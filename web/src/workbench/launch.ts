@@ -7,6 +7,7 @@
  * guard (guard.ts) then removes the copy; a copy left behind by a closed tab is removed by the sweep at the
  * next start. Copies with changes not uploaded yet are never removed without asking (D-04).
  */
+import { Feature, featureEnabled } from '@memobrain/api-client/features';
 import type { AuthService } from '../auth/types';
 import { createCoreWorker, installWailsGlobals, startCore, type CoreHandle } from './bridge';
 import { VAULTS_DIR, folderOf, runCreation, type Creation, type MountCreate } from './create';
@@ -40,6 +41,8 @@ export interface LaunchOptions {
   mount(options: {
     vaultPath: string;
     onBackToConsole: () => void;
+    /** "Remove from this browser" in the sync settings (only for a copy linked to the cloud). */
+    onRemoveFromBrowser?: () => void;
   }): Promise<WorkbenchHandle | void>;
   /** Progress for the loading screen. */
   progress(step: 'core' | 'session' | 'vault' | 'ui'): void;
@@ -203,7 +206,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       'ConfigAPI',
       'Effective',
     );
-    if (state.features?.['web_workbench'] === false) {
+    if (!featureEnabled(state.features, Feature.WebWorkbench)) {
       core.terminate();
       throw new Error(DISABLED);
     }
@@ -304,8 +307,13 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   onLeaveRequest(() => void backToConsole());
 
   o.progress('ui');
+  const vaultGuard = guard;
   workbench =
-    (await o.mount({ vaultPath: info.path, onBackToConsole: () => void backToConsole() })) ?? null;
+    (await o.mount({
+      vaultPath: info.path,
+      onBackToConsole: () => void backToConsole(),
+      ...(vaultGuard ? { onRemoveFromBrowser: () => void vaultGuard.removeCopy() } : {}),
+    })) ?? null;
   if (import.meta.env.MEMOBRAIN_E2E) {
     // Playwright drives the core, the worker (to simulate its failure) and the leave path directly.
     Object.assign(window, {

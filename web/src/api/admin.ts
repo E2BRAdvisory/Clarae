@@ -67,6 +67,25 @@ export const adminKeys = {
   audit: (f: AuditFilters) => ['admin', 'audit', f] as const,
 };
 
+/**
+ * Refreshes every resolved configuration after a change that can alter it (a profile, its versions,
+ * the profiles of a group, group membership or priority): each user's "effective configuration" in
+ * the admin console and the signed-in user's own (['config', 'effective'], which also gates the
+ * web workbench). Without it they keep the old resolution for their stale time.
+ */
+export function invalidateConfigResolution(qc: QueryClient): Promise<void> {
+  return Promise.all([
+    qc.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey[0] === 'admin' &&
+        q.queryKey[1] === 'users' &&
+        q.queryKey[2] === 'one' &&
+        q.queryKey[4] === 'config',
+    }),
+    qc.invalidateQueries({ queryKey: ['config', 'effective'] }),
+  ]).then(() => undefined);
+}
+
 /* ---- Storage ---------------------------------------------------------------- */
 
 export function useStorageOverview() {
@@ -301,7 +320,12 @@ export function useSaveGroup() {
       id
         ? unwrap(api.PATCH('/admin/groups/{groupId}', { params: { path: { groupId: id } }, body }))
         : unwrap(api.POST('/admin/groups', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.groups }),
+    // The priority of a group decides which of its profiles wins.
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: adminKeys.groups }),
+        invalidateConfigResolution(qc),
+      ]),
   });
 }
 
@@ -311,7 +335,11 @@ export function useDeleteGroup() {
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(api.DELETE('/admin/groups/{groupId}', { params: { path: { groupId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.groups }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: adminKeys.groups }),
+        invalidateConfigResolution(qc),
+      ]),
   });
 }
 
@@ -341,6 +369,7 @@ export function useSetMemberRole(groupId: string) {
         qc.invalidateQueries({ queryKey: adminKeys.groupMembers(groupId) }),
         qc.invalidateQueries({ queryKey: adminKeys.groups }),
         qc.invalidateQueries({ queryKey: adminKeys.group(groupId) }),
+        invalidateConfigResolution(qc),
       ]),
   });
 }
@@ -360,6 +389,7 @@ export function useRemoveMember(groupId: string) {
         qc.invalidateQueries({ queryKey: adminKeys.groupMembers(groupId) }),
         qc.invalidateQueries({ queryKey: adminKeys.groups }),
         qc.invalidateQueries({ queryKey: adminKeys.group(groupId) }),
+        invalidateConfigResolution(qc),
       ]),
   });
 }
@@ -386,7 +416,11 @@ export function usePutGroupProfiles(id: string) {
           body: { items },
         }),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.groupProfiles(id) }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: adminKeys.groupProfiles(id) }),
+        invalidateConfigResolution(qc),
+      ]),
   });
 }
 
@@ -439,7 +473,11 @@ export function useSaveProfile() {
           )
         : unwrap(api.POST('/admin/config-profiles', { body })),
     // Saving a global profile demotes the previous one, so the whole subtree is refreshed.
-    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.profiles }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: adminKeys.profiles }),
+        invalidateConfigResolution(qc),
+      ]),
   });
 }
 
@@ -453,7 +491,11 @@ export function useRestoreVersion(id: string) {
           params: { path: { profileId: id, version } },
         }),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.profiles }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: adminKeys.profiles }),
+        invalidateConfigResolution(qc),
+      ]),
   });
 }
 
@@ -469,6 +511,7 @@ export function useDeleteProfile() {
       Promise.all([
         qc.invalidateQueries({ queryKey: adminKeys.profiles }),
         qc.invalidateQueries({ queryKey: ['admin', 'groups'] }),
+        invalidateConfigResolution(qc),
       ]),
   });
 }

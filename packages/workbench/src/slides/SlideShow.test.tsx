@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SlideShow } from './SlideShow';
@@ -6,6 +6,7 @@ import { useSlideshow } from './store';
 import { api } from '../app/api';
 import { initI18n } from '../i18n';
 import { installWailsMock } from '../test/wails-mock';
+import { configurePlatform } from '../platform';
 
 const DECK =
   '---\nslide-transition: none\n---\n# First\n\nNote: say hello\n\n---\n\n# Second\n\n---\n\n# Third\n';
@@ -68,6 +69,24 @@ describe('presentation', () => {
     expect(useSlideshow.getState().index).toBe(0);
     key(dialog, 'End');
     expect(await screen.findByText('Third')).toBeInTheDocument();
+  });
+
+  it('opens a link of a slide outside the app without navigating or advancing', async () => {
+    configurePlatform({ kind: 'web' });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    try {
+      await show('# One\n\n[docs](https://example.com/)\n\n---\n\n# Two\n');
+      // The surface is hidden until it is measured (jsdom has no layout): find the text, not the role.
+      const link = (await screen.findByText('docs')).closest('a') as HTMLAnchorElement;
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      act(() => void link.dispatchEvent(ev));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(open).toHaveBeenCalledWith('https://example.com/', '_blank', 'noopener,noreferrer');
+      expect(useSlideshow.getState().index).toBe(0);
+    } finally {
+      open.mockRestore();
+      configurePlatform();
+    }
   });
 
   it('starts from a given slide and advances on a click', async () => {

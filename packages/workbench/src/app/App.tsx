@@ -28,6 +28,7 @@ import { ImportWizard } from '../importer/ImportWizard';
 import { UpdateDialog } from '../updater/UpdateDialog';
 import { SlideShow } from '../slides/SlideShow';
 import { Header } from '../shell/Header';
+import { DeviceRevokedBanner } from '../sync/DeviceRevokedBanner';
 import { VaultView } from '../shell/VaultView';
 import { Welcome } from '../shell/Welcome';
 import { useCan, usePlatform } from '../platform';
@@ -147,6 +148,7 @@ export function App() {
   return (
     <div className="shell">
       <Header />
+      <DeviceRevokedBanner />
       {vault ? <VaultView key={vault.id} vaultId={vault.id} /> : <Welcome onOpen={openVault} />}
       {settingsOpen && <SettingsPanel />}
       <SyncDialogs />

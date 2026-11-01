@@ -151,3 +151,26 @@ describe('createOidcAuth expiry event', () => {
     expect(state.removed).toBe(1);
   });
 });
+
+describe('createOidcAuth client configuration', () => {
+  it('retries a failed configuration read and does not remember the failure', async () => {
+    state.user = user({});
+    let calls = 0;
+    let down = true;
+    const flaky = () => {
+      calls++;
+      return down ? Promise.reject(new Error('502')) : load();
+    };
+    const auth = createOidcAuth(flaky as never, [0]);
+    await expect(auth.getUser()).rejects.toThrow('502');
+    expect(calls).toBe(2); // the first attempt and one retry
+    down = false;
+    await expect(auth.getUser()).resolves.toMatchObject({ sub: 'u1' }); // the next call starts again
+    expect(calls).toBe(3);
+  });
+
+  it('lets a sign-in that cannot start fail instead of hanging', async () => {
+    const auth = createOidcAuth(() => Promise.reject(new Error('offline')), []);
+    await expect(auth.signIn('/vaults')).rejects.toThrow('offline');
+  });
+});

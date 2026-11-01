@@ -11,7 +11,8 @@ const sources = import.meta.glob<string>('../**/*.{ts,tsx}', {
 
 // Keys assembled at runtime that a static scan cannot see (commands.<id> and editor.mode_<mode>
 // are also picked up automatically from their template literals; they are listed for clarity).
-const DYNAMIC: string[] = ['commands.*', 'editor.mode_*'];
+// errors.<code> are the stable codes of backend errors (util/errors.ts).
+const DYNAMIC: string[] = ['commands.*', 'editor.mode_*', 'errors.*'];
 
 describe('desktop i18n resources', () => {
   const f = comparePair(en, it_);

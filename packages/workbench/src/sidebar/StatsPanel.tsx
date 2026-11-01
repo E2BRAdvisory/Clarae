@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
@@ -45,6 +46,12 @@ export function StatsPanel({ vaultId }: { vaultId: string }) {
     enabled: owned,
   });
 
+  // The cursor moves re-render this panel (stats): parse the note only when its text changes.
+  const figures = useMemo(
+    () => (isNote && path ? textFigures(path, text) : null),
+    [isNote, path, text],
+  );
+
   if (!path) return <div className="muted pad">{t('outline.none')}</div>;
 
   const modified = entry ? new Date(entry.mtime as string).toISOString() : undefined;
@@ -54,8 +61,6 @@ export function StatsPanel({ vaultId }: { vaultId: string }) {
   const grants = grantsCovering(shares.data ?? [], path);
   const editor = lastEditor(revisions, grants);
   const me = profile?.displayName || profile?.username || t('stats.you');
-  const figures = isNote ? textFigures(path, text) : null;
-
   const author = !info.linked
     ? me
     : editor?.kind === 'me'

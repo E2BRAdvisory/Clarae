@@ -53,7 +53,7 @@ Nelle build E2E il workbench accetta anche `?local` (apre una cartella del brows
 
 **Instradamento lato server** (`web-embed`; il dev server di `web/scripts/esbuild.mjs` sceglie la pagina allo stesso modo e inoltra `/api/` al cloud):
 
-- un percorso che corrisponde a `^/vaults/[^/]+/open/?$` riceve `workbench.html` con la sua CSP; se la build non ha `workbench.html` riceve la console;
+- un percorso che corrisponde a `^/vaults/[^/]+/open/?$` riceve `workbench.html` con la sua CSP; se la build non ha `workbench.html` riceve la console. Lo stesso pattern è in `web/src/shared/routes.ts` (usato dal dev server e dalla pagina del workbench); il test Go `TestWorkbenchRouteMatchesTheWebUI` controlla che i due coincidano;
 - `/api` e `/api/*` non sono mai serviti dalla SPA (404 semplice; un percorso sconosciuto sotto `/api/v1` riceve dal router il 404 `problem+json` dell'API);
 - un file esistente nella build viene servito così com'è;
 - un percorso inesistente **con** estensione è un 404 (un asset sbagliato non diventa HTML);
@@ -62,7 +62,7 @@ Nelle build E2E il workbench accetta anche `?local` (apre una cartella del brows
 
 ## Autenticazione
 
-1. All'avvio la SPA legge `GET /api/v1/client-config` (pubblico, [ADR-0008](adr/0008-client-config-endpoint.md)): `issuer`, `web_client_id` (default `memobrain-web`, variabile `OIDC_WEB_CLIENT_ID`) e `audience`.
+1. All'avvio la SPA legge `GET /api/v1/client-config` (pubblico, [ADR-0008](adr/0008-client-config-endpoint.md)): `issuer`, `web_client_id` (default `memobrain-web`, variabile `OIDC_WEB_CLIENT_ID`) e `audience`. La lettura si ritenta due volte (dopo 0,3 s e 1 s); un fallimento non viene ricordato, quindi la richiesta successiva riparte (`createOidcAuth` in `web/src/auth/oidc.ts`).
 2. `oidc-client-ts` esegue Authorization Code + PKCE contro Keycloak con il client pubblico `memobrain-web`; redirect su `<origin>/auth/callback`, scope `openid profile email`. Le redirect URI del realm di sviluppo (`deploy/keycloak/realm-memobrain.json`) coprono `http://localhost:5174/*` e `http://localhost:18081/*`.
 3. Token e stato PKCE stanno solo in `sessionStorage` e spariscono alla chiusura della scheda.
 4. **Rinnovo** (`web/src/auth/oidc.ts`), sempre con il refresh token e mai con un iframe nascosto (la CSP lo vieterebbe):
@@ -72,7 +72,7 @@ Nelle build E2E il workbench accetta anche `?local` (apre una cartella del brows
    - all'evento di token scaduto si tenta un ultimo rinnovo, poi l'utente viene rimosso e la guardia lo rimanda al login.
 5. Una risposta `401` dall'API (query o mutation) riavvia il login sul percorso corrente.
 6. **Workbench:** quando il core chiede un token e la sessione non si può rinnovare, la pagina scrive prima le modifiche in sospeso (`flush()` del workbench, al massimo 5 s) e poi va al login, una volta sola (`getToken` in `web/src/workbench/launch.ts`).
-7. **Guardie** (`web/src/auth/guards.tsx`): `RequireAuth` manda gli anonimi al login ricordando percorso e query; `RequireRole` mostra "Non consentito" senza il ruolo. I ruoli si leggono da `realm_access.roles` dell'access token, solo per la UI.
+7. **Guardie** (`web/src/auth/guards.tsx`): `RequireAuth` manda gli anonimi al login ricordando percorso e query; se la sessione non si può leggere o il login non parte (cloud o identity provider irraggiungibili) mostra l'errore con «Riprova» invece di restare su «Reindirizzamento…» (`error` e `retry` di `AuthProvider`); la pagina del workbench fa lo stesso con un pulsante che ricarica; `RequireRole` mostra "Non consentito" senza il ruolo. I ruoli si leggono da `realm_access.roles` dell'access token, solo per la UI.
 8. **`returnTo`:** viaggia nello `state` OIDC e al ritorno si accettano solo percorsi same-origin (che iniziano con `/` ma non con `//`), altrimenti `/`. Se il percorso è una rotta del workbench, `/auth/callback` lo carica con `location.replace` invece di navigare nel router della console.
 
 **Doppio di test.** Con `MEMOBRAIN_E2E=1` (dev server di Playwright e build E2E) `main.tsx` e `workbench/main.tsx` caricano `auth/e2e.ts`, che legge l'utente da `sessionStorage['memobrain.e2e.user']` e manda il login su `/e2e-signin` (intercettato dai test). `import.meta.env.MEMOBRAIN_E2E` è una costante di build (`define` di esbuild): nelle build di produzione il ramo e il modulo spariscono. Si verifica con `command grep -r "memobrain.e2e" web/dist`, che non deve trovare nulla.
@@ -128,32 +128,39 @@ default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-
 **CSP del workbench** (`WorkbenchCSP()`), servita solo con `workbench.html`:
 
 ```text
-default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: <issuer-origin>; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-<import-map>'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: <issuer-origin>; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
 ```
 
 È la politica di rilascio del desktop più ciò che serve per raggiungere API e issuer:
 
 - `style-src 'unsafe-inline'` perché CodeMirror, KaTeX ed Excalidraw calcolano gli stili; gli script inline restano vietati;
-- `worker-src 'self' blob:` perché `new Worker()` non accetta `integrity`: la pagina scarica lo script del worker del core con SRI e lo avvia da un URL `blob:` dei byte verificati (`VerifiedWorker` in `bridge.ts`);
+- `'sha256-<import-map>'` ammette un solo script inline: l'import map che fissa con SRI i chunk del workbench (vedi sotto). `web-embed` ne calcola l'hash all'avvio dal `workbench.html` incorporato (`ImportMapHashes`); nessun altro script inline passa;
+- `worker-src 'self' blob:` perché `new Worker()` non accetta `integrity`: la pagina scarica lo script di ogni worker (core, layout del grafo, pdf.js) con SRI e lo avvia da un URL `blob:` dei byte verificati (`VerifiedWorker` in `bridge.ts`, `sri.ts`);
 - `img-src`/`media-src` con `blob:` e `data:` per le risorse del vault, `connect-src blob:` per download e risorse del vault.
 
 Nessuna delle due politiche ammette risorse di altre origini (D-01, V-02).
 
 **SRI** (dettagli e lacune in [ADR-0029, sezione «Esito dell'implementazione»](adr/0029-web-workbench.md)):
 
-| Cosa                                     | Copertura                                                                                                                                                                                                                                                |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Script e CSS d'ingresso delle due pagine | `integrity="sha384-…"` e `crossorigin` aggiunti dal plugin `index-html` di `web/scripts/esbuild.mjs` sui byte scritti in `dist/` (solo in produzione)                                                                                                    |
-| Console                                  | costruita **senza code splitting**: un solo JS e un CSS, entrambi coperti dal tag. Tutto il codice della console è verificato                                                                                                                            |
-| Worker del core                          | SHA-384 calcolato dalla build e incluso nel bundle del workbench; `fetch(url, { integrity })` e poi avvio da `blob:`. La build fallisce se il worker importa altri file                                                                                  |
-| WASM (core e sqlite)                     | integrità registrata dalla build e verificata nel worker (`fetch` con `integrity`); un hash mancante è un errore, ammesso solo nelle build E2E                                                                                                           |
-| Lacune residue (workbench)               | chunk JS statici e lazy (Excalidraw, mermaid, pdf.js, KaTeX…), `/excalidraw-assets/excalidraw.js`, `/assets/layout.worker.js` e il worker di pdf.js sono caricati senza `integrity`. Il code splitting resta perché senza supererebbe il budget iniziale |
+| Cosa                                     | Copertura                                                                                                                                                                                                                                                   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script e CSS d'ingresso delle due pagine | `integrity="sha384-…"` e `crossorigin` aggiunti dal plugin `index-html` di `web/scripts/esbuild.mjs` sui byte scritti in `dist/` (solo in produzione)                                                                                                       |
+| Console                                  | costruita **senza code splitting**: un solo JS e un CSS, entrambi coperti dal tag. Tutto il codice della console è verificato                                                                                                                               |
+| Chunk del workbench (statici e lazy)     | import map inline in `workbench.html` con il campo `integrity` per ogni chunk JS della build (Excalidraw, mermaid, pdf.js, KaTeX, MathJax…): il browser verifica ogni `import`/`import()` prima di eseguirlo. L'hash dell'import map è nella `WorkbenchCSP` |
+| Worker del core                          | SHA-384 calcolato dalla build e incluso nel bundle del workbench; `fetch(url, { integrity })` e poi avvio da `blob:`. La build fallisce se il worker importa altri file                                                                                     |
+| Worker del layout del grafo              | come il core: bundle autosufficiente con nome hashato (`assets/layout.worker-<hash>.js`), avviato da `VerifiedWorker`. La build sostituisce la chiamata `new Worker('/assets/layout.worker.js')` di `graph/layoutHost.ts` e fallisce se cambia              |
+| Worker di pdf.js                         | l'import `?url` di uno script diventa, nella build web, un URL `blob:` dei byte verificati con `fetch` + `integrity` (`verifiedScriptURL` in `sri.ts`), passato a `GlobalWorkerOptions.workerSrc`                                                           |
+| `/excalidraw-assets/excalidraw.js`       | script classico aggiunto a run time: il tag creato dal modulo virtuale `excalidraw-fork` porta `integrity` e `crossorigin` (`excalidrawForkPlugin({ scriptIntegrity })`)                                                                                    |
+| WASM (core e sqlite)                     | integrità registrata dalla build e verificata nel worker (`fetch` con `integrity`); un hash mancante è un errore, ammesso solo nelle build E2E                                                                                                              |
+| Non coperti (non sono script)            | font, immagini e il CSS lazy duplicato di Excalidraw (`DrawingEditor-*.css`, non caricato: le sue regole sono già nel CSS d'ingresso)                                                                                                                       |
 
-I test Go `TestBuiltIndexPinsEverySubresourceWithSRI` e `TestBuiltWorkbenchPinsEverySubresourceWithSRI` controllano le pagine incorporate. Senza la build vengono saltati; con `MEMOBRAIN_REQUIRE_WEB_BUILD=1` sono obbligatori.
+Supporto del campo `integrity` dell'import map: Chromium 127+ e Firefox 138+ (Safari non verificato). I browser che non lo supportano lo ignorano (caricano i chunk senza verifica, come prima); worker, Excalidraw e WASM sono verificati in ogni browser perché usano `fetch` con `integrity` o l'attributo del tag.
+
+I test Go `TestBuiltIndexPinsEverySubresourceWithSRI` e `TestBuiltWorkbenchPinsEverySubresourceWithSRI` controllano le pagine incorporate (per il workbench anche l'import map e il suo hash nella CSP servita); `TestEveryEmbeddedScriptIsPinned` verifica che ogni `.js`/`.mjs` della build sia raggiungibile da una catena di SRI che parte dalle pagine (tag → import map → hash incorporati nei chunk). Senza la build vengono saltati; con `MEMOBRAIN_REQUIRE_WEB_BUILD=1` sono obbligatori. Nel browser, `e2e-security/workbench-csp.spec.ts` e `excalidraw-offline.spec.ts` provano che un chunk, il worker del core, il worker di pdf.js ed `excalidraw.js` alterati non vengono eseguiti.
 
 ## Cache, compressione e budget
 
-- **Cache-Control:** i file sotto `assets/` e `core/` hanno `public, max-age=31536000, immutable` (in produzione hanno l'hash nel nome, tranne `assets/layout.worker.js`, che ha un URL fisso). Tutto il resto, comprese le pagine e il fallback SPA, ha `no-cache`.
+- **Cache-Control:** i file sotto `assets/` e `core/` hanno `public, max-age=31536000, immutable` (in produzione hanno tutti l'hash nel nome, compreso il worker del layout del grafo). Tutto il resto, comprese le pagine e il fallback SPA, ha `no-cache`.
 - **ETag forte** per ogni file (SHA-256 calcolato alla prima richiesta), con un valore diverso per ogni rappresentazione (`-gz`, `-id`): le rivalidazioni rispondono 304.
 - **gzip:** i file di testo (`.html`, `.js`, `.mjs`, `.css`, `.svg`, `.json`, `.webmanifest`, `.map`, `.txt`, `.xml`, `.wasm`, `.ttf`, `.otf`) da 512 byte in su sono compressi una volta, alla prima richiesta. La copia resta in memoria solo se risparmia almeno il 10% e si serve ai client che accettano gzip (`Vary: Accept-Encoding`).
 - **WebAssembly:** la build conserva solo `core/<nome>-<hash>.wasm.gz` (il core è circa 36 MB non compresso). Una richiesta di `<nome>.wasm` riceve il `.gz` così com'è se il client accetta gzip; altrimenti lo riceve decompresso in streaming, senza bufferizzarlo, con `Content-Length` letto dal trailer gzip e senza supporto ai range.
@@ -168,7 +175,7 @@ I test Go `TestBuiltIndexPinsEverySubresourceWithSRI` e `TestBuiltWorkbenchPinsE
 | WASM `memobrain-core` | dimensione gzip (livello 9)                                                    | ≤ 8192 kB                             |
 | WASM `sqlite3`        | dimensione gzip                                                                | ≤ 1536 kB                             |
 
-Il core è vicino al limite: `build/wasm/memobrain-core.wasm` del 1° novembre 2026 (39,2 MB) pesa circa 8085 kB con `gzip -9`, meno del 2% sotto gli 8192 kB.
+Il core pesava circa 8090 kB con `gzip -9` (39,2 MB non compresso, 1° novembre 2026), a meno del 2% dal limite. Il client gRPC delle notifiche non può funzionare nel browser (niente TCP) e nel core WebAssembly non è più compilato (`notify_grpc.go` con `//go:build !js`; il core usa solo SSE): con gRPC escono anche protobuf, `golang.org/x/net/trace` e `html/template`. Dopo la modifica il core pesa circa 6750 kB gzip (30,7 MB non compresso), circa il 18% sotto il limite. Dettagli e misure in [ADR-0020](adr/0020-performance-details.md).
 
 ## Comandi
 
@@ -195,7 +202,7 @@ yarn workspace @memobrain/web run e2e:cloud        # contro un cloud vero su :18
 | Unità (Vitest)          | `web/src/**/*.test.ts(x)`: guardie, OIDC, pagine, export, i18n, host del workbench (bridge, guard, markers, overlay, create); `packages/{ui,cloud-features,vaultcrypto-web,sqlite-bridge}`                  | `yarn workspace @memobrain/web run test`, o `task test-ts` per tutti i pacchetti (in `task ci`)                                |
 | Go di `web-embed`       | instradamento, header, CSP, cache e gzip, WASM; SRI sulle pagine incorporate                                                                                                                                | `go test ./web-embed/...` in `services/cloud` (`MEMOBRAIN_REQUIRE_WEB_BUILD=1` dopo `task web-build`)                          |
 | E2E con API simulata    | `web/e2e`: app, vault, account, admin, tastiera, a11y ([a11y-web.md](qa/a11y-web.md)); `opfs-fs.spec.ts` e `workbench.spec.ts` girano sul core vero in una cartella del browser                             | `task e2e-web` (gli spec del workbench vogliono `task wasm-core`)                                                              |
-| Workbench sul core vero | gli spec del desktop (`workflows`, `keyboard`, `editor-toolbar`, `slides`, `graph`) con `E2E_TARGET=web`                                                                                                    | `yarn workspace @memobrain/web run e2e:workbench-ui` (prima `task wasm-core`)                                                  |
+| Workbench sul core vero | tutti gli spec del desktop (`apps/desktop/frontend/e2e`) nella matrice `desktop-mock` / `web-core`, con le esclusioni dichiarate da `skipOnWeb`                                                             | `task e2e-matrix` (o `yarn workspace @memobrain/web run e2e:workbench-ui`)                                                     |
 | Cloud vero              | `web/e2e-cloud`: sync tra due browser con merge (`web-sync`); vault privato: blocco manuale, offline e per inattività (`web-private`); creazione dalla console e annullamento (`web-create-private`)        | `yarn workspace @memobrain/web run e2e:cloud`, dopo `task web-build` e `scripts/run-desktop-with-cloud.sh --cloud-only --keep` |
 | Sicurezza e CSP         | `web/e2e-security`: console (`csp.spec.ts`) e workbench (`workbench-csp.spec.ts`) serviti da `webembed-serve`, senza violazioni CSP né richieste esterne; Excalidraw offline (`excalidraw-offline.spec.ts`) | `yarn workspace @memobrain/web run e2e:security` (dopo `task web-build`; la build E2E del workbench vuole `task wasm-core`)    |
 

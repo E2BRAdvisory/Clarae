@@ -4,6 +4,7 @@ import { Events, type FileChangedPayload } from '../app/events';
 import { dialog } from '../ui/dialogs';
 import { viewIndexByName } from './model';
 import type { BaseInfo, BaseResult, ViewPatch } from './types';
+import { errorMessage } from '../util/errors';
 
 interface Options {
   vaultId: string;
@@ -29,7 +30,7 @@ export interface BaseState {
   reload: () => void;
 }
 
-const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const message = (e: unknown): string => errorMessage(e);
 
 /** Loads a .base file and the result of one of its views; refreshes when the vault changes. */
 export function useBase(o: Options): BaseState {

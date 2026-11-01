@@ -8,8 +8,9 @@ import { dialog } from '../ui/dialogs';
 import { diffLines } from '../sync/diff';
 import { useRecovery } from './store';
 import { mergeVersions, type Version } from './versions';
+import { errorMessage } from '../util/errors';
 
-const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const msg = (e: unknown): string => errorMessage(e);
 
 /** Text of a version (local snapshot or cloud revision). */
 async function versionText(vaultId: string, path: string, v: Version): Promise<string> {

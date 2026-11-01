@@ -4,8 +4,13 @@ import { create } from 'zustand';
 export interface ActiveNote {
   vaultId: string;
   path: string;
-  /** Latest text, including edits that are not saved yet. */
+  /**
+   * The text as of the last pause in typing (subscribers re-render on it); edits that are not saved
+   * yet are included.
+   */
   text: string;
+  /** The editor's text right now, for one-off reads (export, presentation, composer). */
+  current: () => string;
   /**
    * Saves pending edits and returns the hash of what is on disk; rejects when the edits cannot be
    * saved (conflict, write error), so nothing is written over them.

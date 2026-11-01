@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
 import { lockVault } from '../app/actions';
+import { useCan, usePlatform } from '../platform';
 import { useAppStore } from '../state/store';
 import { isLocked, useManaged } from '../state/managed';
 import { infoOf, useSync } from '../state/sync';
@@ -129,6 +130,11 @@ export function SyncSection() {
   const auth = useAppStore((s) => s.auth);
   const setAuth = useAppStore((s) => s.setAuth);
   const [signingIn, setSigningIn] = useState(false);
+  // The desktop disconnects a vault and signs in itself; in the browser the copy belongs to the
+  // cloud vault (it is removed instead) and the session is the console's.
+  const canUnlink = useCan('unlinkVault');
+  const ownsSession = useCan('ownsSession');
+  const removeFromBrowser = usePlatform((s) => s.removeFromBrowser);
 
   if (!vault) return <p className="muted">{t('settings.needsVault')}</p>;
   const id = vault.id;
@@ -188,7 +194,12 @@ export function SyncSection() {
             : ''}
         </span>
       </div>
-      {(auth?.status ?? 'signed_out') === 'signed_out' && (
+      {(auth?.status ?? 'signed_out') === 'signed_out' && !ownsSession && (
+        <div className="row">
+          <span className="muted">{t('sync.signedOutHintWeb')}</span>
+        </div>
+      )}
+      {(auth?.status ?? 'signed_out') === 'signed_out' && ownsSession && (
         <div className="row">
           <span className="muted">{t('sync.signedOutHint')}</span>
           <button
@@ -245,17 +256,38 @@ export function SyncSection() {
         <button onClick={() => void guard(() => api.sync.setPaused(id, !info.paused))}>
           {info.paused ? t('sync.resume') : t('sync.pause')}
         </button>
-        <button
-          className="danger"
-          onClick={() =>
-            void (async () => {
-              if (await dialog.confirm(t('sync.disconnect'), t('sync.disconnectText'), true))
-                await guard(() => api.sync.unlink(id));
-            })()
-          }
-        >
-          {t('sync.disconnect')}
-        </button>
+        {canUnlink && (
+          <button
+            className="danger"
+            onClick={() =>
+              void (async () => {
+                if (await dialog.confirm(t('sync.disconnect'), t('sync.disconnectText'), true))
+                  await guard(() => api.sync.unlink(id));
+              })()
+            }
+          >
+            {t('sync.disconnect')}
+          </button>
+        )}
+        {!canUnlink && removeFromBrowser && (
+          <button
+            className="danger"
+            onClick={() =>
+              void (async () => {
+                if (
+                  await dialog.confirm(
+                    t('sync.removeFromBrowser'),
+                    t('sync.removeFromBrowserText'),
+                    true,
+                  )
+                )
+                  removeFromBrowser();
+              })()
+            }
+          >
+            {t('sync.removeFromBrowser')}
+          </button>
+        )}
       </div>
 
       {info.kind === 'private' && (

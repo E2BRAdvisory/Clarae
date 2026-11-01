@@ -35,7 +35,7 @@ features:
     title: Apertura, cambio e chiusura del vault
     desktop:
       status: yes
-      commands: [vault:switch, vault:close]
+      commands: [vault:close]
       bindings: [VaultAPI.OpenVault, VaultAPI.CloseVault, VaultAPI.ListRecent]
     workbench:
       status: yes
@@ -53,14 +53,19 @@ features:
         - web/src/workbench/guard.test.ts
 
   - id: vault.multi-open
-    title: Più vault aperti insieme
+    title: Più vault aperti insieme, vault recenti e cambio dal menu del vault
     desktop:
       status: yes
+      commands: [vault:switch]
       bindings: [VaultAPI.ListOpen]
+      capability: multiVault
     workbench:
       status: exception
-      reason: un vault per browser, perché gli handle sincroni di OPFS sono esclusivi
+      reason: un vault per pagina, scelto nella console (gli handle sincroni di OPFS sono esclusivi); niente recenti né `vault:switch`
     tests:
+      desktop:
+        - packages/workbench/src/shell/VaultSwitcher.test.tsx
+        - packages/workbench/src/platform/platform.test.tsx
       web:
         - web/e2e/workbench.spec.ts
 
@@ -207,6 +212,7 @@ features:
     desktop:
       status: yes
       bindings: [VaultAPI.Trash]
+      capability: osTrash
     workbench:
       status: exception
       reason: i file eliminati vanno in `.trash/` del vault, perché il browser non ha un cestino
@@ -246,7 +252,7 @@ features:
     desktop:
       status: yes
       commands: [sync:connect]
-      bindings: [SyncAPI.LinkExisting, SyncAPI.Unlink, SyncAPI.Info]
+      bindings: [SyncAPI.LinkExisting, SyncAPI.Info]
       operationIds: [getVaultTree]
     workbench:
       status: yes
@@ -257,6 +263,21 @@ features:
         - apps/desktop/internal/sync/manager_test.go
       web:
         - web/e2e-cloud/web-sync.spec.ts
+
+  - id: sync.unlink
+    title: Scollegamento di un vault dal cloud
+    desktop:
+      status: yes
+      bindings: [SyncAPI.Unlink]
+      capability: unlinkVault
+    workbench:
+      status: exception
+      reason: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia (web/src/workbench/guard.ts)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/sync.test.tsx
+      web:
+        - web/src/workbench/guard.test.ts
 
   - id: sync.engine
     title: Sincronizzazione del vault (stato, pausa, sincronizza ora)
@@ -417,20 +438,28 @@ features:
     title: Creazione di una condivisione (vault, cartella o file)
     desktop:
       status: yes
+      note: da Impostazioni → Condivisione («Nuova condivisione», un vault condiviso intero o una sua cartella, con @memobrain/cloud-features) e dal menu «Condividi…» dell'esplorazione (anche un documento del vault aperto)
       commands: [sharing:share]
-      bindings: [SharingAPI.CreateShare]
+      bindings: [SharingAPI.CreateShare, SharingAPI.CreateCloudShare]
       operationIds: [createShare]
     workbench:
       status: yes
     console:
-      status: missing
-      reason: ADR-0037, fase B. La console non crea condivisioni (`createShare` non è chiamata); oggi si creano dal client, scegliendo cartella o file nel vault
+      status: yes
+      note: «Nuova condivisione» di un vault condiviso intero o di una sua cartella (la console non conosce gli id dei documenti); i vault privati non sono proposti (D-02)
       routes: [/shares]
       operationIds: [createShare]
     tests:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_share_test.go
         - apps/desktop/internal/sync/e2e_sharing_test.go
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Shares.test.tsx
+        - web/e2e/shares.spec.ts
       cloud:
         - services/cloud/test/integration/sharing_test.go
 
@@ -438,8 +467,10 @@ features:
     title: Elenco e revoca delle condivisioni create
     desktop:
       status: yes
+      note: SharesManager di @memobrain/cloud-features, lo stesso componente della console; solo il proprietario revoca, un gestore no
       commands: [sharing:open]
-      bindings: [SharingAPI.VaultShares, SharingAPI.Share, SharingAPI.RevokeShare]
+      bindings:
+        [SharingAPI.ListShares, SharingAPI.VaultShares, SharingAPI.Share, SharingAPI.RevokeShare]
       operationIds: [listShares, getShare, revokeShare]
     workbench:
       status: yes
@@ -447,30 +478,42 @@ features:
       status: yes
       routes: [/shares]
       operationIds: [listShares, revokeShare]
-    notes: implementata due volte, workbench con i binding e console con la REST (ADR-0037 §2)
     tests:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_share_test.go
       web:
+        - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/app.spec.ts
+        - web/e2e/shares.spec.ts
       cloud:
         - services/cloud/test/integration/sharing_test.go
 
   - id: share.update
     title: Rinomina e scadenza di una condivisione
     desktop:
-      status: missing
-      reason: ADR-0037, fase B. `PATCH /shares/{id}` (`updateShare`) non è mai chiamato; il client Go ha `UpdateShare` ma nessun binding lo espone
+      status: yes
+      note: «Modifica» di una condivisione (nome, scadenza o nessuna scadenza), proprietario o gestore
+      bindings: [SharingAPI.UpdateShare]
+      operationIds: [updateShare]
     workbench:
-      status: missing
-      reason: ADR-0037, fase B
+      status: yes
     console:
-      status: missing
-      reason: ADR-0037, fase B
+      status: yes
       routes: [/shares]
       operationIds: [updateShare]
     tests:
+      desktop:
+        - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/sync/manager_share_test.go
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Shares.test.tsx
+        - web/e2e/shares.spec.ts
       cloud:
         - services/cloud/test/integration/sharing_test.go
 
@@ -478,6 +521,7 @@ features:
     title: Permessi di utenti e gruppi su una condivisione
     desktop:
       status: yes
+      note: GrantEditor e ricerca nella directory di @memobrain/cloud-features, gli stessi della console
       bindings: [SharingAPI.SetGrant, SharingAPI.RemoveGrant, SharingAPI.Directory]
       operationIds: [putGrant, deleteGrant, searchDirectoryUsers, searchDirectoryGroups]
     workbench:
@@ -486,12 +530,13 @@ features:
       status: yes
       routes: [/shares]
       operationIds: [putGrant, deleteGrant, searchDirectoryUsers, searchDirectoryGroups]
-    notes: implementata due volte, workbench con i binding e console con la REST (ADR-0037 §2)
     tests:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
       web:
-        - web/src/pages/Shares.test.tsx
+        - packages/cloud-features/src/rest.test.tsx
+        - web/e2e/shares.spec.ts
       cloud:
         - services/cloud/test/integration/sharing_test.go
         - services/cloud/internal/access/access_test.go
@@ -500,20 +545,22 @@ features:
     title: Inviti ricevuti (accetta, rifiuta)
     desktop:
       status: yes
+      note: InvitationsList di @memobrain/cloud-features; sul desktop una condivisione accettata diventa un mount, con il suo elenco
       bindings: [SharingAPI.Invitations, SharingAPI.AcceptShare, SharingAPI.DeclineShare]
-      operationIds: [listSharedWithMe, acceptShare, declineShare]
+      operationIds: [listShares, listSharedWithMe, acceptShare, declineShare]
     workbench:
       status: yes
     console:
       status: yes
       routes: [/shares]
       operationIds: [listShares, acceptShare, declineShare]
-    notes: implementata due volte, workbench con i binding e console con la REST (ADR-0037 §2)
     tests:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
       web:
+        - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/app.spec.ts
       cloud:
@@ -530,6 +577,7 @@ features:
       note: un mount si apre con /vaults/:id/open?share=; non ancora provato contro un cloud vero
     console:
       status: yes
+      note: «Apri» di una condivisione accettata (InvitationsList) apre il workbench sul mount
       routes: [/shares, /vaults/:id/open]
     tests:
       desktop:
@@ -544,7 +592,7 @@ features:
     title: Accesso al cloud e sessione
     desktop:
       status: yes
-      bindings: [AuthAPI.Login, AuthAPI.Logout, AuthAPI.Status]
+      bindings: [AuthAPI.Status]
       operationIds: [getMe]
     workbench:
       status: yes
@@ -564,6 +612,23 @@ features:
         - web/e2e/app.spec.ts
       cloud:
         - services/cloud/internal/auth/verifier_test.go
+
+  - id: account.session
+    title: Accesso dal client e uscita (browser di sistema, scelta del server)
+    desktop:
+      status: yes
+      bindings: [AuthAPI.Login, AuthAPI.Logout]
+      capability: ownsSession
+    workbench:
+      status: exception
+      reason: la sessione è quella OIDC della pagina, gestita dalla console (accesso e «Esci»); il workbench non offre login, logout né server
+    tests:
+      desktop:
+        - packages/workbench/src/settings/CloudSection.test.tsx
+        - apps/desktop/internal/auth/auth_test.go
+        - apps/desktop/internal/auth/hosted_test.go
+      web:
+        - web/src/auth/guards.test.tsx
 
   - id: account.data
     title: Esportazione dei dati personali ed eliminazione dell'account
@@ -588,20 +653,26 @@ features:
     title: I miei gruppi
     desktop:
       status: console-only
-      reason: informazione dell'account, che spetta alla console
+      reason: informazione dell'account, che spetta alla console (il componente MyGroups non è montato dove la porta non elenca i gruppi)
     workbench:
       status: console-only
       reason: informazione dell'account, che spetta alla console
     console:
-      status: missing
-      reason: nessuna pagina mostra i gruppi dell'utente; `GET /me/groups` (`listMyGroups`, spec §3.5) non è chiamata da nessun client
+      status: yes
+      note: pagina Account, sezione «I miei gruppi» (MyGroups di @memobrain/cloud-features)
       routes: [/account]
       operationIds: [listMyGroups]
+    tests:
+      web:
+        - packages/cloud-features/src/rest.test.tsx
+        - web/src/pages/Account.test.tsx
+        - web/e2e/account.spec.ts
 
   - id: devices
     title: Dispositivi collegati e revoca
     desktop:
       status: yes
+      note: DevicesPanel di @memobrain/cloud-features; il dispositivo in uso è segnato e non si revoca da qui
       bindings: [SyncAPI.Devices, SyncAPI.RevokeDevice]
       operationIds: [listMyDevices, revokeDevice, registerDevice]
     workbench:
@@ -609,12 +680,43 @@ features:
       note: il browser si registra come dispositivo `web` (ADR-0029)
     console:
       status: yes
+      note: lo stesso DevicesPanel; il browser in uso (registrazione del workbench in IndexedDB, ADR-0029) è segnato e non si revoca da qui
       routes: [/devices]
       operationIds: [listMyDevices, revokeDevice]
-    notes: implementata due volte, workbench con i binding e console con la REST; la protezione del dispositivo corrente differisce (ADR-0037)
     tests:
+      desktop:
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - packages/workbench/src/settings/CloudSection.test.tsx
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
       web:
+        - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Devices.test.tsx
+        - web/e2e/devices.spec.ts
+      cloud:
+        - services/cloud/test/integration/api_test.go
+
+  - id: devices.revoked
+    title: Dispositivo revocato mentre il client è aperto e nuova registrazione
+    desktop:
+      status: yes
+      note: >-
+        il cloud rifiuta il commit (FORBIDDEN, extra.reason device_revoked): la sync si ferma senza
+        toccare file né outbox, la sessione passa a `device_revoked` (auth:state) e il banner offre
+        «Registra di nuovo questo dispositivo», dopo la quale parte ciò che era in attesa
+      bindings: [AuthAPI.ReregisterDevice]
+      operationIds: [registerDevice]
+    workbench:
+      status: yes
+      note: stesso banner; la nuova registrazione del browser è salvata in IndexedDB (ADR-0029)
+    tests:
+      desktop:
+        - packages/workbench/src/sync/DeviceRevokedBanner.test.tsx
+        - apps/desktop/internal/auth/hosted_test.go
+        - apps/desktop/internal/sync/manager_revoked_test.go
+        - apps/desktop/internal/sync/e2e_device_test.go
+        - apps/desktop/internal/sync/transport/client_test.go
+      web:
+        - web/e2e-mixed/mixed.spec.ts
       cloud:
         - services/cloud/test/integration/api_test.go
 
@@ -622,6 +724,7 @@ features:
     title: Spazio occupato e quota
     desktop:
       status: yes
+      note: UsagePanel di @memobrain/cloud-features, con il livello calcolato dal server e lo spazio di ogni vault (§2.8.2)
       bindings: [SyncAPI.Usage]
       operationIds: [getMyUsage]
     workbench:
@@ -629,12 +732,16 @@ features:
     console:
       status: yes
       routes: [/usage]
-      operationIds: [getMyUsage]
-    notes: implementata due volte; il livello della quota differisce (soglia locale nella console, livello del server nel workbench, ADR-0037)
+      operationIds: [getMyUsage, listVaults]
     tests:
+      desktop:
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
       web:
+        - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Usage.test.tsx
         - web/e2e/app.spec.ts
+        - web/e2e/devices.spec.ts
       cloud:
         - services/cloud/internal/quota/quota_test.go
 
@@ -647,18 +754,25 @@ features:
     workbench:
       status: yes
     console:
-      status: partial
-      reason: la console legge solo il flag `web_workbench` e ignora `sharing` e gli altri; nomi e default dei flag sono definiti in tre punti (ADR-0037)
+      status: yes
+      note: la console applica `web_workbench` e `sharing` (gli altri flag riguardano il contenuto di un vault aperto, quindi il workbench); nomi e default dei flag vengono dallo schema del Config Profile, generati in `shared/go/features` e `@memobrain/api-client/features` (`task gen`)
       operationIds: [getEffectiveConfig]
     tests:
       desktop:
         - packages/workbench/src/state/managed.test.ts
         - apps/desktop/internal/app/managed_test.go
         - apps/desktop/internal/config/config_test.go
+        - apps/desktop/internal/features/features_test.go
         - apps/desktop/frontend/e2e/sharing.spec.ts
+        - shared/go/features/features_test.go
+        - shared/go/features/doc_test.go
       web:
         - web/src/pages/Vaults.test.tsx
+        - web/src/pages/Shares.test.tsx
+        - packages/cloud-features/src/rest.test.tsx
+        - web/e2e-mixed/mixed.spec.ts
       cloud:
+        - services/cloud/internal/configprofiles/schema_test.go
         - services/cloud/test/integration/config_test.go
 
   # ---- applicazione ------------------------------------------------------------------------------

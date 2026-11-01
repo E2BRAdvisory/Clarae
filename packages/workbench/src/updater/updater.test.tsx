@@ -54,6 +54,32 @@ describe('update:check command', () => {
   });
 });
 
+describe('update channel warning', () => {
+  const warning = 'the update channel has not been refreshed; updates may be withheld';
+
+  it('shows the warning of a check in the dialog', async () => {
+    updaterMock.next = idleStatus({ state: 'up-to-date', latest: '1.0.0', warning });
+    mount();
+    await act(async () => {
+      await useUpdater.getState().check();
+    });
+    expect(await screen.findByRole('note')).toHaveTextContent(`Warning: ${warning}`);
+  });
+
+  it('shows it in the update settings too', async () => {
+    useUpdater.setState({ status: idleStatus({ warning }) });
+    render(<UpdateSettings />);
+    expect(await screen.findByRole('note')).toHaveTextContent(warning);
+  });
+
+  it('says nothing when there is no warning', async () => {
+    useUpdater.setState({ status: idleStatus({ state: 'up-to-date' }), dialogOpen: true });
+    mount();
+    await screen.findByRole('dialog');
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+});
+
 describe('update available', () => {
   it('announces in the status bar and opens the dialog with the release notes', async () => {
     updaterMock.status = available();

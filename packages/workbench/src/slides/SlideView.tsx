@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SlideTheme } from '@memobrain/markdown';
 import { slidesCss } from '../export/css';
+import { handleLinkClick } from '../util/links';
 
 /** Logical size of a slide: the content is laid out at this size and scaled to fit. */
 export const SLIDE_WIDTH = 1280;
@@ -18,16 +19,21 @@ function ensureSlidesStyle(): void {
 
 /**
  * One slide scaled to the box it is in (which sets the size: a thumbnail, or the whole stage).
- * `html` is already sanitized by the export renderer.
+ * `html` is already sanitized by the export renderer. A link in a slide never navigates the window:
+ * with `openLinks` (the running presentation) an external URL opens outside the app and the click
+ * stops there (it does not advance the slide); otherwise (thumbnails) links are inert and the click
+ * goes on to the thumbnail.
  */
 export function SlideView({
   html,
   theme,
   className = '',
+  openLinks = false,
 }: {
   html: string | undefined;
   theme: SlideTheme;
   className?: string;
+  openLinks?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
@@ -47,6 +53,14 @@ export function SlideView({
     return () => ro.disconnect();
   }, []);
 
+  const onClick = (e: React.MouseEvent<HTMLElement>): void => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target?.closest('a')) return;
+    // Slides keep only external URLs and in-page anchors (export renderer): neither may navigate.
+    e.preventDefault();
+    if (openLinks && handleLinkClick(e, {})) e.stopPropagation();
+  };
+
   return (
     <div ref={ref} className={`slide-viewport ${className}`}>
       <div
@@ -59,7 +73,11 @@ export function SlideView({
           visibility: scale ? 'visible' : 'hidden',
         }}
       >
-        <article className="export-doc" dangerouslySetInnerHTML={{ __html: html ?? '' }} />
+        <article
+          className="export-doc"
+          onClick={onClick}
+          dangerouslySetInnerHTML={{ __html: html ?? '' }}
+        />
       </div>
     </div>
   );

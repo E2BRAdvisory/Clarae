@@ -30,13 +30,47 @@ describe('platform capabilities', () => {
       updater: true,
       diskEncryptionCheck: true,
       nativeWindow: true,
+      osTrash: true,
+      multiVault: true,
+      unlinkVault: true,
+      ownsSession: true,
+      ephemeralPlaintext: false,
+      directoryPicker: true,
     });
     expect(capabilitiesFor('web')).toEqual({
       localFolders: false,
       updater: false,
       diskEncryptionCheck: false,
       nativeWindow: false,
+      osTrash: false,
+      multiVault: false,
+      unlinkVault: false,
+      ownsSession: false,
+      ephemeralPlaintext: true,
+      directoryPicker: false,
     });
+  });
+
+  it('detects the browser folder picker at run time and takes the host overrides', () => {
+    const w = window as { showDirectoryPicker?: unknown };
+    w.showDirectoryPicker = () => Promise.resolve();
+    try {
+      expect(capabilitiesFor('web').directoryPicker).toBe(true);
+    } finally {
+      delete w.showDirectoryPicker;
+    }
+    configurePlatform({ kind: 'web', capabilities: { osTrash: true } });
+    expect(can('osTrash')).toBe(true);
+    expect(can('multiVault')).toBe(false);
+  });
+
+  it('keeps the way to remove the copy from the browser that the host gives', () => {
+    const remove = vi.fn();
+    configurePlatform({ kind: 'web', onRemoveFromBrowser: remove });
+    usePlatform.getState().removeFromBrowser?.();
+    expect(remove).toHaveBeenCalledOnce();
+    configurePlatform();
+    expect(usePlatform.getState().removeFromBrowser).toBeNull();
   });
 
   it('defaults to the desktop and follows what the host configures', () => {
@@ -60,6 +94,20 @@ describe('the welcome screen', () => {
     renderWelcome();
     expect(screen.getByRole('button', { name: /open folder as vault/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /back to the console/i })).not.toBeInTheDocument();
+  });
+
+  it('lists the recent vaults on the desktop only', async () => {
+    const { installWailsMock } = await import('../test/wails-mock');
+    const { api } = await import('../app/api');
+    installWailsMock();
+    await api.vault.open('/vaults/Recent One');
+    const first = renderWelcome();
+    expect(await screen.findByText('Recent One')).toBeInTheDocument();
+    first.unmount();
+    configurePlatform({ kind: 'web' });
+    renderWelcome();
+    expect(screen.queryByText(/recent/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Recent One')).not.toBeInTheDocument();
   });
 
   it('offers the way back to the console, not a local folder, in the browser', () => {

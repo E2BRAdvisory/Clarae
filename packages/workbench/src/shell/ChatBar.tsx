@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { useManaged } from '../state/managed';
+import { Feature } from '@memobrain/api-client/features';
+import { featureOn, useManaged } from '../state/managed';
 import { Icon } from './icons';
 
 /**
@@ -9,8 +10,8 @@ import { Icon } from './icons';
  */
 export function ChatBar() {
   const { t } = useTranslation();
-  // Unlike the other flags, a missing one means off (it matches `features.Defaults` in Go).
-  const on = useManaged((m) => m.features['chat'] ?? false);
+  // Off unless a profile switches it on (the schema's default).
+  const on = useManaged((m) => featureOn(m.features, Feature.Chat));
   if (!on) return null;
   return (
     <form

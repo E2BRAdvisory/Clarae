@@ -271,3 +271,63 @@ describe('needsGate', () => {
     expect(needsGate('missing', 'private', true)).toBeNull();
   });
 });
+
+describe('vault guard: remove from this browser', () => {
+  it('uploads, then removes the copy of a shared vault and goes to the console', async () => {
+    const { guard, opts, wipe, calls } = guardWith(
+      { 'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }) },
+      { kind: 'shared' },
+    );
+    await guard.removeCopy();
+    expect(opts.flush).toHaveBeenCalled();
+    expect(calls).toContain('SyncAPI.SyncNow');
+    expect(calls).not.toContain('SyncAPI.Unlink'); // the launcher would only link it again
+    expect(wipe).toHaveBeenCalledWith('/vaults/cloud-1');
+    expect(readMarkers()['cloud-1']).toBeUndefined();
+    expect(opts.goToConsole).toHaveBeenCalled();
+  });
+
+  it('keeps a copy with changes the cloud does not have, and deletes it only when asked', async () => {
+    const { guard, opts, wipe } = guardWith(
+      {
+        'SyncAPI.Status': () => ({
+          vaultId: 'local-1',
+          phase: 'offline',
+          pending: 2,
+          conflicts: 0,
+        }),
+      },
+      { kind: 'shared', drainMs: 0 },
+    );
+    await guard.removeCopy();
+    expect(wipe).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('2 changes not uploaded yet');
+    await userEvent.click(screen.getByRole('button', { name: 'Delete anyway' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await flushAsync();
+    expect(wipe).toHaveBeenCalledWith('/vaults/cloud-1');
+    expect(opts.goToConsole).toHaveBeenCalled();
+  });
+
+  it('stays in the vault when asked', async () => {
+    const { guard, opts, wipe } = guardWith(
+      { 'SyncAPI.Status': () => null },
+      { kind: 'shared', drainMs: 0 },
+    );
+    await guard.removeCopy();
+    await userEvent.click(screen.getByRole('button', { name: 'Stay in the vault' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(wipe).not.toHaveBeenCalled();
+    expect(opts.goToConsole).not.toHaveBeenCalled();
+  });
+
+  it('locks a private vault first (the same path as leaving)', async () => {
+    const { guard, calls } = guardWith({
+      'SyncAPI.Info': () => ({ locked: false }),
+      'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }),
+    });
+    guard.noteUnlocked();
+    await guard.removeCopy();
+    expect(calls).toContain('VaultCryptoAPI.Lock');
+  });
+});

@@ -26,6 +26,7 @@ import {
 import { blockStateAt, blockStates } from './blockState';
 import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
 import { livePreviewContext, type LivePreviewContext } from './context';
+import { safeDecodeURI } from '../util/uri';
 import {
   BulletWidget,
   CalloutTitleWidget,
@@ -190,7 +191,7 @@ function structural(c: Ctx, from: number, to: number): void {
           const m0 = marks[0];
           const m1 = marks[1];
           if (url && m0 && m1 && !c.touches(node.from, node.to)) {
-            const src = decodeURI(state.doc.sliceString(url.from, url.to));
+            const src = safeDecodeURI(state.doc.sliceString(url.from, url.to));
             const alt = state.doc.sliceString(m0.to, m1.from);
             c.out.push(
               Decoration.replace({ widget: new ImageWidget(src, alt) }).range(node.from, node.to),
@@ -487,7 +488,7 @@ const linkClicks = EditorView.domEventHandlers({
       else
         ctx.openLink(
           {
-            target: decodeURI(url.split('#')[0] ?? ''),
+            target: safeDecodeURI(url.split('#')[0] ?? ''),
             heading: '',
             block: '',
             alias: '',

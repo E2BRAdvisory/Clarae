@@ -42,6 +42,7 @@ export function ConnectWizard({
   const [cloudVaultId, setCloudVaultId] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [recoveryKey, setRecoveryKey] = useState('');
+  const [warning, setWarning] = useState('');
   const [existing, setExisting] = useState<CloudVault[]>([]);
   const [picked, setPicked] = useState('');
   const [busy, setBusy] = useState(false);
@@ -94,6 +95,7 @@ export function ConnectWizard({
       );
       await useSync.getState().refresh(vaultId);
       setCloudVaultId(res.cloudVaultId);
+      setWarning(res.warning ?? '');
       if (choice === 'private') {
         setRecoveryKey(res.recoveryKey);
         setStep('recovery');
@@ -246,12 +248,16 @@ export function ConnectWizard({
             </div>
           </>
         ) : step === 'recovery' ? (
-          <RecoveryKeyStep
-            recoveryKey={recoveryKey}
-            onConfirmed={() => (preset ? preset.onLinked(cloudVaultId) : setStep('progress'))}
-          />
+          <>
+            <LinkWarning code={warning} />
+            <RecoveryKeyStep
+              recoveryKey={recoveryKey}
+              onConfirmed={() => (preset ? preset.onLinked(cloudVaultId) : setStep('progress'))}
+            />
+          </>
         ) : (
           <>
+            <LinkWarning code={warning} />
             <p>{status?.phase === 'syncing' ? t('sync.uploading') : t('sync.connected')}</p>
             <progress
               max={Math.max(status?.total ?? 0, 1)}
@@ -282,4 +288,20 @@ export function ConnectWizard({
 
 export async function confirmDisconnect(t: (k: string) => string): Promise<boolean> {
   return dialog.confirm(t('sync.disconnect'), t('sync.disconnectText'), true);
+}
+
+/** What SyncAPI.LinkNew reports when the vault was created but something is left to do. */
+const LINK_WARNINGS: Record<string, string> = {
+  'keychain-unavailable': 'sync.linkWarningKeychain',
+  'link-incomplete': 'sync.linkWarningIncomplete',
+};
+
+function LinkWarning({ code }: { code: string }) {
+  const { t } = useTranslation();
+  if (!code) return null;
+  return (
+    <div className="warning small" role="alert">
+      {t(LINK_WARNINGS[code] ?? 'sync.linkWarningOther', { code })}
+    </div>
+  );
 }

@@ -131,7 +131,9 @@ export type HistorySnapshot = Omit<Plain<localHistory.Snapshot>, 'time'> & { tim
 export type HistoryDeleted = Omit<Plain<localHistory.Deleted>, 'time'> & { time: string };
 export type HistorySettings = Plain<localHistory.Settings>;
 export type CloudVault = Omit<Plain<app.CloudVault>, 'createdAt'> & { createdAt: string };
-export type DeviceInfo = Omit<Plain<app.DeviceInfo>, 'lastSeenAt'> & { lastSeenAt: string | null };
+export type DeviceInfo = Omit<Plain<app.DeviceInfo>, 'lastSeenAt'> & {
+  lastSeenAt: string | Date | null;
+};
 export type UsageInfo = Plain<app.UsageInfo>;
 export type ConflictTexts = Plain<app.ConflictTexts>;
 export type ConflictAction = 'keep-remote' | 'keep-local' | 'keep-both' | 'merged';
@@ -368,6 +370,32 @@ export const api = {
       expiresAt = '',
     ): Promise<ShareInfo> =>
       SharingAPI.CreateShare(vaultId, path, isDir, name, grants, expiresAt) as Promise<ShareInfo>,
+    /** Shares of the account: created or managed by the user ("owned"), or received. */
+    list: (scope: 'owned' | 'received'): Promise<ShareInfo[]> =>
+      SharingAPI.ListShares(scope) as Promise<ShareInfo[]>,
+    /** Shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud vault id. */
+    createCloud: (
+      cloudVaultId: string,
+      pathPrefix: string,
+      name: string,
+      grants: GrantInput[],
+      expiresAt = '',
+    ): Promise<ShareInfo> =>
+      SharingAPI.CreateCloudShare(
+        cloudVaultId,
+        pathPrefix,
+        name,
+        grants,
+        expiresAt,
+      ) as Promise<ShareInfo>,
+    /** Rename ("" keeps the name) and expiry (RFC 3339, "" keeps it; clearExpiry removes it). */
+    update: (
+      shareId: string,
+      name: string,
+      expiresAt: string,
+      clearExpiry: boolean,
+    ): Promise<ShareInfo> =>
+      SharingAPI.UpdateShare(shareId, name, expiresAt, clearExpiry) as Promise<ShareInfo>,
     share: (shareId: string): Promise<ShareInfo> => SharingAPI.Share(shareId) as Promise<ShareInfo>,
     revoke: (shareId: string): Promise<void> => SharingAPI.RevokeShare(shareId),
     setGrant: (
@@ -453,6 +481,8 @@ export const api = {
     status: (): Promise<AuthState> => AuthAPI.Status(),
     login: (serverUrl: string): Promise<AuthState> => AuthAPI.Login(serverUrl),
     logout: (): Promise<AuthState> => AuthAPI.Logout(),
+    /** Replaces a device the cloud refuses as revoked with a new registration (status device_revoked). */
+    reregisterDevice: (): Promise<AuthState> => AuthAPI.ReregisterDevice(),
   },
   graph: {
     /** Nodes and edges of the vault (or the neighbourhood of options.center) from the local index. */

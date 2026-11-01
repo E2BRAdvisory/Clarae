@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
@@ -26,6 +26,7 @@ import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 import { isSafeExternalUrl } from '../util/sanitize';
 import { openExternal } from '../util/external';
+import { safeDecodeURI } from '../util/uri';
 import type { Pane, Tab } from './layout';
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
@@ -128,6 +129,9 @@ export function NoteView({ vaultId, pane, tab, visible }: Props) {
   );
 }
 
+/** Pause in typing before the sidebars see the new text. */
+const PUBLISH_DELAY_MS = 300;
+
 function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: string) => string }) {
   const path = tab.path;
   const doc = useNoteDocument(vaultId, path);
@@ -138,7 +142,11 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
   const reveal = useAppStore((s) => s.reveal);
   const activePane = useAppStore((s) => s.layout.activePane);
   const search = useAppStore((s) => s.search);
-  const [, rerender] = useState(0);
+  // The sidebars (properties, statistics, slides) follow the text after typing pauses, not on every
+  // key: they parse the whole note.
+  const publishTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const publishRef = useRef<() => void>(() => undefined);
+  useEffect(() => () => clearTimeout(publishTimer.current), []);
   const settingsRef = useRef(editorSettings);
   useEffect(() => {
     settingsRef.current = editorSettings;
@@ -181,7 +189,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
         }
         return renderEmbedInto(
           el,
-          { target: decodeURI(src), heading: '', block: '', alias: alt, embed: true },
+          { target: safeDecodeURI(src), heading: '', block: '', alias: alt, embed: true },
           { backend: backendFor(vaultId), fromPath: path, depth: 0, visited: [path] },
         );
       },
@@ -227,21 +235,28 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
   const isActive = visible && activePane === pane.id;
   const readOnly = useSync((s) => infoOf(s, vaultId).readOnly);
   useEffect(() => {
-    if (!isActive || doc.status !== 'ready') return;
-    useActiveNote.getState().publish({
-      vaultId,
-      path,
-      text,
-      // A property is written over the saved note: edits that are not on disk (a conflict, a
-      // write error) make it fail rather than be dropped by the write and the reload after it.
-      prepare: async () => {
-        const d = docRef.current;
-        if (!(await d.flush())) throw new Error(i18next.t('editor.notSaved'));
-        return d.savedHash();
-      },
-      // Unsaved edits typed meanwhile are kept (they become a conflict), never discarded.
-      reload: () => void docRef.current.refresh(),
-    });
+    if (!isActive || doc.status !== 'ready') {
+      publishRef.current = () => undefined;
+      return;
+    }
+    const publish = (): void =>
+      useActiveNote.getState().publish({
+        vaultId,
+        path,
+        text: docRef.current.current(),
+        current: () => docRef.current.current(),
+        // A property is written over the saved note: edits that are not on disk (a conflict, a
+        // write error) make it fail rather than be dropped by the write and the reload after it.
+        prepare: async () => {
+          const d = docRef.current;
+          if (!(await d.flush())) throw new Error(i18next.t('editor.notSaved'));
+          return d.savedHash();
+        },
+        // Unsaved edits typed meanwhile are kept (they become a conflict), never discarded.
+        reload: () => void docRef.current.refresh(),
+      });
+    publishRef.current = publish;
+    publish();
   }, [isActive, doc.status, vaultId, path, text]);
   useEffect(() => () => useActiveNote.getState().retire(path), [path]);
 
@@ -336,8 +351,9 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
             reveal={revealHere}
             readOnly={readOnly}
             onChange={(v) => {
-              doc.edit(v);
-              rerender((n) => n + 1);
+              doc.edit(v); // the save state re-renders this view when it changes, not every key
+              clearTimeout(publishTimer.current);
+              publishTimer.current = setTimeout(() => publishRef.current(), PUBLISH_DELAY_MS);
             }}
             onStats={(s) => isActive && setStats(s)}
           />
