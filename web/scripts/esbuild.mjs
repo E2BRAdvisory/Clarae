@@ -1,6 +1,7 @@
 // Build and dev server of the Web UI (esbuild). Usage:
 //   node scripts/esbuild.mjs build            production bundle in dist/ (embedded by the cloud binary)
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload, proxying /api to the cloud
+//                                             (--no-watch builds once, for the e2e matrix)
 // MEMOBRAIN_E2E=1 makes main.tsx install the OIDC test double (Playwright); it is compiled out otherwise.
 //
 // Two pages are built: the console (index.html) and the vault workbench (workbench.html, served for
@@ -15,7 +16,15 @@ import { createServer, request } from 'node:http';
 import { dirname, extname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { baseOptions, copyExcalidrawAssets, graphWorkerEntry } from '@memobrain/workbench/build';
+// The workbench's address (/vaults/:id/open), shared with the pages and checked against the cloud's.
+import { isWorkbenchRoute } from '../src/shared/routes.ts';
+import {
+  baseOptions,
+  copyExcalidrawAssets,
+  excalidrawFork,
+  excalidrawForkPlugin,
+  graphWorkerEntry,
+} from '@memobrain/workbench/build';
 
 const root = dirname(fileURLToPath(import.meta.url)) + '/..';
 // MEMOBRAIN_DIST builds elsewhere (the browser test of the production handler uses an E2E build of its own).
@@ -31,27 +40,111 @@ const version = process.env['MEMOBRAIN_VERSION'] ?? 'dev';
 /** The pages of the app: each has an HTML template and the entry point it loads. */
 const PAGES = [
   { entry: 'src/main.tsx', template: 'index.html', out: 'index.html' },
-  { entry: 'src/workbench/main.tsx', template: 'workbench.html', out: 'workbench.html' },
+  {
+    entry: 'src/workbench/main.tsx',
+    template: 'workbench.html',
+    out: 'workbench.html',
+    importMap: true,
+  },
 ];
 
+/**
+ * `<script type="importmap">` pinning every JS chunk of a build except its entry (which its own tag
+ * pins), sorted so the page, and so the hash the cloud allows, only changes when a chunk does.
+ */
+async function chunkImportMap(result, entryFile) {
+  const integrity = {};
+  const chunks = Object.keys(result.metafile.outputs)
+    .filter((f) => f.endsWith('.js') && f !== entryFile)
+    .sort();
+  for (const f of chunks) integrity[urlOf(f)] = sri384(await readFile(join(root, f)));
+  if (!chunks.length) return '';
+  return `    <script type="importmap">${JSON.stringify({ integrity })}</script>\n  `;
+}
+
+/**
+ * Wires the workbench's out-of-graph scripts to the checked loaders of src/workbench/sri.ts (web build
+ * only: the desktop build of the same sources keeps plain URLs):
+ * - the graph layout worker: `new Worker('/assets/layout.worker.js', …)` in graph/layoutHost.ts becomes
+ *   a VerifiedWorker of the hashed file this build wrote. The build fails if that call changes, so it
+ *   cannot silently fall back to an unchecked worker;
+ * - `import url from 'x.mjs?url'` of a script (the pdf.js worker) yields a blob: URL of the checked bytes
+ *   instead of the file's URL (top-level await in the lazy chunk that imports it).
+ */
+const sriModule = join(root, 'src/workbench/sri.ts');
+const LAYOUT_WORKER_CALL = /new Worker\(\s*'\/assets\/layout\.worker\.js'\s*,\s*(\{[^}]*\})\s*\)/g;
+const verifiedLoaders = ({ layoutWorker }) => ({
+  name: 'verified-loaders',
+  setup(build) {
+    build.onLoad({ filter: /[\\/]graph[\\/]layoutHost\.ts$/ }, async (args) => {
+      const source = await readFile(args.path, 'utf8');
+      const found = source.match(LAYOUT_WORKER_CALL)?.length ?? 0;
+      if (found !== 1)
+        throw new Error(
+          `${args.path}: expected one new Worker('/assets/layout.worker.js', …), found ${found}: update verifiedLoaders in web/scripts/esbuild.mjs`,
+        );
+      const call = `__verifiedWorker(${JSON.stringify(layoutWorker.url)}, ${JSON.stringify(layoutWorker.integrity)}, $1)`;
+      return {
+        contents:
+          `import { verifiedWorker as __verifiedWorker } from ${JSON.stringify(sriModule)};\n` +
+          source.replace(LAYOUT_WORKER_CALL, call),
+        loader: 'ts',
+        resolveDir: dirname(args.path),
+      };
+    });
+    build.onResolve({ filter: /\.m?js\?url$/ }, async (args) => {
+      const r = await build.resolve(args.path.replace(/\?url$/, ''), {
+        resolveDir: args.resolveDir,
+        kind: args.kind,
+      });
+      return r.errors.length ? r : { path: r.path, namespace: 'verified-url' };
+    });
+    build.onLoad({ filter: /.*/, namespace: 'verified-url' }, async (args) => ({
+      resolveDir: dirname(sriModule),
+      loader: 'js',
+      contents: `import url from ${JSON.stringify(args.path + '?verified-file')};
+import { verifiedScriptURL } from ${JSON.stringify(sriModule)};
+export default await verifiedScriptURL(url, ${JSON.stringify(sri384(await readFile(args.path)))});
+`,
+    }));
+    build.onResolve({ filter: /\?verified-file$/ }, (args) => ({
+      path: args.path.replace(/\?verified-file$/, ''),
+      namespace: 'verified-file',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'verified-file' }, async (args) => ({
+      contents: await readFile(args.path),
+      loader: 'file',
+    }));
+  },
+});
+
 const sha = (algo, bytes, enc) => createHash(algo).update(bytes).digest(enc);
+/** The Subresource Integrity value of some bytes (sha384, what every pin of this build uses). */
+const sri384 = (bytes) => `sha384-${sha('sha384', bytes, 'base64')}`;
+/** The URL a file of dist/ is served at. */
+const urlOf = (file) => '/' + relative(dist, join(root, file)).replaceAll('\\', '/');
 
 /**
  * Writes the HTML pages with their hashed bundle and stylesheet. In production it also adds
  * Subresource Integrity (`integrity` + `crossorigin`, sha384) hashing the exact bytes written to
  * dist/: the cloud binary serves them behind a strict CSP with no inline script or style
  * (docs/web-ui.md).
+ *
+ * The workbench is code-split, and the browser fetches the chunks its entry imports (statically or
+ * with import()) by URL, which a tag's integrity does not cover. So its page also gets an import map
+ * whose `integrity` field pins every chunk of the build (Chromium 127+, Firefox 138+; browsers
+ * without it ignore the field). It is the page's only inline script: the cloud allows it in the
+ * workbench policy by its sha256, computed from the embedded page (web-embed, ImportMapHashes).
  */
 const html = {
   name: 'index-html',
   setup(build) {
     build.onEnd(async (result) => {
       if (result.errors.length || !result.metafile) return;
-      const url = (p) => '/' + relative(dist, join(root, p)).replaceAll('\\', '/');
+      const url = urlOf;
       const sri = async (p) => {
         if (dev) return '';
-        const digest = sha('sha384', await readFile(join(root, p)), 'base64');
-        return ` crossorigin integrity="sha384-${digest}"`;
+        return ` crossorigin integrity="${sri384(await readFile(join(root, p)))}"`;
       };
       for (const page of PAGES) {
         const out = Object.entries(result.metafile.outputs).find(
@@ -63,11 +156,12 @@ const html = {
           ? `    <link rel="stylesheet" href="${url(meta.cssBundle)}"${await sri(meta.cssBundle)} />\n  `
           : '';
         const reload = dev ? '\n    <script src="/dev-reload.js"></script>' : '';
+        const importMap = page.importMap && !dev ? await chunkImportMap(result, file) : '';
         const script = new RegExp(
           `<script[^>]*src="/${page.entry.replaceAll('.', '\\.')}"[^>]*></script>`,
         );
         const text = (await readFile(join(root, page.template), 'utf8'))
-          .replace('</head>', `${css}</head>`)
+          .replace('</head>', `${importMap}${css}</head>`)
           .replace(
             script,
             `<script type="module" src="${url(file)}"${await sri(file)}></script>${reload}`,
@@ -104,9 +198,6 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json',
   '.wasm': 'application/wasm',
 };
-
-/** The vault workbench lives at /vaults/:id/open; everything else under /vaults is the console. */
-const isWorkbenchRoute = (path) => /^\/vaults\/[^/]+\/open\/?$/.test(path);
 
 /** Static server for dist/ with the SPA fallback and a proxy of /api to the cloud. */
 function serve(port) {
@@ -201,14 +292,16 @@ async function prepareCore() {
 }
 
 /**
- * The worker that runs the core is a separate, self-contained bundle (no imports: the page starts it
- * from a blob: URL, see bridge.ts). Its URL and its SHA-384 are embedded in the workbench bundle, which
- * the page loads with SRI: `new Worker()` takes no integrity, so the page fetches the script with it.
+ * A worker is a separate, self-contained bundle (no imports: the page starts it from a blob: URL of
+ * the bytes it checked, see bridge.ts and sri.ts). Its URL and its SHA-384 are embedded in the
+ * workbench bundle, which the page loads with SRI: `new Worker()` takes no integrity, so the page
+ * fetches the script with it. Two workers: the core (Go WebAssembly, sync, vault keys) and the graph
+ * layout.
  */
-async function buildWorker(shared) {
+async function buildWorker(shared, name, entry) {
   const result = await esbuild.build({
     ...shared,
-    entryPoints: { 'core-worker': join(root, 'src/workbench/worker.ts') },
+    entryPoints: { [name]: entry },
     outdir: join(dist, 'assets'),
     entryNames: dev ? '[name]' : '[name]-[hash]',
     splitting: false,
@@ -219,10 +312,10 @@ async function buildWorker(shared) {
   const out = Object.keys(result.metafile.outputs).find((o) => o.endsWith('.js'));
   const imports = result.metafile.outputs[out].imports.filter((i) => !i.external);
   if (imports.length)
-    throw new Error(`the core worker must be self-contained, it imports ${imports[0].path}`);
+    throw new Error(`the ${name} worker must be self-contained, it imports ${imports[0].path}`);
   return {
-    url: '/' + relative(dist, join(root, out)).replaceAll('\\', '/'),
-    integrity: `sha384-${sha('sha384', await readFile(join(root, out)), 'base64')}`,
+    url: urlOf(out),
+    integrity: sri384(await readFile(join(root, out))),
     metafile: result.metafile,
   };
 }
@@ -255,8 +348,9 @@ function reach(outputs, from, { dynamic }) {
   return seen;
 }
 
-function checkBudget(meta, workerMeta, sizes) {
-  const outputs = { ...meta.outputs, ...workerMeta.outputs };
+function checkBudget(meta, workerMetas, sizes) {
+  const workerOutputs = Object.assign({}, ...workerMetas.map((m) => m.outputs));
+  const outputs = { ...meta.outputs, ...workerOutputs };
   const kb = (n) => Math.round(n / 1024);
   const sum = (files) => kb([...files].reduce((n, f) => n + (outputs[f]?.bytes ?? 0), 0));
   const entryOf = (entry) =>
@@ -279,7 +373,7 @@ function checkBudget(meta, workerMeta, sizes) {
 
   const wbEntry = entryOf('src/workbench/main.tsx');
   const wbTotal = reach(outputs, wbEntry, { dynamic: true });
-  for (const f of Object.keys(workerMeta.outputs)) wbTotal.add(f);
+  for (const f of Object.keys(workerOutputs)) wbTotal.add(f);
   report(
     'workbench',
     sum(reach(outputs, wbEntry, { dynamic: false })),
@@ -306,6 +400,10 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(join(root, 'public'), dist, { recursive: true });
 await copyExcalidrawAssets(dist);
+// Excalidraw is a classic script added by a <script> tag at run time: the tag carries its integrity.
+const excalidrawIntegrity = sri384(
+  await readFile(join(dist, 'excalidraw-assets', 'excalidraw.js')),
+);
 
 const { assets, sizes } = await prepareCore();
 const base = baseOptions({ dev });
@@ -328,22 +426,18 @@ const shared = {
 };
 delete shared.splitting;
 
-const worker = await buildWorker(shared);
-
-// The graph layout runs in a worker of its own at a fixed URL (the UI loads /assets/layout.worker.js).
-await esbuild.build({
-  ...shared,
-  entryPoints: { 'layout.worker': graphWorkerEntry },
-  outdir: join(dist, 'assets'),
-  plugins: [],
-  logLevel: 'warning',
-});
+const worker = await buildWorker(shared, 'core-worker', join(root, 'src/workbench/worker.ts'));
+// The graph layout worker: hashed name, checked by the page like the core's (verifiedLoaders).
+const layoutWorker = await buildWorker(shared, 'layout.worker', graphWorkerEntry);
+const plugins = base.plugins.map((p) =>
+  p === excalidrawFork ? excalidrawForkPlugin({ scriptIntegrity: excalidrawIntegrity }) : p,
+);
 
 // Two builds, so that the console is a single file covered by the SRI of its <script> tag: with code
 // splitting the entry would import shared chunks, which the browser fetches without integrity. The
-// console has no lazy part, so this costs nothing. The workbench keeps splitting: its lazy chunks
-// (Excalidraw, mermaid, pdf.js…) would otherwise blow the initial budget; that residual gap is
-// documented in ADR-0029 (Esito, SRI).
+// console has no lazy part, so this costs nothing. The workbench keeps splitting (its lazy chunks,
+// Excalidraw, mermaid, pdf.js…, would otherwise blow the initial budget): its chunks are pinned by
+// the import map of its page (html plugin), its workers and Excalidraw's script by verifiedLoaders.
 const common = {
   ...shared,
   outdir: dist,
@@ -353,7 +447,7 @@ const common = {
   publicPath: '/',
   metafile: true,
   logLevel: 'info',
-  plugins: dev ? [...base.plugins, html, reload] : [...base.plugins, html],
+  plugins: dev ? [...plugins, html, reload] : [...plugins, html],
 };
 const builds = [
   { ...common, entryPoints: { main: join(root, 'src/main.tsx') }, splitting: false },
@@ -361,6 +455,7 @@ const builds = [
     ...common,
     entryPoints: { workbench: join(root, 'src/workbench/main.tsx') },
     splitting: true,
+    plugins: [verifiedLoaders({ layoutWorker }), ...common.plugins],
     define: {
       ...shared.define,
       __MEMOBRAIN_WORKER__: JSON.stringify(worker.url),
@@ -377,7 +472,8 @@ if (dev) {
   for (const options of builds) {
     const app = await esbuild.context(options);
     await app.rebuild(); // dist/index.html must exist before the first request
-    await app.watch();
+    // --no-watch builds once: the e2e matrix keeps its pages from reloading while sources change.
+    if (!process.argv.includes('--no-watch')) await app.watch();
   }
   await serve(port);
   console.log(`Local: http://127.0.0.1:${port}/`);
@@ -385,5 +481,5 @@ if (dev) {
   const outputs = {};
   for (const options of builds)
     Object.assign(outputs, (await esbuild.build(options)).metafile.outputs);
-  checkBudget({ outputs }, worker.metafile, sizes);
+  checkBudget({ outputs }, [worker.metafile, layoutWorker.metafile], sizes);
 }

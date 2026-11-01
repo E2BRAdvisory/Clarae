@@ -10,6 +10,7 @@ import {
   encodeRecoveryKey,
   encryptBlob,
   encryptPath,
+  encryptPathV2,
   generateKey,
   hex,
   newPassphraseKdf,
@@ -225,6 +226,62 @@ describe('exportPrivateVault', () => {
     await collect(stream);
     expect(report.skipped).toHaveLength(1);
     expect(report.skipped[0]).toMatchObject({ path: 'notes/a.md', reason: 'decrypt_failed' });
+  });
+
+  it('reads enc2 path tokens and skips one bound to another file (ADR-0042)', async () => {
+    const f = { tree: [...fx.tree], blobs: new Map(fx.blobs), keys: fx.keys };
+    const idA = '0190a3b4-dddd-7222-8333-000000000001';
+    const idB = '0190a3b4-dddd-7222-8333-000000000002';
+    await addFile(f, 'v2/a.md', 'enc2 file', idA, {
+      rawPath: await encryptPathV2(fx.keys, uuidBytes(VAULT), uuidBytes(idA), 'v2/a.md'),
+    });
+    // A hostile server pairs file B with the token of file A.
+    await addFile(f, 'v2/b.md', 'other file', idB, {
+      rawPath: await encryptPathV2(fx.keys, uuidBytes(VAULT), uuidBytes(idA), 'v2/b.md'),
+    });
+    const swapped = (f.tree[f.tree.length - 1] as TreeItem).path;
+    const { stream, report } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      source: source(f),
+    });
+    const z = readZip(await collect(stream));
+    expect(z.entries.map((e) => e.name)).toContain('v2/a.md');
+    expect(z.entries.map((e) => e.name)).not.toContain('v2/b.md');
+    expect(report.skipped).toEqual([{ path: swapped, reason: 'path_undecryptable' }]);
+  });
+
+  it('fetches several blobs at once, bounded, and keeps the manifest order', async () => {
+    const f = { tree: [...fx.tree], blobs: new Map(fx.blobs), keys: fx.keys };
+    for (let i = 0; i < 9; i++)
+      await addFile(f, `many/${i}.md`, `file ${i}`, `0190a3b4-cccc-7222-8333-00000000000${i}`);
+    let inFlight = 0;
+    let peak = 0;
+    let n = 0;
+    const { stream, report } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      concurrency: 4,
+      source: source(f, {
+        // Later requests answer first: the archive must not follow the network.
+        blob: async (h) => {
+          inFlight++;
+          peak = Math.max(peak, inFlight);
+          await new Promise((r) => setTimeout(r, 20 - (n++ % 4) * 5));
+          inFlight--;
+          return f.blobs.get(h) as Uint8Array;
+        },
+      }),
+    });
+    const z = readZip(await collect(stream));
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(4);
+    const names = [
+      ...Object.keys(fx.plain),
+      ...Array.from({ length: 9 }, (_, i) => `many/${i}.md`),
+    ];
+    expect(z.entries.map((e) => e.name)).toEqual(names);
+    expect(report).toMatchObject({ exported: f.tree.length, skipped: [], total: f.tree.length });
   });
 
   it('stops when aborted', async () => {

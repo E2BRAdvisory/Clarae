@@ -47,3 +47,16 @@ Regole:
 - La console non deve importare staticamente nessun modulo di `@memobrain/workbench`. Un test della build verifica che il chunk iniziale della console non contenga moduli del pacchetto.
 - Il limite del workbench JS segue quello del desktop, perché il codice è lo stesso: se il desktop alza il proprio limite di proposito, il web lo segue nella stessa modifica.
 - Il limite del WASM è un obiettivo dello spike M9-WP1. Se lo spike lo supera, si ridiscute qui con le misure, invece di alzarlo in silenzio.
+
+### Misura del core WebAssembly (W8 lotto C2, 2026-11-01)
+
+Il 1° novembre il core (`task wasm-core`, `-trimpath -ldflags "-s -w"`) pesava 39,2 MB non compresso e 8090 kB con `gzip -9`, meno del 2% sotto il limite. Misura per pacchetto (dimensione del codice delle funzioni, dalla sezione `name` di una build senza `-s`, compressa per gruppo): la parte più grande evitabile era **gRPC con protobuf** (circa 680 kB gzip di solo codice, più descrittori e tabelle nella sezione dati), portato da `apps/desktop/internal/sync/transport` per il canale di notifica. Nel browser gRPC non può connettersi (il `net` di `js/wasm` non apre socket TCP): il client provava due volte e poi passava a SSE.
+
+Decisione: il client gRPC è in `notify_grpc.go` (`//go:build !js`); nel core WebAssembly `notify_js.go` dichiara `grpcSupported = false` e le notifiche usano solo SSE, come già accadeva di fatto dopo i due tentativi falliti. Con gRPC escono dal binario anche `memobrain/shared/notifyv1`, protobuf, `golang.org/x/net/trace`, `html/template` e `net/http/httputil`. Il comportamento del desktop non cambia.
+
+| Build del core                      | Non compresso | gzip -9 |
+| ----------------------------------- | ------------- | ------- |
+| prima (con gRPC)                    | 39,2 MB       | 8090 kB |
+| dopo (`notify_grpc.go` solo nativo) | 30,7 MB       | 6751 kB |
+
+Il limite di 8192 kB resta invariato. Candidati successivi, se servisse altro margine: il client OIDC del desktop (`go-oidc`, `go-jose`, `oauth2`, circa 105 kB gzip di codice: nel browser il token arriva dalla pagina) e `goose` con `text/template` per le migrazioni di `internal/store` (circa 60 kB). Entrambi richiedono di separare il codice nativo dietro build tag in pacchetti con più chiamanti.

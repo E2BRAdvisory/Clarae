@@ -44,12 +44,14 @@ export const urlImports = {
  * ReactJSXRuntime from globals and sets ExcalidrawLib. The virtual module below hands it the app's
  * React, loads the script copied into dist/excalidraw-assets (same origin: script-src 'self') and
  * re-exports the library by name, so `import { Excalidraw } from '@excalidraw/excalidraw'` works.
+ * `scriptIntegrity` (the Web UI, ADR-0029) adds Subresource Integrity to that script tag: pass the
+ * sha384 of the file copyExcalidrawAssets wrote.
  */
 const excalidrawDir = join(dirname(require.resolve('@excalidraw/excalidraw')), '..'); // .../dist
 const excalidrawExports = JSON.parse(
   await readFile(join(workbenchRoot, 'scripts/excalidraw-exports.json'), 'utf8'),
 );
-export const excalidrawFork = {
+export const excalidrawForkPlugin = ({ scriptIntegrity = '' } = {}) => ({
   name: 'excalidraw-fork',
   setup(build) {
     build.onResolve({ filter: /^@excalidraw\/excalidraw$/ }, () => ({
@@ -71,7 +73,11 @@ Object.assign(globalThis, { React, ReactDOM: { ...ReactDOM, ...ReactDOMClient },
 if (!globalThis.ExcalidrawLib) {
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = '/excalidraw-assets/excalidraw.js';
+    s.src = '/excalidraw-assets/excalidraw.js';${
+      scriptIntegrity
+        ? `\n    s.integrity = ${JSON.stringify(scriptIntegrity)};\n    s.crossOrigin = 'anonymous';`
+        : ''
+    }
     s.onload = resolve;
     s.onerror = () => reject(new Error('cannot load excalidraw.js'));
     document.head.append(s);
@@ -82,7 +88,8 @@ ${excalidrawExports.map((k) => `export const ${k} = lib.${k};`).join('\n')}
 `,
     }));
   },
-};
+});
+export const excalidrawFork = excalidrawForkPlugin();
 
 /**
  * Excalidraw loads its fonts at run time from window.EXCALIDRAW_ASSET_PATH. Serving them from the

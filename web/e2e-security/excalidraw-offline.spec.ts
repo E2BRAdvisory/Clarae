@@ -92,3 +92,34 @@ test('a drawing opens with its fonts from the app, no request leaves it', async 
   expect(foreign).toEqual([]);
   expect(violations).toEqual([]);
 });
+
+test('an altered excalidraw.js never runs', async ({ page }) => {
+  test.setTimeout(180_000);
+  // The classic script is added by a <script> tag that carries its SRI (workbench build): altered bytes
+  // (a compromised cache or asset store) are refused, so the editor does not open.
+  await page.route(/\/excalidraw-assets\/excalidraw\.js$/, async (route) => {
+    const original = await route.fetch();
+    await route.fulfill({ response: original, body: (await original.text()) + '\n;0;' });
+  });
+  const integrity: string[] = [];
+  page.on('console', (m) => {
+    if (/integrity/i.test(m.text())) integrity.push(m.text());
+  });
+  await page.goto(`${ORIGIN}/vaults/drawing-tampered/open?local`);
+  await expect(page.locator('header.titlebar .title')).toHaveText('drawing-tampered', {
+    timeout: 120_000,
+  });
+  await page.evaluate(async (sketch) => {
+    const app = (
+      window as unknown as {
+        go: { app: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
+      }
+    ).go.app;
+    const [vault] = (await app['VaultAPI']!['ListOpen']!()) as { id: string }[];
+    await app['VaultAPI']!['WriteNote']!(vault!.id, 'Sketch.excalidraw', sketch, '');
+  }, SKETCH);
+  await page.locator('.tree .node', { hasText: 'Sketch' }).click({ timeout: 60_000 });
+  await expect.poll(() => integrity.length, { timeout: 60_000 }).toBeGreaterThan(0);
+  expect(await page.evaluate(() => 'ExcalidrawLib' in globalThis)).toBe(false);
+  await expect(page.locator('.drawing-canvas .excalidraw canvas.interactive')).toHaveCount(0);
+});

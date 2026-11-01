@@ -3,7 +3,7 @@
 // plaintext into a ZIP. The server only ever serves ciphertext; keys stay in memory.
 import { unb64, uuidBytes } from './bytes';
 import { decryptBlob } from './blob';
-import { decryptPath } from './path';
+import { decryptPathFor } from './path';
 import {
   DecryptError,
   deriveKekRecovery,
@@ -136,7 +136,19 @@ export interface ExportOptions {
   onProgress?: (r: ExportReport) => void;
   limits?: Partial<ZipLimits>;
   now?: () => Date;
+  /**
+   * How many files are fetched, checked and decrypted ahead of the ZIP writer (default
+   * {@link DEFAULT_CONCURRENCY}). The archive keeps the manifest order whatever it is.
+   */
+  concurrency?: number;
 }
+
+/** Files in flight by default: the connections a browser opens to one HTTP/1.1 origin. */
+export const DEFAULT_CONCURRENCY = 6;
+
+/** One manifest entry, made ready for the ZIP ahead of time (see exportPrivateVault). */
+type Prepared =
+  { skip: Skipped } | { path: string; skip: Skipped } | { path: string; plain: Uint8Array };
 
 async function sha256Hex(b: Uint8Array): Promise<string> {
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(b)));
@@ -160,53 +172,85 @@ export function exportPrivateVault(opts: ExportOptions): {
     opts.onProgress?.(report);
   };
 
+  /**
+   * Decrypts the path, fetches the blob, checks its hash and decrypts it: everything about one file
+   * that does not depend on the others. Several run at once; only an abort rejects.
+   */
+  async function prepare(item: TreeItem): Promise<Prepared> {
+    let path: string;
+    try {
+      path = (
+        await decryptPathFor(opts.keys, vaultId, uuidBytes(item.file_id), item.path)
+      ).normalize('NFC');
+    } catch {
+      return { skip: { path: item.path, reason: 'path_undecryptable' } };
+    }
+    const unsafe = checkZipName(path);
+    if (unsafe) return { skip: { path, reason: 'unsafe_path', detail: unsafe } };
+    let cipher: Uint8Array;
+    try {
+      cipher = await opts.source.blob(item.hash, signal);
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      const detail = err instanceof Error ? err.message : '';
+      return { path, skip: { path, reason: 'blob_missing', detail } };
+    }
+    if ((await sha256Hex(cipher)) !== item.hash)
+      return { path, skip: { path, reason: 'blob_corrupt' } };
+    try {
+      return {
+        path,
+        plain: await decryptBlob(opts.keys, vaultId, uuidBytes(item.file_id), cipher),
+      };
+    } catch {
+      return { path, skip: { path, reason: 'decrypt_failed' } };
+    }
+  }
+
+  /**
+   * The ZIP entries in manifest order. Up to `concurrency` files are prepared ahead (bounded memory:
+   * at most that many decrypted files wait for the writer), so a large vault costs about one round
+   * trip per `concurrency` files instead of one per file. What depends on the files before (a
+   * duplicate path) is decided here, in order, so the archive and the report are the same as with
+   * one file at a time.
+   */
   async function* entries(): AsyncGenerator<ZipEntry> {
     const items = await opts.source.tree(signal);
     report.total = items.length;
     opts.onProgress?.(report);
+    const width = Math.max(1, Math.floor(opts.concurrency ?? DEFAULT_CONCURRENCY));
+    const ahead: Promise<Prepared>[] = [];
+    let next = 0;
+    const fill = () => {
+      while (next < items.length && ahead.length < width) {
+        const job = prepare(items[next++] as TreeItem);
+        job.catch(() => undefined); // awaited in order below; an abort must not be reported twice
+        ahead.push(job);
+      }
+    };
     const seen = new Set<string>();
-    for (const item of items) {
+    fill();
+    while (ahead.length) {
       signal?.throwIfAborted();
-      let path: string;
-      try {
-        path = (await decryptPath(opts.keys, vaultId, item.path)).normalize('NFC');
-      } catch {
-        skip({ path: item.path, reason: 'path_undecryptable' });
+      const r = await (ahead.shift() as Promise<Prepared>);
+      fill();
+      if (!('path' in r)) {
+        skip(r.skip);
         continue;
       }
-      const unsafe = checkZipName(path);
-      if (unsafe) {
-        skip({ path, reason: 'unsafe_path', detail: unsafe });
+      if (seen.has(r.path)) {
+        skip({ path: r.path, reason: 'duplicate_path' });
         continue;
       }
-      if (seen.has(path)) {
-        skip({ path, reason: 'duplicate_path' });
+      if ('skip' in r) {
+        skip(r.skip);
         continue;
       }
-      let cipher: Uint8Array;
-      try {
-        cipher = await opts.source.blob(item.hash, signal);
-      } catch (err) {
-        if (signal?.aborted) throw err;
-        skip({ path, reason: 'blob_missing', detail: err instanceof Error ? err.message : '' });
-        continue;
-      }
-      if ((await sha256Hex(cipher)) !== item.hash) {
-        skip({ path, reason: 'blob_corrupt' });
-        continue;
-      }
-      let plain: Uint8Array;
-      try {
-        plain = await decryptBlob(opts.keys, vaultId, uuidBytes(item.file_id), cipher);
-      } catch {
-        skip({ path, reason: 'decrypt_failed' });
-        continue;
-      }
-      seen.add(path);
+      seen.add(r.path);
       report.exported++;
-      report.bytes += plain.length;
+      report.bytes += r.plain.length;
       opts.onProgress?.(report);
-      yield { name: path, data: plain, mtime: (opts.now ?? (() => new Date()))() };
+      yield { name: r.path, data: r.plain, mtime: (opts.now ?? (() => new Date()))() };
     }
   }
 

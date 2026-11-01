@@ -125,7 +125,8 @@ describe('audit CSV export', () => {
     expect(call.query.has('limit')).toBe(false);
     await waitFor(() => expect(clicked).toEqual(['audit-log.csv|blob:test']));
     expect(await created[0]?.text()).toBe('id,at\n1,2026\n');
-    await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:test'));
+    // The object URL is revoked a minute later (shared/download.ts, covered by its own test).
+    expect(revoke).not.toHaveBeenCalled();
     expect(await screen.findByText('Audit log exported.')).toBeInTheDocument();
   });
 

@@ -3,25 +3,14 @@ package transport
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
-
-	"memobrain/shared/notifyv1"
 )
 
 // VaultEvent says "this vault reached this changelog position": pull now.
@@ -59,7 +48,8 @@ type NotifyOptions struct {
 
 // RunNotifications keeps a notification stream open until ctx ends: gRPC
 // first, SSE when gRPC cannot be used (corporate proxies), reconnecting with
-// backoff and re-authenticating when the token expires.
+// backoff and re-authenticating when the token expires. The WebAssembly core
+// has no gRPC (notify_js.go) and uses SSE only.
 func (c *Client) RunNotifications(ctx context.Context, o NotifyOptions) {
 	if o.MaxBackoff == 0 {
 		o.MaxBackoff = 60 * time.Second
@@ -72,7 +62,7 @@ func (c *Client) RunNotifications(ctx context.Context, o NotifyOptions) {
 	for ctx.Err() == nil {
 		var err error
 		via := "grpc"
-		if o.GRPCEndpoint != "" && grpcFailures < 2 {
+		if grpcSupported && o.GRPCEndpoint != "" && grpcFailures < 2 {
 			err = c.streamGRPC(ctx, o)
 			if err != nil && !isAuthExpiry(err) {
 				grpcFailures++
@@ -105,65 +95,10 @@ func (c *Client) RunNotifications(ctx context.Context, o NotifyOptions) {
 }
 
 func isAuthExpiry(err error) bool {
-	if status.Code(err) == codes.Unauthenticated {
-		return true
-	}
-	return errors.Is(err, errTokenExpired)
+	return isGRPCAuthExpiry(err) || errors.Is(err, errTokenExpired)
 }
 
 var errTokenExpired = errors.New("token expired")
-
-func (c *Client) streamGRPC(ctx context.Context, o NotifyOptions) error {
-	var creds credentials.TransportCredentials
-	if c.base.Scheme == "https" {
-		creds = credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})
-	} else {
-		creds = insecure.NewCredentials()
-	}
-	conn, err := grpc.NewClient(o.GRPCEndpoint, grpc.WithTransportCredentials(creds))
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-	tok, err := c.tokens.Token(ctx)
-	if err != nil {
-		return err
-	}
-	sctx, cancel := context.WithCancel(metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tok))
-	defer cancel()
-	known := map[string]int64{}
-	if o.Known != nil {
-		known = o.Known()
-	}
-	req := &notifyv1.SubscribeRequest{DeviceId: o.DeviceID, KnownSeq: known}
-	if o.ConfigVersion != nil {
-		req.ConfigVersion = clampInt32(o.ConfigVersion())
-	}
-	stream, err := notifyv1.NewNotifyServiceClient(conn).Subscribe(sctx, req)
-	if err != nil {
-		return err
-	}
-	first := true
-	for {
-		ev, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		if first {
-			first = false
-			o.OnState(true, "grpc")
-		}
-		if vc := ev.GetVaultChanged(); vc != nil && o.Handler != nil {
-			o.Handler(VaultEvent{VaultID: vc.GetVaultId(), Seq: vc.GetSeq()})
-		}
-		if sc := ev.GetShareChanged(); sc != nil && o.OnShare != nil {
-			o.OnShare(ShareEvent{ShareID: sc.GetShareId(), Kind: sc.GetKind()})
-		}
-		if cc := ev.GetConfigChanged(); cc != nil && o.OnConfig != nil {
-			o.OnConfig(int(cc.GetVersion()))
-		}
-	}
-}
 
 func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 	q := url.Values{}
@@ -246,14 +181,4 @@ func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 		return err
 	}
 	return nil
-}
-
-func clampInt32(n int) int32 {
-	if n > math.MaxInt32 {
-		return math.MaxInt32
-	}
-	if n < 0 {
-		return 0
-	}
-	return int32(n)
 }

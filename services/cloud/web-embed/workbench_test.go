@@ -3,9 +3,13 @@ package webembed
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -150,5 +154,56 @@ func TestAcceptsGzip(t *testing.T) {
 		if got := acceptsGzip(header); got != want {
 			t.Errorf("acceptsGzip(%q) = %v, want %v", header, got, want)
 		}
+	}
+}
+
+// The workbench page's import map (SRI of the code-split chunks) is its only inline script: the policy
+// allows exactly its text, by hash, and nothing else inline.
+func TestWorkbenchPolicyAllowsOnlyItsImportMap(t *testing.T) {
+	importMap := `{"integrity":{"/assets/chunk-A.js":"sha384-abc"}}`
+	page := `<html><head><script type="importmap">` + importMap + `</script></head>` +
+		`<body><script>alert(1)</script><script type="module" src="/assets/workbench-1.js"></script></body></html>`
+	h := Handler(Options{FS: fstest.MapFS{
+		"index.html":     {Data: []byte("<html>console</html>")},
+		"workbench.html": {Data: []byte(page)},
+	}})
+	sum := sha256.Sum256([]byte(importMap))
+	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	wb := do(h, "/vaults/x/open", nil).Header().Get("Content-Security-Policy")
+	p := csp(wb)
+	if got := strings.Join(p["script-src"], " "); got != "'self' 'wasm-unsafe-eval' "+want {
+		t.Fatalf("workbench script-src = %q, want the import map's hash %s and nothing else", got, want)
+	}
+	// The console has no import map and keeps its policy.
+	if c := do(h, "/vaults", nil).Header().Get("Content-Security-Policy"); strings.Contains(c, "sha256-") {
+		t.Fatalf("the console policy must not carry the workbench hash: %q", c)
+	}
+	if got := ImportMapHashes([]byte(`<script>x</script><script type="module">y</script>`)); got != nil {
+		t.Fatalf("only import maps are hashed, got %v", got)
+	}
+}
+
+// web/src/shared/routes.ts is the Web UI's copy of workbenchRoute (links, dev server, workbench entry):
+// both must pick the same paths.
+func TestWorkbenchRouteMatchesTheWebUI(t *testing.T) {
+	src, err := os.ReadFile("../../../web/src/shared/routes.ts")
+	if err != nil {
+		t.Skipf("Web UI sources not available: %v", err)
+	}
+	m := regexp.MustCompile(`WORKBENCH_ROUTE_PATTERN = '([^']+)'`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("WORKBENCH_ROUTE_PATTERN not found in web/src/shared/routes.ts")
+	}
+	web := regexp.MustCompile(string(m[1]))
+	for _, p := range []string{
+		"/vaults/x/open", "/vaults/x/open/", "/vaults/0198f1c2-aaaa-7bbb-8ccc-123456789abc/open", "/vaults/new/open",
+		"/vaults", "/vaults/x", "/vaults/x/open/extra", "/vaults/x/opened", "/vaults//open", "/a/vaults/x/open", "/shares",
+	} {
+		if got, want := web.MatchString(p), workbenchRoute.MatchString(p); got != want {
+			t.Errorf("%s: the Web UI says %v, the cloud %v", p, got, want)
+		}
+	}
+	if strings.ReplaceAll(strings.ReplaceAll(string(m[1]), "(", ""), ")", "") != workbenchRoute.String() {
+		t.Errorf("patterns differ: web %q, cloud %q", m[1], workbenchRoute.String())
 	}
 }

@@ -52,22 +52,6 @@ func TestHashedAssetsAreImmutable(t *testing.T) {
 	}
 }
 
-// The graph layout worker keeps a fixed name under assets/: it is revalidated, not immutable.
-func TestFixedNameAssetsAreNotImmutable(t *testing.T) {
-	h := Handler(Options{FS: fstest.MapFS{
-		"index.html":              {Data: []byte("<html>app</html>")},
-		"assets/layout.worker.js": {Data: []byte("self.onmessage = () => {}")},
-		"assets/app-1.js":         {Data: []byte("console.log(1)")},
-	}})
-	rec := get(h, http.MethodGet, "/assets/layout.worker.js")
-	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "no-cache" || rec.Header().Get("ETag") == "" {
-		t.Fatalf("layout worker: %d %q etag %q", rec.Code, rec.Header().Get("Cache-Control"), rec.Header().Get("ETag"))
-	}
-	if got := get(h, http.MethodGet, "/assets/app-1.js").Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
-		t.Fatalf("hashed asset: %q", got)
-	}
-}
-
 func TestStaticFilesUnknownToGoGetTheirType(t *testing.T) {
 	for p, want := range map[string]string{
 		"/site.webmanifest": "application/manifest+json",

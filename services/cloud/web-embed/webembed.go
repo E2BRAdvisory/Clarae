@@ -30,13 +30,6 @@ import (
 	"time"
 )
 
-// fixedNameAssets live under assets/ but keep the same name across builds (the UI
-// loads them by a fixed URL, see web/scripts/esbuild.mjs): they must be revalidated,
-// never cached as immutable, or an upgrade would keep serving the old copy.
-var fixedNameAssets = map[string]bool{
-	"assets/layout.worker.js": true,
-}
-
 //go:embed all:dist
 var embedded embed.FS
 
@@ -88,21 +81,47 @@ func CSP(issuer string) string {
 // resources, no eval; 'wasm-unsafe-eval' only to compile WebAssembly) plus what a page needs to reach
 // the cloud: the API and the OIDC issuer. Styles may be inline because CodeMirror, KaTeX and Excalidraw
 // compute them; scripts may not, and nothing from another origin is ever loaded (D-01, V-02).
-// worker-src allows blob: because the core's worker starts from the bytes the page fetched with
-// Subresource Integrity (web/src/workbench/bridge.ts): new Worker() has no integrity of its own.
-func WorkbenchCSP(issuer string) string {
+// worker-src allows blob: because the workers (the core, the graph layout, pdf.js) start from the bytes
+// the page fetched with Subresource Integrity (web/src/workbench/sri.ts): new Worker() has no integrity
+// of its own.
+//
+// importMapHashes are the 'sha256-…' sources of the page's inline import map, the only inline script it
+// has: it pins every code-split chunk with SRI (ADR-0029). Only that exact text is allowed, never
+// inline script in general.
+func WorkbenchCSP(issuer string, importMapHashes ...string) string {
 	connect := "'self' blob:"
 	if o := issuerOrigin(issuer); o != "" {
 		connect += " " + o
 	}
-	return "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+	script := "'self' 'wasm-unsafe-eval'"
+	for _, h := range importMapHashes {
+		script += " " + h
+	}
+	return "default-src 'self'; script-src " + script + "; style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: blob:; font-src 'self' data:; connect-src " + connect + "; " +
 		"media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; " +
 		"base-uri 'none'; form-action 'self'; object-src 'none'"
 }
 
-// workbenchRoute matches /vaults/:id/open, the only address of the workbench page.
+// workbenchRoute matches /vaults/:id/open, the only address of the workbench page. The same pattern is
+// in web/src/shared/routes.ts (the console's links, the dev server, the workbench entry); a test keeps
+// the two equal.
 var workbenchRoute = regexp.MustCompile(`^/vaults/[^/]+/open/?$`)
+
+// importMapRe finds the inline import maps of a page and their exact text, which is what a CSP hash
+// source covers.
+var importMapRe = regexp.MustCompile(`(?is)<script\s+type="importmap"\s*>(.*?)</script>`)
+
+// ImportMapHashes returns the CSP hash sources ('sha256-<base64>') of the import maps inlined in a page,
+// in page order. Other inline scripts get no hash: the policy keeps refusing them.
+func ImportMapHashes(page []byte) []string {
+	var out []string
+	for _, m := range importMapRe.FindAllSubmatch(page, -1) {
+		sum := sha256.Sum256(m[1])
+		out = append(out, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")
+	}
+	return out
+}
 
 // permissionsPolicy turns off every powerful browser feature the Web UI never uses.
 const permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()"
@@ -120,7 +139,12 @@ func Handler(o Options) http.Handler {
 	if root == nil {
 		root = Dist()
 	}
-	s := &server{root: root, csp: CSP(o.Issuer), workbenchCSP: WorkbenchCSP(o.Issuer)}
+	// The workbench page is read once: its import map is fixed for the life of the build.
+	var hashes []string
+	if page, err := fs.ReadFile(root, "workbench.html"); err == nil {
+		hashes = ImportMapHashes(page)
+	}
+	s := &server{root: root, csp: CSP(o.Issuer), workbenchCSP: WorkbenchCSP(o.Issuer, hashes...)}
 	return http.HandlerFunc(s.serveHTTP)
 }
 
@@ -166,7 +190,8 @@ func (s *server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(p, "/")
 	if name != "" {
 		if a := s.asset(name); a != nil {
-			if (strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "core/")) && !fixedNameAssets[name] {
+			// Every file under assets/ and core/ carries its hash in its name (web/scripts/esbuild.mjs).
+			if strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "core/") {
 				h.Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {
 				h.Set("Cache-Control", "no-cache")

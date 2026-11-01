@@ -3,8 +3,10 @@ package webembed
 import (
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/json"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"regexp"
@@ -69,12 +71,16 @@ func checkPagePinsEverySubresource(t *testing.T, page string) {
 	}
 	html := string(b)
 	root := Dist()
-	pinned := 0
+	pinned, importMaps := 0, 0
 	for _, m := range tagRe.FindAllStringSubmatch(html, -1) {
 		name, a := strings.ToLower(m[1]), attrs(m[2])
 		switch name {
 		case "script":
 			src := a["src"]
+			if src == "" && strings.EqualFold(a["type"], "importmap") && page == "workbench.html" {
+				importMaps++
+				continue // checked below with its text
+			}
 			if src == "" {
 				t.Errorf("inline <script> in %s: %q", page, m[0])
 				continue
@@ -103,6 +109,9 @@ func checkPagePinsEverySubresource(t *testing.T, page string) {
 	}
 	if pinned == 0 {
 		t.Fatal("index.html references no script or stylesheet: is dist/ built?")
+	}
+	if importMaps > 0 {
+		checkImportMap(t, root, b)
 	}
 	if inlineEvent.MatchString(html) {
 		t.Errorf("inline event handler attribute in %s", page)
@@ -261,5 +270,100 @@ func TestSecurityHeadersOnEveryResponseClass(t *testing.T) {
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") {
 			t.Errorf("%s: %d %q", m[1], rec.Code, rec.Header().Get("Cache-Control"))
 		}
+	}
+}
+
+// checkImportMap verifies the workbench's import map: each entry pins an embedded chunk to its real
+// bytes, and the policy the handler serves allows that exact text and nothing else inline.
+func checkImportMap(t *testing.T, root fs.FS, page []byte) {
+	t.Helper()
+	maps := importMapRe.FindAllSubmatch(page, -1)
+	if len(maps) != 1 {
+		t.Fatalf("workbench.html has %d import maps, want 1", len(maps))
+	}
+	var m struct {
+		Imports   map[string]string `json:"imports"`
+		Scopes    map[string]any    `json:"scopes"`
+		Integrity map[string]string `json:"integrity"`
+	}
+	if err := json.Unmarshal(maps[0][1], &m); err != nil {
+		t.Fatalf("import map: %v", err)
+	}
+	if len(m.Imports) > 0 || len(m.Scopes) > 0 {
+		t.Errorf("the import map must only pin chunks, it remaps specifiers: %v %v", m.Imports, m.Scopes)
+	}
+	if len(m.Integrity) == 0 {
+		t.Error("the import map pins no chunk")
+	}
+	for ref, integrity := range m.Integrity {
+		checkPinned(t, root, "importmap", ref, map[string]string{"integrity": integrity, "crossorigin": ""})
+	}
+	rec := httptest.NewRecorder()
+	Handler(Options{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/vaults/x/open", nil))
+	policy := csp(rec.Header().Get("Content-Security-Policy"))
+	want := ImportMapHashes(page)
+	if got := strings.Join(policy["script-src"], " "); got != "'self' 'wasm-unsafe-eval' "+strings.Join(want, " ") {
+		t.Errorf("workbench script-src = %q, want the import map's hash %v", got, want)
+	}
+}
+
+// Every script of the embedded build must be pinned by SRI, directly or through a chain that starts at
+// a page: a page's tags and the workbench import map pin files; a pinned file may carry the integrity
+// of another (the core and layout workers, the pdf.js worker, Excalidraw's script), which pins that one.
+// A script outside every chain would run unverified (ADR-0029, Esito).
+func TestEveryEmbeddedScriptIsPinned(t *testing.T) {
+	root := Dist()
+	if _, err := fs.Stat(root, "workbench.html"); err != nil {
+		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
+			t.Fatal("workbench.html is not embedded: is dist/ built (task web-build)?")
+		}
+		t.Skip("dist/ holds only the placeholder index (run task web-build)")
+	}
+	byHash := map[string]string{} // sha384 integrity -> file
+	var scripts []string
+	_ = fs.WalkDir(root, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || (!strings.HasSuffix(p, ".js") && !strings.HasSuffix(p, ".mjs")) {
+			return err
+		}
+		data, err := fs.ReadFile(root, p)
+		if err != nil {
+			return err
+		}
+		sum := sha512.Sum384(data)
+		byHash["sha384-"+base64.StdEncoding.EncodeToString(sum[:])] = p
+		scripts = append(scripts, p)
+		return nil
+	})
+	integrityRe := regexp.MustCompile(`sha384-[A-Za-z0-9+/]{64}`)
+	pinned := map[string]bool{}
+	var queue []string
+	pin := func(text []byte) {
+		for _, h := range integrityRe.FindAll(text, -1) {
+			if f, ok := byHash[string(h)]; ok && !pinned[f] {
+				pinned[f] = true
+				queue = append(queue, f)
+			}
+		}
+	}
+	for _, page := range []string{"index.html", "workbench.html"} {
+		b, err := fs.ReadFile(root, page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pin(b)
+	}
+	for len(queue) > 0 {
+		f := queue[0]
+		queue = queue[1:]
+		b, _ := fs.ReadFile(root, f)
+		pin(b)
+	}
+	for _, s := range scripts {
+		if !pinned[s] {
+			t.Errorf("%s is not pinned by any SRI chain from the pages", s)
+		}
+	}
+	if len(pinned) < 4 {
+		t.Errorf("only %d scripts pinned: is dist/ built?", len(pinned))
 	}
 }
