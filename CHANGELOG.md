@@ -23,6 +23,14 @@ Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancell
 - **API:** `GET /vaults?include_deleted=true` elenca anche i vault eliminati ancora ripristinabili. Lo stream SSE termina subito dopo la sospensione dell'account, come quello gRPC.
 - **Contratto OpenAPI** (`info.version` ora segue la versione del prodotto, 1.3.0): risposte `429`, `413` e `default` documentate su tutte le operazioni, `x-required-role: memobrain-admin` sulle operazioni di amministrazione, schema `openIdConnect`, upload tus e stream SSE descritti nell'estensione `x-memobrain-external-routes`.
 
+- **Quota sugli upload:** i byte caricati ma non ancora committati contano come in sospeso e un upload oltre quota viene rifiutato subito; il `PATCH` tus non tiene aperta una transazione durante lo streaming.
+- **Commit più veloci e senza deadlock:** il lock del vault si prende per primo, gli statement per operazione scendono da 10 a 4 (creazione) e da 9 a 3 (modifica); un ritentativo concorrente viene riconosciuto dall'id dell'operazione.
+- **Rinomina di cartelle condivise** (ADR-0040): il client invia un solo `move_prefix` e la condivisione segue la cartella; il server applica le regole sulla radice delle condivisioni anche al `move_prefix`.
+- **Condivisioni:** la history vista da una condivisione non mostra path esterni né revisioni precedenti; gli inviti rifiutati risultano rifiutati; le liste non perdono condivisioni sugli errori; gli export hanno limiti per vault e per utente.
+- **Account e ruoli** (ADR-0041): un token vecchio non annulla più una retrocessione; guardia sull'ultimo amministratore sotto lock; eliminazione dell'account con un solo percorso, i grant su vault altrui passano al proprietario; la directory trova un'email solo con l'indirizzo esatto.
+- **Notifiche:** hub riscritto con risincronizzazione dopo una riconnessione al database, limite di stream per utente, recupero dai panic e chiusura ordinata in gRPC.
+- **Dispositivo revocato:** il commit lo segnala con un motivo dedicato.
+
 ### Client desktop e workbench
 
 - **Sync senza perdite** (ADR-0039): i candidati al merge sono salvati in `sync.db` nella stessa transazione del cursore (`pending_remote`); un vault bloccato a metà ciclo ferma il pull prima che il cursore avanzi; un path che non si decifra va in quarantena invece di essere saltato o di mandare nel cestino il file locale; la copia di conflitto si scrive prima di sovrascrivere l'originale, con nomi troncati su confini UTF-8.
@@ -31,25 +39,50 @@ Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancell
 - **Merge del frontmatter:** chiavi duplicate o righe ambigue producono un conflitto invece di essere scartate in un merge «pulito» (nuove fixture in `shared/conformance/merge`).
 - **Prestazioni:** chiavi dei link nell'indice e risoluzione incrementale (niente più risoluzione di tutto il vault a ogni creazione o cancellazione), candidati alla rinomina dall'indice, il primo scan della sync non ricalcola più l'hash di tutto il vault, eventi `vault:file-changed` tipizzati (create, modify, delete) con aggiornamenti mirati dell'interfaccia, meno perdite di memoria negli embed.
 
+- **Watcher su macOS con FSEvents** (ADR-0044): da circa 51.000 descrittori a 11 su un vault di 50.000 file; su Linux e Windows degrada in modo controllato al limite dei descrittori.
+- **Dispositivo revocato:** il sync si ferma senza toccare i dati locali né l'outbox, un banner offre di registrare di nuovo il dispositivo e poi l'outbox viene caricato.
+- **Rinomina:** aggiorna anche i nodi dei canvas e i link nelle proprietà; il rollback non sovrascrive contenuto cambiato nel frattempo.
+- **Merge:** diff deterministico con un budget di lavoro fisso (al posto del timeout di 1 s), un cambio LF/CRLF di un solo lato non produce più un conflitto sull'intero file, Excalidraw usa la base come il canvas.
+- La recovery key non si perde se il keychain fallisce dopo la creazione del vault; un errore temporaneo del keychain non cancella più la sessione; installer Windows avviato senza problemi di quoting; il codice OAuth non finisce nei log.
+
 ### Workbench web
 
 - **Copie in chiaro dei vault privati:** il core è l'unico timer di inattività e rispetta il profilo; quando il vault si blocca, la copia nel browser viene cancellata se il cloud ha tutto, altrimenti resta con un avviso bloccante (sblocca, elimina comunque, torna alla console). All'avvio si rimuovono le copie lasciate da un tab chiuso, tranne quelle con modifiche non inviate; logout e «Dimentica questo browser» avvisano se una copia ha modifiche non inviate (D-04).
 - **Affidabilità:** se il core si ferma la pagina lo dice invece di restare bloccata; le chiamate di avvio hanno un limite di tempo; il token si rinnova senza ricaricare la pagina e, se il rinnovo fallisce, le modifiche vengono scritte prima del login.
 
-### Parità e contratti (ADR-0037, in corso)
+- **Capability estese:** sul web «Disconnetti» diventa «Rimuovi da questo browser» (svuota prima l'outbox), niente vault recenti o cestino di sistema; identità del dispositivo stabile per profilo del browser (IndexedDB).
+- Link nei canvas e nelle slide intercettati, diagrammi Mermaid resi correttamente in chiaro e scuro, niente più crash con un `%` in un link, meno lavoro a ogni tasto; core WASM da 8,1 a 6,8 MB compressi.
+
+### Parità e contratti (ADR-0037)
 
 - **Registro delle funzioni** `shared/parity/features.yaml`, con un `scripts/parity.mjs` che legge i comandi a runtime e verifica funzioni, comandi, binding e operazioni REST (`task parity`); campo `Command.requires` per i comandi che dipendono da una capability.
 - **Client Go generato** da `api/openapi.yaml` (`shared/go/apiclient`), usato dal trasporto della sync del core; contract test del client contro il server reale e test che allinea l'enum `ErrorCode` ai codici di `shared/go/syncproto`.
-- **`@memobrain/cloud-features`:** la gestione dei vault cloud scritta una volta per console, desktop e workbench, dietro l'interfaccia `CloudPort`. In corso: il ciclo di vita dei vault (creazione, rinomina, eliminazione logica e ripristino) su console e desktop.
+- **`@memobrain/cloud-features`:** la gestione dei vault cloud scritta una volta per console, desktop e workbench, dietro l'interfaccia `CloudPort`: ciclo di vita dei vault (creazione, rinomina, eliminazione logica, ripristino; i vault privati si creano nel workbench del browser con la crittografia Go), dispositivi (quello in uso protetto), utilizzo con il livello del server e il dettaglio per vault, condivisioni (creazione e modifica anche dalla console), inviti, «I miei gruppi».
+- **Feature flag dallo schema:** nomi e default dei flag del Config Profile si generano da `api/config-profile.schema.json` (`task gen-features`) per Go e TypeScript; nella guida admin una tabella di tutte le chiavi, verificata da un test.
+- **Matrice e2e:** gli spec della UI desktop girano anche sul workbench web reale (`task e2e-matrix`), con le esclusioni motivate dal registro; una suite mista mette un dispositivo desktop headless e il browser sullo stesso cloud (`task e2e-mixed`).
+
+### Sicurezza e crittografia
+
+- **Audit:** registra l'IP del client (attraverso i proxy fidati) e l'eliminazione, il ripristino e il cambio di chiave dei vault; tutte le celle del CSV sono protette dalla formula injection.
+- **SRI completa nel workbench:** worker del core, chunk (import map con `integrity`), worker di layout e di pdf.js, `excalidraw.js`; la CSP aggiunge solo l'hash della import map.
+- **Passphrase normalizzate NFC** prima di Argon2id; gli envelope creati da un input non NFC continuano ad aprirsi.
+- **Envelope della VMK v2** legato a vault e tipo (ADR-0034) e **path cifrati v2** legati al file (ADR-0042): tutti i client leggono entrambi i formati; la scrittura v2 si accende con `features.envelope_v2` e `features.path_v2` (spenti per default).
+- Chiavi azzerate al blocco, calibrazione di Argon2id con un tetto di 256 MiB, manifest di aggiornamento con scadenza firmata.
+
+### Deploy e supply chain
+
+- Immagini pinnate per versione e digest, action di `release.yml` per SHA, appimagetool e runtime per checksum (`deploy/PINS.md`).
+- Compose: console di amministrazione e realm master di Keycloak chiusi per default (`KEYCLOAK_ADMIN_FROM`); il cloud, il compose e il chart Helm rifiutano i segreti segnaposto (`change-me`); il preStop `sleep` solo da Kubernetes 1.30.
 
 ### Documentazione
 
 - Nuovi `CONTRIBUTING.md`, `docs/architecture.md` e `docs/desktop-web-sync.md`; README con struttura del repository e indice della documentazione; i documenti non promettono più una CI (ADR-0036).
-- ADR in stato di proposta: 0036 (verifiche locali), 0037 (registro delle funzioni e cloud-features), 0038 (retention e changelog), 0039 (`sync.db`).
+- ADR in stato di proposta: 0036 (verifiche locali), 0037 (registro delle funzioni e cloud-features), 0038 (retention e changelog), 0039 (`sync.db`), 0040 (`move_prefix`), 0041 (ruoli, identità e account), 0042 (path cifrati legati al file), 0043 (convergenza della UI), 0044 (watcher FSEvents).
 
 ### Sviluppo
 
-- Linux: `task dev-desktop` e `task build-desktop` usano il tag `webkit2_41` dove c'è solo `webkit2gtk-4.1`; il runtime JavaScript di Wails in `apps/desktop/frontend/wailsjs/runtime` è versionato.
+- Linux: `task dev-desktop` e `task build-desktop` usano il tag `webkit2_41` dove c'è solo `webkit2gtk-4.1`. La copia generata del runtime di Wails in `apps/desktop/frontend/wailsjs` non è più versionata (la UI usa `packages/workbench/wailsjs`).
+- La CLI Wails si installa nella versione di `apps/desktop/go.mod` (v2.17, `task wails-cli`); `gen-wails`, `dev-desktop` e `build-desktop` rifiutano una CLI diversa.
 
 ## [1.2.4] - 2026-10-31
 

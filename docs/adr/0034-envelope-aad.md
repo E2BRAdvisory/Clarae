@@ -82,7 +82,7 @@ Il byte di versione rende il formato esplicito, e il v1 resta riconoscibile dall
 
 - Una sostituzione o uno scambio di envelope viene rilevato al momento dello sblocco, con un errore chiaro, invece che come dati illeggibili più tardi.
 - Due rilasci per completare la migrazione. Gli envelope di recovery dei vault mai recuperati restano v1 finché l'utente non rigenera la recovery key: le impostazioni del vault lo possono suggerire.
-- Da aggiornare: `docs/security/crypto-design.md` (§4, §5, §9, checklist §10), la guida admin (flag `features.envelope_v2`) e lo schema del Config Profile (`features.envelope_v2`, nelle due copie).
+- Da aggiornare: `docs/security/crypto-design.md` (§4, §5, §9, checklist §10), la guida admin (flag `features.envelope_v2`) e lo schema del Config Profile (`features.envelope_v2`; dal W8 lo schema è uno solo, `api/config-profile.schema.json`, da cui si generano le costanti Go e TS).
 - Lo spec cambia in §3.8.2, riga «Envelope»: `0x02 ‖ nonce ‖ AES-256-GCM(KEK, VMK; AAD = "memobrain/v2/envelope" ‖ vault_id ‖ kind) ‖ tag`, con v1 accettato in lettura. In §3.8.7 si aggiungono i nuovi vettori e la regola del pinning (vedi `docs/spec-v1.2-proposta.md`).
 - Va deciso prima dell'audit esterno (`docs/release/v1.0.0-checklist.md` §5): se si sceglie di farlo dopo la 1.0, l'audit va informato che il formato dell'envelope cambierà.
 
@@ -116,7 +116,7 @@ Resta per il **rilascio N+1**:
 
 - accendere `features.envelope_v2` per default (`envelopeV2Enabled` in `apps/desktop/internal/app/managed.go`, oggi con default `false`);
 - documentare il flag nella guida admin;
-- elencare `envelope_v2` nelle due copie dello schema del Config Profile (`api/config-profile.schema.json`, `services/cloud/internal/configprofiles/schema.json`);
+- elencare `envelope_v2` nello schema del Config Profile (`api/config-profile.schema.json`, unica fonte dal W8: la copia in `configprofiles` è stata rimossa e le costanti si generano con `task gen-features`) — fatto, default `false`;
 - aggiornare la descrizione di `KeyEnvelopeInput.wrapped_vmk` in `api/openapi.yaml`, oggi «(60 bytes)», a «60 (v1) o 61 (v2) bytes». Il campo non ha vincoli `minLength`/`maxLength`, quindi il server accetta già entrambi;
 - aggiornare lo spec: §3.8.2, riga «Envelope», e §3.8.7, come indicato sopra in «Conseguenze».
 

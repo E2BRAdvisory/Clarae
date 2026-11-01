@@ -93,12 +93,15 @@ func genManifest(args []string, out io.Writer) error {
 	dir := fs.String("artifacts-dir", "", "directory with memobrain-<version>-<os>-<arch>.<ext> files")
 	baseURL := fs.String("base-url", "", "public URL prefix of the artifacts")
 	outPath := fs.String("out", "", "output file (default stdout)")
+	validity := fs.Duration("validity", updatemanifest.DefaultValidity, "freshness window signed as expires_at (re-sign before it ends)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	released := time.Now().UTC().Truncate(time.Second)
+	expires := released.Add(*validity)
 	m := updatemanifest.Manifest{
 		Schema: updatemanifest.SchemaVersion, Channel: *channel, Version: strings.TrimPrefix(*version, "v"),
-		Sequence: *sequence, MinVersion: *minVersion, NotesURL: *notesURL, ReleasedAt: time.Now().UTC().Truncate(time.Second),
+		Sequence: *sequence, MinVersion: *minVersion, NotesURL: *notesURL, ReleasedAt: released, ExpiresAt: &expires,
 	}
 	if *notesFile != "" {
 		raw, err := os.ReadFile(*notesFile)

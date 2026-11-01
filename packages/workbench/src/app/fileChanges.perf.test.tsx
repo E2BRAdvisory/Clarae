@@ -120,7 +120,8 @@ function snapshot(): Counts {
   return c;
 }
 
-describe('vault:file-changed call counts', () => {
+// These tests count bridge calls, not time: a generous timeout keeps them stable on a loaded machine.
+describe('vault:file-changed call counts', { timeout: 30_000 }, () => {
   it('(a) 20 autosaves of the open note with 50 visible links', async () => {
     snapshot();
     const files = mock.vaults.get(vaultId)?.files;

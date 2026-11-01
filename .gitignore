@@ -55,6 +55,8 @@ test-results/
 playwright-report/
 apps/desktop/build/bin/
 packages/workbench/wailsjs/
+# Wails also writes its runtime here on `wails generate`/`dev`: generated, unused (the UI imports packages/workbench/wailsjs)
+apps/desktop/frontend/wailsjs/
 apps/desktop/frontend/package.json.md5
 
 # Go core compiled to WebAssembly (task wasm-core)

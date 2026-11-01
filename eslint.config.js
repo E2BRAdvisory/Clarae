@@ -9,6 +9,10 @@ export default tseslint.config(
   {
     ignores: [
       '**/node_modules/**',
+      // Local scratch (git-ignored): e2e-matrix/e2e-mixed builds and module copies, perf datasets.
+      '.dev/**',
+      '.perf/**',
+      '**/dist-*/**',
       '**/dist/**',
       '**/dist-e2e/**',
       'build/wasm/**',

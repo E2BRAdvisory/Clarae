@@ -108,7 +108,8 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('embed resources', () => {
+// Counts resources, not time: a generous timeout keeps it stable on a loaded machine.
+describe('embed resources', { timeout: 30_000 }, () => {
   it('(d1) scrolling a note with 30 image embeds back and forth 5 times', async () => {
     const v = view();
     const widgets = Array.from({ length: 30 }, (_, i) => new EmbedWidget(spec(`scroll${i}.png`)));

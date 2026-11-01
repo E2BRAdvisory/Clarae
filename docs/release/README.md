@@ -58,6 +58,8 @@ Tolti dalla pipeline nella 1.2.2 e da ripristinare in `release.yml` quando servo
 
 Le sezioni seguenti valgono solo quando il manifest di aggiornamento torna a essere firmato e pubblicato.
 
+**Scadenza del manifest:** `tools/release gen-manifest` firma un `expires_at` (default 30 giorni, opzione `-validity`, massimo accettato dai client 400 giorni). Un client che trova un manifest scaduto mostra un avviso invece di considerarlo aggiornato, così un canale congelato da un attaccante non passa inosservato. Prima della scadenza va pubblicato un manifest rifirmato con la stessa versione e `sequence` più alta.
+
 ### Ruotare la chiave di aggiornamento
 
 La chiave pubblica è compilata nei client: una rotazione richiede che i client già installati si fidino della nuova chiave **prima** che la vecchia sia ritirata.
