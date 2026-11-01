@@ -29,7 +29,7 @@ import (
 
 type tokens struct{ user string }
 
-func (t tokens) Token(context.Context) (string, error) { return issuer.token(t.user), nil }
+func (t tokens) Token(context.Context) (string, error) { return issuer.Token(t.user), nil }
 
 func newClient(t *testing.T, user string) *transport.Client {
 	t.Helper()
@@ -108,7 +108,7 @@ func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, ciph
 	d := &device{t: t, name: name, user: user, dir: dir, fs: fs, db: syncpkg.NewDB(sdb), client: client, vaultID: cloudVault}
 	d.remote = &flaky{Remote: syncpkg.HTTPRemote{C: client, Vault: cloudVault}}
 	cfg := syncpkg.Config{
-		LocalID: name, FS: fs, DB: d.db, Remote: d.remote, DeviceID: dev.ID, DeviceName: name, UserID: me.ID, ReadOnly: readOnly,
+		LocalID: name, FS: fs, DB: d.db, Remote: d.remote, DeviceID: dev.Id.String(), DeviceName: name, UserID: me.Id.String(), ReadOnly: readOnly,
 		Logger: zerolog.Nop(), OnConflict: func(c syncpkg.Conflict) { d.conflicts = append(d.conflicts, c) },
 		BeforeOverwrite: func(path string) { d.overwritten = append(d.overwritten, path+"\n"+d.read(path)) },
 	}
@@ -125,7 +125,7 @@ func createVault(t *testing.T, user, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return v.ID
+	return v.Id.String()
 }
 
 func (d *device) write(path, content string) {
@@ -649,17 +649,17 @@ func TestPrivateVaultRoundTripAndOpacity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := mgrA.Adopt(pv.ID, mat); err != nil {
+	if err := mgrA.Adopt(pv.Id.String(), mat); err != nil {
 		t.Fatal(err)
 	}
-	a := newDevice(t, "ada", "laptop", pv.ID, mgrA.Cipher(pv.ID))
+	a := newDevice(t, "ada", "laptop", pv.Id.String(), mgrA.Cipher(pv.Id.String()))
 	secret := "the treasure is buried under the old oak tree"
 	a.write("Journal/day one.md", "# Day one\n"+secret+"\n")
 	a.write("Journal/day two.md", "# Day two\n")
 	a.sync()
 
 	// The server stores nothing readable: opaque paths, ciphertext blobs.
-	tree, err := client.GetTree(ctx, pv.ID)
+	tree, err := client.GetTree(ctx, pv.Id.String())
 	if err != nil || len(tree.Items) != 2 {
 		t.Fatalf("tree: %v %v", tree, err)
 	}
@@ -668,7 +668,7 @@ func TestPrivateVaultRoundTripAndOpacity(t *testing.T) {
 			t.Errorf("server sees a readable entry: %+v", it)
 		}
 		var blob bytes.Buffer
-		if _, err := client.GetBlob(ctx, pv.ID, it.Hash, &blob); err != nil {
+		if _, err := client.GetBlob(ctx, pv.Id.String(), it.Hash, &blob); err != nil {
 			t.Fatal(err)
 		}
 		if bytes.Contains(blob.Bytes(), []byte("treasure")) || !bytes.HasPrefix(blob.Bytes(), []byte("NDS1")) {
@@ -677,19 +677,19 @@ func TestPrivateVaultRoundTripAndOpacity(t *testing.T) {
 	}
 
 	// A new device unlocks with the passphrase and reads everything.
-	envs, err := client.GetKeyEnvelopes(ctx, pv.ID)
+	envs, err := client.GetKeyEnvelopes(ctx, pv.Id.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	mgrB := crypto.NewManager(crypto.Options{Store: crypto.NewMemoryStore(), KDFTarget: time.Millisecond})
-	b := newDevice(t, "ada", "desktop", pv.ID, mgrB.Cipher(pv.ID))
+	b := newDevice(t, "ada", "desktop", pv.Id.String(), mgrB.Cipher(pv.Id.String()))
 	if err := b.eng.Sync(ctx); !errors.Is(err, syncpkg.ErrLocked) {
 		t.Fatalf("a locked vault must not sync, got %v", err)
 	}
-	if _, err := mgrB.Unlock(pv.ID, envs, "wrong passphrase here", false); !errors.Is(err, crypto.ErrWrongSecret) {
+	if _, err := mgrB.Unlock(pv.Id.String(), envs, "wrong passphrase here", false); !errors.Is(err, crypto.ErrWrongSecret) {
 		t.Fatalf("wrong passphrase: %v", err)
 	}
-	if _, err := mgrB.Unlock(pv.ID, envs, "correct horse battery staple", false); err != nil {
+	if _, err := mgrB.Unlock(pv.Id.String(), envs, "correct horse battery staple", false); err != nil {
 		t.Fatal(err)
 	}
 	b.sync()
@@ -723,8 +723,8 @@ func TestPrivateVaultRoundTripAndOpacity(t *testing.T) {
 	// A device holding the wrong key can never decrypt: tampering/foreign keys fail loudly.
 	mgrC := crypto.NewManager(crypto.Options{Store: crypto.NewMemoryStore(), KDFTarget: time.Millisecond})
 	other, _ := mgrC.NewMaterial("another passphrase entirely")
-	_ = mgrC.Adopt(pv.ID, other)
-	c := newDevice(t, "ada", "intruder", pv.ID, mgrC.Cipher(pv.ID))
+	_ = mgrC.Adopt(pv.Id.String(), other)
+	c := newDevice(t, "ada", "intruder", pv.Id.String(), mgrC.Cipher(pv.Id.String()))
 	c.sync() // paths cannot be decrypted: every entry is skipped, nothing is written
 	if len(c.files()) != 0 {
 		t.Fatalf("a device with the wrong key wrote files: %v", sortedKeys(c.files()))
@@ -740,37 +740,37 @@ func TestPrivateVaultRecoveryKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = mgr.Adopt(pv.ID, mat)
-	a := newDevice(t, "ada", "laptop", pv.ID, mgr.Cipher(pv.ID))
+	_ = mgr.Adopt(pv.Id.String(), mat)
+	a := newDevice(t, "ada", "laptop", pv.Id.String(), mgr.Cipher(pv.Id.String()))
 	a.write("n.md", "keep me\n")
 	a.sync()
 
 	// The passphrase is lost: the recovery key unlocks, then a new passphrase is set on the server.
-	envs, _ := client.GetKeyEnvelopes(ctx, pv.ID)
+	envs, _ := client.GetKeyEnvelopes(ctx, pv.Id.String())
 	mgr2 := crypto.NewManager(crypto.Options{Store: crypto.NewMemoryStore(), KDFTarget: time.Millisecond})
-	requires, err := mgr2.Unlock(pv.ID, envs, mat.RecoveryKey, true)
+	requires, err := mgr2.Unlock(pv.Id.String(), envs, mat.RecoveryKey, true)
 	if err != nil || !requires {
 		t.Fatalf("recovery unlock: %v %v", requires, err)
 	}
-	env, err := mgr2.NewPassphraseEnvelope(pv.ID, "a brand new passphrase!")
+	env, err := mgr2.NewPassphraseEnvelope(pv.Id.String(), "a brand new passphrase!")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := client.PutKeyEnvelope(ctx, pv.ID, env); err != nil {
+	if err := client.PutKeyEnvelope(ctx, pv.Id.String(), env); err != nil {
 		t.Fatal(err)
 	}
-	b := newDevice(t, "ada", "desktop", pv.ID, mgr2.Cipher(pv.ID))
+	b := newDevice(t, "ada", "desktop", pv.Id.String(), mgr2.Cipher(pv.Id.String()))
 	b.sync()
 	if b.read("n.md") != "keep me\n" {
 		t.Fatalf("data not recovered: %q", b.read("n.md"))
 	}
 	// And the new passphrase works on a fresh device with the envelopes now on the server.
-	envs, _ = client.GetKeyEnvelopes(ctx, pv.ID)
+	envs, _ = client.GetKeyEnvelopes(ctx, pv.Id.String())
 	mgr3 := crypto.NewManager(crypto.Options{Store: crypto.NewMemoryStore(), KDFTarget: time.Millisecond})
-	if _, err := mgr3.Unlock(pv.ID, envs, "a brand new passphrase!", false); err != nil {
+	if _, err := mgr3.Unlock(pv.Id.String(), envs, "a brand new passphrase!", false); err != nil {
 		t.Fatalf("new passphrase: %v", err)
 	}
-	if _, err := mgr3.Unlock(pv.ID, envs, "correct horse battery staple", false); err == nil {
+	if _, err := mgr3.Unlock(pv.Id.String(), envs, "correct horse battery staple", false); err == nil {
 		t.Fatal("the old passphrase must stop working")
 	}
 	_ = io.EOF

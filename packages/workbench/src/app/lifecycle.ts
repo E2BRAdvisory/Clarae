@@ -1,0 +1,67 @@
+// Teardown of the whole workbench: the desktop window closing, the Web UI page being left. Pending
+// edits are written first (D-04), within a bounded time so leaving can never hang on a stuck write.
+import { Quit } from '../../wailsjs/runtime/runtime';
+import { installActivityFeed } from './activity';
+import { api } from './api';
+import { Events } from './events';
+import type { PlatformKind } from '../platform';
+import { saveWorkspaceNow } from '../shell/useVaultSession';
+import { useAppStore } from '../state/store';
+import { flushAllNotes, hasUnsavedNotes, withTimeout } from '../workspaces/flush';
+
+/** How long an exit waits for the pending writes (the desktop host gives up a few seconds later). */
+export const EXIT_FLUSH_MS = 5_000;
+
+/**
+ * Writes every pending edit (edits that cannot be saved in their file go to a copy next to it) and
+ * the workspace layout. Resolves after `timeoutMs` at the latest; never rejects.
+ */
+export async function flushWorkbench(timeoutMs = EXIT_FLUSH_MS): Promise<void> {
+  await withTimeout(
+    (async () => {
+      const report = await flushAllNotes({ rescue: true });
+      if (report.failed.length)
+        console.error('memobrain: unsaved edits could not be written:', report.failed.join(', '));
+      const vault = useAppStore.getState().vault;
+      if (vault) await saveWorkspaceNow(vault.id);
+    })(),
+    timeoutMs,
+  );
+}
+
+/**
+ * Hooks the workbench to the host's teardown; returns the function that unhooks it.
+ * - desktop: the Go host holds the first close request and emits `app:before-close`; the
+ *   workbench flushes and asks to quit again (the host quits anyway if it never hears back);
+ * - web: leaving the page with unsaved edits asks the browser to confirm;
+ * - both: a hidden window (minimized, tab switched or being closed) starts writing at once, and user
+ *   input restarts the idle lock timer of private vaults (app/activity).
+ */
+export function installLifecycle(kind: PlatformKind): () => void {
+  const offs: (() => void)[] = [];
+  if (kind === 'desktop') {
+    let closing = false;
+    offs.push(
+      api.on(Events.beforeClose, () => {
+        if (closing) return;
+        closing = true;
+        void flushWorkbench().finally(() => Quit());
+      }),
+    );
+  } else {
+    const beforeUnload = (e: BeforeUnloadEvent): void => {
+      if (!hasUnsavedNotes()) return;
+      void flushAllNotes();
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    offs.push(() => window.removeEventListener('beforeunload', beforeUnload));
+  }
+  const onHidden = (): void => {
+    if (document.visibilityState === 'hidden' && hasUnsavedNotes()) void flushAllNotes();
+  };
+  document.addEventListener('visibilitychange', onHidden);
+  offs.push(() => document.removeEventListener('visibilitychange', onHidden));
+  offs.push(installActivityFeed());
+  return () => offs.forEach((off) => off());
+}

@@ -38,7 +38,14 @@ export async function mergeActiveNote(): Promise<void> {
   if (!target) return;
   // Pending edits of the source must be on disk before they are copied.
   const active = useActiveNote.getState().note;
-  if (active?.path === source) await active.prepare();
+  if (active?.path === source) {
+    try {
+      await active.prepare();
+    } catch (e) {
+      await dialog.error(e); // edits that cannot be saved (a conflict) are not merged nor lost
+      return;
+    }
+  }
   const plan = await api.composer.planMerge(vault.id, source, target);
   const ok = await dialog.confirm(
     i18next.t('composer.mergeTitle'),

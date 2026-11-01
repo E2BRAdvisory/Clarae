@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"memobrain/apps/desktop/internal/crypto"
 	"memobrain/apps/desktop/internal/vault"
 	"memobrain/shared/hashing"
 	"memobrain/shared/pathrules"
@@ -81,12 +82,22 @@ type Engine struct {
 
 	run stdsync.Mutex // one cycle at a time
 
-	mu       stdsync.Mutex
-	status   Status
-	lastScan time.Time
+	mu     stdsync.Mutex
+	status Status
+	// lastScan is when the last complete scan started (see scan); it is kept
+	// in sync.db so the first scan after a restart trusts the same files a
+	// later scan would. scanLoaded: it was read from sync.db (under e.run).
+	lastScan   time.Time
+	scanLoaded bool
+	// hashFile hashes a vault file (FS.HashFile; replaced by tests to count reads).
+	hashFile func(rel string) (string, int64, error)
 	// candidates are remote changes that hit a locally modified file; they
-	// are resolved after the pull completed (§3.4.4 B).
-	candidates map[string]transportChange
+	// are resolved after the pull completed (§3.4.4 B). They mirror the
+	// pending_remote table (loaded once per run, under e.run): staged are the
+	// ones not written yet, saved with the next cursor update.
+	candidates    map[string]transportChange
+	staged        map[string]bool
+	pendingLoaded bool
 	// stop is set when a cycle must end early (quota, auth).
 	stop error
 	// active is true when the last cycle found something to do.
@@ -103,7 +114,7 @@ func New(cfg Config) *Engine {
 	if cfg.CacheDir == "" {
 		cfg.CacheDir = cfg.FS.Root() + "/" + pathrules.ConfigDir + "/cache/outbox"
 	}
-	e := &Engine{cfg: cfg, log: cfg.Logger, candidates: map[string]transportChange{}}
+	e := &Engine{cfg: cfg, log: cfg.Logger, candidates: map[string]transportChange{}, staged: map[string]bool{}, hashFile: cfg.FS.HashFile}
 	e.status = Status{VaultID: cfg.LocalID, Phase: PhaseIdle}
 	if cfg.Cipher != nil {
 		e.status.Kind = "private"
@@ -177,6 +188,9 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 	e.stop = nil
 	e.active = false
 	e.mu.Unlock()
+	if err := e.loadPending(ctx); err != nil {
+		return fmt.Errorf("load pending changes: %w", err)
+	}
 	if !e.tmpCleaned {
 		// Staging files of a write that crashed are never synced (pathrules); remove them once.
 		e.tmpCleaned = true
@@ -184,6 +198,7 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 			e.log.Info().Int("files", n).Msg("removed stale temporary files of interrupted writes")
 		}
 	}
+	var resolveErr error // files that could not be resolved: reported once the others are pushed
 	for round := 0; round < 6; round++ {
 		if err := e.scan(ctx); err != nil {
 			return fmt.Errorf("scan: %w", err)
@@ -193,7 +208,11 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 			return fmt.Errorf("pull: %w", err)
 		}
 		resolved, err := e.resolveCandidates(ctx)
-		if err != nil {
+		var failure *resolveFailure
+		switch {
+		case errors.As(err, &failure):
+			resolveErr = fmt.Errorf("resolve: %w", err)
+		case err != nil:
 			return fmt.Errorf("resolve: %w", err)
 		}
 		pushed := false
@@ -210,13 +229,13 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 		}
 		if !pulled && !resolved && !pushed {
 			_ = e.cfg.DB.PruneOutbox(ctx)
-			return nil
+			return resolveErr
 		}
 		e.mu.Lock()
 		e.active = true
 		e.mu.Unlock()
 	}
-	return nil
+	return resolveErr
 }
 
 // Active reports whether the last cycle found anything to pull or push (the
@@ -238,42 +257,176 @@ func (e *Engine) Exclusive(fn func() error) error {
 // Renamed tells the engine that a file or folder moved so identity survives
 // even if the move also rewrote content (link updates): without this hint a
 // renamed-and-edited note would look like a delete plus a new file (§3.4.4 A).
+// A scan that ran between the move and the hint may already have recorded the
+// new path as a new file (and the old one as deleted): the two rows are merged
+// back into the original identity. Everything happens in one transaction.
 func (e *Engine) Renamed(ctx context.Context, from, to string) error {
 	e.run.Lock()
 	defer e.run.Unlock()
-	rows, err := e.cfg.DB.Files(ctx)
+	return e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+		rows, err := tx.Files(ctx)
+		if err != nil {
+			return err
+		}
+		target := func(p string) (string, bool) {
+			switch {
+			case p == from:
+				return to, true
+			case pathrules.HasPrefix(p, from):
+				return to + p[len(from):], true
+			}
+			return "", false
+		}
+		byPath := make(map[string]File, len(rows))
+		moving := map[string]bool{} // file ids that follow the move
+		for _, r := range rows {
+			byPath[r.Path] = r
+			if _, ok := target(r.Path); ok {
+				moving[r.FileID] = true
+			}
+		}
+		for _, r := range rows {
+			np, ok := target(r.Path)
+			if !ok {
+				continue
+			}
+			var adopted *File
+			if other, taken := byPath[np]; taken && !moving[other.FileID] {
+				if other.State == StateLocalNew && other.ServerRev == 0 {
+					// The scan saw the moved file as a new one: it is this file.
+					if err := tx.DeleteFile(ctx, other.FileID); err != nil {
+						return err
+					}
+					if err := tx.DeleteOutbox(ctx, other.Path); err != nil {
+						return err
+					}
+					adopted = &other
+				} else {
+					// A stale row (its file was replaced by the moved one): give it
+					// a free name so the next scan reports it as gone.
+					other.Path = uniquePath(np, func(p string) bool { _, used := byPath[p]; return used || e.diskExists(p) })
+					byPath[other.Path] = other
+					if err := tx.PutFile(ctx, other); err != nil {
+						return err
+					}
+				}
+				delete(byPath, np)
+			}
+			wasDeleted := r.State == StateLocalDeleted
+			if r.State == StateLocalNew {
+				r.Path = np
+			} else {
+				if r.MovedFrom == "" {
+					r.MovedFrom = r.Path
+				}
+				r.Path = np
+				switch r.State {
+				case StateSynced:
+					r.State = StateLocalMoved
+				case StateLocalModify:
+					r.State, r.Dirty = StateLocalMoved, true
+				}
+			}
+			if adopted != nil {
+				if adopted.LocalHash != r.LocalHash && r.State == StateLocalMoved {
+					r.Dirty = true
+				}
+				r.LocalHash, r.LocalSize, r.LocalMtime = adopted.LocalHash, adopted.LocalSize, adopted.LocalMtime
+				r.Attempts, r.LastError = 0, ""
+			}
+			if wasDeleted && (adopted != nil || e.diskExists(np)) {
+				// The scan had marked the old path deleted, but the file lives on
+				// at the new one. Whether its content still matches the server
+				// cannot be told from a plaintext hash in a private vault (nor for
+				// a file modified before it vanished), so it is sent again unless
+				// provably equal.
+				r.State = StateLocalMoved
+				r.Dirty = e.cfg.Cipher != nil || r.LocalHash != r.ServerHash
+			}
+			byPath[r.Path] = r
+			if err := tx.PutFile(ctx, r); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// loadPending reads the parked remote changes once per run (under e.run).
+func (e *Engine) loadPending(ctx context.Context) error {
+	if e.pendingLoaded {
+		return nil
+	}
+	saved, err := e.cfg.DB.Pending(ctx)
 	if err != nil {
 		return err
 	}
-	for _, r := range rows {
-		var np string
-		switch {
-		case r.Path == from:
-			np = to
-		case pathrules.HasPrefix(r.Path, from):
-			np = to + r.Path[len(from):]
-		default:
-			continue
-		}
-		if r.State == StateLocalNew {
-			r.Path = np
-		} else {
-			if r.MovedFrom == "" {
-				r.MovedFrom = r.Path
-			}
-			r.Path = np
-			switch r.State {
-			case StateSynced:
-				r.State = StateLocalMoved
-			case StateLocalModify:
-				r.State, r.Dirty = StateLocalMoved, true
-			}
-		}
-		if err := e.cfg.DB.PutFile(ctx, r); err != nil {
-			return err
+	for id, c := range saved {
+		if cur, ok := e.candidates[id]; !ok || cur.Rev < c.Rev {
+			e.candidates[id] = c
 		}
 	}
+	e.pendingLoaded = true
 	return nil
+}
+
+// addCandidate parks a remote change for resolution. It is saved to sync.db by
+// saveCandidates, in the transaction that moves the cursor past it.
+func (e *Engine) addCandidate(c transportChange) {
+	if cur, ok := e.candidates[c.FileID]; ok && cur.Rev > c.Rev {
+		return
+	}
+	e.candidates[c.FileID] = c
+	e.staged[c.FileID] = true
+}
+
+// saveCandidates writes the staged candidates with db (a transaction or the
+// plain database); call committed once db's writes are durable.
+func (e *Engine) saveCandidates(ctx context.Context, db *DB) (committed func(), err error) {
+	ids := make([]string, 0, len(e.staged))
+	for id := range e.staged {
+		c, ok := e.candidates[id]
+		if !ok {
+			continue
+		}
+		if err := db.PutPending(ctx, c, e.cfg.Now()); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return func() {
+		for _, id := range ids {
+			delete(e.staged, id)
+		}
+	}, nil
+}
+
+// dropCandidate forgets a candidate once it is settled.
+func (e *Engine) dropCandidate(ctx context.Context, fileID string) error {
+	if err := e.cfg.DB.DeletePending(ctx, fileID); err != nil {
+		return err
+	}
+	delete(e.candidates, fileID)
+	delete(e.staged, fileID)
+	return nil
+}
+
+// isLocked reports whether err comes from a vault key that went away (the
+// vault was locked, by the user or by the idle timeout, during the cycle).
+func (e *Engine) isLocked(err error) bool {
+	if errors.Is(err, ErrLocked) || errors.Is(err, crypto.ErrLocked) {
+		return true
+	}
+	return e.cfg.Cipher != nil && e.cfg.Cipher.Locked()
+}
+
+// lockedErr turns a cipher failure caused by a locked vault into ErrLocked, so
+// the cycle ends in PhaseLocked instead of treating the data as unreadable.
+func (e *Engine) lockedErr(err error) error {
+	if err == nil || errors.Is(err, ErrLocked) || !e.isLocked(err) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrLocked, err)
 }
 
 func hashHex(data []byte) string { return hashing.Sum(data).Hex() }

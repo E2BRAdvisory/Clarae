@@ -88,6 +88,7 @@ func TestConformance(t *testing.T) {
 				t.Errorf("copyOf = %q, want %q", res.CopyOf, m.CopyOf)
 			}
 			if m.Kind == "md" {
+				checkNoSilentLoss(t, string(base), string(ours), string(theirs), res)
 				if string(res.Merged) != string(want) {
 					t.Errorf("merged:\n%q\nwant:\n%q", res.Merged, want)
 				}

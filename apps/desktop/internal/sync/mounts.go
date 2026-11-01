@@ -55,8 +55,8 @@ type MountMeta struct {
 // MountOf converts the server's description of an accepted share.
 func MountOf(m transport.Mount) MountMeta {
 	return MountMeta{
-		ShareID: m.ShareID, CloudVaultID: m.VaultID, Scope: m.Scope, Permission: m.Permission,
-		Name: m.DisplayName, OwnerName: m.OwnerName, ResourceType: m.ResourceType,
+		ShareID: m.ShareId.String(), CloudVaultID: m.VaultId.String(), Scope: m.Scope, Permission: string(m.Permission),
+		Name: m.DisplayName, OwnerName: m.OwnerName, ResourceType: string(m.ResourceType),
 	}
 }
 
@@ -155,7 +155,13 @@ func (m *Manager) MountOfVault(ctx context.Context, localID string) (MountMeta, 
 // folder is theirs, nothing restricts it).
 func (m *Manager) Permission(ctx context.Context, localID string) string {
 	mv, err := m.get(localID)
-	if err != nil || mv.engine == nil && mv.cloudID == "" {
+	if err != nil {
+		return ""
+	}
+	m.mu.Lock()
+	unlinked := mv.engine == nil && mv.cloudID == ""
+	m.mu.Unlock()
+	if unlinked {
 		return ""
 	}
 	if mm, ok, _ := readMountMeta(ctx, mv.db); ok {
@@ -191,17 +197,14 @@ func (m *Manager) UpdateMount(ctx context.Context, localID string, mm MountMeta)
 		}
 	}
 	_ = mv.db.DeleteMeta(ctx, MetaRevoked)
-	m.mu.Lock()
-	m.stopLocked(mv)
-	m.mu.Unlock()
-	return m.activate(ctx, mv)
+	return m.activate(ctx, mv) // stops the running engine and waits for it first
 }
 
 // markRevoked stops a mount whose share is gone and tells the UI.
 func (m *Manager) markRevoked(ctx context.Context, mv *managed) {
 	_ = mv.db.SetMeta(context.WithoutCancel(ctx), MetaRevoked, "1")
 	m.mu.Lock()
-	m.stopLocked(mv)
+	m.stopLocked(mv) // no wait: this may run on the loop itself, which returns right after
 	m.mu.Unlock()
 	name, _ := mv.db.Meta(context.WithoutCancel(ctx), MetaMountName)
 	share, _ := mv.db.Meta(context.WithoutCancel(ctx), MetaShareID)
@@ -222,10 +225,10 @@ func ForgetMount(ctx context.Context, root string) error {
 	}
 	defer func() { _ = sdb.Close() }()
 	db := NewDB(sdb)
-	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
+	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaLastScan, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
 		_ = db.DeleteMeta(ctx, k)
 	}
-	_, err = sdb.ExecContext(ctx, `DELETE FROM sync_files; DELETE FROM outbox; DELETE FROM conflicts; UPDATE sync_cursor SET last_seq = 0`)
+	_, err = sdb.ExecContext(ctx, resetSQL)
 	return err
 }
 

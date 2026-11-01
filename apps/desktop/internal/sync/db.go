@@ -8,6 +8,7 @@ package sync
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -50,11 +51,42 @@ type File struct {
 	LastError  string
 }
 
-// DB wraps sync.db.
-type DB struct{ db *sql.DB }
+// querier is what *sql.DB and *sql.Tx have in common.
+type querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// DB wraps sync.db. Inside WithTx the same methods run on the transaction.
+type DB struct {
+	sdb *sql.DB
+	db  querier
+	tx  bool
+}
 
 // NewDB wraps an open sync.db (see store.Open with store.KindSync).
-func NewDB(db *sql.DB) *DB { return &DB{db: db} }
+func NewDB(db *sql.DB) *DB { return &DB{sdb: db, db: db} }
+
+// WithTx runs fn in one sync.db transaction: every method of the *DB it
+// receives is part of it, and it commits only when fn returns nil. The
+// connection pool has a single connection, so fn must not use the outer *DB
+// (it would wait for the transaction forever). Nested calls join the
+// transaction already open.
+func (d *DB) WithTx(ctx context.Context, fn func(tx *DB) error) error {
+	if d.tx {
+		return fn(d)
+	}
+	tx, err := d.sdb.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(&DB{sdb: d.sdb, db: tx, tx: true}); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
 
 const fileCols = `path, file_id, server_rev, base_rev, server_hash, local_hash, local_size, local_mtime, state, moved_from, dirty, tombstoned, conflict_of, attempts, last_error`
 
@@ -318,7 +350,8 @@ const (
 	MetaBootstrapped = "bootstrapped"
 	MetaPaused       = "paused"
 	MetaLinkedAt     = "linked_at"
-	MetaPollSeconds  = "poll_s" // user-chosen polling interval (0 = automatic)
+	MetaPollSeconds  = "poll_s"       // user-chosen polling interval (0 = automatic)
+	MetaLastScan     = "last_scan_ns" // start of the last complete local scan (Unix ns)
 )
 
 // MetaInt reads an integer metadata value.
@@ -333,3 +366,86 @@ func (d *DB) MetaInt(ctx context.Context, key string) (int, error) {
 	}
 	return n, nil
 }
+
+// PutPending stores (or replaces) the remote change parked for a file until
+// its merge succeeds. A change older than the one already parked is ignored.
+func (d *DB) PutPending(ctx context.Context, c transportChange, now time.Time) error {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	_, err = d.db.ExecContext(ctx, `
+		INSERT INTO pending_remote (file_id, rev, change, created_at) VALUES (?,?,?,?)
+		ON CONFLICT(file_id) DO UPDATE SET rev=excluded.rev, change=excluded.change
+		WHERE excluded.rev >= pending_remote.rev`,
+		c.FileID, c.Rev, string(data), now.UnixNano())
+	return err
+}
+
+// DeletePending drops the parked change of a file.
+func (d *DB) DeletePending(ctx context.Context, fileID string) error {
+	_, err := d.db.ExecContext(ctx, `DELETE FROM pending_remote WHERE file_id = ?`, fileID)
+	return err
+}
+
+// Pending returns every parked remote change, keyed by file id.
+func (d *DB) Pending(ctx context.Context) (map[string]transportChange, error) {
+	rows, err := d.db.QueryContext(ctx, `SELECT file_id, change FROM pending_remote`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]transportChange{}
+	for rows.Next() {
+		var id, data string
+		if err := rows.Scan(&id, &data); err != nil {
+			return nil, err
+		}
+		var c transportChange
+		if err := json.Unmarshal([]byte(data), &c); err != nil {
+			return nil, fmt.Errorf("pending change of %s: %w", id, err)
+		}
+		out[id] = c
+	}
+	return out, rows.Err()
+}
+
+// Quarantined is a server entry this device could not read.
+type Quarantined struct {
+	FileID    string
+	Rev       int
+	Reason    string
+	CreatedAt time.Time
+}
+
+// Quarantine records a server entry that cannot be applied (undecryptable path).
+func (d *DB) Quarantine(ctx context.Context, fileID string, rev int, reason string, now time.Time) error {
+	_, err := d.db.ExecContext(ctx, `
+		INSERT INTO quarantine (file_id, rev, reason, created_at) VALUES (?,?,?,?)
+		ON CONFLICT(file_id) DO UPDATE SET rev=excluded.rev, reason=excluded.reason`,
+		fileID, rev, reason, now.UnixNano())
+	return err
+}
+
+// Quarantined lists the entries that could not be applied.
+func (d *DB) Quarantined(ctx context.Context) ([]Quarantined, error) {
+	rows, err := d.db.QueryContext(ctx, `SELECT file_id, rev, reason, created_at FROM quarantine ORDER BY file_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Quarantined
+	for rows.Next() {
+		var q Quarantined
+		var ts int64
+		if err := rows.Scan(&q.FileID, &q.Rev, &q.Reason, &ts); err != nil {
+			return nil, err
+		}
+		q.CreatedAt = time.Unix(0, ts)
+		out = append(out, q)
+	}
+	return out, rows.Err()
+}
+
+// resetSQL empties the synchronization state (unlink, forgotten mount).
+const resetSQL = `DELETE FROM sync_files; DELETE FROM outbox; DELETE FROM conflicts; DELETE FROM pending_remote; DELETE FROM quarantine; UPDATE sync_cursor SET last_seq = 0`

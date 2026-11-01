@@ -65,6 +65,9 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		if r.Attempts >= MaxAttempts {
 			continue
 		}
+		if _, pending := e.candidates[r.FileID]; pending {
+			continue // a server change waits to be merged first: sending now could only conflict
+		}
 		p, ok, err := e.prepare(ctx, r)
 		if err != nil {
 			return false, err
@@ -166,6 +169,9 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 		if e.cfg.Cipher != nil {
 			tok, key, err := e.cfg.Cipher.EncryptPath(row.Path)
 			if err != nil {
+				if e.isLocked(err) {
+					return p, false, e.lockedErr(err) // not the file's fault: never park it
+				}
 				return p, false, e.park(ctx, row, "cannot encrypt the path: "+err.Error())
 			}
 			op.Path, op.PathKey = tok, key
@@ -197,6 +203,9 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 		p.localHash, p.mtime, p.size = cont.Hash, cont.Mtime.UnixNano(), cont.Size
 		data, blobHash, err := e.blobFor(ctx, row, kind, cont.Hash, cont.Data)
 		if err != nil {
+			if e.isLocked(err) {
+				return p, false, e.lockedErr(err)
+			}
 			return p, false, e.park(ctx, row, "cannot encrypt the content: "+err.Error())
 		}
 		if int64(len(data)) > limit { // the ciphertext is slightly larger than the plaintext
@@ -375,6 +384,21 @@ func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpRe
 		row.Attempts++
 		if res.CurrentHash == "" && p.op.Op == syncproto.OpModify {
 			row.Tombstoned, row.ServerRev = true, res.CurrentRev
+		} else if res.CurrentHash != "" && res.CurrentRev > row.ServerRev {
+			// Safety net: the server is ahead of what we know. Normally the next
+			// pull brings that change, but if it was already passed (a candidate
+			// lost by an older version) nothing would: park the current revision
+			// as a candidate so the next round merges it instead of retrying the
+			// same stale base until the file is parked (D-04). A real change
+			// pulled meanwhile replaces it (same or newer revision).
+			if cur, ok := e.candidates[row.FileID]; !ok || cur.Rev < res.CurrentRev {
+				e.addCandidate(transportChange{Seq: res.CurrentSeq, FileID: row.FileID, Op: "modify", Rev: res.CurrentRev, BlobHash: res.CurrentHash})
+				saved, err := e.saveCandidates(ctx, e.cfg.DB)
+				if err != nil {
+					return false, err
+				}
+				saved()
+			}
 		}
 		if row.Attempts >= MaxAttempts {
 			row.State, row.LastError = StateConflict, "too many concurrent edits: resolve manually"

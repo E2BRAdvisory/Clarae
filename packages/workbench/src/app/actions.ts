@@ -1,4 +1,5 @@
 // High-level operations used by both the UI and the command registry.
+import i18next from 'i18next';
 import { api, errorCode, type Entry } from './api';
 import { applyTheme, effectiveTheme, type Theme } from './theme';
 import { useBookmarks } from '../bookmarks/store';
@@ -11,7 +12,7 @@ import { newNoteDir } from '../settings/locations';
 import { selectActivePath, useAppStore } from '../state/store';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
 import { dialog } from '../ui/dialogs';
-import { flushAllNotes } from '../workspaces/flush';
+import { flushAllNotes, settleNotes } from '../workspaces/flush';
 
 function vaultId(): string {
   const v = useAppStore.getState().vault;
@@ -114,7 +115,8 @@ export async function openVaultAt(path: string): Promise<void> {
   const prev = useAppStore.getState().vault;
   try {
     if (prev) {
-      await flushAllNotes();
+      // Edits that could not be written anywhere keep the vault open (the user resolves them first).
+      if (!(await settleNotes())) return;
       await saveWorkspaceNow(prev.id);
     }
     const info = await api.vault.open(path);
@@ -125,6 +127,20 @@ export async function openVaultAt(path: string): Promise<void> {
   } catch (e) {
     await dialog.error(e);
   }
+}
+
+/**
+ * Locks a private vault (forgets its key on this device). The open documents are written first,
+ * since the core pushes what waits for upload before forgetting the key and a host may drop the
+ * clear-text copy once nothing is left to push; edits that cannot be saved go to a copy next to
+ * their file, and edits that cannot be written anywhere keep the vault unlocked (D-04).
+ * Resolves whether the vault was locked.
+ */
+export async function lockVault(id: string): Promise<boolean> {
+  const report = await flushAllNotes();
+  if (report.failed.length && !(await settleNotes())) return false;
+  await api.crypto.lock(id);
+  return true;
 }
 
 export interface RenameResult {
@@ -139,7 +155,20 @@ export async function renameEntry(
   confirm?: (plan: { notes: number; links: number }) => boolean | Promise<boolean>,
 ): Promise<RenameResult | null> {
   const id = vaultId();
+  // Pending edits go to disk first: the rename moves the files and rewrites links inside them,
+  // and an open note must not keep (and later write) text from before that.
+  const flushed = await flushAllNotes();
   const plan = await api.links.planRename(id, from, to);
+  const touched = (p: string): boolean =>
+    p === from || p.startsWith(from + '/') || plan.files.some((f) => f.path === p);
+  const blocked = flushed.failed.filter(touched);
+  if (blocked.length) {
+    await dialog.alert(
+      i18next.t('editor.notSavedTitle'),
+      i18next.t('editor.renameBlocked', { paths: blocked.join(', ') }),
+    );
+    return null;
+  }
   const notes = plan.files.length;
   const links = plan.files.reduce((n, f) => n + f.edits.length, 0);
   if (notes > 0 && confirm && !(await confirm({ notes, links }))) return null;

@@ -10,13 +10,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"memobrain/shared/hashing"
@@ -33,10 +37,50 @@ var (
 	ErrIsDirectory  = errors.New("is a directory")
 )
 
-// FS is a vault root on disk.
+// FS is a vault root on disk. It is safe for concurrent use: the Wails
+// bindings, the importer and the sync engine share one FS per vault, so every
+// mutation takes the locks described at lockPath and lockTree.
 type FS struct {
 	root     string // absolute, symlinks resolved
 	onChange atomic.Pointer[func(paths []string)]
+
+	// tree is held shared by content mutations (WriteFile, Mkdir) and
+	// exclusively by structural ones (Rename, Trash, Delete), which may move
+	// or remove a whole folder and therefore every path below it.
+	tree sync.RWMutex
+	// stripes serialize content mutations of the same path. A path maps to
+	// a stripe by its case-folded NFC key, so names that collide on a
+	// case-insensitive file system (A.md, a.md) share a stripe.
+	stripes [lockStripes]sync.Mutex
+}
+
+// lockStripes is the number of per-path mutexes; unrelated paths sharing a
+// stripe only wait for each other, which is harmless.
+const lockStripes = 64
+
+// lockPath makes the existence/hash check and the publication of a write to
+// normalized one atomic step with respect to every other mutation made
+// through this FS. It returns the unlock function. Never nest it, nor call it
+// while holding lockTree.
+func (f *FS) lockPath(normalized string) (unlock func()) {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(pathrules.Key(normalized)))
+	m := &f.stripes[h.Sum32()%lockStripes]
+	f.tree.RLock()
+	m.Lock()
+	return func() {
+		m.Unlock()
+		f.tree.RUnlock()
+	}
+}
+
+// lockTree excludes every other mutation made through this FS, for the
+// operations that move or remove folders (whose descendants a per-path lock
+// would not cover). Holding it, no per-path lock is needed, so there is no
+// lock ordering to get wrong.
+func (f *FS) lockTree() (unlock func()) {
+	f.tree.Lock()
+	return f.tree.Unlock
 }
 
 // SetOnChange registers a callback told, after every successful mutation made through this FS,
@@ -155,11 +199,29 @@ func (f *FS) ReadFile(rel string) (Content, error) {
 // hash to it, otherwise ErrHashMismatch is returned and nothing is written;
 // an empty expectedHash with an existing file means "overwrite". Pass
 // create=true to require that the file does not exist yet (ErrExists).
+//
+// The check and the replacement are atomic with respect to the other
+// mutations made through this FS: of two concurrent writes with the same
+// expectedHash exactly one succeeds. With create=true the file is published
+// with a hard link where the file system supports it, which also refuses a
+// file another program created meanwhile instead of replacing it.
 func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool) (Content, error) {
 	abs, normalized, err := f.Resolve(rel)
 	if err != nil {
 		return Content{}, err
 	}
+	c, err := f.writeFile(abs, normalized, data, expectedHash, create)
+	if err != nil {
+		return Content{}, err
+	}
+	f.changed(normalized) // outside the lock: the callback may call back into the FS
+	return c, nil
+}
+
+func (f *FS) writeFile(abs, normalized string, data []byte, expectedHash string, create bool) (Content, error) {
+	unlock := f.lockPath(normalized)
+	defer unlock()
+	perm := fs.FileMode(0o644)
 	if st, err := os.Stat(abs); err == nil {
 		if st.IsDir() {
 			return Content{}, ErrIsDirectory
@@ -176,6 +238,7 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 				return Content{}, ErrHashMismatch
 			}
 		}
+		perm = st.Mode().Perm() // keep the permissions the user gave the file
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return Content{}, err
 	} else if expectedHash != "" && !create {
@@ -185,14 +248,13 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return Content{}, err
 	}
-	if err := writeAtomic(abs, data); err != nil {
+	if err := writeAtomic(abs, data, perm, create); err != nil {
 		return Content{}, err
 	}
 	st, err := os.Stat(abs)
 	if err != nil {
 		return Content{}, err
 	}
-	f.changed(normalized)
 	return Content{Path: normalized, Data: data, Hash: hashing.Sum(data).Hex(), Mtime: st.ModTime(), Size: st.Size()}, nil
 }
 
@@ -200,9 +262,13 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 const (
 	stepTmpWritten = "tmp-written"   // temporary file holds the data, not yet fsynced
 	stepSynced     = "synced"        // data fsynced and closed
-	stepBeforeRen  = "before-rename" // mode set, rename not yet issued
-	stepRenamed    = "renamed"       // target replaced, directory not yet fsynced
+	stepBeforeRen  = "before-rename" // mode set, rename (or link) not yet issued
+	stepRenamed    = "renamed"       // target published, directory not yet fsynced
 )
+
+// linkFile publishes a staging file without replacing an existing target; a
+// variable so tests can simulate file systems without hard links.
+var linkFile = os.Link
 
 // crashHook, when set (tests only), is called after each step of writeAtomic.
 // A hook that panics or exits simulates a crash at that point: the deferred
@@ -215,7 +281,14 @@ func crashPoint(step string) {
 	}
 }
 
-func writeAtomic(abs string, data []byte) error {
+// writeAtomic stages data in a temporary file next to abs, fsyncs it and
+// publishes it as abs with mode perm. With noReplace an existing abs is never
+// replaced (ErrExists): the staging file is hard-linked to abs, which fails
+// atomically when abs exists. Where hard links are not available (the OPFS
+// file system of the browser build, FAT, some network shares) it falls back
+// to rename, relying on the caller's lockPath to have checked that abs does
+// not exist.
+func writeAtomic(abs string, data []byte, perm fs.FileMode, noReplace bool) error {
 	dir := filepath.Dir(abs)
 	tmp, err := os.CreateTemp(dir, tmpPrefix+"*")
 	if err != nil {
@@ -239,11 +312,26 @@ func writeAtomic(abs string, data []byte) error {
 		return err
 	}
 	crashPoint(stepSynced)
-	if err := os.Chmod(tmpName, 0o644); err != nil {
+	if err := os.Chmod(tmpName, perm); err != nil {
 		cleanup()
 		return err
 	}
 	crashPoint(stepBeforeRen)
+	if noReplace {
+		err := linkFile(tmpName, abs)
+		switch {
+		case err == nil:
+			// abs now names the staging inode; a leftover staging name
+			// (crash right here) is removed by CleanStaleTemp.
+			cleanup()
+			crashPoint(stepRenamed)
+			return syncDir(dir)
+		case errors.Is(err, fs.ErrExist):
+			cleanup()
+			return ErrExists
+		}
+		// No hard links on this file system: publish with rename below.
+	}
 	if err := os.Rename(tmpName, abs); err != nil {
 		cleanup()
 		return err
@@ -278,16 +366,28 @@ func (f *FS) CleanStaleTemp(olderThan time.Duration) (int, error) {
 	return n, err
 }
 
-// syncDir flushes the directory entry; best effort on platforms where
-// directories cannot be fsynced.
+// syncDir flushes the directory entry so that a rename survives a power
+// loss. It is best effort where directories cannot be fsynced (Windows, the
+// browser build, file systems that report the operation as unsupported); any
+// other failure is returned, since the write may not be durable.
 func syncDir(dir string) error {
+	if runtime.GOOS == "windows" || runtime.GOOS == "js" {
+		return nil
+	}
 	d, err := os.Open(dir)
 	if err != nil {
-		return nil //nolint:nilerr // best effort
+		return nil //nolint:nilerr // best effort: the data itself was fsynced
 	}
 	defer func() { _ = d.Close() }()
-	_ = d.Sync()
+	if err := d.Sync(); err != nil && !dirSyncUnsupported(err) {
+		return fmt.Errorf("fsync %s: %w", dir, err)
+	}
 	return nil
+}
+
+func dirSyncUnsupported(err error) bool {
+	return errors.Is(err, errors.ErrUnsupported) || errors.Is(err, syscall.EINVAL) ||
+		errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP)
 }
 
 // Mkdir creates a folder (and parents).
@@ -296,7 +396,10 @@ func (f *FS) Mkdir(rel string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(abs, 0o755); err != nil {
+	unlock := f.lockPath(normalized)
+	err = os.MkdirAll(abs, 0o755)
+	unlock()
+	if err != nil {
 		return err
 	}
 	f.changed(normalized)
@@ -313,6 +416,16 @@ func (f *FS) Rename(fromRel, toRel string) error {
 	if err != nil {
 		return err
 	}
+	if err := f.rename(from, to); err != nil {
+		return err
+	}
+	f.changed(fromNorm, toNorm)
+	return nil
+}
+
+func (f *FS) rename(from, to string) error {
+	unlock := f.lockTree()
+	defer unlock()
 	if _, err := os.Lstat(from); err != nil {
 		return err
 	}
@@ -326,11 +439,7 @@ func (f *FS) Rename(fromRel, toRel string) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
 	}
-	if err := os.Rename(from, to); err != nil {
-		return err
-	}
-	f.changed(fromNorm, toNorm)
-	return nil
+	return os.Rename(from, to)
 }
 
 // Trash moves a file or folder into the vault's .trash/ folder, keeping the
@@ -344,6 +453,17 @@ func (f *FS) Trash(rel string) (string, error) {
 	if pathrules.HasPrefix(normalized, pathrules.TrashDir) {
 		return "", fmt.Errorf("%s is already in the trash", normalized)
 	}
+	dest, err := f.trash(from, normalized)
+	if err != nil {
+		return "", err
+	}
+	f.changed(normalized, dest)
+	return dest, nil
+}
+
+func (f *FS) trash(from, normalized string) (string, error) {
+	unlock := f.lockTree()
+	defer unlock()
 	dest := pathrules.TrashDir + "/" + normalized
 	to, _, err := f.Resolve(dest)
 	if err != nil {
@@ -352,10 +472,22 @@ func (f *FS) Trash(rel string) (string, error) {
 	if _, err := os.Lstat(to); err == nil {
 		dir, base := pathrules.Split(dest)
 		ext := pathrules.Ext(base)
-		stem := strings.TrimSuffix(base, ext)
-		dest = dir + "/" + stem + " " + time.Now().Format("2006-01-02 15-04-05") + ext
-		if to, _, err = f.Resolve(dest); err != nil {
-			return "", err
+		stem := strings.TrimSuffix(base, ext) + " " + time.Now().Format("2006-01-02 15-04-05")
+		// os.Rename replaces an existing file: a name trashed twice within
+		// the same second gets a counter too.
+		for n := 1; ; n++ {
+			dest = dir + "/" + stem + ext
+			if n > 1 {
+				dest = fmt.Sprintf("%s/%s (%d)%s", dir, stem, n, ext)
+			}
+			if to, _, err = f.Resolve(dest); err != nil {
+				return "", err
+			}
+			if _, err := os.Lstat(to); errors.Is(err, fs.ErrNotExist) {
+				break
+			} else if err != nil {
+				return "", err
+			}
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
@@ -364,7 +496,6 @@ func (f *FS) Trash(rel string) (string, error) {
 	if err := os.Rename(from, to); err != nil {
 		return "", err
 	}
-	f.changed(normalized, dest)
 	return dest, nil
 }
 
@@ -374,7 +505,10 @@ func (f *FS) Delete(rel string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(abs); err != nil {
+	unlock := f.lockTree()
+	err = os.RemoveAll(abs)
+	unlock()
+	if err != nil {
 		return err
 	}
 	f.changed(normalized)

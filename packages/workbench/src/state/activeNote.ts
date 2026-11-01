@@ -6,9 +6,12 @@ export interface ActiveNote {
   path: string;
   /** Latest text, including edits that are not saved yet. */
   text: string;
-  /** Saves pending edits and returns the hash of what is on disk. */
+  /**
+   * Saves pending edits and returns the hash of what is on disk; rejects when the edits cannot be
+   * saved (conflict, write error), so nothing is written over them.
+   */
   prepare: () => Promise<string>;
-  /** Reloads the note after a property was written. */
+  /** Shows the note again after a property was written (unsaved edits are kept). */
   reload: () => void;
 }
 

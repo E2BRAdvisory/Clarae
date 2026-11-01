@@ -85,28 +85,32 @@ func (m *Manager) maxFileBytes() int64 {
 // its key is forgotten (0 = never).
 func (m *Manager) SetLockTimeout(d time.Duration) { m.crypto.SetLockTimeout(d) }
 
+// SetEnvelopeV2 switches the writing of v2 key envelopes (ADR-0034,
+// features.envelope_v2): at creation, on passphrase or recovery key changes
+// and as an upgrade after an unlock.
+func (m *Manager) SetEnvelopeV2(on bool) { m.crypto.SetEnvelopeV2(on) }
+
 // idleLockInterval is how often idle private vaults are looked for.
 const idleLockInterval = 30 * time.Second
 
-// lockIdleVaults locks the private vaults idle past the timeout and tells the UI.
+// lockIdleVaults locks the private vaults idle past the timeout and tells the
+// UI. Each one first pushes what waits for upload (drainAndLock): the key is
+// forgotten only afterwards, and only if the vault was not unlocked again
+// meanwhile. A key no open vault uses is simply forgotten.
 func (m *Manager) lockIdleVaults() {
-	ids := m.crypto.LockIdle()
-	if len(ids) == 0 {
-		return
-	}
 	m.mu.Lock()
-	var hit []*managed
-	for _, mv := range m.vaults {
-		for _, id := range ids {
-			if mv.cloudID == id && mv.engine != nil {
-				hit = append(hit, mv)
-			}
-		}
-	}
+	ctx := m.appCtx
 	m.mu.Unlock()
-	for _, mv := range hit {
-		mv.engine.setStatus(func(s *Status) { s.Phase, s.Error = PhaseLocked, "" })
-		m.emit(EventLocked, map[string]any{"vaultId": mv.localID})
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for _, cloud := range m.crypto.IdleVaults() {
+		err := m.drainAndLock(ctx, cloud, LockReasonIdle, func() (bool, error) {
+			return m.crypto.LockExpired(cloud)
+		})
+		if err != nil {
+			m.log.Warn().Err(err).Msg("sync: idle lock")
+		}
 	}
 }
 
@@ -135,6 +139,8 @@ type Manager struct {
 	managedLocked atomic.Bool
 	// maxFile is the upload size limit from the distributed configuration (0 = default).
 	maxFile atomic.Int64
+	// remoteFor builds the server side of an engine (tests replace it; nil = the session's client).
+	remoteFor func(ref string) Remote
 }
 
 type managed struct {
@@ -142,15 +148,43 @@ type managed struct {
 	fs      *vault.FS
 	sdb     *sql.DB
 	db      *DB
+	kick    chan struct{}
+	now     chan struct{} // immediate sync request (skips the debounce)
 
+	// Guarded by Manager.mu: activate, Unlink and the loops change them
+	// concurrently with the UI calls (read them through linked/engineOf).
 	engine  *Engine
 	cloudID string
 	kind    string
 	scope   string // share scope of a mount ("" for a vault of one's own)
 	cancel  context.CancelFunc
-	kick    chan struct{}
-	now     chan struct{} // immediate sync request (skips the debounce)
 	running bool
+	done    chan struct{} // closed when the last started loop has returned
+}
+
+// linkView is a consistent snapshot of a linked vault's engine and identity,
+// taken under Manager.mu; its fields shadow the live ones of managed.
+type linkView struct {
+	*managed
+	engine  *Engine
+	cloudID string
+	kind    string
+	scope   string
+}
+
+// engineOf returns the current engine of a vault (nil when not linked).
+func (m *Manager) engineOf(mv *managed) *Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return mv.engine
+}
+
+// waitLoop blocks until a loop stopped by stopLocked has returned. Call it
+// without holding m.mu: the loop takes it on its way out.
+func waitLoop(done <-chan struct{}) {
+	if done != nil {
+		<-done
+	}
 }
 
 // NewManager creates the manager; emit publishes UI events (may be a no-op).
@@ -209,6 +243,14 @@ type sessionRemote struct {
 
 var errSignedOut = errors.New("not signed in to the cloud")
 
+// remote returns the server side of the engine of a vault reference.
+func (m *Manager) remote(ref string) Remote {
+	if m.remoteFor != nil {
+		return m.remoteFor(ref)
+	}
+	return sessionRemote{m: m, vault: ref}
+}
+
 func (r sessionRemote) do(fn func(Remote) error) error {
 	c := r.m.session.Client()
 	if c == nil {
@@ -259,16 +301,30 @@ func (m *Manager) Attach(ctx context.Context, localID string, fs *vault.FS) erro
 	}
 	mv := &managed{localID: localID, fs: fs, sdb: sdb, db: NewDB(sdb), kick: make(chan struct{}, 1), now: make(chan struct{}, 1)}
 	m.mu.Lock()
-	if old := m.vaults[localID]; old != nil {
-		m.stopLocked(old)
+	old := m.vaults[localID]
+	var oldDone <-chan struct{}
+	if old != nil {
+		oldDone = m.stopLocked(old)
 	}
 	m.vaults[localID] = mv
 	m.mu.Unlock()
+	if old != nil {
+		// The replaced entry's loop must be gone before its database closes
+		// and before a second engine starts on the same folder.
+		waitLoop(oldDone)
+		_ = old.sdb.Close()
+	}
 	return m.activate(ctx, mv)
 }
 
-// activate builds the engine of a linked vault and starts its loop.
+// activate builds the engine of a linked vault and starts its loop. A loop
+// still running on the vault is stopped and waited for first: two engines on
+// one folder would not serialize their cycles.
 func (m *Manager) activate(ctx context.Context, mv *managed) error {
+	m.mu.Lock()
+	done := m.stopLocked(mv)
+	m.mu.Unlock()
+	waitLoop(done)
 	cloud, err := mv.db.Meta(ctx, MetaCloudVault)
 	if err != nil || cloud == "" {
 		m.publish(mv)
@@ -293,7 +349,7 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		}
 	}
 	cfg := Config{
-		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: sessionRemote{m: m, vault: transport.Ref(cloud, mount.Scope)},
+		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: m.remote(transport.Ref(cloud, mount.Scope)),
 		ReadOnly: isMount && mount.Permission == PermViewer,
 		DeviceID: deviceID, DeviceName: name, UserID: userID, Logger: m.log.With().Str("vault", mv.localID).Logger(),
 		OnStatus:     func(s Status) { m.emit(EventStatus, s) },
@@ -312,7 +368,10 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		_, _ = m.crypto.Restore(cloud) // unlock silently from the keychain when possible
 		cfg.Cipher = m.crypto.Cipher(cloud)
 	}
-	mv.engine, mv.cloudID, mv.kind, mv.scope = New(cfg), cloud, kind, mount.Scope
+	eng := New(cfg)
+	m.mu.Lock()
+	mv.engine, mv.cloudID, mv.kind, mv.scope = eng, cloud, kind, mount.Scope
+	m.mu.Unlock()
 	m.publish(mv)
 	if _, ok := m.session.Info(); ok {
 		m.startLoop(mv)
@@ -321,23 +380,26 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 }
 
 func (m *Manager) publish(mv *managed) {
-	if mv.engine != nil {
-		m.emit(EventStatus, mv.engine.Status())
+	if eng := m.engineOf(mv); eng != nil {
+		m.emit(EventStatus, eng.Status())
 		return
 	}
 	m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseIdle, Kind: ""})
 }
 
-// Detach stops synchronizing a vault and closes its state (vault closed).
+// Detach stops synchronizing a vault and closes its state (vault closed). It
+// returns once the vault's loop is gone, so no cycle uses the closed database.
 func (m *Manager) Detach(localID string) {
 	m.mu.Lock()
 	mv := m.vaults[localID]
 	delete(m.vaults, localID)
+	var done <-chan struct{}
 	if mv != nil {
-		m.stopLocked(mv)
+		done = m.stopLocked(mv)
 	}
 	m.mu.Unlock()
 	if mv != nil {
+		waitLoop(done)
 		_ = mv.sdb.Close()
 	}
 }
@@ -359,12 +421,16 @@ func (m *Manager) Shutdown() {
 	}
 }
 
-func (m *Manager) stopLocked(mv *managed) {
+// stopLocked cancels the vault's loop (m.mu held) and returns the channel
+// closed when it has returned; callers that free or replace what the loop uses
+// wait on it with waitLoop after releasing m.mu. The loop itself must not wait.
+func (m *Manager) stopLocked(mv *managed) <-chan struct{} {
 	if mv.cancel != nil {
 		mv.cancel()
 		mv.cancel = nil
 	}
 	mv.running = false
+	return mv.done
 }
 
 func (m *Manager) get(localID string) (*managed, error) {
@@ -377,15 +443,17 @@ func (m *Manager) get(localID string) (*managed, error) {
 	return mv, nil
 }
 
-func (m *Manager) linked(localID string) (*managed, error) {
-	mv, err := m.get(localID)
-	if err != nil {
-		return nil, err
+func (m *Manager) linked(localID string) (linkView, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mv := m.vaults[localID]
+	if mv == nil {
+		return linkView{}, fmt.Errorf("vault %s is not open", localID)
 	}
 	if mv.engine == nil {
-		return nil, errors.New("this vault is not connected to the cloud")
+		return linkView{}, errors.New("this vault is not connected to the cloud")
 	}
-	return mv, nil
+	return linkView{managed: mv, engine: mv.engine, cloudID: mv.cloudID, kind: mv.kind, scope: mv.scope}, nil
 }
 
 // SessionChanged is called when the cloud login changes: loops start when the
@@ -395,21 +463,21 @@ func (m *Manager) SessionChanged() {
 	m.mu.Lock()
 	vs := make([]*managed, 0, len(m.vaults))
 	for _, v := range m.vaults {
-		vs = append(vs, v)
+		if v.engine != nil {
+			vs = append(vs, v)
+		}
 	}
 	ctx := m.appCtx
 	m.mu.Unlock()
 	for _, mv := range vs {
-		if mv.engine == nil {
-			continue
-		}
 		if ok {
 			m.startLoop(mv)
 		} else {
 			m.mu.Lock()
-			m.stopLocked(mv)
+			m.stopLocked(mv) // the same engine restarts at sign-in: no need to wait
+			kind := mv.kind
 			m.mu.Unlock()
-			m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseOffline, Kind: mv.kind, Error: "signed out of the cloud"})
+			m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseOffline, Kind: kind, Error: "signed out of the cloud"})
 		}
 	}
 	m.restartNotifier(ctx, info, ok)
@@ -527,10 +595,14 @@ func (m *Manager) kickNow(mv *managed) {
 // Renamed forwards a rename (with its link updates) to the engine.
 func (m *Manager) Renamed(ctx context.Context, localID, from, to string) {
 	mv, err := m.get(localID)
-	if err != nil || mv.engine == nil {
+	if err != nil {
 		return
 	}
-	if err := mv.engine.Renamed(ctx, from, to); err != nil {
+	eng := m.engineOf(mv)
+	if eng == nil {
+		return
+	}
+	if err := eng.Renamed(ctx, from, to); err != nil {
 		m.log.Warn().Err(err).Msg("sync: rename hint failed")
 	}
 }
@@ -553,16 +625,32 @@ func (m *Manager) startLoop(mv *managed) {
 		base = context.Background()
 	}
 	ctx, cancel := context.WithCancel(base)
-	mv.cancel, mv.running = cancel, true
+	prev, done := mv.done, make(chan struct{})
+	mv.cancel, mv.running, mv.done = cancel, true, done
+	eng, scope := mv.engine, mv.scope
 	m.mu.Unlock()
-	go m.loop(ctx, mv)
+	go func() {
+		defer close(done)
+		// A loop stopped without waiting (sign-out, revocation) may still be
+		// finishing its cycle: never run two at once.
+		if prev != nil {
+			select {
+			case <-prev:
+			case <-ctx.Done():
+				return
+			}
+		}
+		m.loop(ctx, mv, eng, scope)
+	}()
 }
 
 // loop is the scheduler of one vault (§3.4.4): sync at start, after local
 // changes (debounced), after a server notification, and by polling with an
 // adaptive interval (30 s growing to 5 min while idle; 5 min when the realtime
 // stream is up). Errors back off exponentially with jitter.
-func (m *Manager) loop(ctx context.Context, mv *managed) {
+// The engine and the scope are the ones the loop was started with: activate
+// and Unlink change mv's fields only after stopping and waiting for it.
+func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope string) {
 	poll := minPoll
 	failures := 0
 	next := time.NewTimer(0)
@@ -592,12 +680,12 @@ func (m *Manager) loop(ctx context.Context, mv *managed) {
 			}
 		case <-mv.now:
 		}
-		err := mv.engine.Sync(ctx)
+		err := eng.Sync(ctx)
 		var wait time.Duration
 		switch {
 		case err == nil:
 			failures = 0
-			if mv.engine.Active() {
+			if eng.Active() {
 				poll = minPoll
 			} else {
 				poll = min(poll*2, maxPoll)
@@ -614,13 +702,17 @@ func (m *Manager) loop(ctx context.Context, mv *managed) {
 				wait = time.Duration(max(secs, 15)) * time.Second // the chosen interval overrides the adaptive one
 			}
 		case errors.Is(err, ErrLocked):
-			m.emit(EventLocked, map[string]any{"vaultId": mv.localID})
+			// Record the local changes the cycle could not see, so the
+			// count of what waits for the next unlock is right.
+			var scanErr error
+			_ = eng.Exclusive(func() error { scanErr = eng.scan(ctx); return nil })
+			m.emit(EventLocked, m.lockedEvent(ctx, mv.localID, eng, mv.db, LockReasonSync, scanErr))
 			wait = maxPoll // an unlock kicks the loop
 		case errors.Is(err, ErrPaused):
 			wait = maxPoll // resume kicks the loop
 		case errors.Is(err, context.Canceled):
 			return
-		case mv.scope != "" && isRevocation(err):
+		case scope != "" && isRevocation(err):
 			m.markRevoked(ctx, mv)
 			return
 		default:

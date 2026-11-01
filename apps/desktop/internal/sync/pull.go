@@ -40,7 +40,8 @@ func (e *Engine) fetch(ctx context.Context, fileID, hash string) ([]byte, error)
 	if e.cfg.Cipher == nil {
 		return buf.Bytes(), nil
 	}
-	return e.cfg.Cipher.DecryptBlob(fileID, buf.Bytes())
+	data, err := e.cfg.Cipher.DecryptBlob(fileID, buf.Bytes())
+	return data, e.lockedErr(err)
 }
 
 // fetchRevision returns the content of an old revision (the base of a merge).
@@ -52,7 +53,8 @@ func (e *Engine) fetchRevision(ctx context.Context, fileID string, rev int) ([]b
 	if e.cfg.Cipher == nil {
 		return buf.Bytes(), nil
 	}
-	return e.cfg.Cipher.DecryptBlob(fileID, buf.Bytes())
+	data, err := e.cfg.Cipher.DecryptBlob(fileID, buf.Bytes())
+	return data, e.lockedErr(err)
 }
 
 func (e *Engine) diskExists(path string) bool {
@@ -167,11 +169,23 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 			applied = applied || did
 			e.progress(i+1, len(ch.Items))
 		}
-		if ch.NextSeq > cur {
-			if err := e.cfg.DB.SetCursor(ctx, ch.NextSeq, false); err != nil {
-				return applied, err
+		// The parked candidates of this page are saved with the cursor that
+		// moves past them: the server never sends them again (§3.4.4 B).
+		var saved func()
+		err = e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+			var err error
+			if saved, err = e.saveCandidates(ctx, tx); err != nil {
+				return err
 			}
+			if ch.NextSeq > cur {
+				return tx.SetCursor(ctx, ch.NextSeq, false)
+			}
+			return nil
+		})
+		if err != nil {
+			return applied, err
 		}
+		saved()
 		if !ch.HasMore {
 			return applied, nil
 		}
@@ -187,14 +201,19 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 	if has && row.ServerRev >= c.Rev {
 		return false, nil // already applied (our own echo, or a replay)
 	}
+	if c.Op == "delete" {
+		return e.applyDelete(ctx, row, has, c) // needs no path
+	}
 	path, err := e.clearPath(c.Path)
 	if err != nil {
-		e.log.Error().Err(err).Str("file_id", c.FileID).Msg("cannot decrypt a path: change skipped")
-		return false, nil
+		if e.isLocked(err) {
+			// The key went away during the cycle: stop here, before the cursor
+			// moves past a change that was not applied.
+			return false, e.lockedErr(err)
+		}
+		return false, e.quarantine(ctx, c.FileID, c.Rev, row, has, err)
 	}
 	switch c.Op {
-	case "delete":
-		return e.applyDelete(ctx, row, has, c)
 	case "move":
 		return e.applyMove(ctx, row, has, c, path)
 	default:
@@ -202,11 +221,55 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 			return true, e.createFromRemote(ctx, c, path)
 		}
 		if row.State == StateSynced {
+			if row.Path != path {
+				// A modification that also carries a new path (a move we
+				// missed): move first, then take the content.
+				if row, err = e.relocate(ctx, row, path); err != nil {
+					return false, err
+				}
+			}
 			return e.overwriteFromRemote(ctx, row, c)
 		}
-		e.candidates[c.FileID] = c
+		e.addCandidate(c)
 		return false, nil
 	}
+}
+
+// quarantine records a server entry whose path cannot be decrypted with the
+// vault key (corrupt or foreign token). It is neither applied nor taken for a
+// deletion; the local file, if any, is left alone and shows the reason.
+func (e *Engine) quarantine(ctx context.Context, fileID string, rev int, row File, has bool, cause error) error {
+	e.log.Error().Err(cause).Str("file_id", fileID).Int("rev", rev).Msg("cannot decrypt a server path: change quarantined")
+	if err := e.cfg.DB.Quarantine(ctx, fileID, rev, "cannot decrypt the server path: "+cause.Error(), e.cfg.Now()); err != nil {
+		return err
+	}
+	if has {
+		row.LastError = "the server version of this file cannot be decrypted"
+		return e.cfg.DB.PutFile(ctx, row)
+	}
+	return nil
+}
+
+// relocate moves a local file to the path the server has for it, keeping its
+// revisions (the content is applied separately, and a failure there must find
+// the change still to apply).
+func (e *Engine) relocate(ctx context.Context, row File, newPath string) (File, error) {
+	if row.Path == newPath {
+		return row, nil
+	}
+	if err := e.makeRoom(ctx, newPath); err != nil {
+		return row, err
+	}
+	if e.diskExists(row.Path) {
+		if err := e.cfg.FS.Rename(row.Path, newPath); err != nil {
+			return row, err
+		}
+	}
+	row.Path = newPath
+	if st, err := os.Stat(e.absPath(newPath)); err == nil {
+		row.LocalMtime = st.ModTime().UnixNano()
+	}
+	return row, e.cfg.DB.PutFile(ctx, row)
 }
 
 func (e *Engine) createFromRemote(ctx context.Context, c transport.Change, path string) error {
@@ -235,10 +298,10 @@ func (e *Engine) overwriteFromRemote(ctx context.Context, row File, c transport.
 	cont, err := e.cfg.FS.WriteFile(row.Path, data, row.LocalHash, false)
 	if errors.Is(err, vault.ErrHashMismatch) {
 		// Edited on disk since the last scan: it is a conflict candidate after all.
-		if row, err = e.refreshRow(ctx, row); err != nil {
+		if _, err = e.refreshRow(ctx, row); err != nil {
 			return false, err
 		}
-		e.candidates[c.FileID] = c
+		e.addCandidate(c)
 		return false, nil
 	}
 	if err != nil {
@@ -265,10 +328,10 @@ func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.
 	case StateSynced, StateLocalModify, StateLocalMoved, StateConflict:
 		// Rename versus modify: both apply. Rename versus rename: the first
 		// commit (the server's) wins and the local move is dropped.
+		if err := e.makeRoom(ctx, newPath); err != nil {
+			return false, err
+		}
 		if e.diskExists(row.Path) {
-			if err := e.makeRoom(ctx, newPath); err != nil {
-				return false, err
-			}
 			if err := e.cfg.FS.Rename(row.Path, newPath); err != nil {
 				return false, err
 			}
@@ -290,8 +353,13 @@ func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.
 		}
 		return true, e.cfg.DB.PutFile(ctx, row)
 	case StateLocalDeleted:
-		// We deleted it; the deletion wins over a pure rename.
-		row.Path, row.ServerRev = newPath, c.Rev
+		// We deleted it; the deletion wins over a pure rename. The delete we
+		// send needs no path: the row only follows the server's when that path
+		// is free (a local file may have taken it meanwhile).
+		row.ServerRev = c.Rev
+		if !e.pathTaken(ctx, newPath) {
+			row.Path = newPath
+		}
 		return true, e.cfg.DB.PutFile(ctx, row)
 	default:
 		return false, nil
@@ -355,13 +423,20 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 	remote := make([]remoteFile, 0, len(tree.Items))
 	known := make(map[string]bool, len(tree.Items))
 	for _, it := range tree.Items {
+		// Listed by the server: never a deletion, even when unreadable.
+		known[it.FileID] = true
 		p, err := e.clearPath(it.Path)
 		if err != nil {
-			e.log.Error().Err(err).Str("file_id", it.FileID).Msg("cannot decrypt a path: file skipped")
+			if e.isLocked(err) {
+				return e.lockedErr(err)
+			}
+			row, has := byID[it.FileID]
+			if err := e.quarantine(ctx, it.FileID, it.Rev, row, has, err); err != nil {
+				return err
+			}
 			continue
 		}
 		remote = append(remote, remoteFile{it, p})
-		known[it.FileID] = true
 	}
 	sort.Slice(remote, func(i, j int) bool { return remote[i].path < remote[j].path })
 
@@ -373,14 +448,24 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 		e.progress(i+1, len(remote))
 		synthetic := transport.Change{FileID: rf.FileID, Op: "modify", Path: rf.Path, Rev: rf.Rev, BlobHash: rf.Hash, Size: rf.Size}
 		if row, ok := byID[rf.FileID]; ok {
-			if row.ServerRev >= rf.Rev {
+			// The revision alone is not enough: a move applied by an earlier,
+			// interrupted bootstrap already raised it without the content.
+			if row.ServerRev >= rf.Rev && row.ServerHash == rf.Hash && row.Path == rf.path {
 				continue
 			}
 			if row.Path != rf.path {
-				mv := synthetic
-				mv.Op = "move"
-				if _, err := e.applyMoveClear(ctx, row, mv, rf.path); err != nil {
-					return err
+				if row.State == StateSynced && row.ServerHash != rf.Hash {
+					// Moved and modified: move without claiming the new revision,
+					// which only the content applied below may do.
+					if _, err := e.relocate(ctx, row, rf.path); err != nil {
+						return err
+					}
+				} else {
+					mv := synthetic
+					mv.Op = "move"
+					if _, err := e.applyMoveClear(ctx, row, mv, rf.path); err != nil {
+						return err
+					}
 				}
 				row, _, _ = e.cfg.DB.GetFileByID(ctx, rf.FileID)
 			}
@@ -401,11 +486,14 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 				same = hashHex(data) == local.LocalHash
 			}
 			if same {
-				if err := e.cfg.DB.DeleteFile(ctx, local.FileID); err != nil {
-					return err
-				}
+				oldID := local.FileID
 				local.FileID, local.ServerRev, local.BaseRev, local.ServerHash, local.State = rf.FileID, rf.Rev, rf.Rev, rf.Hash, StateSynced
-				if err := e.cfg.DB.PutFile(ctx, local); err != nil {
+				if err := e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+					if err := tx.DeleteFile(ctx, oldID); err != nil {
+						return err
+					}
+					return tx.PutFile(ctx, local)
+				}); err != nil {
 					return err
 				}
 				continue
@@ -427,10 +515,21 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 			}
 		}
 	}
-	if err := e.cfg.DB.SetCursor(ctx, tree.AsOfSeq, true); err != nil {
+	var saved func()
+	if err := e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+		var err error
+		if saved, err = e.saveCandidates(ctx, tx); err != nil {
+			return err
+		}
+		if err := tx.SetCursor(ctx, tree.AsOfSeq, true); err != nil {
+			return err
+		}
+		return tx.SetMeta(ctx, MetaBootstrapped, "1")
+	}); err != nil {
 		return err
 	}
-	return e.cfg.DB.SetMeta(ctx, MetaBootstrapped, "1")
+	saved()
+	return nil
 }
 
 // applyMoveClear and applyContentClear are the entry points used by bootstrap
@@ -447,7 +546,7 @@ func (e *Engine) applyContentClear(ctx context.Context, row File, has bool, c tr
 		_, err := e.overwriteFromRemote(ctx, row, c)
 		return err
 	}
-	e.candidates[c.FileID] = c
+	e.addCandidate(c)
 	return nil
 }
 

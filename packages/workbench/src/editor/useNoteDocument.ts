@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorCode } from '../app/api';
 import { Events, type FileChangedPayload } from '../app/events';
-import { registerNoteFlusher } from '../workspaces/flush';
+import { registerNoteFlusher, reportFlush, writeRescueCopy } from '../workspaces/flush';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 
@@ -16,23 +16,44 @@ export interface NoteDocument {
   error: string;
   /** The latest text, including edits not yet saved. */
   current: () => string;
+  /** Hash of the file version the editor text is based on (the last load or successful write). */
+  savedHash: () => string;
   /** Call on every edit. */
   edit: (text: string) => void;
-  /** Saves now; resolves once the write finished (or immediately when clean). */
-  flush: () => Promise<void>;
-  /** Reloads from disk, discarding unsaved edits. */
+  /**
+   * Saves now, after any write in flight; resolves true when the file holds the editor's text,
+   * false when the edits are still only in memory (conflict, write error).
+   */
+  flush: () => Promise<boolean>;
+  /** Reloads from disk, discarding unsaved edits (the user's explicit choice). */
   reload: () => Promise<void>;
-  /** Saves ignoring a conflict: the editor wins. */
-  overwrite: () => Promise<void>;
+  /** Shows the file's new content if it changed on disk; unsaved edits are kept (as a conflict). */
+  refresh: () => Promise<void>;
+  /** Saves ignoring a conflict: the editor wins. Resolves true once written. */
+  overwrite: () => Promise<boolean>;
 }
 
 /** Default autosave delay; drawings use a longer one (they are written whole). */
 export const NOTE_DEBOUNCE_MS = 500;
 
+/** Rounds of a flush when the text keeps changing while it is written. */
+const FLUSH_ROUNDS = 5;
+/** Overwrite attempts when the file keeps changing between reading its hash and writing. */
+const OVERWRITE_ATTEMPTS = 3;
+/** Re-reads of an external change when a write of ours landed meanwhile. */
+const REFRESH_ATTEMPTS = 5;
+
+type Outcome = 'saved' | 'dirty' | 'failed';
+
 /**
  * Loads a note and keeps it saved. Writes carry the hash of the last read
  * (WriteNote expectedHash), so an external edit is detected instead of
  * overwritten; the user then chooses to reload or overwrite.
+ *
+ * Loads and writes run one at a time (a promise chain), so each write uses the hash the previous
+ * one returned and two saves never race with the same stale hash. A generation counter, bumped by
+ * every load and successful write, lets an external-change read that a write overtook be retried
+ * instead of being taken for somebody else's edit.
  */
 export function useNoteDocument(
   vaultId: string,
@@ -56,67 +77,90 @@ export function useNoteDocument(
   const latest = useRef('');
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const saving = useRef<Promise<void> | null>(null);
   const conflict = useRef(false);
+  /** Every load and write, in order; replaced (new identity) by each job queued. */
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const generation = useRef(0);
 
-  const load = useCallback(async () => {
-    try {
-      const note = await api.vault.readNote(vaultId, path);
-      hashRef.current = note.hash;
-      latest.current = note.content;
+  const enqueue = useCallback(<T>(job: () => Promise<T>): Promise<T> => {
+    const run = chain.current.then(job);
+    chain.current = run.catch(() => undefined);
+    return run;
+  }, []);
+
+  // A write of `text` landed with `newHash`.
+  const accepted = useCallback((newHash: string, text: string) => {
+    hashRef.current = newHash;
+    generation.current++;
+    conflict.current = false;
+    setHash(newHash);
+    if (latest.current === text) {
       dirty.current = false;
-      conflict.current = false;
-      setHash(note.hash);
       setSave('saved');
-      setState((s) => ({
-        status: 'ready',
-        content: note.content,
-        version: s.version + 1,
-        error: '',
-      }));
-    } catch (e) {
-      setState((s) => ({ ...s, status: 'error', error: String(e) }));
+    } else {
+      setSave('dirty'); // edited again while saving
     }
-  }, [vaultId, path]);
+  }, []);
+
+  const rejected = useCallback((e: unknown) => {
+    const code = errorCode(e);
+    if (code === 'conflict' || code === 'not-found') {
+      conflict.current = true;
+      setSave('conflict');
+    } else {
+      setState((s) => ({ ...s, error: String(e) }));
+      setSave('error');
+    }
+  }, []);
+
+  const load = useCallback(
+    () =>
+      enqueue(async () => {
+        try {
+          const note = await api.vault.readNote(vaultId, path);
+          hashRef.current = note.hash;
+          latest.current = note.content;
+          dirty.current = false;
+          conflict.current = false;
+          generation.current++;
+          setHash(note.hash);
+          setSave('saved');
+          setState((s) => ({
+            status: 'ready',
+            content: note.content,
+            version: s.version + 1,
+            error: '',
+          }));
+        } catch (e) {
+          setState((s) => ({ ...s, status: 'error', error: String(e) }));
+        }
+      }),
+    [vaultId, path, enqueue],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const doSave = useCallback(
-    async (force: boolean): Promise<void> => {
-      if (saving.current) await saving.current;
-      if (!dirty.current && !force) return;
-      if (conflict.current && !force) return;
-      const text = latest.current;
-      setSave('saving');
-      const run = (async () => {
+  // One write of the latest text with the latest hash, after whatever is in flight.
+  const saveOnce = useCallback(
+    (): Promise<Outcome> =>
+      enqueue(async (): Promise<Outcome> => {
+        if (!dirty.current) return 'saved';
+        // A conflict waits for the user; a document that never loaded has no base to write over.
+        if (conflict.current || hashRef.current === '') return 'failed';
+        const text = latest.current;
+        setSave('saving');
         try {
-          const res = await api.vault.writeNote(vaultId, path, text, force ? '' : hashRef.current);
-          hashRef.current = res.hash;
-          setHash(res.hash);
-          conflict.current = false;
-          if (latest.current === text) {
-            dirty.current = false;
-            setSave('saved');
-          } else {
-            setSave('dirty'); // edited again while saving
-          }
+          const res = await api.vault.writeNote(vaultId, path, text, hashRef.current);
+          accepted(res.hash, text);
+          return dirty.current ? 'dirty' : 'saved';
         } catch (e) {
-          if (errorCode(e) === 'conflict') {
-            conflict.current = true;
-            setSave('conflict');
-          } else {
-            setState((s) => ({ ...s, error: String(e) }));
-            setSave('error');
-          }
+          rejected(e);
+          return 'failed';
         }
-      })();
-      saving.current = run;
-      await run;
-      saving.current = null;
-    },
-    [vaultId, path],
+      }),
+    [vaultId, path, enqueue, accepted, rejected],
   );
 
   const edit = useCallback(
@@ -125,53 +169,133 @@ export function useNoteDocument(
       dirty.current = true;
       setSave((s) => (s === 'conflict' ? s : 'dirty'));
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => void doSave(false), debounceMs);
+      timer.current = setTimeout(() => void saveOnce(), debounceMs);
     },
-    [doSave, debounceMs],
+    [saveOnce, debounceMs],
   );
 
-  const flush = useCallback(async () => {
-    clearTimeout(timer.current);
-    await doSave(false);
-  }, [doSave]);
+  const flush = useCallback(async (): Promise<boolean> => {
+    for (let round = 0; round < FLUSH_ROUNDS; round++) {
+      clearTimeout(timer.current);
+      const outcome = await saveOnce();
+      if (outcome !== 'dirty') return outcome === 'saved';
+    }
+    return !dirty.current;
+  }, [saveOnce]);
 
-  // Lets "load workspace" write every pending edit before the layout is replaced.
-  useEffect(() => registerNoteFlusher(flush), [flush]);
+  // The Go binding reads an empty expected hash as "create", so overwriting means writing over the
+  // hash the file has now (or creating it again when it is gone), retried if it keeps changing.
+  const overwrite = useCallback(
+    (): Promise<boolean> =>
+      enqueue(async (): Promise<boolean> => {
+        clearTimeout(timer.current);
+        const text = latest.current;
+        setSave('saving');
+        for (let attempt = 0; attempt < OVERWRITE_ATTEMPTS; attempt++) {
+          let base = '';
+          try {
+            base = (await api.vault.readNote(vaultId, path)).hash;
+          } catch (e) {
+            if (errorCode(e) !== 'not-found') {
+              rejected(e);
+              return false;
+            }
+          }
+          try {
+            const res = await api.vault.writeNote(vaultId, path, text, base);
+            accepted(res.hash, text);
+            return true;
+          } catch (e) {
+            const code = errorCode(e);
+            if (code !== 'conflict' && code !== 'exists' && code !== 'not-found') {
+              rejected(e);
+              return false;
+            }
+          }
+        }
+        conflict.current = true;
+        setSave('conflict');
+        return false;
+      }),
+    [vaultId, path, enqueue, accepted, rejected],
+  );
 
-  // Save pending edits when the note is closed.
+  const refresh = useCallback(async (): Promise<void> => {
+    for (let attempt = 0; attempt < REFRESH_ATTEMPTS; attempt++) {
+      const before = chain.current;
+      await before; // a write of ours in flight lands first
+      const gen = generation.current;
+      let note;
+      try {
+        note = await api.vault.readNote(vaultId, path);
+      } catch {
+        return; // deleted or renamed meanwhile: the tab is closed or retargeted by the store
+      }
+      // A load or write was queued or landed while reading: the read may predate it.
+      if (chain.current !== before || gen !== generation.current) continue;
+      if (note.hash === hashRef.current) return;
+      if (!dirty.current) {
+        // Nothing unsaved: just show the new content.
+        hashRef.current = note.hash;
+        latest.current = note.content;
+        generation.current++;
+        setHash(note.hash);
+        setState((s) => ({ ...s, content: note.content, version: s.version + 1 }));
+      } else {
+        conflict.current = true;
+        setSave('conflict');
+      }
+      return;
+    }
+  }, [vaultId, path]);
+
+  // Keeps edits that cannot be saved in the file in a copy next to it.
+  const rescue = useCallback(
+    (): Promise<string | null> =>
+      enqueue(async () => {
+        if (!dirty.current) return null;
+        const text = latest.current;
+        const copy = await writeRescueCopy(vaultId, path, text);
+        if (latest.current === text) dirty.current = false;
+        return copy;
+      }),
+    [vaultId, path, enqueue],
+  );
+
+  // Lets "load workspace", closing the vault, renaming and quitting write every pending edit first.
+  useEffect(
+    () => registerNoteFlusher({ vaultId, path, flush, rescue, dirty: () => dirty.current }),
+    [vaultId, path, flush, rescue],
+  );
+
+  // Save pending edits when the note is closed: after the write in flight, with the latest hash.
+  // What cannot be saved in the file (a conflict, an error) goes to a copy, and the user is told.
   useEffect(
     () => () => {
       clearTimeout(timer.current);
-      if (dirty.current && !conflict.current)
-        void api.vault
-          .writeNote(vaultId, path, latest.current, hashRef.current)
-          .catch(() => undefined);
+      if (!dirty.current) return;
+      void (async () => {
+        if (await flush()) return;
+        if (!dirty.current) return;
+        try {
+          const copy = await rescue();
+          if (copy) await reportFlush({ failed: [], rescued: [copy] });
+        } catch (e) {
+          console.error(`memobrain: unsaved edits of ${path} could not be written`, e);
+          await reportFlush({ failed: [path], rescued: [] });
+        }
+      })();
     },
-    [vaultId, path],
+    [path, flush, rescue],
   );
 
   // External change of this file.
   useEffect(() => {
     return api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
       if (p.vaultId !== vaultId || !p.paths.includes(path)) return;
-      void api.vault
-        .readNote(vaultId, path)
-        .then((note) => {
-          if (note.hash === hashRef.current) return;
-          if (!dirty.current) {
-            // Nothing unsaved: just show the new content.
-            hashRef.current = note.hash;
-            latest.current = note.content;
-            setHash(note.hash);
-            setState((s) => ({ ...s, content: note.content, version: s.version + 1 }));
-          } else {
-            conflict.current = true;
-            setSave('conflict');
-          }
-        })
-        .catch(() => undefined); // deleted or renamed meanwhile: the tab is closed or retargeted by the store
+      void refresh();
     });
-  }, [vaultId, path]);
+  }, [vaultId, path, refresh]);
 
   return {
     status: state.status,
@@ -181,9 +305,11 @@ export function useNoteDocument(
     save,
     error: state.error,
     current: () => latest.current,
+    savedHash: () => hashRef.current,
     edit,
     flush,
     reload: load,
-    overwrite: () => doSave(true),
+    refresh,
+    overwrite,
   };
 }

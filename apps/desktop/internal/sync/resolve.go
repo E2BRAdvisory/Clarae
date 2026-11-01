@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 
@@ -12,8 +13,23 @@ import (
 	"memobrain/shared/merge"
 )
 
+// errRetryLater means the file changed on disk while it was being resolved:
+// the candidate stays parked and the next round starts over from the new content.
+var errRetryLater = errors.New("file changed during resolution")
+
+// resolveFailure reports files whose resolution failed for a reason of their
+// own (e.g. an unreadable blob): their candidates are kept, and the cycle goes
+// on with the other files before reporting it.
+type resolveFailure struct{ err error }
+
+func (r *resolveFailure) Error() string { return r.err.Error() }
+func (r *resolveFailure) Unwrap() error { return r.err }
+
 // resolveCandidates settles every file that was changed both here and on the
-// server (§3.4.5), using the strategy of the decision table.
+// server (§3.4.5), using the strategy of the decision table. A candidate is
+// forgotten only once its resolution is written: a failure keeps it (in
+// sync.db too) for the next round, because the changelog will not bring the
+// change again (D-04).
 func (e *Engine) resolveCandidates(ctx context.Context) (bool, error) {
 	if len(e.candidates) == 0 {
 		return false, nil
@@ -24,22 +40,45 @@ func (e *Engine) resolveCandidates(ctx context.Context) (bool, error) {
 	}
 	sort.Strings(ids)
 	did := false
+	var firstErr error
 	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return did, err
+		}
 		c := e.candidates[id]
-		delete(e.candidates, id)
 		row, ok, err := e.cfg.DB.GetFileByID(ctx, id)
 		if err != nil {
 			return did, err
 		}
 		if !ok || row.BaseRev >= c.Rev {
+			if err := e.dropCandidate(ctx, id); err != nil {
+				return did, err
+			}
 			continue
 		}
-		if err := e.resolveOne(ctx, row, c); err != nil {
+		err = e.resolveOne(ctx, row, c)
+		switch {
+		case errors.Is(err, errRetryLater):
+			did = true // another round rescans the file and tries again
+			continue
+		case err != nil:
+			if ctx.Err() != nil || e.isLocked(err) || isNetwork(err) {
+				return did, e.lockedErr(err)
+			}
+			// This file cannot be settled now (e.g. its blob is unreadable):
+			// the others go on, the cycle reports the failure.
+			e.log.Warn().Err(err).Str("path", row.Path).Msg("cannot resolve a concurrent change, kept for the next round")
+			if firstErr == nil {
+				firstErr = &resolveFailure{fmt.Errorf("%s: %w", row.Path, err)}
+			}
+			continue
+		}
+		if err := e.dropCandidate(ctx, id); err != nil {
 			return did, err
 		}
 		did = true
 	}
-	return did, nil
+	return did, firstErr
 }
 
 func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) error {
@@ -81,7 +120,10 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 		cont, err := e.cfg.FS.WriteFile(row.Path, remote, local.Hash, false)
 		if errors.Is(err, vault.ErrHashMismatch) {
 			row.Dirty = true
-			return e.cfg.DB.PutFile(ctx, row)
+			if err := e.cfg.DB.PutFile(ctx, row); err != nil {
+				return err
+			}
+			return errRetryLater // now a modification: merged next round
 		}
 		if err != nil {
 			return err
@@ -109,6 +151,9 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 
 	base, err := e.fetchRevision(ctx, c.FileID, row.BaseRev)
 	if err != nil {
+		if ctx.Err() != nil || e.isLocked(err) || isNetwork(err) {
+			return e.lockedErr(err) // not a pruned history: try again later
+		}
 		base = nil // history pruned: merge without ancestor (conflicts surface as such)
 	}
 	sameAuthor := c.AuthorID != "" && c.AuthorID == e.cfg.UserID
@@ -143,13 +188,43 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 
 func (e *Engine) finishMerge(ctx context.Context, row File, c transportChange, strategy merge.Strategy, res merge.Result, local vault.Content, remote []byte) error {
 	ours := local.Data // what the user had, before the merged text replaces it
+
+	// Not mergeable: the path takes the merged (server) version and the losing
+	// side is saved as a new file that syncs like any other and shows in the
+	// conflict view. The copy is written before the original is replaced, so
+	// a failure in between never loses either version.
+	var cp *File
+	if !res.Clean {
+		content := ours
+		if res.CopyOf == merge.Theirs {
+			content = remote
+		}
+		copyPath := conflictPath(row.Path, e.cfg.DeviceName, e.cfg.Now(), func(p string) bool { return e.pathTaken(ctx, p) })
+		cont, err := e.cfg.FS.WriteFile(copyPath, content, "", true)
+		if err != nil {
+			return err
+		}
+		cp = &File{
+			Path: copyPath, FileID: newFileID(), LocalHash: cont.Hash, LocalSize: cont.Size, LocalMtime: cont.Mtime.UnixNano(),
+			State: StateLocalNew, ConflictOf: row.FileID,
+		}
+	}
+
 	if !bytes.Equal(res.Merged, local.Data) {
 		if e.cfg.BeforeOverwrite != nil {
 			e.cfg.BeforeOverwrite(row.Path) // ours is not on the server: keep a local snapshot
 		}
 		cont, err := e.cfg.FS.WriteFile(row.Path, res.Merged, local.Hash, false)
 		if errors.Is(err, vault.ErrHashMismatch) {
-			return nil // edited again meanwhile: the next round starts over
+			// Edited again meanwhile: the next round starts over from the new
+			// text. The copy of the old one is no longer needed (it is a state
+			// the user moved past) but goes to the trash rather than away.
+			if cp != nil {
+				if _, terr := e.cfg.FS.Trash(cp.Path); terr != nil && !os.IsNotExist(terr) {
+					e.log.Warn().Err(terr).Str("path", cp.Path).Msg("cannot remove an unused conflict copy")
+				}
+			}
+			return errRetryLater
 		}
 		if err != nil {
 			return err
@@ -169,38 +244,29 @@ func (e *Engine) finishMerge(ctx context.Context, row File, c transportChange, s
 		// is a deletion that our modification overrides: push it.
 		row.State = StateLocalModify
 	}
-	if err := e.cfg.DB.PutFile(ctx, row); err != nil {
-		return err
-	}
-	if res.Clean {
-		return nil
-	}
-	// Not mergeable: the path keeps the server version; the losing side is
-	// saved as a new file that syncs like any other and shows in the conflict view.
-	content := ours
-	if res.CopyOf == merge.Theirs {
-		content = remote
-	}
-	copyPath := conflictPath(row.Path, e.cfg.DeviceName, e.cfg.Now(), func(p string) bool { return e.pathTaken(ctx, p) })
-	cont, err := e.cfg.FS.WriteFile(copyPath, content, "", true)
-	if err != nil {
-		return err
-	}
-	if err := e.cfg.DB.PutFile(ctx, File{
-		Path: copyPath, FileID: newFileID(), LocalHash: cont.Hash, LocalSize: cont.Size, LocalMtime: cont.Mtime.UnixNano(),
-		State: StateLocalNew, ConflictOf: row.FileID,
-	}); err != nil {
-		return err
-	}
-	detail, _ := json.Marshal(res.Conflicts)
-	conf, err := e.cfg.DB.AddConflict(ctx, Conflict{
-		FileID: row.FileID, Path: row.Path, CopyPath: copyPath, Strategy: string(strategy),
-		LocalHash: local.Hash, RemoteRev: c.Rev, Detail: string(detail), CreatedAt: e.cfg.Now(),
+
+	var conf Conflict
+	err := e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+		if cp != nil {
+			if err := tx.PutFile(ctx, *cp); err != nil {
+				return err
+			}
+			detail, _ := json.Marshal(res.Conflicts)
+			var err error
+			conf, err = tx.AddConflict(ctx, Conflict{
+				FileID: row.FileID, Path: row.Path, CopyPath: cp.Path, Strategy: string(strategy),
+				LocalHash: local.Hash, RemoteRev: c.Rev, Detail: string(detail), CreatedAt: e.cfg.Now(),
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return tx.PutFile(ctx, row)
 	})
 	if err != nil {
 		return err
 	}
-	if e.cfg.OnConflict != nil {
+	if cp != nil && e.cfg.OnConflict != nil {
 		e.cfg.OnConflict(conf)
 	}
 	return nil

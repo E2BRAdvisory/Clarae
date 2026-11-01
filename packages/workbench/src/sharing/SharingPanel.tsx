@@ -5,6 +5,7 @@ import { api, type MountState, type ShareInfo } from '../app/api';
 import { useAppStore } from '../state/store';
 import { useSharing } from '../state/sharing';
 import { dialog } from '../ui/dialogs';
+import { settleNotes } from '../workspaces/flush';
 import { sharingKeys, useInvitations, useMounts, useVaultShares } from './queries';
 import { infoOf, useSync } from '../state/sync';
 
@@ -51,6 +52,8 @@ function Mount({ mount }: { mount: MountState }) {
   const refresh = () => void qc.invalidateQueries({ queryKey: sharingKeys.mounts });
   const open = async () => {
     try {
+      // The open vault's pending edits are written before its views go away.
+      if (!(await settleNotes())) return;
       const info = await api.sharing.openMount(mount.shareId);
       setVault(info);
       useAppStore.getState().closeSettings();

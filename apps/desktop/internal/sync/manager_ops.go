@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
 	"memobrain/apps/desktop/internal/crypto"
 	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/vaultcrypto"
 )
 
 // LinkResult is returned when a vault is connected to the cloud.
@@ -50,10 +52,11 @@ func (m *Manager) Status(ctx context.Context, localID string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	if mv.engine == nil {
+	eng := m.engineOf(mv)
+	if eng == nil {
 		return Status{VaultID: localID, Phase: PhaseIdle}, nil
 	}
-	st := mv.engine.Status()
+	st := eng.Status()
 	if _, ok := m.session.Info(); !ok && st.Phase == PhaseIdle {
 		st.Phase, st.Error = PhaseOffline, "signed out of the cloud"
 	}
@@ -71,7 +74,7 @@ func (m *Manager) client() (*transport.Client, SessionInfo, error) {
 
 func (m *Manager) saveLink(ctx context.Context, mv *managed, v transport.Vault, info SessionInfo) error {
 	for k, val := range map[string]string{
-		MetaCloudVault: v.ID, MetaKind: v.Kind, MetaServerURL: info.ServerURL, MetaDeviceID: info.DeviceID,
+		MetaCloudVault: v.Id.String(), MetaKind: string(v.Kind), MetaServerURL: info.ServerURL, MetaDeviceID: info.DeviceID,
 		MetaUserID: info.UserID, MetaVaultName: v.Name, MetaLinkedAt: time.Now().UTC().Format(time.RFC3339),
 	} {
 		if err := mv.db.SetMeta(ctx, k, val); err != nil {
@@ -100,18 +103,18 @@ func (m *Manager) Link(ctx context.Context, localID, name, kind, passphrase stri
 	}
 	var res LinkResult
 	var v transport.Vault
+	var mat crypto.Material
 	switch kind {
 	case "shared":
 		v, err = c.CreateVault(ctx, name, "shared", nil)
 	case "private":
-		var mat crypto.Material
 		if mat, err = m.crypto.NewMaterial(passphrase); err != nil {
 			return LinkResult{}, err
 		}
 		if v, err = c.CreateVault(ctx, name, "private", mat.Envelopes); err != nil {
 			return LinkResult{}, err
 		}
-		if err = m.crypto.Adopt(v.ID, mat); err != nil {
+		if err = m.crypto.Adopt(v.Id.String(), mat); err != nil {
 			return LinkResult{}, err
 		}
 		res.RecoveryKey = mat.RecoveryKey
@@ -121,9 +124,12 @@ func (m *Manager) Link(ctx context.Context, localID, name, kind, passphrase stri
 	if err != nil {
 		return LinkResult{}, err
 	}
-	res.CloudVaultID = v.ID
+	res.CloudVaultID = v.Id.String()
 	if err := m.saveLink(ctx, mv, v, info); err != nil {
 		return res, err
+	}
+	if kind == "private" && m.crypto.EnvelopeV2() {
+		m.upgradeNewVaultEnvelopes(ctx, mv, c, v.Id.String(), mat)
 	}
 	if err := m.activate(ctx, mv); err != nil {
 		return res, err
@@ -178,17 +184,18 @@ func (m *Manager) Unlink(ctx context.Context, localID string) error {
 		return err
 	}
 	m.mu.Lock()
-	m.stopLocked(mv)
+	done := m.stopLocked(mv)
 	cloud, kind := mv.cloudID, mv.kind
 	mv.engine, mv.cloudID, mv.kind, mv.scope = nil, "", "", ""
 	m.mu.Unlock()
+	waitLoop(done) // no cycle may write the state erased below
 	if cloud != "" && kind == "private" {
 		_ = m.crypto.Forget(cloud)
 	}
-	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
+	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaLastScan, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
 		_ = mv.db.DeleteMeta(ctx, k)
 	}
-	if _, err := mv.sdb.ExecContext(ctx, `DELETE FROM sync_files; DELETE FROM outbox; DELETE FROM conflicts; UPDATE sync_cursor SET last_seq = 0`); err != nil {
+	if _, err := mv.sdb.ExecContext(ctx, resetSQL); err != nil {
 		return err
 	}
 	m.publish(mv)
@@ -211,7 +218,7 @@ func (m *Manager) SetPaused(ctx context.Context, localID string, paused bool) er
 	if paused {
 		mv.engine.setStatus(func(s *Status) { s.Phase = PhasePaused })
 	} else {
-		m.kickNow(mv)
+		m.kickNow(mv.managed)
 	}
 	return nil
 }
@@ -229,7 +236,7 @@ func (m *Manager) SetPollInterval(ctx context.Context, localID string, seconds i
 	if err := mv.db.SetMeta(ctx, MetaPollSeconds, strconv.Itoa(seconds)); err != nil {
 		return err
 	}
-	m.kickNow(mv)
+	m.kickNow(mv.managed)
 	return nil
 }
 
@@ -239,20 +246,20 @@ func (m *Manager) SyncNow(localID string) error {
 	if err != nil {
 		return err
 	}
-	m.startLoop(mv)
-	m.kickNow(mv)
+	m.startLoop(mv.managed)
+	m.kickNow(mv.managed)
 	return nil
 }
 
 // --- encryption --------------------------------------------------------------
 
-func (m *Manager) privateVault(localID string) (*managed, *transport.Client, error) {
+func (m *Manager) privateVault(localID string) (linkView, *transport.Client, error) {
 	mv, err := m.linked(localID)
 	if err != nil {
-		return nil, nil, err
+		return linkView{}, nil, err
 	}
 	if mv.kind != "private" {
-		return nil, nil, errors.New("only private vaults are encrypted")
+		return linkView{}, nil, errors.New("only private vaults are encrypted")
 	}
 	c, _, err := m.client()
 	return mv, c, err
@@ -270,26 +277,237 @@ func (m *Manager) Unlock(ctx context.Context, localID, secret string, recovery b
 	if err != nil {
 		return false, err
 	}
-	if requiresNewPassphrase, err = m.crypto.Unlock(mv.cloudID, envs, secret, recovery); err != nil {
+	res, err := m.crypto.UnlockWith(mv.cloudID, envs, secret, recovery, crypto.UnlockOptions{PinnedV2: m.envelopePins(ctx, mv.managed, mv.cloudID)})
+	if err != nil {
 		return false, err
 	}
-	m.kickNow(mv)
-	return requiresNewPassphrase, nil
+	if res.Version == 2 {
+		m.pinEnvelopeV2(ctx, mv.managed, mv.cloudID, res.Kind)
+	}
+	if res.Upgrade != nil {
+		m.uploadUpgradedEnvelope(ctx, mv.managed, c, mv.cloudID, envs, *res.Upgrade)
+	}
+	m.kickNow(mv.managed)
+	return res.RequiresNewPassphrase, nil
 }
 
-// LockVault forgets the key on this device (memory and keychain).
+// --- key envelope formats (ADR-0034) ----------------------------------------
+
+// metaEnvelopeV2 is the sync.db key that pins an envelope kind of a cloud
+// vault to format v2. The cloud id is part of the key, so a folder linked
+// again to another vault never inherits the pin.
+func metaEnvelopeV2(cloudID, kind string) string { return "envelope_v2:" + cloudID + ":" + kind }
+
+// envelopePins returns the envelope kinds pinned to v2 for the vault and hands
+// them to the key manager, so a re-wrap of those kinds stays v2.
+func (m *Manager) envelopePins(ctx context.Context, mv *managed, cloudID string) map[string]bool {
+	pins := map[string]bool{}
+	for _, kind := range []string{crypto.KindPassphrase, crypto.KindRecovery} {
+		if v, _ := mv.db.Meta(ctx, metaEnvelopeV2(cloudID, kind)); v == "1" {
+			pins[kind] = true
+			m.crypto.MarkEnvelopeV2(cloudID, kind)
+		}
+	}
+	return pins
+}
+
+// pinEnvelopeV2 records that the vault's envelope of kind is v2 on the server:
+// from now on this device refuses a v1 envelope of that kind (trust on first
+// use, ADR-0034).
+func (m *Manager) pinEnvelopeV2(ctx context.Context, mv *managed, cloudID, kind string) {
+	m.crypto.MarkEnvelopeV2(cloudID, kind)
+	if err := mv.db.SetMeta(ctx, metaEnvelopeV2(cloudID, kind), "1"); err != nil {
+		m.log.Warn().Err(err).Str("kind", kind).Msg("sync: pin key envelope format")
+	}
+}
+
+// putEnvelope uploads a new envelope and pins its kind when it is v2.
+func (m *Manager) putEnvelope(ctx context.Context, mv *managed, c *transport.Client, cloudID string, env transport.KeyEnvelope) error {
+	if err := c.PutKeyEnvelope(ctx, cloudID, env); err != nil {
+		return err
+	}
+	if vaultcrypto.EnvelopeVersion(env.WrappedVmk) == 2 {
+		m.pinEnvelopeV2(ctx, mv, cloudID, string(env.Kind))
+	}
+	return nil
+}
+
+// uploadUpgradedEnvelope replaces an envelope with its v2 re-wrap after an
+// unlock (release N+1 behavior, only while v2 writing is on). It is best
+// effort: the vault is already unlocked and the old envelope still works, so
+// a failure is only logged. The envelope is replaced only if it is still the
+// one that was opened, so a passphrase changed meanwhile on another device is
+// never overwritten with the old one.
+func (m *Manager) uploadUpgradedEnvelope(ctx context.Context, mv *managed, c *transport.Client, cloudID string, opened []transport.KeyEnvelope, up transport.KeyEnvelope) {
+	before, ok := findEnvelope(opened, string(up.Kind))
+	if !ok {
+		return
+	}
+	cur, err := c.GetKeyEnvelopes(ctx, cloudID)
+	if err != nil {
+		m.log.Warn().Err(err).Msg("sync: key envelope upgrade skipped")
+		return
+	}
+	if now, ok := findEnvelope(cur, string(up.Kind)); !ok || !bytes.Equal(now.WrappedVmk, before.WrappedVmk) {
+		return
+	}
+	if err := m.putEnvelope(ctx, mv, c, cloudID, up); err != nil {
+		m.log.Warn().Err(err).Str("kind", string(up.Kind)).Msg("sync: key envelope upgrade failed")
+	}
+}
+
+// upgradeNewVaultEnvelopes replaces the v1 envelopes a vault was just created
+// with by their v2 re-wraps: v2 needs the vault id, which the server assigns
+// at creation. Best effort, like uploadUpgradedEnvelope.
+func (m *Manager) upgradeNewVaultEnvelopes(ctx context.Context, mv *managed, c *transport.Client, cloudID string, mat crypto.Material) {
+	envs, err := m.crypto.UpgradeMaterial(cloudID, mat)
+	if err != nil {
+		m.log.Warn().Err(err).Msg("sync: key envelope upgrade skipped")
+		return
+	}
+	for _, e := range envs {
+		if err := m.putEnvelope(ctx, mv, c, cloudID, e); err != nil {
+			m.log.Warn().Err(err).Str("kind", string(e.Kind)).Msg("sync: key envelope upgrade failed")
+		}
+	}
+}
+
+func findEnvelope(envs []transport.KeyEnvelope, kind string) (transport.KeyEnvelope, bool) {
+	for _, e := range envs {
+		if string(e.Kind) == kind {
+			return e, true
+		}
+	}
+	return transport.KeyEnvelope{}, false
+}
+
+// LockVault forgets the key on this device (memory and keychain). What waits
+// for upload is pushed first (a bounded cycle: the engine cannot encrypt once
+// the key is gone), and the lock waits for a running cycle to end, so the key
+// never disappears halfway through applying server changes. Signing in is not
+// needed: offline, the changes simply stay in the outbox.
 func (m *Manager) LockVault(ctx context.Context, localID string) error {
-	mv, _, err := m.privateVault(localID)
+	mv, err := m.linked(localID)
 	if err != nil {
 		return err
 	}
-	if err := m.crypto.Lock(mv.cloudID); err != nil {
-		return err
+	if mv.kind != "private" {
+		return errors.New("only private vaults are encrypted")
 	}
-	mv.engine.setStatus(func(s *Status) { s.Phase, s.Error = PhaseLocked, "" })
-	m.emit(EventLocked, map[string]any{"vaultId": localID})
-	return nil
+	cloud := mv.cloudID
+	return m.drainAndLock(ctx, cloud, LockReasonManual, func() (bool, error) {
+		return true, m.crypto.Lock(cloud)
+	})
 }
+
+// Reasons carried by EventLocked.
+const (
+	// LockReasonManual: the user locked the vault.
+	LockReasonManual = "manual"
+	// LockReasonIdle: the idle timeout expired.
+	LockReasonIdle = "idle"
+	// LockReasonSync: a synchronization cycle found the vault without its key
+	// (no key in the keychain at startup, or locked since the last cycle).
+	LockReasonSync = "sync"
+)
+
+// LockedEvent is the payload of EventLocked, computed after the key is gone.
+// Pending counts the files that still differ from the server (they stay in
+// the outbox and leave at the next unlock); -1 means unknown (the local
+// changes could not be scanned), so the clear-text copy must be kept.
+type LockedEvent struct {
+	VaultID   string `json:"vaultId"`
+	Reason    string `json:"reason"`
+	Pending   int    `json:"pending"`
+	Conflicts int    `json:"conflicts"`
+}
+
+// drainTimeout bounds the cycle that pushes pending changes before a lock.
+const drainTimeout = 20 * time.Second
+
+// lockedViews returns the linked vaults that use the key of a cloud vault,
+// in a stable order (their cycle locks are taken in that order).
+func (m *Manager) lockedViews(cloud string) []linkView {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []linkView
+	for _, mv := range m.vaults {
+		if mv.engine != nil && mv.cloudID == cloud {
+			out = append(out, linkView{managed: mv, engine: mv.engine, cloudID: mv.cloudID, kind: mv.kind, scope: mv.scope})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].localID < out[j].localID })
+	return out
+}
+
+// drain runs one bounded cycle so the changes waiting for upload leave while
+// the key is still there. Failures (offline, timeout) are fine: what is not
+// pushed stays in the outbox and is reported as pending.
+func (m *Manager) drain(ctx context.Context, v linkView) {
+	if _, ok := m.session.Info(); !ok {
+		return
+	}
+	dctx, cancel := context.WithTimeout(ctx, drainTimeout)
+	defer cancel()
+	if err := v.engine.Sync(dctx); err != nil && !errors.Is(err, ErrPaused) {
+		m.log.Info().Err(err).Str("vault", v.localID).Msg("sync: changes left in the outbox at lock")
+	}
+}
+
+// drainAndLock pushes what waits for upload, then, holding every engine that
+// uses the key, records the local changes no cycle has seen (a scan needs no
+// key) and calls lock. When lock removed the key the UI is told, with what
+// is left to push. lock reports whether the key left memory.
+func (m *Manager) drainAndLock(ctx context.Context, cloud, reason string, lock func() (bool, error)) error {
+	views := m.lockedViews(cloud)
+	for _, v := range views {
+		m.drain(ctx, v)
+	}
+	scanErrs := make([]error, len(views))
+	var locked bool
+	var lockErr error
+	var hold func(i int) error
+	hold = func(i int) error {
+		if i == len(views) {
+			locked, lockErr = lock()
+			return nil
+		}
+		eng := views[i].engine
+		return eng.Exclusive(func() error {
+			scanErrs[i] = eng.scan(ctx)
+			return hold(i + 1)
+		})
+	}
+	_ = hold(0)
+	if !locked {
+		return lockErr
+	}
+	for i, v := range views {
+		m.emit(EventLocked, m.lockedEvent(ctx, v.localID, v.engine, v.db, reason, scanErrs[i]))
+	}
+	return lockErr
+}
+
+// lockedEvent counts what a locked vault still has to push and its open
+// conflicts (sync.db alone, no key needed) and puts the engine in PhaseLocked.
+func (m *Manager) lockedEvent(ctx context.Context, localID string, eng *Engine, db *DB, reason string, scanErr error) LockedEvent {
+	ev := LockedEvent{VaultID: localID, Reason: reason}
+	var err error
+	if ev.Pending, err = db.PendingCount(ctx); err != nil || scanErr != nil {
+		m.log.Warn().Err(errors.Join(err, scanErr)).Str("vault", localID).Msg("sync: pending changes of a locked vault unknown")
+		ev.Pending = -1
+	}
+	ev.Conflicts, _ = db.OpenConflictCount(ctx)
+	eng.setStatus(func(s *Status) {
+		s.Phase, s.Error, s.Done, s.Total = PhaseLocked, "", 0, 0
+		s.Pending, s.Conflicts = max(ev.Pending, 0), ev.Conflicts
+	})
+	return ev
+}
+
+// Activity records user activity: the idle timer of the unlocked private
+// vaults starts again. The sync engine's own work never counts.
+func (m *Manager) Activity() { m.crypto.Touch() }
 
 // ChangePassphrase re-wraps the VMK under a new passphrase; nothing is re-encrypted.
 func (m *Manager) ChangePassphrase(ctx context.Context, localID, oldPassphrase, newPassphrase string) error {
@@ -301,7 +519,7 @@ func (m *Manager) ChangePassphrase(ctx context.Context, localID, oldPassphrase, 
 	if err != nil {
 		return err
 	}
-	if err := m.crypto.VerifyPassphrase(envs, oldPassphrase); err != nil {
+	if err := m.crypto.VerifyPassphrase(mv.cloudID, envs, oldPassphrase); err != nil {
 		return err
 	}
 	return m.putNewPassphrase(ctx, mv, c, newPassphrase)
@@ -317,12 +535,13 @@ func (m *Manager) SetPassphrase(ctx context.Context, localID, newPassphrase stri
 	return m.putNewPassphrase(ctx, mv, c, newPassphrase)
 }
 
-func (m *Manager) putNewPassphrase(ctx context.Context, mv *managed, c *transport.Client, newPassphrase string) error {
+func (m *Manager) putNewPassphrase(ctx context.Context, mv linkView, c *transport.Client, newPassphrase string) error {
+	m.envelopePins(ctx, mv.managed, mv.cloudID)
 	env, err := m.crypto.NewPassphraseEnvelope(mv.cloudID, newPassphrase)
 	if err != nil {
 		return err
 	}
-	return c.PutKeyEnvelope(ctx, mv.cloudID, env)
+	return m.putEnvelope(ctx, mv.managed, c, mv.cloudID, env)
 }
 
 // RegenerateRecoveryKey issues a new recovery key (the old one stops working)
@@ -336,14 +555,15 @@ func (m *Manager) RegenerateRecoveryKey(ctx context.Context, localID, passphrase
 	if err != nil {
 		return "", err
 	}
-	if err := m.crypto.VerifyPassphrase(envs, passphrase); err != nil {
+	if err := m.crypto.VerifyPassphrase(mv.cloudID, envs, passphrase); err != nil {
 		return "", err
 	}
+	m.envelopePins(ctx, mv.managed, mv.cloudID)
 	env, key, err := m.crypto.NewRecoveryEnvelope(mv.cloudID)
 	if err != nil {
 		return "", err
 	}
-	return key, c.PutKeyEnvelope(ctx, mv.cloudID, env)
+	return key, m.putEnvelope(ctx, mv.managed, c, mv.cloudID, env)
 }
 
 // --- conflicts ---------------------------------------------------------------
@@ -476,17 +696,17 @@ type RevisionInfo struct {
 	Mine       bool      `json:"mine"`
 }
 
-func (m *Manager) fileOf(ctx context.Context, localID, path string) (*managed, File, *transport.Client, error) {
+func (m *Manager) fileOf(ctx context.Context, localID, path string) (linkView, File, *transport.Client, error) {
 	mv, err := m.linked(localID)
 	if err != nil {
-		return nil, File{}, nil, err
+		return linkView{}, File{}, nil, err
 	}
 	row, ok, err := mv.db.GetFile(ctx, path)
 	if err != nil {
-		return nil, File{}, nil, err
+		return linkView{}, File{}, nil, err
 	}
 	if !ok || row.ServerRev == 0 {
-		return nil, File{}, nil, errors.New("this note has not been uploaded yet: it has no history")
+		return linkView{}, File{}, nil, errors.New("this note has not been uploaded yet: it has no history")
 	}
 	c, _, err := m.client()
 	return mv, row, c, err
@@ -553,7 +773,7 @@ func (m *Manager) RestoreRevision(ctx context.Context, localID, path string, rev
 	if res.Status != "accepted" {
 		return fmt.Errorf("%s: %s", res.Code, res.Detail)
 	}
-	m.kickNow(mv)
+	m.kickNow(mv.managed)
 	return nil
 }
 

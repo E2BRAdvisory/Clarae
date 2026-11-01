@@ -3,16 +3,20 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"memobrain/apps/desktop/internal/app"
 	"memobrain/apps/desktop/internal/platform"
@@ -70,6 +74,7 @@ func run() int {
 		OnStartup:        a.Startup,
 		OnDomReady:       a.DomReady,
 		OnShutdown:       a.Shutdown,
+		OnBeforeClose:    (&closeGuard{}).beforeClose,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               platform.InstanceID(dataDir),
 			OnSecondInstanceLaunch: a.OnSecondInstance,
@@ -91,6 +96,57 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+// eventBeforeClose asks the frontend to write its pending edits before the app quits; it answers
+// by calling the runtime Quit again (packages/workbench/src/app/lifecycle.ts).
+const eventBeforeClose = "app:before-close"
+
+// closeFlushTimeout bounds the wait for the frontend: a frontend that never answers (still loading,
+// hung) does not keep the app open. The frontend gives up on its own writes a few seconds earlier.
+const closeFlushTimeout = 10 * time.Second
+
+// closeGuard holds the first close request (window closed, Cmd+Q, runtime Quit) until the frontend
+// has flushed its open notes (no silent data loss, D-04). The second request quits.
+type closeGuard struct {
+	mu       sync.Mutex
+	pending  bool
+	release  bool
+	answered chan struct{}
+}
+
+// beforeClose is the Wails OnBeforeClose hook: true keeps the app open. It must not block (Windows
+// calls it on the UI thread), so the event is emitted and the timeout watched in goroutines.
+func (g *closeGuard) beforeClose(ctx context.Context) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	switch {
+	case g.release:
+		return false
+	case g.pending:
+		// The frontend has flushed (or the user insists): quit.
+		g.release = true
+		close(g.answered)
+		return false
+	}
+	g.pending = true
+	g.answered = make(chan struct{})
+	answered := g.answered
+	go runtime.EventsEmit(ctx, eventBeforeClose)
+	go func() {
+		select {
+		case <-answered:
+		case <-time.After(closeFlushTimeout):
+			g.mu.Lock()
+			quit := !g.release
+			g.release = true
+			g.mu.Unlock()
+			if quit {
+				runtime.Quit(ctx)
+			}
+		}
+	}()
+	return true
 }
 
 // cspMiddleware sets the Content-Security-Policy on every asset response
