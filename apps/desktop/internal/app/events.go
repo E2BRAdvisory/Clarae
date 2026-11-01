@@ -1,7 +1,7 @@
 package app
 
 // Event names emitted from Go to the frontend (§2.5). The TypeScript side
-// mirrors them in frontend/src/app/events.ts.
+// mirrors them in packages/workbench/src/app/events.ts.
 const (
 	EventVaultFileChanged = "vault:file-changed"
 	EventIndexProgress    = "index:progress"
@@ -13,10 +13,12 @@ const (
 	EventOpenRequest      = "app:open-request" // memobrain://open handled by the OS
 )
 
-// FileChangedPayload accompanies EventVaultFileChanged.
+// FileChangedPayload accompanies EventVaultFileChanged. Paths lists every path of the batch;
+// Changes says, for each, whether it was created, modified or deleted (see FileChange).
 type FileChangedPayload struct {
-	VaultID string   `json:"vaultId"`
-	Paths   []string `json:"paths"`
+	VaultID string       `json:"vaultId"`
+	Paths   []string     `json:"paths"`
+	Changes []FileChange `json:"changes,omitempty"`
 }
 
 // OpenRequestPayload accompanies EventOpenRequest.

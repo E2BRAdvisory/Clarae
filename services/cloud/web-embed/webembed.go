@@ -13,17 +13,29 @@ package webembed
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"embed"
+	"encoding/base64"
+	"encoding/binary"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"net/url"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// fixedNameAssets live under assets/ but keep the same name across builds (the UI
+// loads them by a fixed URL, see web/scripts/esbuild.mjs): they must be revalidated,
+// never cached as immutable, or an upgrade would keep serving the old copy.
+var fixedNameAssets = map[string]bool{
+	"assets/layout.worker.js": true,
+}
 
 //go:embed all:dist
 var embedded embed.FS
@@ -41,6 +53,7 @@ func Dist() fs.FS {
 var extraTypes = map[string]string{
 	".webmanifest": "application/manifest+json",
 	".ico":         "image/vnd.microsoft.icon",
+	".mjs":         "text/javascript; charset=utf-8",
 }
 
 // Options configure Handler.
@@ -75,6 +88,8 @@ func CSP(issuer string) string {
 // resources, no eval; 'wasm-unsafe-eval' only to compile WebAssembly) plus what a page needs to reach
 // the cloud: the API and the OIDC issuer. Styles may be inline because CodeMirror, KaTeX and Excalidraw
 // compute them; scripts may not, and nothing from another origin is ever loaded (D-01, V-02).
+// worker-src allows blob: because the core's worker starts from the bytes the page fetched with
+// Subresource Integrity (web/src/workbench/bridge.ts): new Worker() has no integrity of its own.
 func WorkbenchCSP(issuer string) string {
 	connect := "'self' blob:"
 	if o := issuerOrigin(issuer); o != "" {
@@ -82,7 +97,7 @@ func WorkbenchCSP(issuer string) string {
 	}
 	return "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: blob:; font-src 'self' data:; connect-src " + connect + "; " +
-		"media-src 'self' blob:; worker-src 'self'; frame-src 'none'; frame-ancestors 'none'; " +
+		"media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; " +
 		"base-uri 'none'; form-action 'self'; object-src 'none'"
 }
 
@@ -95,100 +110,307 @@ const permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=(),
 // Handler serves the SPA. API-looking paths are never answered with the
 // index (they get a plain 404), and a missing path with a file extension is a
 // 404 too, so a mistyped asset never turns into HTML.
+//
+// Every file gets a strong ETag (computed once, on its first request), so the pages and the
+// other files that browsers must revalidate are answered with 304 when unchanged. Text files
+// are gzip-compressed once, on their first request, and the compressed copy is kept for the
+// browsers that accept gzip; the rest are streamed straight from the build without a copy.
 func Handler(o Options) http.Handler {
 	root := o.FS
 	if root == nil {
 		root = Dist()
 	}
-	csp := CSP(o.Issuer)
-	workbenchCSP := WorkbenchCSP(o.Issuer)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		page := "index.html"
-		if workbenchRoute.MatchString(path.Clean("/" + r.URL.Path)) {
-			// The workbench is its own document: its policy and its style sheet must not touch the console.
-			if _, err := fs.Stat(root, "workbench.html"); err == nil {
-				page = "workbench.html"
-			}
-		}
-		if page == "workbench.html" {
-			h.Set("Content-Security-Policy", workbenchCSP)
-		} else {
-			h.Set("Content-Security-Policy", csp)
-		}
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "no-referrer")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Cross-Origin-Opener-Policy", "same-origin")
-		h.Set("Permissions-Policy", permissionsPolicy)
+	s := &server{root: root, csp: CSP(o.Issuer), workbenchCSP: WorkbenchCSP(o.Issuer)}
+	return http.HandlerFunc(s.serveHTTP)
+}
 
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			h.Set("Allow", "GET, HEAD")
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+// server holds the build and what was learned about its files.
+type server struct {
+	root         fs.FS
+	csp          string
+	workbenchCSP string
+	// files caches one *asset per file that exists (never a miss: the set is bounded by the build).
+	files sync.Map
+}
+
+func (s *server) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	h := w.Header()
+	page := s.asset("index.html")
+	if workbenchRoute.MatchString(path.Clean("/" + r.URL.Path)) {
+		// The workbench is its own document: its policy and its style sheet must not touch the console.
+		if wb := s.asset("workbench.html"); wb != nil {
+			page = wb
+		}
+	}
+	if page != nil && page.name == "workbench.html" {
+		h.Set("Content-Security-Policy", s.workbenchCSP)
+	} else {
+		h.Set("Content-Security-Policy", s.csp)
+	}
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Cross-Origin-Opener-Policy", "same-origin")
+	h.Set("Permissions-Policy", permissionsPolicy)
+
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		h.Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	p := path.Clean("/" + r.URL.Path)
+	if p == "/api" || strings.HasPrefix(p, "/api/") {
+		http.NotFound(w, r)
+		return
+	}
+	name := strings.TrimPrefix(p, "/")
+	if name != "" {
+		if a := s.asset(name); a != nil {
+			if (strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "core/")) && !fixedNameAssets[name] {
+				h.Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				h.Set("Cache-Control", "no-cache")
+			}
+			s.serve(w, r, a)
 			return
 		}
-		p := path.Clean("/" + r.URL.Path)
-		if p == "/api" || strings.HasPrefix(p, "/api/") {
+		if path.Ext(name) != "" {
 			http.NotFound(w, r)
 			return
 		}
-		name := strings.TrimPrefix(p, "/")
-		if name != "" {
-			if st, err := fs.Stat(root, name); err == nil && !st.IsDir() {
-				if strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "core/") {
-					h.Set("Cache-Control", "public, max-age=31536000, immutable")
-				} else {
-					h.Set("Cache-Control", "no-cache")
-				}
-				serveFile(w, r, root, name)
-				return
-			}
-			// WebAssembly files are kept compressed: name.wasm is answered from name.wasm.gz.
-			if strings.HasSuffix(name, ".wasm") {
-				if _, err := fs.Stat(root, name+".gz"); err == nil {
-					h.Set("Cache-Control", "public, max-age=31536000, immutable")
-					serveGzipped(w, r, root, name+".gz")
-					return
-				}
-			}
-			if path.Ext(name) != "" {
-				http.NotFound(w, r)
-				return
-			}
-		}
-		h.Set("Cache-Control", "no-cache")
-		serveFile(w, r, root, page)
-	})
+	}
+	h.Set("Cache-Control", "no-cache")
+	if page == nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.serve(w, r, page)
 }
 
-// serveGzipped answers a request for a file stored as name.gz: the compressed bytes go out as they are
-// to a client that accepts gzip, a decompressed copy to one that does not.
-func serveGzipped(w http.ResponseWriter, r *http.Request, root fs.FS, gzName string) {
-	data, err := fs.ReadFile(root, gzName)
-	if err != nil {
+// asset returns the file served for name, or nil when there is none. WebAssembly files are kept
+// compressed: name.wasm is answered from name.wasm.gz.
+func (s *server) asset(name string) *asset {
+	if a, ok := s.files.Load(name); ok {
+		return a.(*asset)
+	}
+	a := &asset{name: name, file: name}
+	if st, err := fs.Stat(s.root, name); err != nil || !st.Mode().IsRegular() {
+		if !strings.HasSuffix(name, ".wasm") {
+			return nil
+		}
+		if st, err := fs.Stat(s.root, name+".gz"); err != nil || !st.Mode().IsRegular() {
+			return nil
+		}
+		a.file, a.stored = name+".gz", true
+	}
+	a.ctype = contentType(name)
+	a.compressible = a.ctype != "" && compressible[path.Ext(name)]
+	got, _ := s.files.LoadOrStore(name, a)
+	return got.(*asset)
+}
+
+// asset is one file of the build and its lazily computed metadata.
+type asset struct {
+	name  string // the requested name
+	file  string // the file in the build: name, or name.gz when stored compressed
+	ctype string // Content-Type ("" lets ServeContent sniff it)
+	// stored: the build keeps only a gzip copy (file is name.gz).
+	stored bool
+	// compressible: a text type worth compressing for the browsers that accept gzip.
+	compressible bool
+
+	metaOnce sync.Once
+	tag      string // hash of the bytes in the build, the base of the ETags
+	rawSize  int64  // stored only: the decompressed size, from the gzip trailer
+	metaErr  error
+
+	gzOnce sync.Once
+	gz     []byte // compressible only: the gzip copy (nil when it does not pay off)
+}
+
+// meta hashes the file once.
+func (a *asset) meta(root fs.FS) error {
+	a.metaOnce.Do(func() {
+		f, err := root.Open(a.file)
+		if err != nil {
+			a.metaErr = err
+			return
+		}
+		defer func() { _ = f.Close() }()
+		sum := sha256.New()
+		var tail tailWriter
+		if _, err := io.Copy(io.MultiWriter(sum, &tail), f); err != nil {
+			a.metaErr = err
+			return
+		}
+		a.tag = base64.RawURLEncoding.EncodeToString(sum.Sum(nil)[:18])
+		if a.stored {
+			// ISIZE: the decompressed length modulo 2^32, exact for files under 4 GiB.
+			a.rawSize = int64(binary.LittleEndian.Uint32(tail.b[:]))
+		}
+	})
+	return a.metaErr
+}
+
+// gzipped returns the compressed copy of a text file, made on the first call.
+func (a *asset) gzipped(root fs.FS) []byte {
+	a.gzOnce.Do(func() {
+		data, err := fs.ReadFile(root, a.file)
+		if err != nil || len(data) < minCompressSize {
+			return
+		}
+		var b bytes.Buffer
+		zw, _ := gzip.NewWriterLevel(&b, gzip.BestCompression)
+		if _, err := zw.Write(data); err != nil || zw.Close() != nil {
+			return
+		}
+		// Keep the copy only when it saves at least a tenth.
+		if b.Len() < len(data)-len(data)/10 {
+			a.gz = bytes.Clone(b.Bytes())
+		}
+	})
+	return a.gz
+}
+
+// minCompressSize is the smallest file worth compressing: below it the headers dominate.
+const minCompressSize = 512
+
+// compressible lists the text types compressed for browsers that accept gzip. Fonts in woff/woff2
+// and images are compressed already.
+var compressible = map[string]bool{
+	".html": true, ".js": true, ".mjs": true, ".css": true, ".svg": true, ".json": true,
+	".webmanifest": true, ".map": true, ".txt": true, ".xml": true, ".wasm": true, ".ttf": true, ".otf": true,
+}
+
+// contentType is the Content-Type of a file name, "" when unknown.
+func contentType(name string) string {
+	// Types missing from Go's built-in table (the image may have no /etc/mime.types): the PWA manifest
+	// and the favicon would otherwise be sniffed as text/plain and image/x-icon.
+	if t, ok := extraTypes[path.Ext(name)]; ok {
+		return t
+	}
+	return mime.TypeByExtension(path.Ext(name))
+}
+
+// serve answers with the representation the client accepts: the gzip copy (kept in the build or
+// made once) when it accepts gzip, the plain bytes otherwise. Each representation has its own
+// strong ETag, so a revalidation is answered with 304 when the file did not change.
+func (s *server) serve(w http.ResponseWriter, r *http.Request, a *asset) {
+	if err := a.meta(s.root); err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	h := w.Header()
-	h.Set("Content-Type", "application/wasm")
-	h.Add("Vary", "Accept-Encoding")
-	if acceptsGzip(r.Header.Get("Accept-Encoding")) {
-		h.Set("Content-Encoding", "gzip")
-		http.ServeContent(w, r, gzName, time.Time{}, bytes.NewReader(data))
+	if a.ctype != "" {
+		h.Set("Content-Type", a.ctype)
+	}
+	gz := acceptsGzip(r.Header.Get("Accept-Encoding"))
+	switch {
+	case a.stored:
+		h.Add("Vary", "Accept-Encoding")
+		if gz {
+			h.Set("Content-Encoding", "gzip")
+			h.Set("ETag", `"`+a.tag+`"`)
+			s.serveFile(w, r, a.file)
+			return
+		}
+		h.Set("ETag", `"`+a.tag+`-id"`)
+		s.serveDecompressed(w, r, a)
+	case a.compressible:
+		h.Add("Vary", "Accept-Encoding")
+		if data := a.gzipped(s.root); gz && data != nil {
+			h.Set("Content-Encoding", "gzip")
+			h.Set("ETag", `"`+a.tag+`-gz"`)
+			http.ServeContent(w, r, a.name, time.Time{}, bytes.NewReader(data))
+			return
+		}
+		h.Set("ETag", `"`+a.tag+`"`)
+		s.serveFile(w, r, a.file)
+	default:
+		h.Set("ETag", `"`+a.tag+`"`)
+		s.serveFile(w, r, a.file)
+	}
+}
+
+// serveFile streams a file of the build. Embedded files (and those of the other file systems in
+// use) can seek, so ServeContent reads them in place, with ranges and conditional requests.
+func (s *server) serveFile(w http.ResponseWriter, r *http.Request, name string) {
+	f, err := s.root.Open(name)
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
-	zr, err := gzip.NewReader(bytes.NewReader(data))
+	defer func() { _ = f.Close() }()
+	if rs, ok := f.(io.ReadSeeker); ok {
+		http.ServeContent(w, r, name, time.Time{}, rs)
+		return
+	}
+	data, err := io.ReadAll(f)
+	if err != nil {
+		http.Error(w, "unreadable asset", http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
+}
+
+// serveDecompressed streams a file stored as name.gz to a client that does not accept gzip,
+// decompressing on the fly instead of holding the whole file (the core is 36 MB raw). Ranges are
+// not supported on this path: the whole file is sent.
+func (s *server) serveDecompressed(w http.ResponseWriter, r *http.Request, a *asset) {
+	if etagMatches(r.Header.Get("If-None-Match"), w.Header().Get("ETag")) {
+		h := w.Header()
+		h.Del("Content-Type")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	f, err := s.root.Open(a.file)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	zr, err := gzip.NewReader(f)
 	if err != nil {
 		http.Error(w, "corrupt asset", http.StatusInternalServerError)
 		return
 	}
 	defer func() { _ = zr.Close() }()
-	raw, err := io.ReadAll(zr)
-	if err != nil {
-		http.Error(w, "corrupt asset", http.StatusInternalServerError)
+	w.Header().Set("Content-Length", strconv.FormatInt(a.rawSize, 10))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
 		return
 	}
-	http.ServeContent(w, r, strings.TrimSuffix(gzName, ".gz"), time.Time{}, bytes.NewReader(raw))
+	// Bounded by the announced length; a corrupt file ends the response early and the client sees a
+	// short body.
+	_, _ = io.CopyN(w, zr, a.rawSize)
+}
+
+// etagMatches reports whether an If-None-Match header lists etag (weak comparison, RFC 9110 13.1.2).
+func etagMatches(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	if strings.TrimSpace(header) == "*" {
+		return true
+	}
+	for _, t := range strings.Split(header, ",") {
+		if strings.TrimPrefix(strings.TrimSpace(t), "W/") == etag {
+			return true
+		}
+	}
+	return false
+}
+
+// tailWriter keeps the last four bytes written to it.
+type tailWriter struct{ b [4]byte }
+
+func (t *tailWriter) Write(p []byte) (int, error) {
+	if len(p) >= 4 {
+		copy(t.b[:], p[len(p)-4:])
+	} else {
+		copy(t.b[:], append(t.b[len(p):], p...))
+	}
+	return len(p), nil
 }
 
 // acceptsGzip reports whether an Accept-Encoding header lists gzip (and does not rule it out with q=0).
@@ -207,18 +429,4 @@ func acceptsGzip(header string) bool {
 		return true
 	}
 	return false
-}
-
-func serveFile(w http.ResponseWriter, r *http.Request, root fs.FS, name string) {
-	data, err := fs.ReadFile(root, name)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	// Types missing from Go's built-in table (the image may have no /etc/mime.types): the PWA manifest
-	// and the favicon would otherwise be sniffed as text/plain and image/x-icon.
-	if t, ok := extraTypes[path.Ext(name)]; ok {
-		w.Header().Set("Content-Type", t)
-	}
-	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }

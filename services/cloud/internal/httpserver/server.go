@@ -66,7 +66,8 @@ type Deps struct {
 	WebUI       http.Handler
 	WebUIOrigin string
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed
-	// when resolving the client address for the per-IP rate limit.
+	// when resolving the client address for the per-IP rate limit and the
+	// audit log.
 	TrustedProxies []netip.Prefix
 	Metrics        *observability.Metrics
 	// Drain, when set, ends the SSE streams at shutdown (see Drain).
@@ -135,7 +136,10 @@ func NewRouter(d Deps) http.Handler {
 			MaxAge:           600,
 		}))
 	}
-	r.Use(NewRateLimiter(50, 100).ByIP(NewClientIP(d.TrustedProxies)))
+	clientIP := NewClientIP(d.TrustedProxies)
+	r.Use(NewRateLimiter(50, 100).ByIP(clientIP))
+	r.Use(AuditClientIP(clientIP))
+	r.Use(probeDetails)
 
 	r.Handle("/metrics", internalOnly(promhttp.Handler()))
 

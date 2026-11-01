@@ -5,7 +5,7 @@ Obiettivi dall'Appendice A dello spec, misure e come ripeterle. Le cifre sono qu
 ## Come si esegue
 
 ```sh
-task perf PERF_NOTES=50000      # indice, ricerca, apertura nota, apertura vault, grafo 10k → .perf/results-50000.json
+task perf PERF_NOTES=50000      # indice, ricerca, apertura nota, apertura vault, creazione/rinomina, scansione sync, grafo 10k → .perf/results-50000.json
 task perf-check PERF_NOTES=50000 [PERF_TOLERANCE=25]   # confronto con docs/perf/baseline-50000.json
 task perf-data PERF_NOTES=10000 # solo il dataset (cache in .perf/vault-N, mai committato)
 ```
@@ -35,6 +35,25 @@ MacBook Apple M4 (10 core), 32 GB, macOS 27.0.1, SSD, Go 1.26.0; Chromium di Pla
 | Albero file con 50.000 note                                    | render 856 ms (prima 3.319 ms), 37 righe nel DOM (prima 50.715), espandi/comprimi 6 ms (prima 642 ms); 10k: 736 ms prima                                                                                         | M4, Chromium headless | migliorato                                                                   |
 | Memoria dell'indice                                            | cache di ricerca ≈ **210 MB** di heap a 50k; picco runtime Go in indicizzazione 161 MB; `index.db` 894 MB su disco (5,3× il testo)                                                                               | M4                    | misurato, vedi limiti                                                        |
 | Cloud p95 `changes` < 200 ms, `commit` < 500 ms a 1.000 utenti | k6 **non eseguito** (vedi sotto). Test Go esistente, 8 client: changes p95 13 ms, commit 50 op p95 216 ms. Misto piccolo, 200 utenti a ciclo chiuso: changes p95 50 ms (1.891/s), commit 1 op p95 203 ms (627/s) | M4 + PG in Docker     | indicativo, non il test richiesto                                            |
+
+## Metriche senza obiettivo nello spec
+
+Percorsi che lo spec non quantifica ma che crescono con il vault; misurati da `internal/perf/mutations_test.go` dopo l'apertura nota. Le fasi modificano il dataset in cache e lo ripristinano: le note create vengono cancellate, le rinomine annullate byte per byte e l'indice riallineato. `perfcheck` le elenca come `NEW` finché non sono nella baseline e non le fa mai fallire.
+
+| Metrica                                   | Cosa è cronometrato                                                                                                                                                                                           | Campioni | Prima (W4)       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------- |
+| `note_create_index_median_ms` / `_p95_ms` | `Indexer.Update` di una nota appena creata (`WriteFile` con `create`, come `WriteNote` con hash vuoto) con due link e un link fantasma: insieme dei file cambiato → `links.ResolveAll` su tutto il vault      | 20       | 3.091 / 3.324 ms |
+| `note_delete_index_median_ms` / `_p95_ms` | `Indexer.Update` dopo la cancellazione di quelle note (stesso percorso di `Trash`)                                                                                                                            | 20       | 3.083 / 3.129 ms |
+| `plan_rename_hub_median_ms`               | `links.PlanRename` (anteprima di `LinksAPI.PlanRename`) delle note con più backlink                                                                                                                           | 5 note   | 27,0 s           |
+| `plan_rename_leaf_median_ms`              | `links.PlanRename` di note casuali con 1-3 backlink                                                                                                                                                           | 5 note   | 24,7 s           |
+| `apply_rename_ms`                         | come `LinksAPI.ApplyRename`: nuovo `PlanRename` + `ApplyRename` (riscrittura e spostamento) + `Indexer.Update` dei percorsi toccati, per la nota con circa 100 backlink (un hub ne ha migliaia a 50k)         | 1        | 32,9 s           |
+| `apply_rename_leaf_ms`                    | lo stesso per una nota con 1-3 backlink                                                                                                                                                                       | 1        | 34,2 s           |
+| `sync_first_scan_s`                       | primo ciclo di un `Engine` nuovo (come dopo l'avvio) su un vault sincronizzato e invariato: righe `sync_files` già allineate, server finto senza modifiche; tempo da `Sync` alla prima richiesta di `changes` | 1        | 6,21 s           |
+| `sync_rescan_unchanged_s`                 | lo stesso, secondo ciclo dello stesso `Engine`                                                                                                                                                                | 1        | 0,22 s           |
+
+- Valori «Prima (W4)»: 2026-11-01, M4, Go 1.27.3, dataset 50k appena generato, load average 2,6-4,6 (nessuna build in parallelo); `.perf/results-before-50000.json`. Hub: 979-8.009 backlink, 2.531 note riscritte in media; il primo ciclo sync include 52 ms di pulizia dei temporanei.
+- La scansione non è esportata: si misura con `Engine.Sync` e un `Remote` finto che risponde solo a `changes` (vuoto); il primo ciclo include anche la pulizia dei file temporanei rimasti (una visita del vault, registrata a parte nel log del test).
+- Dopo una creazione il watcher dell'app richiama `Update` sullo stesso percorso (contenuto identico, ricarica del resolver): non è nel tempo misurato.
 
 ## Ottimizzazioni (prima → dopo)
 

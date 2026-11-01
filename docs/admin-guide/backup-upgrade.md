@@ -25,7 +25,7 @@ I **vault privati** sono cifrati dal client: un backup del server contiene solo 
 
 ## Upgrade
 
-- Il servizio applica le **migrazioni SQL** (goose) all'avvio. Sono pensate per essere compatibili con la versione precedente (aggiunte, non rimozioni) così che un rolling update con repliche miste funzioni; le eccezioni sono segnalate nelle note di rilascio (`docs/release/README.md`).
+- Il servizio applica le **migrazioni SQL** (goose) all'avvio delle repliche API (`--role=api`/`all`), una alla volta grazie a un advisory lock PostgreSQL; il worker non migra e attende che lo schema raggiunga la versione del proprio binario prima di eseguire i job. Sono pensate per essere compatibili con la versione precedente (aggiunte, non rimozioni) così che un rolling update con repliche miste funzioni; le eccezioni sono segnalate nelle note di rilascio (`docs/release/README.md`).
 - **Prima di aggiornare:** backup del database; leggere le note di rilascio; verificare le nuove variabili in [configurazione](configurazione.md).
 - **Procedura Helm:** `helm upgrade memobrain deploy/helm/memobrain -f my-values.yaml --set image.tag=<nuova>`; osservare `readyz`, la dashboard e i log del primo pod.
 - **Compatibilità client:** il protocollo di sync è versionato; i client più vecchi continuano a funzionare finché il server accetta la loro versione. Le versioni minime supportate saranno riportate nelle note di rilascio.

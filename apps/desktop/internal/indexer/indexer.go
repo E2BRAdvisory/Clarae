@@ -45,6 +45,16 @@ type Indexer struct {
 	logger   zerolog.Logger
 	progress func(Progress)
 
+	// Writers are serialized (see Full): wmu is held by every write to the
+	// index (an Update from start to end, each batch, removal and the final
+	// link resolution of a Full, the key index DDL); fullMu keeps two full
+	// passes (Full, Rebuild) from running at once. Lock order: fullMu, wmu.
+	fullMu sync.Mutex
+	wmu    sync.Mutex
+	// updated lists the paths an Update wrote while a Full is running (nil
+	// otherwise); the Full then leaves them alone. Guarded by wmu.
+	updated map[string]bool
+
 	// res caches the link resolver of the current file set (see Update).
 	rmu sync.Mutex
 	res *links.Resolver
@@ -91,8 +101,37 @@ func (j job) weight() int { return len(j.body) + 512 }
 // Full reconciles the whole vault with the index. Files that changed are read
 // and parsed by a pool of workers while a single writer stores them in batched
 // transactions.
+//
+// Concurrency: Full and Update are both writers and are serialized, but a
+// Full does not hold the write lock for its whole duration (a first index of
+// 50k notes takes about a minute, and an Update from a binding must not wait
+// behind it). It takes the lock per batch, for the removals, and for the
+// final link resolution; Updates run in between. A path an Update wrote
+// while the Full runs is skipped by the Full's later batches and removals:
+// the Full may have read that file before the Update did, and writing it
+// would bring back older content (the watcher reports any later change with
+// another Update). The final ResolveAll re-resolves every link against the
+// file set at that moment, so links written by interleaved Updates end up
+// consistent too; it holds the lock for its whole run (a few seconds on the
+// largest vaults), because resolving later chunks with a resolver that misses
+// an interleaved Update's files would undo that Update's resolution.
 func (ix *Indexer) Full(ctx context.Context) error {
+	ix.fullMu.Lock()
+	defer ix.fullMu.Unlock()
+	return ix.full(ctx)
+}
+
+// full is Full with fullMu held.
+func (ix *Indexer) full(ctx context.Context) error {
 	start := time.Now()
+	ix.wmu.Lock()
+	ix.updated = map[string]bool{}
+	ix.wmu.Unlock()
+	defer func() {
+		ix.wmu.Lock()
+		ix.updated = nil
+		ix.wmu.Unlock()
+	}()
 	known, err := ix.loadRows(ctx)
 	if err != nil {
 		return err
@@ -115,19 +154,25 @@ func (ix *Indexer) Full(ctx context.Context) error {
 		}
 		todo = append(todo, e)
 	}
-	if _, err := ix.indexBatches(ctx, todo, known, len(entries)-len(todo), len(entries)); err != nil {
+	bulk := len(todo) >= bulkMinFiles && 2*len(todo) >= len(entries)
+	if err := ix.withKeyIndex(ctx, bulk, func() error {
+		_, err := ix.indexBatches(ctx, todo, known, len(entries)-len(todo), len(entries), ix.applyFullBatch)
+		return err
+	}); err != nil {
 		return err
 	}
+	ix.wmu.Lock()
+	defer ix.wmu.Unlock()
 	removed := 0
 	for p := range known {
-		if !seen[p] {
-			if err := ix.remove(ctx, p); err != nil {
+		if !seen[p] && !ix.updated[p] {
+			if _, err := ix.remove(ctx, p); err != nil {
 				return err
 			}
 			removed++
 		}
 	}
-	ix.setResolver(nil)
+	ix.invalidateResolver()
 	if err := links.ResolveAll(ctx, ix.db); err != nil {
 		return err
 	}
@@ -136,11 +181,75 @@ func (ix *Indexer) Full(ctx context.Context) error {
 	return nil
 }
 
-// indexBatches prepares the entries concurrently and writes them in batches.
-// It reports whether any write changed the set of files or aliases.
-func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known map[string]fileRow, doneBase, total int) (bool, error) {
+// applyFullBatch writes one batch of a Full under the write lock, without
+// the paths an Update has written since the Full started.
+func (ix *Indexer) applyFullBatch(ctx context.Context, jobs []job) (delta, error) {
+	if testHookFullBatch != nil {
+		testHookFullBatch()
+	}
+	ix.wmu.Lock()
+	defer ix.wmu.Unlock()
+	keep := jobs[:0:0]
+	for _, j := range jobs {
+		if !ix.updated[j.e.Path] {
+			keep = append(keep, j)
+		}
+	}
+	if len(keep) == 0 {
+		return delta{}, nil
+	}
+	st, err := ix.applyBatch(ctx, keep)
+	if st.any {
+		// Updates running between batches must not resolve against the
+		// file set as it was before this batch.
+		ix.invalidateResolver()
+	}
+	return st, err
+}
+
+// testHookFullBatch runs before a Full takes the lock for a batch (tests).
+var testHookFullBatch func()
+
+// bulkMinFiles is the smallest pass for which Full drops the links_key_ix
+// index while writing (see withKeyIndex); a variable for the tests.
+var bulkMinFiles = 2000
+
+// createKeyIndex is the index of migration 0003_link_keys.
+const createKeyIndex = `CREATE INDEX IF NOT EXISTS links_key_ix ON links(target_key)`
+
+// withKeyIndex runs a write pass. With bulk set (most of the vault is
+// written, e.g. a first index) the index on links.target_key is dropped for
+// the pass and built again afterwards: one sort is much cheaper than
+// keeping a b-tree of random keys up to date for every inserted link (that
+// made a cold index of 10k notes about 7% slower). The index is (re)created
+// after every pass, so one that dies half way only leaves lookups slower until
+// the next Full: they stay correct without it. Both statements run under the
+// write lock; Updates interleaved with the pass stay correct without the
+// index too, only their link lookups are slower meanwhile.
+func (ix *Indexer) withKeyIndex(ctx context.Context, bulk bool, write func() error) error {
+	if bulk {
+		ix.wmu.Lock()
+		_, err := ix.db.ExecContext(ctx, `DROP INDEX IF EXISTS links_key_ix`)
+		ix.wmu.Unlock()
+		if err != nil {
+			return err
+		}
+	}
+	werr := write()
+	ix.wmu.Lock()
+	_, err := ix.db.ExecContext(context.WithoutCancel(ctx), createKeyIndex)
+	ix.wmu.Unlock()
+	return errors.Join(werr, err)
+}
+
+// indexBatches prepares the entries concurrently and writes them in batches
+// with apply. It reports how the set of files or aliases changed.
+func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known map[string]fileRow, doneBase, total int,
+	apply func(context.Context, []job) (delta, error),
+) (delta, error) {
+	var structural delta
 	if len(todo) == 0 {
-		return false, nil
+		return structural, nil
 	}
 	workers := min(runtime.NumCPU(), 8)
 	in := make(chan vault.Entry)
@@ -174,13 +283,13 @@ func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known m
 	go func() { wg.Wait(); close(out) }()
 
 	var batch []job
-	weight, processed, structural := 0, 0, false
+	weight, processed := 0, 0
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
 		}
-		st, err := ix.applyBatch(ctx, batch)
-		structural = structural || st
+		st, err := apply(ctx, batch)
+		structural.merge(st)
 		processed += len(batch)
 		batch, weight = batch[:0], 0
 		last := todo[min(processed, len(todo))-1]
@@ -207,10 +316,13 @@ func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known m
 }
 
 // Update refreshes the given vault-relative paths after a watcher batch.
-// A path that no longer exists is removed; a folder is walked.
+// A path that no longer exists is removed; a folder is walked. It holds the
+// write lock from start to end (see Full).
 func (ix *Indexer) Update(ctx context.Context, paths []string) error {
+	ix.wmu.Lock()
+	defer ix.wmu.Unlock()
 	var entries []vault.Entry
-	structural := false
+	var structural delta
 	for _, p := range paths {
 		abs, normalized, err := ix.fs.Resolve(p)
 		if err != nil {
@@ -219,10 +331,13 @@ func (ix *Indexer) Update(ctx context.Context, paths []string) error {
 		st, err := os.Stat(abs)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
-			if err := ix.removePrefix(ctx, normalized); err != nil {
+			d, err := ix.removePrefix(ctx, normalized)
+			ix.markUpdated(normalized)
+			ix.markUpdated(d.removed...)
+			if err != nil {
 				return err
 			}
-			structural = true
+			structural.merge(d)
 			continue
 		case err != nil:
 			return err
@@ -240,30 +355,59 @@ func (ix *Indexer) Update(ctx context.Context, paths []string) error {
 		}
 		entries = append(entries, vault.Entry{Path: normalized, Name: filepath.Base(abs), Kind: syncproto.KindOf(normalized), Size: st.Size(), Mtime: st.ModTime()})
 	}
-	st, err := ix.indexBatches(ctx, entries, map[string]fileRow{}, 0, len(entries))
+	for _, e := range entries {
+		ix.markUpdated(e.Path)
+	}
+	st, err := ix.indexBatches(ctx, entries, map[string]fileRow{}, 0, len(entries), ix.applyBatch)
 	if err != nil {
 		return err
 	}
-	// Link targets depend on which files and aliases exist: when that set changed every link may
-	// resolve differently. A plain edit only re-resolves the links of the notes it touched.
-	if structural || st {
-		ix.setResolver(nil)
-		return links.ResolveAll(ctx, ix.db)
+	structural.merge(st)
+	// Link targets depend on which files and aliases exist: when that set changed, the links
+	// that could resolve differently (see links.ResolveAffected) are resolved again with a
+	// fresh resolver. The links of the notes written are resolved in any case.
+	if structural.any {
+		ix.invalidateResolver()
 	}
 	r, err := ix.getResolver(ctx)
 	if err != nil {
 		return err
 	}
-	changed := make([]string, len(entries))
+	ch := links.Change{Tokens: structural.tokens, Removed: structural.removed, Paths: make([]string, len(entries))}
 	for i, e := range entries {
-		changed[i] = e.Path
+		ch.Paths[i] = e.Path
 	}
-	return links.ResolvePaths(ctx, ix.db, r, changed)
+	return links.ResolveAffected(ctx, ix.db, r, ch)
 }
 
-func (ix *Indexer) setResolver(r *links.Resolver) {
+// markUpdated records paths an Update wrote while a Full runs. wmu held.
+func (ix *Indexer) markUpdated(paths ...string) {
+	if ix.updated == nil {
+		return
+	}
+	for _, p := range paths {
+		ix.updated[p] = true
+	}
+}
+
+// delta is how a write changed the set of files and aliases link resolution works on.
+type delta struct {
+	tokens  []string // links.FileTokens / links.AliasTokens of what appeared, disappeared or changed
+	removed []string // paths removed
+	any     bool     // the set changed
+}
+
+func (d *delta) merge(o delta) {
+	d.tokens = append(d.tokens, o.tokens...)
+	d.removed = append(d.removed, o.removed...)
+	d.any = d.any || o.any
+}
+
+// invalidateResolver drops the cached resolver: the next Update loads one for
+// the current file set.
+func (ix *Indexer) invalidateResolver() {
 	ix.rmu.Lock()
-	ix.res = r
+	ix.res = nil
 	ix.rmu.Unlock()
 }
 
@@ -283,12 +427,18 @@ func (ix *Indexer) getResolver(ctx context.Context) (*links.Resolver, error) {
 
 // Rebuild clears every table and runs a full pass.
 func (ix *Indexer) Rebuild(ctx context.Context) error {
+	ix.fullMu.Lock()
+	defer ix.fullMu.Unlock()
+	ix.wmu.Lock()
 	for _, table := range []string{"fts_content", "aliases", "tags", "links", "headings", "properties", "tasks", "block_ids", "files"} {
 		if _, err := ix.db.ExecContext(ctx, "DELETE FROM "+table); err != nil { //nolint:gosec // table names are constants
+			ix.wmu.Unlock()
 			return err
 		}
 	}
-	return ix.Full(ctx)
+	ix.invalidateResolver()
+	ix.wmu.Unlock()
+	return ix.full(ctx)
 }
 
 func (ix *Indexer) loadRows(ctx context.Context) (map[string]fileRow, error) {
@@ -369,30 +519,31 @@ func (ix *Indexer) prepareStructured(e vault.Entry, prev fileRow, title string) 
 // applyBatch writes the jobs in one transaction. If the batch fails as a whole
 // (one bad row must not lose the others) the jobs are retried one by one and
 // the failing ones are logged and skipped.
-func (ix *Indexer) applyBatch(ctx context.Context, jobs []job) (bool, error) {
+func (ix *Indexer) applyBatch(ctx context.Context, jobs []job) (delta, error) {
 	structural, err := ix.applyTx(ctx, jobs)
 	if err == nil {
 		return structural, nil
 	}
 	if ctx.Err() != nil {
-		return false, ctx.Err()
+		return delta{}, ctx.Err()
 	}
-	structural = false
+	structural = delta{}
 	for _, j := range jobs {
 		st, err := ix.applyTx(ctx, []job{j})
 		if err != nil {
 			ix.logger.Warn().Err(err).Str("path", j.e.Path).Msg("index failed")
 			continue
 		}
-		structural = structural || st
+		structural.merge(st)
 	}
 	return structural, nil
 }
 
-func (ix *Indexer) applyTx(ctx context.Context, jobs []job) (bool, error) {
+func (ix *Indexer) applyTx(ctx context.Context, jobs []job) (delta, error) {
+	var structural delta
 	tx, err := ix.db.BeginTx(ctx, nil)
 	if err != nil {
-		return false, err
+		return structural, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	w := &txWriter{tx: tx, stmts: map[string]*sql.Stmt{}}
@@ -401,25 +552,27 @@ func (ix *Indexer) applyTx(ctx context.Context, jobs []job) (bool, error) {
 	// transaction has touched the FTS5 table, each later statement that opens a
 	// statement journal (all the foreign-key inserts do) makes FTS5 flush its
 	// in-memory segment to disk, which was most of the indexing time.
-	structural := false
 	ids := make([]int64, len(jobs))
 	exists := make([]bool, len(jobs))
 	for i, j := range jobs {
 		st, err := w.apply(ctx, j, &ids[i], &exists[i])
 		if err != nil {
-			return false, err
+			return delta{}, err
 		}
-		structural = structural || st
+		structural.merge(st)
 	}
 	for i, j := range jobs {
 		if j.touch {
 			continue
 		}
 		if err := w.writeFTS(ctx, j, ids[i], exists[i]); err != nil {
-			return false, err
+			return delta{}, err
 		}
 	}
-	return structural, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return delta{}, err
+	}
+	return structural, nil
 }
 
 // txWriter caches prepared statements for the lifetime of one transaction.
@@ -463,44 +616,44 @@ var deleteDerived = []string{
 }
 
 // apply stores one job. It reports whether the file is new or its aliases
-// changed, i.e. whether link resolution of the whole vault may be affected.
-func (w *txWriter) apply(ctx context.Context, j job, outID *int64, outExists *bool) (bool, error) {
+// changed, i.e. whether the resolution of links in other notes may be affected.
+func (w *txWriter) apply(ctx context.Context, j job, outID *int64, outExists *bool) (delta, error) {
 	e := j.e
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if j.touch {
-		return false, w.exec(ctx, `UPDATE files SET mtime_ns=?, size=?, indexed_at=? WHERE path=?`, e.Mtime.UnixNano(), e.Size, now, e.Path)
+		return delta{}, w.exec(ctx, `UPDATE files SET mtime_ns=?, size=?, indexed_at=? WHERE path=?`, e.Mtime.UnixNano(), e.Size, now, e.Path)
 	}
 	var id int64
 	exists := true
 	sel, err := w.stmt(ctx, `SELECT id FROM files WHERE path = ?`)
 	if err != nil {
-		return false, err
+		return delta{}, err
 	}
 	if err := sel.QueryRowContext(ctx, e.Path).Scan(&id); errors.Is(err, sql.ErrNoRows) {
 		exists = false
 	} else if err != nil {
-		return false, err
+		return delta{}, err
 	}
 	var oldAliases []string
 	if exists {
 		rows, err := w.tx.QueryContext(ctx, `SELECT name FROM aliases WHERE path = ?`, e.Path)
 		if err != nil {
-			return false, err
+			return delta{}, err
 		}
 		for rows.Next() {
 			var n string
 			if err := rows.Scan(&n); err != nil {
 				_ = rows.Close()
-				return false, err
+				return delta{}, err
 			}
 			oldAliases = append(oldAliases, n)
 		}
 		if err := rows.Close(); err != nil {
-			return false, err
+			return delta{}, err
 		}
 		for _, q := range deleteDerived {
 			if err := w.exec(ctx, q, e.Path); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 	}
@@ -517,31 +670,31 @@ func (w *txWriter) apply(ctx context.Context, j job, outID *int64, outExists *bo
 		  hash=excluded.hash, title=excluded.title, word_count=excluded.word_count, indexed_at=excluded.indexed_at
 		RETURNING id`)
 	if err != nil {
-		return false, err
+		return delta{}, err
 	}
 	if err := up.QueryRowContext(ctx, e.Path, string(e.Kind), e.Mtime.UnixNano(), e.Size, j.hash, j.title, wordCount, now).Scan(&id); err != nil {
-		return false, err
+		return delta{}, err
 	}
 	if doc := j.doc; doc != nil {
 		for _, h := range doc.Headings {
 			if err := w.exec(ctx, `INSERT INTO headings (path, level, text, line) VALUES (?, ?, ?, ?)`, e.Path, h.Level, h.Text, h.Line); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 		for _, l := range doc.Links {
-			if err := w.exec(ctx, `INSERT INTO links (path, line, kind, target_raw, target_resolved, heading, block, alias, embed) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
-				e.Path, l.Line, string(l.Kind), l.Target, l.Heading, l.Block, l.Alias, l.Embed); err != nil {
-				return false, err
+			if err := w.exec(ctx, `INSERT INTO links (path, line, kind, target_raw, target_resolved, heading, block, alias, embed, target_key) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+				e.Path, l.Line, string(l.Kind), l.Target, l.Heading, l.Block, l.Alias, l.Embed, links.LinkKey(e.Path, string(l.Kind), l.Target)); err != nil {
+				return delta{}, err
 			}
 		}
 		for _, t := range doc.Tags {
 			if err := w.exec(ctx, `INSERT INTO tags (path, line, name) VALUES (?, ?, ?)`, e.Path, t.Line, t.Name); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 		for _, a := range doc.Aliases {
 			if err := w.exec(ctx, `INSERT INTO aliases (path, name) VALUES (?, ?)`, e.Path, a); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 		for k, v := range doc.Properties {
@@ -550,22 +703,28 @@ func (w *txWriter) apply(ctx context.Context, j job, outID *int64, outExists *bo
 				continue
 			}
 			if err := w.exec(ctx, `INSERT INTO properties (path, key, kind, value) VALUES (?, ?, ?, ?)`, e.Path, k, string(properties.Infer(v)), string(raw)); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 		for _, t := range doc.Tasks {
 			if err := w.exec(ctx, `INSERT INTO tasks (path, line, state, text) VALUES (?, ?, ?, ?)`, e.Path, t.Line, t.State, t.Text); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 		for _, b := range doc.BlockIDs {
 			if err := w.exec(ctx, `INSERT INTO block_ids (path, line, id) VALUES (?, ?, ?)`, e.Path, b.Line, b.ID); err != nil {
-				return false, err
+				return delta{}, err
 			}
 		}
 	}
 	*outID, *outExists = id, exists
-	return !exists || !sameSet(oldAliases, newAliases), nil
+	switch {
+	case !exists:
+		return delta{tokens: links.FileTokens(e.Path, newAliases), any: true}, nil
+	case !sameSet(oldAliases, newAliases):
+		return delta{tokens: links.AliasTokens(append(oldAliases, newAliases...)), any: true}, nil
+	}
+	return delta{}, nil
 }
 
 // writeFTS stores the searchable text; its rowid is the id of the files row (see the schema comment).
@@ -597,45 +756,68 @@ func sameSet(a, b []string) bool {
 	return true
 }
 
-func (ix *Indexer) remove(ctx context.Context, path string) error {
+// remove drops a file from the index and returns how that changed the file set.
+func (ix *Indexer) remove(ctx context.Context, path string) (delta, error) {
 	tx, err := ix.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return delta{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	var aliases []string
+	rows, err := tx.QueryContext(ctx, `SELECT name FROM aliases WHERE path = ?`, path)
+	if err != nil {
+		return delta{}, err
+	}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			_ = rows.Close()
+			return delta{}, err
+		}
+		aliases = append(aliases, n)
+	}
+	if err := rows.Close(); err != nil {
+		return delta{}, err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM fts_content WHERE rowid = (SELECT id FROM files WHERE path = ?)`, path); err != nil {
-		return err
+		return delta{}, err
 	}
 	for _, table := range []string{"aliases", "tags", "links", "headings", "properties", "tasks", "block_ids", "files"} {
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE path = ?", table), path); err != nil {
-			return err
+			return delta{}, err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return delta{}, err
+	}
+	return delta{tokens: links.FileTokens(path, aliases), removed: []string{path}, any: true}, nil
 }
 
 // removePrefix removes a path and, if it was a folder, everything under it.
-func (ix *Indexer) removePrefix(ctx context.Context, path string) error {
+func (ix *Indexer) removePrefix(ctx context.Context, path string) (delta, error) {
+	var d delta
 	rows, err := ix.db.QueryContext(ctx, `SELECT path FROM files WHERE path = ? OR path LIKE ? ESCAPE '\'`, path, escapeLike(path)+"/%")
 	if err != nil {
-		return err
+		return d, err
 	}
 	var paths []string
 	for rows.Next() {
 		var p string
 		if err := rows.Scan(&p); err != nil {
 			_ = rows.Close()
-			return err
+			return d, err
 		}
 		paths = append(paths, p)
 	}
 	_ = rows.Close()
 	for _, p := range paths {
-		if err := ix.remove(ctx, p); err != nil {
-			return err
+		r, err := ix.remove(ctx, p)
+		if err != nil {
+			return d, err
 		}
+		d.merge(r)
 	}
-	return nil
+	return d, nil
 }
 
 func escapeLike(s string) string {

@@ -326,7 +326,15 @@ func TestPerf(t *testing.T) {
 	out.set(t, "unlinked_mentions_median_ms", ms(med), "ms (lazy, shown after the note)")
 	out.set(t, "unlinked_mentions_p95_ms", ms(p95), "ms")
 
-	// 7. Graph build on the 10k vault.
+	// 7. File set changes and renames (the dataset and the index are restored afterwards).
+	ix = indexer.New(fsys2, db, zerolog.Nop(), nil)
+	measureCreateDelete(ctx, t, out, fsys2, ix, paths, rng, 20)
+	measureRename(ctx, t, out, fsys2, db, ix, rng, 5)
+
+	// 8. Sync scan of an unchanged, fully synchronized vault.
+	measureSyncScan(ctx, t, out, fsys2)
+
+	// 9. Graph build on the 10k vault.
 	if gn := graphNotes(); gn > 0 {
 		measureGraph(ctx, t, out, gn)
 	}

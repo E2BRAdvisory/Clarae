@@ -72,10 +72,17 @@ groups:
           description: 'Più del 20% delle operazioni è rifiutato (quota, path non validi, vault in sola lettura).'
           runbook: 'docs/admin-guide/runbook.md#quota-esaurita'
 
+  # Le metriche dei job hanno un'etichetta `job` (il nome del job), che coincide con l'etichetta di
+  # target di Prometheus: senza `honor_labels: true` lo scraping la rinomina in `exported_job`. Le regole
+  # seguenti funzionano in entrambi i casi (`label_replace` o un selettore per ciascuna etichetta).
+  # I job girano nei processi `--role=worker` (porta interna METRICS_LISTEN_ADDR, :18083) o `--role=all`.
   - name: memobrain-jobs
     rules:
       - alert: MemobrainJobFailing
-        expr: sum by (job) (increase(memobrain_jobs_runs_total{result="error"}[1h])) >= 3
+        expr: |
+          sum by (job) (
+            label_replace(increase(memobrain_jobs_runs_total{result="error"}[1h]), "job", "$1", "exported_job", "(.+)")
+          ) >= 3
         for: 5m
         labels: { severity: warning }
         annotations:
@@ -84,7 +91,11 @@ groups:
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
       - alert: MemobrainExportJobStale
-        expr: time() - max(memobrain_jobs_last_success_timestamp_seconds{job="exports"}) > 600
+        expr: |
+          time() - max(
+            memobrain_jobs_last_success_timestamp_seconds{job="exports"}
+              or memobrain_jobs_last_success_timestamp_seconds{exported_job="exports"}
+          ) > 600
         for: 5m
         labels: { severity: warning }
         annotations:
@@ -93,12 +104,46 @@ groups:
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
       - alert: MemobrainMaintenanceStale
-        expr: time() - max(memobrain_jobs_last_success_timestamp_seconds{job="maintenance"}) > 2 * 86400
+        expr: |
+          time() - max(
+            memobrain_jobs_last_success_timestamp_seconds{job="maintenance"}
+              or memobrain_jobs_last_success_timestamp_seconds{exported_job="maintenance"}
+          ) > 2 * 86400
         for: 30m
         labels: { severity: warning }
         annotations:
           summary: 'Manutenzione giornaliera ferma da oltre 2 giorni'
           description: 'Compattazione, purge dei vault eliminati e riconciliazione dei contatori non girano.'
+          runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
+
+      # Le regole "stale" non scattano se la serie manca del tutto (worker spento, non raccolto da
+      # Prometheus, o job mai riuscito dall'avvio): queste due coprono l'assenza.
+      - alert: MemobrainJobMetricsAbsent
+        expr: absent(memobrain_jobs_runs_total)
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: 'Nessun processo worker raccolto da Prometheus'
+          description: "Nessuna metrica dei job da 15 minuti (ogni job parte entro un minuto dall'avvio): il worker è giù o Prometheus non raccoglie la sua porta interna (METRICS_LISTEN_ADDR, :18083)."
+          runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
+
+      - alert: MemobrainJobNeverSucceeded
+        expr: |
+          (absent(memobrain_jobs_last_success_timestamp_seconds{job="blob-gc"})
+            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="blob-gc"}))
+          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="uploads"})
+            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="uploads"}))
+          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="retention"})
+            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="retention"}))
+          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="maintenance"})
+            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="maintenance"}))
+          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="exports"})
+            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="exports"}))
+        for: 2h
+        labels: { severity: warning }
+        annotations:
+          summary: 'Il job {{ $labels.job }} non risulta mai riuscito'
+          description: 'Nessun successo del job da quando il worker è stato avviato (o il worker non è raccolto): controllare i log `job failed`.'
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
   - name: memobrain-database

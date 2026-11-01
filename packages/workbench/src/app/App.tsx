@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, type AuthState, type SyncStatus } from './api';
 import {
   Events,
-  type FileChangedPayload,
   type IndexProgressPayload,
   type OpenRequestPayload,
   type SyncConflictPayload,
@@ -32,6 +32,7 @@ import { VaultView } from '../shell/VaultView';
 import { Welcome } from '../shell/Welcome';
 import { useCan, usePlatform } from '../platform';
 import { followLinkPath } from './open';
+import { applyVaultChanges, onVaultChanges } from './fileChanges';
 
 export function App() {
   const vault = useAppStore((s) => s.vault);
@@ -42,6 +43,7 @@ export function App() {
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const appearance = useSettings((s) => s.appearance);
   const invalidate = useInvalidate();
+  const queryClient = useQueryClient();
 
   // Load preferences once.
   useEffect(() => {
@@ -71,14 +73,8 @@ export function App() {
 
   // Backend events.
   useEffect(() => {
-    const offFile = api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
-      void invalidate.tree(p.vaultId);
-      void invalidate.search(p.vaultId);
-      void invalidate.backlinks(p.vaultId);
-      void invalidate.tags(p.vaultId);
-      void invalidate.propkeys(p.vaultId);
-      void invalidate.outline(p.vaultId);
-    });
+    // File changes are coalesced and patched into the caches (see fileChanges.ts).
+    const offFile = onVaultChanges((batch) => applyVaultChanges(queryClient, batch));
     const offIndex = api.on<IndexProgressPayload>(Events.indexProgress, (p) => {
       setIndexProgress(p.finished ? null : p);
       if (p.finished) {
@@ -91,7 +87,7 @@ export function App() {
       offFile();
       offIndex();
     };
-  }, [invalidate, setIndexProgress]);
+  }, [invalidate, queryClient, setIndexProgress]);
 
   const openVault = async (path: string) => {
     await openVaultAt(path);

@@ -1,6 +1,21 @@
 import { iconElement, type IconName } from '../shell/icons';
 import { WidgetType, type EditorView } from '@codemirror/view';
-import { livePreviewContext, type LinkSpec } from './context';
+import { livePreviewContext, type EmbedDisposer, type LinkSpec } from './context';
+
+/** What frees each rendered embed element, called from WidgetType.destroy. */
+const disposers = new WeakMap<HTMLElement, EmbedDisposer>();
+
+function keep(el: HTMLElement, d: EmbedDisposer | void): void {
+  if (d) disposers.set(el, d);
+}
+
+function release(el: HTMLElement): void {
+  const d = disposers.get(el);
+  if (!d) return;
+  disposers.delete(el);
+  if (typeof d === 'function') d();
+  else d.dispose();
+}
 
 /** Checkbox for a task marker: toggles " " <-> "x" in the document. */
 export class CheckboxWidget extends WidgetType {
@@ -111,8 +126,11 @@ export class EmbedWidget extends WidgetType {
   override toDOM(view: EditorView): HTMLElement {
     const el = document.createElement('span');
     el.className = 'cm-lp-embed';
-    view.state.facet(livePreviewContext).renderEmbed(this.spec, el);
+    keep(el, view.state.facet(livePreviewContext).renderEmbed(this.spec, el));
     return el;
+  }
+  override destroy(dom: HTMLElement): void {
+    release(dom);
   }
   override ignoreEvent(): boolean {
     return false;
@@ -133,8 +151,11 @@ export class ImageWidget extends WidgetType {
   override toDOM(view: EditorView): HTMLElement {
     const el = document.createElement('span');
     el.className = 'cm-lp-embed';
-    view.state.facet(livePreviewContext).renderImage(this.src, this.alt, el);
+    keep(el, view.state.facet(livePreviewContext).renderImage(this.src, this.alt, el));
     return el;
+  }
+  override destroy(dom: HTMLElement): void {
+    release(dom);
   }
   override ignoreEvent(): boolean {
     return false;

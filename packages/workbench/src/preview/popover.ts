@@ -53,6 +53,8 @@ export function placePopover(
 }
 
 let el: HTMLElement | null = null;
+/** Frees the embeds hydrated into the open popover. */
+let disposeEmbeds: (() => void) | null = null;
 let openKey = '';
 let seq = 0;
 let showTimer: ReturnType<typeof setTimeout> | undefined;
@@ -77,6 +79,8 @@ export function hidePreview(restoreFocus = false): void {
   pendingKey = '';
   cleanup?.();
   cleanup = null;
+  disposeEmbeds?.();
+  disposeEmbeds = null;
   const hadFocus = !!el && el.contains(document.activeElement);
   el?.remove();
   el = null;
@@ -153,7 +157,8 @@ function build(
     if (/^[A-Za-z][A-Za-z0-9+.-]+:/.test(href)) openExternal(href);
   });
 
-  hydrate(body, {
+  disposeEmbeds?.();
+  disposeEmbeds = hydrate(body, {
     backend: previewBackend(req.vaultId),
     fromPath: path,
     depth: MAX_EMBED_DEPTH - 1, // embeds render one level deep, no further

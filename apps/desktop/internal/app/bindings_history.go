@@ -54,8 +54,9 @@ func (h *HistoryAPI) Restore(vaultID, snapshotID string) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, bindingError(err)
 	}
+	changes := classifyChanges(context.Background(), ov, []string{path})
 	_ = ov.Indexer.Update(context.Background(), []string{path})
-	h.app.emit(EventVaultFileChanged, FileChangedPayload{VaultID: vaultID, Paths: []string{path}})
+	h.app.emit(EventVaultFileChanged, FileChangedPayload{VaultID: vaultID, Paths: []string{path}, Changes: changes})
 	h.app.sync.Kick(vaultID)
 	return WriteResult{Path: path, Hash: hash}, nil
 }

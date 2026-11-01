@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { followLink } from '../app/actions';
-import { Events, type FileChangedPayload } from '../app/events';
+import { onVaultChanges, staleTargets, type VaultChangeBatch } from '../app/fileChanges';
 import { Editor, type LinkResolver } from '../editor/Editor';
 import { EditorToolbar } from '../editor/EditorToolbar';
 import type { LinkSpec, LivePreviewContext } from '../editor/context';
@@ -29,10 +30,14 @@ import type { Pane, Tab } from './layout';
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
 
-/** Resolution cache for [[links]]: fills in the background, then asks views to repaint. */
+/**
+ * Resolution cache for [[links]]: fills in the background, then asks views to repaint. It keeps
+ * what each target resolved to, so a file change re-checks only the targets it may redirect
+ * (fileChanges.staleTargets); the old answer stays on screen until the new one arrives.
+ */
 function useLinkResolver(vaultId: string, path: string) {
   return useMemo(() => {
-    const cache = new Map<string, boolean>();
+    const cache = new Map<string, string>(); // target -> resolved path, '' when unresolved
     const pending = new Set<string>();
     const subs = new Set<() => void>();
     const notify = (): void => subs.forEach((f) => f());
@@ -42,24 +47,47 @@ function useLinkResolver(vaultId: string, path: string) {
         return () => subs.delete(cb);
       },
     };
+    const lookup = (target: string): Promise<string> =>
+      api.links.resolve(vaultId, path, target).catch(() => '');
     return {
       resolver,
-      resolved: (target: string): boolean | undefined => (target === '' ? true : cache.get(target)),
+      resolved: (target: string): boolean | undefined => {
+        if (target === '') return true;
+        const p = cache.get(target);
+        return p === undefined ? undefined : p !== '';
+      },
       request: (target: string): void => {
         if (target === '' || cache.has(target) || pending.has(target)) return;
         pending.add(target);
-        void api.links
-          .resolve(vaultId, path, target)
-          .then((p) => cache.set(target, p !== ''))
-          .catch(() => cache.set(target, false))
+        void lookup(target)
+          .then((p) => cache.set(target, p))
           .finally(() => {
             pending.delete(target);
             notify();
           });
       },
-      invalidate: (): void => {
-        cache.clear();
-        notify();
+      /** Re-resolves the targets a batch of file changes may affect (all of them when unknown). */
+      changed: (batch: VaultChangeBatch): void => {
+        const stale = staleTargets(cache, batch);
+        if (stale === null) {
+          cache.clear();
+          notify();
+          return;
+        }
+        const todo = stale.filter((t) => !pending.has(t));
+        if (todo.length === 0) return;
+        todo.forEach((t) => pending.add(t));
+        void Promise.all(
+          todo.map(async (t) => {
+            const p = await lookup(t);
+            pending.delete(t);
+            if (cache.get(t) === p) return false;
+            cache.set(t, p);
+            return true;
+          }),
+        ).then((changed) => {
+          if (changed.some(Boolean)) notify();
+        });
       },
     };
   }, [vaultId, path]);
@@ -68,12 +96,13 @@ function useLinkResolver(vaultId: string, path: string) {
 function AttachmentView({ vaultId, path }: { vaultId: string; path: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (ref.current)
-      void renderEmbedInto(
-        ref.current,
-        { target: path, heading: '', block: '', alias: '', embed: true },
-        { backend: backendFor(vaultId), fromPath: path, depth: 0, visited: [path] },
-      );
+    if (!ref.current) return;
+    const embed = renderEmbedInto(
+      ref.current,
+      { target: path, heading: '', block: '', alias: '', embed: true },
+      { backend: backendFor(vaultId), fromPath: path, depth: 0, visited: [path] },
+    );
+    return () => embed.dispose();
   }, [vaultId, path]);
   return <div className="attachment-view" ref={ref} />;
 }
@@ -115,11 +144,11 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
     settingsRef.current = editorSettings;
   });
 
-  // Another note was created/renamed/deleted: links may resolve differently now.
+  // Notes created, renamed, deleted (or aliases edited): some links may resolve differently now.
   useEffect(
     () =>
-      api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
-        if (p.vaultId === vaultId) link.invalidate();
+      onVaultChanges((batch) => {
+        if (batch.vaultId === vaultId) link.changed(batch);
       }),
     [vaultId, link],
   );
@@ -134,7 +163,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
       resolved: link.resolved,
       requestResolve: link.request,
       renderEmbed: (spec, el) =>
-        void renderEmbedInto(el, spec, {
+        renderEmbedInto(el, spec, {
           backend: backendFor(vaultId),
           fromPath: path,
           depth: 0,
@@ -150,7 +179,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
           el.replaceChildren(img);
           return;
         }
-        void renderEmbedInto(
+        return renderEmbedInto(
           el,
           { target: decodeURI(src), heading: '', block: '', alias: alt, embed: true },
           { backend: backendFor(vaultId), fromPath: path, depth: 0, visited: [path] },
@@ -203,11 +232,15 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
       vaultId,
       path,
       text,
+      // A property is written over the saved note: edits that are not on disk (a conflict, a
+      // write error) make it fail rather than be dropped by the write and the reload after it.
       prepare: async () => {
-        await docRef.current.flush();
-        return (await api.vault.readNote(vaultId, path)).hash;
+        const d = docRef.current;
+        if (!(await d.flush())) throw new Error(i18next.t('editor.notSaved'));
+        return d.savedHash();
       },
-      reload: () => void docRef.current.reload(),
+      // Unsaved edits typed meanwhile are kept (they become a conflict), never discarded.
+      reload: () => void docRef.current.refresh(),
     });
   }, [isActive, doc.status, vaultId, path, text]);
   useEffect(() => () => useActiveNote.getState().retire(path), [path]);

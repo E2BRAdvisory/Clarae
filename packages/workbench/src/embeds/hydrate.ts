@@ -3,7 +3,7 @@
 import type { BinaryContent } from '../app/api';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
-import { blobUrl, classify, embedOptions, parseSize, pdfPage } from './media';
+import { classify, embedOptions, loadMedia, parseSize, pdfPage, type FileStamp } from './media';
 import { renderPdf } from './pdf';
 import { renderMath, renderMermaid } from './typeset';
 import type { LinkSpec } from '../editor/context';
@@ -11,6 +11,13 @@ import { parseDrawingRef, type DrawingRef } from '../drawing/embed/ref';
 
 /** What embeds need from the backend (a subset of `api`, so tests can fake it). */
 export interface EmbedBackend {
+  /** Scope of the attachment cache (the vault id); '' when absent. */
+  vaultId?: string;
+  /**
+   * Size and modification time of a file as the file tree knows them, if it does: a cached
+   * attachment with the same stamp is shown without reading the file again.
+   */
+  stat?(path: string): FileStamp | undefined;
   resolve(from: string, target: string): Promise<string>;
   readNote(path: string): Promise<string>;
   readBinary(path: string): Promise<BinaryContent>;
@@ -18,8 +25,8 @@ export interface EmbedBackend {
   drawingPreview?(path: string, ref?: DrawingRef | null): Promise<string>;
   /** Blob URL of the static picture of a canvas. */
   canvasPreview?(path: string): Promise<string>;
-  /** Mounts the live view of a `.base` file (optionally a named view) into el. */
-  baseEmbed?(el: HTMLElement, path: string, view: string, fromPath: string): void;
+  /** Mounts the live view of a `.base` file (optionally a named view) into el; returns its unmount. */
+  baseEmbed?(el: HTMLElement, path: string, view: string, fromPath: string): (() => void) | void;
 }
 
 export interface EmbedDeps {
@@ -42,11 +49,52 @@ function notice(el: HTMLElement, cls: string, text: string): void {
   el.textContent = text;
 }
 
-/** Fills el with the embed described by spec. */
-export async function renderEmbedInto(
+/** A render in progress or done: await it, and dispose it when its element goes away. */
+export type EmbedHandle = Promise<void> & { dispose(): void };
+
+/** The render that currently owns an element, so a new render (or its widget) can stop it. */
+const owners = new WeakMap<HTMLElement, () => void>();
+
+/** Stops what renderEmbedInto put into el (pdf.js document, attachment, nested embeds, React root). */
+export function disposeEmbed(el: HTMLElement): void {
+  owners.get(el)?.();
+}
+
+/**
+ * Fills el with the embed described by spec. The returned handle resolves once it is filled;
+ * its dispose() frees what the embed holds (call it when el is discarded) and is idempotent.
+ */
+export function renderEmbedInto(el: HTMLElement, spec: LinkSpec, deps: EmbedDeps): EmbedHandle {
+  disposeEmbed(el);
+  const cleanups: (() => void)[] = [];
+  let disposed = false;
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    if (owners.get(el) === dispose) owners.delete(el);
+    for (const f of cleanups.splice(0).reverse()) f();
+  };
+  /** Registers a cleanup; runs it at once when the render was disposed meanwhile. */
+  const own = (f: () => void): boolean => {
+    if (disposed) {
+      f();
+      return false;
+    }
+    cleanups.push(f);
+    return true;
+  };
+  owners.set(el, dispose);
+  const done = fill(el, spec, deps, own, () => disposed) as EmbedHandle;
+  done.dispose = dispose;
+  return done;
+}
+
+async function fill(
   el: HTMLElement,
   spec: LinkSpec,
   deps: EmbedDeps,
+  own: (cleanup: () => void) => boolean,
+  disposed: () => boolean,
 ): Promise<void> {
   const label = `![[${spec.target}${spec.heading ? '#' + spec.heading : ''}]]`;
   let path = '';
@@ -55,14 +103,26 @@ export async function renderEmbedInto(
   } catch {
     path = '';
   }
+  if (disposed()) return;
   if (!path) return notice(el, 'embed-missing', label);
   const kind = classify(path);
+  const backend = deps.backend;
+  const media = async () => {
+    const h = await loadMedia(
+      backend.vaultId ?? '',
+      path,
+      () => backend.readBinary(path),
+      backend.stat?.(path),
+    );
+    return own(h.release) ? h : null;
+  };
   try {
     switch (kind) {
       case 'image': {
-        const bin = await deps.backend.readBinary(path);
+        const h = await media();
+        if (!h) return;
         const img = document.createElement('img');
-        img.src = blobUrl(bin);
+        img.src = h.url;
         img.alt =
           spec.alias && !parseSize(spec.alias).width ? spec.alias : (path.split('/').pop() ?? path);
         const { width, height } = parseSize(spec.alias);
@@ -73,18 +133,30 @@ export async function renderEmbedInto(
       }
       case 'audio':
       case 'video': {
-        const bin = await deps.backend.readBinary(path);
-        const media = document.createElement(kind);
-        media.controls = true;
-        media.src = blobUrl(bin);
+        const h = await media();
+        if (!h) return;
+        const player = document.createElement(kind);
+        player.controls = true;
+        player.src = h.url;
         const { width } = parseSize(spec.alias);
-        if (width && media instanceof HTMLVideoElement) media.width = width;
-        el.replaceChildren(media);
+        if (width && player instanceof HTMLVideoElement) player.width = width;
+        el.replaceChildren(player);
         return;
       }
       case 'pdf': {
-        const bin = await deps.backend.readBinary(path);
-        renderPdf(el, bin, pdfPage(spec.heading));
+        const h = await media();
+        if (!h) return;
+        // pdf.js takes the bytes over: give it a copy, the cache keeps the Blob.
+        const blob = h.blob;
+        h.release(); // pdf.js needs the bytes only, no object URL
+        own(
+          renderPdf(
+            el,
+            path,
+            async () => new Uint8Array(await blob.arrayBuffer()),
+            pdfPage(spec.heading),
+          ),
+        );
         return;
       }
       case 'note': {
@@ -93,6 +165,7 @@ export async function renderEmbedInto(
         if (deps.visited.includes(path))
           return notice(el, 'embed-cycle', `${label} (circular embed)`);
         const src = await deps.backend.readNote(path);
+        if (disposed()) return;
         let md = stripFrontmatter(src);
         if (spec.heading) {
           const sec = extractSection(src, spec.heading);
@@ -117,12 +190,14 @@ export async function renderEmbedInto(
         body.className = 'embed-note-body reading';
         body.innerHTML = renderMarkdown(md); // sanitized by renderMarkdown
         el.replaceChildren(title, body);
-        hydrate(body, {
-          ...deps,
-          fromPath: path,
-          depth: deps.depth + 1,
-          visited: [...deps.visited, path],
-        });
+        own(
+          hydrate(body, {
+            ...deps,
+            fromPath: path,
+            depth: deps.depth + 1,
+            visited: [...deps.visited, path],
+          }),
+        );
         return;
       }
       case 'drawing': {
@@ -135,6 +210,7 @@ export async function renderEmbedInto(
             return notice(el, 'embed-missing', `${label} (${ref.kind}=${ref.value} not found)`);
           throw e;
         }
+        if (disposed()) return;
         if (!url) return notice(el, 'embed-other', path);
         const img = document.createElement('img');
         img.src = url;
@@ -154,6 +230,7 @@ export async function renderEmbedInto(
       }
       case 'canvas': {
         const url = await deps.backend.canvasPreview?.(path);
+        if (disposed()) return;
         if (!url) return notice(el, 'embed-other', path);
         const img = document.createElement('img');
         img.src = url;
@@ -174,18 +251,25 @@ export async function renderEmbedInto(
         if (!deps.backend.baseEmbed) return notice(el, 'embed-other', path);
         // `![[x.base#View]]`: the fragment names the view.
         el.className = 'embed-base-wrap';
-        deps.backend.baseEmbed(el, path, spec.heading, deps.fromPath);
+        {
+          const unmount = deps.backend.baseEmbed(el, path, spec.heading, deps.fromPath);
+          if (unmount) own(unmount);
+        }
         return;
       default:
         return notice(el, 'embed-other', path);
     }
   } catch {
-    notice(el, 'embed-missing', `${label} (could not be loaded)`);
+    if (!disposed()) notice(el, 'embed-missing', `${label} (could not be loaded)`);
   }
 }
 
-/** Hydrates math, Mermaid and embeds inside rendered (sanitized) Markdown. */
-export function hydrate(root: HTMLElement, deps: EmbedDeps): void {
+/**
+ * Hydrates math, Mermaid and embeds inside rendered (sanitized) Markdown. Returns a disposer for
+ * the embeds, to call before root's content is replaced or root is discarded.
+ */
+export function hydrate(root: HTMLElement, deps: EmbedDeps): () => void {
+  const embeds: EmbedHandle[] = [];
   for (const el of root.querySelectorAll<HTMLElement>('.math-inline'))
     renderMath(el, el.textContent ?? '', false);
   for (const el of root.querySelectorAll<HTMLElement>('.math-display'))
@@ -211,6 +295,7 @@ export function hydrate(root: HTMLElement, deps: EmbedDeps): void {
       alias: el.dataset['size'] ?? '',
       embed: true,
     };
-    void renderEmbedInto(el, spec, deps);
+    embeds.push(renderEmbedInto(el, spec, deps));
   }
+  return () => embeds.splice(0).forEach((e) => e.dispose());
 }

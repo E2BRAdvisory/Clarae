@@ -28,6 +28,12 @@ spec:
         app.kubernetes.io/component: {{ $role }}
       annotations:
         checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- if $root.Values.metrics.podAnnotations }}
+        # Annotation-based discovery; /metrics answers only direct (non-proxied) scrapes.
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: {{ ternary $root.Values.service.httpPort $spec.metricsPort (eq $role "api") | quote }}
+        {{- end }}
         {{- with $root.Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
         {{- with $spec.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
     spec:
@@ -66,15 +72,29 @@ spec:
           readinessProbe:
             httpGet: { path: /api/v1/readyz, port: http }
             {{- toYaml $spec.probes.readiness | nindent 12 }}
+          {{- else }}
+          ports:
+            - name: metrics
+              containerPort: {{ $spec.metricsPort }}
+          # The worker's internal listener (METRICS_LISTEN_ADDR): liveness holds while the job scheduler
+          # ticks (or while it waits for the API to migrate the schema), readiness once the jobs run.
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            {{- toYaml $spec.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+            {{- toYaml $spec.probes.readiness | nindent 12 }}
           {{- end }}
-          {{- if gt (int $spec.preStopSleepSeconds) 0 }}
+          {{- /* The sleep action is on by default from Kubernetes 1.30; older API servers reject it, and the
+                 image has no shell for an exec sleep: there SHUTDOWN_DRAIN alone delays the shutdown. */}}
+          {{- if and (gt (int $spec.preStopSleepSeconds) 0) (include "memobrain.preStopSleepSupported" $root) }}
           lifecycle:
             preStop:
               sleep:
                 seconds: {{ $spec.preStopSleepSeconds }}
           {{- end }}
           volumeMounts:
-            - { name: tmp, mountPath: /tmp } # blob uploads are spooled to the temp dir
+            - { name: tmp, mountPath: /tmp } # blob uploads (api) and export archives (worker) are spooled here
           resources: {{- toYaml $spec.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -84,5 +104,10 @@ spec:
             seccompProfile: { type: RuntimeDefault }
       volumes:
         - name: tmp
-          emptyDir: {}
+          # Bounded: past sizeLimit the kubelet evicts the pod instead of filling the node's disk.
+          emptyDir:
+            {{- with (default (dict) $spec.tmp).sizeLimit }}
+            sizeLimit: {{ . }}
+            {{- else }} {}
+            {{- end }}
 {{- end }}

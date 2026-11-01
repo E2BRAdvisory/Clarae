@@ -3,7 +3,7 @@
 Formato: **sintomo → verifica → rimedio**. Prima di ogni caso, i tre strumenti base:
 
 - log del servizio (JSON, un `request_id` per richiesta; il client invia `X-Request-Id`): `kubectl logs deploy/memobrain-api`, `kubectl logs deploy/memobrain-worker`;
-- `GET /api/v1/healthz` (processo vivo) e `GET /api/v1/readyz` (database e storage rispondono entro 3 s; risponde 503 con il nome della dipendenza che manca);
+- `GET /api/v1/healthz` (processo vivo) e `GET /api/v1/readyz` (database e storage rispondono entro 3 s; risponde 503 e, solo se interrogato direttamente dalla rete interna, ad esempio con `kubectl port-forward deploy/memobrain-api 18081` o `docker compose exec proxy wget -qO- http://cloud-api:18081/api/v1/readyz`, il nome e l'errore della dipendenza che manca; da fuori, il dettaglio è nel log `readiness check failed`). Per il worker: `/healthz` e `/readyz` sulla porta 18083 (`state`: `running`, `waiting-for-schema`, `stalled`);
 - dashboard Grafana "Panoramica servizio cloud" ([monitoraggio](monitoraggio.md)) e registro di audit della console admin.
 
 ## Il login non funziona
@@ -57,11 +57,12 @@ Formato: **sintomo → verifica → rimedio**. Prima di ogni caso, i tre strumen
 
 **Sintomo:** il download ZIP di un vault condiviso resta su "in coda" o "in preparazione"; stato `failed` o `expired`.
 
-1. Gli export sono eseguiti dal job `exports` (ogni 15 s) in un processo con `--role=worker` o `--role=all`. Se tutte le repliche sono `--role=api`, **nessuno** li elabora: aggiungere un worker.
-2. Dashboard → _Job_: `memobrain_jobs_runs_total{job="exports",result="error"}` e "Tempo dall'ultimo successo". Nei log del worker cercare `job failed` con `job=exports`.
-3. Cause tipiche: bucket `S3_BUCKET_EXPORTS` inesistente o credenziali senza scrittura; disco o quota dell'archivio pieni; vault molto grande che supera il tempo (il job ritenta alla successiva esecuzione).
-4. `expired`: l'archivio è stato rimosso dopo il periodo di validità; l'utente deve ripetere la richiesta.
-5. I vault **privati** non si esportano dal server (`409 VAULT_ENCRYPTED`): lo ZIP si costruisce nel browser dopo aver inserito passphrase o recovery key. Se "non funziona", verificare che l'utente conosca la passphrase: non esiste recupero lato server.
+1. Gli export sono eseguiti dal job `exports` (ogni 15 s) in un processo con `--role=worker` o `--role=all`. Se tutte le repliche sono `--role=api`, **nessuno** li elabora: aggiungere un worker. Un worker con `/readyz` a 503 e `state` `waiting-for-schema` non esegue job finché l'API non ha migrato il database (log `waiting for the API to migrate the database schema`): verificare che almeno una replica API della stessa versione sia partita.
+2. Il worker sfrattato (`Evicted`, `ephemeral-storage`) ha superato `worker.tmp.sizeLimit` costruendo un archivio: alzare il limite (e `resources.limits.ephemeral-storage`) sopra la dimensione del vault più grande.
+3. Dashboard → _Job_: `memobrain_jobs_runs_total{exported_job="exports",result="error"}` (`job` con `honor_labels: true`) e "Tempo dall'ultimo successo". Nei log del worker cercare `job failed` con `job=exports`.
+4. Cause tipiche: bucket `S3_BUCKET_EXPORTS` inesistente o credenziali senza scrittura; disco o quota dell'archivio pieni; vault molto grande che supera il tempo (il job ritenta alla successiva esecuzione).
+5. `expired`: l'archivio è stato rimosso dopo il periodo di validità; l'utente deve ripetere la richiesta.
+6. I vault **privati** non si esportano dal server (`409 VAULT_ENCRYPTED`): lo ZIP si costruisce nel browser dopo aver inserito passphrase o recovery key. Se "non funziona", verificare che l'utente conosca la passphrase: non esiste recupero lato server.
 
 **Rimedio:** correggere bucket e credenziali, riavviare il worker; l'utente rilancia l'export dalla Web UI.
 
@@ -72,7 +73,7 @@ Formato: **sintomo → verifica → rimedio**. Prima di ogni caso, i tre strumen
 1. `kubectl get pods`; `kubectl describe pod` (OOMKilled? probe fallite?); `kubectl logs --previous`.
 2. Database: raggiungibile dal pod? (`psql "$DATABASE_URL" -c 'select 1'`), spazio su disco, `max_connections`, failover in corso. Il servizio non perde dati se il DB è momentaneamente giù: restituisce errori e i client riprovano con backoff; i commit sono idempotenti.
 3. Saturazione del pool: dashboard → _Database_. Il pool è dimensionato dalla libreria; con molte repliche la somma delle connessioni può superare `max_connections` di PostgreSQL (usare un pooler come PgBouncer in modalità session; **non** transaction se si usano `LISTEN/NOTIFY` — lo stream di notifica ne ha bisogno).
-4. Migrazioni fallite all'avvio: il pod resta in crash loop con l'errore di goose; non avviare versioni precedenti sul DB migrato (vedi [upgrade](backup-upgrade.md)).
+4. Migrazioni fallite all'avvio: il pod resta in crash loop con l'errore di goose (con più repliche, una sola migra alla volta sotto advisory lock: le altre attendono fino a 10 minuti e, se il lock non si libera, falliscono con `failed to acquire lock`); non avviare versioni precedenti sul DB migrato (vedi [upgrade](backup-upgrade.md)).
 
 **Rimedio:** ripristinare il database (da backup o replica, [backup](backup-upgrade.md)), poi `kubectl rollout restart`. Al ritorno del DB i client si riallineano da soli.
 

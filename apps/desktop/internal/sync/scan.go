@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,9 +52,10 @@ func (e *Engine) scan(ctx context.Context) error {
 	for _, r := range rows {
 		byPath[r.Path] = r
 	}
-	// A file whose mtime is within two seconds of the previous scan may have
-	// been modified again inside the same timestamp tick: rehash it.
-	racy := e.lastScan.Add(-2 * time.Second)
+	trustBefore, err := e.trustBefore(ctx, started)
+	if err != nil {
+		return err
+	}
 
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -76,11 +78,11 @@ func (e *Engine) scan(ctx context.Context) error {
 			newFiles = append(newFiles, p)
 			continue
 		}
-		changed := lf.Size != row.LocalSize || lf.Mtime != row.LocalMtime || time.Unix(0, lf.Mtime).After(racy) || row.State == StateLocalDeleted
+		changed := lf.Size != row.LocalSize || lf.Mtime != row.LocalMtime || !time.Unix(0, lf.Mtime).Before(trustBefore) || row.State == StateLocalDeleted
 		if !changed {
 			continue
 		}
-		h, _, err := e.cfg.FS.HashFile(p)
+		h, _, err := e.hashFile(p)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue // vanished while scanning: the next scan sees it
@@ -142,7 +144,7 @@ func (e *Engine) scan(ctx context.Context) error {
 	used := make([]bool, len(missing))
 	for _, p := range newFiles {
 		lf := files[p]
-		h, _, err := e.cfg.FS.HashFile(p)
+		h, _, err := e.hashFile(p)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -181,10 +183,65 @@ func (e *Engine) scan(ctx context.Context) error {
 			return err
 		}
 	}
+	// Every row now matches the disk as seen after started: only then may the
+	// next scan (possibly of another engine, after a restart) rely on it.
+	if err := e.cfg.DB.SetMeta(ctx, MetaLastScan, strconv.FormatInt(started.UnixNano(), 10)); err != nil {
+		return err
+	}
 	e.mu.Lock()
 	e.lastScan = started
 	e.mu.Unlock()
 	return nil
+}
+
+// racyWindow covers the coarsest file system timestamp we expect (FAT: 2 s).
+const racyWindow = 2 * time.Second
+
+// trustBefore returns the time before which an unchanged (size, mtime) proves
+// an unchanged file, for a scan that starts at now.
+//
+// Each row's (size, mtime) was observed at some time T >= S, S being the start
+// of the last complete scan: that scan verified every row (hashing the ones it
+// could not trust), and every row written since (pull, merge, push) was
+// observed later still. A write after T sets the mtime to the time of the
+// write, truncated to the file system's tick, so at least T - racyWindow > S -
+// racyWindow. Hence a file whose size and mtime equal its row's and whose mtime
+// lies before S - racyWindow has not been written since it was observed (git's
+// "racily clean" rule). Files modified while the application was closed
+// carry a newer mtime and are rehashed like any other change.
+//
+// S is kept in sync.db (MetaLastScan), so the first scan after a restart
+// applies the same rule as the following ones. It is only written once a scan
+// completed: an interrupted scan leaves the previous, older S, which trusts
+// fewer files. Without a usable S nothing is trusted and every known file is
+// rehashed: the value is missing (first scan since this version or since the
+// database was created) or lies in the future, because the clock went back
+// (mtimes written after the jump could then fall before S yet postdate the
+// observation). There is no sound per-file shortcut in that case: the time a
+// row was observed is not recorded, and a row observed in the same tick as
+// its file's last write looks exactly like an old one.
+func (e *Engine) trustBefore(ctx context.Context, now time.Time) (time.Time, error) {
+	if !e.scanLoaded {
+		v, err := e.cfg.DB.Meta(ctx, MetaLastScan)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if ns, err := strconv.ParseInt(v, 10, 64); err == nil && ns > 0 {
+			e.mu.Lock()
+			if e.lastScan.IsZero() {
+				e.lastScan = time.Unix(0, ns)
+			}
+			e.mu.Unlock()
+		}
+		e.scanLoaded = true
+	}
+	e.mu.Lock()
+	last := e.lastScan
+	e.mu.Unlock()
+	if last.IsZero() || last.After(now) {
+		return time.Time{}, nil // trust nothing (Before(zero) is false for every mtime)
+	}
+	return last.Add(-racyWindow), nil
 }
 
 // pickRename chooses which vanished file a new file replaces: same base name

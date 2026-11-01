@@ -17,6 +17,12 @@ spec:
       ports:
         - { protocol: TCP, port: {{ .Values.service.httpPort }} }
         - { protocol: TCP, port: {{ .Values.service.grpcPort }} }
+    {{- with .Values.networkPolicy.metricsFrom }}
+    # Prometheus scraping /metrics
+    - from: {{- toYaml . | nindent 8 }}
+      ports:
+        - { protocol: TCP, port: {{ $.Values.service.httpPort }} }
+    {{- end }}
   {{- if .Values.networkPolicy.restrictEgress }}
   egress:
     - ports: # DNS
@@ -28,7 +34,8 @@ spec:
   {{- end }}
 {{- if .Values.networkPolicy.restrictEgress }}
 ---
-# The worker has no inbound traffic at all; outbound follows the same rule.
+# The worker's only inbound traffic is the scrape of its metrics port (kubelet probes are not subject to
+# network policies); outbound follows the same rule as the API.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -38,7 +45,14 @@ spec:
   podSelector:
     matchLabels: {{- include "memobrain.selector" (dict "root" . "role" "worker") | nindent 6 }}
   policyTypes: [Ingress, Egress]
+  {{- with .Values.networkPolicy.metricsFrom }}
+  ingress:
+    - from: {{- toYaml . | nindent 8 }}
+      ports:
+        - { protocol: TCP, port: {{ $.Values.worker.metricsPort }} }
+  {{- else }}
   ingress: []
+  {{- end }}
   egress:
     - ports:
         - { protocol: UDP, port: 53 }

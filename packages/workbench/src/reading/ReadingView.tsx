@@ -9,6 +9,8 @@ import { openExternal } from '../util/external';
 import { readingPreviewHandlers } from '../preview/hover';
 import { renderQueryInto } from '../query/env';
 import { renderMarkdown } from './render';
+import { queryClient } from '../state/queryClient';
+import { treeEntry } from '../state/queries';
 
 export interface Reveal {
   heading?: string;
@@ -35,6 +37,8 @@ const slug = (s: string): string =>
 
 export function backendFor(vaultId: string): EmbedBackend {
   return {
+    vaultId,
+    stat: (p) => treeEntry(queryClient, vaultId, p),
     resolve: (from, target) => api.links.resolve(vaultId, from, target),
     readNote: async (p) => (await api.vault.readNote(vaultId, p)).content,
     readBinary: (p) => api.vault.readBinary(vaultId, p),
@@ -53,7 +57,8 @@ export function ReadingView({ vaultId, path, content, reveal, onOpenLink, onSear
     const el = ref.current;
     if (!el) return;
     el.innerHTML = html; // already sanitized by renderMarkdown
-    hydrate(el, {
+    // The disposer runs before the next render replaces the content, and on unmount.
+    return hydrate(el, {
       backend: backendFor(vaultId),
       fromPath: path,
       depth: 0,

@@ -173,53 +173,31 @@ func pickBest(from string, cands []string) string {
 }
 
 // ResolveAll fills links.target_resolved for every wikilink and Markdown
-// link of the index (external URLs stay NULL). Call it after (re)indexing.
+// link of the index (external URLs stay NULL) and the target_key of the rows
+// that have none. Only rows whose values change are written. Call it after a
+// full pass; a change of a few files uses ResolveAffected.
 func ResolveAll(ctx context.Context, db *sql.DB) error {
 	r, err := Load(ctx, db)
 	if err != nil {
 		return err
 	}
-	type row struct {
-		rowid    int64
-		src, raw string
-	}
-	rows, err := db.QueryContext(ctx, `SELECT rowid, path, target_raw FROM links WHERE kind <> 'external'`)
-	if err != nil {
-		return err
-	}
-	var todo []row
-	for rows.Next() {
-		var x row
-		if err := rows.Scan(&x.rowid, &x.src, &x.raw); err != nil {
-			_ = rows.Close()
+	// Chunks bound the memory to resolveChunk rows instead of every link of
+	// the vault (a cold index of 50k notes has close to half a million).
+	var last int64
+	for {
+		todo, err := queryLinkRows(ctx, db, `kind <> 'external' AND rowid > ? ORDER BY rowid LIMIT ?`, last, resolveChunk)
+		if err != nil || len(todo) == 0 {
 			return err
 		}
-		todo = append(todo, x)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	stmt, err := tx.PrepareContext(ctx, `UPDATE links SET target_resolved = ? WHERE rowid = ?`)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = stmt.Close() }()
-	for _, x := range todo {
-		var resolved any
-		if p := r.Resolve(x.src, x.raw); p != "" {
-			resolved = p
-		}
-		if _, err := stmt.ExecContext(ctx, resolved, x.rowid); err != nil {
+		if err := writeResolved(ctx, db, r, todo); err != nil {
 			return err
 		}
+		last = todo[len(todo)-1].rowid
 	}
-	return tx.Commit()
 }
+
+// resolveChunk is how many links ResolveAll reads and writes at a time.
+const resolveChunk = 10000
 
 // Link is a link occurrence as shown in the UI.
 type Link struct {

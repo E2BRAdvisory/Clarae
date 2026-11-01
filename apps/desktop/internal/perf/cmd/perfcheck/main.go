@@ -6,8 +6,8 @@
 //	go run ./internal/perf/cmd/perfcheck -baseline ../../docs/perf/baseline-50000.json -results perf.json -tolerance 25
 //
 // The baseline file looks like {"meta": {...}, "metrics": {"name": value}}.
-// Metrics missing from the results are reported; metrics missing from the
-// baseline are informational. Tiny absolute values are ignored (-floor) so
+// Metrics missing from the results fail the check; metrics missing from the
+// baseline (new ones) are listed as NEW and never fail it. Tiny absolute values are ignored (-floor) so
 // that timer noise on sub-millisecond metrics cannot fail a night.
 package main
 
@@ -74,6 +74,17 @@ func main() {
 			failed++
 		}
 		fmt.Printf("%s %-40s baseline %10.2f  now %10.2f  (%+.0f%%)\n", status, n, want, got, pct(want, got))
+	}
+	// Metrics without a baseline yet (added to the suite later) never fail the check.
+	var fresh []string
+	for n := range res {
+		if _, ok := base.Metrics[n]; !ok && !strings.HasPrefix(n, "dataset_") && n != "notes" {
+			fresh = append(fresh, n)
+		}
+	}
+	sort.Strings(fresh)
+	for _, n := range fresh {
+		fmt.Printf("NEW     %-40s no baseline     now %10.2f\n", n, res[n])
 	}
 	if failed > 0 {
 		fmt.Printf("\n%d metric(s) beyond the %.0f%% budget\n", failed, *tol)

@@ -1,6 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { extract } from '@memobrain/markdown';
-import { api, type SearchSort } from '../app/api';
+import { api, type Entry, type SearchSort } from '../app/api';
 
 export const queryKeys = {
   recentVaults: ['recent-vaults'] as const,
@@ -41,6 +42,20 @@ export function useOutline(vaultId: string | undefined, path: string | null) {
 
 export function useRecentVaults() {
   return useQuery({ queryKey: queryKeys.recentVaults, queryFn: () => api.vault.listRecent() });
+}
+
+const treeIndexes = new WeakMap<readonly Entry[], Map<string, Entry>>();
+
+/** The cached tree entry of a file (no fetch): its size and mtime tell a cached copy is current. */
+export function treeEntry(qc: QueryClient, vaultId: string, path: string): Entry | undefined {
+  const tree = qc.getQueryData<Entry[]>(queryKeys.tree(vaultId));
+  if (!tree) return undefined;
+  let index = treeIndexes.get(tree);
+  if (!index) {
+    index = new Map(tree.map((e) => [e.path, e]));
+    treeIndexes.set(tree, index);
+  }
+  return index.get(path);
 }
 
 export function useTree(vaultId: string | undefined) {
@@ -89,6 +104,11 @@ export function useSearch(vaultId: string | undefined, q: string, sort: SearchSo
 /** Invalidation helpers used by event handlers and mutations. */
 export function useInvalidate() {
   const qc = useQueryClient();
+  // Stable per client, so effects depending on it do not re-subscribe on every render.
+  return useMemo(() => invalidators(qc), [qc]);
+}
+
+function invalidators(qc: QueryClient) {
   return {
     tree: (vaultId: string) => qc.invalidateQueries({ queryKey: queryKeys.tree(vaultId) }),
     note: (vaultId: string, path: string) =>

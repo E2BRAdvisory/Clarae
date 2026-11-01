@@ -52,8 +52,24 @@ var ErrStalePlan = errors.New("a note changed since the rename was planned")
 
 // PlanRename computes the effect of renaming or moving a file or folder
 // (from → to): every link that would stop pointing at the right file is
-// rewritten to the shortest unambiguous form. Nothing is written.
+// rewritten to the shortest unambiguous form. Nothing is written. Only the
+// notes the index designates as candidates are read (renameCandidates); the
+// result is the same as reading every note.
 func PlanRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string) (Plan, error) {
+	return planRename(ctx, db, fsys, from, to, renameCandidates)
+}
+
+// planRenameFull is PlanRename reading every note and drawing of the index
+// (the reference the candidate selection is tested against).
+func planRenameFull(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string) (Plan, error) {
+	return planRename(ctx, db, fsys, from, to, nil)
+}
+
+// candidateFunc returns the paths of the files a rename may have to edit
+// (nil candidates: every file).
+type candidateFunc func(ctx context.Context, db *sql.DB, fsys *vault.FS, files []File, moves map[string]string) (map[string]bool, error)
+
+func planRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string, candidates candidateFunc) (Plan, error) {
 	from, err := pathrules.Normalize(from)
 	if err != nil {
 		return Plan{}, err
@@ -89,10 +105,19 @@ func PlanRename(ctx context.Context, db *sql.DB, fsys *vault.FS, from, to string
 	if len(moves) == 0 {
 		return plan, nil // not indexed (e.g. an empty folder): nothing refers to it
 	}
+	var include map[string]bool
+	if candidates != nil {
+		if include, err = candidates(ctx, db, fsys, files, moves); err != nil {
+			return Plan{}, err
+		}
+	}
 
 	oldR, newR := NewResolver(files), NewResolver(newFiles)
 	for _, f := range files {
 		if f.Kind != "md" && f.Kind != "excalidraw" {
+			continue
+		}
+		if include != nil && !include[f.Path] {
 			continue
 		}
 		content, err := fsys.ReadFile(f.Path)

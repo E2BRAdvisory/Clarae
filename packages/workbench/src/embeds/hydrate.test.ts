@@ -55,6 +55,21 @@ describe('embeds', () => {
     expect([img?.width, img?.height]).toEqual([120, 80]);
   });
 
+  it('fills nothing once disposed, and replaces an earlier render of the same element', async () => {
+    const el = document.createElement('span');
+    const first = renderEmbedInto(el, spec('pic.png'), deps());
+    first.dispose();
+    await first;
+    expect(el.querySelector('img')).toBeNull();
+    const second = renderEmbedInto(el, spec('pic.png'), deps());
+    const third = renderEmbedInto(el, spec('B'), deps()); // stops the second
+    await Promise.all([second, third]);
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.className).toBe('embed-note');
+    third.dispose();
+    third.dispose(); // idempotent
+  });
+
   it('renders a note without its frontmatter, hydrating nested embeds', async () => {
     const el = document.createElement('span');
     await renderEmbedInto(el, spec('B'), deps());

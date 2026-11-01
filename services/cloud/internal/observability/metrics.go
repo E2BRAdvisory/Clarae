@@ -21,7 +21,13 @@ type Metrics struct {
 
 // New registers the HTTP collectors on the default registry.
 func New() *Metrics {
-	m := &Metrics{
+	m := newMetrics()
+	prometheus.MustRegister(m.requests, m.duration, m.inflight)
+	return m
+}
+
+func newMetrics() *Metrics {
+	return &Metrics{
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "memobrain", Subsystem: "http", Name: "requests_total",
 			Help: "HTTP requests by route pattern, method and status.",
@@ -36,8 +42,6 @@ func New() *Metrics {
 			Help: "HTTP requests currently being served.",
 		}),
 	}
-	prometheus.MustRegister(m.requests, m.duration, m.inflight)
-	return m
 }
 
 // HTTPMiddleware records one observation per request, labelled with the chi
@@ -53,7 +57,18 @@ func (m *Metrics) HTTPMiddleware(next http.Handler) http.Handler {
 		if route == "" {
 			route = "unmatched"
 		}
-		m.requests.WithLabelValues(route, r.Method, strconv.Itoa(ww.Status())).Inc()
-		m.duration.WithLabelValues(route, r.Method).Observe(time.Since(start).Seconds())
+		method := methodLabel(r.Method)
+		m.requests.WithLabelValues(route, method, strconv.Itoa(ww.Status())).Inc()
+		m.duration.WithLabelValues(route, method).Observe(time.Since(start).Seconds())
 	})
+}
+
+// methodLabel maps the request method to a closed set: the middleware runs before routing and
+// net/http accepts any token as a method, so the raw value would let clients mint label values.
+func methodLabel(m string) string {
+	switch m {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions:
+		return m
+	}
+	return "OTHER"
 }

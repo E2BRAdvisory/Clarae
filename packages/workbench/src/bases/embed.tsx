@@ -13,10 +13,15 @@ export function mountBaseEmbed(
   path: string,
   viewName: string,
   fromPath: string,
-): void {
+): () => void {
   mounted.get(el)?.unmount();
   const root = createRoot(el);
   mounted.set(el, root);
+  const unmount = (): void => {
+    if (mounted.get(el) !== root) return;
+    mounted.delete(el);
+    root.unmount();
+  };
   let seenConnected = false;
   const isAlive = (): boolean => {
     if (el.isConnected) seenConnected = true;
@@ -29,8 +34,11 @@ export function mountBaseEmbed(
       viewName={viewName.trim()}
       thisPath={fromPath}
       isAlive={isAlive}
-      onDetached={() => setTimeout(() => root.unmount(), 0)}
+      onDetached={() => setTimeout(unmount, 0)}
       onOpen={() => useAppStore.getState().openNote(path, { newTab: true })}
     />,
   );
+  // Deferred: the embed may be discarded while React is rendering (a widget destroyed by an
+  // editor update), when a root cannot be unmounted synchronously.
+  return () => void setTimeout(unmount, 0);
 }

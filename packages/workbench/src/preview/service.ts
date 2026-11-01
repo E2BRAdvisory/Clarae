@@ -8,6 +8,8 @@ import type { EmbedBackend } from '../embeds/hydrate';
 import { classify } from '../embeds/media';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
+import { queryClient } from '../state/queryClient';
+import { treeEntry } from '../state/queries';
 
 export type PreviewResult =
   | { ok: true; path: string; title: string; html: string }
@@ -59,6 +61,8 @@ export function stripRemoteResources(root: HTMLElement): void {
 /** What embeds inside a preview read from the vault (same as the reading view). */
 export function previewBackend(vaultId: string): EmbedBackend {
   return {
+    vaultId,
+    stat: (p) => treeEntry(queryClient, vaultId, p),
     resolve: (from, target) => api.links.resolve(vaultId, from, target),
     readNote: async (p) => (await api.vault.readNote(vaultId, p)).content,
     readBinary: (p) => api.vault.readBinary(vaultId, p),

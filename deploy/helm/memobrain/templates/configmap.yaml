@@ -6,10 +6,12 @@ metadata:
 data:
   LISTEN_ADDR: "0.0.0.0:{{ .Values.service.httpPort }}"
   GRPC_LISTEN_ADDR: "0.0.0.0:{{ .Values.service.grpcPort }}"
+  METRICS_LISTEN_ADDR: "0.0.0.0:{{ .Values.worker.metricsPort }}"
   {{- range $k, $v := .Values.config }}
   {{ $k }}: {{ $v | quote }}
   {{- end }}
 {{- if and (not .Values.secret.existingSecret) (not .Values.externalSecret.enabled) }}
+{{- include "memobrain.checkSecretValues" . }}
 ---
 apiVersion: v1
 kind: Secret

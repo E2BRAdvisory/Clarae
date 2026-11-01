@@ -66,7 +66,7 @@ function MarkdownBlock({ text, vaultId, path }: { text: string; vaultId: string;
     const el = ref.current;
     if (!el) return;
     el.innerHTML = html; // already sanitized by renderMarkdown
-    hydrate(el, {
+    return hydrate(el, {
       backend: backendFor(vaultId),
       fromPath: path,
       depth: 1,
@@ -85,7 +85,7 @@ function FileBlock({ node, vaultId, path }: { node: CNode; vaultId: string; path
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    void renderEmbedInto(
+    const embed = renderEmbedInto(
       el,
       {
         target: file,
@@ -102,6 +102,7 @@ function FileBlock({ node, vaultId, path }: { node: CNode; vaultId: string; path
         openLink: (spec, newTab) => void followLink(path, spec, newTab),
       },
     );
+    return () => embed.dispose();
   }, [file, sub, vaultId, path]);
   return (
     <>

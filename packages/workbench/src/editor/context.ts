@@ -13,15 +13,21 @@ export interface LinkSpec {
   embed: boolean;
 }
 
+/** Frees what an embed render holds; a function or a render handle with dispose(). */
+export type EmbedDisposer = (() => void) | { dispose(): void };
+
 export interface LivePreviewContext {
   /** true/false once known, undefined while still being resolved. */
   resolved(target: string): boolean | undefined;
   /** Asks the application to resolve a target; it calls onChange when done. */
   requestResolve(target: string): void;
-  /** Fills el with the rendered embed (note, image, pdf, audio, video). */
-  renderEmbed(spec: LinkSpec, el: HTMLElement): void;
-  /** Fills el with an image from a Markdown image link. */
-  renderImage(src: string, alt: string, el: HTMLElement): void;
+  /**
+   * Fills el with the rendered embed (note, image, pdf, audio, video). May return what frees its
+   * resources: the widget calls it when CodeMirror discards el (scrolled away, edited, closed).
+   */
+  renderEmbed(spec: LinkSpec, el: HTMLElement): EmbedDisposer | void;
+  /** Fills el with an image from a Markdown image link (disposer as for renderEmbed). */
+  renderImage(src: string, alt: string, el: HTMLElement): EmbedDisposer | void;
   openLink(spec: LinkSpec, newTab: boolean): void;
   openExternal(url: string): void;
   /** Renders KaTeX into el (lazy-loaded). */
