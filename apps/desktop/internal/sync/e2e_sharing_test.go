@@ -18,6 +18,7 @@ import (
 	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/apps/desktop/internal/vault"
+	"memobrain/shared/apiclient"
 	"memobrain/shared/syncproto"
 )
 
@@ -29,7 +30,7 @@ func meOf(t *testing.T, user string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return me.ID
+	return me.Id.String()
 }
 
 // groupOf creates a group holding the users (there is no admin API before M5, so rows go in directly).
@@ -53,12 +54,12 @@ func groupOf(t *testing.T, users ...string) string {
 func shareFolder(t *testing.T, owner, vault, prefix string, grants ...transport.NewGrant) string {
 	t.Helper()
 	sh, err := newClient(t, owner).CreateShare(context.Background(), transport.CreateShare{
-		VaultID: vault, ResourceType: "folder", PathPrefix: prefix, DisplayName: "Shared " + prefix, Grants: grants,
+		VaultId: uuid.MustParse(vault), ResourceType: "folder", PathPrefix: &prefix, DisplayName: "Shared " + prefix, Grants: &grants,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return sh.ID
+	return sh.Id.String()
 }
 
 // mountOf accepts the invitation as user and returns the mount the server lists.
@@ -74,7 +75,7 @@ func mountOf(t *testing.T, user, shareID string) transport.Mount {
 		t.Fatal(err)
 	}
 	for _, m := range mounts {
-		if m.ShareID == shareID {
+		if m.ShareId.String() == shareID {
 			return m
 		}
 	}
@@ -84,11 +85,15 @@ func mountOf(t *testing.T, user, shareID string) transport.Mount {
 
 func mountDevice(t *testing.T, user, name string, m transport.Mount) *device {
 	t.Helper()
-	return newDeviceRef(t, user, name, transport.Ref(m.VaultID, m.Scope), m.Permission == "viewer", nil)
+	return newDeviceRef(t, user, name, transport.Ref(m.VaultId.String(), m.Scope), m.Permission == "viewer", nil)
 }
 
 func userGrant(t *testing.T, user, perm string) transport.NewGrant {
-	return transport.NewGrant{PrincipalType: "user", PrincipalID: meOf(t, user), Permission: perm}
+	return newGrant("user", meOf(t, user), perm)
+}
+
+func newGrant(ptype, pid, perm string) transport.NewGrant {
+	return transport.NewGrant{PrincipalType: apiclient.NewGrantPrincipalType(ptype), PrincipalId: uuid.MustParse(pid), Permission: apiclient.SharePermission(perm)}
 }
 
 func TestSharedFolderRoundTripBetweenTwoUsers(t *testing.T) {
@@ -102,7 +107,7 @@ func TestSharedFolderRoundTripBetweenTwoUsers(t *testing.T) {
 	ownerDev.sync()
 
 	team := groupOf(t, "bob", "carol")
-	share := shareFolder(t, "ada", vaultID, "Projects/Alfa", transport.NewGrant{PrincipalType: "group", PrincipalID: team, Permission: "editor"})
+	share := shareFolder(t, "ada", vaultID, "Projects/Alfa", newGrant("group", team, "editor"))
 	m := mountOf(t, "bob", share)
 	if m.Permission != "editor" || m.Scope != "share:"+share {
 		t.Fatalf("mount: %+v", m)
@@ -207,7 +212,7 @@ func TestViewerCannotWrite(t *testing.T) {
 		t.Error("a viewer's local edits must not reach the owner")
 	}
 	// ...and the server would refuse them anyway.
-	_, err := newClient(t, "dave").Commit(context.Background(), transport.Ref(m.VaultID, m.Scope), syncproto.CommitRequest{
+	_, err := newClient(t, "dave").Commit(context.Background(), transport.Ref(m.VaultId.String(), m.Scope), syncproto.CommitRequest{
 		DeviceID: viewer.eng.DeviceID(),
 		Ops:      []syncproto.Op{{OpID: uuid.NewString(), Op: syncproto.OpCreate, FileID: uuid.NewString(), Path: "x.md", BlobHash: strings.Repeat("0", 64)}},
 	})
@@ -283,7 +288,7 @@ func newManagerEnv(t *testing.T, user string) *managerEnv {
 		t.Fatal(err)
 	}
 	e := &managerEnv{user: user, root: t.TempDir()}
-	sess := testSession{c: c, info: syncpkg.SessionInfo{ServerURL: serverURL, DeviceID: dev.ID, UserID: me.ID, DeviceName: user + "-mgr"}}
+	sess := testSession{c: c, info: syncpkg.SessionInfo{ServerURL: serverURL, DeviceID: dev.Id.String(), UserID: me.Id.String(), DeviceName: user + "-mgr"}}
 	e.m = syncpkg.NewManager(sess, crypto.NewManager(crypto.Options{Store: crypto.NewMemoryStore()}), zerolog.Nop(), func(name string, _ any) {
 		e.mu.Lock()
 		e.events = append(e.events, name)
@@ -366,11 +371,11 @@ func TestManagerSharingFlow(t *testing.T) {
 	if err != nil || len(invs) < 2 {
 		t.Fatalf("invitations: %v %v", invs, err)
 	}
-	mount, err := bob.m.AcceptShare(ctx, shFolder.ID, mountsDir)
+	mount, err := bob.m.AcceptShare(ctx, shFolder.Id.String(), mountsDir)
 	if err != nil || mount.Permission != "editor" || !mount.Mounted {
 		t.Fatalf("accept: %+v %v", mount, err)
 	}
-	docMount, err := bob.m.AcceptShare(ctx, shDoc.ID, mountsDir)
+	docMount, err := bob.m.AcceptShare(ctx, shDoc.Id.String(), mountsDir)
 	if err != nil || docMount.Permission != "viewer" {
 		t.Fatalf("accept doc: %+v %v", docMount, err)
 	}
@@ -409,7 +414,7 @@ func TestManagerSharingFlow(t *testing.T) {
 	})
 
 	// The server raises bob to manager: a reconcile applies it to the open mount.
-	if _, err := newClient(t, "ada").PutGrant(ctx, shFolder.ID, "user", meOf(t, "bob"), "manager"); err != nil {
+	if _, err := newClient(t, "ada").PutGrant(ctx, shFolder.Id.String(), "user", meOf(t, "bob"), "manager"); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the new level", func() bool {
@@ -420,7 +425,7 @@ func TestManagerSharingFlow(t *testing.T) {
 	})
 
 	// Revocation: the mount stops, the UI is told, the copy stays.
-	if err := newClient(t, "ada").RevokeShare(ctx, shFolder.ID); err != nil {
+	if err := newClient(t, "ada").RevokeShare(ctx, shFolder.Id.String()); err != nil {
 		t.Fatal(err)
 	}
 	bob.m.Kick("bob-team")
@@ -438,7 +443,7 @@ func TestManagerSharingFlow(t *testing.T) {
 	}
 	var revoked bool
 	for _, s := range states {
-		revoked = revoked || (s.ShareID == shFolder.ID && s.Revoked && s.Mounted)
+		revoked = revoked || (s.ShareID == shFolder.Id.String() && s.Revoked && s.Mounted)
 	}
 	if !revoked {
 		t.Fatalf("the revoked mount must still be listed: %+v", states)
@@ -452,5 +457,49 @@ func TestManagerSharingFlow(t *testing.T) {
 	}
 	if info, _ := bob.m.Info(ctx, "bob-team"); info.Linked {
 		t.Fatalf("a detached copy is not linked any more: %+v", info)
+	}
+}
+
+// A note written in an open vault before it is connected to the cloud is part of
+// the first upload, for both kinds of vault (the browser workbench writes a note,
+// then links the folder).
+func TestManagerLinkUploadsFilesWrittenBeforeLinking(t *testing.T) {
+	for _, kind := range []string{"shared", "private"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			env := newManagerEnv(t, "ada")
+			dir := filepath.Join(env.root, "vault")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			fs, err := vault.NewFS(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := env.m.Attach(ctx, "v", fs); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := fs.WriteFile("Before.md", []byte("written before linking\n"), "", true); err != nil {
+				t.Fatal(err)
+			}
+			pass := ""
+			if kind == "private" {
+				pass = "correct horse battery staple 42"
+			}
+			res, err := env.m.Link(ctx, "v", "early-"+kind+"-"+uuid.NewString()[:6], kind, pass)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := newClient(t, "ada")
+			eventually(t, "the note written before linking to reach the server", func() bool {
+				_ = env.m.SyncNow("v")
+				tree, err := c.GetTree(ctx, res.CloudVaultID)
+				return err == nil && len(tree.Items) == 1
+			})
+			st, err := env.m.Status(ctx, "v")
+			if err != nil || st.Pending != 0 {
+				t.Fatalf("status after the first upload: %+v %v", st, err)
+			}
+		})
 	}
 }

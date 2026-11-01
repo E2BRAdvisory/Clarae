@@ -5,13 +5,21 @@ import { Button } from '@memobrain/ui';
 import { useAuth } from '../auth/AuthProvider';
 import { setLanguage, supportedLanguages, isLanguage } from '../i18n';
 import { applyTheme, loadTheme, type Theme } from './theme';
-import { forgetThisBrowser } from '../workbench/forget';
+import { useForgetBrowser } from './ForgetBrowser';
 
 export function Shell() {
   const { t, i18n } = useTranslation();
   const { user, isAdmin, signOut } = useAuth();
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const lang = isLanguage(i18n.language) ? i18n.language : 'en';
+  // A shared computer must not keep a clear-text copy of the vaults opened in the browser: signing out
+  // removes them, after asking when one holds changes that were not uploaded.
+  const forget = useForgetBrowser({
+    confirmLabel: t('forget.confirmSignOut'),
+    onDone: signOut,
+    // An unexpected failure must not keep the user signed in on a shared computer.
+    onError: signOut,
+  });
 
   return (
     <div className="app">
@@ -62,19 +70,12 @@ export function Shell() {
             </select>
           </label>
           <span className="app__user">{user?.name}</span>
-          {/* A shared computer must not keep a clear-text copy of the vaults opened in the browser. */}
-          <Button
-            small
-            onClick={() =>
-              void forgetThisBrowser()
-                .catch(() => undefined)
-                .finally(signOut)
-            }
-          >
+          <Button small onClick={forget.start} disabled={forget.working}>
             {t('shell.signOut')}
           </Button>
         </div>
       </header>
+      {forget.dialogs}
       <main id="main" className="app__main">
         <Outlet />
       </main>

@@ -20,3 +20,107 @@
     color: #f2b8b5;
   }
 }
+
+/* Page-level overlays (overlay.ts): they hide the workbench completely (a locked private vault must not
+   stay readable underneath), so the background is opaque. */
+.page-overlay {
+  --overlay-bg: #f6f7fb;
+  --overlay-card: #ffffff;
+  --overlay-text: #1b1f2a;
+  --overlay-border: #d4d8e3;
+  --overlay-accent: #6d45d9;
+  --overlay-danger: #b3261e;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: var(--overlay-bg);
+  color: var(--overlay-text);
+  font-family: system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  .page-overlay {
+    --overlay-bg: #111624;
+    --overlay-card: #1b2133;
+    --overlay-text: #e6e8ef;
+    --overlay-border: #343c52;
+    --overlay-accent: #a58bf5;
+    --overlay-danger: #f2b8b5;
+  }
+}
+.page-overlay__card {
+  display: grid;
+  gap: 12px;
+  width: min(480px, 100%);
+  padding: 24px;
+  border: 1px solid var(--overlay-border);
+  border-radius: 12px;
+  background: var(--overlay-card);
+  line-height: 1.45;
+}
+.page-overlay__card:focus {
+  outline: none;
+}
+.page-overlay h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.page-overlay p {
+  margin: 0;
+}
+.page-overlay__form {
+  display: grid;
+  gap: 8px;
+}
+.page-overlay__form input[type='password'],
+.page-overlay__form input[type='text'] {
+  padding: 8px 10px;
+  border: 1px solid var(--overlay-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.page-overlay__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-overlay__error {
+  color: var(--overlay-danger);
+}
+.page-overlay__error[hidden] {
+  display: none;
+}
+.page-overlay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.page-overlay button {
+  padding: 8px 14px;
+  border: 1px solid var(--overlay-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.page-overlay button.primary {
+  border-color: var(--overlay-accent);
+  background: var(--overlay-accent);
+  color: var(--overlay-card);
+}
+.page-overlay button.danger {
+  border-color: var(--overlay-danger);
+  color: var(--overlay-danger);
+}
+.page-overlay button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

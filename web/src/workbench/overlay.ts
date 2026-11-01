@@ -1,0 +1,270 @@
+/**
+ * Page-level overlays of the workbench page: they cover the whole page, workbench UI included, and are
+ * built here with the DOM (no inline styles: the CSP forbids them; the look is in shell.css). One at a
+ * time: showing an overlay replaces the previous one.
+ */
+import { message, plural } from './strings';
+
+export interface OverlayAction {
+  label: string;
+  kind?: 'primary' | 'danger';
+  onClick: () => void;
+}
+
+export interface OverlayOptions {
+  title?: string;
+  lines: string[];
+  actions?: OverlayAction[];
+  /** Extra content between the text and the buttons (a form). */
+  content?: HTMLElement;
+  /** A progress message: announced politely, no buttons. */
+  busy?: boolean;
+}
+
+export interface Overlay {
+  readonly element: HTMLElement;
+  close(): void;
+}
+
+const OVERLAY_ID = 'page-overlay';
+
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: Partial<HTMLElementTagNameMap[K]> = {},
+  children: (Node | string)[] = [],
+): HTMLElementTagNameMap[K] {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+
+function button(a: OverlayAction): HTMLButtonElement {
+  const b = el('button', { type: 'button', textContent: a.label });
+  if (a.kind) b.className = a.kind;
+  b.addEventListener('click', () => a.onClick());
+  return b;
+}
+
+export function showOverlay(o: OverlayOptions): Overlay {
+  document.getElementById(OVERLAY_ID)?.remove();
+  const card = el('div', { className: 'page-overlay__card' });
+  const root = el('div', { id: OVERLAY_ID, className: 'page-overlay' }, [card]);
+  if (o.busy) {
+    root.setAttribute('role', 'status');
+    root.setAttribute('aria-live', 'polite');
+  } else {
+    root.setAttribute('role', 'alertdialog');
+    root.setAttribute('aria-modal', 'true');
+  }
+  if (o.title) {
+    const h = el('h2', { id: `${OVERLAY_ID}-title`, textContent: o.title });
+    card.append(h);
+    root.setAttribute('aria-labelledby', h.id);
+  }
+  for (const line of o.lines) card.append(el('p', { textContent: line }));
+  if (o.content) card.append(o.content);
+  if (o.actions?.length)
+    card.append(el('div', { className: 'page-overlay__actions' }, o.actions.map(button)));
+  document.body.append(root);
+  // Keyboard focus belongs to the overlay, not to the workbench underneath.
+  (card.querySelector<HTMLElement>('input, button') ?? card).focus();
+  return { element: root, close: () => root.remove() };
+}
+
+export function closeOverlay(): void {
+  document.getElementById(OVERLAY_ID)?.remove();
+}
+
+/** The core stopped: nothing on the page works any more until it is reloaded. */
+export function showFatal(reload: () => void = () => window.location.reload()): Overlay {
+  return showOverlay({
+    lines: [message('fatal')],
+    actions: [{ label: message('reload'), kind: 'primary', onClick: reload }],
+  });
+}
+
+/** What a copy kept in the browser holds that the cloud does not have, as sentences. */
+export function unsyncedLines(pending: number, conflicts: number, dirty = false): string[] {
+  const lines: string[] = [];
+  if (pending > 0) lines.push(plural('lockedPending', pending));
+  if (conflicts > 0) lines.push(plural('lockedConflicts', conflicts));
+  if (lines.length === 0 && dirty) lines.push(message('lockedUnscanned'));
+  return lines;
+}
+
+/**
+ * Asks before deleting a copy that holds changes: the overlay turns into a confirmation, and back into
+ * what it was (`back`) on Cancel.
+ */
+export function confirmDelete(onDelete: () => void, back: () => void): Overlay {
+  return showOverlay({
+    title: message('lockedTitle'),
+    lines: [message('deleteConfirm')],
+    actions: [
+      { label: message('cancel'), onClick: back },
+      { label: message('deleteConfirmButton'), kind: 'danger', onClick: onDelete },
+    ],
+  });
+}
+
+export interface LockedChoices {
+  unlock: () => void;
+  deleteCopy: () => void;
+  backToConsole: () => void;
+}
+
+/** A private vault was locked while its copy holds changes the cloud does not have. */
+export function showLocked(
+  counts: { pending: number; conflicts: number; dirty?: boolean },
+  c: LockedChoices,
+): Overlay {
+  const show = (): Overlay =>
+    showOverlay({
+      title: message('lockedTitle'),
+      lines: [
+        ...unsyncedLines(counts.pending, counts.conflicts, counts.dirty),
+        message('lockedHint'),
+      ],
+      actions: [
+        { label: message('back'), onClick: c.backToConsole },
+        {
+          label: message('deleteAnyway'),
+          kind: 'danger',
+          onClick: () => confirmDelete(c.deleteCopy, show),
+        },
+        { label: message('unlock'), kind: 'primary', onClick: c.unlock },
+      ],
+    });
+  return show();
+}
+
+export interface UnlockGateOptions {
+  counts: { pending: number; conflicts: number; dirty?: boolean };
+  /** VaultCryptoAPI.Unlock: resolves to true when a new passphrase must be set (recovery key used). */
+  unlock: (secret: string, recovery: boolean) => Promise<boolean>;
+  /** VaultCryptoAPI.SetPassphrase. */
+  setPassphrase: (passphrase: string) => Promise<void>;
+  deleteCopy: () => void;
+  backToConsole: () => void;
+}
+
+const errorText = (e: unknown): string =>
+  e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+
+/**
+ * Opening a private vault whose copy holds changes that were not uploaded: the clear text must not show
+ * before the vault is unlocked, so the passphrase is asked here, before the workbench is mounted.
+ * Resolves once the vault is unlocked (and, after the recovery key, has a new passphrase).
+ */
+export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const secretStep = (): void => {
+      const input = el('input', {
+        id: 'gate-secret',
+        type: 'password',
+        autocomplete: 'off',
+        required: true,
+      });
+      const label = el('label', { htmlFor: input.id, textContent: message('passphrase') });
+      const recovery = el('input', { id: 'gate-recovery', type: 'checkbox' });
+      recovery.addEventListener('change', () => {
+        label.textContent = message(recovery.checked ? 'recoveryKey' : 'passphrase');
+        input.type = recovery.checked ? 'text' : 'password';
+      });
+      const error = el('p', { className: 'page-overlay__error', hidden: true });
+      error.setAttribute('role', 'alert');
+      const submit = el('button', {
+        type: 'submit',
+        className: 'primary',
+        textContent: message('unlock'),
+      });
+      const form = el('form', { className: 'page-overlay__form' }, [
+        label,
+        input,
+        el('label', { className: 'page-overlay__check' }, [recovery, message('useRecoveryKey')]),
+        error,
+        el('div', { className: 'page-overlay__actions' }, [
+          button({ label: message('back'), onClick: o.backToConsole }),
+          button({
+            label: message('deleteAnyway'),
+            kind: 'danger',
+            onClick: () => confirmDelete(o.deleteCopy, secretStep),
+          }),
+          submit,
+        ]),
+      ]);
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        if (!input.value) return;
+        submit.disabled = true;
+        error.hidden = true;
+        o.unlock(input.value, recovery.checked).then(
+          (mustChange) => (mustChange ? passphraseStep() : finish()),
+          (e: unknown) => {
+            submit.disabled = false;
+            error.textContent = errorText(e);
+            error.hidden = false;
+          },
+        );
+      });
+      showOverlay({
+        title: message('gateTitle'),
+        lines: [
+          ...unsyncedLines(o.counts.pending, o.counts.conflicts, o.counts.dirty),
+          message('lockedHint'),
+        ],
+        content: form,
+      });
+    };
+
+    const passphraseStep = (): void => {
+      const pass = el('input', { id: 'gate-new', type: 'password', autocomplete: 'new-password' });
+      const again = el('input', {
+        id: 'gate-again',
+        type: 'password',
+        autocomplete: 'new-password',
+      });
+      const error = el('p', { className: 'page-overlay__error', hidden: true });
+      error.setAttribute('role', 'alert');
+      const submit = el('button', {
+        type: 'submit',
+        className: 'primary',
+        textContent: message('save'),
+      });
+      const form = el('form', { className: 'page-overlay__form' }, [
+        el('label', { htmlFor: pass.id, textContent: message('newPassphrase') }),
+        pass,
+        el('label', { htmlFor: again.id, textContent: message('newPassphraseAgain') }),
+        again,
+        error,
+        el('div', { className: 'page-overlay__actions' }, [submit]),
+      ]);
+      const fail = (text: string): void => {
+        error.textContent = text;
+        error.hidden = false;
+      };
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        if (pass.value.length < 12) return fail(message('newPassphraseShort'));
+        if (pass.value !== again.value) return fail(message('newPassphraseMismatch'));
+        submit.disabled = true;
+        o.setPassphrase(pass.value).then(finish, (e: unknown) => {
+          submit.disabled = false;
+          fail(errorText(e));
+        });
+      });
+      showOverlay({
+        title: message('gateTitle'),
+        lines: [message('newPassphraseIntro')],
+        content: form,
+      });
+    };
+
+    const finish = (): void => {
+      closeOverlay();
+      resolve();
+    };
+
+    secretStep();
+  });
+}

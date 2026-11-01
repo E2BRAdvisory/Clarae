@@ -23,6 +23,21 @@ async function bind<T>(
   ) as Promise<T>;
 }
 
+/** The localStorage key of the workbench's vault markers (web/src/workbench/markers.ts). */
+const MARKERS = 'memobrain.workbench.vaults';
+
+/** Whether this browser holds the folder of a vault (OPFS `fs/vaults/<name>`). */
+const vaultFolder = (page: Page, name: string): Promise<boolean> =>
+  page.evaluate(async (name) => {
+    try {
+      const fs = await (await navigator.storage.getDirectory()).getDirectoryHandle('fs');
+      await (await fs.getDirectoryHandle('vaults')).getDirectoryHandle(name);
+      return true;
+    } catch {
+      return false;
+    }
+  }, name);
+
 async function openWorkbench(page: Page, vault = 'e2e-vault'): Promise<{ id: string }> {
   await page.goto(`/vaults/${vault}/open?local`);
   // The UI is up when the vault's name is in the header.
@@ -192,13 +207,18 @@ test.describe('vault workbench', () => {
       .toBeGreaterThanOrEqual(1);
   });
 
-  test('locking a vault removes its clear-text copy from the browser', async ({ page }) => {
-    const { id } = await openWorkbench(page, 'forget');
+  test('the start-up sweep removes the clear text a closed tab left of a private vault', async ({
+    page,
+  }) => {
+    // Two copies: one the cloud has entirely, one with changes not uploaded yet.
+    const kept = await openWorkbench(page, 'kept');
+    await bind(page, 'VaultAPI', 'WriteNote', kept.id, 'Draft.md', 'not uploaded yet\n', '');
+    const swept = await openWorkbench(page, 'swept');
     await bind(
       page,
       'VaultAPI',
       'WriteNote',
-      id,
+      swept.id,
       'Secret.md',
       '# Secret\n\nclear text that must not stay\n',
       '',
@@ -211,7 +231,7 @@ test.describe('vault workbench', () => {
               page,
               'SearchAPI',
               'Query',
-              id,
+              swept.id,
               'must not stay',
               'all',
               5,
@@ -220,30 +240,31 @@ test.describe('vault workbench', () => {
         { timeout: 30_000 },
       )
       .toBe(1);
-    const present = () =>
-      page.evaluate(async () => {
-        const fs = await (await navigator.storage.getDirectory()).getDirectoryHandle('fs');
-        try {
-          await (await fs.getDirectoryHandle('vaults')).getDirectoryHandle('forget');
-          return true;
-        } catch {
-          return false;
-        }
+    // What the workbench records of private vaults linked to the cloud (?local links nothing).
+    await page.evaluate((key) => {
+      const marker = (name: string, pending: number) => ({
+        name,
+        kind: 'private',
+        localPath: `/vaults/${name}`,
+        pending,
+        conflicts: 0,
+        dirty: false,
+        updatedAt: Date.now(),
       });
-    expect(await present()).toBe(true);
+      localStorage.setItem(
+        key,
+        JSON.stringify({ swept: marker('swept', 0), kept: marker('kept', 2) }),
+      );
+    }, MARKERS);
+    expect(await vaultFolder(page, 'swept')).toBe(true);
 
-    // What the idle timer does for a private vault: lock it, close it, delete this browser's copy.
-    await page.evaluate(() =>
-      (window as unknown as { __lockAndForget(): Promise<void> }).__lockAndForget(),
-    );
-    expect(await present()).toBe(false);
-
-    // Opening it again finds nothing: neither the file nor its index survived.
+    // The tab is closed and the workbench opened again: the clean copy is gone before anything opens.
     await page.reload();
-    await expect(page.locator('header.titlebar .title')).toHaveText('forget', { timeout: 60_000 });
+    await expect(page.locator('header.titlebar .title')).toHaveText('swept', { timeout: 60_000 });
     const again = (await bind<{ id: string; name: string }[]>(page, 'VaultAPI', 'ListOpen')).find(
-      (v) => v.name === 'forget',
+      (v) => v.name === 'swept',
     )!;
+    // Neither the file nor its index survived.
     expect(
       (
         await bind<{ hits: unknown[] }>(
@@ -258,6 +279,38 @@ test.describe('vault workbench', () => {
       ).hits ?? [],
     ).toHaveLength(0);
     await expect(bind(page, 'VaultAPI', 'ReadNote', again.id, 'Secret.md')).rejects.toThrow();
+    // The copy with changes is kept, and so is its marker.
+    expect(await vaultFolder(page, 'kept')).toBe(true);
+    const markers = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>,
+      MARKERS,
+    );
+    expect(Object.keys(markers)).toEqual(['kept']);
+  });
+
+  test('a stopped engine blocks the page and offers a reload', async ({ page }) => {
+    await openWorkbench(page, 'crash');
+    // What the worker posts when the Go program exits.
+    await page.evaluate(() =>
+      (window as unknown as { __coreWorker: Worker }).__coreWorker.dispatchEvent(
+        new MessageEvent('message', { data: { type: 'fatal', error: 'the Go core exited' } }),
+      ),
+    );
+    const overlay = page.locator('.page-overlay');
+    await expect(overlay).toContainText('The vault engine stopped. Reload the page to continue.');
+    // Calls no longer wait for an answer that will never come.
+    const error = await page.evaluate(async () => {
+      try {
+        await (window as unknown as { go: { app: Bindings } }).go.app['SettingsAPI']!['Info']!();
+        return 'answered';
+      } catch (e) {
+        return String(e);
+      }
+    });
+    expect(error).toContain('the vault engine stopped');
+    await overlay.getByRole('button', { name: 'Reload' }).click();
+    await expect(page.locator('header.titlebar .title')).toHaveText('crash', { timeout: 60_000 });
+    await expect(page.locator('.page-overlay')).toHaveCount(0);
   });
 
   test('"Forget this browser" in the console removes every vault copy and its databases', async ({
@@ -286,10 +339,62 @@ test.describe('vault workbench', () => {
       'GET /me': { id: ME, username: 'alice' },
       'GET /vaults': { items: [], mounts: [] },
     });
+    // A copy that holds changes not uploaded yet is deleted only after a confirmation (D-04).
+    await page.evaluate(
+      (key) =>
+        localStorage.setItem(
+          key,
+          JSON.stringify({
+            'cloud-1': {
+              name: 'Team notes',
+              kind: 'shared',
+              localPath: '/vaults/cloud-1',
+              pending: 3,
+              conflicts: 0,
+              dirty: false,
+              updatedAt: Date.now(),
+            },
+          }),
+        ),
+      MARKERS,
+    );
     await page.goto('/account');
     await page.getByRole('button', { name: 'Forget this browser' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Changes not uploaded' });
+    await expect(dialog).toContainText('Team notes — 3 changes not uploaded');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    expect(await folders()).toEqual(['fs', 'memobrain-sqlite']);
+    await page.getByRole('button', { name: 'Forget this browser' }).click();
+    await page.getByRole('button', { name: 'Delete them' }).click();
     await expect(page.getByText('This browser no longer holds any vault.')).toBeVisible();
     expect(await folders()).toEqual([]);
+    expect(await page.evaluate((key) => localStorage.getItem(key), MARKERS)).toBeNull();
+  });
+
+  test('forgetting the browser while a workbench tab is open asks that tab to leave', async ({
+    page,
+    context,
+  }) => {
+    const { id } = await openWorkbench(page, 'busy-tab');
+    await bind(page, 'VaultAPI', 'WriteNote', id, 'Open.md', 'held by the other tab\n', '');
+    const consolePage = await context.newPage();
+    await consolePage.addInitScript(() =>
+      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
+    );
+    await mockApi(consolePage, {
+      'GET /me': { id: ME, username: 'alice' },
+      'GET /vaults': { items: [], mounts: [] },
+    });
+    await consolePage.goto('/account');
+    await consolePage.getByRole('button', { name: 'Forget this browser' }).click();
+    const dialog = consolePage.getByRole('dialog', { name: 'A vault is open in another tab' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close that tab and retry' }).click();
+    // The workbench tab writes its edits and goes back to the console, releasing the files.
+    await expect(page).toHaveURL(/\/vaults$|e2e-signin/, { timeout: 30_000 });
+    await expect(consolePage.getByText('This browser no longer holds any vault.')).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test('keeps the vault across a reload (OPFS files and the SQLite index persist)', async ({
@@ -350,6 +455,11 @@ test.describe('vault workbench', () => {
   });
 
   test('an address that is not a vault does not start the workbench', async ({ page }) => {
+    // Signed in, so the console renders instead of bouncing through the E2E sign-in page (which is
+    // itself a console route and would redirect forever without a user).
+    await page.addInitScript(() =>
+      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
+    );
     await page.goto('/vaults/x/open/extra?local');
     // The server answers with the console for this path: no workbench page (no #status), no core worker.
     await expect(page.locator('#status')).toHaveCount(0);

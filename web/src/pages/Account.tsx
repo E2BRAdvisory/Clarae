@@ -6,7 +6,7 @@ import { useDeleteMyAccount, useExportMyData } from '../api/account';
 import { useMe, useVaults } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
 import { downloadBlob } from '../export/download';
-import { forgetThisBrowser } from '../workbench/forget';
+import { useForgetBrowser } from '../layout/ForgetBrowser';
 
 export function AccountPage() {
   const { t } = useTranslation();
@@ -23,13 +23,14 @@ export function AccountPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [forgetError, setForgetError] = useState<string | null>(null);
 
+  const forgetBrowser = useForgetBrowser({
+    confirmLabel: t('forget.confirmForget'),
+    onDone: () => toast.push(t('account.forgetDone')),
+    onError: (e) => setForgetError(describeError(e, t)),
+  });
   const forget = () => {
     setForgetError(null);
-    forgetThisBrowser().then(
-      (r) =>
-        r.busy ? setForgetError(t('account.forgetBusy')) : toast.push(t('account.forgetDone')),
-      (e: unknown) => setForgetError(describeError(e, t)),
-    );
+    forgetBrowser.start();
   };
 
   const username = me.data?.username ?? '';
@@ -86,9 +87,12 @@ export function AccountPage() {
         <h2 id="account-browser">{t('account.forgetTitle')}</h2>
         <p>{t('account.forgetBody')}</p>
         <div>
-          <Button onClick={forget}>{t('account.forgetButton')}</Button>
+          <Button onClick={forget} disabled={forgetBrowser.working}>
+            {t('account.forgetButton')}
+          </Button>
         </div>
         {forgetError && <InlineError>{forgetError}</InlineError>}
+        {forgetBrowser.dialogs}
       </section>
 
       <section aria-labelledby="account-delete" className="nd-stack">

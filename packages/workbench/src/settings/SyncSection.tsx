@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
+import { lockVault } from '../app/actions';
 import { useAppStore } from '../state/store';
 import { isLocked, useManaged } from '../state/managed';
 import { infoOf, useSync } from '../state/sync';
@@ -275,9 +276,7 @@ export function SyncSection() {
                   {t('sync.unlock')}
                 </button>
               ) : (
-                <button onClick={() => void guard(() => api.crypto.lock(id))}>
-                  {t('sync.lockNow')}
-                </button>
+                <button onClick={() => void guard(() => lockVault(id))}>{t('sync.lockNow')}</button>
               )}
               <button disabled={info.locked} onClick={() => setForm('passphrase')}>
                 {t('sync.changePassphrase')}

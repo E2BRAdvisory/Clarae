@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { problem, renderApp, type FakeAuth } from '../test/utils';
+import { readMarkers, updateMarker } from '../workbench/markers';
 
 const me = { id: 'u1', username: 'alice' };
 const vault = (kind: 'shared' | 'private', name: string) => ({
@@ -106,5 +107,32 @@ describe('account page', () => {
       'This is not possible in the current state.',
     );
     expect((auth as FakeAuth).signOut).not.toHaveBeenCalled();
+  });
+
+  it('asks before forgetting a browser that keeps changes not uploaded, then forgets it', async () => {
+    localStorage.clear();
+    updateMarker('v1', { name: 'Diary', kind: 'private', localPath: '/vaults/v1', pending: 1 });
+    renderApp({
+      path: '/account',
+      routes: { 'GET /me': me, 'GET /vaults': { items: [], mounts: [] } },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Forget this browser' }));
+    const dialog = screen.getByRole('dialog', { name: 'Changes not uploaded' });
+    expect(dialog).toHaveTextContent('Diary — 1 change not uploaded');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete them' }));
+    expect(await screen.findByText('This browser no longer holds any vault.')).toBeInTheDocument();
+    expect(readMarkers()).toEqual({});
+  });
+
+  it('signs out at once when the browser keeps nothing that was not uploaded', async () => {
+    localStorage.clear();
+    const { auth } = renderApp({
+      path: '/account',
+      routes: { 'GET /me': me, 'GET /vaults': { items: [], mounts: [] } },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect((auth as FakeAuth).signOut).toHaveBeenCalled());
   });
 });

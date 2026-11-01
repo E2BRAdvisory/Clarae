@@ -14,15 +14,33 @@ function toAuthUser(u: User): AuthUser {
   };
 }
 
+/** An access token that expires within this many seconds is renewed before it is handed out. */
+export const RENEW_MARGIN_S = 30;
+
 /**
  * Authorization Code + PKCE against Keycloak via oidc-client-ts. Tokens live in
  * sessionStorage only (gone when the tab closes). Renewal uses the refresh token
- * (no hidden iframe, which the CSP would block anyway); when a renewal fails the
- * access token simply expires and the user is signed out locally, so the route
- * guard sends them to sign in again.
+ * (oidc-client-ts' signinSilent takes the refresh_token grant when the user has
+ * one; no hidden iframe, which the CSP would block anyway). A token that expired
+ * while the page slept (a laptop lid, a background tab) is renewed on the next
+ * getUser; only when the renewal fails is the user signed out locally, so the
+ * route guard sends them to sign in again.
  */
 export function createOidcAuth(load: () => Promise<ClientConfig> = loadClientConfig): AuthService {
   let manager: Promise<UserManager> | undefined;
+  // One renewal at a time: concurrent callers (the core asks for tokens too) share it.
+  let renewing: Promise<User | null> | null = null;
+
+  const renew = (mgr: UserManager): Promise<User | null> => {
+    renewing ??= mgr
+      .signinSilent()
+      .then((u) => (u && !u.expired ? u : null))
+      .catch(() => null)
+      .finally(() => {
+        renewing = null;
+      });
+    return renewing;
+  };
 
   const getManager = (): Promise<UserManager> => {
     manager ??= load().then((cfg) => {
@@ -39,9 +57,14 @@ export function createOidcAuth(load: () => Promise<ClientConfig> = loadClientCon
         automaticSilentRenew: true,
         loadUserInfo: false,
       });
-      // A failed renewal is not fatal until the token really expires.
+      // A failed automatic renewal is not fatal until the token really expires; even then the refresh
+      // token may still be good (the timer does not run while the computer sleeps): try it once more.
       mgr.events.addAccessTokenExpired(() => {
-        void mgr.removeUser();
+        void (async () => {
+          const u = await mgr.getUser();
+          if (u?.refresh_token && (await renew(mgr))) return;
+          await mgr.removeUser();
+        })();
       });
       return mgr;
     });
@@ -52,11 +75,17 @@ export function createOidcAuth(load: () => Promise<ClientConfig> = loadClientCon
     async getUser() {
       const mgr = await getManager();
       const u = await mgr.getUser();
-      if (!u || u.expired) {
-        if (u) await mgr.removeUser();
-        return null;
+      if (!u) return null;
+      const expiring = u.expired || (u.expires_in !== undefined && u.expires_in < RENEW_MARGIN_S);
+      if (!expiring) return toAuthUser(u);
+      if (u.refresh_token) {
+        const fresh = await renew(mgr);
+        if (fresh) return toAuthUser(fresh);
       }
-      return toAuthUser(u);
+      // Still valid for a few seconds: use it while it lasts.
+      if (!u.expired) return toAuthUser(u);
+      await mgr.removeUser();
+      return null;
     },
     async signIn(returnTo) {
       const mgr = await getManager();
