@@ -743,10 +743,10 @@ func (s *Service) AuditCSV(ctx context.Context, f AuditFilter) ([]byte, error) {
 			if r.ActorID != nil {
 				actorID = r.ActorID.String()
 			}
-			_ = w.Write([]string{
-				strconv.FormatInt(r.ID, 10), r.At.UTC().Format(time.RFC3339), actorID, deref(r.ActorName), csvSafe(r.Action),
-				csvSafe(deref(r.TargetType)), csvSafe(deref(r.TargetID)), csvSafe(string(r.Details)), r.Ip,
-			})
+			_ = w.Write(csvSafeRow(
+				strconv.FormatInt(r.ID, 10), r.At.UTC().Format(time.RFC3339), actorID, deref(r.ActorName), r.Action,
+				deref(r.TargetType), deref(r.TargetID), string(r.Details), r.Ip,
+			))
 			written++
 		}
 		if next == "" {
@@ -758,8 +758,21 @@ func (s *Service) AuditCSV(ctx context.Context, f AuditFilter) ([]byte, error) {
 	return buf.Bytes(), w.Error()
 }
 
-// csvSafe neutralises spreadsheet formula injection: a cell starting with = + - @ is read
-// as a formula by Excel, and audit fields can carry text chosen by users (names, paths).
+// csvSafeRow applies csvSafe to every cell. Every column goes through it, not
+// only the ones that look user-controlled today: actor names come from the
+// identity provider, targets and details from user input, and a column that
+// is safe now (ids, timestamps, addresses) stays safe through it.
+func csvSafeRow(cells ...string) []string {
+	for i, c := range cells {
+		cells[i] = csvSafe(c)
+	}
+	return cells
+}
+
+// csvSafe neutralises spreadsheet formula injection: a cell starting with = + - @
+// (or a tab or carriage return, which some spreadsheets skip before reading
+// the formula) is read as a formula by Excel, and audit fields can carry text
+// chosen by users (names, paths).
 func csvSafe(v string) string {
 	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
 		return "'" + v

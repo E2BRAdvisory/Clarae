@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"golang.org/x/time/rate"
 
+	"memobrain/services/cloud/internal/audit"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/shared/syncproto"
 )
@@ -130,12 +131,14 @@ func (rl *RateLimiter) Allow(w http.ResponseWriter, r *http.Request, key string)
 }
 
 // ByIP applies the limiter per client address as resolved by ip. Health
-// probes are exempt: the orchestrator polls them from a few addresses and a
-// throttled probe would take the pod out of rotation.
+// probes from direct internal callers are exempt: the orchestrator polls them
+// from a few addresses and a throttled probe would take the pod out of
+// rotation. Probes relayed by a proxy or coming from the internet are limited
+// like any other request.
 func (rl *RateLimiter) ByIP(ip ClientIP) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isProbe(r.URL.Path) || rl.Allow(w, r, "ip:"+ip.Of(r)) {
+			if (isProbe(r.URL.Path) && directInternal(r)) || rl.Allow(w, r, "ip:"+ip.Of(r)) {
 				next.ServeHTTP(w, r)
 			}
 		})
@@ -144,6 +147,16 @@ func (rl *RateLimiter) ByIP(ip ClientIP) func(http.Handler) http.Handler {
 
 func isProbe(path string) bool {
 	return path == BasePath+"/healthz" || path == BasePath+"/readyz"
+}
+
+// AuditClientIP stores the client address resolved by ip in the request
+// context, where audit.Record picks it up for audit_log.ip.
+func AuditClientIP(ip ClientIP) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(audit.WithClientIP(r.Context(), ip.Of(r))))
+		})
+	}
 }
 
 // ClientIP resolves the address of the client behind the trusted reverse

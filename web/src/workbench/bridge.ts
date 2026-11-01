@@ -25,11 +25,39 @@ export interface CoreOptions {
   createWorker?(): Worker;
 }
 
+/** Every call rejects with this once the core stopped (the worker failed or the Go program exited). */
+export class CoreDeadError extends Error {
+  constructor(reason: string) {
+    super(`the vault engine stopped: ${reason}`);
+    this.name = 'CoreDeadError';
+  }
+}
+
+/** A call that got no answer within the time it was given (see CoreHandle.callWithin). */
+export class CoreTimeoutError extends Error {
+  constructor(service: string, method: string, ms: number) {
+    super(`${service}.${method} did not answer within ${Math.round(ms / 1000)} s`);
+    this.name = 'CoreTimeoutError';
+  }
+}
+
 export interface CoreHandle {
   /** The services and methods the core exposes, as reported when it started. */
   readonly methods: Record<string, string[]>;
-  /** Calls a binding: JSON arguments in, parsed result out. Rejects with the binding's error message. */
+  /** True once the core stopped: every call then rejects at once with a CoreDeadError. */
+  readonly dead: boolean;
+  /**
+   * Calls a binding: JSON arguments in, parsed result out. Rejects with the binding's error message
+   * (text, like Wails), or with a CoreDeadError when the core stopped.
+   */
   call<T = unknown>(service: string, method: string, ...args: unknown[]): Promise<T>;
+  /** Like `call`, but rejects with a CoreTimeoutError when no answer arrives within `timeoutMs`. */
+  callWithin<T = unknown>(
+    timeoutMs: number,
+    service: string,
+    method: string,
+    ...args: unknown[]
+  ): Promise<T>;
   /** Wails' OnStartup / OnDomReady / OnShutdown. */
   start(): Promise<void>;
   domReady(): void;
@@ -43,12 +71,120 @@ export interface CoreHandle {
   terminate(): void;
 }
 
+/**
+ * The worker that runs the core; the build bundles it separately and records its URL and SHA-384
+ * (scripts/esbuild.mjs). It holds the vault keys, so its script is checked like the page's own.
+ */
+export const createCoreWorker = (): Worker =>
+  new VerifiedWorker(__MEMOBRAIN_WORKER__, __MEMOBRAIN_WORKER_INTEGRITY__, {
+    type: 'module',
+    name: 'memobrain-core',
+  }) as unknown as Worker;
+
+/** What VerifiedWorker needs from the browser (replaced in tests). */
+export interface VerifiedWorkerDeps {
+  fetch(url: string, init: RequestInit): Promise<Response>;
+  createObjectURL(blob: Blob): string;
+  revokeObjectURL(url: string): void;
+  createWorker(url: string, options: WorkerOptions): Worker;
+}
+
+const browserDeps = (): VerifiedWorkerDeps => ({
+  fetch: (url, init) => fetch(url, init),
+  createObjectURL: (blob) => URL.createObjectURL(blob),
+  revokeObjectURL: (url) => URL.revokeObjectURL(url),
+  createWorker: (url, options) => new Worker(url, options),
+});
+
+/**
+ * A worker whose script passes Subresource Integrity before it runs. `new Worker(url)` takes no
+ * integrity, so the script is fetched with it (the expected hash comes from the page bundle, itself
+ * loaded with SRI) and the worker starts from a blob: URL of the checked bytes; the workbench policy
+ * allows `worker-src blob:` for this. The script must be self-contained (a blob: module cannot resolve
+ * relative imports) and resolve what it fetches against `location.origin` (worker.ts does).
+ *
+ * It behaves like a Worker for what the bridge and the tests use: messages posted before the worker
+ * exists are queued, the real worker's events are re-dispatched here (`onmessage`, `onerror`,
+ * `dispatchEvent`), and a failed check surfaces as an `error` event: the core never starts.
+ */
+export class VerifiedWorker extends EventTarget {
+  onmessage: ((ev: MessageEvent) => void) | null = null;
+  onerror: ((ev: ErrorEvent) => void) | null = null;
+  private worker: Worker | null = null;
+  private queue: [unknown, Transferable[]][] = [];
+  private terminated = false;
+  private blobURL = '';
+
+  constructor(
+    url: string,
+    integrity: string,
+    options: WorkerOptions,
+    private readonly deps: VerifiedWorkerDeps = browserDeps(),
+  ) {
+    super();
+    this.addEventListener('message', (e) => this.onmessage?.(e as MessageEvent));
+    this.addEventListener('error', (e) => this.onerror?.(e as ErrorEvent));
+    this.boot(url, integrity, options).catch((e: unknown) => {
+      this.fail(`cannot load ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    });
+  }
+
+  private async boot(url: string, integrity: string, options: WorkerOptions): Promise<void> {
+    // Only E2E builds may start an unpinned script; production builds always embed the hash.
+    if (!integrity && !import.meta.env.MEMOBRAIN_E2E) throw new Error('no integrity to check');
+    if (!integrity) return this.started(this.deps.createWorker(url, options));
+    const res = await this.deps.fetch(url, { integrity, credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = new Blob([await res.arrayBuffer()], { type: 'text/javascript' });
+    if (this.terminated) return;
+    this.blobURL = this.deps.createObjectURL(blob);
+    this.started(this.deps.createWorker(this.blobURL, options));
+  }
+
+  private started(worker: Worker): void {
+    this.worker = worker;
+    worker.onmessage = (e: MessageEvent) => {
+      this.revoke();
+      this.dispatchEvent(new MessageEvent('message', { data: e.data as unknown }));
+    };
+    worker.onerror = (e: ErrorEvent) => {
+      this.revoke();
+      e.preventDefault();
+      this.fail(e.message || 'unknown error');
+    };
+    for (const [m, transfer] of this.queue) worker.postMessage(m, transfer);
+    this.queue = [];
+  }
+
+  /** The worker read its script (it answered or failed): the blob: URL is no longer needed. */
+  private revoke(): void {
+    if (!this.blobURL) return;
+    this.deps.revokeObjectURL(this.blobURL);
+    this.blobURL = '';
+  }
+
+  private fail(message: string): void {
+    if (this.terminated) return;
+    this.dispatchEvent(new ErrorEvent('error', { message }));
+  }
+
+  postMessage(message: unknown, transfer: Transferable[] = []): void {
+    if (this.terminated) return;
+    if (this.worker) this.worker.postMessage(message, transfer);
+    else this.queue.push([message, transfer]);
+  }
+
+  terminate(): void {
+    this.terminated = true;
+    this.queue = [];
+    this.worker?.terminate();
+    this.revoke();
+  }
+}
+
 /** Starts the worker and resolves when the core answers its first call. */
 export function startCore(options: CoreOptions): Promise<CoreHandle> {
-  // The build bundles the worker separately and records its URL (scripts/esbuild.mjs).
-  const worker = options.createWorker
-    ? options.createWorker()
-    : new Worker(__MEMOBRAIN_WORKER__, { type: 'module', name: 'memobrain-core' });
+  const worker = (options.createWorker ?? createCoreWorker)();
   const send = (m: ToWorker, transfer: Transferable[] = []): void =>
     worker.postMessage(m, transfer);
 
@@ -56,12 +192,52 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
   const pending = new Map<number, { resolve: (v: string) => void; reject: (e: unknown) => void }>();
   const listeners = new Map<string, Set<(p: unknown) => void>>();
 
-  const request = (build: (id: number) => ToWorker): Promise<string> =>
+  let deadReason: string | null = null;
+
+  const request = (
+    build: (id: number) => ToWorker,
+    timeout?: () => Error,
+    ms = 0,
+  ): Promise<string> =>
     new Promise((resolve, reject) => {
+      if (deadReason !== null) return reject(new CoreDeadError(deadReason));
       const id = next++;
-      pending.set(id, { resolve, reject });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = (): void => {
+        clearTimeout(timer);
+        pending.delete(id);
+      };
+      pending.set(id, {
+        resolve: (v) => (done(), resolve(v)),
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- an Error, or Wails' text
+        reject: (e) => (done(), reject(e)),
+      });
+      // A late answer finds no entry and is dropped.
+      if (timeout && ms > 0) timer = setTimeout(() => (done(), reject(timeout())), ms);
       send(build(id));
     });
+
+  /** The core is gone: fail what is waiting and everything that comes after. */
+  const die = (reason: string): void => {
+    if (deadReason !== null) return;
+    deadReason = reason;
+    const waiting = [...pending.values()];
+    pending.clear();
+    for (const p of waiting) p.reject(new CoreDeadError(reason));
+  };
+
+  const callText = (service: string, method: string, args: unknown[], ms = 0): Promise<string> =>
+    request(
+      (id) => ({ type: 'call', id, service, method, args: JSON.stringify(args) }),
+      () => new CoreTimeoutError(service, method, ms),
+      ms,
+    ).catch((e: unknown) => {
+      if (e instanceof CoreDeadError || e instanceof CoreTimeoutError) throw e;
+      // Like Wails, the rejection is the message text: the UI is written for that.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw e instanceof Error ? e.message : String(e);
+    });
+  const parse = <T>(text: string): T => (text === '' ? null : JSON.parse(text)) as T;
 
   return new Promise<CoreHandle>((resolveReady, rejectReady) => {
     let methods: Record<string, string[]> = {};
@@ -71,26 +247,25 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
       get methods() {
         return methods;
       },
+      get dead() {
+        return deadReason !== null;
+      },
       async call<T>(service: string, method: string, ...args: unknown[]): Promise<T> {
-        // Like Wails, a rejection carries the message text, not an Error.
-        const text = await request((id) => ({
-          type: 'call',
-          id,
-          service,
-          method,
-          args: JSON.stringify(args),
-        })).catch((e: unknown) => {
-          // Like Wails, the rejection is the message text: the UI is written for that.
-          // eslint-disable-next-line @typescript-eslint/only-throw-error
-          throw e instanceof Error ? e.message : String(e);
-        });
-        return (text === '' ? null : JSON.parse(text)) as T;
+        return parse<T>(await callText(service, method, args));
+      },
+      async callWithin<T>(
+        timeoutMs: number,
+        service: string,
+        method: string,
+        ...args: unknown[]
+      ): Promise<T> {
+        return parse<T>(await callText(service, method, args, timeoutMs));
       },
       async start() {
         await request((id) => ({ type: 'start', id }));
       },
       domReady() {
-        send({ type: 'domReady' });
+        if (deadReason === null) send({ type: 'domReady' });
       },
       async shutdown() {
         await request((id) => ({ type: 'shutdown', id }));
@@ -108,13 +283,19 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
       },
       terminate() {
         worker.terminate();
+        die('terminated');
       },
     };
 
-    worker.onerror = (e) => {
-      const message = `the core worker failed: ${e.message || 'unknown error'}`;
+    const fatal = (message: string): void => {
+      const first = deadReason === null;
+      die(message);
       if (!settled) rejectReady(new Error(message));
-      options.onFatal?.(message);
+      if (first) options.onFatal?.(message);
+    };
+
+    worker.onerror = (e) => {
+      fatal(`the core worker failed: ${e.message || 'unknown error'}`);
     };
 
     worker.onmessage = (ev: MessageEvent<FromWorker>) => {
@@ -126,13 +307,11 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
           resolveReady(handle);
           return;
         case 'fatal':
-          if (!settled) rejectReady(new Error(m.error));
-          options.onFatal?.(m.error);
+          fatal(m.error);
           return;
         case 'result': {
           const p = pending.get(m.id);
           if (!p) return;
-          pending.delete(m.id);
           if (m.error !== undefined) p.reject(new Error(m.error));
           else p.resolve(m.result ?? 'null');
           return;

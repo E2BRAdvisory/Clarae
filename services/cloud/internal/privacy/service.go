@@ -239,7 +239,8 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID, req DeleteReques
 		if _, err := q.ExpireExportsOfUser(ctx, userID); err != nil {
 			return err
 		}
-		if err := audit.Record(ctx, tx, userID, "account.delete", "user", userID.String(), map[string]any{
+		// Written after Anonymise: it must not bring the address back.
+		if err := audit.Record(audit.WithoutClientIP(ctx), tx, userID, "account.delete", "user", userID.String(), map[string]any{
 			"vaults": deleted, "private_vaults": private, "memberships": memberships,
 		}); err != nil {
 			return err

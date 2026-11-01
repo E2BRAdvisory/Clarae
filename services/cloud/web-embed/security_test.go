@@ -211,6 +211,10 @@ func TestCSPIsStrict(t *testing.T) {
 	if _, ok := p["script-src"]; !ok {
 		t.Error("script-src missing")
 	}
+	// Only the workbench starts a worker from a blob: (its SRI-checked core): the console never does.
+	if _, ok := p["worker-src"]; ok || strings.Contains(CSP("https://id.example.com"), "blob:") {
+		t.Errorf("the console policy must not allow blob: workers: %v", p)
+	}
 }
 
 // Every class of response (page, asset, 404, 405) carries the full header set.

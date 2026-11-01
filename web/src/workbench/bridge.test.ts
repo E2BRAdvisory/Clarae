@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { acceptOf, installWailsGlobals, startCore, type CoreHandle } from './bridge';
+import {
+  acceptOf,
+  CoreDeadError,
+  CoreTimeoutError,
+  installWailsGlobals,
+  startCore,
+  VerifiedWorker,
+  type CoreHandle,
+  type VerifiedWorkerDeps,
+} from './bridge';
 import type { CoreAssets, FromWorker, HostRequest, ToWorker } from './protocol';
 
 const assets: CoreAssets = {
@@ -194,16 +203,80 @@ describe('startCore', () => {
     worker.emit({ type: 'fatal', error: 'the Go core stopped' });
     expect(onFatal).toHaveBeenCalledWith('the Go core stopped');
   });
+
+  it('fails the waiting calls and every later one once the core stops after start-up', async () => {
+    const onFatal = vi.fn();
+    // A core that never answers a call: only its death can end the wait.
+    const { worker, core } = start((m, w) => void ready(m, w), { onFatal });
+    const handle = await core;
+    const waiting = handle.call('VaultAPI', 'ReadNote', 'v', 'a.md');
+    const wiping = handle.wipe('/vaults/v');
+    worker.emit({ type: 'fatal', error: 'the Go core exited' });
+    await expect(waiting).rejects.toBeInstanceOf(CoreDeadError);
+    await expect(wiping).rejects.toThrow('the vault engine stopped: the Go core exited');
+    expect(handle.dead).toBe(true);
+    const sent = worker.sent.length;
+    await expect(handle.call('VaultAPI', 'ListOpen')).rejects.toBeInstanceOf(CoreDeadError);
+    expect(worker.sent).toHaveLength(sent); // nothing more is posted to a dead worker
+    // A second report (the worker's own error event) does not notify twice.
+    worker.onerror?.({ message: 'boom' } as ErrorEvent);
+    expect(onFatal).toHaveBeenCalledOnce();
+  });
+
+  it('treats an error event of the worker after start-up as the core stopping', async () => {
+    const onFatal = vi.fn();
+    const { worker, core } = start((m, w) => void ready(m, w), { onFatal });
+    const handle = await core;
+    const waiting = handle.call('S', 'M');
+    worker.onerror?.({ message: 'out of memory' } as ErrorEvent);
+    await expect(waiting).rejects.toThrow(/out of memory/);
+    expect(onFatal).toHaveBeenCalledWith('the core worker failed: out of memory');
+    expect(handle.dead).toBe(true);
+  });
+
+  it('gives up on a call that does not answer in time, and drops its late answer', async () => {
+    let late: ToWorker | undefined;
+    const { worker, core } = start((m, w) => {
+      if (ready(m, w)) return;
+      if (m.type === 'call') late = m;
+    });
+    const handle = await core;
+    vi.useFakeTimers();
+    try {
+      const slow = handle.callWithin(5_000, 'AuthAPI', 'Status');
+      const check = expect(slow).rejects.toBeInstanceOf(CoreTimeoutError);
+      await vi.advanceTimersByTimeAsync(5_001);
+      await check;
+      await expect(slow).rejects.toThrow('AuthAPI.Status did not answer within 5 s');
+    } finally {
+      vi.useRealTimers();
+    }
+    // The answer arriving afterwards is ignored; the core is still usable.
+    if (late?.type === 'call') worker.emit({ type: 'result', id: late.id, result: '"x"' });
+    expect(handle.dead).toBe(false);
+  });
+
+  it('answers a timed call that is quick enough like any other call', async () => {
+    const { core } = start((m, w) => {
+      if (ready(m, w)) return;
+      if (m.type === 'call') w.emit({ type: 'result', id: m.id, result: '{"status":"ready"}' });
+    });
+    const handle = await core;
+    expect(await handle.callWithin(1_000, 'AuthAPI', 'Status')).toEqual({ status: 'ready' });
+  });
 });
 
 describe('installWailsGlobals', () => {
   const fake = (): CoreHandle => {
     const listeners = new Map<string, Set<(p: unknown) => void>>();
+    const call = vi.fn((s: string, m: string, ...a: unknown[]) =>
+      Promise.resolve({ s, m, a }),
+    ) as unknown as CoreHandle['call'];
     return {
       methods,
-      call: vi.fn((s: string, m: string, ...a: unknown[]) =>
-        Promise.resolve({ s, m, a }),
-      ) as unknown as CoreHandle['call'],
+      dead: false,
+      call,
+      callWithin: (_ms: number, s: string, m: string, ...a: unknown[]) => call(s, m, ...a),
       start: () => Promise.resolve(),
       domReady: () => undefined,
       shutdown: () => Promise.resolve(),
@@ -255,5 +328,147 @@ describe('acceptOf', () => {
     expect(acceptOf(['*.md;*.txt', '*.zip'])).toBe('.md,.txt,.zip');
     expect(acceptOf(['*'])).toBe('');
     expect(acceptOf([])).toBe('');
+  });
+});
+
+describe('VerifiedWorker', () => {
+  /** A real worker stand-in: records what it receives, emits what the test says. */
+  class StubWorker {
+    onmessage: ((e: MessageEvent) => void) | null = null;
+    onerror: ((e: ErrorEvent) => void) | null = null;
+    received: unknown[] = [];
+    terminated = false;
+    constructor(
+      readonly url: string,
+      readonly options: WorkerOptions,
+    ) {}
+    postMessage(m: unknown): void {
+      this.received.push(m);
+    }
+    terminate(): void {
+      this.terminated = true;
+    }
+  }
+
+  function deps(fetchImpl: VerifiedWorkerDeps['fetch']) {
+    const workers: StubWorker[] = [];
+    const revoked: string[] = [];
+    const fetches: [string, RequestInit][] = [];
+    const d: VerifiedWorkerDeps = {
+      fetch: (url, init) => (fetches.push([url, init]), fetchImpl(url, init)),
+      createObjectURL: () => 'blob:http://localhost/1',
+      revokeObjectURL: (u) => void revoked.push(u),
+      createWorker: (url, options) => {
+        const w = new StubWorker(url, options);
+        workers.push(w);
+        return w as unknown as Worker;
+      },
+    };
+    return { d, workers, revoked, fetches };
+  }
+  const ok = () => Promise.resolve(new Response('self.onmessage = () => {};', { status: 200 }));
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('fetches the script with its integrity and starts the worker from the checked bytes', async () => {
+    const { d, workers, revoked, fetches } = deps(ok);
+    const vw = new VerifiedWorker('/assets/core-worker-X.js', 'sha384-abc', { type: 'module' }, d);
+    const got: unknown[] = [];
+    vw.onmessage = (e) => got.push(e.data);
+    vw.postMessage({ type: 'init' }); // before the worker exists: queued
+    await settle();
+
+    expect(fetches).toEqual([
+      ['/assets/core-worker-X.js', { integrity: 'sha384-abc', credentials: 'same-origin' }],
+    ]);
+    expect(workers).toHaveLength(1);
+    expect(workers[0]!.url).toBe('blob:http://localhost/1');
+    expect(workers[0]!.options).toEqual({ type: 'module' });
+    expect(workers[0]!.received).toEqual([{ type: 'init' }]);
+
+    workers[0]!.onmessage?.({ data: { type: 'ready' } } as MessageEvent);
+    expect(got).toEqual([{ type: 'ready' }]);
+    expect(revoked).toEqual(['blob:http://localhost/1']);
+    // dispatchEvent works as on a Worker (the E2E tests simulate a crash with it).
+    vw.dispatchEvent(new MessageEvent('message', { data: { type: 'fatal' } }));
+    expect(got).toEqual([{ type: 'ready' }, { type: 'fatal' }]);
+  });
+
+  it('never starts a script that fails the integrity check', async () => {
+    const { d, workers } = deps(() => Promise.reject(new TypeError('Failed to fetch')));
+    const vw = new VerifiedWorker('/assets/w.js', 'sha384-abc', { type: 'module' }, d);
+    const errors: string[] = [];
+    vw.onerror = (e) => errors.push(e.message);
+    await settle();
+    expect(workers).toHaveLength(0);
+    expect(errors).toEqual(['cannot load /assets/w.js: Failed to fetch']);
+  });
+
+  it('refuses a script without integrity outside E2E builds', async () => {
+    const { d, workers, fetches } = deps(ok);
+    const vw = new VerifiedWorker('/assets/w.js', '', { type: 'module' }, d);
+    const errors: string[] = [];
+    vw.onerror = (e) => errors.push(e.message);
+    await settle();
+    expect(fetches).toHaveLength(0);
+    expect(workers).toHaveLength(0);
+    expect(errors).toEqual(['cannot load /assets/w.js: no integrity to check']);
+  });
+
+  it('turns a failure of the started worker into an error event', async () => {
+    const { d, workers } = deps(ok);
+    const vw = new VerifiedWorker('/assets/w.js', 'sha384-abc', { type: 'module' }, d);
+    const errors: string[] = [];
+    vw.onerror = (e) => errors.push(e.message);
+    await settle();
+    workers[0]!.onerror?.(new ErrorEvent('error', { message: 'boom', cancelable: true }));
+    expect(errors).toEqual(['boom']);
+  });
+
+  it('does not start once terminated', async () => {
+    const { d, workers } = deps(ok);
+    const vw = new VerifiedWorker('/assets/w.js', 'sha384-abc', { type: 'module' }, d);
+    vw.terminate();
+    await settle();
+    expect(workers).toHaveLength(0);
+  });
+
+  it('feeds startCore like a plain worker', async () => {
+    const { d, workers } = deps(ok);
+    const core = startCore({
+      assets,
+      config,
+      getToken: () => Promise.resolve('t'),
+      createWorker: () =>
+        new VerifiedWorker(
+          '/assets/w.js',
+          'sha384-abc',
+          { type: 'module' },
+          d,
+        ) as unknown as Worker,
+    });
+    await settle();
+    expect(workers[0]!.received).toEqual([{ type: 'init', assets, config }]);
+    workers[0]!.onmessage?.({ data: { type: 'ready', methods } } as MessageEvent);
+    expect((await core).methods).toEqual(methods);
+  });
+
+  it('fails startCore when the check fails', async () => {
+    const { d } = deps(() => Promise.reject(new TypeError('integrity mismatch')));
+    const onFatal = vi.fn();
+    const core = startCore({
+      assets,
+      config,
+      getToken: () => Promise.resolve('t'),
+      onFatal,
+      createWorker: () =>
+        new VerifiedWorker(
+          '/assets/w.js',
+          'sha384-abc',
+          { type: 'module' },
+          d,
+        ) as unknown as Worker,
+    });
+    await expect(core).rejects.toThrow('integrity mismatch');
+    expect(onFatal).toHaveBeenCalledOnce();
   });
 });

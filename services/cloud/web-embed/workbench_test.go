@@ -50,14 +50,15 @@ func do(h http.Handler, target string, header map[string]string) *httptest.Respo
 
 func TestWorkbenchRouteServesItsOwnPageAndPolicy(t *testing.T) {
 	h, _ := workbenchHandler(t)
-	for _, p := range []string{"/vaults/0198f1c2-aaaa-7bbb-8ccc-123456789abc/open", "/vaults/x/open/"} {
+	// /vaults/new/open?kind=private&name=… is the creation route of a private vault (ADR-0037 §2).
+	for _, p := range []string{"/vaults/0198f1c2-aaaa-7bbb-8ccc-123456789abc/open", "/vaults/x/open/", "/vaults/new/open?kind=private&name=Diary"} {
 		rec := do(h, p, nil)
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "workbench") {
 			t.Fatalf("%s: code %d body %q", p, rec.Code, rec.Body.String())
 		}
 		csp := rec.Header().Get("Content-Security-Policy")
 		for _, want := range []string{
-			"script-src 'self' 'wasm-unsafe-eval'", "style-src 'self' 'unsafe-inline'", "worker-src 'self'",
+			"script-src 'self' 'wasm-unsafe-eval'", "style-src 'self' 'unsafe-inline'", "worker-src 'self' blob:;",
 			"img-src 'self' data: blob:", "connect-src 'self' blob: https://id.example.com:8443;",
 			"frame-ancestors 'none'", "object-src 'none'", "frame-src 'none'",
 		} {

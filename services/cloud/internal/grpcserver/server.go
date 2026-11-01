@@ -94,7 +94,7 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 			if err := stream.Send(msg); err != nil {
 				return err
 			}
-			if ev.Kind == notify.KindAccount && ev.AccountKind == notify.AccountSuspended {
+			if notify.EndsStream(ev) {
 				return status.Error(codes.PermissionDenied, "account suspended")
 			}
 		}

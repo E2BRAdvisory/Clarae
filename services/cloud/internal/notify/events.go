@@ -26,6 +26,15 @@ const (
 	AccountQuotaChanged = "quota_changed"
 )
 
+// EndsStream reports whether sending ev must close the notification stream
+// it travels on. A suspension (account deletion publishes the same kind)
+// revokes the access the token was granted when the stream opened, so both
+// transports deliver the event and then stop: gRPC with PERMISSION_DENIED,
+// SSE by ending the response. Reconnecting fails the suspension check.
+func EndsStream(ev Event) bool {
+	return ev.Kind == KindAccount && ev.AccountKind == AccountSuspended
+}
+
 // AccountEvent says that the account of one user changed.
 type AccountEvent struct {
 	User uuid.UUID `json:"u"`

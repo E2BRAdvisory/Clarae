@@ -68,11 +68,41 @@ func TestByIPExemptsHealthProbes(t *testing.T) {
 	}))
 	for range 5 {
 		for _, p := range []string{"/api/v1/healthz", "/api/v1/readyz"} {
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
-			if rec.Code != http.StatusNoContent {
-				t.Fatalf("%s throttled: %d", p, rec.Code)
+			for _, peer := range []string{"10.0.3.4:40000", "127.0.0.1:40000", "[fd00::4]:40000", "100.64.1.2:40000"} {
+				r := httptest.NewRequest(http.MethodGet, p, nil)
+				r.RemoteAddr = peer
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, r)
+				if rec.Code != http.StatusNoContent {
+					t.Fatalf("%s from %s throttled: %d", p, peer, rec.Code)
+				}
 			}
+		}
+	}
+}
+
+// Probes relayed by a proxy, or coming straight from the internet, are limited like any request:
+// otherwise anyone could hammer /readyz without a budget.
+func TestByIPLimitsPublicAndProxiedProbes(t *testing.T) {
+	for name, set := range map[string]func(*http.Request){
+		"public peer":  func(r *http.Request) { r.RemoteAddr = "203.0.113.7:4000" },
+		"via ingress":  func(r *http.Request) { r.RemoteAddr = "10.0.0.2:4000"; r.Header.Set("X-Forwarded-For", "203.0.113.7") },
+		"via RFC 7239": func(r *http.Request) { r.RemoteAddr = "10.0.0.2:4000"; r.Header.Set("Forwarded", "for=203.0.113.7") },
+	} {
+		rl := NewRateLimiter(0.001, 1)
+		h := rl.ByIP(NewClientIP(nil))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		codes := []int{}
+		for range 3 {
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/readyz", nil)
+			set(r)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, r)
+			codes = append(codes, rec.Code)
+		}
+		if codes[2] != http.StatusTooManyRequests {
+			t.Errorf("%s: codes %v, the probe was not limited", name, codes)
 		}
 	}
 }

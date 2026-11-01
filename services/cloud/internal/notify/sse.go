@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,8 +14,9 @@ import (
 
 // SSEHandler serves GET /events, the fallback for networks that block gRPC
 // (§3.5.3). Authentication wraps it. Query "known" carries replay positions as
-// "vault_id:seq,vault_id:seq" and "config" the configuration revision the client holds. The stream ends when the access token expires;
-// the client refreshes it and reconnects.
+// "vault_id:seq,vault_id:seq" and "config" the configuration revision the client holds. The stream ends when the access token expires
+// (the client refreshes it and reconnects) and right after an event that
+// EndsStream (suspension: the reconnect is refused).
 func (h *Hub) SSEHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
@@ -88,23 +90,36 @@ func (h *Hub) SSEHandler() http.Handler {
 				if !ok {
 					return
 				}
-				for _, ev := range batch {
-					switch ev.Kind {
-					case KindShare:
-						_, _ = fmt.Fprintf(w, "event: share_changed\ndata: {\"share_id\":%q,\"kind\":%q}\n\n", ev.ShareID, ev.ShareKind)
-					case KindAccount:
-						_, _ = fmt.Fprintf(w, "event: account_changed\ndata: {\"kind\":%q}\n\n", ev.AccountKind)
-					case KindConfig:
-						_, _ = fmt.Fprintf(w, "event: config_changed\ndata: {\"version\":%d}\n\n", ev.Revision)
-					default:
-						_, _ = fmt.Fprintf(w, "event: vault_changed\ndata: {\"vault_id\":%q,\"seq\":%d}\n\n", ev.VaultID, ev.Seq)
-					}
-				}
+				end := writeSSEBatch(w, batch)
 				flusher.Flush()
+				if end {
+					return
+				}
 			case <-heartbeat.C:
 				_, _ = fmt.Fprint(w, ": ping\n\n")
 				flusher.Flush()
 			}
 		}
 	})
+}
+
+// writeSSEBatch writes the events of one batch and reports whether the stream
+// must end; events queued after the one that ends it are dropped, as on gRPC.
+func writeSSEBatch(w io.Writer, batch []Event) (end bool) {
+	for _, ev := range batch {
+		switch ev.Kind {
+		case KindShare:
+			_, _ = fmt.Fprintf(w, "event: share_changed\ndata: {\"share_id\":%q,\"kind\":%q}\n\n", ev.ShareID, ev.ShareKind)
+		case KindAccount:
+			_, _ = fmt.Fprintf(w, "event: account_changed\ndata: {\"kind\":%q}\n\n", ev.AccountKind)
+		case KindConfig:
+			_, _ = fmt.Fprintf(w, "event: config_changed\ndata: {\"version\":%d}\n\n", ev.Revision)
+		default:
+			_, _ = fmt.Fprintf(w, "event: vault_changed\ndata: {\"vault_id\":%q,\"seq\":%d}\n\n", ev.VaultID, ev.Seq)
+		}
+		if EndsStream(ev) {
+			return true
+		}
+	}
+	return false
 }

@@ -200,7 +200,11 @@ async function prepareCore() {
   return { assets, sizes };
 }
 
-/** The worker that runs the core is a separate, self-contained bundle: its URL is known to the page. */
+/**
+ * The worker that runs the core is a separate, self-contained bundle (no imports: the page starts it
+ * from a blob: URL, see bridge.ts). Its URL and its SHA-384 are embedded in the workbench bundle, which
+ * the page loads with SRI: `new Worker()` takes no integrity, so the page fetches the script with it.
+ */
 async function buildWorker(shared) {
   const result = await esbuild.build({
     ...shared,
@@ -213,8 +217,12 @@ async function buildWorker(shared) {
     logLevel: 'warning',
   });
   const out = Object.keys(result.metafile.outputs).find((o) => o.endsWith('.js'));
+  const imports = result.metafile.outputs[out].imports.filter((i) => !i.external);
+  if (imports.length)
+    throw new Error(`the core worker must be self-contained, it imports ${imports[0].path}`);
   return {
     url: '/' + relative(dist, join(root, out)).replaceAll('\\', '/'),
+    integrity: `sha384-${sha('sha384', await readFile(join(root, out)), 'base64')}`,
     metafile: result.metafile,
   };
 }
@@ -331,34 +339,51 @@ await esbuild.build({
   logLevel: 'warning',
 });
 
-const options = {
+// Two builds, so that the console is a single file covered by the SRI of its <script> tag: with code
+// splitting the entry would import shared chunks, which the browser fetches without integrity. The
+// console has no lazy part, so this costs nothing. The workbench keeps splitting: its lazy chunks
+// (Excalidraw, mermaid, pdf.js…) would otherwise blow the initial budget; that residual gap is
+// documented in ADR-0029 (Esito, SRI).
+const common = {
   ...shared,
-  entryPoints: {
-    main: join(root, 'src/main.tsx'),
-    workbench: join(root, 'src/workbench/main.tsx'),
-  },
   outdir: dist,
   entryNames: dev ? 'assets/[name]' : 'assets/[name]-[hash]',
   chunkNames: 'assets/[name]-[hash]',
   assetNames: 'assets/[name]-[hash]',
   publicPath: '/',
-  splitting: true,
   metafile: true,
   logLevel: 'info',
-  define: { ...shared.define, __MEMOBRAIN_WORKER__: JSON.stringify(worker.url) },
   plugins: dev ? [...base.plugins, html, reload] : [...base.plugins, html],
 };
+const builds = [
+  { ...common, entryPoints: { main: join(root, 'src/main.tsx') }, splitting: false },
+  {
+    ...common,
+    entryPoints: { workbench: join(root, 'src/workbench/main.tsx') },
+    splitting: true,
+    define: {
+      ...shared.define,
+      __MEMOBRAIN_WORKER__: JSON.stringify(worker.url),
+      __MEMOBRAIN_WORKER_INTEGRITY__: JSON.stringify(worker.integrity),
+    },
+  },
+];
 
 if (dev) {
   await writeFile(
     join(dist, 'dev-reload.js'),
     "new EventSource('/esbuild').addEventListener('change', () => location.reload());\n",
   );
-  const app = await esbuild.context(options);
-  await app.rebuild(); // dist/index.html must exist before the first request
-  await app.watch();
+  for (const options of builds) {
+    const app = await esbuild.context(options);
+    await app.rebuild(); // dist/index.html must exist before the first request
+    await app.watch();
+  }
   await serve(port);
   console.log(`Local: http://127.0.0.1:${port}/`);
 } else {
-  checkBudget((await esbuild.build(options)).metafile, worker.metafile, sizes);
+  const outputs = {};
+  for (const options of builds)
+    Object.assign(outputs, (await esbuild.build(options)).metafile.outputs);
+  checkBudget({ outputs }, worker.metafile, sizes);
 }

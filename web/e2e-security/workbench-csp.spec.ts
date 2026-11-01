@@ -14,6 +14,8 @@ test('the workbench boots under the production policy, with no violation and no 
   const foreign: string[] = [];
   const pageErrors: string[] = [];
   const wasm: { url: string; encoding: string | undefined; type: string | undefined }[] = [];
+  const workers: string[] = [];
+  page.on('worker', (w) => workers.push(w.url()));
   page.on('console', (m) => {
     if (/content security policy|refused to/i.test(m.text())) violations.push(m.text());
   });
@@ -35,7 +37,8 @@ test('the workbench boots under the production policy, with no violation and no 
   expect(csp).toContain("style-src 'self' 'unsafe-inline'");
   expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'");
   expect(csp.replace('wasm-unsafe-eval', '')).not.toContain('unsafe-eval');
-  expect(csp).toContain("worker-src 'self'");
+  // blob: only for the core's worker, started from the bytes the page checked with SRI.
+  expect(csp).toContain("worker-src 'self' blob:;");
   expect(csp).toContain("frame-ancestors 'none'");
   expect(response?.headers()['x-frame-options']).toBe('DENY');
 
@@ -86,9 +89,27 @@ test('the workbench boots under the production policy, with no violation and no 
     expect(w.type).toBe('application/wasm');
     expect(w.encoding).toBe('gzip');
   }
+  // The core runs in a worker started from a blob: of its SRI-checked script, never from its URL.
+  expect(workers.some((u) => u.startsWith('blob:'))).toBe(true);
+  expect(workers.filter((u) => /core-worker/.test(u))).toEqual([]);
   expect(violations).toEqual([]);
   expect(foreign).toEqual([]);
   expect(pageErrors).toEqual([]);
+});
+
+test('a tampered core worker script never runs', async ({ page }) => {
+  test.setTimeout(120_000);
+  // Same bytes plus one statement: what a compromised cache or CDN in front of the cloud could serve.
+  await page.route(/\/assets\/core-worker-[^/]+\.js$/, async (route) => {
+    const original = await route.fetch();
+    await route.fulfill({ response: original, body: (await original.text()) + '\n;0;' });
+  });
+  const workers: string[] = [];
+  page.on('worker', (w) => workers.push(w.url()));
+  await page.goto(`${ORIGIN}/vaults/tampered/open?local`);
+  await expect(page.locator('body')).toContainText(/core-worker[^ ]*\.js/, { timeout: 60_000 });
+  expect(workers).toEqual([]);
+  await expect(page.locator('header.titlebar .title')).toHaveCount(0);
 });
 
 test('the console page keeps the strict policy next to it', async ({ page }) => {

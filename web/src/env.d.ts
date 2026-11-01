@@ -6,6 +6,8 @@ declare module '*.css';
 declare const __MEMOBRAIN_CORE__: unknown;
 /** URL of the bundled worker that runs the core (scripts/esbuild.mjs). */
 declare const __MEMOBRAIN_WORKER__: string;
+/** SHA-384 of that bundle (Subresource Integrity), checked before the worker starts (bridge.ts). */
+declare const __MEMOBRAIN_WORKER_INTEGRITY__: string;
 /** Version stamped by the build. */
 declare const __MEMOBRAIN_VERSION__: string;
 /** Go's loader for the core (build/wasm/wasm_exec.js, produced by `task wasm-core`). */

@@ -13,7 +13,14 @@ import {
   type SqliteStatement,
 } from '@memobrain/sqlite-bridge';
 import { installOpfsFs, segments, type OpfsFs } from './opfs-fs';
-import type { CoreAssets, CoreConfig, FromWorker, HostRequest, ToWorker } from './protocol';
+import type {
+  AssetRef,
+  CoreAssets,
+  CoreConfig,
+  FromWorker,
+  HostRequest,
+  ToWorker,
+} from './protocol';
 
 /** The worker's global scope (the DOM lib types `self` as a Window). */
 const scope = globalThis as unknown as {
@@ -139,6 +146,9 @@ async function installSqlite(assets: CoreAssets): Promise<void> {
   const sqlite3 = await init({
     // The loader would fetch sqlite3.wasm next to itself; the bytes are already here, checked.
     wasmBinary: new Uint8Array(wasm),
+    // Only names the file: without it the loader resolves it against import.meta.url, which a blob:
+    // worker cannot serve as a base. The bytes above are what gets compiled.
+    locateFile: (file: string) => file,
     print: (...a: unknown[]) => console.log('[sqlite]', ...a),
     printErr: (...a: unknown[]) => console.warn('[sqlite]', ...a),
   });
@@ -185,8 +195,17 @@ async function installSqlite(assets: CoreAssets): Promise<void> {
   );
 }
 
-async function fetchChecked(ref: { url: string; integrity: string }): Promise<Response> {
-  const res = await fetch(ref.url, ref.integrity ? { integrity: ref.integrity } : {});
+/**
+ * Fetches a WebAssembly file with the Subresource Integrity the build recorded. A missing hash is a
+ * broken build, not a reason to skip the check: only E2E builds (a build-time constant, compiled out
+ * of production) may load an unpinned file. URLs are resolved against the origin because the worker
+ * runs from a blob: URL (bridge.ts), which cannot serve as a base.
+ */
+async function fetchChecked(ref: AssetRef): Promise<Response> {
+  if (!ref.integrity && !import.meta.env.MEMOBRAIN_E2E)
+    throw new Error(`refusing to load ${ref.url} without its integrity hash`);
+  const url = new URL(ref.url, location.origin).href;
+  const res = await fetch(url, ref.integrity ? { integrity: ref.integrity } : {});
   if (!res.ok) throw new Error(`cannot load ${ref.url}: HTTP ${res.status}`);
   return res;
 }
