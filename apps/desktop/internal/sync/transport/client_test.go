@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -177,6 +178,36 @@ func TestProblemDecoding(t *testing.T) {
 	_, err = c.ListVaults(context.Background())
 	if !errors.As(err, &pe) || pe.StatusCode != http.StatusBadGateway || pe.Problem.Code != syncproto.CodeInternal || !strings.Contains(pe.Problem.Detail, "bad gateway") {
 		t.Fatalf("err: %#v", err)
+	}
+}
+
+func TestDeviceRevokedProblem(t *testing.T) {
+	baseRev := 1
+	commit := syncproto.CommitRequest{DeviceID: "0190a0a0-0000-7000-8000-000000000004", Ops: []syncproto.Op{{OpID: "0190a0a0-0000-7000-8000-00000000000a", Op: syncproto.OpDelete, FileID: "0190a0a0-0000-7000-8000-00000000000b", BaseRev: &baseRev}}}
+	vault := "0190a0a0-0000-7000-8000-000000000001"
+	for _, tc := range []struct {
+		name, body string
+		revoked    bool
+	}{
+		{"reason", `{"type":"x","title":"Forbidden","status":403,"code":"FORBIDDEN","detail":"device revoked","extra":{"reason":"device_revoked"}}`, true},
+		{"older server, detail only", `{"type":"x","title":"Forbidden","status":403,"code":"FORBIDDEN","detail":"device revoked"}`, true},
+		{"another refusal", `{"type":"x","title":"Forbidden","status":403,"code":"FORBIDDEN","detail":"not an editor of the vault"}`, false},
+		{"suspended user", `{"type":"x","title":"Forbidden","status":403,"code":"USER_SUSPENDED","detail":"device revoked"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeServer{handlers: []func(*http.Request) *http.Response{reply(http.StatusForbidden, "application/problem+json", tc.body)}}
+			c := newTestClient(t, f)
+			_, err := c.Commit(context.Background(), vault, commit)
+			if err == nil {
+				t.Fatal("commit accepted")
+			}
+			if got := IsDeviceRevoked(fmt.Errorf("push: %w", err)); got != tc.revoked {
+				t.Fatalf("IsDeviceRevoked = %v, want %v (%v)", got, tc.revoked, err)
+			}
+			if !tc.revoked && errors.Is(err, ErrDeviceRevoked) {
+				t.Fatal("errors.Is matched")
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { useAppStore } from '../state/store';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
+import { reregisterDevice } from '../sync/DeviceRevokedBanner';
 import { Icon } from './icons';
 
 /** "Ada Lovelace" -> "AL"; a single word gives its first two letters. */
@@ -69,15 +70,24 @@ export function AccountButton() {
   }
 
   const name = auth?.profile.displayName || auth?.profile.username || '';
-  const disconnected = status === 'disconnected';
+  const revoked = status === 'device_revoked';
+  const disconnected = status === 'disconnected' || revoked;
   const items: MenuItem[] = [
     { label: name, disabled: true, onSelect: () => undefined },
     ...(auth?.profile.email
       ? [{ label: auth.profile.email, disabled: true, onSelect: () => undefined }]
       : []),
-    ...(disconnected
-      ? [{ label: t('account.reconnect'), separator: true, onSelect: () => void login() }]
-      : []),
+    ...(revoked
+      ? [
+          {
+            label: t('deviceRevoked.reregister'),
+            separator: true,
+            onSelect: () => void reregisterDevice(setAuth),
+          },
+        ]
+      : disconnected
+        ? [{ label: t('account.reconnect'), separator: true, onSelect: () => void login() }]
+        : []),
     {
       label: t('account.manage'),
       separator: !disconnected,
@@ -88,7 +98,11 @@ export function AccountButton() {
       onSelect: () => void api.auth.logout().then(setAuth),
     },
   ];
-  const label = disconnected ? t('cloud.disconnected', { name }) : name;
+  const label = revoked
+    ? t('cloud.deviceRevoked', { name })
+    : disconnected
+      ? t('cloud.disconnected', { name })
+      : name;
   return (
     <>
       <button

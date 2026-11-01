@@ -346,6 +346,13 @@ func TestTransportHonoursTheContract(t *testing.T) {
 	if res.Results[0].Status != syncproto.StatusConflict || res.Results[0].Code != syncproto.CodeRevConflict {
 		t.Fatalf("conflict: %+v", res)
 	}
+	// The revoked device: a FORBIDDEN problem the client recognises (extra.reason), whole request refused.
+	_, err = ada.Commit(ctx, vid, syncproto.CommitRequest{DeviceID: spare.Id.String(), Ops: []syncproto.Op{
+		{OpID: uuid.NewString(), Op: syncproto.OpModify, FileID: fileID, BaseRev: &base, BlobHash: hash, Size: int64(len(content))},
+	}})
+	if !transport.IsCode(err, syncproto.CodeForbidden) || !transport.IsDeviceRevoked(err) {
+		t.Fatalf("commit with a revoked device: %v", err)
+	}
 	// A well-formed request the server refuses: the problem document is validated too.
 	_, err = ada.Commit(ctx, vid, syncproto.CommitRequest{DeviceID: uuid.NewString(), Ops: []syncproto.Op{
 		{OpID: uuid.NewString(), Op: syncproto.OpDelete, FileID: fileID, BaseRev: &base},
@@ -424,6 +431,69 @@ func TestTransportHonoursTheContract(t *testing.T) {
 	carolGrant := []transport.NewGrant{{PrincipalType: apiclient.NewGrantPrincipalTypeUser, PrincipalId: carolMe.Id, Permission: apiclient.SharePermissionViewer}}
 	invite := must[transport.Share](t, "create share for carol")(ada.CreateShare(ctx, transport.CreateShare{VaultId: shared.Id, ResourceType: apiclient.ResourceTypeVault, DisplayName: "All", Grants: &carolGrant}))
 	must[transport.Share](t, "decline share")(carol.DeclineShare(ctx, invite.Id.String()))
+	// --- folder renames (§3.4.7, ADR-0040) ---
+	// A move_prefix renames the shared folder in one go (one move revision per
+	// file) and the share follows it, a case-only rename included; moving the
+	// last file out of the shared folder one by one is SHARE_ROOT_MOVE, and so
+	// is renaming the root from the mount.
+	movePrefix := func(what, from, to string) syncproto.OpResult {
+		res := must[syncproto.CommitResponse](t, what)(ada.Commit(ctx, vid, syncproto.CommitRequest{DeviceID: dev.Id.String(), Ops: []syncproto.Op{
+			{OpID: uuid.NewString(), Op: syncproto.OpMovePrefix, From: from, To: to},
+		}}))
+		return res.Results[0]
+	}
+	sharePrefix := func() string {
+		s := must[transport.Share](t, "get share")(ada.GetShare(ctx, sid))
+		if s.PathPrefix == nil {
+			return ""
+		}
+		return *s.PathPrefix
+	}
+	before := must[transport.Changes](t, "changes before move_prefix")(ada.GetChanges(ctx, vid, 0, 500)).NextSeq
+	if r := movePrefix("move_prefix", "Docs", "Papers"); r.Status != syncproto.StatusAccepted {
+		t.Fatalf("move_prefix: %+v", r)
+	}
+	if p := sharePrefix(); p != "Papers" {
+		t.Fatalf("share prefix after move_prefix: %q", p)
+	}
+	if r := movePrefix("case-only move_prefix", "Papers", "papers"); r.Status != syncproto.StatusAccepted {
+		t.Fatalf("case-only move_prefix: %+v", r)
+	}
+	if p := sharePrefix(); p != "papers" {
+		t.Fatalf("share prefix after the case-only rename: %q", p)
+	}
+	moves := must[transport.Changes](t, "changes after move_prefix")(ada.GetChanges(ctx, vid, before, 500))
+	if len(moves.Items) != 4 {
+		t.Fatalf("changes after two folder renames of two files: %+v", moves.Items)
+	}
+	for _, c := range moves.Items {
+		if c.Op != "move" || c.PrevPath == "" || !strings.HasPrefix(c.Path, "Papers/") && !strings.HasPrefix(c.Path, "papers/") {
+			t.Fatalf("folder rename change: %+v", c)
+		}
+	}
+	if r := movePrefix("move_prefix of nothing", "Nowhere", "Elsewhere"); r.Status != syncproto.StatusRejected || r.Code != syncproto.CodeNotFound {
+		t.Fatalf("move_prefix of an empty folder: %+v", r)
+	}
+	current := map[string]int{}
+	for _, it := range must[transport.Tree](t, "tree after move_prefix")(ada.GetTree(ctx, vid)).Items {
+		current[it.FileID] = it.Rev
+	}
+	bigRev, planRev := current[bigID], current[fileID]
+	res = must[syncproto.CommitResponse](t, "moves out of the shared folder")(ada.Commit(ctx, vid, syncproto.CommitRequest{DeviceID: dev.Id.String(), Ops: []syncproto.Op{
+		{OpID: uuid.NewString(), Op: syncproto.OpMove, FileID: bigID, BaseRev: &bigRev, Path: "big.bin"},
+		{OpID: uuid.NewString(), Op: syncproto.OpMove, FileID: fileID, BaseRev: &planRev, Path: "plan.md"},
+	}}))
+	if res.Results[0].Status != syncproto.StatusAccepted || res.Results[1].Status != syncproto.StatusRejected || res.Results[1].Code != syncproto.CodeShareRootMove {
+		t.Fatalf("moving the last file out of the shared folder: %+v", res.Results)
+	}
+	bobDev := must[transport.Device](t, "register bob")(bob.RegisterDevice(ctx, transport.DeviceRegistration{Name: "bob laptop", Platform: apiclient.Linux}))
+	res = must[syncproto.CommitResponse](t, "move_prefix of the mount root")(bob.Commit(ctx, ref, syncproto.CommitRequest{DeviceID: bobDev.Id.String(), Ops: []syncproto.Op{
+		{OpID: uuid.NewString(), Op: syncproto.OpMovePrefix, To: "Renamed"},
+	}}))
+	if res.Results[0].Status != syncproto.StatusRejected || res.Results[0].Code != syncproto.CodeShareRootMove {
+		t.Fatalf("renaming the root from the mount: %+v", res.Results)
+	}
+
 	check(t, "revoke share", ada.RevokeShare(ctx, sid))
 	_, err = bob.GetTree(ctx, ref)
 	wantCode(t, "revoked share", err, syncproto.CodeNotFound)

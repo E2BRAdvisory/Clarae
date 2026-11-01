@@ -20,6 +20,9 @@ type LinkResult struct {
 	CloudVaultID string `json:"cloudVaultId"`
 	// RecoveryKey is set for private vaults and shown to the user exactly once.
 	RecoveryKey string `json:"recoveryKey"`
+	// Warning, when set, is one of the Warn* codes: the link succeeded with
+	// a limitation the user should be told about.
+	Warning string `json:"warning,omitempty"`
 }
 
 // Info returns the cloud connection of a vault.
@@ -56,11 +59,22 @@ func (m *Manager) Status(ctx context.Context, localID string) (Status, error) {
 	if eng == nil {
 		return Status{VaultID: localID, Phase: PhaseIdle}, nil
 	}
-	st := eng.Status()
-	if _, ok := m.session.Info(); !ok && st.Phase == PhaseIdle {
-		st.Phase, st.Error = PhaseOffline, "signed out of the cloud"
+	return m.view(eng.Status()), nil
+}
+
+// view is an engine status as the UI must read it: while signed out an idle
+// engine is offline, and while the device is revoked every engine says so (a
+// cycle cancelled by the stop would otherwise end on a plain idle).
+func (m *Manager) view(st Status) Status {
+	if info, ok := m.session.Info(); !ok {
+		switch {
+		case info.DeviceRevoked:
+			st = revokedView(st)
+		case st.Phase == PhaseIdle:
+			st.Phase, st.Error = PhaseOffline, "signed out of the cloud"
+		}
 	}
-	return st, nil
+	return st
 }
 
 func (m *Manager) client() (*transport.Client, SessionInfo, error) {
@@ -89,6 +103,14 @@ func (m *Manager) saveLink(ctx context.Context, mv *managed, v transport.Vault, 
 // Link creates a cloud vault for the local one and starts the first upload.
 // kind is "shared" or "private"; private vaults need a passphrase and return
 // the recovery key. The kind cannot be changed afterwards (D-02).
+//
+// Once a private vault exists on the server its recovery key is the only
+// way back to the data if the passphrase is forgotten, so it is never
+// dropped: a keychain that cannot store the key only makes the unlock last
+// for this session (Warning), and a step that fails before the link is saved
+// deletes the server vault again. Should that delete fail too, Link still
+// succeeds with the recovery key and the server vault left unlinked
+// (WarnLinkIncomplete): the folder can be connected to it later.
 func (m *Manager) Link(ctx context.Context, localID, name, kind, passphrase string) (LinkResult, error) {
 	mv, err := m.get(localID)
 	if err != nil {
@@ -106,35 +128,80 @@ func (m *Manager) Link(ctx context.Context, localID, name, kind, passphrase stri
 	var mat crypto.Material
 	switch kind {
 	case "shared":
-		v, err = c.CreateVault(ctx, name, "shared", nil)
+		if v, err = c.CreateVault(ctx, name, "shared", nil); err != nil {
+			return LinkResult{}, err
+		}
 	case "private":
 		if mat, err = m.crypto.NewMaterial(passphrase); err != nil {
 			return LinkResult{}, err
 		}
+		// Adopt copies the VMK and UpgradeMaterial runs before Link returns:
+		// the material's keys are not needed past this call.
+		defer mat.Wipe()
 		if v, err = c.CreateVault(ctx, name, "private", mat.Envelopes); err != nil {
-			return LinkResult{}, err
-		}
-		if err = m.crypto.Adopt(v.Id.String(), mat); err != nil {
 			return LinkResult{}, err
 		}
 		res.RecoveryKey = mat.RecoveryKey
 	default:
 		return LinkResult{}, fmt.Errorf("unknown vault kind %q", kind)
 	}
-	if err != nil {
-		return LinkResult{}, err
-	}
 	res.CloudVaultID = v.Id.String()
+	if kind == "private" {
+		if err := m.crypto.Adopt(res.CloudVaultID, mat); err != nil {
+			if m.crypto.IsLocked(res.CloudVaultID) {
+				return m.undoLink(ctx, c, res, err)
+			}
+			// The key is active in memory, only the keychain refused it:
+			// the vault works now and asks for the passphrase next start.
+			m.log.Warn().Err(err).Str("vault", localID).Msg("sync: vault key not saved in the keychain")
+			res.Warning = WarnKeychainUnavailable
+		}
+	}
 	if err := m.saveLink(ctx, mv, v, info); err != nil {
-		return res, err
+		if kind == "private" {
+			_ = m.crypto.Forget(res.CloudVaultID)
+		}
+		return m.undoLink(ctx, c, res, err)
 	}
 	if kind == "private" && m.crypto.EnvelopeV2() {
-		m.upgradeNewVaultEnvelopes(ctx, mv, c, v.Id.String(), mat)
+		m.upgradeNewVaultEnvelopes(ctx, mv, c, res.CloudVaultID, mat)
 	}
 	if err := m.activate(ctx, mv); err != nil {
-		return res, err
+		if res.RecoveryKey == "" {
+			return res, err
+		}
+		// The link is saved and activated again at the next start: the
+		// recovery key, shown only now, matters more than this error.
+		m.log.Error().Err(err).Str("vault", localID).Msg("sync: start after link")
+		return res, nil
 	}
 	m.kickNow(mv)
+	return res, nil
+}
+
+// Warnings of a LinkResult.
+const (
+	// WarnKeychainUnavailable: the vault key could not be kept in the OS
+	// keychain; the vault is unlocked for this session only.
+	WarnKeychainUnavailable = "keychain-unavailable"
+	// WarnLinkIncomplete: the private vault exists on the server but this
+	// folder could not be linked to it; connect it with LinkExisting.
+	WarnLinkIncomplete = "link-incomplete"
+)
+
+// undoLink deletes the cloud vault Link has just created after a later step
+// failed (cause). A private vault the server keeps anyway is reported with its
+// recovery key instead of the error, so the key is never lost.
+func (m *Manager) undoLink(ctx context.Context, c *transport.Client, res LinkResult, cause error) (LinkResult, error) {
+	derr := c.DeleteVault(context.WithoutCancel(ctx), res.CloudVaultID)
+	if derr == nil {
+		return LinkResult{}, cause
+	}
+	m.log.Error().Err(cause).AnErr("rollback", derr).Str("cloudVault", res.CloudVaultID).Msg("sync: link failed and the new cloud vault could not be deleted")
+	if res.RecoveryKey == "" {
+		return LinkResult{}, cause
+	}
+	res.Warning = WarnLinkIncomplete
 	return res, nil
 }
 
@@ -240,14 +307,25 @@ func (m *Manager) SetPollInterval(ctx context.Context, localID string, seconds i
 	return nil
 }
 
-// SyncNow requests an immediate synchronization.
+// SyncNow requests an immediate synchronization that sees the disk as it is
+// now: a cycle whose scan starts after the call (Engine.RequestScan). Until it
+// has completed the status says syncing, never a stale idle. Requests made while
+// a cycle runs coalesce: at most one more cycle follows, and none when a later
+// round of the running cycle already scanned. A revoked device does not sync.
 func (m *Manager) SyncNow(localID string) error {
 	mv, err := m.linked(localID)
 	if err != nil {
 		return err
 	}
+	if info, ok := m.session.Info(); !ok && info.DeviceRevoked {
+		return ErrDeviceRevoked
+	}
+	mv.engine.RequestScan()
 	m.startLoop(mv.managed)
-	m.kickNow(mv.managed)
+	select {
+	case mv.req <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -277,9 +355,15 @@ func (m *Manager) Unlock(ctx context.Context, localID, secret string, recovery b
 	if err != nil {
 		return false, err
 	}
+	wasLocked := m.crypto.IsLocked(mv.cloudID)
 	res, err := m.crypto.UnlockWith(mv.cloudID, envs, secret, recovery, crypto.UnlockOptions{PinnedV2: m.envelopePins(ctx, mv.managed, mv.cloudID)})
 	if err != nil {
-		return false, err
+		if !wasLocked || m.crypto.IsLocked(mv.cloudID) {
+			return false, err
+		}
+		// Unlocked in memory, only the keychain refused the key: the vault
+		// works for this session and asks again at the next start.
+		m.log.Warn().Err(err).Str("vault", localID).Msg("sync: vault key not saved in the keychain")
 	}
 	if res.Version == 2 {
 		m.pinEnvelopeV2(ctx, mv.managed, mv.cloudID, res.Kind)
@@ -727,7 +811,7 @@ func (m *Manager) History(ctx context.Context, localID, path string) ([]Revision
 	for _, r := range revs {
 		p := r.Path
 		if mv.engine.cfg.Cipher != nil {
-			if dec, err := mv.engine.cfg.Cipher.DecryptPath(r.Path); err == nil {
+			if dec, err := mv.engine.cfg.Cipher.DecryptFilePath(row.FileID, r.Path); err == nil { // enc1 or enc2 (ADR-0042)
 				p = dec
 			} else {
 				p = ""

@@ -60,14 +60,37 @@ func (e *ProblemError) Error() string {
 	return fmt.Sprintf("%s (%d)", e.Problem.Code, e.StatusCode)
 }
 
-// Is lets callers match on the application code: errors.Is(err, CodeError(syncproto.CodeNotFound)).
+// Is lets callers match on the application code: errors.Is(err, CodeError(syncproto.CodeNotFound)),
+// and on a revoked device: errors.Is(err, ErrDeviceRevoked).
 func (e *ProblemError) Is(target error) bool {
+	if target == ErrDeviceRevoked {
+		return e.deviceRevoked()
+	}
 	var ce CodeError
 	if errors.As(target, &ce) {
 		return e.Problem.Code == syncproto.Code(ce)
 	}
 	return false
 }
+
+// ErrDeviceRevoked matches the cloud's answer to a commit sent with a device
+// that was revoked from the device list (the console, another device): a
+// FORBIDDEN problem with extra.reason "device_revoked". Servers that predate
+// the reason say so in the detail only ("device revoked").
+var ErrDeviceRevoked = errors.New("this device was revoked")
+
+func (e *ProblemError) deviceRevoked() bool {
+	if e.Problem.Code != syncproto.CodeForbidden {
+		return false
+	}
+	if r, _ := e.Problem.Extra["reason"].(string); r == syncproto.ReasonDeviceRevoked {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(e.Problem.Detail), "device revoked")
+}
+
+// IsDeviceRevoked reports whether err says that the device id used is revoked.
+func IsDeviceRevoked(err error) bool { return errors.Is(err, ErrDeviceRevoked) }
 
 // CodeError is a sentinel for matching ProblemError codes with errors.Is.
 type CodeError syncproto.Code

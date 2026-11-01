@@ -36,3 +36,12 @@ func (x *AuthAPI) Logout() (auth.State, error) {
 	err := x.app.auth.Logout(context.Background())
 	return x.app.auth.State(), err
 }
+
+// ReregisterDevice replaces a device the cloud refuses as revoked with a new registration of the
+// same account, then synchronization resumes and sends what waited meanwhile (nothing local is
+// lost). When the account itself is no longer signed in, the state becomes signed_out and Login
+// signs in again, which registers a new device as well.
+func (x *AuthAPI) ReregisterDevice() (auth.State, error) {
+	err := x.app.auth.ReregisterDevice(context.Background())
+	return x.app.auth.State(), bindingError(err)
+}

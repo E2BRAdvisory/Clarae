@@ -29,6 +29,9 @@ type SessionInfo struct {
 	UserID       string
 	DeviceName   string
 	GRPCEndpoint string
+	// DeviceRevoked is set, with Info answering "not signed in", while the
+	// account is signed in but the cloud refuses its device as revoked.
+	DeviceRevoked bool
 }
 
 // Session is the cloud login as the manager sees it (implemented over auth.Service).
@@ -61,6 +64,9 @@ type Hooks struct {
 	// BeforeOverwrite is called before a merge replaces local content that the
 	// server does not have, so the application can snapshot it (local history).
 	BeforeOverwrite func(localVaultID, path string)
+	// DeviceRevoked is called when the cloud refuses a commit because the device
+	// it was sent with is revoked; every engine using it has been stopped.
+	DeviceRevoked func(deviceID string)
 }
 
 // SetManagedPoll sets the polling interval distributed by the administrator (0 = none).
@@ -89,6 +95,11 @@ func (m *Manager) SetLockTimeout(d time.Duration) { m.crypto.SetLockTimeout(d) }
 // features.envelope_v2): at creation, on passphrase or recovery key changes
 // and as an upgrade after an unlock.
 func (m *Manager) SetEnvelopeV2(on bool) { m.crypto.SetEnvelopeV2(on) }
+
+// SetPathV2 switches the writing of enc2 path tokens, bound to their file
+// (ADR-0042, features.path_v2). A vault already pinned to enc2 keeps writing
+// enc2 whatever the flag.
+func (m *Manager) SetPathV2(on bool) { m.crypto.SetPathV2(on) }
 
 // idleLockInterval is how often idle private vaults are looked for.
 const idleLockInterval = 30 * time.Second
@@ -141,6 +152,9 @@ type Manager struct {
 	maxFile atomic.Int64
 	// remoteFor builds the server side of an engine (tests replace it; nil = the session's client).
 	remoteFor func(ref string) Remote
+	// reactivating serializes the rebuild of the engines after the session's
+	// device changed (see SessionChanged).
+	reactivating stdsync.Mutex
 }
 
 type managed struct {
@@ -150,6 +164,7 @@ type managed struct {
 	db      *DB
 	kick    chan struct{}
 	now     chan struct{} // immediate sync request (skips the debounce)
+	req     chan struct{} // SyncNow: a cycle with a fresh scan, unless one ran since (Engine.RequestScan)
 
 	// Guarded by Manager.mu: activate, Unlink and the loops change them
 	// concurrently with the UI calls (read them through linked/engineOf).
@@ -292,6 +307,15 @@ func (r sessionRemote) Commit(ctx context.Context, req syncproto.CommitRequest) 
 	return
 }
 
+// FolderShareRoots implements FolderShareRooter.
+func (r sessionRemote) FolderShareRoots(ctx context.Context) ([]string, error) {
+	c := r.m.session.Client()
+	if c == nil {
+		return nil, errSignedOut
+	}
+	return HTTPRemote{C: c, Vault: r.vault}.FolderShareRoots(ctx)
+}
+
 // Attach opens the vault's sync state and, when the vault is linked and the
 // user is signed in, starts synchronizing it.
 func (m *Manager) Attach(ctx context.Context, localID string, fs *vault.FS) error {
@@ -299,7 +323,7 @@ func (m *Manager) Attach(ctx context.Context, localID string, fs *vault.FS) erro
 	if err != nil {
 		return err
 	}
-	mv := &managed{localID: localID, fs: fs, sdb: sdb, db: NewDB(sdb), kick: make(chan struct{}, 1), now: make(chan struct{}, 1)}
+	mv := &managed{localID: localID, fs: fs, sdb: sdb, db: NewDB(sdb), kick: make(chan struct{}, 1), now: make(chan struct{}, 1), req: make(chan struct{}, 1)}
 	m.mu.Lock()
 	old := m.vaults[localID]
 	var oldDone <-chan struct{}
@@ -347,12 +371,21 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		if userID == "" {
 			userID = info.UserID
 		}
+		if m.sessionDeviceApplies(ctx, mv, info, deviceID, userID) {
+			// The account registered a new device (after a revocation, or at a new
+			// sign-in): the vault commits with it from now on. Only commits carry the
+			// device id, so nothing else changes; the outbox goes out with it.
+			deviceID = info.DeviceID
+			if err := mv.db.SetMeta(ctx, MetaDeviceID, deviceID); err != nil {
+				m.log.Warn().Err(err).Msg("sync: record the new device id")
+			}
+		}
 	}
 	cfg := Config{
 		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: m.remote(transport.Ref(cloud, mount.Scope)),
 		ReadOnly: isMount && mount.Permission == PermViewer,
 		DeviceID: deviceID, DeviceName: name, UserID: userID, Logger: m.log.With().Str("vault", mv.localID).Logger(),
-		OnStatus:     func(s Status) { m.emit(EventStatus, s) },
+		OnStatus:     func(s Status) { m.emit(EventStatus, m.view(s)) },
 		OnConflict:   func(c Conflict) { m.emit(EventConflict, map[string]any{"vaultId": mv.localID, "conflict": c}) },
 		MaxFileBytes: m.maxFileBytes,
 		BeforeOverwrite: func(path string) {
@@ -379,9 +412,81 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 	return nil
 }
 
+// sessionDeviceApplies reports whether a vault linked with deviceID by userID
+// should commit with the session's device instead: same account, same server,
+// another device. A vault linked on another server or by another account keeps
+// its own.
+func (m *Manager) sessionDeviceApplies(ctx context.Context, mv *managed, info SessionInfo, deviceID, userID string) bool {
+	if info.DeviceID == "" || deviceID == info.DeviceID || userID != info.UserID {
+		return false
+	}
+	server, _ := mv.db.Meta(ctx, MetaServerURL)
+	return server == "" || server == info.ServerURL
+}
+
+// staleDevice reports whether the engine of a vault commits with a device the
+// session has replaced (see sessionDeviceApplies).
+func (m *Manager) staleDevice(ctx context.Context, mv *managed, info SessionInfo) bool {
+	eng := m.engineOf(mv)
+	if eng == nil {
+		return false
+	}
+	userID, _ := mv.db.Meta(ctx, MetaUserID)
+	if userID == "" {
+		userID = info.UserID
+	}
+	return m.sessionDeviceApplies(ctx, mv, info, eng.DeviceID(), userID)
+}
+
+// reactivate rebuilds the engine of a vault whose device was replaced, so it
+// commits with the new one. It runs on its own goroutine: SessionChanged may be
+// called from inside a sync cycle (a token refresh), which activate waits for.
+func (m *Manager) reactivate(mv *managed) {
+	m.reactivating.Lock()
+	defer m.reactivating.Unlock()
+	m.mu.Lock()
+	ctx, current := m.appCtx, m.vaults[mv.localID] == mv
+	m.mu.Unlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	info, ok := m.session.Info()
+	if !current || !ok || !m.staleDevice(ctx, mv, info) {
+		return
+	}
+	if err := m.activate(ctx, mv); err != nil {
+		m.log.Warn().Err(err).Str("vault", mv.localID).Msg("sync: restart with the new device")
+	}
+}
+
+// deviceRevoked stops every engine that commits with the revoked device (all of
+// them, normally: they share the session's device) and tells the application,
+// which moves the session to device_revoked. Nothing local is touched: files,
+// sync.db and the outbox stay as they are and go out once the device is
+// registered again (SessionChanged then restarts the engines with the new id).
+func (m *Manager) deviceRevoked(id string) {
+	m.mu.Lock()
+	var stopped []*Engine
+	for _, v := range m.vaults {
+		if v.engine != nil && v.engine.DeviceID() == id {
+			m.stopLocked(v) // called from a loop: never wait here
+			stopped = append(stopped, v.engine)
+		}
+	}
+	hook := m.hooks.DeviceRevoked
+	m.mu.Unlock()
+	m.log.Warn().Str("device", id).Int("vaults", len(stopped)).Msg("sync: the cloud refuses this device as revoked; synchronization stopped")
+	for _, eng := range stopped {
+		m.emit(EventStatus, revokedView(eng.Status())) // the session may not say "revoked" yet: the hook below does
+	}
+	if hook != nil {
+		hook(id)
+	}
+}
+
 func (m *Manager) publish(mv *managed) {
 	if eng := m.engineOf(mv); eng != nil {
-		m.emit(EventStatus, eng.Status())
+		m.emit(EventStatus, m.view(eng.Status()))
 		return
 	}
 	m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseIdle, Kind: ""})
@@ -470,17 +575,32 @@ func (m *Manager) SessionChanged() {
 	ctx := m.appCtx
 	m.mu.Unlock()
 	for _, mv := range vs {
-		if ok {
+		switch {
+		case ok && m.staleDevice(ctx2(ctx), mv, info):
+			go m.reactivate(mv) // a new device: a new engine, which starts its loop
+		case ok:
 			m.startLoop(mv)
-		} else {
+		default:
 			m.mu.Lock()
 			m.stopLocked(mv) // the same engine restarts at sign-in: no need to wait
-			kind := mv.kind
+			kind, eng := mv.kind, mv.engine
 			m.mu.Unlock()
+			if info.DeviceRevoked {
+				m.emit(EventStatus, revokedView(eng.Status()))
+				continue
+			}
 			m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseOffline, Kind: kind, Error: "signed out of the cloud"})
 		}
 	}
 	m.restartNotifier(ctx, info, ok)
+}
+
+// ctx2 is ctx, or a background context before Start.
+func ctx2(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 func (m *Manager) restartNotifier(ctx context.Context, info SessionInfo, signedIn bool) {
@@ -679,6 +799,10 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 				}
 			}
 		case <-mv.now:
+		case <-mv.req:
+			if !eng.ScanDue() {
+				continue // a cycle scanned after the request already: nothing to add
+			}
 		}
 		err := eng.Sync(ctx)
 		var wait time.Duration
@@ -711,6 +835,9 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 		case errors.Is(err, ErrPaused):
 			wait = maxPoll // resume kicks the loop
 		case errors.Is(err, context.Canceled):
+			return
+		case transport.IsDeviceRevoked(err):
+			m.deviceRevoked(eng.DeviceID())
 			return
 		case scope != "" && isRevocation(err):
 			m.markRevoked(ctx, mv)
