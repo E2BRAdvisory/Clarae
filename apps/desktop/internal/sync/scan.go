@@ -40,6 +40,9 @@ func newFileID() string { return uuid.Must(uuid.NewV7()).String() }
 // content shows up (a rename), and unknown files become new ones.
 func (e *Engine) scan(ctx context.Context) error {
 	started := e.cfg.Now()
+	e.mu.Lock()
+	e.scans++
+	e.mu.Unlock()
 	files, err := e.walkLocal()
 	if err != nil {
 		return err
@@ -164,6 +167,16 @@ func (e *Engine) scan(ctx context.Context) error {
 				r.State = StateLocalMoved
 			case StateLocalModify:
 				r.State, r.Dirty = StateLocalMoved, true
+			}
+			if r.State == StateLocalMoved {
+				// A new destination is a new attempt (a move parked by the
+				// server, e.g. SHARE_ROOT_MOVE, is tried again), and a file
+				// moved back where the server has it is no move any more
+				// (an edit made meanwhile is still sent).
+				r.Attempts, r.LastError = 0, ""
+				if r.MovedFrom == r.Path {
+					settleMoved(&r)
+				}
 			}
 			if err := e.cfg.DB.PutFile(ctx, r); err != nil {
 				return err

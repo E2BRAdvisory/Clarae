@@ -14,17 +14,85 @@ import (
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/apps/desktop/internal/vault"
 	"memobrain/shared/syncproto"
+	"memobrain/shared/vaultcrypto"
 )
 
 type transportChange = transport.Change
 
-// clearPath turns a server path into the local one (decrypting tokens in
-// private vaults).
-func (e *Engine) clearPath(serverPath string) (string, error) {
+// ErrPathDowngrade means the server sent an enc1 path token for a file this
+// device has already seen with an enc2 token (ADR-0042): enc1 is not bound to
+// the file, so it may be the token of another file of the vault.
+var ErrPathDowngrade = errors.New("the server path of this file is in an older format than this device has already seen")
+
+// Path-token pins in sync.db (ADR-0042), trust on first use like the
+// envelope pins of ADR-0034:
+//   - metaPathV2 marks a cloud vault whose tokens this device has seen (or
+//     written) in format enc2: new tokens stay enc2 even with
+//     features.path_v2 off, so a vault never goes back to enc1;
+//   - metaPathV2File marks one file: from then on an enc1 token for it is
+//     refused (ErrPathDowngrade). Files never seen in enc2 keep accepting
+//     enc1, which they legitimately use until they are moved.
+func metaPathV2(cloudID string) string { return "path_v2:" + cloudID }
+
+func metaPathV2File(fileID string) string { return "path_v2_file:" + fileID }
+
+// clearPath turns the server path of a file into the local one (decrypting
+// the token in private vaults, see the pins above).
+func (e *Engine) clearPath(ctx context.Context, fileID, serverPath string) (string, error) {
 	if e.cfg.Cipher == nil {
 		return serverPath, nil
 	}
-	return e.cfg.Cipher.DecryptPath(serverPath)
+	v := vaultcrypto.PathTokenVersion(serverPath)
+	if v == 1 {
+		if pinned, _ := e.cfg.DB.Meta(ctx, metaPathV2File(fileID)); pinned == "1" {
+			return "", ErrPathDowngrade
+		}
+	}
+	p, err := e.cfg.Cipher.DecryptFilePath(fileID, serverPath)
+	if err == nil && v == 2 {
+		e.pinPathV2(ctx, fileID)
+	}
+	return p, err
+}
+
+// pinPathV2 records that the file (and so the vault) has an enc2 token on
+// the server. Best effort: a pin that cannot be saved only weakens the
+// downgrade check, it never blocks the sync.
+func (e *Engine) pinPathV2(ctx context.Context, fileID string) {
+	if v, _ := e.cfg.DB.Meta(ctx, metaPathV2File(fileID)); v != "1" {
+		if err := e.cfg.DB.SetMeta(ctx, metaPathV2File(fileID), "1"); err != nil {
+			e.log.Warn().Err(err).Str("file_id", fileID).Msg("sync: pin path token format")
+		}
+	}
+	if e.pathV2Pinned {
+		return
+	}
+	cloud, _ := e.cfg.DB.Meta(ctx, MetaCloudVault)
+	if cloud == "" {
+		return
+	}
+	if err := e.cfg.DB.SetMeta(ctx, metaPathV2(cloud), "1"); err != nil {
+		e.log.Warn().Err(err).Msg("sync: pin path token format")
+		return
+	}
+	e.pathV2Pinned, e.pathPinLoaded = true, true
+}
+
+// writePathV2 decides the format of a new path token: enc2 when
+// features.path_v2 is on or the vault is pinned to enc2 (never downgrade),
+// enc1 otherwise, which every client can read.
+func (e *Engine) writePathV2(ctx context.Context) bool {
+	if e.cfg.Cipher.PathV2() {
+		return true
+	}
+	if !e.pathPinLoaded {
+		if cloud, _ := e.cfg.DB.Meta(ctx, MetaCloudVault); cloud != "" {
+			v, _ := e.cfg.DB.Meta(ctx, metaPathV2(cloud))
+			e.pathV2Pinned = v == "1"
+		}
+		e.pathPinLoaded = true
+	}
+	return e.pathV2Pinned
 }
 
 // fetch downloads a blob, verifies its digest and decrypts it when needed.
@@ -158,16 +226,29 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 		if err != nil {
 			return applied, err
 		}
-		for i, c := range ch.Items {
+		for i := 0; i < len(ch.Items); {
 			if err := ctx.Err(); err != nil {
 				return applied, err
 			}
+			// A folder renamed elsewhere: one directory rename (folders.go).
+			n, err := e.applyFolderMove(ctx, ch.Items[i:])
+			if err != nil {
+				return applied, fmt.Errorf("folder move at change %d: %w", ch.Items[i].Seq, err)
+			}
+			if n > 0 {
+				i += n
+				applied = true
+				e.progress(i, len(ch.Items))
+				continue
+			}
+			c := ch.Items[i]
 			did, err := e.applyChange(ctx, c)
 			if err != nil {
 				return applied, fmt.Errorf("change %d (%s %s): %w", c.Seq, c.Op, c.FileID, err)
 			}
 			applied = applied || did
-			e.progress(i+1, len(ch.Items))
+			i++
+			e.progress(i, len(ch.Items))
 		}
 		// The parked candidates of this page are saved with the cursor that
 		// moves past them: the server never sends them again (§3.4.4 B).
@@ -204,7 +285,7 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 	if c.Op == "delete" {
 		return e.applyDelete(ctx, row, has, c) // needs no path
 	}
-	path, err := e.clearPath(c.Path)
+	path, err := e.clearPath(ctx, c.FileID, c.Path)
 	if err != nil {
 		if e.isLocked(err) {
 			// The key went away during the cycle: stop here, before the cursor
@@ -221,6 +302,13 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 			return true, e.createFromRemote(ctx, c, path)
 		}
 		if row.State == StateSynced {
+			if row.Path == path && c.BlobHash != "" && c.BlobHash == row.ServerHash {
+				// The very blob this device holds: only the revision changes
+				// (e.g. the files of a mount whose share root was renamed,
+				// which "enter" the share again, §3.4.7).
+				row.ServerRev, row.BaseRev = c.Rev, c.Rev
+				return true, e.cfg.DB.PutFile(ctx, row)
+			}
 			if row.Path != path {
 				// A modification that also carries a new path (a move we
 				// missed): move first, then take the content.
@@ -319,6 +407,13 @@ func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.
 	}
 	if row.Path == newPath {
 		row.ServerRev = c.Rev
+		if row.State == StateLocalMoved {
+			// The server has the file where it is here: our own move (a
+			// move_prefix, or a move whose answer was lost) or the same move
+			// made elsewhere. Nothing is left to send for the path.
+			settleMoved(&row)
+			row.Attempts, row.LastError = 0, ""
+		}
 		if row.State == StateSynced {
 			row.BaseRev = c.Rev
 		}
@@ -425,7 +520,7 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 	for _, it := range tree.Items {
 		// Listed by the server: never a deletion, even when unreadable.
 		known[it.FileID] = true
-		p, err := e.clearPath(it.Path)
+		p, err := e.clearPath(ctx, it.FileID, it.Path)
 		if err != nil {
 			if e.isLocked(err) {
 				return e.lockedErr(err)

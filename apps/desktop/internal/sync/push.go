@@ -14,6 +14,7 @@ import (
 
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/shared/syncproto"
+	"memobrain/shared/vaultcrypto"
 )
 
 const (
@@ -31,6 +32,8 @@ type prepared struct {
 	localHash string
 	mtime     int64
 	size      int64
+	// folder is set for a move_prefix (row is then empty).
+	folder *folderMove
 }
 
 func opOrder(s State) int {
@@ -60,8 +63,32 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		}
 		return rows[i].Path < rows[j].Path
 	})
-	var ops []prepared
+	// Folder renames go as one move_prefix each (shared vaults, folders.go),
+	// after the deletes of files below them and before everything else.
+	folders, held, err := e.folderMoves(ctx)
+	if err != nil {
+		return false, err
+	}
+	inFolder, early := map[string]bool{}, map[string]bool{}
+	var prefixOps []prepared
+	for _, m := range folders {
+		for _, r := range m.members {
+			inFolder[r.FileID] = true
+		}
+		for _, id := range m.deletes {
+			early[id] = true
+		}
+		p, err := e.preparePrefix(ctx, m)
+		if err != nil {
+			return false, err
+		}
+		prefixOps = append(prefixOps, p)
+	}
+	var ops, earlyOps []prepared
 	for _, r := range rows {
+		if inFolder[r.FileID] || held[r.FileID] {
+			continue
+		}
 		if r.Attempts >= MaxAttempts {
 			continue
 		}
@@ -72,9 +99,19 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if ok {
+		if !ok {
+			continue
+		}
+		if early[r.FileID] {
+			earlyOps = append(earlyOps, p)
+		} else {
 			ops = append(ops, p)
 		}
+	}
+	if len(prefixOps) > 0 {
+		ops = append(append(earlyOps, prefixOps...), ops...)
+	} else {
+		ops = append(earlyOps, ops...)
 	}
 	if len(ops) == 0 {
 		return false, nil
@@ -167,7 +204,7 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 	needsPath := kind == "create" || kind == "move" || (kind == "modify" && row.Tombstoned)
 	if needsPath {
 		if e.cfg.Cipher != nil {
-			tok, key, err := e.cfg.Cipher.EncryptPath(row.Path)
+			tok, key, err := e.cfg.Cipher.EncryptPath(row.FileID, row.Path, e.writePathV2(ctx))
 			if err != nil {
 				if e.isLocked(err) {
 					return p, false, e.lockedErr(err) // not the file's fault: never park it
@@ -344,6 +381,9 @@ func (e *Engine) upload(ctx context.Context, batch []prepared) (tooLarge map[str
 // applyResult folds one operation's outcome into sync_files. It reports
 // whether another round is needed.
 func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpResult) (bool, error) {
+	if p.folder != nil {
+		return e.applyPrefixResult(ctx, p, res)
+	}
 	row := p.row
 	// The row may have been changed by an earlier result of this batch.
 	if cur, ok, err := e.cfg.DB.GetFileByID(ctx, row.FileID); err != nil {
@@ -360,6 +400,9 @@ func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpRe
 	switch res.Status {
 	case syncproto.StatusAccepted:
 		finish()
+		if e.cfg.Cipher != nil && vaultcrypto.PathTokenVersion(p.op.Path) == 2 {
+			e.pinPathV2(ctx, row.FileID) // the server now holds an enc2 token for it
+		}
 		switch p.op.Op {
 		case syncproto.OpDelete:
 			return true, e.cfg.DB.DeleteFile(ctx, row.FileID)
@@ -432,6 +475,8 @@ func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncpro
 		_ = e.cfg.DB.DeleteOutbox(ctx, row.Path)
 		row.Attempts++
 		return row.Attempts < MaxAttempts, e.cfg.DB.PutFile(ctx, row)
+	case syncproto.CodeShareRootMove:
+		return e.shareRootMove(ctx, p, row, res)
 	case syncproto.CodeNotFound:
 		// The server does not know the file (e.g. a restored backup): upload it as new.
 		if p.op.Op == syncproto.OpDelete {

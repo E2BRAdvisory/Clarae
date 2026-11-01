@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"memobrain/apps/desktop/internal/crypto"
+	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/apps/desktop/internal/vault"
 	"memobrain/shared/hashing"
 	"memobrain/shared/pathrules"
@@ -48,6 +49,23 @@ var ErrLocked = errors.New("vault is locked")
 
 // ErrPaused means synchronization is paused for this vault.
 var ErrPaused = errors.New("synchronization is paused")
+
+// DeviceRevokedMessage is Status.Error while the cloud refuses this device as
+// revoked: synchronization stops until the device is registered again.
+const DeviceRevokedMessage = "this device was revoked from your account: register it again to resume synchronization"
+
+// ErrDeviceRevoked is returned by the operations that need the cloud while
+// this device is revoked.
+var ErrDeviceRevoked = errors.New(DeviceRevokedMessage)
+
+// revokedView is how a status reads while the device is revoked: offline with
+// the reason, except for a locked or paused vault, which says that first.
+func revokedView(st Status) Status {
+	if st.Phase != PhaseLocked && st.Phase != PhasePaused {
+		st.Phase, st.Error = PhaseOffline, DeviceRevokedMessage
+	}
+	return st
+}
 
 // Config wires an Engine.
 type Config struct {
@@ -104,6 +122,19 @@ type Engine struct {
 	active bool
 	// tmpCleaned: stale atomic-write staging files were removed (once per run, under e.run).
 	tmpCleaned bool
+	// pathV2Pinned caches the vault's enc2 pin (ADR-0042, see writePathV2),
+	// read from sync.db once (pathPinLoaded, under e.run).
+	pathV2Pinned  bool
+	pathPinLoaded bool
+	// noPrefix are the folder renames the server refused as a move_prefix
+	// (sent file by file since), forcedPrefix the share-root renames deduced
+	// from a SHARE_ROOT_MOVE, to send in the next round (see folders.go;
+	// both under e.run, keyed by prefixPair.key).
+	noPrefix     map[string]bool
+	forcedPrefix map[string]forcedMove
+	// scans counts the scans started; wantScan is the scan a SyncNow waits for
+	// (see RequestScan). Both under e.mu.
+	scans, wantScan uint64
 }
 
 // New creates the engine.
@@ -114,7 +145,10 @@ func New(cfg Config) *Engine {
 	if cfg.CacheDir == "" {
 		cfg.CacheDir = cfg.FS.Root() + "/" + pathrules.ConfigDir + "/cache/outbox"
 	}
-	e := &Engine{cfg: cfg, log: cfg.Logger, candidates: map[string]transportChange{}, staged: map[string]bool{}, hashFile: cfg.FS.HashFile}
+	e := &Engine{
+		cfg: cfg, log: cfg.Logger, candidates: map[string]transportChange{}, staged: map[string]bool{}, hashFile: cfg.FS.HashFile,
+		noPrefix: map[string]bool{}, forcedPrefix: map[string]forcedMove{},
+	}
 	e.status = Status{VaultID: cfg.LocalID, Phase: PhaseIdle}
 	if cfg.Cipher != nil {
 		e.status.Kind = "private"
@@ -144,6 +178,34 @@ func (e *Engine) setStatus(mutate func(*Status)) {
 	}
 }
 
+// RequestScan asks for a cycle whose scan of the disk starts after this call
+// (SyncNow: a file written just before must be seen). Until such a cycle has
+// completed, Status says PhaseSyncing rather than a stale idle, and a cycle
+// that started earlier ends in PhaseSyncing too: the scheduler runs the next
+// one at once. Several requests made before that scan are one request.
+func (e *Engine) RequestScan() {
+	e.mu.Lock()
+	if e.wantScan <= e.scans {
+		e.wantScan = e.scans + 1
+	}
+	publish := e.status.Phase == PhaseIdle
+	if publish {
+		e.status.Phase = PhaseSyncing
+	}
+	s := e.status
+	e.mu.Unlock()
+	if publish && e.cfg.OnStatus != nil {
+		e.cfg.OnStatus(s)
+	}
+}
+
+// ScanDue reports whether a scan asked with RequestScan has not started yet.
+func (e *Engine) ScanDue() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.wantScan > e.scans
+}
+
 func (e *Engine) progress(done, total int) {
 	e.setStatus(func(s *Status) { s.Done, s.Total = done, total })
 }
@@ -166,16 +228,26 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 	defer func() {
 		pending, _ := e.cfg.DB.PendingCount(ctx)
 		conflicts, _ := e.cfg.DB.OpenConflictCount(ctx)
+		notice := ""
+		if err == nil {
+			// Not a failure of the cycle (no backoff), but the user must know.
+			notice = e.shareRootNotice(ctx)
+		}
 		e.setStatus(func(s *Status) {
 			s.Pending, s.Conflicts = pending, conflicts
 			s.Done, s.Total = 0, 0
 			switch {
+			case err == nil && e.wantScan > e.scans:
+				// A SyncNow came after this cycle's last scan: the next cycle runs at once.
+				s.Phase, s.LastSync, s.Error = PhaseSyncing, e.cfg.Now(), notice
 			case err == nil:
-				s.Phase, s.LastSync, s.Error = PhaseIdle, e.cfg.Now(), ""
+				s.Phase, s.LastSync, s.Error = PhaseIdle, e.cfg.Now(), notice
 			case errors.Is(err, ErrLocked):
 				s.Phase, s.Error = PhaseLocked, ""
 			case errors.Is(err, context.Canceled):
 				s.Phase = PhaseIdle
+			case transport.IsDeviceRevoked(err):
+				s.Phase, s.Error = PhaseOffline, DeviceRevokedMessage
 			case isNetwork(err):
 				s.Phase, s.Error = PhaseOffline, err.Error()
 			default:
@@ -342,6 +414,12 @@ func (e *Engine) Renamed(ctx context.Context, from, to string) error {
 				// provably equal.
 				r.State = StateLocalMoved
 				r.Dirty = e.cfg.Cipher != nil || r.LocalHash != r.ServerHash
+			}
+			if r.State == StateLocalMoved {
+				r.Attempts, r.LastError = 0, "" // a new destination is a new attempt
+				if r.MovedFrom == r.Path {
+					settleMoved(&r) // moved back where the server has it (an edit stays to send)
+				}
 			}
 			byPath[r.Path] = r
 			if err := tx.PutFile(ctx, r); err != nil {

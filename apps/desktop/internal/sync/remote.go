@@ -3,8 +3,10 @@ package sync
 import (
 	"context"
 	"io"
+	"strings"
 
 	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/apiclient"
 	"memobrain/shared/syncproto"
 )
 
@@ -68,13 +70,43 @@ func (r HTTPRemote) Commit(ctx context.Context, req syncproto.CommitRequest) (sy
 	return r.C.Commit(ctx, r.Vault, req)
 }
 
+// FolderShareRoots implements FolderShareRooter: the path prefixes of the
+// live folder shares of the vault, as its owner sees them. A mount (a vault
+// reference with a share scope) has none of its own.
+func (r HTTPRemote) FolderShareRoots(ctx context.Context) ([]string, error) {
+	vault, scope, _ := strings.Cut(r.Vault, "|")
+	if scope != "" {
+		return nil, nil
+	}
+	shares, err := r.C.ListShares(ctx, "owned")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, sh := range shares {
+		if sh.VaultId.String() == vault && sh.ResourceType == apiclient.ResourceTypeFolder && sh.PathPrefix != nil && *sh.PathPrefix != "" {
+			out = append(out, *sh.PathPrefix)
+		}
+	}
+	return out, nil
+}
+
 // Cipher is the end-to-end encryption of a private vault, bound to its VMK.
 // A nil Cipher means a shared vault: content and paths travel in clear.
 type Cipher interface {
 	// Locked reports that the VMK is not available (vault locked).
 	Locked() bool
-	// EncryptPath returns the opaque path token and the uniqueness key.
-	EncryptPath(path string) (token, key string, err error)
+	// PathV2 reports whether new path tokens are written in format enc2
+	// (ADR-0042, the Config Profile flag features.path_v2).
+	PathV2() bool
+	// EncryptPath returns the opaque token of the file's path, in format
+	// enc2 (bound to the file) when v2 is set and enc1 otherwise, and the
+	// uniqueness key (the same in both formats).
+	EncryptPath(fileID, path string, v2 bool) (token, key string, err error)
+	// DecryptFilePath opens the path token of a file, enc1 or enc2.
+	DecryptFilePath(fileID, token string) (string, error)
+	// DecryptPath opens an enc1 token, for callers that do not know the file
+	// id; an enc2 token fails. Prefer DecryptFilePath.
 	DecryptPath(token string) (string, error)
 	EncryptBlob(fileID string, plaintext []byte) ([]byte, error)
 	DecryptBlob(fileID string, blob []byte) ([]byte, error)

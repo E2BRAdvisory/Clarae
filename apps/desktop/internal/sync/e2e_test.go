@@ -58,6 +58,15 @@ func (f *flaky) Commit(ctx context.Context, req syncproto.CommitRequest) (syncpr
 	return resp, err
 }
 
+// FolderShareRoots passes the share roots of the real server through, so the
+// engine can recover from SHARE_ROOT_MOVE as with the application's remote.
+func (f *flaky) FolderShareRoots(ctx context.Context) ([]string, error) {
+	if r, ok := f.Remote.(syncpkg.FolderShareRooter); ok {
+		return r.FolderShareRoots(ctx)
+	}
+	return nil, nil
+}
+
 type device struct {
 	t         *testing.T
 	name      string
