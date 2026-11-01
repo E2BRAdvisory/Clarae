@@ -6,9 +6,9 @@ import { decryptBlob } from './blob';
 import { decryptPath } from './path';
 import {
   DecryptError,
-  deriveKekPassphrase,
   deriveKekRecovery,
   deriveSubkeys,
+  openWithPassphrase,
   parseRecoveryKey,
   unwrap,
   type KdfParams,
@@ -41,30 +41,44 @@ export interface Unlocked {
 }
 
 /**
- * Derives the KEK from the secret and unwraps the VMK. Throws DecryptError for a wrong
- * passphrase or recovery key (the AEAD tag does not verify), WeakKdfError for unacceptable
- * KDF parameters and RecoveryKeyError for a malformed recovery key.
+ * Derives the KEK from the secret and unwraps the VMK of the vault `vaultId` (a v2 envelope is
+ * bound to it, ADR-0034; v1 envelopes are accepted too). A passphrase is tried in NFC form first,
+ * then in the legacy forms (openWithPassphrase). Throws DecryptError for a wrong passphrase or
+ * recovery key (the AEAD tag does not verify) or an envelope of another vault, WeakKdfError for
+ * unacceptable KDF parameters and RecoveryKeyError for a malformed recovery key. The export never
+ * rewrites envelopes: it only reads.
  */
-export async function unlockVault(envelopes: Envelope[], secret: Secret): Promise<Unlocked> {
+export async function unlockVault(
+  envelopes: Envelope[],
+  secret: Secret,
+  vaultId: string,
+): Promise<Unlocked> {
   const env = envelopes.find((e) => e.kind === secret.kind);
   if (!env) throw new MissingEnvelopeError(secret.kind);
-  let kek: Uint8Array;
-  let recovery: Uint8Array | undefined;
-  if (secret.kind === 'passphrase') {
-    kek = await deriveKekPassphrase(secret.passphrase, env.kdf);
-  } else {
-    recovery = await parseRecoveryKey(secret.recoveryKey);
-    kek = await deriveKekRecovery(recovery, env.kdf);
+  const vid = uuidBytes(vaultId);
+  let wrapped: Uint8Array;
+  try {
+    wrapped = unb64(env.wrapped_vmk);
+  } catch {
+    throw new DecryptError();
   }
   let vmk: Uint8Array;
-  try {
-    vmk = await unwrap(kek, unb64(env.wrapped_vmk));
-  } catch (err) {
-    if (err instanceof DecryptError) throw err;
-    throw new DecryptError();
-  } finally {
-    kek.fill(0);
-    recovery?.fill(0);
+  if (secret.kind === 'passphrase') {
+    const res = await openWithPassphrase(secret.passphrase, env.kdf, wrapped, vid);
+    res.kek.fill(0);
+    vmk = res.vmk;
+  } else {
+    const recovery = await parseRecoveryKey(secret.recoveryKey);
+    const kek = await deriveKekRecovery(recovery, env.kdf);
+    try {
+      vmk = await unwrap(kek, wrapped, vid, 'recovery');
+    } catch (err) {
+      if (err instanceof DecryptError) throw err;
+      throw new DecryptError();
+    } finally {
+      kek.fill(0);
+      recovery.fill(0);
+    }
   }
   const keys = await deriveSubkeys(vmk);
   return {

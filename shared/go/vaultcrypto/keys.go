@@ -15,10 +15,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/text/unicode/norm"
 )
 
 // Sizes.
@@ -122,8 +124,18 @@ func CalibratePassphraseKDF(target time.Duration) KDFParams {
 	return p
 }
 
-// DeriveKEKPassphrase derives the key-encryption key from the passphrase.
+// DeriveKEKPassphrase derives the key-encryption key from the passphrase,
+// normalized to Unicode NFC first: the same passphrase typed on keyboards or
+// operating systems that produce composed or decomposed characters derives
+// the same key. Every new envelope is wrapped under this key.
 func DeriveKEKPassphrase(passphrase string, p KDFParams) ([KeySize]byte, error) {
+	return DeriveKEKPassphraseRaw(norm.NFC.String(passphrase), p)
+}
+
+// DeriveKEKPassphraseRaw derives the key from the exact UTF-8 bytes of the
+// passphrase, without normalization: the rule of the envelopes written before
+// NFC normalization, kept to open them (see OpenWithPassphrase).
+func DeriveKEKPassphraseRaw(passphrase string, p KDFParams) ([KeySize]byte, error) {
 	var kek [KeySize]byte
 	if p.Alg != AlgArgon2id || p.T < MinT || p.T > maxT || p.MKiB < MinMKiB || p.MKiB > maxMKiB || p.P < MinP || p.P > maxP {
 		return kek, ErrWeakKDF
@@ -210,7 +222,54 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-// Wrap encrypts the VMK under the KEK: nonce ‖ ciphertext ‖ tag.
+// Envelope formats (ADR-0034). v1 is nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag
+// without AAD, recognized by its length alone; v2 prefixes a version byte and
+// binds the envelope to its vault and kind through the AAD
+// "memobrain/v2/envelope" ‖ vault_id (16 bytes) ‖ kind.
+const (
+	WrappedSizeV1 = NonceSize + KeySize + TagSize // 60
+	WrappedSizeV2 = 1 + WrappedSizeV1             // 61
+	// EnvelopeV2 is the first byte of a v2 envelope.
+	EnvelopeV2 byte = 0x02
+
+	aadEnvelopeV2 = "memobrain/v2/envelope"
+)
+
+// EnvelopeKind names the secret an envelope is wrapped under; it is part of
+// the v2 AAD.
+type EnvelopeKind string
+
+// Envelope kinds.
+const (
+	KindPassphrase EnvelopeKind = "passphrase"
+	KindRecovery   EnvelopeKind = "recovery"
+)
+
+// EnvelopeAAD returns the additional data of a v2 envelope.
+func EnvelopeAAD(vaultID [16]byte, kind EnvelopeKind) ([]byte, error) {
+	if kind != KindPassphrase && kind != KindRecovery {
+		return nil, fmt.Errorf("vaultcrypto: unknown envelope kind %q", kind)
+	}
+	aad := make([]byte, 0, len(aadEnvelopeV2)+16+len(kind))
+	aad = append(aad, aadEnvelopeV2...)
+	aad = append(aad, vaultID[:]...)
+	return append(aad, kind...), nil
+}
+
+// EnvelopeVersion reports the format of a wrapped VMK from its length and
+// version byte: 1, 2, or 0 when it is neither.
+func EnvelopeVersion(wrapped []byte) int {
+	switch {
+	case len(wrapped) == WrappedSizeV1:
+		return 1
+	case len(wrapped) == WrappedSizeV2 && wrapped[0] == EnvelopeV2:
+		return 2
+	}
+	return 0
+}
+
+// Wrap encrypts the VMK under the KEK in format v1: nonce ‖ ciphertext ‖ tag.
+// It stays the default writer until every client reads v2 (ADR-0034).
 func Wrap(kek [KeySize]byte, vmk VMK) ([]byte, error) {
 	return WrapWithNonce(kek, vmk, randomBytes(NonceSize))
 }
@@ -224,23 +283,110 @@ func WrapWithNonce(kek [KeySize]byte, vmk VMK, nonce []byte) ([]byte, error) {
 	return g.Seal(append([]byte(nil), nonce...), nonce, vmk[:], nil), nil
 }
 
-// Unwrap recovers the VMK; ErrDecrypt means the KEK is wrong (wrong
-// passphrase or recovery key) or the envelope was altered.
-func Unwrap(kek [KeySize]byte, wrapped []byte) (VMK, error) {
+// WrapV2 encrypts the VMK under the KEK in format v2, bound to the vault and
+// to the envelope kind: 0x02 ‖ nonce ‖ ciphertext ‖ tag.
+func WrapV2(kek [KeySize]byte, vmk VMK, vaultID [16]byte, kind EnvelopeKind) ([]byte, error) {
+	return WrapV2WithNonce(kek, vmk, vaultID, kind, randomBytes(NonceSize))
+}
+
+// WrapV2WithNonce is WrapV2 with a caller-chosen nonce (test vectors only).
+func WrapV2WithNonce(kek [KeySize]byte, vmk VMK, vaultID [16]byte, kind EnvelopeKind, nonce []byte) ([]byte, error) {
+	aad, err := EnvelopeAAD(vaultID, kind)
+	if err != nil {
+		return nil, err
+	}
+	g, err := newGCM(kek[:])
+	if err != nil {
+		return nil, err
+	}
+	out := append([]byte{EnvelopeV2}, nonce...)
+	return g.Seal(out, nonce, vmk[:], aad), nil
+}
+
+// Unwrap recovers the VMK from a v1 or v2 envelope; a v2 envelope opens only
+// for the vault and kind it was written for. ErrDecrypt means the KEK is
+// wrong (wrong passphrase or recovery key), the envelope belongs to another
+// vault or kind, or it was altered.
+func Unwrap(kek [KeySize]byte, wrapped []byte, vaultID [16]byte, kind EnvelopeKind) (VMK, error) {
 	var vmk VMK
-	if len(wrapped) != NonceSize+KeySize+TagSize {
+	var body, aad []byte
+	switch EnvelopeVersion(wrapped) {
+	case 1:
+		body = wrapped
+	case 2:
+		var err error
+		if aad, err = EnvelopeAAD(vaultID, kind); err != nil {
+			return vmk, ErrDecrypt
+		}
+		body = wrapped[1:]
+	default:
 		return vmk, ErrDecrypt
 	}
 	g, err := newGCM(kek[:])
 	if err != nil {
 		return vmk, err
 	}
-	pt, err := g.Open(nil, wrapped[:NonceSize], wrapped[NonceSize:], nil)
+	pt, err := g.Open(nil, body[:NonceSize], body[NonceSize:], aad)
 	if err != nil {
 		return vmk, ErrDecrypt
 	}
 	copy(vmk[:], pt)
 	return vmk, nil
+}
+
+// PassphraseForms returns the encodings of a typed passphrase to try, in
+// order, when opening an existing passphrase envelope: the NFC form (the rule
+// of every envelope written since normalization was introduced), then the
+// exact input and its NFD form, which open the envelopes written earlier from
+// the raw bytes of a non-NFC input. Duplicates are dropped, so a passphrase
+// that is already NFC and NFD (plain ASCII) costs one derivation.
+func PassphraseForms(passphrase string) []string {
+	forms := []string{norm.NFC.String(passphrase)}
+	for _, f := range []string{passphrase, norm.NFD.String(passphrase)} {
+		if !slices.Contains(forms, f) {
+			forms = append(forms, f)
+		}
+	}
+	return forms
+}
+
+// PassphraseUnlock is the result of OpenWithPassphrase.
+type PassphraseUnlock struct {
+	VMK VMK
+	// KEK is derived from the NFC form under the envelope's KDF parameters,
+	// even when a legacy form opened it: re-wrapping under it converges the
+	// envelope to the current rule.
+	KEK [KeySize]byte
+	// Version is the format of the envelope that opened (1 or 2).
+	Version int
+	// Legacy reports that only a non-NFC form opened the envelope.
+	Legacy bool
+}
+
+// OpenWithPassphrase derives the KEK from each form of the passphrase
+// (PassphraseForms) and unwraps the envelope with the first that works.
+// ErrWeakKDF is returned before any derivation; ErrDecrypt means no form
+// opened it.
+func OpenWithPassphrase(passphrase string, p KDFParams, wrapped []byte, vaultID [16]byte) (PassphraseUnlock, error) {
+	var res PassphraseUnlock
+	res.Version = EnvelopeVersion(wrapped)
+	if res.Version == 0 {
+		return res, ErrDecrypt
+	}
+	for i, form := range PassphraseForms(passphrase) {
+		kek, err := DeriveKEKPassphraseRaw(form, p)
+		if err != nil {
+			return PassphraseUnlock{}, err
+		}
+		if i == 0 {
+			res.KEK = kek
+		}
+		if vmk, err := Unwrap(kek, wrapped, vaultID, KindPassphrase); err == nil {
+			res.VMK, res.Legacy = vmk, i > 0
+			return res, nil
+		}
+	}
+	return PassphraseUnlock{}, ErrDecrypt
 }
 
 // Subkeys are derived from the VMK (§3.8.2); the VMK itself is not used

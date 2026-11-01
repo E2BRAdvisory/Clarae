@@ -70,5 +70,6 @@ func (a *App) applyConfig() {
 	mode, _ := configValue(cur.Config, "auth.redirect_mode")
 	s, _ := mode.(string)
 	a.auth.SetManagedRedirectMode(auth.ParseRedirectMode(s))
+	a.sync.SetEnvelopeV2(envelopeV2Enabled(cur.Config))
 	a.applyLockTimeout()
 }

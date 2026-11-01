@@ -13,6 +13,10 @@ import (
 // Configuration keys the backend applies itself (the frontend handles the others).
 const (
 	cfgVaultLock = "security.vault_lock_minutes"
+	// cfgEnvelopeV2 switches the writing of v2 key envelopes (ADR-0034). Off
+	// unless the administrator turns it on: release N reads both formats and
+	// writes v1, so devices that are not updated yet keep unlocking.
+	cfgEnvelopeV2 = "features.envelope_v2"
 	// maxVaultLockMinutes bounds the idle timeout of private vaults (one day).
 	maxVaultLockMinutes = 1440
 )
@@ -77,6 +81,13 @@ func (a *App) applyLockTimeout() {
 	managed, has := configInt(cur.Config, cfgVaultLock)
 	minutes := effectiveLockMinutes(settings.VaultLockMinutes, managed, has, keyLocked(cur.LockedKeys, cfgVaultLock))
 	a.sync.SetLockTimeout(time.Duration(minutes) * time.Minute)
+}
+
+// envelopeV2Enabled reads features.envelope_v2 (default off).
+func envelopeV2Enabled(cfg map[string]any) bool {
+	v, _ := configValue(cfg, cfgEnvelopeV2)
+	on, _ := v.(bool)
+	return on
 }
 
 // envRedirectMode is the redirect mode forced from the environment

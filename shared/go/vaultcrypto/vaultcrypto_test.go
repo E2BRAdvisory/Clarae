@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/text/unicode/norm"
+
 	"memobrain/shared/vaultcrypto"
 )
 
@@ -137,29 +139,102 @@ func TestEnvelopeFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := vaultcrypto.Unwrap(kek, wrapped)
+	got, err := vaultcrypto.Unwrap(kek, wrapped, vaultID, vaultcrypto.KindPassphrase)
 	if err != nil || got != vmk {
 		t.Fatalf("unwrap: %v", err)
 	}
 	bad, _ := vaultcrypto.DeriveKEKPassphrase("wrong passphrase!!", p)
-	if _, err := vaultcrypto.Unwrap(bad, wrapped); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+	if _, err := vaultcrypto.Unwrap(bad, wrapped, vaultID, vaultcrypto.KindPassphrase); !errors.Is(err, vaultcrypto.ErrDecrypt) {
 		t.Errorf("wrong passphrase: %v", err)
 	}
-	if _, err := vaultcrypto.Unwrap(kek, wrapped[:10]); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+	if _, err := vaultcrypto.Unwrap(kek, wrapped[:10], vaultID, vaultcrypto.KindPassphrase); !errors.Is(err, vaultcrypto.ErrDecrypt) {
 		t.Errorf("short envelope: %v", err)
 	}
 
 	rk, _ := vaultcrypto.GenerateRecoveryKey()
 	rp := vaultcrypto.NewRecoveryKDF()
 	rkek, _ := vaultcrypto.DeriveKEKRecovery(rk, rp)
-	rw, _ := vaultcrypto.Wrap(rkek, vmk)
+	rw, _ := vaultcrypto.WrapV2(rkek, vmk, vaultID, vaultcrypto.KindRecovery)
 	parsed, err := vaultcrypto.ParseRecoveryKey(strings.ToLower(rk.String()))
 	if err != nil || parsed != rk {
 		t.Fatalf("recovery parse: %v", err)
 	}
 	pk, _ := vaultcrypto.DeriveKEKRecovery(parsed, rp)
-	if v, err := vaultcrypto.Unwrap(pk, rw); err != nil || v != vmk {
+	if v, err := vaultcrypto.Unwrap(pk, rw, vaultID, vaultcrypto.KindRecovery); err != nil || v != vmk {
 		t.Fatalf("recovery unwrap: %v", err)
+	}
+	if _, err := vaultcrypto.Unwrap(pk, rw, vaultID, vaultcrypto.KindPassphrase); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("v2 recovery envelope opened as a passphrase envelope: %v", err)
+	}
+}
+
+func TestEnvelopeV2(t *testing.T) {
+	vmk, _ := vaultcrypto.GenerateVMK()
+	var kek [vaultcrypto.KeySize]byte
+	_, _ = rand.Read(kek[:])
+	w, err := vaultcrypto.WrapV2(kek, vmk, vaultID, vaultcrypto.KindPassphrase)
+	if err != nil || len(w) != vaultcrypto.WrappedSizeV2 || w[0] != vaultcrypto.EnvelopeV2 {
+		t.Fatalf("v2 envelope: %d bytes, %v", len(w), err)
+	}
+	if vaultcrypto.EnvelopeVersion(w) != 2 {
+		t.Fatal("version not detected")
+	}
+	if got, err := vaultcrypto.Unwrap(kek, w, vaultID, vaultcrypto.KindPassphrase); err != nil || got != vmk {
+		t.Fatalf("unwrap v2: %v", err)
+	}
+	if _, err := vaultcrypto.WrapV2(kek, vmk, vaultID, "backup"); err == nil {
+		t.Error("unknown kind accepted by the writer")
+	}
+	if _, err := vaultcrypto.Unwrap(kek, w, vaultID, "backup"); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("unknown kind: %v", err)
+	}
+	// Two encryptions of the same VMK never repeat (random nonce).
+	w2, _ := vaultcrypto.WrapV2(kek, vmk, vaultID, vaultcrypto.KindPassphrase)
+	if bytes.Equal(w, w2) {
+		t.Error("v2 envelopes must differ")
+	}
+}
+
+func TestPassphraseNormalization(t *testing.T) {
+	const nfc, nfd = "caf\u00e9 cr\u00e8me br\u00fbl\u00e9e", "cafe\u0301 cre\u0300me bru\u0302le\u0301e"
+	if forms := vaultcrypto.PassphraseForms(nfd); len(forms) != 2 || forms[0] != nfc || forms[1] != nfd {
+		t.Fatalf("forms of NFD input: %q", forms)
+	}
+	if forms := vaultcrypto.PassphraseForms(nfc); len(forms) != 2 || forms[0] != nfc || forms[1] != nfd {
+		t.Fatalf("forms of NFC input: %q", forms)
+	}
+	if forms := vaultcrypto.PassphraseForms("plain ascii"); len(forms) != 1 {
+		t.Fatalf("ASCII input needs one form: %q", forms)
+	}
+	p := vaultcrypto.NewPassphraseKDF(0, 0, 0)
+	a, _ := vaultcrypto.DeriveKEKPassphrase(nfc, p)
+	b, _ := vaultcrypto.DeriveKEKPassphrase(nfd, p)
+	if a != b {
+		t.Fatal("NFC and NFD input must derive the same KEK")
+	}
+	vmk, _ := vaultcrypto.GenerateVMK()
+	// A legacy envelope, wrapped under the raw bytes of a decomposed input,
+	// still opens with either form; the result says so and carries the NFC KEK.
+	raw, _ := vaultcrypto.DeriveKEKPassphraseRaw(nfd, p)
+	legacy, _ := vaultcrypto.Wrap(raw, vmk)
+	for _, typed := range []string{nfd, nfc} {
+		res, err := vaultcrypto.OpenWithPassphrase(typed, p, legacy, vaultID)
+		if err != nil || res.VMK != vmk || !res.Legacy || res.KEK != a || res.Version != 1 {
+			t.Fatalf("legacy envelope with %q: legacy=%v err=%v", typed, res.Legacy, err)
+		}
+	}
+	current, _ := vaultcrypto.WrapV2(a, vmk, vaultID, vaultcrypto.KindPassphrase)
+	res, err := vaultcrypto.OpenWithPassphrase(nfd, p, current, vaultID)
+	if err != nil || res.VMK != vmk || res.Legacy || res.Version != 2 {
+		t.Fatalf("current envelope: %+v %v", res.Legacy, err)
+	}
+	if _, err := vaultcrypto.OpenWithPassphrase("cafe creme brulee", p, current, vaultID); !errors.Is(err, vaultcrypto.ErrDecrypt) {
+		t.Errorf("wrong passphrase: %v", err)
+	}
+	weak := p
+	weak.MKiB = 1024
+	if _, err := vaultcrypto.OpenWithPassphrase(nfc, weak, current, vaultID); !errors.Is(err, vaultcrypto.ErrWeakKDF) {
+		t.Errorf("weak KDF: %v", err)
 	}
 }
 
@@ -248,7 +323,9 @@ type vectors struct {
 		Nonce   string `json:"nonce"`
 		Wrapped string `json:"wrapped"`
 	} `json:"wrap"`
-	Subkeys struct {
+	WrapV2               []wrapV2Vector       `json:"wrap_v2"`
+	PassphraseNormalized passphraseNormVector `json:"passphrase_normalization"`
+	Subkeys              struct {
 		VMK     string `json:"vmk"`
 		PathEnc string `json:"path_enc"`
 		PathKey string `json:"path_key"`
@@ -269,6 +346,33 @@ type blobVector struct {
 	PlaintextLen int    `json:"plaintext_len"` // plaintext is byte(i % 251)
 	Blob         string `json:"blob,omitempty"`
 	BlobSHA256   string `json:"blob_sha256"`
+}
+
+// wrapV2Vector is an ADR-0034 envelope: 0x02 ‖ nonce ‖ AES-256-GCM(KEK, VMK; AAD) ‖ tag.
+type wrapV2Vector struct {
+	KEK     string `json:"kek"`
+	VMK     string `json:"vmk"`
+	VaultID string `json:"vault_id"`
+	Kind    string `json:"kind"`
+	Nonce   string `json:"nonce"`
+	AAD     string `json:"aad"`
+	Wrapped string `json:"wrapped"`
+}
+
+// passphraseNormVector checks the NFC rule: both inputs derive KEK; KEKRawNFD
+// is the pre-normalization derivation of the NFD bytes. Legacy is a v1
+// envelope wrapped under KEKRawNFD, which both inputs must still open (through
+// the raw/NFD fallback); Current is a v2 envelope wrapped under KEK.
+type passphraseNormVector struct {
+	NFC       string                `json:"nfc"`
+	NFD       string                `json:"nfd"`
+	KDF       vaultcrypto.KDFParams `json:"kdf"`
+	KEK       string                `json:"kek"`
+	KEKRawNFD string                `json:"kek_raw_nfd"`
+	VaultID   string                `json:"vault_id"`
+	VMK       string                `json:"vmk"`
+	Legacy    string                `json:"legacy_wrapped"`
+	Current   string                `json:"current_wrapped"`
 }
 
 type pathVector struct {
@@ -337,6 +441,32 @@ func generate(t *testing.T) vectors {
 	v.Wrap.KEK, v.Wrap.VMK, v.Wrap.Nonce = vecKEK, vecVMK, "303132333435363738393a3b"
 	w, _ := vaultcrypto.WrapWithNonce(arr32(vecKEK), vmk, unhex(v.Wrap.Nonce))
 	v.Wrap.Wrapped = hex.EncodeToString(w)
+	for i, kind := range []vaultcrypto.EnvelopeKind{vaultcrypto.KindPassphrase, vaultcrypto.KindRecovery} {
+		c := wrapV2Vector{KEK: vecKEK, VMK: vecVMK, VaultID: vecVault, Kind: string(kind), Nonce: hex.EncodeToString(bytes.Repeat([]byte{byte(0x70 + i)}, 12))}
+		aad, _ := vaultcrypto.EnvelopeAAD(mustUUID(vecVault), kind)
+		c.AAD = hex.EncodeToString(aad)
+		w2, err := vaultcrypto.WrapV2WithNonce(arr32(vecKEK), vmk, mustUUID(vecVault), kind, unhex(c.Nonce))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Wrapped = hex.EncodeToString(w2)
+		v.WrapV2 = append(v.WrapV2, c)
+	}
+
+	pn := &v.PassphraseNormalized
+	const accented = "P\u00e4ssw\u00f6rd f\u00fcr \u00c5ngstr\u00f6m: cr\u00e8me br\u00fbl\u00e9e"
+	pn.NFC, pn.NFD = norm.NFC.String(accented), norm.NFD.String(accented)
+	pn.KDF = vaultcrypto.KDFParams{Alg: "argon2id", T: 3, MKiB: 65536, P: 4, Salt: base64.StdEncoding.EncodeToString(unhex("808182838485868788898a8b8c8d8e8f"))}
+	nk, err := vaultcrypto.DeriveKEKPassphrase(pn.NFC, pn.KDF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rk2, _ := vaultcrypto.DeriveKEKPassphraseRaw(pn.NFD, pn.KDF)
+	pn.KEK, pn.KEKRawNFD = hex.EncodeToString(nk[:]), hex.EncodeToString(rk2[:])
+	pn.VaultID, pn.VMK = vecVault, vecVMK
+	lw, _ := vaultcrypto.WrapWithNonce(rk2, vmk, bytes.Repeat([]byte{0x90}, 12))
+	cw, _ := vaultcrypto.WrapV2WithNonce(nk, vmk, mustUUID(vecVault), vaultcrypto.KindPassphrase, bytes.Repeat([]byte{0x91}, 12))
+	pn.Legacy, pn.Current = hex.EncodeToString(lw), hex.EncodeToString(cw)
 
 	sk := vaultcrypto.DeriveSubkeys(vmk)
 	v.Subkeys.VMK = vecVMK
@@ -418,8 +548,47 @@ func TestVectors(t *testing.T) {
 	if hex.EncodeToString(w) != v.Wrap.Wrapped {
 		t.Error("wrap mismatch")
 	}
-	if got, err := vaultcrypto.Unwrap(arr32(v.Wrap.KEK), unhex(v.Wrap.Wrapped)); err != nil || got != vmk {
+	if got, err := vaultcrypto.Unwrap(arr32(v.Wrap.KEK), unhex(v.Wrap.Wrapped), mustUUID(vecVault), vaultcrypto.KindPassphrase); err != nil || got != vmk {
 		t.Errorf("unwrap vector: %v", err)
+	}
+	if len(v.WrapV2) != 2 {
+		t.Fatal("wrap_v2 vectors missing")
+	}
+	for _, c := range v.WrapV2 {
+		kind, vid := vaultcrypto.EnvelopeKind(c.Kind), mustUUID(c.VaultID)
+		aad, err := vaultcrypto.EnvelopeAAD(vid, kind)
+		if err != nil || hex.EncodeToString(aad) != c.AAD {
+			t.Errorf("wrap_v2 %s: AAD mismatch (%v)", c.Kind, err)
+		}
+		w, err := vaultcrypto.WrapV2WithNonce(arr32(c.KEK), vaultcrypto.VMK(arr32(c.VMK)), vid, kind, unhex(c.Nonce))
+		if err != nil || hex.EncodeToString(w) != c.Wrapped {
+			t.Errorf("wrap_v2 %s: mismatch (%v)", c.Kind, err)
+		}
+		if got, err := vaultcrypto.Unwrap(arr32(c.KEK), unhex(c.Wrapped), vid, kind); err != nil || got != vaultcrypto.VMK(arr32(c.VMK)) {
+			t.Errorf("wrap_v2 %s: unwrap: %v", c.Kind, err)
+		}
+	}
+	pn := v.PassphraseNormalized
+	if pn.NFC == pn.NFD || norm.NFC.String(pn.NFD) != pn.NFC {
+		t.Fatal("passphrase_normalization: inputs are not two forms of one string")
+	}
+	for _, in := range []string{pn.NFC, pn.NFD} {
+		if k, err := vaultcrypto.DeriveKEKPassphrase(in, pn.KDF); err != nil || hex.EncodeToString(k[:]) != pn.KEK {
+			t.Errorf("passphrase_normalization: KEK of %+q mismatch (%v)", in, err)
+		}
+	}
+	if k, _ := vaultcrypto.DeriveKEKPassphraseRaw(pn.NFD, pn.KDF); hex.EncodeToString(k[:]) != pn.KEKRawNFD || pn.KEKRawNFD == pn.KEK {
+		t.Error("passphrase_normalization: raw NFD KEK mismatch")
+	}
+	for _, in := range []string{pn.NFC, pn.NFD} {
+		res, err := vaultcrypto.OpenWithPassphrase(in, pn.KDF, unhex(pn.Legacy), mustUUID(pn.VaultID))
+		if err != nil || hex.EncodeToString(res.VMK[:]) != pn.VMK || !res.Legacy || hex.EncodeToString(res.KEK[:]) != pn.KEK {
+			t.Errorf("passphrase_normalization: legacy envelope with %+q: legacy=%v %v", in, res.Legacy, err)
+		}
+		res, err = vaultcrypto.OpenWithPassphrase(in, pn.KDF, unhex(pn.Current), mustUUID(pn.VaultID))
+		if err != nil || hex.EncodeToString(res.VMK[:]) != pn.VMK || res.Legacy || res.Version != 2 {
+			t.Errorf("passphrase_normalization: current envelope with %+q: %v", in, err)
+		}
 	}
 	sk := vaultcrypto.DeriveSubkeys(vaultcrypto.VMK(arr32(v.Subkeys.VMK)))
 	if hex.EncodeToString(sk.PathEnc[:]) != v.Subkeys.PathEnc || hex.EncodeToString(sk.PathKey[:]) != v.Subkeys.PathKey {

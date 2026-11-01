@@ -253,6 +253,63 @@
       "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
       "wrapped": "",
       "expect": "decrypt"
+    },
+    {
+      "name": "v2 opened for another vault id",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "027070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d13",
+      "vault_id": "0194f0a8-0000-7000-8000-00000000bbbb",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 passphrase envelope opened as recovery (kind swapped)",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "027070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d13",
+      "kind": "recovery",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 opened with an unknown kind",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "027070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d13",
+      "kind": "backup",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 version byte altered (0x03)",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "037070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d13",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 version byte altered (0x01)",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "017070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d13",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 truncated to 60 bytes (downgrade to v1)",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "027070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 without its version byte (downgrade to v1)",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "7070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d13",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 tampered tag",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "027070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d12",
+      "expect": "decrypt"
+    },
+    {
+      "name": "v2 with a trailing byte",
+      "kek": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "wrapped": "027070707070707070707070708fba9c0e7ea0749a1e823bc86ecff12d6f70fdfdd778e660c5a41cbd8499f67335b1f88e10b94428531e69b1cc2d5d1300",
+      "expect": "decrypt"
     }
   ],
   "kdf": [

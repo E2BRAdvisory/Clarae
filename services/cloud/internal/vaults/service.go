@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"memobrain/services/cloud/internal/audit"
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/settings"
@@ -39,8 +40,16 @@ const (
 	EnvelopeRecovery   = "recovery"
 )
 
-// WrappedVMKSize is nonce (12) + VMK (32) + GCM tag (16).
+// WrappedVMKSize is a v1 envelope: nonce (12) + VMK (32) + GCM tag (16).
 const WrappedVMKSize = 12 + 32 + 16
+
+// WrappedVMKSizeV2 is a v2 envelope (ADR-0034): the version byte
+// envelopeV2Version followed by a v1-sized body whose AAD binds it to the
+// vault and the kind. The server checks only the length and the version byte.
+const (
+	WrappedVMKSizeV2  = 1 + WrappedVMKSize
+	envelopeV2Version = 0x02
+)
 
 // Argon2id bounds enforced on stored envelopes: the minimum protects users
 // from a client that would weaken the KDF, the maximum stops a hostile client
@@ -93,8 +102,11 @@ func ValidateEnvelope(e EnvelopeInput) error {
 	if err != nil || len(salt) < 8 || len(salt) > 64 {
 		return errors.New("kdf.salt must be base64 of 8..64 bytes")
 	}
-	if len(e.WrappedVMK) != WrappedVMKSize {
-		return fmt.Errorf("wrapped_vmk must be %d bytes", WrappedVMKSize)
+	switch {
+	case len(e.WrappedVMK) == WrappedVMKSize:
+	case len(e.WrappedVMK) == WrappedVMKSizeV2 && e.WrappedVMK[0] == envelopeV2Version:
+	default:
+		return fmt.Errorf("wrapped_vmk must be %d bytes (v1) or %d bytes starting with 0x%02x (v2)", WrappedVMKSize, WrappedVMKSizeV2, envelopeV2Version)
 	}
 	switch e.Kind {
 	case EnvelopePassphrase:
@@ -219,9 +231,26 @@ func (s *Service) open(ctx context.Context, q *vaultsdb.Queries, userID, vaultID
 	return v, nil
 }
 
-// List returns the caller's vaults.
-func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]vaultsdb.Vault, error) {
-	return vaultsdb.New(s.db.Pool).ListOwnedVaults(ctx, userID)
+// List returns the caller's vaults. With includeDeleted it also returns the
+// soft-deleted ones that Restore would still accept (deleted within the
+// retention period); older ones wait for the purge job and stay hidden.
+func (s *Service) List(ctx context.Context, userID uuid.UUID, includeDeleted bool) ([]vaultsdb.Vault, error) {
+	q := vaultsdb.New(s.db.Pool)
+	if !includeDeleted {
+		return q.ListOwnedVaults(ctx, userID)
+	}
+	return q.ListOwnedVaultsWithDeleted(ctx, vaultsdb.ListOwnedVaultsWithDeletedParams{
+		OwnerID:      userID,
+		DeletedAfter: time.Now().Add(-s.deletedRetention(ctx)),
+	})
+}
+
+// deletedRetention is how long a soft-deleted vault stays restorable.
+func (s *Service) deletedRetention(ctx context.Context) time.Duration {
+	if days, err := s.settingInt(ctx, "vaults.deleted_retention_days"); err == nil && days > 0 {
+		return time.Duration(days) * 24 * time.Hour
+	}
+	return defaultDeletedRetention
 }
 
 // Rename changes the vault name (owner).
@@ -245,8 +274,12 @@ func (s *Service) Delete(ctx context.Context, userID, vaultID uuid.UUID) error {
 	if _, err := s.Open(ctx, userID, vaultID); err != nil {
 		return err
 	}
-	_, err := vaultsdb.New(s.db.Pool).SoftDeleteVault(ctx, vaultID)
-	return err
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := vaultsdb.New(tx).SoftDeleteVault(ctx, vaultID); err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, userID, "vault.delete", "vault", vaultID.String(), nil)
+	})
 }
 
 // Restore undoes a soft delete inside the retention period.
@@ -259,14 +292,17 @@ func (s *Service) Restore(ctx context.Context, userID, vaultID uuid.UUID) (vault
 	if v.DeletedAt == nil {
 		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "vault is not deleted")
 	}
-	retention := defaultDeletedRetention
-	if days, err := s.settingInt(ctx, "vaults.deleted_retention_days"); err == nil && days > 0 {
-		retention = time.Duration(days) * 24 * time.Hour
-	}
-	if time.Since(*v.DeletedAt) > retention {
+	if time.Since(*v.DeletedAt) > s.deletedRetention(ctx) {
 		return vaultsdb.Vault{}, httpproblem.NotFound("vault")
 	}
-	r, err := q.RestoreVault(ctx, vaultID)
+	var r vaultsdb.Vault
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var err error
+		if r, err = vaultsdb.New(tx).RestoreVault(ctx, vaultID); err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, userID, "vault.restore", "vault", vaultID.String(), nil)
+	})
 	if isUnique(err, "vaults_owner_name_uq") {
 		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "another vault is already named %q: rename it first", v.Name)
 	}
@@ -415,7 +451,16 @@ func (s *Service) PutEnvelope(ctx context.Context, userID, vaultID uuid.UUID, in
 	if err != nil {
 		return Envelope{}, err
 	}
-	row, err := vaultsdb.New(s.db.Pool).UpsertEnvelope(ctx, vaultsdb.UpsertEnvelopeParams{ID: id, VaultID: vaultID, Kind: in.Kind, Kdf: kdf, WrappedVmk: in.WrappedVMK})
+	var row vaultsdb.VaultKeyEnvelope
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var err error
+		row, err = vaultsdb.New(tx).UpsertEnvelope(ctx, vaultsdb.UpsertEnvelopeParams{ID: id, VaultID: vaultID, Kind: in.Kind, Kdf: kdf, WrappedVmk: in.WrappedVMK})
+		if err != nil {
+			return err
+		}
+		// Only the kind: the wrapped key and KDF salt are not audit material.
+		return audit.Record(ctx, tx, userID, "vault.envelope.replace", "vault", vaultID.String(), map[string]string{"kind": in.Kind})
+	})
 	if err != nil {
 		return Envelope{}, err
 	}

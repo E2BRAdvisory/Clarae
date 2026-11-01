@@ -111,6 +111,25 @@ func TestPrivateVaultKeyEnvelopes(t *testing.T) {
 	if got.Items[0]["wrapped_vmk"] != repl["wrapped_vmk"] {
 		t.Fatal("passphrase envelope not replaced")
 	}
+	// ADR-0034: a v2 envelope is 61 bytes starting with 0x02; the server checks
+	// nothing else. 61 bytes with another first byte, or 62 bytes, are refused.
+	v2 := append([]byte{0x02}, bytes.Repeat([]byte{8}, 60)...)
+	repl["wrapped_vmk"] = base64.StdEncoding.EncodeToString(v2)
+	expect(t, ada.json(http.MethodPut, "/vaults/"+id+"/key-envelopes/passphrase", repl), http.StatusOK)
+	got = decode[struct{ Items []map[string]any }](t, ada.json(http.MethodGet, "/vaults/"+id+"/key-envelopes", nil))
+	if got.Items[0]["wrapped_vmk"] != repl["wrapped_vmk"] {
+		t.Fatal("v2 passphrase envelope not stored as sent")
+	}
+	for name, bad := range map[string][]byte{
+		"61 bytes without the v2 version byte": bytes.Repeat([]byte{3}, 61),
+		"62 bytes":                             append(append([]byte(nil), v2...), 0),
+	} {
+		repl["wrapped_vmk"] = base64.StdEncoding.EncodeToString(bad)
+		if r := ada.json(http.MethodPut, "/vaults/"+id+"/key-envelopes/passphrase", repl); r.StatusCode != http.StatusBadRequest {
+			t.Fatalf("%s accepted: %d", name, r.StatusCode)
+		}
+	}
+	repl["wrapped_vmk"] = base64.StdEncoding.EncodeToString(v2)
 	// Body kind must match the URL.
 	if r := ada.json(http.MethodPut, "/vaults/"+id+"/key-envelopes/recovery", repl); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("mismatched kind: %d", r.StatusCode)

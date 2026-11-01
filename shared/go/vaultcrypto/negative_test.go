@@ -41,10 +41,14 @@ type negPath struct {
 	Expect  string `json:"expect"`
 }
 
+// negWrap is opened as the envelope of VaultID and Kind (defaults: the
+// vector vault and "passphrase").
 type negWrap struct {
 	Name    string `json:"name"`
 	KEK     string `json:"kek"`
 	Wrapped string `json:"wrapped"`
+	VaultID string `json:"vault_id,omitempty"`
+	Kind    string `json:"kind,omitempty"`
 	Expect  string `json:"expect"`
 }
 
@@ -157,12 +161,34 @@ func generateNegative(t *testing.T) negVectors {
 	wn := append([]byte(nil), w...)
 	wn[0] ^= 1
 	v.Wrap = []negWrap{
-		{"tampered wrapped key", vecKEK, hex.EncodeToString(wf), "decrypt"},
-		{"tampered nonce", vecKEK, hex.EncodeToString(wn), "decrypt"},
-		{"wrong KEK", strings.Repeat("cd", 32), hex.EncodeToString(w), "decrypt"},
-		{"wrong length", vecKEK, hex.EncodeToString(w[:len(w)-1]), "decrypt"},
-		{"empty", vecKEK, "", "decrypt"},
+		{Name: "tampered wrapped key", KEK: vecKEK, Wrapped: hex.EncodeToString(wf), Expect: "decrypt"},
+		{Name: "tampered nonce", KEK: vecKEK, Wrapped: hex.EncodeToString(wn), Expect: "decrypt"},
+		{Name: "wrong KEK", KEK: strings.Repeat("cd", 32), Wrapped: hex.EncodeToString(w), Expect: "decrypt"},
+		{Name: "wrong length", KEK: vecKEK, Wrapped: hex.EncodeToString(w[:len(w)-1]), Expect: "decrypt"},
+		{Name: "empty", KEK: vecKEK, Wrapped: "", Expect: "decrypt"},
 	}
+	// ADR-0034 v2 envelopes: bound to the vault and the kind, no downgrade.
+	v2, err := vaultcrypto.WrapV2WithNonce(arr32(vecKEK), vaultcrypto.VMK(arr32(vecVMK)), mustUUID(vecVault), vaultcrypto.KindPassphrase, bytes.Repeat([]byte{0x70}, 12))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2ver := append([]byte(nil), v2...)
+	v2ver[0] = 0x03
+	v2one := append([]byte(nil), v2...)
+	v2one[0] = 0x01
+	v2tag := append([]byte(nil), v2...)
+	v2tag[len(v2tag)-1] ^= 1
+	v.Wrap = append(v.Wrap,
+		negWrap{Name: "v2 opened for another vault id", KEK: vecKEK, Wrapped: hex.EncodeToString(v2), VaultID: negOtherVault, Expect: "decrypt"},
+		negWrap{Name: "v2 passphrase envelope opened as recovery (kind swapped)", KEK: vecKEK, Wrapped: hex.EncodeToString(v2), Kind: "recovery", Expect: "decrypt"},
+		negWrap{Name: "v2 opened with an unknown kind", KEK: vecKEK, Wrapped: hex.EncodeToString(v2), Kind: "backup", Expect: "decrypt"},
+		negWrap{Name: "v2 version byte altered (0x03)", KEK: vecKEK, Wrapped: hex.EncodeToString(v2ver), Expect: "decrypt"},
+		negWrap{Name: "v2 version byte altered (0x01)", KEK: vecKEK, Wrapped: hex.EncodeToString(v2one), Expect: "decrypt"},
+		negWrap{Name: "v2 truncated to 60 bytes (downgrade to v1)", KEK: vecKEK, Wrapped: hex.EncodeToString(v2[:vaultcrypto.WrappedSizeV1]), Expect: "decrypt"},
+		negWrap{Name: "v2 without its version byte (downgrade to v1)", KEK: vecKEK, Wrapped: hex.EncodeToString(v2[1:]), Expect: "decrypt"},
+		negWrap{Name: "v2 tampered tag", KEK: vecKEK, Wrapped: hex.EncodeToString(v2tag), Expect: "decrypt"},
+		negWrap{Name: "v2 with a trailing byte", KEK: vecKEK, Wrapped: hex.EncodeToString(append(append([]byte(nil), v2...), 0)), Expect: "decrypt"},
+	)
 
 	salt := base64.StdEncoding.EncodeToString(unhex("101112131415161718191a1b1c1d1e1f"))
 	ok := vaultcrypto.KDFParams{Alg: "argon2id", T: 3, MKiB: 65536, P: 4, Salt: salt}
@@ -245,7 +271,14 @@ func TestNegativeVectors(t *testing.T) {
 	}
 	for _, c := range v.Wrap {
 		t.Run("wrap/"+c.Name, func(t *testing.T) {
-			_, err := vaultcrypto.Unwrap(arr32(c.KEK), unhex(c.Wrapped))
+			vid, kind := vecVault, vaultcrypto.KindPassphrase
+			if c.VaultID != "" {
+				vid = c.VaultID
+			}
+			if c.Kind != "" {
+				kind = vaultcrypto.EnvelopeKind(c.Kind)
+			}
+			_, err := vaultcrypto.Unwrap(arr32(c.KEK), unhex(c.Wrapped), mustUUID(vid), kind)
 			classify(t, err, c.Expect)
 		})
 	}

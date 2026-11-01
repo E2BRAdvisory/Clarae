@@ -120,3 +120,20 @@ func TestSnapshotBeforeOverwrite(t *testing.T) {
 	a.snapshotBeforeOverwrite("nope", "note.md")
 	a.snapshotBeforeOverwrite(info.ID, "missing.md")
 }
+
+// ADR-0034: v2 key envelopes are written only when the Config Profile turns
+// features.envelope_v2 on; release N reads both formats and writes v1.
+func TestEnvelopeV2FromProfile(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	if a.crypto.EnvelopeV2() {
+		t.Fatal("v2 envelopes must be off by default")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"envelope_v2": true}})
+	if !a.crypto.EnvelopeV2() {
+		t.Fatal("features.envelope_v2 not applied")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"envelope_v2": "yes"}})
+	if a.crypto.EnvelopeV2() {
+		t.Fatal("a non-boolean value must leave v2 writing off")
+	}
+}

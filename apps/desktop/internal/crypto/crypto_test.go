@@ -7,6 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/text/unicode/norm"
+
+	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/shared/vaultcrypto"
 )
 
 const vaultID = "0194f0a8-0000-7000-8000-00000000aaaa"
@@ -170,10 +174,8 @@ func TestIdleTimeoutLocks(t *testing.T) {
 	if m.IsLocked(vaultID) {
 		t.Fatal("locked too early")
 	}
-	// Using the vault resets the idle timer.
-	if _, _, err := m.Cipher(vaultID).EncryptPath("a.md"); err != nil {
-		t.Fatal(err)
-	}
+	// User activity resets the idle timer.
+	m.Touch()
 	*now = now.Add(9 * time.Minute)
 	if m.IsLocked(vaultID) {
 		t.Fatal("activity did not postpone the lock")
@@ -181,6 +183,87 @@ func TestIdleTimeoutLocks(t *testing.T) {
 	*now = now.Add(11 * time.Minute)
 	if !m.IsLocked(vaultID) {
 		t.Fatal("not locked after the idle timeout")
+	}
+	// Activity after the expiry does not open the vault again.
+	m.Touch()
+	if !m.IsLocked(vaultID) {
+		t.Fatal("Touch revived an expired vault")
+	}
+	if _, err := m.NewPassphraseEnvelope(vaultID, "another long passphrase"); !errors.Is(err, ErrLocked) {
+		t.Fatalf("user operation on an expired vault: %v", err)
+	}
+}
+
+// The sync engine works through the Cipher in the background (another device
+// keeps editing): that must not count as activity, or the vault never locks.
+func TestBackgroundUseDoesNotExtendIdle(t *testing.T) {
+	m, store, now := newManager(t)
+	m.SetLockTimeout(10 * time.Minute)
+	mat, _ := m.NewMaterial("correct horse battery staple")
+	_ = m.Adopt(vaultID, mat)
+	c := m.Cipher(vaultID)
+	file := uuid.NewString()
+	for range 4 {
+		*now = now.Add(4 * time.Minute)
+		ct, err := c.EncryptBlob(file, []byte("x"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.DecryptBlob(file, ct); err != nil {
+			t.Fatal(err)
+		}
+		tok, _, err := c.EncryptPath("a.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.DecryptPath(tok); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !m.IsLocked(vaultID) {
+		t.Fatal("background encryption kept the vault unlocked")
+	}
+	if ids := m.IdleVaults(); len(ids) != 1 || ids[0] != vaultID {
+		t.Fatalf("IdleVaults = %v", ids)
+	}
+	// Expired but not locked yet: the engine can still push what waits for
+	// upload, and the keychain copy does not reopen the vault.
+	if c.Locked() {
+		t.Fatal("the engine lost the key before the drain")
+	}
+	if _, _, err := c.EncryptPath("b.md"); err != nil {
+		t.Fatalf("drain encryption: %v", err)
+	}
+	if ok, _ := m.Restore(vaultID); ok {
+		t.Fatal("Restore reopened an expired vault")
+	}
+	if ok, err := m.LockExpired(vaultID); !ok || err != nil {
+		t.Fatalf("LockExpired = %v, %v", ok, err)
+	}
+	if !c.Locked() {
+		t.Fatal("key still in memory after LockExpired")
+	}
+	if v, _ := store.Get(account(vaultID)); v != "" {
+		t.Fatal("the VMK stayed in the keychain")
+	}
+}
+
+// LockExpired leaves alone a vault that was unlocked again during the drain.
+func TestLockExpiredSkipsReopenedVault(t *testing.T) {
+	m, _, now := newManager(t)
+	m.SetLockTimeout(time.Minute)
+	mat, _ := m.NewMaterial("correct horse battery staple")
+	_ = m.Adopt(vaultID, mat)
+	*now = now.Add(2 * time.Minute)
+	if len(m.IdleVaults()) != 1 {
+		t.Fatal("vault not idle")
+	}
+	_ = m.Adopt(vaultID, mat) // unlocked again meanwhile
+	if ok, err := m.LockExpired(vaultID); ok || err != nil {
+		t.Fatalf("LockExpired locked a reopened vault: %v %v", ok, err)
+	}
+	if m.IsLocked(vaultID) {
+		t.Fatal("reopened vault locked")
 	}
 }
 
@@ -228,5 +311,175 @@ func TestDiskParsers(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("case %d: %s, want %s", i, c.got, c.want)
 		}
+	}
+}
+
+func envelopeOf(t *testing.T, envs []transport.KeyEnvelope, kind string) transport.KeyEnvelope {
+	t.Helper()
+	e, ok := find(envs, kind)
+	if !ok {
+		t.Fatalf("no %s envelope", kind)
+	}
+	return e
+}
+
+func replaceEnvelope(envs []transport.KeyEnvelope, e transport.KeyEnvelope) []transport.KeyEnvelope {
+	out := append([]transport.KeyEnvelope(nil), envs...)
+	for i := range out {
+		if out[i].Kind == e.Kind {
+			out[i] = e
+		}
+	}
+	return out
+}
+
+// ADR-0034 release N: v1 is written by default, v2 only with the flag; both
+// are read, a v2 envelope opens only for its vault, and a pinned kind refuses v1.
+func TestEnvelopeV2(t *testing.T) {
+	const pass = "correct horse battery staple"
+	m, _, _ := newManager(t)
+	mat, err := m.NewMaterial(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range mat.Envelopes {
+		if vaultcrypto.EnvelopeVersion(e.WrappedVmk) != 1 {
+			t.Fatalf("%s envelope of a new vault must be v1", e.Kind)
+		}
+	}
+	if err := m.Adopt(vaultID, mat); err != nil {
+		t.Fatal(err)
+	}
+	// Flag off: re-wraps stay v1, unlocks propose no upgrade.
+	if env, err := m.NewPassphraseEnvelope(vaultID, "another long passphrase"); err != nil || vaultcrypto.EnvelopeVersion(env.WrappedVmk) != 1 {
+		t.Fatalf("flag off must write v1: %v", err)
+	}
+	other, _, _ := newManager(t)
+	res, err := other.UnlockWith(vaultID, mat.Envelopes, pass, false, UnlockOptions{})
+	if err != nil || res.Upgrade != nil || res.Version != 1 || res.Legacy {
+		t.Fatalf("v1 unlock, flag off: %+v %v", res, err)
+	}
+
+	// After creation, with the flag on, the envelopes are re-wrapped in v2.
+	v2, err := m.UpgradeMaterial(vaultID, mat)
+	if err != nil || len(v2) != 2 {
+		t.Fatalf("upgrade material: %v", err)
+	}
+	for _, e := range v2 {
+		if vaultcrypto.EnvelopeVersion(e.WrappedVmk) != 2 {
+			t.Fatalf("%s: not v2", e.Kind)
+		}
+	}
+	third, _, _ := newManager(t)
+	if res, err := third.UnlockWith(vaultID, v2, pass, false, UnlockOptions{}); err != nil || res.Version != 2 {
+		t.Fatalf("v2 passphrase unlock: %+v %v", res, err)
+	}
+	if res, err := third.UnlockWith(vaultID, v2, mat.RecoveryKey, true, UnlockOptions{}); err != nil || res.Version != 2 || !res.RequiresNewPassphrase {
+		t.Fatalf("v2 recovery unlock: %+v %v", res, err)
+	}
+	// Served for another vault of the same user (same passphrase): refused.
+	const otherVault = "0194f0a8-0000-7000-8000-00000000bbbb"
+	if _, err := third.Unlock(otherVault, v2, pass, false); !errors.Is(err, ErrWrongSecret) {
+		t.Fatalf("v2 envelope of another vault: %v", err)
+	}
+	// The recovery envelope served as the passphrase one: refused (kind in the AAD).
+	swapped := envelopeOf(t, v2, KindRecovery)
+	swapped.Kind = KindPassphrase
+	swapped.Kdf = envelopeOf(t, v2, KindPassphrase).Kdf
+	if _, err := third.Unlock(vaultID, replaceEnvelope(v2, swapped), pass, false); !errors.Is(err, ErrWrongSecret) {
+		t.Fatalf("swapped kind: %v", err)
+	}
+	// Pinned kinds refuse v1 (a downgrade), other kinds still accept it.
+	pins := UnlockOptions{PinnedV2: map[string]bool{KindPassphrase: true}}
+	if _, err := third.UnlockWith(vaultID, mat.Envelopes, pass, false, pins); !errors.Is(err, ErrEnvelopeDowngrade) {
+		t.Fatalf("pinned v1: %v", err)
+	}
+	if _, err := third.UnlockWith(vaultID, mat.Envelopes, mat.RecoveryKey, true, pins); err != nil {
+		t.Fatalf("unpinned recovery v1: %v", err)
+	}
+	// A vault seen with v2 envelopes keeps them v2 even with the flag off.
+	if env, err := third.NewPassphraseEnvelope(vaultID, "another long passphrase"); err != nil || vaultcrypto.EnvelopeVersion(env.WrappedVmk) != 2 {
+		t.Fatalf("seen v2 must stay v2: %v", err)
+	}
+	if err := third.VerifyPassphrase(vaultID, v2, pass); err != nil {
+		t.Fatalf("verify v2: %v", err)
+	}
+	if err := third.VerifyPassphrase(otherVault, v2, pass); !errors.Is(err, ErrWrongSecret) {
+		t.Fatalf("verify v2 of another vault: %v", err)
+	}
+}
+
+// With the flag on (release N+1 behavior) an unlock of a v1 envelope proposes
+// the same VMK re-wrapped in v2 under the same KDF parameters.
+func TestUnlockUpgradesToV2WhenEnabled(t *testing.T) {
+	const pass = "correct horse battery staple"
+	m, _, _ := newManager(t)
+	mat, _ := m.NewMaterial(pass)
+	dev := NewManager(Options{Store: NewMemoryStore(), KDFTarget: time.Millisecond, EnvelopeV2: true})
+	for _, recovery := range []bool{false, true} {
+		secret, kind := pass, KindPassphrase
+		if recovery {
+			secret, kind = mat.RecoveryKey, KindRecovery
+		}
+		res, err := dev.UnlockWith(vaultID, mat.Envelopes, secret, recovery, UnlockOptions{})
+		if err != nil || res.Upgrade == nil || string(res.Upgrade.Kind) != kind {
+			t.Fatalf("%s: no upgrade proposed: %+v %v", kind, res, err)
+		}
+		up := *res.Upgrade
+		if vaultcrypto.EnvelopeVersion(up.WrappedVmk) != 2 || up.Kdf.Salt != envelopeOf(t, mat.Envelopes, kind).Kdf.Salt {
+			t.Fatalf("%s: upgrade must be v2 with the same KDF parameters", kind)
+		}
+		next, _, _ := newManager(t)
+		res, err = next.UnlockWith(vaultID, replaceEnvelope(mat.Envelopes, up), secret, recovery, UnlockOptions{})
+		if err != nil || res.Version != 2 || res.Upgrade != nil {
+			t.Fatalf("%s: upgraded envelope: %+v %v", kind, res, err)
+		}
+	}
+	if env, err := dev.NewPassphraseEnvelope(vaultID, "a brand new passphrase"); err != nil || vaultcrypto.EnvelopeVersion(env.WrappedVmk) != 2 {
+		t.Fatalf("flag on must write v2: %v", err)
+	}
+	if env, _, err := dev.NewRecoveryEnvelope(vaultID); err != nil || vaultcrypto.EnvelopeVersion(env.WrappedVmk) != 2 {
+		t.Fatalf("flag on must write a v2 recovery envelope: %v", err)
+	}
+}
+
+// A passphrase envelope written before NFC normalization, from the raw bytes
+// of a decomposed input, still opens with either form; with v2 writing on the
+// upgrade re-wraps it under the NFC form.
+func TestLegacyNonNFCPassphrase(t *testing.T) {
+	const nfc = "café crème brûlée"
+	nfd := norm.NFD.String(nfc)
+	vmk, _ := vaultcrypto.GenerateVMK()
+	kdf := vaultcrypto.NewPassphraseKDF(0, 0, 0)
+	raw, err := vaultcrypto.DeriveKEKPassphraseRaw(nfd, kdf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, _ := vaultcrypto.Wrap(raw, vmk)
+	legacy := []transport.KeyEnvelope{{Kind: KindPassphrase, Kdf: kdfToTransport(kdf), WrappedVmk: w}}
+	for _, typed := range []string{nfd, nfc} {
+		m, _, _ := newManager(t)
+		res, err := m.UnlockWith(vaultID, legacy, typed, false, UnlockOptions{})
+		if err != nil || !res.Legacy || res.Upgrade != nil {
+			t.Fatalf("legacy envelope typed as %+q: %+v %v", typed, res, err)
+		}
+		if err := m.VerifyPassphrase(vaultID, legacy, typed); err != nil {
+			t.Fatalf("verify legacy: %v", err)
+		}
+	}
+	dev := NewManager(Options{Store: NewMemoryStore(), KDFTarget: time.Millisecond, EnvelopeV2: true})
+	res, err := dev.UnlockWith(vaultID, legacy, nfd, false, UnlockOptions{})
+	if err != nil || res.Upgrade == nil {
+		t.Fatalf("legacy upgrade: %+v %v", res, err)
+	}
+	up := []transport.KeyEnvelope{*res.Upgrade}
+	vid, _ := vaultcrypto.ParseUUID(vaultID)
+	nfcKEK, _ := vaultcrypto.DeriveKEKPassphrase(nfc, kdf)
+	if got, err := vaultcrypto.Unwrap(nfcKEK, res.Upgrade.WrappedVmk, vid, vaultcrypto.KindPassphrase); err != nil || got != vmk {
+		t.Fatalf("upgrade not under the NFC key: %v", err)
+	}
+	m, _, _ := newManager(t)
+	if res, err := m.UnlockWith(vaultID, up, nfd, false, UnlockOptions{}); err != nil || res.Legacy {
+		t.Fatalf("upgraded envelope: %+v %v", res, err)
 	}
 }

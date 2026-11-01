@@ -72,7 +72,7 @@ export async function openPrivateVault(
     ...(signal ? { signal } : {}),
   });
   if (!env.response.ok || !env.data) throw apiError(env.response, env.error);
-  const keys = await unlockVault(env.data.items, secret);
+  const keys = await unlockVault(env.data.items, secret, vaultId);
   try {
     const tree = await apiVaultSource(api, vaultId).tree(signal);
     return {

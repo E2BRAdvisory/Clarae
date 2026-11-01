@@ -85,3 +85,39 @@ Il byte di versione rende il formato esplicito, e il v1 resta riconoscibile dall
 - Da aggiornare: `docs/security/crypto-design.md` (§4, §5, §9, checklist §10), la guida admin (flag `features.envelope_v2`) e lo schema del Config Profile (`features.envelope_v2`, nelle due copie).
 - Lo spec cambia in §3.8.2, riga «Envelope»: `0x02 ‖ nonce ‖ AES-256-GCM(KEK, VMK; AAD = "memobrain/v2/envelope" ‖ vault_id ‖ kind) ‖ tag`, con v1 accettato in lettura. In §3.8.7 si aggiungono i nuovi vettori e la regola del pinning (vedi `docs/spec-v1.2-proposta.md`).
 - Va deciso prima dell'audit esterno (`docs/release/v1.0.0-checklist.md` §5): se si sceglie di farlo dopo la 1.0, l'audit va informato che il formato dell'envelope cambierà.
+
+## Esito
+
+Stato dell'implementazione al 2026-11-01: **rilascio N completato**. Lo stato dell'ADR resta «proposta» finché l'owner non lo accetta e aggiorna lo spec.
+
+Che cosa fa il rilascio N, come prescritto dalla sezione «Scrittura e migrazione» («tutti i client […] leggono v1 e v2, e scrivono ancora v1»):
+
+- **Libreria Go** (`shared/go/vaultcrypto/keys.go`): `Unwrap(kek, wrapped, vaultID, kind)` accetta v1 (60 byte, senza AAD) e v2 (61 byte, `0x02` in testa); `WrapV2`/`WrapV2WithNonce` scrivono v2; `Wrap` (v1) resta lo scrittore di default; `EnvelopeAAD` ed `EnvelopeVersion` espongono l'AAD e il riconoscimento del formato.
+- **Libreria TS** (`packages/vaultcrypto-web/src/keys.ts`): le stesse funzioni (`unwrap`, `wrapV2`, `envelopeAad`, `envelopeVersion`). L'export ZIP del browser (`unlockVault(envelopes, secret, vaultId)`, chiamato da `web/src/export/privateExport.ts`) legge i due formati e non riscrive mai gli envelope.
+- **AAD**, byte per byte: i 21 byte ASCII `memobrain/v2/envelope`, i 16 byte dell'UUID del vault, il `kind` in ASCII (`passphrase` o `recovery`), senza separatori né lunghezze. Il formato è univoco perché i primi due campi hanno lunghezza fissa.
+- **Server**: `vaults.ValidateEnvelope` accetta 60 byte, oppure 61 byte con il primo byte `0x02`, e rifiuta tutto il resto (test unitari e di integrazione).
+- **Client desktop e core WASM del workbench web** (`apps/desktop/internal/crypto`, `internal/sync`): leggono v1 e v2. Ogni sblocco passa il `vault_id` del cloud, che il gestore delle chiavi conosce già perché indicizza i vault per id cloud.
+- **Flag**: `features.envelope_v2` del Config Profile, **spento per default** in questo rilascio (`apps/desktop/internal/app/managed.go`, applicato a ogni cambio di configurazione). Lo schema del Config Profile accetta già la chiave (`additionalProperties: boolean`).
+- **Comportamento con il flag acceso** (quello del rilascio N+1, già implementato):
+  - creazione: il vault nasce con envelope v1, perché l'id lo assegna il server alla creazione; subito dopo il client carica le versioni v2 con `PUT /key-envelopes/{kind}`;
+  - cambio passphrase e nuova recovery key scrivono v2;
+  - allo sblocco con la passphrase, un envelope v1 viene ri-avvolto in v2 con gli stessi parametri KDF e la KEK della forma NFC (la stessa, salvo per gli envelope legacy descritti più sotto);
+  - allo sblocco con la recovery key, l'envelope di recovery passa al v2.
+  - Il caricamento è best effort: la VMK resta la stessa e l'envelope precedente continua a funzionare. Il client sostituisce l'envelope solo se sul server c'è ancora quello che ha aperto, così non sovrascrive una passphrase cambiata nel frattempo da un altro dispositivo.
+- **Vettori**: `vectors.json` → `wrap_v2` (passphrase e recovery, con l'AAD in esadecimale); `negative-vectors.json` → `vault_id` diverso, `kind` scambiato, `kind` sconosciuto, byte di versione alterato (`0x03` e `0x01`), v2 troncato a 60 byte, v2 privato del byte di versione (downgrade), tag alterato, byte in coda. Go e TS li verificano entrambi.
+
+Precisazioni rispetto al testo della decisione:
+
+1. **Pinning per tipo di envelope, non per vault.** Il client annota in `sync.db` (`envelope_v2:<id cloud>:<kind>`) che un tipo di envelope di quel vault è passato al v2. Lo annota quando ne apre uno o quando ne carica uno. Da quel momento rifiuta un v1 di quel tipo con `ErrEnvelopeDowngrade`. Un pin per l'intero vault avrebbe rifiutato anche l'envelope di recovery legittimo, che secondo questo stesso ADR resta v1 finché non si usa la recovery key: si rischiava di chiudere fuori l'utente. L'id cloud fa parte della chiave, quindi una cartella ricollegata a un altro vault non eredita il pin.
+2. **Mai declassare.** Anche con il flag spento, un client che ha visto (o annotato) un envelope v2 di un tipo continua a scrivere v2 per quel tipo. Così un dispositivo con il flag spento non riporta a v1 un vault già migrato.
+3. Non è implementato il messaggio distinto «la passphrase apre l'envelope di un altro tuo vault»: uno scambio di envelope v2 appare come passphrase errata, e uno v1 al posto di un tipo annotato appare come `ErrEnvelopeDowngrade`.
+
+Resta per il **rilascio N+1**:
+
+- accendere `features.envelope_v2` per default (`envelopeV2Enabled` in `apps/desktop/internal/app/managed.go`, oggi con default `false`);
+- documentare il flag nella guida admin;
+- elencare `envelope_v2` nelle due copie dello schema del Config Profile (`api/config-profile.schema.json`, `services/cloud/internal/configprofiles/schema.json`);
+- aggiornare la descrizione di `KeyEnvelopeInput.wrapped_vmk` in `api/openapi.yaml`, oggi «(60 bytes)», a «60 (v1) o 61 (v2) bytes». Il campo non ha vincoli `minLength`/`maxLength`, quindi il server accetta già entrambi;
+- aggiornare lo spec: §3.8.2, riga «Envelope», e §3.8.7, come indicato sopra in «Conseguenze».
+
+**Normalizzazione della passphrase (modifica collegata, stesso intervento).** La KEK si deriva ora dalla passphrase normalizzata in Unicode NFC (`DeriveKEKPassphrase` in Go, `deriveKekPassphrase` in TS). Ogni nuovo envelope (creazione, cambio passphrase, nuova passphrase dopo la recovery) usa questa regola. In apertura il client prova, in ordine, la forma NFC, l'input esatto e la sua forma NFD, saltando i duplicati (`PassphraseForms` / `passphraseForms`, `OpenWithPassphrase` / `openWithPassphrase`). Così gli envelope scritti prima, con i byte grezzi di un input non NFC, continuano ad aprirsi. Un envelope aperto solo con una forma legacy viene ri-avvolto sotto la forma NFC solo con il flag acceso, nello stesso upgrade: con il flag spento, un dispositivo non aggiornato che digita la stessa forma non NFC continua a sbloccare. La recovery key non cambia: alfabeto Base32 ASCII con checksum; un carattere non ASCII è già rifiutato prima di qualsiasi derivazione. Vettori: `passphrase_normalization` in `vectors.json`, con input NFC e NFD che danno la stessa KEK, la KEK grezza dell'input NFD e un envelope legacy aperto da entrambe le forme. **Lo spec va aggiornato in §3.8.2** (riga «KDF della passphrase»): la passphrase si normalizza in NFC prima di Argon2id, e in lettura si provano anche l'input esatto e la sua forma NFD.

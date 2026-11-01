@@ -15,6 +15,7 @@ import {
   newPassphraseKdf,
   newRecoveryKdf,
   wrap,
+  wrapV2,
   type Subkeys,
 } from './index';
 import {
@@ -79,7 +80,12 @@ beforeAll(async () => {
   const kekR = await deriveKekRecovery(recovery, rk);
   const envelopes: Envelope[] = [
     { kind: 'passphrase', kdf: pk, wrapped_vmk: b64(await wrap(kekP, vmk)) },
-    { kind: 'recovery', kdf: rk, wrapped_vmk: b64(await wrap(kekR, vmk)) },
+    // The recovery envelope is in format v2 (ADR-0034): the export reads both.
+    {
+      kind: 'recovery',
+      kdf: rk,
+      wrapped_vmk: b64(await wrapV2(kekR, vmk, uuidBytes(VAULT), 'recovery')),
+    },
   ];
   const f = { tree: [] as TreeItem[], blobs: new Map<string, Uint8Array>(), keys };
   const plain = {
@@ -106,7 +112,7 @@ function source(f: Pick<Fixture, 'tree' | 'blobs'>, tweak?: Partial<VaultSource>
 
 describe('unlockVault', () => {
   it('unlocks with the passphrase', async () => {
-    const u = await unlockVault(fx.envelopes, { kind: 'passphrase', passphrase: PASS });
+    const u = await unlockVault(fx.envelopes, { kind: 'passphrase', passphrase: PASS }, VAULT);
     expect(hex(u.keys.vmk)).toBe(hex(fx.keys.vmk));
     u.wipe();
     expect(u.keys.vmk.every((x) => x === 0)).toBe(true);
@@ -114,19 +120,33 @@ describe('unlockVault', () => {
 
   it('rejects a wrong passphrase with DecryptError', async () => {
     await expect(
-      unlockVault(fx.envelopes, { kind: 'passphrase', passphrase: 'nope' }),
+      unlockVault(fx.envelopes, { kind: 'passphrase', passphrase: 'nope' }, VAULT),
     ).rejects.toBeInstanceOf(DecryptError);
   }, 60_000);
 
   it('unlocks with the recovery key and reports malformed or wrong ones', async () => {
-    const u = await unlockVault(fx.envelopes, { kind: 'recovery', recoveryKey: fx.recoveryText });
+    const u = await unlockVault(
+      fx.envelopes,
+      { kind: 'recovery', recoveryKey: fx.recoveryText },
+      VAULT,
+    );
     expect(hex(u.keys.vmk)).toBe(hex(fx.keys.vmk));
     await expect(
-      unlockVault(fx.envelopes, { kind: 'recovery', recoveryKey: 'AAAAA-BBBBB' }),
+      unlockVault(fx.envelopes, { kind: 'recovery', recoveryKey: 'AAAAA-BBBBB' }, VAULT),
     ).rejects.toBeInstanceOf(RecoveryKeyError);
     const other = await encodeRecoveryKey(generateKey());
     await expect(
-      unlockVault(fx.envelopes, { kind: 'recovery', recoveryKey: other }),
+      unlockVault(fx.envelopes, { kind: 'recovery', recoveryKey: other }, VAULT),
+    ).rejects.toBeInstanceOf(DecryptError);
+  });
+
+  it('refuses a v2 envelope served for another vault', async () => {
+    await expect(
+      unlockVault(
+        fx.envelopes,
+        { kind: 'recovery', recoveryKey: fx.recoveryText },
+        '0190a3b4-1111-7222-8333-444455550000',
+      ),
     ).rejects.toBeInstanceOf(DecryptError);
   });
 
@@ -138,11 +158,11 @@ describe('unlockVault', () => {
         wrapped_vmk: b64(new Uint8Array(60)),
       },
     ];
-    await expect(unlockVault(weak, { kind: 'passphrase', passphrase: 'x' })).rejects.toBeInstanceOf(
-      WeakKdfError,
-    );
     await expect(
-      unlockVault(weak, { kind: 'recovery', recoveryKey: fx.recoveryText }),
+      unlockVault(weak, { kind: 'passphrase', passphrase: 'x' }, VAULT),
+    ).rejects.toBeInstanceOf(WeakKdfError);
+    await expect(
+      unlockVault(weak, { kind: 'recovery', recoveryKey: fx.recoveryText }, VAULT),
     ).rejects.toBeInstanceOf(MissingEnvelopeError);
   });
 });

@@ -66,7 +66,22 @@ export function generateKey(): Uint8Array {
   return randomBytes(KEY_SIZE);
 }
 
+/**
+ * Derives the KEK from the passphrase normalized to Unicode NFC, so the same passphrase typed
+ * as composed or decomposed characters derives the same key. Every new envelope uses it.
+ */
 export async function deriveKekPassphrase(passphrase: string, p: KdfParams): Promise<Uint8Array> {
+  return deriveKekPassphraseRaw(passphrase.normalize('NFC'), p);
+}
+
+/**
+ * Derives the KEK from the exact UTF-8 bytes of the passphrase, without normalization: the rule
+ * of the envelopes written before NFC normalization, kept to open them (see openWithPassphrase).
+ */
+export async function deriveKekPassphraseRaw(
+  passphrase: string,
+  p: KdfParams,
+): Promise<Uint8Array> {
   const { t = 0, m_kib: m = 0, p: par = 0 } = p;
   if (
     p.alg !== 'argon2id' ||
@@ -86,7 +101,7 @@ export async function deriveKekPassphrase(passphrase: string, p: KdfParams): Pro
   }
   if (salt.length < 8) throw new WeakKdfError('bad salt');
   return argon2id({
-    password: passphrase,
+    password: enc.encode(passphrase),
     salt,
     parallelism: par,
     iterations: t,
@@ -185,6 +200,32 @@ async function aesKey(raw: Uint8Array, usage: KeyUsage[]): Promise<CryptoKey> {
   return subtle().importKey('raw', buf(raw), 'AES-GCM', false, usage);
 }
 
+// Envelope formats (ADR-0034). v1 is nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag without AAD,
+// recognized by its length alone; v2 prefixes a version byte and binds the envelope to its
+// vault and kind through the AAD "memobrain/v2/envelope" ‖ vault_id (16 bytes) ‖ kind.
+export const WRAPPED_SIZE_V1 = NONCE_SIZE + KEY_SIZE + TAG_SIZE; // 60
+export const WRAPPED_SIZE_V2 = 1 + WRAPPED_SIZE_V1; // 61
+export const ENVELOPE_V2 = 0x02;
+const AAD_ENVELOPE_V2 = 'memobrain/v2/envelope';
+
+export type EnvelopeKind = 'passphrase' | 'recovery';
+
+/** Additional data of a v2 envelope. */
+export function envelopeAad(vaultId: Uint8Array, kind: string): Uint8Array {
+  if (kind !== 'passphrase' && kind !== 'recovery')
+    throw new Error(`unknown envelope kind ${kind}`);
+  if (vaultId.length !== 16) throw new Error('vault id must be 16 bytes');
+  return concat(enc.encode(AAD_ENVELOPE_V2), vaultId, enc.encode(kind));
+}
+
+/** Format of a wrapped VMK from its length and version byte: 1, 2, or 0 when neither. */
+export function envelopeVersion(wrapped: Uint8Array): 0 | 1 | 2 {
+  if (wrapped.length === WRAPPED_SIZE_V1) return 1;
+  if (wrapped.length === WRAPPED_SIZE_V2 && wrapped[0] === ENVELOPE_V2) return 2;
+  return 0;
+}
+
+/** Wraps the VMK in format v1 (the default writer until every client reads v2, ADR-0034). */
 export async function wrap(
   kek: Uint8Array,
   vmk: Uint8Array,
@@ -198,18 +239,113 @@ export async function wrap(
   return concat(nonce, new Uint8Array(ct));
 }
 
-export async function unwrap(kek: Uint8Array, wrapped: Uint8Array): Promise<Uint8Array> {
-  if (wrapped.length !== NONCE_SIZE + KEY_SIZE + TAG_SIZE) throw new DecryptError();
+/** Wraps the VMK in format v2, bound to the vault and the envelope kind. */
+export async function wrapV2(
+  kek: Uint8Array,
+  vmk: Uint8Array,
+  vaultId: Uint8Array,
+  kind: EnvelopeKind,
+  nonce: Uint8Array = randomBytes(NONCE_SIZE),
+): Promise<Uint8Array> {
+  const ct = await subtle().encrypt(
+    {
+      name: 'AES-GCM',
+      iv: buf(nonce),
+      additionalData: buf(envelopeAad(vaultId, kind)),
+      tagLength: 128,
+    },
+    await aesKey(kek, ['encrypt']),
+    buf(vmk),
+  );
+  return concat(Uint8Array.of(ENVELOPE_V2), nonce, new Uint8Array(ct));
+}
+
+/**
+ * Recovers the VMK from a v1 or v2 envelope; a v2 envelope opens only for the vault and kind it
+ * was written for. DecryptError means a wrong KEK, another vault or kind, or tampering.
+ */
+export async function unwrap(
+  kek: Uint8Array,
+  wrapped: Uint8Array,
+  vaultId: Uint8Array,
+  kind: string,
+): Promise<Uint8Array> {
+  const version = envelopeVersion(wrapped);
+  if (version === 0) throw new DecryptError();
+  let aad: Uint8Array | undefined;
+  if (version === 2) {
+    try {
+      aad = envelopeAad(vaultId, kind);
+    } catch {
+      throw new DecryptError();
+    }
+  }
+  const body = version === 2 ? wrapped.slice(1) : wrapped;
   try {
     const pt = await subtle().decrypt(
-      { name: 'AES-GCM', iv: buf(wrapped.slice(0, NONCE_SIZE)), tagLength: 128 },
+      {
+        name: 'AES-GCM',
+        iv: buf(body.slice(0, NONCE_SIZE)),
+        ...(aad ? { additionalData: buf(aad) } : {}),
+        tagLength: 128,
+      },
       await aesKey(kek, ['decrypt']),
-      buf(wrapped.slice(NONCE_SIZE)),
+      buf(body.slice(NONCE_SIZE)),
     );
     return new Uint8Array(pt);
   } catch {
     throw new DecryptError();
   }
+}
+
+/**
+ * Encodings of a typed passphrase to try, in order, on an existing envelope: NFC (the rule of
+ * every envelope written since normalization), then the exact input and its NFD form, which
+ * open envelopes written earlier from the raw bytes of a non-NFC input. No duplicates.
+ */
+export function passphraseForms(passphrase: string): string[] {
+  const forms = [passphrase.normalize('NFC')];
+  for (const f of [passphrase, passphrase.normalize('NFD')]) if (!forms.includes(f)) forms.push(f);
+  return forms;
+}
+
+export interface PassphraseUnlock {
+  vmk: Uint8Array;
+  /** KEK of the NFC form under the envelope's KDF parameters (to re-wrap under). */
+  kek: Uint8Array;
+  version: 1 | 2;
+  /** Only a non-NFC form opened the envelope. */
+  legacy: boolean;
+}
+
+/**
+ * Derives the KEK from each form of the passphrase and unwraps with the first that works.
+ * WeakKdfError comes before any derivation; DecryptError means no form opened it.
+ */
+export async function openWithPassphrase(
+  passphrase: string,
+  p: KdfParams,
+  wrapped: Uint8Array,
+  vaultId: Uint8Array,
+): Promise<PassphraseUnlock> {
+  const version = envelopeVersion(wrapped);
+  if (version === 0) throw new DecryptError();
+  const forms = passphraseForms(passphrase);
+  let nfcKek: Uint8Array | undefined;
+  for (const [i, form] of forms.entries()) {
+    const kek = await deriveKekPassphraseRaw(form, p);
+    if (i === 0) nfcKek = kek;
+    try {
+      const vmk = await unwrap(kek, wrapped, vaultId, 'passphrase');
+      if (i > 0) kek.fill(0);
+      return { vmk, kek: nfcKek ?? kek, version, legacy: i > 0 };
+    } catch (err) {
+      if (!(err instanceof DecryptError)) throw err;
+      if (i > 0) kek.fill(0);
+    }
+  }
+  nfcKek?.fill(0);
+  throw new DecryptError();
 }
 
 export interface Subkeys {
