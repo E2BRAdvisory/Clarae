@@ -1,9 +1,10 @@
 // Entry of the vault workbench page (/vaults/:id/open). It is a page of its own, with its own HTML and
 // style sheet, because the desktop UI's global styles must not reach the console (ADR-0029).
-import { mountWorkbench } from '@memobrain/workbench';
+import { mountCreateCloudVault, mountWorkbench } from '@memobrain/workbench';
 import { createOidcAuth } from '../auth/oidc';
 import type { AuthService } from '../auth/types';
-import { DISABLED, launchWorkbench } from './launch';
+import { parseCreation } from './create';
+import { CANCELLED, DISABLED, launchWorkbench } from './launch';
 import type { CoreAssets } from './protocol';
 import { message } from './strings';
 import './shell.css';
@@ -42,6 +43,9 @@ async function start(): Promise<void> {
   const match = /^\/vaults\/([^/]+)\/open\/?$/.exec(location.pathname);
   if (!match) return show(message('notFound'), { error: true, back: true });
   const vaultId = decodeURIComponent(match[1] as string);
+  // /vaults/new/open?kind=private&name=…: the console sends the creation of a private vault here.
+  const create = parseCreation(vaultId, params);
+  if (create === 'invalid') return show(message('badCreate'), { error: true, back: true });
 
   // Playwright opens a folder of the browser without a cloud, using the OIDC test double.
   const localOnly = Boolean(import.meta.env.MEMOBRAIN_E2E) && params.has('local');
@@ -66,6 +70,11 @@ async function start(): Promise<void> {
       auth,
       vaultId,
       share: params.get('share'),
+      create,
+      mountCreate: (options) => {
+        status.hidden = true;
+        return mountCreateCloudVault(root, options);
+      },
       localOnly,
       fsTrace: Boolean(import.meta.env.MEMOBRAIN_E2E) && params.has('fstrace'),
       assets,
@@ -73,10 +82,11 @@ async function start(): Promise<void> {
       progress: (step) => show(message(step)),
       mount: async ({ vaultPath, onBackToConsole }) => {
         status.hidden = true;
-        await mountWorkbench(root, { kind: 'web', onBackToConsole, vaultPath });
+        return mountWorkbench(root, { kind: 'web', onBackToConsole, vaultPath });
       },
     });
   } catch (e) {
+    if (e instanceof Error && e.message === CANCELLED) return; // on the way back to the console
     if (e instanceof Error && e.message === DISABLED)
       return show(message('disabled'), { error: true, back: true });
     console.error(e);

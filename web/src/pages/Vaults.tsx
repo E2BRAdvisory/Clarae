@@ -1,80 +1,52 @@
+import { useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Badge, EmptyState, Table } from '@memobrain/ui';
-import type { Schemas } from '@memobrain/api-client';
-import { useVaults, useWorkbenchAllowed } from '../api/queries';
-import { formatBytes, formatDay } from '../format';
-import { QueryState } from './QueryState';
+import { Table } from '@memobrain/ui';
+import { CloudVaultsTable, RestCloudPort } from '@memobrain/cloud-features';
+import { useApi } from '../api/context';
+import { keys, useShares, useWorkbenchAllowed, type Share } from '../api/queries';
 import { VaultExport } from './VaultExport';
 
-function VaultsTable({
-  vaults,
-  caption,
-  exportable = false,
-}: {
-  vaults: Schemas['Vault'][];
-  caption: string;
-  /** Owned vaults can be downloaded as ZIP; mounts of other users' shares cannot. */
-  exportable?: boolean;
-}) {
-  const { t, i18n } = useTranslation();
-  const loc = i18n.language;
+/** Where the console sends the creation of a private vault: the browser workbench makes its keys. */
+export function privateCreationHref(name: string): string {
+  return `/vaults/new/open?kind=private&name=${encodeURIComponent(name)}`;
+}
+
+/** A full page load to the workbench (a seam for the tests: jsdom cannot navigate). */
+export const navigation = { assign: (href: string) => window.location.assign(href) };
+
+/** Shares received and accepted: each one opens in the workbench as a mount (`?share=`). */
+function SharedWithMe({ shares }: { shares: Share[] }) {
+  const { t } = useTranslation();
   const canOpen = useWorkbenchAllowed();
   return (
-    <Table caption={caption}>
+    <Table caption={t('vaults.mounts')}>
       <thead>
         <tr>
           <th scope="col">{t('vaults.colName')}</th>
-          <th scope="col">{t('vaults.colKind')}</th>
-          <th scope="col" className="nd-num">
-            {t('vaults.colSize')}
-          </th>
-          <th scope="col" className="nd-num">
-            {t('vaults.colFiles')}
-          </th>
-          <th scope="col" className="nd-num">
-            {t('vaults.colSeq')}
-          </th>
-          <th scope="col">{t('vaults.colCreated')}</th>
+          <th scope="col">{t('vaults.colOwner')}</th>
           {canOpen && (
             <th scope="col">
               <span className="nd-visually-hidden">{t('vaults.open')}</span>
             </th>
           )}
-          {exportable && (
-            <th scope="col">
-              <span className="nd-visually-hidden">{t('vaultExport.column')}</span>
-            </th>
-          )}
         </tr>
       </thead>
       <tbody>
-        {vaults.map((v) => (
-          <tr key={v.id}>
-            <th scope="row">{v.name}</th>
-            <td>
-              <Badge tone={v.kind === 'private' ? 'warn' : 'neutral'}>
-                {v.kind === 'private' ? t('vaults.kindPrivate') : t('vaults.kindShared')}
-              </Badge>
-            </td>
-            <td className="nd-num">{formatBytes(v.total_bytes, loc)}</td>
-            <td className="nd-num">{v.file_count.toLocaleString(loc)}</td>
-            <td className="nd-num">{v.last_seq.toLocaleString(loc)}</td>
-            <td>{formatDay(v.created_at, loc)}</td>
+        {shares.map((s) => (
+          <tr key={s.id}>
+            <th scope="row">{s.display_name}</th>
+            <td>{s.owner_name}</td>
             {canOpen && (
               <td>
                 {/* A full page load: the workbench has its own HTML and style sheet (ADR-0029). */}
                 <a
                   className="nd-button nd-button--small"
-                  href={`/vaults/${encodeURIComponent(v.id)}/open`}
-                  aria-label={t('vaults.openAria', { name: v.name })}
+                  href={`/vaults/${encodeURIComponent(s.vault_id)}/open?share=${encodeURIComponent(s.id)}`}
+                  aria-label={t('vaults.openAria', { name: s.display_name })}
                 >
                   {t('vaults.open')}
                 </a>
-              </td>
-            )}
-            {exportable && (
-              <td>
-                <VaultExport vault={{ id: v.id, name: v.name }} kind={v.kind} />
               </td>
             )}
           </tr>
@@ -85,27 +57,37 @@ function VaultsTable({
 }
 
 export function VaultsPage() {
-  const { t } = useTranslation();
-  const vaults = useVaults();
+  const { t, i18n } = useTranslation();
+  const api = useApi();
+  const qc = useQueryClient();
+  const canOpen = useWorkbenchAllowed();
+  // The cloud vault lifecycle lives in @memobrain/cloud-features (ADR-0037 §2); a private vault is
+  // created in the browser workbench, which holds the Go core's cryptography.
+  const port = useMemo(() => new RestCloudPort(api, { createPrivate: canOpen }), [api, canOpen]);
+  const received = useShares('received');
+  const mounts = (received.data ?? []).filter((s) => s.my_status === 'accepted');
+
   return (
     <>
       <h1>{t('vaults.title')}</h1>
-      <QueryState query={vaults}>
-        {(list) =>
-          list.items.length === 0 && list.mounts.length === 0 ? (
-            <EmptyState title={t('vaults.empty')}>{t('vaults.emptyHint')}</EmptyState>
-          ) : (
-            <div className="nd-stack">
-              {list.items.length > 0 && (
-                <VaultsTable vaults={list.items} caption={t('vaults.title')} exportable />
-              )}
-              {list.mounts.length > 0 && (
-                <VaultsTable vaults={list.mounts} caption={t('vaults.mounts')} />
-              )}
-            </div>
-          )
-        }
-      </QueryState>
+      <div className="nd-stack">
+        <CloudVaultsTable
+          port={port}
+          lang={i18n.language}
+          caption={t('vaults.title')}
+          openHref={canOpen ? (v) => `/vaults/${encodeURIComponent(v.id)}/open` : undefined}
+          extraColumn={{
+            header: t('vaultExport.column'),
+            render: (v) => <VaultExport vault={{ id: v.id, name: v.name }} kind={v.kind} />,
+          }}
+          onCreatePrivate={(name) => navigation.assign(privateCreationHref(name))}
+          onChanged={() => {
+            void qc.invalidateQueries({ queryKey: keys.vaults });
+            void qc.invalidateQueries({ queryKey: keys.usage });
+          }}
+        />
+        {mounts.length > 0 && <SharedWithMe shares={mounts} />}
+      </div>
     </>
   );
 }

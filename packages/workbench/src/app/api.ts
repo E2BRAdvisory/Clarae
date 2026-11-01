@@ -297,6 +297,15 @@ export const api = {
       passphrase: string,
     ): Promise<SyncLinkResult> => SyncAPI.LinkNew(vaultId, name, kind, passphrase),
     listCloudVaults: (): Promise<CloudVault[]> => SyncAPI.ListCloudVaults(),
+    /** Soft-deleted vaults of the account that can still be restored (deletedAt set). */
+    listDeletedCloudVaults: (): Promise<CloudVault[]> => SyncAPI.ListDeletedCloudVaults(),
+    renameCloudVault: (cloudVaultId: string, name: string): Promise<CloudVault> =>
+      SyncAPI.RenameCloudVault(cloudVaultId, name),
+    /** Soft delete; the vaults of this device linked to it are disconnected and keep their files. */
+    deleteCloudVault: (cloudVaultId: string): Promise<void> =>
+      SyncAPI.DeleteCloudVault(cloudVaultId),
+    restoreCloudVault: (cloudVaultId: string): Promise<CloudVault> =>
+      SyncAPI.RestoreCloudVault(cloudVaultId),
     linkExisting: (vaultId: string, cloudVaultId: string): Promise<void> =>
       SyncAPI.LinkExisting(vaultId, cloudVaultId),
     unlink: (vaultId: string): Promise<void> => SyncAPI.Unlink(vaultId),
@@ -426,6 +435,8 @@ export const api = {
     unlock: (vaultId: string, secret: string, isRecovery: boolean): Promise<boolean> =>
       VaultCryptoAPI.Unlock(vaultId, secret, isRecovery),
     lock: (vaultId: string): Promise<void> => VaultCryptoAPI.Lock(vaultId),
+    /** User activity: restarts the idle timer of the unlocked private vaults (see app/activity). */
+    activity: (): Promise<void> => VaultCryptoAPI.Activity(),
     setPassphrase: (vaultId: string, newPassphrase: string): Promise<void> =>
       VaultCryptoAPI.SetPassphrase(vaultId, newPassphrase),
     changePassphrase: (

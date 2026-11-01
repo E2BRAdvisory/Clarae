@@ -5,7 +5,23 @@ export interface WorkbenchOptions {
   onBackToConsole?: () => void;
   vaultPath?: string;
 }
+export interface WorkbenchHandle {
+  /** Writes the pending edits (bounded wait, never rejects); call before tearing the page down. */
+  flush(): Promise<void>;
+}
 export declare function mountWorkbench(
   root: HTMLElement,
   options?: WorkbenchOptions,
-): Promise<void>;
+): Promise<WorkbenchHandle>;
+export interface CreateCloudVaultOptions {
+  vaultId: string;
+  name: string;
+  kind: 'shared' | 'private';
+  onCreated: (cloudVaultId: string) => void;
+  onCancel: () => void;
+}
+/** Runs the workbench's connect wizard preset for a new cloud vault; resolves to its unmount. */
+export declare function mountCreateCloudVault(
+  root: HTMLElement,
+  options: CreateCloudVaultOptions,
+): Promise<() => void>;

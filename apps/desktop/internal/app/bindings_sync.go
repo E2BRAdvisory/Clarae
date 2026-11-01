@@ -6,16 +6,40 @@ import (
 
 	"memobrain/apps/desktop/internal/crypto"
 	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
-// CloudVault is a cloud vault the account can connect a folder to.
+// CloudVault is a cloud vault of the account (the OpenAPI Vault, in the
+// bindings' naming). DeletedAt (RFC 3339) is set on a soft-deleted vault.
 type CloudVault struct {
 	ID         string    `json:"id"`
+	OwnerID    string    `json:"ownerId"`
 	Name       string    `json:"name"`
 	Kind       string    `json:"kind"`
 	TotalBytes int64     `json:"totalBytes"`
 	FileCount  int       `json:"fileCount"`
+	LastSeq    int64     `json:"lastSeq"`
 	CreatedAt  time.Time `json:"createdAt"`
+	DeletedAt  string    `json:"deletedAt,omitempty"`
+}
+
+func cloudVault(v transport.Vault) CloudVault {
+	out := CloudVault{
+		ID: v.Id.String(), OwnerID: v.OwnerId.String(), Name: v.Name, Kind: string(v.Kind),
+		TotalBytes: v.TotalBytes, FileCount: v.FileCount, LastSeq: v.LastSeq, CreatedAt: v.CreatedAt,
+	}
+	if v.DeletedAt != nil {
+		out.DeletedAt = v.DeletedAt.UTC().Format(time.RFC3339)
+	}
+	return out
+}
+
+func cloudVaults(vs []transport.Vault) []CloudVault {
+	out := make([]CloudVault, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, cloudVault(v))
+	}
+	return out
 }
 
 // DeviceInfo is a registered device of the account.
@@ -72,11 +96,44 @@ func (s *SyncAPI) ListCloudVaults() ([]CloudVault, error) {
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	out := make([]CloudVault, 0, len(vs))
-	for _, v := range vs {
-		out = append(out, CloudVault{ID: v.ID, Name: v.Name, Kind: v.Kind, TotalBytes: v.TotalBytes, FileCount: v.FileCount, CreatedAt: v.CreatedAt})
+	return cloudVaults(vs), nil
+}
+
+// ListDeletedCloudVaults lists the account's soft-deleted vaults that can still
+// be restored (deleted within the server's retention period).
+func (s *SyncAPI) ListDeletedCloudVaults() ([]CloudVault, error) {
+	vs, err := s.app.sync.DeletedCloudVaults(context.Background())
+	if err != nil {
+		return nil, bindingError(err)
 	}
-	return out, nil
+	return cloudVaults(vs), nil
+}
+
+// RenameCloudVault renames a cloud vault of the account. A vault of this
+// device linked to it shows the new name in its link; folders keep theirs.
+func (s *SyncAPI) RenameCloudVault(cloudVaultID, name string) (CloudVault, error) {
+	v, err := s.app.sync.RenameCloudVault(context.Background(), cloudVaultID, name)
+	if err != nil {
+		return CloudVault{}, bindingError(err)
+	}
+	return cloudVault(v), nil
+}
+
+// DeleteCloudVault soft-deletes a cloud vault of the account (restorable within
+// the retention period). The vaults of this device linked to it are then
+// disconnected: their files stay on disk.
+func (s *SyncAPI) DeleteCloudVault(cloudVaultID string) error {
+	_, err := s.app.sync.DeleteCloudVault(context.Background(), cloudVaultID)
+	return bindingError(err)
+}
+
+// RestoreCloudVault restores a soft-deleted cloud vault within the retention period.
+func (s *SyncAPI) RestoreCloudVault(cloudVaultID string) (CloudVault, error) {
+	v, err := s.app.sync.RestoreCloudVault(context.Background(), cloudVaultID)
+	if err != nil {
+		return CloudVault{}, bindingError(err)
+	}
+	return cloudVault(v), nil
 }
 
 // LinkExisting connects the open vault to an existing cloud vault (a new device).
@@ -156,7 +213,8 @@ func (s *SyncAPI) Devices() ([]DeviceInfo, error) {
 		if d.AppVersion != nil {
 			v = *d.AppVersion
 		}
-		out = append(out, DeviceInfo{ID: d.ID, Name: d.Name, Platform: d.Platform, AppVersion: v, LastSeenAt: d.LastSeenAt, Current: d.ID == current})
+		id := d.Id.String()
+		out = append(out, DeviceInfo{ID: id, Name: d.Name, Platform: d.Platform, AppVersion: v, LastSeenAt: d.LastSeenAt, Current: id == current})
 	}
 	return out, nil
 }
@@ -169,7 +227,7 @@ func (s *SyncAPI) RevokeDevice(id string) error {
 // Usage returns the storage usage of the account.
 func (s *SyncAPI) Usage() (UsageInfo, error) {
 	u, err := s.app.sync.Usage(context.Background())
-	return UsageInfo{UsedBytes: u.UsedBytes, QuotaBytes: u.QuotaBytes, Level: u.Level}, bindingError(err)
+	return UsageInfo{UsedBytes: u.UsedBytes, QuotaBytes: u.QuotaBytes, Level: string(u.Level)}, bindingError(err)
 }
 
 // VaultCryptoAPI exposes end-to-end encryption of private vaults (§2.5).
@@ -189,6 +247,13 @@ func (c *VaultCryptoAPI) Unlock(vaultID, secret string, isRecovery bool) (bool, 
 // Lock forgets the vault key on this device.
 func (c *VaultCryptoAPI) Lock(vaultID string) error {
 	return bindingError(c.app.sync.LockVault(context.Background(), vaultID))
+}
+
+// Activity tells the core that the user is active (pointer, keys, scrolling):
+// the idle timer of the unlocked private vaults starts again. The page calls
+// it at most every few seconds; background synchronization never counts.
+func (c *VaultCryptoAPI) Activity() {
+	c.app.sync.Activity()
 }
 
 // SetPassphrase sets a new passphrase on an unlocked vault (after a recovery).

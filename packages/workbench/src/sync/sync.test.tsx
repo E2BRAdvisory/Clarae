@@ -15,6 +15,7 @@ import { ConnectWizard } from './ConnectWizard';
 import { HistoryView } from './HistoryView';
 import { SyncIndicator } from './SyncIndicator';
 import { UnlockDialog } from './UnlockDialog';
+import { registerNoteFlusher } from '../workspaces/flush';
 
 const GOOD = 'correct horse battery staple orbit';
 const wrap = (ui: ReactNode) => (
@@ -154,14 +155,53 @@ describe('ConnectWizard', () => {
     expect((await api.sync.info(vaultId)).kind).toBe('private');
   });
 
+  it('preset by the console: asks only for the passphrase, then hands the new vault over', async () => {
+    await signIn();
+    const linked: string[] = [];
+    let cancelled = 0;
+    render(
+      wrap(
+        <ConnectWizard
+          vaultId={vaultId}
+          vaultName="new-123"
+          preset={{
+            kind: 'private',
+            name: 'Diary',
+            onLinked: (id) => linked.push(id),
+            onCancel: () => cancelled++,
+          }}
+        />,
+      ),
+    );
+    // No choice of kind: straight to the passphrase, with the consequences spelled out.
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.getByText(/cannot be recovered by anyone/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(cancelled).toBe(1);
+    fireEvent.change(screen.getByLabelText('Passphrase'), { target: { value: GOOD } });
+    fireEvent.change(screen.getByLabelText('Repeat the passphrase'), { target: { value: GOOD } });
+    const create = screen.getByRole('button', { name: 'Create encrypted vault' });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    const key = (await screen.findByLabelText('Recovery key')).textContent ?? '';
+    fireEvent.change(screen.getByLabelText(/Type the recovery key/), { target: { value: key } });
+    expect(linked).toEqual([]); // not before the key was retyped
+    fireEvent.click(screen.getByRole('button', { name: 'I saved it' }));
+    const info = await api.sync.info(vaultId);
+    expect(linked).toEqual([info.cloudVaultId]);
+    expect(info).toMatchObject({ kind: 'private', name: 'Diary' });
+  });
+
   it('connects to an existing private vault and hands over to the unlock dialog', async () => {
     await signIn();
     mock.sync.cloudVaults.push({
       id: 'cv1',
+      ownerId: 'user-1',
       name: 'Old diary',
       kind: 'private',
       totalBytes: 10,
       fileCount: 2,
+      lastSeq: 4,
       createdAt: new Date().toISOString(),
     });
     render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Notes" />));
@@ -176,10 +216,12 @@ describe('ConnectWizard', () => {
     await signIn();
     mock.sync.cloudVaults.push({
       id: 'cv1',
+      ownerId: 'user-1',
       name: 'Notes',
       kind: 'shared',
       totalBytes: 0,
       fileCount: 0,
+      lastSeq: 0,
       createdAt: new Date().toISOString(),
     });
     render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Notes" />));
@@ -409,6 +451,56 @@ describe('SyncSection (settings)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lock now' }));
     await screen.findByRole('button', { name: 'Unlock' });
     expect(mock.sync.links.get(vaultId)?.locked).toBe(true);
+  });
+
+  it('writes the pending edits before locking', async () => {
+    await signIn();
+    await api.sync.linkNew(vaultId, 'Diary', 'private', GOOD);
+    await useSync.getState().refresh(vaultId);
+    const lockedAtFlush: (boolean | undefined)[] = [];
+    const off = registerNoteFlusher({
+      vaultId,
+      path: 'a.md',
+      flush: () => {
+        lockedAtFlush.push(mock.sync.links.get(vaultId)?.locked);
+        return Promise.resolve(true);
+      },
+      rescue: () => Promise.resolve(null),
+      dirty: () => false,
+    });
+    try {
+      render(wrap(<SyncSection />));
+      fireEvent.click(await screen.findByRole('button', { name: 'Lock now' }));
+      await screen.findByRole('button', { name: 'Unlock' });
+      expect(lockedAtFlush).toEqual([false]);
+      expect(mock.sync.links.get(vaultId)?.locked).toBe(true);
+    } finally {
+      off();
+    }
+  });
+
+  it('keeps the vault unlocked when edits cannot be written anywhere', async () => {
+    await signIn();
+    await api.sync.linkNew(vaultId, 'Diary', 'private', GOOD);
+    await useSync.getState().refresh(vaultId);
+    const off = registerNoteFlusher({
+      vaultId,
+      path: 'a.md',
+      flush: () => Promise.resolve(false),
+      rescue: () => Promise.resolve(null),
+      dirty: () => true,
+    });
+    try {
+      render(wrap(<SyncSection />));
+      fireEvent.click(await screen.findByRole('button', { name: 'Lock now' }));
+      expect(await screen.findByText(/a\.md/)).toBeInTheDocument();
+      fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'OK' })).toBeNull());
+      expect(mock.sync.links.get(vaultId)?.locked).toBe(false);
+      expect(screen.getByRole('button', { name: 'Lock now' })).toBeInTheDocument();
+    } finally {
+      off();
+    }
   });
 
   it('sets the idle lock of private vaults as a device setting', async () => {

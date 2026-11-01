@@ -58,19 +58,17 @@
   },
   "vaults": {
     "title": "My vaults",
-    "empty": "You have no vaults yet",
-    "emptyHint": "Create a vault from the desktop app and it will appear here.",
     "colName": "Name",
     "colKind": "Type",
     "colSize": "Size",
     "colFiles": "Files",
-    "colSeq": "Last sync (seq)",
     "colCreated": "Created",
     "kindPrivate": "Private (encrypted)",
     "kindShared": "Shared",
     "mounts": "Shared with me",
     "open": "Open",
-    "openAria": "Open {{name}} in the browser"
+    "openAria": "Open {{name}} in the browser",
+    "colOwner": "Shared by"
   },
   "devices": {
     "title": "Devices",
@@ -529,7 +527,23 @@
     "forgetTitle": "This browser",
     "forgetBody": "Vaults you open in the browser are kept on this computer while you work. Remove those copies and the data that indexes them: they are downloaded again the next time you open a vault. Signing out does this too.",
     "forgetButton": "Forget this browser",
-    "forgetDone": "This browser no longer holds any vault.",
-    "forgetBusy": "A vault is open in another tab of this browser. Close it and try again."
+    "forgetDone": "This browser no longer holds any vault."
+  },
+  "forget": {
+    "confirmTitle": "Changes not uploaded",
+    "confirmBody": "This browser keeps changes to these vaults that were not uploaded to the cloud yet. If you continue they are deleted from this browser for good.",
+    "confirmHint": "To keep them, open the vault and let it upload its changes first.",
+    "pendingCount_one": "{{count}} change not uploaded",
+    "pendingCount_other": "{{count}} changes not uploaded",
+    "conflictCount_one": "{{count}} conflict to resolve",
+    "conflictCount_other": "{{count}} conflicts to resolve",
+    "maybePending": "changes may not be uploaded yet",
+    "confirmSignOut": "Delete and sign out",
+    "confirmForget": "Delete them",
+    "busyTitle": "A vault is open in another tab",
+    "busyBody": "A vault is open in another tab of this browser and keeps its files in use. Close that tab, or let it upload its changes and close itself, then try again.",
+    "stillOpen": "The vault tab is still open: it may be keeping changes it could not upload. Switch to it to decide what to do.",
+    "waiting": "Asking the vault tab to upload its changes and close…",
+    "closeTab": "Close that tab and retry"
   }
 }

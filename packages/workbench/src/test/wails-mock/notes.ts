@@ -17,7 +17,7 @@ import type { MockVault } from './index';
 interface Ctx {
   vaultOf: (id: string) => MockVault;
   resolve: (v: MockVault, from: string, target: string) => string;
-  changed: (id: string, paths: string[]) => void;
+  changed: (id: string, paths: string[], created?: readonly string[]) => void;
 }
 
 const pad = (n: number, w = 2): string => String(n).padStart(w, '0');
@@ -73,8 +73,9 @@ export function notesMock({ vaultOf, resolve, changed }: Ctx) {
     } catch {
       /* a missing template creates an empty note */
     }
+    const existed = v.files.has(path);
     v.files.set(path, content);
-    changed(id, [path]);
+    changed(id, [path], existed ? [] : [path]);
   };
 
   const TemplatesAPI = {
@@ -203,7 +204,7 @@ export function notesMock({ vaultOf, resolve, changed }: Ctx) {
         ? (/^---\n[\s\S]*?\n---\n/.exec(v.files.get(o.sourcePath) ?? '')?.[0] ?? '')
         : '';
       v.files.set(path, fm + o.selection.trimEnd() + '\n');
-      changed(id, [path]);
+      changed(id, [path], [path]);
       const link = `[[${stem(path)}]]`;
       return Promise.resolve({ path, link: o.embed ? '!' + link : link });
     },

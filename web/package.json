@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@memobrain/api-client": "workspace:*",
+    "@memobrain/cloud-features": "workspace:*",
     "@memobrain/sqlite-bridge": "workspace:*",
     "@memobrain/ui": "workspace:*",
     "@memobrain/vaultcrypto-web": "workspace:*",

@@ -7,6 +7,7 @@
 import { parseDocument } from 'yaml';
 import { extract, splitFrontmatter } from '@memobrain/markdown';
 import { linkInfo } from '../../app/api';
+import type { FileChange } from '../../app/events';
 import { buildMockGraph } from '../../graph/mockBuild';
 import { syntheticGraph } from '../../graph/synthetic';
 import type { GraphData, GraphOptions } from '../../graph/types';
@@ -113,6 +114,10 @@ export interface WailsMock {
   /** DrawingAPI.WriteExport: auto-exported files by vault path. */
   drawingExports: Map<string, string>;
   prints: number;
+  /** Calls of the runtime Quit (the desktop window closing after a flush). */
+  quits: number;
+  /** Calls of VaultCryptoAPI.Activity (user activity reported for the idle lock). */
+  activity: number;
   recent: VaultInfo[];
   settings: AppSettings;
   auth: AuthState;
@@ -183,6 +188,23 @@ function entriesOf(v: MockVault): Entry[] {
     });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function changeOf(v: MockVault, path: string, created: boolean): FileChange {
+  const file = v.files.get(path) ?? v.binaries.get(path);
+  const isDir =
+    file === undefined &&
+    [...v.files.keys(), ...v.binaries.keys()].some((p) => p.startsWith(path + '/'));
+  if (file === undefined && !isDir) return { type: 'delete', path };
+  const entry: Entry = {
+    path,
+    name: baseName(path),
+    isDir,
+    kind: isDir ? '' : isNote(path) ? 'md' : 'other',
+    size: isDir ? 0 : (v.files.get(path)?.length ?? 0),
+    mtime: new Date().toISOString(),
+  };
+  return { type: isDir || created ? 'create' : 'modify', path, entry };
 }
 
 function fuzzy(query: string, text: string): number {
@@ -293,6 +315,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     fileExports: [],
     drawingExports: new Map<string, string>(),
     prints: 0,
+    quits: 0,
+    activity: 0,
     recent: seed?.recent ?? [],
     settings: seed?.settings ?? { language: '', theme: 'system', trashMode: 'vault' },
     auth: seed?.auth ?? {
@@ -313,8 +337,15 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     return v;
   };
   const reject = (msg: string): Promise<never> => Promise.reject(new Error(msg));
-  const changed = (id: string, paths: string[]): void =>
-    mock.emit('vault:file-changed', { vaultId: id, paths });
+  /**
+   * vault:file-changed as the core sends it: every path, classified (internal/app/changes.go). The
+   * mock has no index to tell a creation from an edit, so callers name the paths they created.
+   */
+  const changed = (id: string, paths: string[], created: readonly string[] = []): void => {
+    const v = mock.vaults.get(id);
+    const changes = v ? paths.map((p) => changeOf(v, p, created.includes(p))) : undefined;
+    mock.emit('vault:file-changed', { vaultId: id, paths, ...(changes ? { changes } : {}) });
+  };
 
   const outgoing = (v: MockVault, path: string): NoteLink[] => {
     const raw = v.files.get(path);
@@ -392,7 +423,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (expectedHash !== '' && (current === undefined || hashOf(current) !== expectedHash))
         return reject('conflict: file changed on disk');
       v.files.set(path, content);
-      changed(id, [path]);
+      changed(id, [path], current === undefined ? [path] : []);
       return Promise.resolve({ path, hash: hashOf(content), size: content.length });
     },
     CreateFolder: (): Promise<void> => Promise.resolve(),
@@ -412,7 +443,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         v.binaries.delete(from);
         v.binaries.set(to, bin);
       }
-      changed(id, [from, to]);
+      changed(id, [from, to], [to]);
       return Promise.resolve();
     },
     Trash: (id: string, path: string): Promise<string> => {
@@ -454,7 +485,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         candidate = `${dir ? dir + '/' : ''}${name.slice(0, name.length - ext.length)} ${i}${ext}`;
       }
       v.binaries.set(candidate, base64);
-      changed(id, [candidate]);
+      changed(id, [candidate], [candidate]);
       return Promise.resolve(candidate);
     },
   };
@@ -889,6 +920,22 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     );
   };
 
+  const unlink = (id: string): void => {
+    sy.links.delete(id);
+    sy.status.delete(id);
+    mock.emit('sync:status', {
+      vaultId: id,
+      phase: 'idle',
+      lastSync: '',
+      pending: 0,
+      conflicts: 0,
+      done: 0,
+      total: 0,
+      error: '',
+      kind: '',
+    });
+  };
+
   const SyncAPI = {
     Info: (id: string): Promise<SyncLinkInfo> => {
       const info: SyncLinkInfo & { passphrase?: string; recoveryKey?: string } = { ...linkOf(id) };
@@ -922,17 +969,19 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (kind !== 'shared' && kind !== 'private') return reject(`unknown vault kind "${kind}"`);
       if (kind === 'private' && [...passphrase].length < 12)
         return reject('the passphrase must have at least 12 characters');
-      if (sy.cloudVaults.some((v) => v.name === name))
+      if (sy.cloudVaults.some((v) => v.name === name && !v.deletedAt))
         return reject('name-in-use: you already have a vault with this name');
       const cloudVaultId = `cloud-${sy.cloudVaults.length + 1}`;
       const recoveryKey =
         kind === 'private' ? 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z2345-67ABC-DEFGH-IJKLM-NOPQR-STU' : '';
       sy.cloudVaults.push({
         id: cloudVaultId,
+        ownerId: 'user-1',
         name,
         kind,
         totalBytes: 0,
         fileCount: 0,
+        lastSeq: 0,
         createdAt: new Date().toISOString(),
       });
       sy.links.set(id, {
@@ -954,7 +1003,47 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve({ cloudVaultId, recoveryKey });
     },
     ListCloudVaults: (): Promise<CloudVault[]> =>
-      requireSignIn() ?? Promise.resolve(sy.cloudVaults),
+      requireSignIn() ?? Promise.resolve(sy.cloudVaults.filter((v) => !v.deletedAt)),
+    ListDeletedCloudVaults: (): Promise<CloudVault[]> =>
+      requireSignIn() ?? Promise.resolve(sy.cloudVaults.filter((v) => Boolean(v.deletedAt))),
+    // The lifecycle of a cloud vault (ADR-0037 §2): like the server, a name is unique among the
+    // owner's live vaults; like the core, a delete disconnects the vaults linked to it (files stay).
+    RenameCloudVault: (cloudVaultId: string, name: string): Promise<CloudVault> => {
+      const err = requireSignIn();
+      if (err) return err;
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+      if (!v) return reject('NOT_FOUND: vault not found');
+      if (name.trim() === '') return reject('VALIDATION_FAILED: name is required');
+      if (sy.cloudVaults.some((x) => x.id !== v.id && x.name === name && !x.deletedAt))
+        return reject('NAME_IN_USE: a vault with this name already exists');
+      v.name = name;
+      for (const [id, l] of sy.links)
+        if (l.cloudVaultId === cloudVaultId && !l.mount) {
+          sy.links.set(id, { ...l, name });
+          setStatus(id, {});
+        }
+      return Promise.resolve({ ...v });
+    },
+    DeleteCloudVault: (cloudVaultId: string): Promise<void> => {
+      const err = requireSignIn();
+      if (err) return err;
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+      if (!v) return reject('NOT_FOUND: vault not found');
+      v.deletedAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+      for (const [id, l] of [...sy.links])
+        if (l.cloudVaultId === cloudVaultId && !l.mount) unlink(id);
+      return Promise.resolve();
+    },
+    RestoreCloudVault: (cloudVaultId: string): Promise<CloudVault> => {
+      const err = requireSignIn();
+      if (err) return err;
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && x.deletedAt);
+      if (!v) return reject('NOT_FOUND: vault not found');
+      if (sy.cloudVaults.some((x) => x.id !== v.id && x.name === v.name && !x.deletedAt))
+        return reject('NAME_IN_USE: a vault with this name already exists');
+      delete v.deletedAt;
+      return Promise.resolve({ ...v });
+    },
     LinkExisting: (id: string, cloudVaultId: string): Promise<void> => {
       const err = requireSignIn();
       if (err) return err;
@@ -977,19 +1066,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve();
     },
     Unlink: (id: string): Promise<void> => {
-      sy.links.delete(id);
-      sy.status.delete(id);
-      mock.emit('sync:status', {
-        vaultId: id,
-        phase: 'idle',
-        lastSync: '',
-        pending: 0,
-        conflicts: 0,
-        done: 0,
-        total: 0,
-        error: '',
-        kind: '',
-      });
+      unlink(id);
       return Promise.resolve();
     },
     SetPaused: (id: string, paused: boolean): Promise<void> => {
@@ -1251,7 +1328,11 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const l = linkOf(id);
       sy.links.set(id, { ...l, locked: true });
       setStatus(id, { phase: 'locked' });
-      mock.emit('vault:locked', { vaultId: id });
+      mock.emit('vault:locked', { vaultId: id, reason: 'manual', pending: 0, conflicts: 0 });
+      return Promise.resolve();
+    },
+    Activity: (): Promise<void> => {
+      mock.activity++;
       return Promise.resolve();
     },
     SetPassphrase: (id: string, passphrase: string): Promise<void> => {
@@ -1346,6 +1427,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     EventsEmit: (name: string, ...data: unknown[]) => mock.emit(name, data[0]),
     BrowserOpenURL: () => undefined,
     WindowShow: () => undefined,
+    Quit: () => {
+      mock.quits++;
+    },
   };
   return mock;
 }

@@ -66,7 +66,14 @@
     "mode_source": "Sorgente",
     "mode_reading": "Lettura",
     "saveError": "Salvataggio non riuscito",
-    "ariaLabel": "Editor della nota"
+    "ariaLabel": "Editor della nota",
+    "notSaved": "Questa nota ha modifiche non ancora salvate (vedi il messaggio sopra l'editor). Ricarica o sovrascrivi, poi riprova.",
+    "notSavedTitle": "Modifiche non salvate",
+    "notSavedList": "Non è stato possibile salvare le modifiche a queste note: {{paths}}. Risolvi il conflitto (ricarica o sovrascrivi) oppure copia il testo, poi riprova.",
+    "renameBlocked": "Le modifiche a {{paths}} non sono ancora salvate. Risolvi il conflitto (ricarica o sovrascrivi), poi rinomina.",
+    "rescuedTitle": "Modifiche salvate in una copia",
+    "rescued": "Non è stato possibile salvare queste modifiche nel loro file: sono state salvate in una copia accanto: {{paths}}",
+    "rescueName": "{{name}} (non salvato {{time}})"
   },
   "status": {
     "indexing": "Indicizzazione {{done}}/{{total}}",
@@ -168,7 +175,8 @@
     "devices": "Dispositivi",
     "thisDevice": "questo dispositivo",
     "revoke": "Revoca dispositivo",
-    "revokeText": "Disconnettere «{{name}}» dal tuo account? Smetterà di sincronizzare."
+    "revokeText": "Disconnettere «{{name}}» dal tuo account? Smetterà di sincronizzare.",
+    "vaults": "Vault nel cloud"
   },
   "links": {
     "outgoing": "Link",

@@ -1,0 +1,284 @@
+/* Components of the MemoBrain Notes UI design system: nd-* classes only, no element or global rule,
+   so they can be loaded next to another style sheet. The tokens (--nd-*) are defined by styles.css
+   (console) or by the host (see @memobrain/cloud-features/workbench.css). */
+
+.nd-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Button */
+.nd-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  color: var(--nd-text);
+  font: inherit;
+  cursor: pointer;
+}
+.nd-button:hover:not(:disabled) {
+  background: var(--nd-surface-2);
+}
+.nd-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.nd-button--primary {
+  background: var(--nd-accent);
+  border-color: var(--nd-accent);
+  color: var(--nd-accent-text);
+}
+.nd-button--primary:hover:not(:disabled) {
+  background: var(--nd-accent);
+  filter: brightness(1.08);
+}
+.nd-button--danger {
+  color: var(--nd-danger);
+  border-color: var(--nd-danger);
+}
+.nd-button--small {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 0.9rem;
+}
+
+/* Form controls */
+.nd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.nd-field__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.nd-field__hint {
+  color: var(--nd-text-muted);
+  font-size: 0.85rem;
+}
+.nd-input,
+.nd-select {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  color: var(--nd-text);
+  font: inherit;
+  max-width: 100%;
+}
+
+/* Card */
+.nd-card {
+  background: var(--nd-surface);
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  padding: var(--nd-gap);
+  margin-bottom: var(--nd-gap);
+}
+
+/* Table: scrolls horizontally inside its wrapper on narrow screens */
+.nd-table-wrap {
+  /* containing block for absolutely positioned visually-hidden text, so it cannot widen the page */
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+}
+.nd-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.nd-table caption {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.nd-table th,
+.nd-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-top: 1px solid var(--nd-border);
+  vertical-align: middle;
+}
+.nd-table thead th {
+  border-top: 0;
+  background: var(--nd-surface-2);
+  font-size: 0.85rem;
+  color: var(--nd-text-muted);
+  white-space: nowrap;
+}
+.nd-table .nd-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Badge */
+.nd-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--nd-border);
+  background: var(--nd-surface-2);
+  color: var(--nd-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.nd-badge--ok {
+  background: var(--nd-ok-bg);
+  color: var(--nd-ok);
+  border-color: var(--nd-ok);
+}
+.nd-badge--warn {
+  background: var(--nd-warn-bg);
+  color: var(--nd-warn);
+  border-color: var(--nd-warn);
+}
+.nd-badge--danger {
+  background: var(--nd-danger-bg);
+  color: var(--nd-danger);
+  border-color: var(--nd-danger);
+}
+
+/* Quota bar: a native <progress> so that no inline style is needed (CSP style-src 'self') */
+.nd-quota__bar {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--nd-surface-2);
+  --nd-quota-color: var(--nd-ok);
+}
+.nd-quota__bar::-webkit-progress-bar {
+  background: var(--nd-surface-2);
+}
+.nd-quota__bar::-webkit-progress-value {
+  background: var(--nd-quota-color);
+}
+.nd-quota__bar::-moz-progress-bar {
+  background: var(--nd-quota-color);
+}
+.nd-quota[data-level='warn'] .nd-quota__bar {
+  --nd-quota-color: var(--nd-warn);
+}
+.nd-quota[data-level='critical'] .nd-quota__bar,
+.nd-quota[data-level='full'] .nd-quota__bar {
+  --nd-quota-color: var(--nd-danger);
+}
+.nd-quota__caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--nd-text-muted);
+}
+
+/* Empty state, inline error, toast */
+.nd-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--nd-text-muted);
+  border: 1px dashed var(--nd-border);
+  border-radius: var(--nd-radius);
+}
+.nd-empty__title {
+  color: var(--nd-text);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.nd-inline-error {
+  padding: 10px 12px;
+  border: 1px solid var(--nd-danger);
+  border-radius: var(--nd-radius);
+  background: var(--nd-danger-bg);
+  color: var(--nd-danger);
+  margin: 0 0 12px;
+}
+.nd-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 1000;
+  pointer-events: none;
+}
+.nd-toast {
+  pointer-events: auto;
+  max-width: 420px;
+  padding: 10px 14px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  box-shadow: var(--nd-shadow);
+}
+.nd-toast--error {
+  border-color: var(--nd-danger);
+  color: var(--nd-danger);
+}
+
+/* Dialog */
+.nd-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.45);
+  z-index: 900;
+}
+.nd-dialog {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  background: var(--nd-surface);
+  color: var(--nd-text);
+  box-shadow: var(--nd-shadow);
+}
+.nd-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Layout helpers */
+.nd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.nd-stack > * + * {
+  margin-top: var(--nd-gap);
+}
+.nd-muted {
+  color: var(--nd-text-muted);
+}

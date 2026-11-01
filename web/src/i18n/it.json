@@ -58,19 +58,17 @@
   },
   "vaults": {
     "title": "I miei vault",
-    "empty": "Non hai ancora vault",
-    "emptyHint": "Crea un vault dall'app desktop e comparirà qui.",
     "colName": "Nome",
     "colKind": "Tipo",
     "colSize": "Dimensione",
     "colFiles": "File",
-    "colSeq": "Ultima sincronizzazione (seq)",
     "colCreated": "Creato",
     "kindPrivate": "Privato (cifrato)",
     "kindShared": "Condiviso",
     "mounts": "Condivisi con me",
     "open": "Apri",
-    "openAria": "Apri {{name}} nel browser"
+    "openAria": "Apri {{name}} nel browser",
+    "colOwner": "Condiviso da"
   },
   "devices": {
     "title": "Dispositivi",
@@ -529,7 +527,23 @@
     "forgetTitle": "Questo browser",
     "forgetBody": "I vault che apri nel browser restano su questo computer mentre lavori. Rimuovi quelle copie e i dati che le indicizzano: si scaricano di nuovo alla prossima apertura. Anche l'uscita dall'account lo fa.",
     "forgetButton": "Dimentica questo browser",
-    "forgetDone": "Questo browser non conserva più nessun vault.",
-    "forgetBusy": "Un vault è aperto in un'altra scheda di questo browser. Chiudila e riprova."
+    "forgetDone": "Questo browser non conserva più nessun vault."
+  },
+  "forget": {
+    "confirmTitle": "Modifiche non caricate",
+    "confirmBody": "Questo browser conserva modifiche a questi vault non ancora caricate nel cloud. Se continui vengono eliminate da questo browser per sempre.",
+    "confirmHint": "Per conservarle, apri il vault e lascia che carichi prima le modifiche.",
+    "pendingCount_one": "{{count}} modifica non caricata",
+    "pendingCount_other": "{{count}} modifiche non caricate",
+    "conflictCount_one": "{{count}} conflitto da risolvere",
+    "conflictCount_other": "{{count}} conflitti da risolvere",
+    "maybePending": "le modifiche potrebbero non essere ancora caricate",
+    "confirmSignOut": "Elimina ed esci",
+    "confirmForget": "Eliminale",
+    "busyTitle": "Un vault è aperto in un'altra scheda",
+    "busyBody": "Un vault è aperto in un'altra scheda di questo browser e ne tiene in uso i file. Chiudi quella scheda, oppure lascia che carichi le modifiche e si chiuda da sola, poi riprova.",
+    "stillOpen": "La scheda del vault è ancora aperta: potrebbe conservare modifiche che non è riuscita a caricare. Passa a quella scheda per decidere cosa fare.",
+    "waiting": "Richiesta alla scheda del vault di caricare le modifiche e chiudersi…",
+    "closeTab": "Chiudi quella scheda e riprova"
   }
 }

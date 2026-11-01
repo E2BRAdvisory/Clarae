@@ -3,12 +3,25 @@ import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import 'katex/dist/katex.min.css';
 import { App } from './app/App';
+import { api } from './app/api';
+import { ConnectWizard } from './sync/ConnectWizard';
+import { useAppStore } from './state/store';
+import { flushWorkbench, installLifecycle } from './app/lifecycle';
 import { initI18n } from './i18n';
 import { configurePlatform, type PlatformOptions } from './platform';
 import { queryClient } from './state/queryClient';
 import './style.css';
 
 export type WorkbenchOptions = PlatformOptions;
+
+/** What the host can do with a mounted workbench. */
+export interface WorkbenchHandle {
+  /**
+   * Writes every pending edit (what cannot be saved in its file goes to a copy next to it) and the
+   * workspace. Call it before tearing the page down; it resolves within a few seconds, never rejects.
+   */
+  flush(): Promise<void>;
+}
 
 /**
  * Mounts the workbench (the whole vault UI) in `root`. The host provides the backend before
@@ -18,8 +31,13 @@ export type WorkbenchOptions = PlatformOptions;
 export async function mountWorkbench(
   root: HTMLElement,
   options: WorkbenchOptions = {},
-): Promise<void> {
-  configurePlatform(options);
+): Promise<WorkbenchHandle> {
+  const back = options.onBackToConsole;
+  configurePlatform({
+    ...options,
+    // Leaving for the console writes the pending edits first.
+    ...(back ? { onBackToConsole: () => void flushWorkbench().finally(back) } : {}),
+  });
   initI18n();
   // Playwright runs the desktop UI in a plain browser: swap the Wails bindings for the in-memory mock.
   // A web host brings its own backend (the Go core), which must never be replaced.
@@ -27,6 +45,7 @@ export async function mountWorkbench(
     const { installWailsMock } = await import('./test/wails-mock');
     (window as unknown as { __mock: unknown }).__mock = installWailsMock();
   }
+  installLifecycle(options.kind ?? 'desktop');
   createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
@@ -34,4 +53,48 @@ export async function mountWorkbench(
       </QueryClientProvider>
     </StrictMode>,
   );
+  return { flush: () => flushWorkbench() };
+}
+
+export interface CreateCloudVaultOptions {
+  /** The local vault (an empty folder the host opened) to link to the new cloud vault. */
+  vaultId: string;
+  /** Name and kind chosen in the console. */
+  name: string;
+  kind: 'shared' | 'private';
+  /** Linked: for a private vault, once the recovery key was retyped. */
+  onCreated: (cloudVaultId: string) => void;
+  onCancel: () => void;
+}
+
+/**
+ * Web host only: runs the "connect to the cloud" wizard on its own, preset with the name and the
+ * kind chosen in the console, to create a cloud vault from an empty folder of the browser. A
+ * private vault's keys (envelopes, recovery key) are made by the Go core behind SyncAPI.LinkNew,
+ * never in TypeScript (ADR-0037 §2). The host unmounts it (the returned function) before mounting
+ * the workbench on the new vault.
+ */
+export async function mountCreateCloudVault(
+  root: HTMLElement,
+  options: CreateCloudVaultOptions,
+): Promise<() => void> {
+  configurePlatform({ kind: 'web' });
+  initI18n();
+  useAppStore.getState().setAuth(await api.auth.status());
+  const r = createRoot(root);
+  r.render(
+    <StrictMode>
+      <ConnectWizard
+        vaultId={options.vaultId}
+        vaultName={options.name}
+        preset={{
+          kind: options.kind,
+          name: options.name,
+          onLinked: options.onCreated,
+          onCancel: options.onCancel,
+        }}
+      />
+    </StrictMode>,
+  );
+  return () => r.unmount();
 }

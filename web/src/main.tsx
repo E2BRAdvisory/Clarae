@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@memobrain/ui/styles.css';
+import '@memobrain/cloud-features/styles.css';
 import './app.css';
 import { App } from './App';
 import { createOidcAuth } from './auth/oidc';

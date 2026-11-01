@@ -66,7 +66,14 @@
     "mode_source": "Source",
     "mode_reading": "Reading",
     "saveError": "Could not save",
-    "ariaLabel": "Note editor"
+    "ariaLabel": "Note editor",
+    "notSaved": "This note has changes that are not saved yet (see the message above the editor). Reload or overwrite first, then try again.",
+    "notSavedTitle": "Unsaved changes",
+    "notSavedList": "The changes to these notes could not be saved: {{paths}}. Resolve the conflict (reload or overwrite) or copy the text, then try again.",
+    "renameBlocked": "The changes to {{paths}} are not saved yet. Resolve the conflict (reload or overwrite), then rename.",
+    "rescuedTitle": "Changes saved in a copy",
+    "rescued": "These changes could not be saved in their own file and were saved as a copy next to it: {{paths}}",
+    "rescueName": "{{name}} (unsaved {{time}})"
   },
   "status": {
     "indexing": "Indexing {{done}}/{{total}}",
@@ -168,7 +175,8 @@
     "devices": "Devices",
     "thisDevice": "this device",
     "revoke": "Revoke device",
-    "revokeText": "Sign out “{{name}}” from your account? It will stop syncing."
+    "revokeText": "Sign out “{{name}}” from your account? It will stop syncing.",
+    "vaults": "Cloud vaults"
   },
   "links": {
     "outgoing": "Links",

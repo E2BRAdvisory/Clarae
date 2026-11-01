@@ -10,14 +10,36 @@ import { RecoveryKeyStep } from './RecoveryKeyStep';
 type Choice = 'shared' | 'private' | 'existing';
 type Step = 'choose' | 'passphrase' | 'recovery' | 'progress';
 
+/**
+ * A wizard opened for one kind of vault already chosen elsewhere: the web console's "New vault"
+ * opens the browser workbench on a fresh folder to create a private vault (its keys are made by the
+ * core), and hands the name and the kind over.
+ */
+export interface WizardPreset {
+  kind: 'shared' | 'private';
+  name: string;
+  /** The vault is linked (for a private one, after the recovery key was confirmed). */
+  onLinked: (cloudVaultId: string) => void;
+  onCancel: () => void;
+}
+
 /** "Connect to the cloud": kind (with explicit consequences), passphrase, recovery key, first upload. */
-export function ConnectWizard({ vaultId, vaultName }: { vaultId: string; vaultName: string }) {
+export function ConnectWizard({
+  vaultId,
+  vaultName,
+  preset,
+}: {
+  vaultId: string;
+  vaultName: string;
+  preset?: WizardPreset | undefined;
+}) {
   const { t } = useTranslation();
   const auth = useAppStore((s) => s.auth);
   const status = useSync((s) => s.status[vaultId]);
-  const [choice, setChoice] = useState<Choice>('shared');
-  const [name, setName] = useState(vaultName);
-  const [step, setStep] = useState<Step>('choose');
+  const [choice, setChoice] = useState<Choice>(preset?.kind ?? 'shared');
+  const [name, setName] = useState(preset?.name ?? vaultName);
+  const [step, setStep] = useState<Step>(preset?.kind === 'private' ? 'passphrase' : 'choose');
+  const [cloudVaultId, setCloudVaultId] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [recoveryKey, setRecoveryKey] = useState('');
   const [existing, setExisting] = useState<CloudVault[]>([]);
@@ -26,7 +48,7 @@ export function ConnectWizard({ vaultId, vaultName }: { vaultId: string; vaultNa
   const [error, setError] = useState('');
 
   const signedIn = auth?.status === 'ready' || auth?.status === 'disconnected';
-  const close = () => useSync.getState().setWizardOpen(false);
+  const close = () => (preset ? preset.onCancel() : useSync.getState().setWizardOpen(false));
 
   useEffect(() => {
     if (signedIn && choice === 'existing') {
@@ -71,9 +93,12 @@ export function ConnectWizard({ vaultId, vaultName }: { vaultId: string; vaultNa
         choice === 'private' ? passphrase : '',
       );
       await useSync.getState().refresh(vaultId);
+      setCloudVaultId(res.cloudVaultId);
       if (choice === 'private') {
         setRecoveryKey(res.recoveryKey);
         setStep('recovery');
+      } else if (preset) {
+        preset.onLinked(res.cloudVaultId);
       } else {
         setStep('progress');
       }
@@ -192,7 +217,13 @@ export function ConnectWizard({ vaultId, vaultName }: { vaultId: string; vaultNa
           </>
         ) : step === 'passphrase' ? (
           <>
+            {preset && (
+              <p>
+                <strong>{name}</strong> · {t('sync.kindPrivate')}
+              </p>
+            )}
             <p>{t('sync.passphraseIntro')}</p>
+            {preset && <p className="warning small">{t('sync.irreversible')}</p>}
             <PassphraseFields idPrefix="wizard" onValid={onValid} />
             {error && (
               <div className="error" role="alert">
@@ -200,7 +231,11 @@ export function ConnectWizard({ vaultId, vaultName }: { vaultId: string; vaultNa
               </div>
             )}
             <div className="actions">
-              <button onClick={() => setStep('choose')}>{t('sync.back')}</button>
+              {preset ? (
+                <button onClick={close}>{t('dialog.cancel')}</button>
+              ) : (
+                <button onClick={() => setStep('choose')}>{t('sync.back')}</button>
+              )}
               <button
                 className="primary"
                 disabled={busy || passphrase === ''}
@@ -211,7 +246,10 @@ export function ConnectWizard({ vaultId, vaultName }: { vaultId: string; vaultNa
             </div>
           </>
         ) : step === 'recovery' ? (
-          <RecoveryKeyStep recoveryKey={recoveryKey} onConfirmed={() => setStep('progress')} />
+          <RecoveryKeyStep
+            recoveryKey={recoveryKey}
+            onConfirmed={() => (preset ? preset.onLinked(cloudVaultId) : setStep('progress'))}
+          />
         ) : (
           <>
             <p>{status?.phase === 'syncing' ? t('sync.uploading') : t('sync.connected')}</p>

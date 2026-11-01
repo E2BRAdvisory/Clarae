@@ -1,0 +1,91 @@
+/* Layout of the cloud vault components (@memobrain/cloud-features), for every host. The controls are
+   the components of @memobrain/ui (nd-* classes): the console styles them with its design system,
+   the workbench with workbench.css. Plain CSS, no inline style (CSP, V-02). */
+
+.mbcf-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mbcf-status:empty {
+  display: none;
+}
+.mbcf-status {
+  margin: 0 0 12px;
+}
+
+.mbcf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.mbcf-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85em;
+  text-align: right;
+}
+
+.mbcf-muted {
+  color: var(--nd-text-muted);
+}
+
+.mbcf-deleted {
+  margin-top: var(--nd-gap, 16px);
+}
+.mbcf-deleted > p {
+  margin: 8px 0 0;
+}
+
+.mbcf-form > p {
+  margin: 8px 0;
+}
+
+.mbcf-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+.mbcf-legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+.mbcf-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--nd-border);
+  border-radius: var(--nd-radius);
+  cursor: pointer;
+}
+.mbcf-choice[data-active] {
+  border-color: var(--nd-accent);
+}
+.mbcf-choice input {
+  margin-top: 4px;
+}
+.mbcf-choice > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mbcf-choice .mbcf-muted {
+  font-size: 0.9em;
+}
+
+/* Numbers, dates and buttons stay on one line; the name may wrap. */
+.mbcf td {
+  white-space: nowrap;
+}
+.mbcf-actions {
+  flex-wrap: nowrap;
+}

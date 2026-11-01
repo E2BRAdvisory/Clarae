@@ -1,0 +1,43 @@
+/* The cloud vault components inside the workbench (desktop and web workbench). The workbench does not
+   load the console's design system (its global rules would reach the editor), only the component
+   rules of @memobrain/ui (components.css, nd-* classes only); here its tokens take the workbench's
+   values inside the components' root, so the same markup follows the workbench theme. */
+@import '@memobrain/ui/components.css';
+@import './styles.css';
+
+.mbcf {
+  --nd-bg: var(--bg);
+  --nd-surface: var(--bg);
+  --nd-surface-2: var(--bg-secondary);
+  --nd-text: var(--text);
+  --nd-text-muted: var(--text-muted);
+  --nd-border: var(--border);
+  --nd-accent: var(--accent);
+  --nd-accent-text: var(--accent-contrast);
+  --nd-danger: var(--danger);
+  --nd-danger-bg: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  --nd-ok: var(--success);
+  --nd-ok-bg: color-mix(in srgb, var(--success) 12%, var(--bg));
+  --nd-warn: var(--accent-text);
+  --nd-warn-bg: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  --nd-focus: var(--accent);
+  --nd-radius: var(--radius);
+  --nd-gap: 12px;
+  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.25);
+  user-select: text;
+}
+.mbcf .nd-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+.mbcf .nd-button {
+  min-height: 30px;
+}
+/* The settings panel is narrow: denser cells. */
+.mbcf .nd-table th,
+.mbcf .nd-table td {
+  padding: 6px 8px;
+}
+.mbcf-vaults {
+  margin: 16px 0;
+}

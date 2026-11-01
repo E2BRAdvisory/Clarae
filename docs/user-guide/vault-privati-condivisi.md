@@ -11,6 +11,8 @@ Quando collegate un vault al cloud scegliete uno di due tipi. **La scelta è def
 | Esportazione ZIP dalla Web UI | Sì                                                              | Sì, ma decifrata **nel vostro browser** con passphrase o chiave |
 | Se perdete l'accesso          | L'amministratore può aiutarvi con l'account                     | **I dati sono irrecuperabili**                                  |
 
+Un vault privato si crea dal desktop (collegando una cartella al cloud) oppure dalla Web UI: _I miei vault → Nuovo vault → Privato_ apre il workbench del browser, dove scegliete la passphrase e salvate la chiave di recupero. Rinomina, eliminazione (ripristinabile per il periodo di conservazione) e ripristino funzionano come per i vault condivisi: vedete [Sincronizzazione e cloud](sync-cloud.md#gestire-i-vault-nel-cloud).
+
 ## Che cosa significa "E2EE"
 
 _End-to-end encryption_: la cifratura avviene sul vostro computer, con una chiave che il server non possiede mai. Il server conserva solo dati illeggibili e non può né leggerli né consegnarli a terzi, neppure su richiesta dell'amministratore. Dettagli utili:

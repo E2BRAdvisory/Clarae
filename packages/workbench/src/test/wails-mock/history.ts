@@ -23,7 +23,7 @@ export function newMockHistory(): MockHistory {
 
 interface Host {
   files(vaultId: string): Map<string, string>;
-  changed(vaultId: string, paths: string[]): void;
+  changed(vaultId: string, paths: string[], created?: readonly string[]): void;
   hash(text: string): string;
 }
 
@@ -68,7 +68,7 @@ export function createHistoryAPI(h: MockHistory, host: Host) {
         h.snapshots.set(hit[0], list);
       }
       files.set(snapshot.path, content);
-      host.changed(vaultId, [snapshot.path]);
+      host.changed(vaultId, [snapshot.path], current === undefined ? [snapshot.path] : []);
       return Promise.resolve({
         path: snapshot.path,
         hash: host.hash(content),

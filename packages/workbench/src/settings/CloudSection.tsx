@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { useAppStore } from '../state/store';
 import { AccountDevices } from './AccountDevices';
+import { CloudVaults } from './CloudVaults';
 
 export function CloudSection() {
   const { t } = useTranslation();
@@ -64,6 +65,7 @@ export function CloudSection() {
           </button>
         </div>
       )}
+      {signedIn && <CloudVaults />}
       {signedIn && <AccountDevices />}
       {auth?.error && (
         <div className="muted" role="alert" style={{ color: 'var(--danger)' }}>

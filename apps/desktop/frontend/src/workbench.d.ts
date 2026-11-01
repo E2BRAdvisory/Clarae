@@ -5,7 +5,11 @@ export interface WorkbenchOptions {
   onBackToConsole?: () => void;
   vaultPath?: string;
 }
+export interface WorkbenchHandle {
+  /** Writes the pending edits (bounded wait, never rejects); call before tearing the page down. */
+  flush(): Promise<void>;
+}
 export declare function mountWorkbench(
   root: HTMLElement,
   options?: WorkbenchOptions,
-): Promise<void>;
+): Promise<WorkbenchHandle>;
