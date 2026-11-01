@@ -52,22 +52,47 @@ func NewService(d *db.DB, a access.Authorizer, r Restorer, b BlobReader) *Servic
 	return &Service{db: d, authz: a, restorer: r, blobs: b}
 }
 
-// readableFile authorizes a read of a file's history, through an optional share.
-func (s *Service) readableFile(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID) error {
+// readableFile authorizes a read of a file's history, through an optional
+// share, and returns the share's scope (nil for the owner).
+func (s *Service) readableFile(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID) (*access.Scope, error) {
 	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Viewer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	f, err := revisionsdb.New(s.db.Pool).GetFile(ctx, revisionsdb.GetFileParams{ID: fileID, VaultID: vaultID})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && acc.Scope != nil && !acc.Scope.ContainsFile(f.ID, f.Path)) {
-		return httpproblem.NotFound("file")
+		return nil, httpproblem.NotFound("file")
 	}
-	return err
+	return acc.Scope, err
 }
+
+// project shows a revision through a share like the changelog does (§3.4.7):
+// paths relative to the root, a move into the share as a create (where the
+// file came from is not shared), a move out as a deletion without content.
+// Revisions made while the file was outside the share are invisible.
+func project(sc *access.Scope, r revisionsdb.FileRevision) (revisionsdb.FileRevision, bool) {
+	if sc == nil {
+		return r, true
+	}
+	pr, ok := sc.Project(r.FileID, r.Op, r.Path, r.PrevPath)
+	if !ok {
+		return revisionsdb.FileRevision{}, false
+	}
+	r.Op, r.Path, r.PrevPath = pr.Op, pr.Path, pr.PrevPath
+	if !pr.Content {
+		r.BlobHash, r.Size = nil, 0
+	}
+	return r, true
+}
+
+// scopedPages bounds the pages a share read scans to fill one page of visible
+// revisions: a file with a long history outside the share costs bounded work.
+const scopedPages = 20
 
 // List returns revisions newest first, with a cursor for the next page.
 func (s *Service) List(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, limit int, cursor string) ([]revisionsdb.FileRevision, string, error) {
-	if err := s.readableFile(ctx, userID, vaultID, scope, fileID); err != nil {
+	sc, err := s.readableFile(ctx, userID, vaultID, scope, fileID)
+	if err != nil {
 		return nil, "", err
 	}
 	conn := s.db.Pool
@@ -83,21 +108,41 @@ func (s *Service) List(ctx context.Context, userID, vaultID uuid.UUID, scope str
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := q.ListRevisions(ctx, revisionsdb.ListRevisionsParams{VaultID: vaultID, FileID: fileID, BeforeRev: before, MaxRows: int32(limit + 1)})
-	if err != nil {
-		return nil, "", err
+	out := make([]revisionsdb.FileRevision, 0, limit)
+	for page := 0; page < scopedPages; page++ {
+		rows, err := q.ListRevisions(ctx, revisionsdb.ListRevisionsParams{VaultID: vaultID, FileID: fileID, BeforeRev: before, MaxRows: int32(limit + 1)})
+		if err != nil {
+			return nil, "", err
+		}
+		more := len(rows) > limit
+		if more {
+			rows = rows[:limit]
+		}
+		for _, r := range rows {
+			before = r.RevNo
+			if v, ok := project(sc, r); ok {
+				out = append(out, v)
+				if len(out) == limit {
+					// The page is full: continue after it if anything older exists.
+					if more || r.RevNo != rows[len(rows)-1].RevNo {
+						return out, strconv.Itoa(int(r.RevNo)), nil
+					}
+					return out, "", nil
+				}
+			}
+		}
+		if !more || before <= 1 {
+			return out, "", nil
+		}
 	}
-	next := ""
-	if len(rows) > limit {
-		rows = rows[:limit]
-		next = strconv.Itoa(int(rows[len(rows)-1].RevNo))
-	}
-	return rows, next, nil
+	// Bounded scan through a share: hand back what was found and where to go on.
+	return out, strconv.Itoa(int(before)), nil
 }
 
 // Content opens the blob of a revision.
 func (s *Service) Content(ctx context.Context, userID, vaultID uuid.UUID, scope string, fileID uuid.UUID, rev int32) (io.ReadCloser, int64, error) {
-	if err := s.readableFile(ctx, userID, vaultID, scope, fileID); err != nil {
+	sc, err := s.readableFile(ctx, userID, vaultID, scope, fileID)
+	if err != nil {
 		return nil, 0, err
 	}
 	r, err := revisionsdb.New(s.db.Pool).GetRevision(ctx, revisionsdb.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
@@ -106,6 +151,10 @@ func (s *Service) Content(ctx context.Context, userID, vaultID uuid.UUID, scope 
 	}
 	if err != nil {
 		return nil, 0, err
+	}
+	r, ok := project(sc, r)
+	if !ok {
+		return nil, 0, httpproblem.NotFound("revision")
 	}
 	if r.BlobHash == nil {
 		return nil, 0, httpproblem.NotFound("revision content")

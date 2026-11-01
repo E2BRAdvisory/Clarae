@@ -13,13 +13,15 @@ import (
 )
 
 const claimExportJob = `-- name: ClaimExportJob :one
-UPDATE export_jobs SET status = 'running'
+UPDATE export_jobs SET status = 'running', expires_at = $1::timestamptz
 WHERE id = (SELECT j.id FROM export_jobs j WHERE j.status = 'queued' ORDER BY j.created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
 RETURNING id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at
 `
 
-func (q *Queries) ClaimExportJob(ctx context.Context) (ExportJob, error) {
-	row := q.db.QueryRow(ctx, claimExportJob)
+// While a job runs, expires_at is the worker's lease (renewed by RenewExportLease):
+// past it the job counts as abandoned and is queued again.
+func (q *Queries) ClaimExportJob(ctx context.Context, leaseUntil time.Time) (ExportJob, error) {
+	row := q.db.QueryRow(ctx, claimExportJob, leaseUntil)
 	var i ExportJob
 	err := row.Scan(
 		&i.ID,
@@ -34,6 +36,17 @@ func (q *Queries) ClaimExportJob(ctx context.Context) (ExportJob, error) {
 		&i.ExpiresAt,
 	)
 	return i, err
+}
+
+const countActiveExportJobsOfUser = `-- name: CountActiveExportJobsOfUser :one
+SELECT count(*)::int FROM export_jobs WHERE requested_by = $1 AND status IN ('queued', 'running')
+`
+
+func (q *Queries) CountActiveExportJobsOfUser(ctx context.Context, requestedBy uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countActiveExportJobsOfUser, requestedBy)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const createExportJob = `-- name: CreateExportJob :one
@@ -96,7 +109,7 @@ func (q *Queries) ExpireExportJobs(ctx context.Context, now time.Time) ([]Expire
 }
 
 const failExportJob = `-- name: FailExportJob :exec
-UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now() WHERE id = $1
+UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now(), expires_at = NULL WHERE id = $1
 `
 
 type FailExportJobParams struct {
@@ -130,6 +143,30 @@ func (q *Queries) FinishExportJob(ctx context.Context, arg FinishExportJobParams
 	return err
 }
 
+const getActiveExportJobOfVault = `-- name: GetActiveExportJobOfVault :one
+SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at FROM export_jobs WHERE vault_id = $1 AND status IN ('queued', 'running')
+ORDER BY created_at LIMIT 1
+`
+
+// The queued or running job of a vault, if any: a new request joins it.
+func (q *Queries) GetActiveExportJobOfVault(ctx context.Context, vaultID uuid.UUID) (ExportJob, error) {
+	row := q.db.QueryRow(ctx, getActiveExportJobOfVault, vaultID)
+	var i ExportJob
+	err := row.Scan(
+		&i.ID,
+		&i.VaultID,
+		&i.RequestedBy,
+		&i.Status,
+		&i.Size,
+		&i.ObjectKey,
+		&i.Error,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const getExportJob = `-- name: GetExportJob :one
 SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at FROM export_jobs WHERE id = $1 AND vault_id = $2
 `
@@ -157,12 +194,45 @@ func (q *Queries) GetExportJob(ctx context.Context, arg GetExportJobParams) (Exp
 	return i, err
 }
 
-const requeueStaleExportJobs = `-- name: RequeueStaleExportJobs :execrows
-UPDATE export_jobs SET status = 'queued' WHERE status = 'running' AND created_at < $1::timestamptz
+const lockExportRequests = `-- name: LockExportRequests :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
 `
 
-func (q *Queries) RequeueStaleExportJobs(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.Exec(ctx, requeueStaleExportJobs, before)
+// Serializes the export requests of one user (key: the user's id) until the transaction ends.
+func (q *Queries) LockExportRequests(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, lockExportRequests, key)
+	return err
+}
+
+const renewExportLease = `-- name: RenewExportLease :exec
+UPDATE export_jobs SET expires_at = $2::timestamptz WHERE id = $1 AND status = 'running'
+`
+
+type RenewExportLeaseParams struct {
+	ID         uuid.UUID
+	LeaseUntil time.Time
+}
+
+func (q *Queries) RenewExportLease(ctx context.Context, arg RenewExportLeaseParams) error {
+	_, err := q.db.Exec(ctx, renewExportLease, arg.ID, arg.LeaseUntil)
+	return err
+}
+
+const requeueStaleExportJobs = `-- name: RequeueStaleExportJobs :execrows
+UPDATE export_jobs SET status = 'queued', expires_at = NULL
+WHERE status = 'running'
+  AND (expires_at < $1::timestamptz OR (expires_at IS NULL AND created_at < $2::timestamptz))
+`
+
+type RequeueStaleExportJobsParams struct {
+	Now    time.Time
+	Before time.Time
+}
+
+// Running jobs whose lease ran out (their worker died). Rows claimed before
+// leases existed have none: they fall back to their age.
+func (q *Queries) RequeueStaleExportJobs(ctx context.Context, arg RequeueStaleExportJobsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, requeueStaleExportJobs, arg.Now, arg.Before)
 	if err != nil {
 		return 0, err
 	}

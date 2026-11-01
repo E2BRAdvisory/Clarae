@@ -30,6 +30,31 @@ func (q *Queries) CountFilesUnderPrefix(ctx context.Context, arg CountFilesUnder
 	return column_1, err
 }
 
+const existingFileIDs = `-- name: ExistingFileIDs :many
+SELECT id FROM files WHERE id = ANY($1::uuid[])
+`
+
+// Which of the file ids a batch creates are taken already (in any vault).
+func (q *Queries) ExistingFileIDs(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, existingFileIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const fileIDExists = `-- name: FileIDExists :one
 SELECT EXISTS (SELECT 1 FROM files WHERE id = $1)
 `
@@ -394,6 +419,92 @@ type ListFilesUnderPrefixParams struct {
 // Locks the affected rows in a stable order (deadlock avoidance).
 func (q *Queries) ListFilesUnderPrefix(ctx context.Context, arg ListFilesUnderPrefixParams) ([]File, error) {
 	rows, err := q.db.Query(ctx, listFilesUnderPrefix, arg.VaultID, arg.Exact, arg.Descendants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []File{}
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.VaultID,
+			&i.Path,
+			&i.PathKey,
+			&i.Kind,
+			&i.CurrentRev,
+			&i.CurrentSeq,
+			&i.BlobHash,
+			&i.Size,
+			&i.IsDeleted,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRevisionsByOpIDs = `-- name: ListRevisionsByOpIDs :many
+SELECT op_id, file_id, rev_no, seq FROM file_revisions
+WHERE vault_id = $1 AND op_id = ANY($2::uuid[])
+`
+
+type ListRevisionsByOpIDsParams struct {
+	VaultID uuid.UUID
+	OpIds   []uuid.UUID
+}
+
+type ListRevisionsByOpIDsRow struct {
+	OpID   *uuid.UUID
+	FileID uuid.UUID
+	RevNo  int32
+	Seq    int64
+}
+
+// The operations of a commit batch that were already applied (idempotency),
+// read once under the vault lock instead of once per operation.
+func (q *Queries) ListRevisionsByOpIDs(ctx context.Context, arg ListRevisionsByOpIDsParams) ([]ListRevisionsByOpIDsRow, error) {
+	rows, err := q.db.Query(ctx, listRevisionsByOpIDs, arg.VaultID, arg.OpIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRevisionsByOpIDsRow{}
+	for rows.Next() {
+		var i ListRevisionsByOpIDsRow
+		if err := rows.Scan(
+			&i.OpID,
+			&i.FileID,
+			&i.RevNo,
+			&i.Seq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockFiles = `-- name: LockFiles :many
+SELECT id, vault_id, path, path_key, kind, current_rev, current_seq, blob_hash, size, is_deleted, updated_at FROM files WHERE vault_id = $1 AND id = ANY($2::uuid[]) ORDER BY id FOR UPDATE
+`
+
+type LockFilesParams struct {
+	VaultID uuid.UUID
+	Ids     []uuid.UUID
+}
+
+// The file rows a commit batch changes, locked once in a stable order.
+func (q *Queries) LockFiles(ctx context.Context, arg LockFilesParams) ([]File, error) {
+	rows, err := q.db.Query(ctx, lockFiles, arg.VaultID, arg.Ids)
 	if err != nil {
 		return nil, err
 	}

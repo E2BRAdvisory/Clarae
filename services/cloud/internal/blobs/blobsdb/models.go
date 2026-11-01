@@ -29,4 +29,5 @@ type Upload struct {
 	Chunks       int32
 	CreatedAt    time.Time
 	ExpiresAt    time.Time
+	ChunkKeys    []string
 }

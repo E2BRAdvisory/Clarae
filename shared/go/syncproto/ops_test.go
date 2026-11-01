@@ -24,6 +24,7 @@ func TestOpValidate(t *testing.T) {
 		{"create with base_rev", Op{OpID: "1", Op: OpCreate, FileID: "f", Path: "a.md", BlobHash: hash, BaseRev: rev(1)}, false, false},
 		{"create bad hash", Op{OpID: "1", Op: OpCreate, FileID: "f", Path: "a.md", BlobHash: "xyz"}, false, false},
 		{"create opaque ok", Op{OpID: "1", Op: OpCreate, FileID: "f", Path: "enc1:AbC-_123", BlobHash: hash}, true, true},
+		{"create opaque v2 ok", Op{OpID: "1", Op: OpCreate, FileID: "f", Path: "enc2:AbC-_123", BlobHash: hash}, true, true},
 		{"create opaque with clear path", Op{OpID: "1", Op: OpCreate, FileID: "f", Path: "a.md", BlobHash: hash}, true, false},
 		{"modify ok", Op{OpID: "1", Op: OpModify, FileID: "f", BaseRev: rev(3), BlobHash: hash}, false, true},
 		{"modify missing base_rev", Op{OpID: "1", Op: OpModify, FileID: "f", BlobHash: hash}, false, false},
@@ -58,10 +59,10 @@ func TestOpValidate(t *testing.T) {
 }
 
 func TestIsOpaquePath(t *testing.T) {
-	if !IsOpaquePath("enc1:abcDEF012-_") {
+	if !IsOpaquePath("enc1:abcDEF012-_") || !IsOpaquePath("enc2:abcDEF012-_") {
 		t.Error("valid token rejected")
 	}
-	for _, bad := range []string{"", "enc1:", "enc2:abc", "abc", "enc1:ab+c", "enc1:ab/c", "enc1:" + strings.Repeat("a", MaxOpaquePathLen)} {
+	for _, bad := range []string{"", "enc1:", "enc2:", "enc3:abc", "ENC2:abc", "abc", "enc1:ab+c", "enc2:ab/c", "enc1:" + strings.Repeat("a", MaxOpaquePathLen), "enc2:" + strings.Repeat("a", MaxOpaquePathLen)} {
 		if IsOpaquePath(bad) {
 			t.Errorf("IsOpaquePath(%q) should be false", bad)
 		}

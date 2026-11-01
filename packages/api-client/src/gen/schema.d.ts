@@ -240,7 +240,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Complete manifest of current files plus the changelog position it reflects */
+        /**
+         * Complete manifest of current files plus the changelog position it reflects
+         * @description Read from one database snapshot and streamed: an interrupted or failed transfer ends with an incomplete JSON document, which the client discards and requests again.
+         */
         get: operations["getVaultTree"];
         put?: never;
         post?: never;
@@ -339,7 +342,10 @@ export interface paths {
         };
         /** Download a blob (Range supported) */
         get: operations["getBlob"];
-        /** Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch */
+        /**
+         * Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
+         * @description Uploaded bytes are charged to the vault owner only when a commit references them (D-03), but until then they count as pending: blobs uploaded within `uploads.expiry_hours` that no revision references, plus the resumable uploads in progress. An upload that does not fit in the quota next to the used and pending bytes is refused with `413 QUOTA_EXCEEDED` (`extra.used_bytes`, `extra.pending_bytes`, `extra.quota_bytes`). A blob the vault already holds adds nothing.
+         */
         put: operations["putBlob"];
         post?: never;
         delete?: never;
@@ -361,7 +367,7 @@ export interface paths {
         put?: never;
         /**
          * Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
-         * @description Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+         * @description Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
          */
         post: operations["commit"];
         delete?: never;
@@ -456,7 +462,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Find users to share with (minimal fields) */
+        /**
+         * Find users to share with (minimal fields)
+         * @description q matches a substring of the username or display name (`%` and `_` are literal), or a whole e-mail address, case-insensitively. A part of an address never matches, so the directory cannot be used to guess addresses (ADR-0041). E-mail addresses are never returned.
+         */
         get: operations["searchDirectoryUsers"];
         put?: never;
         post?: never;
@@ -493,7 +502,10 @@ export interface paths {
         /** Shares the caller owns or manages (`owned`) or was invited to (`received`) */
         get: operations["listShares"];
         put?: never;
-        /** Share a vault, a folder or a document (shared vaults only) */
+        /**
+         * Share a vault, a folder or a document (shared vaults only)
+         * @description Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+         */
         post: operations["createShare"];
         delete?: never;
         options?: never;
@@ -1102,7 +1114,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start an export job (any size); the ZIP is built in the background */
+        /**
+         * Start an export job (any size); the ZIP is built in the background
+         * @description A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
+         */
         post: operations["createExport"];
         delete?: never;
         options?: never;
@@ -1217,7 +1232,7 @@ export interface components {
             quota_bytes: number;
             /** Format: int64 */
             used_bytes: number;
-            /** @description Version of the effective configuration (ETag of /config/effective) */
+            /** @description Revision of the configuration: the `version` of /config/effective and of the ConfigChanged notification events (§3.6). Compare it with the one you hold to refetch. */
             config_version: number;
             /** Format: date-time */
             created_at: string;
@@ -1495,7 +1510,10 @@ export interface components {
             id: string;
             name: string;
             description?: string;
-            /** @enum {string} */
+            /**
+             * @description Role inside the group. `manager` is reserved in v1 and grants no extra capability (ADR-0041).
+             * @enum {string}
+             */
             member_role: "member" | "manager";
         };
         DirectoryUser: {
@@ -4267,7 +4285,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Accepted */
+            /** @description Accepted (a new job, or the one already queued or running for the vault) */
             202: {
                 headers: {
                     [name: string]: unknown;

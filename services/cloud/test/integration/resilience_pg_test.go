@@ -32,7 +32,7 @@ type restartablePG struct {
 func startRestartablePG(t *testing.T) *restartablePG {
 	t.Helper()
 	ctx := context.Background()
-	ctr, err := tcpostgres.Run(ctx, "postgres:17",
+	ctr, err := tcpostgres.Run(ctx, postgresImage,
 		tcpostgres.WithDatabase("memobrain"), tcpostgres.WithUsername("memobrain"), tcpostgres.WithPassword("memobrain"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)

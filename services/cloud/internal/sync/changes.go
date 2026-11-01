@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"path"
 	"time"
 
 	"memobrain/services/cloud/internal/access"
@@ -128,32 +127,16 @@ func (s *Service) scopedChanges(ctx context.Context, acc access.Access, since in
 
 // scopeChange translates one revision for a share, or reports that it is invisible to it.
 func scopeChange(sc *access.Scope, r syncdb.FileRevision) (Change, bool) {
-	inNew := sc.ContainsFile(r.FileID, r.Path)
-	inOld := r.PrevPath != nil && sc.ContainsFile(r.FileID, *r.PrevPath)
+	pr, ok := sc.Project(r.FileID, r.Op, r.Path, r.PrevPath)
+	if !ok {
+		return Change{}, false
+	}
 	c := Change{
-		Seq: r.Seq, FileID: r.FileID, Op: r.Op, Path: sc.Rel(r.Path), Rev: r.RevNo, BlobHash: r.BlobHash, Size: r.Size,
+		Seq: r.Seq, FileID: r.FileID, Op: pr.Op, Path: pr.Path, PrevPath: pr.PrevPath, Rev: r.RevNo, BlobHash: r.BlobHash, Size: r.Size,
 		AuthorID: r.AuthorID, DeviceID: r.DeviceID, ServerTime: r.ServerTime, ConflictOf: r.ConflictOfFile,
 	}
-	switch r.Op {
-	case "move":
-		switch {
-		case inOld && inNew:
-			c.PrevPath = ptr(sc.Rel(*r.PrevPath))
-			if sc.Type == access.ResourceFile && path.Base(r.Path) == path.Base(*r.PrevPath) {
-				return Change{}, false // a document moving between folders does not change its name in the mount
-			}
-		case inOld:
-			// It left the share: to the recipient it is gone.
-			c.Op, c.Path, c.BlobHash, c.Size = "delete", sc.Rel(*r.PrevPath), nil, 0
-		case inNew:
-			c.Op = "create"
-		default:
-			return Change{}, false
-		}
-	default:
-		if !inNew {
-			return Change{}, false
-		}
+	if !pr.Content {
+		c.BlobHash, c.Size = nil, 0
 	}
 	return c, true
 }

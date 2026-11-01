@@ -17,6 +17,7 @@ import (
 type (
 	AddVaultUsageParams     = vaultsdb.AddVaultUsageParams
 	AdvanceCompactionParams = vaultsdb.AdvanceCompactionParams
+	FinishVaultBatchParams  = vaultsdb.FinishVaultBatchParams
 	Vault                   = vaultsdb.Vault
 )
 
@@ -28,6 +29,11 @@ func GetVault(ctx context.Context, tx db.DBTX, id uuid.UUID) (Vault, error) {
 // SoftDeleteVaultsOfOwner runs the SoftDeleteVaultsOfOwner query on tx.
 func SoftDeleteVaultsOfOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) (int64, error) {
 	return vaultsdb.New(tx).SoftDeleteVaultsOfOwner(ctx, ownerID)
+}
+
+// ListVaultIDsOfOwner runs the ListVaultIDsOfOwner query on tx.
+func ListVaultIDsOfOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) ([]uuid.UUID, error) {
+	return vaultsdb.New(tx).ListVaultIDsOfOwner(ctx, ownerID)
 }
 
 // NextVaultSeq runs the NextVaultSeq query on tx.
@@ -43,6 +49,19 @@ func NextVaultSeq(ctx context.Context, tx db.DBTX, id uuid.UUID) (int64, error) 
 func LockVault(ctx context.Context, tx db.DBTX, id uuid.UUID) error {
 	_, err := vaultsdb.New(tx).LockVault(ctx, id)
 	return err
+}
+
+// LockVaultSeq takes the vault's row lock like LockVault and returns its
+// last_seq: a commit batch hands out the following seqs itself while it holds
+// the lock, and stores the last one with FinishVaultBatch.
+func LockVaultSeq(ctx context.Context, tx db.DBTX, id uuid.UUID) (int64, error) {
+	return vaultsdb.New(tx).LockVaultSeq(ctx, id)
+}
+
+// FinishVaultBatch runs the FinishVaultBatch query on tx: the last seq of a
+// commit batch and its usage delta, in one update of the vault row.
+func FinishVaultBatch(ctx context.Context, tx db.DBTX, arg FinishVaultBatchParams) error {
+	return vaultsdb.New(tx).FinishVaultBatch(ctx, arg)
 }
 
 // AddVaultUsage runs the AddVaultUsage query on tx.

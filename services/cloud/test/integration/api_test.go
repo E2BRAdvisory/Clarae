@@ -207,6 +207,31 @@ func TestDevices(t *testing.T) {
 	}
 }
 
+// TestCommitWithRevokedDevice: a commit sent with a revoked device is refused as a whole with a
+// FORBIDDEN problem that says why (extra.reason), so the client can offer to register again.
+func TestCommitWithRevokedDevice(t *testing.T) {
+	e := newEnv(t)
+	c := e.user("rita")
+	vault := c.createVault("V", "shared")
+	h := c.putBlob(vault, []byte("before"))
+	mustAccepted(t, c.commit(vault, create(newID(), "a.md", h))[0])
+
+	expect(t, c.json(http.MethodDelete, "/me/devices/"+c.deviceID, nil), http.StatusNoContent)
+	resp := c.json(http.MethodPost, "/vaults/"+vault+"/commit", map[string]any{"device_id": c.deviceID, "ops": []map[string]any{create(newID(), "b.md", h)}})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("commit with a revoked device: %d", resp.StatusCode)
+	}
+	p := decode[syncproto.Problem](t, resp)
+	if p.Code != syncproto.CodeForbidden || p.Extra["reason"] != syncproto.ReasonDeviceRevoked {
+		t.Fatalf("problem = %+v", p)
+	}
+
+	// A new registration works at once.
+	dev := decode[map[string]any](t, c.json(http.MethodPost, "/me/devices", map[string]any{"name": "again", "platform": "linux"}))
+	c.deviceID, _ = dev["id"].(string)
+	mustAccepted(t, c.commit(vault, create(newID(), "b.md", h))[0])
+}
+
 func TestEffectiveConfigETag(t *testing.T) {
 	e := newEnv(t)
 	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-cfg"})

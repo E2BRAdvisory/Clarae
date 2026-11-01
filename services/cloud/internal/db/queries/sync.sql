@@ -56,3 +56,17 @@ SELECT id FROM file_revisions WHERE file_id = $1 AND rev_no = $2;
 SELECT * FROM file_revisions
 WHERE vault_id = $1 AND seq > $2
 ORDER BY seq LIMIT $3;
+
+-- name: ListRevisionsByOpIDs :many
+-- The operations of a commit batch that were already applied (idempotency),
+-- read once under the vault lock instead of once per operation.
+SELECT op_id, file_id, rev_no, seq FROM file_revisions
+WHERE vault_id = $1 AND op_id = ANY(sqlc.arg(op_ids)::uuid[]);
+
+-- name: ExistingFileIDs :many
+-- Which of the file ids a batch creates are taken already (in any vault).
+SELECT id FROM files WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: LockFiles :many
+-- The file rows a commit batch changes, locked once in a stable order.
+SELECT * FROM files WHERE vault_id = $1 AND id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id FOR UPDATE;

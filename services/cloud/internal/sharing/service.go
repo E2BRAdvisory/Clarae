@@ -192,35 +192,15 @@ func (s *Service) view(ctx context.Context, tx db.DBTX, sh sharingdb.Share, view
 	if err != nil {
 		return View{}, err
 	}
-	out := View{Share: sh, VaultName: v.Name, OwnerID: v.OwnerID, OwnerName: owner.Username}
-	if v.OwnerID == viewer {
-		out.IsOwner = true
-	} else {
-		grants, err := q.ListUserGrantsOnShare(ctx, sharingdb.ListUserGrantsOnShareParams{ShareID: sh.ID, PrincipalID: viewer})
-		if err != nil {
+	var mine []sharingdb.ShareGrant
+	if v.OwnerID != viewer {
+		if mine, err = q.ListUserGrantsOnShare(ctx, sharingdb.ListUserGrantsOnShareParams{ShareID: sh.ID, PrincipalID: viewer}); err != nil {
 			return View{}, err
 		}
-		if len(grants) == 0 || sh.RevokedAt != nil {
-			return View{}, httpproblem.NotFound("share")
-		}
-		out.MyPermission = best(grants)
-		out.MyStatus = "pending"
-		for _, g := range grants {
-			switch g.Status {
-			case "accepted":
-				out.MyStatus = "accepted"
-			case "declined":
-				if out.MyStatus != "accepted" && out.MyStatus != "pending" {
-					out.MyStatus = "declined"
-				}
-			}
-		}
-		if out.MyStatus == "pending" && out.MyPermission == access.None {
-			// Not accepted yet: show the level that was offered.
-			for _, g := range grants {
-				out.MyPermission = max(out.MyPermission, access.ParsePermission(g.Permission))
-			}
-		}
+	}
+	out, ok := buildView(sh, v.Name, v.OwnerID, owner.Username, viewer, mine)
+	if !ok {
+		return View{}, httpproblem.NotFound("share")
 	}
 	if out.canManage() && out.MyStatus != "pending" {
 		out.Grants, err = q.ListGrants(ctx, sh.ID)
@@ -229,6 +209,51 @@ func (s *Service) view(ctx context.Context, tx db.DBTX, sh sharingdb.Share, view
 		}
 	}
 	return out, nil
+}
+
+// buildView computes what a viewer sees of a share from the viewer's own grants
+// on it (empty for the owner); ok is false when the viewer has no link to it.
+// The full grant list is the caller's job (for canManage views only).
+func buildView(sh sharingdb.Share, vaultName string, ownerID uuid.UUID, ownerName string, viewer uuid.UUID, mine []sharingdb.ShareGrant) (View, bool) {
+	out := View{Share: sh, VaultName: vaultName, OwnerID: ownerID, OwnerName: ownerName}
+	if ownerID == viewer {
+		out.IsOwner = true
+		return out, true
+	}
+	if len(mine) == 0 || sh.RevokedAt != nil {
+		return View{}, false
+	}
+	out.MyPermission = best(mine)
+	out.MyStatus = myStatus(mine)
+	if out.MyStatus == "pending" && out.MyPermission == access.None {
+		// Not accepted yet: show the level that was offered.
+		for _, g := range mine {
+			if g.Status == "pending" {
+				out.MyPermission = max(out.MyPermission, access.ParsePermission(g.Permission))
+			}
+		}
+	}
+	return out, true
+}
+
+// myStatus is the state of a viewer's invitation over all the grants that
+// reach them (directly and through groups): accepted if any grant is, else
+// pending if any still is, else declined.
+func myStatus(grants []sharingdb.ShareGrant) string {
+	status := ""
+	for _, g := range grants {
+		switch g.Status {
+		case "accepted":
+			return "accepted"
+		case "pending":
+			status = "pending"
+		case "declined":
+			if status == "" {
+				status = "declined"
+			}
+		}
+	}
+	return status
 }
 
 // Get returns a share to its owner or to anyone invited to it.
@@ -492,51 +517,118 @@ func (s *Service) Decline(ctx context.Context, userID, shareID uuid.UUID) (View,
 	return s.respond(ctx, userID, shareID, false)
 }
 
-// ListOwned returns the shares of the vaults the caller owns plus those they manage.
-func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID) ([]View, error) {
-	conn := s.db.Pool
-	q := sharingdb.New(conn)
-	rows, err := q.ListSharesOfVaultOwner(ctx, userID)
+// shareRow is a share with what a list shows of its vault and owner.
+type shareRow struct {
+	share     sharingdb.Share
+	vaultName string
+	ownerID   uuid.UUID
+	ownerName string
+}
+
+// views builds the views of many shares with a fixed number of queries (the
+// viewer's grants and, for the shares they manage, every grant). Shares the
+// viewer has no link to, or declined (keepDeclined false), are left out;
+// database errors are returned, never mistaken for an empty list.
+func (s *Service) views(ctx context.Context, tx db.DBTX, rows []shareRow, viewer uuid.UUID, keepDeclined bool) ([]View, error) {
+	q := sharingdb.New(tx)
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.share.ID)
+	}
+	if len(ids) == 0 {
+		return []View{}, nil
+	}
+	mineRows, err := q.ListUserGrantsOnShares(ctx, sharingdb.ListUserGrantsOnSharesParams{ShareIds: ids, UserID: viewer})
 	if err != nil {
 		return nil, err
 	}
+	mine := map[uuid.UUID][]sharingdb.ShareGrant{}
+	for _, g := range mineRows {
+		mine[g.ShareID] = append(mine[g.ShareID], g)
+	}
 	out := make([]View, 0, len(rows))
-	for _, sh := range rows {
-		v, err := s.view(ctx, conn, sh, userID)
-		if err != nil {
+	var managed []uuid.UUID
+	for _, r := range rows {
+		var grants []sharingdb.ShareGrant
+		if r.ownerID != viewer {
+			grants = mine[r.share.ID]
+		}
+		v, ok := buildView(r.share, r.vaultName, r.ownerID, r.ownerName, viewer, grants)
+		if !ok || (!keepDeclined && v.MyStatus == "declined") {
 			continue
+		}
+		if v.canManage() && v.MyStatus != "pending" {
+			managed = append(managed, r.share.ID)
 		}
 		out = append(out, v)
 	}
+	if len(managed) > 0 {
+		all, err := q.ListGrantsOfShares(ctx, managed)
+		if err != nil {
+			return nil, err
+		}
+		byShare := map[uuid.UUID][]sharingdb.ListGrantsRow{}
+		for _, g := range all {
+			byShare[g.ShareID] = append(byShare[g.ShareID], sharingdb.ListGrantsRow(g))
+		}
+		for i := range out {
+			if out[i].canManage() && out[i].MyStatus != "pending" {
+				out[i].Grants = byShare[out[i].Share.ID]
+			}
+		}
+	}
 	return out, nil
+}
+
+// ListOwned returns the shares of the vaults the caller owns plus those they manage.
+func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID) ([]View, error) {
+	conn := s.db.Pool
+	rows, err := sharingdb.New(conn).ListSharesOfVaultOwner(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]shareRow, 0, len(rows))
+	for _, r := range rows {
+		list = append(list, shareRow{share: r.Share, vaultName: r.VaultName, ownerID: r.OwnerID, ownerName: r.OwnerName})
+	}
+	return s.views(ctx, conn, list, userID, true)
 }
 
 // ListReceived returns the shares that reach the caller, pending invitations included.
 func (s *Service) ListReceived(ctx context.Context, userID uuid.UUID) ([]View, error) {
 	conn := s.db.Pool
 	q := sharingdb.New(conn)
-	rows, err := q.ListGrantsOfUser(ctx, userID)
+	grants, err := q.ListGrantsOfUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	seen := map[uuid.UUID]bool{}
-	out := make([]View, 0, len(rows))
-	for _, g := range rows {
+	var ids []uuid.UUID
+	for _, g := range grants {
 		if seen[g.ShareID] || g.OwnerID == userID {
 			continue
 		}
 		seen[g.ShareID] = true
-		sh, err := q.GetShare(ctx, g.ShareID)
-		if err != nil {
-			continue
-		}
-		v, err := s.view(ctx, conn, sh, userID)
-		if err != nil || v.MyStatus == "declined" {
-			continue
-		}
-		out = append(out, v)
+		ids = append(ids, g.ShareID)
 	}
-	return out, nil
+	if len(ids) == 0 {
+		return []View{}, nil
+	}
+	rows, err := q.ListSharesByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[uuid.UUID]sharingdb.ListSharesByIDsRow, len(rows))
+	for _, r := range rows {
+		byID[r.Share.ID] = r
+	}
+	list := make([]shareRow, 0, len(ids))
+	for _, id := range ids { // keep the order of ListGrantsOfUser (newest share first)
+		if r, ok := byID[id]; ok {
+			list = append(list, shareRow{share: r.Share, vaultName: r.VaultName, ownerID: r.OwnerID, ownerName: r.OwnerName})
+		}
+	}
+	return s.views(ctx, conn, list, userID, false)
 }
 
 // Mount is an accepted share ready to be synced.

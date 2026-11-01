@@ -76,6 +76,80 @@ func (q *Queries) CreateVault(ctx context.Context, arg CreateVaultParams) (Vault
 	return i, err
 }
 
+const finishVaultBatch = `-- name: FinishVaultBatch :exec
+UPDATE vaults SET last_seq = GREATEST(last_seq, $2::bigint),
+  total_bytes = total_bytes + $3::bigint, file_count = file_count + $4::int
+WHERE id = $1
+`
+
+type FinishVaultBatchParams struct {
+	ID         uuid.UUID
+	LastSeq    int64
+	TotalBytes int64
+	FileCount  int32
+}
+
+// End of a commit batch: one update of the hot vault row instead of two per
+// operation (NextVaultSeq, AddVaultUsage).
+func (q *Queries) FinishVaultBatch(ctx context.Context, arg FinishVaultBatchParams) error {
+	_, err := q.db.Exec(ctx, finishVaultBatch,
+		arg.ID,
+		arg.LastSeq,
+		arg.TotalBytes,
+		arg.FileCount,
+	)
+	return err
+}
+
+const getTreeFile = `-- name: GetTreeFile :many
+SELECT id, path, path_key, kind, current_rev, blob_hash, size FROM files
+WHERE vault_id = $1 AND id = $2 AND NOT is_deleted
+`
+
+type GetTreeFileParams struct {
+	VaultID uuid.UUID
+	ID      uuid.UUID
+}
+
+type GetTreeFileRow struct {
+	ID         uuid.UUID
+	Path       string
+	PathKey    string
+	Kind       string
+	CurrentRev int32
+	BlobHash   *string
+	Size       int64
+}
+
+// The manifest of a document share: its one file, if current.
+func (q *Queries) GetTreeFile(ctx context.Context, arg GetTreeFileParams) ([]GetTreeFileRow, error) {
+	rows, err := q.db.Query(ctx, getTreeFile, arg.VaultID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTreeFileRow{}
+	for rows.Next() {
+		var i GetTreeFileRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Path,
+			&i.PathKey,
+			&i.Kind,
+			&i.CurrentRev,
+			&i.BlobHash,
+			&i.Size,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getVault = `-- name: GetVault :one
 SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults WHERE id = $1
 `
@@ -208,32 +282,52 @@ func (q *Queries) ListOwnedVaultsWithDeleted(ctx context.Context, arg ListOwnedV
 	return items, nil
 }
 
-const listTree = `-- name: ListTree :many
-SELECT id, path, kind, current_rev, blob_hash, size FROM files
-WHERE vault_id = $1 AND NOT is_deleted ORDER BY path_key
+const listTreePage = `-- name: ListTreePage :many
+SELECT id, path, path_key, kind, current_rev, blob_hash, size FROM files
+WHERE vault_id = $1 AND NOT is_deleted AND path_key > $2::text
+  AND ($3::text = '' OR path_key LIKE $3::text ESCAPE '\')
+ORDER BY path_key LIMIT $4::int
 `
 
-type ListTreeRow struct {
+type ListTreePageParams struct {
+	VaultID     uuid.UUID
+	After       string
+	Descendants string
+	MaxRows     int32
+}
+
+type ListTreePageRow struct {
 	ID         uuid.UUID
 	Path       string
+	PathKey    string
 	Kind       string
 	CurrentRev int32
 	BlobHash   *string
 	Size       int64
 }
 
-func (q *Queries) ListTree(ctx context.Context, vaultID uuid.UUID) ([]ListTreeRow, error) {
-	rows, err := q.db.Query(ctx, listTree, vaultID)
+// One page of the manifest after the key "after" (path keys of current files
+// are unique, files_path_uq), optionally only below a folder (descendants: an
+// escaped LIKE pattern, ” for the whole vault). A manifest is read page by
+// page inside one REPEATABLE READ snapshot, so it is never held in memory.
+func (q *Queries) ListTreePage(ctx context.Context, arg ListTreePageParams) ([]ListTreePageRow, error) {
+	rows, err := q.db.Query(ctx, listTreePage,
+		arg.VaultID,
+		arg.After,
+		arg.Descendants,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListTreeRow{}
+	items := []ListTreePageRow{}
 	for rows.Next() {
-		var i ListTreeRow
+		var i ListTreePageRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Path,
+			&i.PathKey,
 			&i.Kind,
 			&i.CurrentRev,
 			&i.BlobHash,
@@ -242,6 +336,32 @@ func (q *Queries) ListTree(ctx context.Context, vaultID uuid.UUID) ([]ListTreeRo
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVaultIDsOfOwner = `-- name: ListVaultIDsOfOwner :many
+SELECT id FROM vaults WHERE owner_id = $1
+`
+
+// Every vault of an owner, soft-deleted ones included (their blobs still
+// take space until the purge): the scope of the upload quota check.
+func (q *Queries) ListVaultIDsOfOwner(ctx context.Context, ownerID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listVaultIDsOfOwner, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -261,6 +381,20 @@ func (q *Queries) LockVault(ctx context.Context, id uuid.UUID) (uuid.UUID, error
 	var id_2 uuid.UUID
 	err := row.Scan(&id_2)
 	return id_2, err
+}
+
+const lockVaultSeq = `-- name: LockVaultSeq :one
+SELECT last_seq FROM vaults WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// LockVault for a commit batch: the same row lock, plus the changelog position
+// the batch continues from (it hands out the next seqs itself while holding
+// the lock and stores the last one with FinishVaultBatch).
+func (q *Queries) LockVaultSeq(ctx context.Context, id uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, lockVaultSeq, id)
+	var last_seq int64
+	err := row.Scan(&last_seq)
+	return last_seq, err
 }
 
 const nextVaultSeq = `-- name: NextVaultSeq :one

@@ -18,6 +18,8 @@ Le migrazioni dello schema le applicano solo i processi `api` e `all`, all'avvio
 
 Le colonne "Obbl." indicano se il servizio rifiuta di avviarsi senza la variabile (o senza una delle alternative indicate).
 
+Un valore che non si interpreta non viene mai sostituito in silenzio dal default: una durata senza unità (`SHUTDOWN_TIMEOUT=30` invece di `30s`) o un booleano non riconosciuto (`S3_USE_PATH_STYLE=yes`; valori ammessi `true`/`false`, `1`/`0`) fanno fallire l'avvio con un errore che elenca tutte le variabili sbagliate. Sono rifiutati anche `SHUTDOWN_TIMEOUT` non positivo, `SHUTDOWN_DRAIN` negativo e `OIDC_STATUS_CACHE_TTL` fuori dall'intervallo 0–5m (0 disattiva la cache).
+
 ### Rete e processo
 
 | Variabile             | Default              | Obbl. | Descrizione                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -84,14 +86,19 @@ All'avvio il servizio rifiuta di partire se un segreto vale ancora uno dei segna
 
 Alcuni parametri si cambiano dalla console admin (**Limiti**) o dalla tabella `settings` senza riavviare il servizio. Valori predefiniti:
 
-| Chiave                          | Default | Significato                                                              |
-| ------------------------------- | ------- | ------------------------------------------------------------------------ |
-| `files.max_size_bytes`          | 100 MiB | Dimensione massima di un file sincronizzato.                             |
-| `history.retention_days`        | 30      | Giorni in cui si conservano tutte le revisioni.                          |
-| `history.daily_retention_days`  | 90      | Giorni in cui si conserva una revisione al giorno (poi viene potata).    |
-| `sync.changelog_window_days`    | 90      | Oltre questa finestra i client molto indietro ripartono dal manifesto.   |
-| `vaults.deleted_retention_days` | 30      | Periodo in cui un vault eliminato è ancora recuperabile prima del purge. |
-| `blobs.gc_grace_hours`          | 24      | Attesa prima di cancellare un blob non più referenziato.                 |
+| Chiave                          | Default | Significato                                                                                                                                            |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `files.max_size_bytes`          | 100 MiB | Dimensione massima di un file sincronizzato.                                                                                                           |
+| `history.retention_days`        | 30      | Giorni in cui si conservano tutte le revisioni.                                                                                                        |
+| `history.daily_retention_days`  | 90      | Giorni in cui si conserva una revisione al giorno (poi viene potata).                                                                                  |
+| `sync.changelog_window_days`    | 90      | Oltre questa finestra i client molto indietro ripartono dal manifesto.                                                                                 |
+| `vaults.deleted_retention_days` | 30      | Periodo in cui un vault eliminato è ancora recuperabile prima del purge.                                                                               |
+| `blobs.gc_grace_hours`          | 24      | Attesa prima di cancellare un blob non più referenziato.                                                                                               |
+| `uploads.expiry_hours`          | 24      | Durata di un upload riprendibile (tus) e finestra in cui un blob caricato ma non ancora committato conta nella quota del proprietario.                 |
+| `exports.workers`               | 2       | Archivi ZIP di export costruiti in parallelo dal worker (massimo 16).                                                                                  |
+| `exports.max_active_per_user`   | 3       | Job di export in coda o in esecuzione per utente; oltre, `429 RATE_LIMITED`. Un vault ha al più un job attivo: una nuova richiesta restituisce quello. |
+
+**Quota e upload.** La quota conta solo i file correnti (D-03), addebitati al commit. I byte caricati ma non ancora committati (blob caricati entro `uploads.expiry_hours` che nessuna revisione referenzia, più la lunghezza annunciata degli upload tus in corso) non compaiono in `used_bytes` ma limitano i nuovi upload: un upload che non sta nella quota insieme ai byte usati e a quelli in attesa è rifiutato con `413 QUOTA_EXCEEDED`. Conviene tenere `blobs.gc_grace_hours` non superiore a `uploads.expiry_hours`: un blob mai committato smette di contare alla fine della finestra e occupa spazio finché il GC non lo rimuove.
 
 La quota predefinita e le soglie di avviso/critica (`warn_percent`, `critical_percent`) si impostano nella stessa pagina **Limiti**.
 

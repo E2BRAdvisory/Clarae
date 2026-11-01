@@ -43,8 +43,10 @@ SELECT g.*,
 FROM share_grants g WHERE g.share_id = $1 ORDER BY g.created_at;
 
 -- name: ListSharesOfVaultOwner :many
--- Shares of the vaults a user owns, plus those the user manages.
-SELECT s.* FROM shares s JOIN vaults v ON v.id = s.vault_id
+-- Shares of the vaults a user owns, plus those the user manages, with what a
+-- list shows of their vault and owner (one query per list, not per share).
+SELECT sqlc.embed(s), v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
+FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
 WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
   AND (v.owner_id = sqlc.arg(user_id)
        OR EXISTS (SELECT 1 FROM share_grants g
@@ -93,3 +95,23 @@ WHERE vault_id = sqlc.arg(vault_id) AND resource_type = 'folder'
 
 -- name: DeleteGrantsOfPrincipal :execrows
 DELETE FROM share_grants WHERE principal_type = $1 AND principal_id = $2;
+
+-- name: ListSharesByIDs :many
+-- The shares of a list with their vault and owner (ListReceived).
+SELECT sqlc.embed(s), v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
+FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
+WHERE s.id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: ListUserGrantsOnShares :many
+-- ListUserGrantsOnShare for many shares at once.
+SELECT g.* FROM share_grants g
+WHERE g.share_id = ANY(sqlc.arg(share_ids)::uuid[])
+  AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
+    OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id))));
+
+-- name: ListGrantsOfShares :many
+-- ListGrants for many shares at once.
+SELECT g.*,
+       CASE g.principal_type WHEN 'user' THEN (SELECT username FROM users WHERE id = g.principal_id)
+                             ELSE (SELECT name::text FROM groups WHERE id = g.principal_id) END::text AS principal_name
+FROM share_grants g WHERE g.share_id = ANY(sqlc.arg(share_ids)::uuid[]) ORDER BY g.share_id, g.created_at;

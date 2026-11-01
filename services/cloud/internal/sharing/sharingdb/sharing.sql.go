@@ -209,6 +209,56 @@ func (q *Queries) ListGrants(ctx context.Context, shareID uuid.UUID) ([]ListGran
 	return items, nil
 }
 
+const listGrantsOfShares = `-- name: ListGrantsOfShares :many
+SELECT g.id, g.share_id, g.principal_type, g.principal_id, g.permission, g.status, g.granted_by, g.created_at,
+       CASE g.principal_type WHEN 'user' THEN (SELECT username FROM users WHERE id = g.principal_id)
+                             ELSE (SELECT name::text FROM groups WHERE id = g.principal_id) END::text AS principal_name
+FROM share_grants g WHERE g.share_id = ANY($1::uuid[]) ORDER BY g.share_id, g.created_at
+`
+
+type ListGrantsOfSharesRow struct {
+	ID            uuid.UUID
+	ShareID       uuid.UUID
+	PrincipalType string
+	PrincipalID   uuid.UUID
+	Permission    string
+	Status        string
+	GrantedBy     uuid.UUID
+	CreatedAt     time.Time
+	PrincipalName string
+}
+
+// ListGrants for many shares at once.
+func (q *Queries) ListGrantsOfShares(ctx context.Context, shareIds []uuid.UUID) ([]ListGrantsOfSharesRow, error) {
+	rows, err := q.db.Query(ctx, listGrantsOfShares, shareIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGrantsOfSharesRow{}
+	for rows.Next() {
+		var i ListGrantsOfSharesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShareID,
+			&i.PrincipalType,
+			&i.PrincipalID,
+			&i.Permission,
+			&i.Status,
+			&i.GrantedBy,
+			&i.CreatedAt,
+			&i.PrincipalName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGrantsOfUser = `-- name: ListGrantsOfUser :many
 SELECT g.id, g.share_id, g.principal_type, g.principal_id, g.permission, g.status, g.granted_by, g.created_at, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.expires_at,
        v.owner_id, v.name AS vault_name,
@@ -349,8 +399,57 @@ func (q *Queries) ListShareRecipients(ctx context.Context, shareID uuid.UUID) ([
 	return items, nil
 }
 
+const listSharesByIDs = `-- name: ListSharesByIDs :many
+SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at, v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
+FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
+WHERE s.id = ANY($1::uuid[])
+`
+
+type ListSharesByIDsRow struct {
+	Share     Share
+	VaultName string
+	OwnerID   uuid.UUID
+	OwnerName string
+}
+
+// The shares of a list with their vault and owner (ListReceived).
+func (q *Queries) ListSharesByIDs(ctx context.Context, ids []uuid.UUID) ([]ListSharesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listSharesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSharesByIDsRow{}
+	for rows.Next() {
+		var i ListSharesByIDsRow
+		if err := rows.Scan(
+			&i.Share.ID,
+			&i.Share.VaultID,
+			&i.Share.ResourceType,
+			&i.Share.PathPrefix,
+			&i.Share.FileID,
+			&i.Share.DisplayName,
+			&i.Share.CreatedBy,
+			&i.Share.CreatedAt,
+			&i.Share.ExpiresAt,
+			&i.Share.RevokedAt,
+			&i.VaultName,
+			&i.OwnerID,
+			&i.OwnerName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSharesOfVaultOwner = `-- name: ListSharesOfVaultOwner :many
-SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at FROM shares s JOIN vaults v ON v.id = s.vault_id
+SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at, v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
+FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
 WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
   AND (v.owner_id = $1
        OR EXISTS (SELECT 1 FROM share_grants g
@@ -360,27 +459,38 @@ WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
 ORDER BY s.created_at DESC
 `
 
-// Shares of the vaults a user owns, plus those the user manages.
-func (q *Queries) ListSharesOfVaultOwner(ctx context.Context, userID uuid.UUID) ([]Share, error) {
+type ListSharesOfVaultOwnerRow struct {
+	Share     Share
+	VaultName string
+	OwnerID   uuid.UUID
+	OwnerName string
+}
+
+// Shares of the vaults a user owns, plus those the user manages, with what a
+// list shows of their vault and owner (one query per list, not per share).
+func (q *Queries) ListSharesOfVaultOwner(ctx context.Context, userID uuid.UUID) ([]ListSharesOfVaultOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listSharesOfVaultOwner, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Share{}
+	items := []ListSharesOfVaultOwnerRow{}
 	for rows.Next() {
-		var i Share
+		var i ListSharesOfVaultOwnerRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.VaultID,
-			&i.ResourceType,
-			&i.PathPrefix,
-			&i.FileID,
-			&i.DisplayName,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.ExpiresAt,
-			&i.RevokedAt,
+			&i.Share.ID,
+			&i.Share.VaultID,
+			&i.Share.ResourceType,
+			&i.Share.PathPrefix,
+			&i.Share.FileID,
+			&i.Share.DisplayName,
+			&i.Share.CreatedBy,
+			&i.Share.CreatedAt,
+			&i.Share.ExpiresAt,
+			&i.Share.RevokedAt,
+			&i.VaultName,
+			&i.OwnerID,
+			&i.OwnerName,
 		); err != nil {
 			return nil, err
 		}
@@ -406,6 +516,48 @@ type ListUserGrantsOnShareParams struct {
 
 func (q *Queries) ListUserGrantsOnShare(ctx context.Context, arg ListUserGrantsOnShareParams) ([]ShareGrant, error) {
 	rows, err := q.db.Query(ctx, listUserGrantsOnShare, arg.ShareID, arg.PrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ShareGrant{}
+	for rows.Next() {
+		var i ShareGrant
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShareID,
+			&i.PrincipalType,
+			&i.PrincipalID,
+			&i.Permission,
+			&i.Status,
+			&i.GrantedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserGrantsOnShares = `-- name: ListUserGrantsOnShares :many
+SELECT g.id, g.share_id, g.principal_type, g.principal_id, g.permission, g.status, g.granted_by, g.created_at FROM share_grants g
+WHERE g.share_id = ANY($1::uuid[])
+  AND ((g.principal_type = 'user' AND g.principal_id = $2)
+    OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $2)))
+`
+
+type ListUserGrantsOnSharesParams struct {
+	ShareIds []uuid.UUID
+	UserID   uuid.UUID
+}
+
+// ListUserGrantsOnShare for many shares at once.
+func (q *Queries) ListUserGrantsOnShares(ctx context.Context, arg ListUserGrantsOnSharesParams) ([]ShareGrant, error) {
+	rows, err := q.db.Query(ctx, listUserGrantsOnShares, arg.ShareIds, arg.UserID)
 	if err != nil {
 		return nil, err
 	}

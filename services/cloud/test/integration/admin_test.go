@@ -249,8 +249,10 @@ func TestAdminSetsQuotaAndWritesStopAtTheLimit(t *testing.T) {
 	if got := decode[adminUser](t, resp); got.QuotaBytes != 10 || got.QuotaBytesOverride == nil || *got.QuotaBytesOverride != 10 {
 		t.Fatalf("quota: %+v", got)
 	}
-	if res := ada.commit(v, create(newID(), "big.md", ada.putBlob(v, []byte("0123456789ABCDEF")))); res[0].code() != "QUOTA_EXCEEDED" {
-		t.Fatalf("a write over the quota: %+v", res[0])
+	// A write over the quota stops at the upload already (the blob alone does not fit).
+	big := []byte("0123456789ABCDEF")
+	if p := respProblem(t, ada.raw(http.MethodPut, "/vaults/"+v+"/blobs/"+hashOf(big), "application/octet-stream", big, nil)); p.Status != http.StatusRequestEntityTooLarge || p.Code != "QUOTA_EXCEEDED" {
+		t.Fatalf("a write over the quota: %+v", p)
 	}
 	// Unlimited, then back to the default.
 	expect(t, root.json(http.MethodPut, "/admin/users/"+ada.userID+"/quota", map[string]any{"quota_bytes": -1}), http.StatusOK)

@@ -41,6 +41,11 @@ const (
 	CodeInternal           Code = "INTERNAL"
 )
 
+// ReasonDeviceRevoked is Problem.Extra["reason"] of the FORBIDDEN answer to a
+// commit sent with a revoked device_id: the client stops synchronizing until
+// the device is registered again.
+const ReasonDeviceRevoked = "device_revoked"
+
 // HTTPStatus returns the HTTP status associated with a code when it is the
 // outcome of a whole request (per-operation outcomes inside a commit are
 // always carried in a 200 response).

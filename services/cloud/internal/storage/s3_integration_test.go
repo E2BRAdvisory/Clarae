@@ -11,28 +11,40 @@ import (
 	"testing"
 	"time"
 
-	tcminio "github.com/testcontainers/testcontainers-go/modules/minio"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"memobrain/services/cloud/internal/storage"
 )
 
+// rustfsImage is the S3 server of the deployment (deploy/PINS.md), pinned by
+// version and digest like there. MinIO no longer publishes images on Docker Hub.
+const rustfsImage = "rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2"
+
 // TestS3Store runs the BlobStore contract against a real S3 server: the one in
-// MEMOBRAIN_TEST_S3_ENDPOINT (credentials in MEMOBRAIN_TEST_S3_KEY/SECRET) or a MinIO container.
+// MEMOBRAIN_TEST_S3_ENDPOINT (credentials in MEMOBRAIN_TEST_S3_KEY/SECRET) or a RustFS container.
 func TestS3Store(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	opts := storage.S3Options{Endpoint: os.Getenv("MEMOBRAIN_TEST_S3_ENDPOINT"), AccessKey: os.Getenv("MEMOBRAIN_TEST_S3_KEY"), SecretKey: os.Getenv("MEMOBRAIN_TEST_S3_SECRET"), Region: "us-east-1", Bucket: "memobrain-test-blobs", UsePathStyle: true}
 	if opts.Endpoint == "" {
-		c, err := tcminio.Run(ctx, "minio/minio:latest")
+		c, err := testcontainers.Run(ctx, rustfsImage,
+			testcontainers.WithEnv(map[string]string{
+				"RUSTFS_ACCESS_KEY": "memobrain", "RUSTFS_SECRET_KEY": "memobrain-secret",
+				"RUSTFS_VOLUMES": "/data", "RUSTFS_ADDRESS": ":9000",
+			}),
+			testcontainers.WithExposedPorts("9000/tcp"),
+			testcontainers.WithWaitStrategy(wait.ForListeningPort("9000/tcp").WithStartupTimeout(60*time.Second)),
+		)
 		if err != nil {
 			t.Skipf("no S3 server available: %v", err)
 		}
 		t.Cleanup(func() { _ = c.Terminate(context.Background()) })
-		addr, err := c.ConnectionString(ctx)
+		addr, err := c.PortEndpoint(ctx, "9000/tcp", "http")
 		if err != nil {
 			t.Fatal(err)
 		}
-		opts.Endpoint, opts.AccessKey, opts.SecretKey = "http://"+addr, c.Username, c.Password
+		opts.Endpoint, opts.AccessKey, opts.SecretKey = addr, "memobrain", "memobrain-secret"
 	}
 	s, err := storage.NewS3(ctx, opts)
 	if err != nil {

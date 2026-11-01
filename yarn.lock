@@ -1295,6 +1295,7 @@ __metadata:
     "@lezer/common": "npm:^1.5.4"
     "@lezer/highlight": "npm:^1.2.5"
     "@lezer/markdown": "npm:^1.8.1"
+    "@memobrain/api-client": "workspace:*"
     "@memobrain/cloud-features": "workspace:*"
     "@memobrain/markdown": "workspace:*"
     "@memobrain/ui": "workspace:*"

@@ -176,7 +176,7 @@ func opErr(op Op, msg string) error {
 // Validate checks structural rules that do not depend on vault state:
 // required fields per kind, hash format and, for clear-text paths, path
 // rules. opaquePaths must be true for private vaults, whose paths are
-// "enc1:" tokens validated only for shape (§3.8.5).
+// "enc1:" or "enc2:" tokens validated only for shape (§3.8.5, ADR-0042).
 func (o Op) Validate(opaquePaths bool) error {
 	if o.OpID == "" {
 		return opErr(o, "op_id is required")
@@ -187,7 +187,7 @@ func (o Op) Validate(opaquePaths bool) error {
 		}
 		if opaquePaths {
 			if !IsOpaquePath(p) {
-				return opErr(o, field+" must be an enc1: token")
+				return opErr(o, field+" must be an enc1: or enc2: token")
 			}
 			return nil
 		}
@@ -266,16 +266,22 @@ func (o Op) Validate(opaquePaths bool) error {
 // OpaquePathPrefix marks encrypted paths of private vaults (§3.8.3).
 const OpaquePathPrefix = "enc1:"
 
+// OpaquePathPrefixV2 marks encrypted paths bound to their vault and file
+// (ADR-0042): same shape and the same hmac1 path key as enc1.
+const OpaquePathPrefixV2 = "enc2:"
+
 // MaxOpaquePathLen bounds the serialized encrypted path: base64url of
-// nonce(12) + ciphertext(≤1024) + tag(16), plus the prefix.
+// nonce(12) + ciphertext(≤1024) + tag(16), plus the prefix (both prefixes
+// have the same length).
 const MaxOpaquePathLen = len(OpaquePathPrefix) + ((12+pathrules.MaxPathBytes+16)*4+2)/3 + 4
 
-// IsOpaquePath reports whether p has the shape of an encrypted path token.
+// IsOpaquePath reports whether p has the shape of an encrypted path token
+// (either format).
 func IsOpaquePath(p string) bool {
 	if len(p) <= len(OpaquePathPrefix) || len(p) > MaxOpaquePathLen {
 		return false
 	}
-	if p[:len(OpaquePathPrefix)] != OpaquePathPrefix {
+	if pre := p[:len(OpaquePathPrefix)]; pre != OpaquePathPrefix && pre != OpaquePathPrefixV2 {
 		return false
 	}
 	for _, c := range p[len(OpaquePathPrefix):] {

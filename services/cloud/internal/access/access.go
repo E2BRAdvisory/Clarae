@@ -156,6 +156,48 @@ func (s *Scope) Abs(rel string) (string, error) {
 	return "", fmt.Errorf("a document share has no paths to address")
 }
 
+// Projection is how one revision of a file appears through a share.
+type Projection struct {
+	Op       string
+	Path     string  // relative to the root of the share
+	PrevPath *string // set for a move inside the share
+	// Content is false when the revision shows as a deletion (the file left
+	// the share): its blob is not part of what the share exposes.
+	Content bool
+}
+
+// Project translates a revision (file, operation, vault path and previous path)
+// into what the share shows: paths relative to its root, a file moving out of
+// the share as a delete and one moving in as a create. ok is false when the
+// revision is invisible through the share (it happened outside it, or only
+// moved a shared document between folders). Every reader of revisions through
+// a share (changes, history, restore) goes through it, so their rules cannot
+// drift apart.
+func (s *Scope) Project(fileID uuid.UUID, op, p string, prev *string) (Projection, bool) {
+	inNew := s.ContainsFile(fileID, p)
+	inOld := prev != nil && s.ContainsFile(fileID, *prev)
+	out := Projection{Op: op, Path: s.Rel(p), Content: true}
+	if op != "move" {
+		return out, inNew
+	}
+	switch {
+	case inOld && inNew:
+		if s.Type == ResourceFile && path.Base(p) == path.Base(*prev) {
+			return Projection{}, false // a document moving between folders keeps its name in the mount
+		}
+		rel := s.Rel(*prev)
+		out.PrevPath = &rel
+	case inOld:
+		// It left the share: to the recipient it is gone.
+		out.Op, out.Path, out.Content = "delete", s.Rel(*prev), false
+	case inNew:
+		out.Op = "create" // it entered the share: where it came from is not shared
+	default:
+		return Projection{}, false
+	}
+	return out, true
+}
+
 // Vault is a vault row as the vaults module stores it. access is the shared
 // vocabulary of the modules that serve vault content, so it names the type
 // they pass around; it is the one place outside vaults that refers to vaultsdb

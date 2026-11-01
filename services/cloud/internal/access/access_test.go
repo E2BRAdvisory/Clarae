@@ -86,3 +86,52 @@ func TestVaultAndFileScopes(t *testing.T) {
 		t.Error("a document share has no paths to address")
 	}
 }
+
+func TestProjectRevisionsThroughAShare(t *testing.T) {
+	sp := func(s string) *string { return &s }
+	id := uuid.New()
+	sc := folderScope("Projects/Acme")
+	cases := []struct {
+		name       string
+		op, path   string
+		prev       *string
+		ok         bool
+		wantOp     string
+		wantPath   string
+		wantPrev   *string
+		wantBlobOK bool
+	}{
+		{"modify inside", "modify", "Projects/Acme/x.md", nil, true, "modify", "x.md", nil, true},
+		{"modify outside", "modify", "HR/x.md", nil, false, "", "", nil, false},
+		{"move inside", "move", "Projects/Acme/b/x.md", sp("Projects/Acme/x.md"), true, "move", "b/x.md", sp("x.md"), true},
+		// Where the file came from is not shared: no prev_path.
+		{"move in", "move", "Projects/Acme/x.md", sp("HR/Confidential/x.md"), true, "create", "x.md", nil, true},
+		{"move out", "move", "HR/x.md", sp("Projects/Acme/x.md"), true, "delete", "x.md", nil, false},
+		{"move outside", "move", "HR/y.md", sp("HR/x.md"), false, "", "", nil, false},
+		{"case-folded prefix", "create", "projects/ACME/x.md", nil, true, "create", "x.md", nil, true},
+	}
+	for _, c := range cases {
+		got, ok := sc.Project(id, c.op, c.path, c.prev)
+		if ok != c.ok {
+			t.Errorf("%s: visible %v, want %v", c.name, ok, c.ok)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if got.Op != c.wantOp || got.Path != c.wantPath || got.Content != c.wantBlobOK || (got.PrevPath == nil) != (c.wantPrev == nil) || (got.PrevPath != nil && *got.PrevPath != *c.wantPrev) {
+			t.Errorf("%s: got %+v (prev %v)", c.name, got, got.PrevPath)
+		}
+	}
+
+	doc := NewScope(uuid.New(), ResourceFile, nil, &id)
+	if _, ok := doc.Project(id, "move", "B/Report.md", sp("A/Report.md")); ok {
+		t.Error("a document moving between folders keeps its name in the mount: invisible")
+	}
+	if got, ok := doc.Project(id, "move", "A/Final.md", sp("A/Report.md")); !ok || got.Path != "Final.md" || *got.PrevPath != "Report.md" {
+		t.Errorf("document rename: %+v %v", got, ok)
+	}
+	if _, ok := doc.Project(uuid.New(), "modify", "A/Report.md", nil); ok {
+		t.Error("another file is outside a document share")
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"memobrain/services/cloud/internal/access"
 	"memobrain/services/cloud/internal/settings"
@@ -22,6 +23,7 @@ import (
 	"memobrain/services/cloud/internal/blobs"
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/notify"
 	"memobrain/services/cloud/internal/observability"
 	"memobrain/services/cloud/internal/quota"
 	"memobrain/services/cloud/internal/sync/syncdb"
@@ -38,8 +40,8 @@ func recordCommit(resp syncproto.CommitResponse, err error) {
 	observability.SyncCommit(err, statuses)
 }
 
-// ChannelVaultChanged is the Postgres NOTIFY channel carrying "vault_id:seq".
-const ChannelVaultChanged = "vault_changed"
+// touchEvery is how stale a device's last_seen_at may get before a commit refreshes it.
+const touchEvery = time.Minute
 
 // DefaultMaxFileBytes is used when the files.max_size_bytes setting is missing.
 const DefaultMaxFileBytes = syncproto.DefaultMaxFileBytes
@@ -72,6 +74,12 @@ func (e *opError) Error() string { return string(e.code) + ": " + e.detail }
 func reject(code syncproto.Code, format string, args ...any) *opError {
 	return &opError{code: code, detail: fmt.Sprintf(format, args...)}
 }
+
+// appliedError means the operation is in the changelog already: a retry that
+// overlapped its original (see lockFile).
+type appliedError struct{ rev syncdb.FileRevision }
+
+func (e *appliedError) Error() string { return "operation already applied" }
 
 // conflict carries the current state of a file back to the client.
 type conflictError struct{ f syncdb.File }
@@ -122,9 +130,15 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 		return syncproto.CommitResponse{}, err
 	}
 	if dev.RevokedAt != nil {
-		return syncproto.CommitResponse{}, httpproblem.Errorf(syncproto.CodeForbidden, "device revoked")
+		// extra.reason lets the client tell this from the other FORBIDDEN answers:
+		// it stops syncing and offers to register the device again.
+		return syncproto.CommitResponse{}, &httpproblem.Error{Code: syncproto.CodeForbidden, Detail: "device revoked", Extra: map[string]any{"reason": syncproto.ReasonDeviceRevoked}}
 	}
-	_ = users.TouchDevice(ctx, conn, users.TouchDeviceParams{ID: deviceID, UserID: userID})
+	if dev.LastSeenAt == nil || time.Since(*dev.LastSeenAt) > touchEvery {
+		// last_seen_at is shown with minute precision: a client committing in a
+		// loop does not need one write of its device row per commit.
+		_ = users.TouchDevice(ctx, conn, users.TouchDeviceParams{ID: deviceID, UserID: userID})
+	}
 
 	// The owner pays for the storage, whoever edits (shared vaults, M4).
 	quotaBytes, err := s.quota.QuotaOf(ctx, vault.OwnerID)
@@ -155,6 +169,9 @@ type commitEnv struct {
 	maxFile  int64
 	// scope is set when the caller works through a share.
 	scope *access.Scope
+	// restore marks RestoreRevision: its modification is recorded as a
+	// restore even when the file is live (§3.5.2).
+	restore bool
 	// batch is set on the fast path: the writes that every operation of the
 	// batch would repeat on the same few rows (the owner's usage, blob
 	// reference counts) are accumulated and applied once, just before commit,
@@ -167,6 +184,26 @@ type batchState struct {
 	usedAtStart int64
 	delta       int64
 	refs        map[string]int32
+	// startSeq is the vault's last_seq when the batch locked it; seq is the
+	// last seq handed out since (the vault row lock makes that safe).
+	startSeq, seq int64
+	// usage of the vault (bytes, files), stored once with the last seq.
+	vaultBytes int64
+	vaultFiles int32
+	// applied holds the operations of the batch already in the changelog:
+	// read once for the whole batch, then completed as operations apply.
+	applied map[uuid.UUID]appliedOp
+	// rows holds the file rows the batch has locked, in their current state.
+	rows map[uuid.UUID]syncdb.File
+	// taken holds the file ids that exist (create must refuse them).
+	taken map[uuid.UUID]bool
+}
+
+// appliedOp is where an operation landed in the changelog.
+type appliedOp struct {
+	fileID uuid.UUID
+	rev    int32
+	seq    int64
 }
 
 // errChargeRace means the final quota charge failed although every operation
@@ -178,11 +215,16 @@ func (e commitEnv) private() bool { return e.vault.Kind == "private" }
 func (s *Service) notify(ctx context.Context, tx pgx.Tx, vaultID uuid.UUID, seq int64) error {
 	// One notification per transaction: it carries the highest seq and
 	// listeners coalesce per vault anyway.
-	_, err := tx.Exec(ctx, "SELECT pg_notify($1, $2)", ChannelVaultChanged, fmt.Sprintf("%s:%d", vaultID, seq))
-	return err
+	return notify.PublishVaultChanged(ctx, tx, vaultID, seq)
 }
 
 // commitBatch is the fast path: all operations in one transaction.
+//
+// While it holds the vault lock the batch keeps its round trips per operation
+// low: the operation ids already applied, the file rows it changes (locked in
+// id order) and the file ids it creates are read once up front; seqs are
+// handed out in memory; the owner's usage, the vault's usage and last seq and
+// the blob references are written once at the end (flushBatch).
 func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncproto.Op) (syncproto.CommitResponse, error) {
 	resp := syncproto.CommitResponse{Results: make([]syncproto.OpResult, 0, len(ops))}
 	tx, err := s.db.Pool.Begin(ctx)
@@ -190,15 +232,18 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 		return resp, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := vaults.LockVault(ctx, tx, env.vault.ID); err != nil {
+	lastSeq, err := vaults.LockVaultSeq(ctx, tx, env.vault.ID)
+	if err != nil {
 		return resp, err
 	}
 	used, err := quota.UsedBytes(ctx, tx, env.vault.OwnerID)
 	if err != nil {
 		return resp, err
 	}
-	env.batch = &batchState{usedAtStart: used, refs: map[string]int32{}}
-	var top int64
+	env.batch = &batchState{usedAtStart: used, refs: map[string]int32{}, startSeq: lastSeq, seq: lastSeq}
+	if err := s.preload(ctx, tx, env, ops); err != nil {
+		return resp, err
+	}
 	for _, op := range ops {
 		res, err := s.execOp(ctx, tx, env, op)
 		if res2, handled := business(op.OpID, err); handled {
@@ -208,21 +253,79 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 			return resp, err
 		}
 		resp.Results = append(resp.Results, res)
-		top = max(top, res.Seq)
 	}
-	if top > 0 {
+	if env.batch.seq > env.batch.startSeq {
 		if err := s.flushBatch(ctx, tx, env); err != nil {
 			return resp, err
 		}
-		if err := s.notify(ctx, tx, env.vault.ID, top); err != nil {
+		if err := s.notify(ctx, tx, env.vault.ID, env.batch.seq); err != nil {
 			return resp, err
 		}
 	}
 	return resp, tx.Commit(ctx)
 }
 
-// flushBatch applies the accumulated usage charge and blob references. Blob
-// hashes are processed in sorted order so concurrent batches never deadlock.
+// preload reads, under the vault lock, what every operation of the batch would
+// otherwise query on its own: the operation ids already applied, the rows of
+// the files it changes (locked in id order, so the batch never waits on a row
+// halfway) and which of the file ids it creates already exist.
+func (s *Service) preload(ctx context.Context, tx db.DBTX, env commitEnv, ops []syncproto.Op) error {
+	b := env.batch
+	q := syncdb.New(tx)
+	var opIDs, changed, created []uuid.UUID
+	for _, op := range ops {
+		if id, err := uuid.Parse(op.OpID); err == nil {
+			opIDs = append(opIDs, id)
+		}
+		id, err := uuid.Parse(op.FileID)
+		if err != nil {
+			continue
+		}
+		switch op.Op {
+		case syncproto.OpCreate:
+			created = append(created, id)
+		case syncproto.OpModify, syncproto.OpRestore, syncproto.OpMove, syncproto.OpDelete:
+			changed = append(changed, id)
+		}
+	}
+	b.applied = make(map[uuid.UUID]appliedOp, len(ops))
+	b.rows = make(map[uuid.UUID]syncdb.File, len(changed))
+	b.taken = make(map[uuid.UUID]bool, len(created))
+	if len(opIDs) > 0 {
+		prev, err := q.ListRevisionsByOpIDs(ctx, syncdb.ListRevisionsByOpIDsParams{VaultID: env.vault.ID, OpIds: opIDs})
+		if err != nil {
+			return err
+		}
+		for _, r := range prev {
+			if r.OpID != nil {
+				b.applied[*r.OpID] = appliedOp{fileID: r.FileID, rev: r.RevNo, seq: r.Seq}
+			}
+		}
+	}
+	if len(changed) > 0 {
+		rows, err := q.LockFiles(ctx, syncdb.LockFilesParams{VaultID: env.vault.ID, Ids: changed})
+		if err != nil {
+			return err
+		}
+		for _, f := range rows {
+			b.rows[f.ID] = f
+		}
+	}
+	if len(created) > 0 {
+		taken, err := q.ExistingFileIDs(ctx, created)
+		if err != nil {
+			return err
+		}
+		for _, id := range taken {
+			b.taken[id] = true
+		}
+	}
+	return nil
+}
+
+// flushBatch applies the accumulated usage charge, the vault's last seq and
+// usage, and the blob references. Blob hashes are processed in sorted order so
+// concurrent batches never deadlock.
 func (s *Service) flushBatch(ctx context.Context, tx db.DBTX, env commitEnv) error {
 	b := env.batch
 	if b.delta != 0 {
@@ -234,17 +337,21 @@ func (s *Service) flushBatch(ctx context.Context, tx db.DBTX, env commitEnv) err
 			return err
 		}
 	}
+	if err := vaults.FinishVaultBatch(ctx, tx, vaults.FinishVaultBatchParams{
+		ID: env.vault.ID, LastSeq: b.seq, TotalBytes: b.vaultBytes, FileCount: b.vaultFiles,
+	}); err != nil {
+		return err
+	}
 	hashes := make([]string, 0, len(b.refs))
 	for h := range b.refs {
 		hashes = append(hashes, h)
 	}
 	slices.Sort(hashes)
-	for _, h := range hashes {
-		if err := blobs.AddRef(ctx, tx, h, b.refs[h]); err != nil {
-			return err
-		}
+	deltas := make([]int32, len(hashes))
+	for i, h := range hashes {
+		deltas[i] = b.refs[h]
 	}
-	return nil
+	return blobs.AddRefs(ctx, tx, hashes, deltas)
 }
 
 // opAttempts bounds how often the slow path runs one operation again after a
@@ -310,6 +417,17 @@ func (s *Service) execOp(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "op_id must be a UUID")
 	}
 	// A retried operation returns its original outcome (idempotency).
+	if b := env.batch; b != nil {
+		if a, ok := b.applied[opID]; ok {
+			return accepted(op.OpID, a.fileID, a.rev, a.seq), nil
+		}
+		if env.scope != nil {
+			if op, err = scopeOp(env.scope, op); err != nil {
+				return syncproto.OpResult{}, err
+			}
+		}
+		return s.dispatch(ctx, tx, env, op, opID)
+	}
 	prev, err := q.GetRevisionByOpID(ctx, syncdb.GetRevisionByOpIDParams{VaultID: env.vault.ID, OpID: &opID})
 	if err == nil {
 		return accepted(op.OpID, prev.FileID, prev.RevNo, prev.Seq), nil
@@ -329,8 +447,9 @@ func (s *Service) execOp(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 // into vault paths and refuses what the share cannot express.
 func scopeOp(sc *access.Scope, op syncproto.Op) (syncproto.Op, error) {
 	if sc.Type == access.ResourceFile {
-		// A shared document can be edited or removed, not moved, and nothing can be added beside it.
-		if op.Op != syncproto.OpModify && op.Op != syncproto.OpDelete {
+		// A shared document can be edited (restoring a revision is an edit) or removed, not
+		// moved, and nothing can be added beside it.
+		if op.Op != syncproto.OpModify && op.Op != syncproto.OpRestore && op.Op != syncproto.OpDelete {
 			return op, reject(syncproto.CodeForbidden, "a shared document can only be modified or deleted")
 		}
 		op.Path = ""
@@ -373,7 +492,10 @@ func scopeOp(sc *access.Scope, op syncproto.Op) (syncproto.Op, error) {
 func business(opID string, err error) (syncproto.OpResult, bool) {
 	var oe *opError
 	var ce *conflictError
+	var ae *appliedError
 	switch {
+	case errors.As(err, &ae):
+		return accepted(opID, ae.rev.FileID, ae.rev.RevNo, ae.rev.Seq), true
 	case errors.As(err, &oe):
 		return syncproto.OpResult{OpID: opID, Status: syncproto.StatusRejected, Code: oe.code, Detail: oe.detail}, true
 	case errors.As(err, &ce):
@@ -457,20 +579,23 @@ func (s *Service) dispatch(ctx context.Context, tx db.DBTX, env commitEnv, op sy
 	}
 }
 
-// resolvePath validates a path and returns it with its uniqueness key and
-// file kind. Shared vaults carry clear paths the server normalizes; private
-// vaults carry opaque tokens plus the client-computed key (§3.8.3, ADR-0009).
+// resolvePath validates a path entering the vault (create, move, a revive at
+// a new path) and returns it with its uniqueness key and file kind. Shared
+// vaults carry clear paths the server normalizes, refusing names no Windows
+// client could create (NormalizePortable); private vaults carry opaque tokens,
+// enc1 or enc2 (ADR-0042), plus the client-computed key (§3.8.3, ADR-0009).
 func resolvePath(env commitEnv, path, pathKey string) (p, key string, kind syncproto.FileKind, err error) {
 	if env.private() {
-		if !strings.HasPrefix(path, "enc1:") || len(path) > 1100 || len(path) < 10 || strings.ContainsAny(path, "/ \n\r\t") {
-			return "", "", "", reject(syncproto.CodePathInvalid, "path must be an opaque enc1: token")
+		opaque := strings.HasPrefix(path, syncproto.OpaquePathPrefix) || strings.HasPrefix(path, syncproto.OpaquePathPrefixV2)
+		if !opaque || len(path) > 1100 || len(path) < 10 || strings.ContainsAny(path, "/ \n\r\t") {
+			return "", "", "", reject(syncproto.CodePathInvalid, "path must be an opaque enc1: or enc2: token")
 		}
 		if !strings.HasPrefix(pathKey, "hmac1:") || len(pathKey) != len("hmac1:")+64 || !blobs.IsHash(pathKey[len("hmac1:"):]) {
 			return "", "", "", reject(syncproto.CodePathInvalid, "path_key must be hmac1:<64 hex>")
 		}
 		return path, pathKey, syncproto.KindOpaque, nil
 	}
-	norm, err := pathrules.Normalize(path)
+	norm, err := pathrules.NormalizePortable(path)
 	if err != nil {
 		return "", "", "", reject(syncproto.CodePathInvalid, "%v", err)
 	}
@@ -551,8 +676,10 @@ type recordArgs struct {
 
 func (s *Service) record(ctx context.Context, tx db.DBTX, env commitEnv, a recordArgs) (seq int64, err error) {
 	q := syncdb.New(tx)
-	seq, err = vaults.NextVaultSeq(ctx, tx, env.vault.ID)
-	if err != nil {
+	if b := env.batch; b != nil {
+		b.seq++
+		seq = b.seq
+	} else if seq, err = vaults.NextVaultSeq(ctx, tx, env.vault.ID); err != nil {
 		return 0, err
 	}
 	f := a.file
@@ -593,5 +720,28 @@ func (s *Service) record(ctx context.Context, tx db.DBTX, env commitEnv, a recor
 			return 0, err
 		}
 	}
+	if b := env.batch; b != nil {
+		// Later operations of the batch see the row as it is now.
+		f.VaultID, f.CurrentRev, f.CurrentSeq = env.vault.ID, a.rev, seq
+		b.rows[f.ID] = f
+		b.taken[f.ID] = true
+		if a.opID != nil {
+			b.applied[*a.opID] = appliedOp{fileID: f.ID, rev: a.rev, seq: seq}
+		}
+	}
 	return seq, nil
+}
+
+// addUsage changes the vault's usage counters: at the end of the batch on the
+// fast path, at once otherwise.
+func addUsage(ctx context.Context, tx db.DBTX, env commitEnv, bytes int64, files int32) error {
+	if bytes == 0 && files == 0 {
+		return nil
+	}
+	if b := env.batch; b != nil {
+		b.vaultBytes += bytes
+		b.vaultFiles += files
+		return nil
+	}
+	return vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: bytes, FileCount: files})
 }

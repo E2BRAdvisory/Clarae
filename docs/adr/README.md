@@ -2,46 +2,51 @@
 
 Le deviazioni e le precisazioni rispetto a `Specifications.md` si registrano come ADR (template: [`0000-template.md`](0000-template.md)). Gli ADR in stato **proposta** vanno recepiti nello spec dall'owner; quelli **accettata** sono già confermati. Elenco verificato rispetto al contenuto della directory.
 
-| ADR                                                  | Titolo                                                                                  | Stato     |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------- | --------- |
-| [0001](0001-url-scheme-delivery.md)                  | Consegna degli URL `memobrain://` per sistema operativo (SPIKE-01)                      | accettata |
-| [0002](0002-sqlite-fts5-trigram.md)                  | SQLite pure-Go con FTS5 `trigram` per l'indice locale (SPIKE-02)                        | accettata |
-| [0003](0003-react-excalidraw.md)                     | React 19 e strategia per Excalidraw (SPIKE-03)                                          | accettata |
-| [0004](0004-live-preview.md)                         | Architettura Live Preview, una sola vista CodeMirror (SPIKE-04)                         | accettata |
-| [0005](0005-webview-csp.md)                          | Content Security Policy nel webview (SPIKE-05)                                          | accettata |
-| [0006](0006-go-toolchain-and-tools-module.md)        | Go 1.26 e modulo `tools/` per gli strumenti di sviluppo                                 | accettata |
-| [0007](0007-dev-stack.md)                            | Stack di sviluppo locale: RustFS come S3, porte non standard                            | accettata |
-| [0008](0008-client-config-endpoint.md)               | Endpoint pubblico `GET /client-config` per il bootstrap                                 | accettata |
-| [0009](0009-sync-protocol-details.md)                | Dettagli del protocollo di sync (M2)                                                    | proposta  |
-| [0010](0010-drawing-and-canvas-details.md)           | Dettagli di disegni e canvas (M3)                                                       | proposta  |
-| [0011](0011-sharing-groups-config-details.md)        | Condivisione, gruppi e configurazione distribuita (M4)                                  | proposta  |
-| [0012](0012-admin-export-details.md)                 | Console admin ed export, ruoli minimi del service account (M5)                          | proposta  |
-| [0013](0013-graph-view-details.md)                   | Graph view: Canvas 2D, ctime da frontmatter/mtime (M6-WP1)                              | proposta  |
-| [0014](0014-bases-details.md)                        | Bases: sottoinsieme supportato, degrado e round-trip                                    | proposta  |
-| [0015](0015-daily-templates-composer-details.md)     | Note giornaliere, template, composer (M6)                                               | proposta  |
-| [0016](0016-bookmarks-workspaces-preview-details.md) | Bookmarks, workspaces e page preview                                                    | proposta  |
-| [0017](0017-importer-details.md)                     | Importer: mappature per sorgente e limiti                                               | proposta  |
-| [0018](0018-local-history-details.md)                | History locale e File recovery (M6-WP5)                                                 | proposta  |
-| [0019](0019-embedded-search-export-details.md)       | Embedded search, export PDF/HTML, impostazioni residue (M6-WP6)                         | proposta  |
-| [0020](0020-performance-details.md)                  | Prestazioni: indicizzazione a lotti, cache di ricerca, albero virtualizzato (M7-WP1)    | proposta  |
-| [0021](0021-security-privacy-details.md)             | Sicurezza e privacy: GDPR (export e cancellazione), controlli in CI (M7-WP2)            | proposta  |
-| [0022](0022-resilience-details.md)                   | Resilienza: garanzie verificate, bug trovati, prova di ripristino (M7-WP2b)             | proposta  |
-| [0023](0023-distribution-and-updates-details.md)     | Distribuzione e aggiornamenti: manifest firmato, installer, chart (M7-WP3)              | proposta  |
-| [0024](0024-excalidraw-feature-parity.md)            | Parità funzionale con i plugin Obsidian Excalidraw ed Excalidraw Extras                 | proposta  |
-| [0025](0025-desktop-frontend-esbuild.md)             | Frontend desktop e Web UI: build e dev server con esbuild al posto di Vite              | accettata |
-| [0026](0026-shell-ui-revisione.md)                   | Revisione della shell UI desktop: ribbon, sidebar, footer, tab bloccabili (M8)          | proposta  |
-| [0027](0027-slides-note.md)                          | Slides: presentazione di note (M8-WP8)                                                  | proposta  |
-| [0028](0028-excalidraw-fork-obsidian.md)             | Excalidraw: fork del plugin Obsidian (lazo, secchiello, disegna per la forma)           | proposta  |
-| [0029](0029-web-workbench.md)                        | Workbench del vault nella Web UI (M9)                                                   | proposta  |
-| [0030](0030-desktop-core-wasm.md)                    | Core del desktop compilato in WebAssembly per il workbench web (M9)                     | proposta  |
-| [0031](0031-release-pipeline-unsigned-channel.md)    | Pipeline di rilascio: correzioni, canale non firmato, matrice estesa (M10)              | proposta  |
-| [0032](0032-task-runner.md)                          | Task (go-task) al posto di make                                                         | proposta  |
-| [0033](0033-sqlc-per-module.md)                      | Un pacchetto sqlc per modulo e proprietà delle tabelle nel cloud; Excalidraw offline    | proposta  |
-| [0034](0034-envelope-aad.md)                         | Envelope della VMK legati al vault e al tipo (formato v2 con AAD)                       | proposta  |
-| [0035](0035-status-bar-opzionale.md)                 | Barra di stato compatta e opzionale                                                     | proposta  |
-| [0036](0036-verifiche-locali-senza-ci.md)            | Verifiche locali (`task ci`) al posto di un servizio di CI                              | proposta  |
-| [0037](0037-registro-funzioni-e-cloud-features.md)   | Registro delle funzioni, `@memobrain/cloud-features` con CloudPort e client Go generato | proposta  |
-| [0038](0038-retention-e-finestra-changelog.md)       | Retention delle revisioni, compattazione del changelog e copie di conflitto             | proposta  |
-| [0039](0039-sync-db-candidati-e-quarantena.md)       | sync.db: candidati al merge persistenti e quarantena dei path illeggibili               | proposta  |
+| ADR                                                   | Titolo                                                                                                                                    | Stato     |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| [0001](0001-url-scheme-delivery.md)                   | Consegna degli URL `memobrain://` per sistema operativo (SPIKE-01)                                                                        | accettata |
+| [0002](0002-sqlite-fts5-trigram.md)                   | SQLite pure-Go con FTS5 `trigram` per l'indice locale (SPIKE-02)                                                                          | accettata |
+| [0003](0003-react-excalidraw.md)                      | React 19 e strategia per Excalidraw (SPIKE-03)                                                                                            | accettata |
+| [0004](0004-live-preview.md)                          | Architettura Live Preview, una sola vista CodeMirror (SPIKE-04)                                                                           | accettata |
+| [0005](0005-webview-csp.md)                           | Content Security Policy nel webview (SPIKE-05)                                                                                            | accettata |
+| [0006](0006-go-toolchain-and-tools-module.md)         | Go 1.26 e modulo `tools/` per gli strumenti di sviluppo                                                                                   | accettata |
+| [0007](0007-dev-stack.md)                             | Stack di sviluppo locale: RustFS come S3, porte non standard                                                                              | accettata |
+| [0008](0008-client-config-endpoint.md)                | Endpoint pubblico `GET /client-config` per il bootstrap                                                                                   | accettata |
+| [0009](0009-sync-protocol-details.md)                 | Dettagli del protocollo di sync (M2)                                                                                                      | proposta  |
+| [0010](0010-drawing-and-canvas-details.md)            | Dettagli di disegni e canvas (M3)                                                                                                         | proposta  |
+| [0011](0011-sharing-groups-config-details.md)         | Condivisione, gruppi e configurazione distribuita (M4)                                                                                    | proposta  |
+| [0012](0012-admin-export-details.md)                  | Console admin ed export, ruoli minimi del service account (M5)                                                                            | proposta  |
+| [0013](0013-graph-view-details.md)                    | Graph view: Canvas 2D, ctime da frontmatter/mtime (M6-WP1)                                                                                | proposta  |
+| [0014](0014-bases-details.md)                         | Bases: sottoinsieme supportato, degrado e round-trip                                                                                      | proposta  |
+| [0015](0015-daily-templates-composer-details.md)      | Note giornaliere, template, composer (M6)                                                                                                 | proposta  |
+| [0016](0016-bookmarks-workspaces-preview-details.md)  | Bookmarks, workspaces e page preview                                                                                                      | proposta  |
+| [0017](0017-importer-details.md)                      | Importer: mappature per sorgente e limiti                                                                                                 | proposta  |
+| [0018](0018-local-history-details.md)                 | History locale e File recovery (M6-WP5)                                                                                                   | proposta  |
+| [0019](0019-embedded-search-export-details.md)        | Embedded search, export PDF/HTML, impostazioni residue (M6-WP6)                                                                           | proposta  |
+| [0020](0020-performance-details.md)                   | Prestazioni: indicizzazione a lotti, cache di ricerca, albero virtualizzato (M7-WP1)                                                      | proposta  |
+| [0021](0021-security-privacy-details.md)              | Sicurezza e privacy: GDPR (export e cancellazione), controlli in CI (M7-WP2)                                                              | proposta  |
+| [0022](0022-resilience-details.md)                    | Resilienza: garanzie verificate, bug trovati, prova di ripristino (M7-WP2b)                                                               | proposta  |
+| [0023](0023-distribution-and-updates-details.md)      | Distribuzione e aggiornamenti: manifest firmato, installer, chart (M7-WP3)                                                                | proposta  |
+| [0024](0024-excalidraw-feature-parity.md)             | Parità funzionale con i plugin Obsidian Excalidraw ed Excalidraw Extras                                                                   | proposta  |
+| [0025](0025-desktop-frontend-esbuild.md)              | Frontend desktop e Web UI: build e dev server con esbuild al posto di Vite                                                                | accettata |
+| [0026](0026-shell-ui-revisione.md)                    | Revisione della shell UI desktop: ribbon, sidebar, footer, tab bloccabili (M8)                                                            | proposta  |
+| [0027](0027-slides-note.md)                           | Slides: presentazione di note (M8-WP8)                                                                                                    | proposta  |
+| [0028](0028-excalidraw-fork-obsidian.md)              | Excalidraw: fork del plugin Obsidian (lazo, secchiello, disegna per la forma)                                                             | proposta  |
+| [0029](0029-web-workbench.md)                         | Workbench del vault nella Web UI (M9)                                                                                                     | proposta  |
+| [0030](0030-desktop-core-wasm.md)                     | Core del desktop compilato in WebAssembly per il workbench web (M9)                                                                       | proposta  |
+| [0031](0031-release-pipeline-unsigned-channel.md)     | Pipeline di rilascio: correzioni, canale non firmato, matrice estesa (M10)                                                                | proposta  |
+| [0032](0032-task-runner.md)                           | Task (go-task) al posto di make                                                                                                           | proposta  |
+| [0033](0033-sqlc-per-module.md)                       | Un pacchetto sqlc per modulo e proprietà delle tabelle nel cloud; Excalidraw offline                                                      | proposta  |
+| [0034](0034-envelope-aad.md)                          | Envelope della VMK legati al vault e al tipo (formato v2 con AAD)                                                                         | proposta  |
+| [0035](0035-status-bar-opzionale.md)                  | Barra di stato compatta e opzionale                                                                                                       | proposta  |
+| [0036](0036-verifiche-locali-senza-ci.md)             | Verifiche locali (`task ci`) al posto di un servizio di CI                                                                                | proposta  |
+| [0037](0037-registro-funzioni-e-cloud-features.md)    | Registro delle funzioni, `@memobrain/cloud-features` con CloudPort e client Go generato                                                   | proposta  |
+| [0038](0038-retention-e-finestra-changelog.md)        | Retention delle revisioni, compattazione del changelog e copie di conflitto                                                               | proposta  |
+| [0039](0039-sync-db-candidati-e-quarantena.md)        | sync.db: candidati al merge persistenti e quarantena dei path illeggibili                                                                 | proposta  |
+| [0040](0040-move-prefix-rename-cartelle-condivise.md) | `move_prefix` resta il rename atomico delle cartelle condivise                                                                            | proposta  |
+| [0041](0041-control-plane-ruoli-identita-account.md)  | Control plane del cloud: ruolo autorevole dopo un cambio, conflitti di identità, eliminazione unificata degli account, rubrica, notifiche | proposta  |
+| [0042](0042-path-token-legato-al-file.md)             | Token di path dei vault privati legati al file (formato enc2)                                                                             | proposta  |
+| [0043](0043-convergenza-ui-console-workbench.md)      | Convergenza degli stack UI di console e workbench (primitive in `@memobrain/ui`)                                                          | proposta  |
+| [0044](0044-watcher-fsevents-macos.md)                | Watcher su macOS con FSEvents (via purego) al posto di kqueue; limiti di inotify                                                          | proposta  |
 
 Nota: gli ADR 0015 e 0018 usano un'intestazione in forma di elenco invece della tabella del template; il contenuto resta valido, l'uniformazione del formato è un'attività di pulizia non bloccante. La proposta di aggiornamento dello spec che recepisce gli ADR in stato _proposta_ è in [`../spec-v1.2-proposta.md`](../spec-v1.2-proposta.md).

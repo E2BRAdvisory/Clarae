@@ -45,11 +45,15 @@ func toShare(v View) api.Share {
 	if v.IsOwner {
 		p := api.SharePermission(access.Manager.String())
 		out.MyPermission = &p
-	} else if v.MyPermission != access.None {
-		p := api.SharePermission(v.MyPermission.String())
-		out.MyPermission = &p
-		st := api.GrantStatus(v.MyStatus)
-		out.MyStatus = &st
+	} else {
+		if v.MyPermission != access.None {
+			p := api.SharePermission(v.MyPermission.String())
+			out.MyPermission = &p
+		}
+		if v.MyStatus != "" { // a declined invitation has no level but still a status
+			st := api.GrantStatus(v.MyStatus)
+			out.MyStatus = &st
+		}
 	}
 	return out
 }

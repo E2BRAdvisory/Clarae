@@ -25,6 +25,7 @@ import (
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/vaults/vaultsdb"
+	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
 )
 
@@ -331,60 +332,125 @@ type TreeEntry struct {
 	Size int64
 }
 
-// Tree returns the manifest of current files and the changelog position it
-// reflects, read in one snapshot so a client can continue with
-// changes?since=asOfSeq without gaps or duplicates.
-func (s *Service) Tree(ctx context.Context, userID, vaultID uuid.UUID) (entries []TreeEntry, asOfSeq int64, err error) {
-	tx, err := s.db.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, 0, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := vaultsdb.New(tx)
-	v, err := s.open(ctx, q, userID, vaultID, false)
-	if err != nil {
-		return nil, 0, err
-	}
-	rows, err := q.ListTree(ctx, vaultID)
-	if err != nil {
-		return nil, 0, err
-	}
-	entries = make([]TreeEntry, 0, len(rows))
-	for _, r := range rows {
-		h := ""
-		if r.BlobHash != nil {
-			h = *r.BlobHash
-		}
-		entries = append(entries, TreeEntry{ID: r.ID, Path: r.Path, Kind: r.Kind, Rev: r.CurrentRev, Hash: h, Size: r.Size})
-	}
-	return entries, v.LastSeq, nil
+// treePage is how many manifest rows are read at a time.
+const treePage = 1000
+
+// TreeStream is a manifest being read from one snapshot: the transaction stays
+// open while Each walks the files page by page, so a vault of any size is
+// served in bounded memory. Close ends it (Each does not).
+type TreeStream struct {
+	// AsOfSeq is the changelog position the manifest reflects.
+	AsOfSeq int64
+	tx      pgx.Tx
+	vaultID uuid.UUID
+	scope   *access.Scope
+	// descendants is the LIKE pattern of a folder share, "" for the whole vault.
+	descendants string
 }
 
-// TreeScoped is Tree through an optional share scope: the manifest of the files the share
-// covers, with paths relative to its root (§3.4.7). An empty scope is the owner's own tree.
-func (s *Service) TreeScoped(ctx context.Context, userID, vaultID uuid.UUID, scope string) ([]TreeEntry, int64, error) {
-	if scope == "" {
-		return s.Tree(ctx, userID, vaultID)
+// OpenTree starts reading the manifest of current files, through an optional
+// share scope (paths then relative to its root, §3.4.7), with the changelog
+// position it reflects: the files and the position come from one snapshot, so
+// a client can continue with changes?since=AsOfSeq without gaps or duplicates.
+// Filtering by the share happens in the query: a recipient of one document
+// does not make the server read the owner's whole tree.
+func (s *Service) OpenTree(ctx context.Context, userID, vaultID uuid.UUID, scope string) (*TreeStream, error) {
+	var sc *access.Scope
+	owner := userID
+	if scope != "" {
+		if s.authz == nil {
+			return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "shares are not available")
+		}
+		acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Viewer)
+		if err != nil {
+			return nil, err
+		}
+		sc, owner = acc.Scope, acc.Vault.OwnerID
 	}
-	if s.authz == nil {
-		return nil, 0, httpproblem.Errorf(syncproto.CodeValidationFailed, "shares are not available")
-	}
-	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Viewer)
+	tx, err := s.db.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	entries, asOf, err := s.Tree(ctx, acc.Vault.OwnerID, vaultID)
+	v, err := s.open(ctx, vaultsdb.New(tx), owner, vaultID, false)
 	if err != nil {
-		return nil, 0, err
+		_ = tx.Rollback(ctx)
+		return nil, err
 	}
-	out := make([]TreeEntry, 0, len(entries))
-	for _, e := range entries {
-		if acc.Scope.ContainsFile(e.ID, e.Path) {
-			e.Path = acc.Scope.Rel(e.Path)
-			out = append(out, e)
+	t := &TreeStream{AsOfSeq: v.LastSeq, tx: tx, vaultID: vaultID, scope: sc}
+	if sc != nil && sc.Type == access.ResourceFolder {
+		t.descendants = likeEscape(pathrules.Key(sc.Prefix)) + "/%"
+	}
+	return t, nil
+}
+
+// likeEscape escapes LIKE metacharacters of a path key used as a prefix.
+func likeEscape(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// Each calls fn for every file of the manifest, in path-key order.
+func (t *TreeStream) Each(ctx context.Context, fn func(TreeEntry) error) error {
+	q := vaultsdb.New(t.tx)
+	emit := func(id uuid.UUID, path, kind string, rev int32, hash *string, size int64) error {
+		e := TreeEntry{ID: id, Path: path, Kind: kind, Rev: rev, Size: size}
+		if hash != nil {
+			e.Hash = *hash
+		}
+		if t.scope != nil {
+			if !t.scope.ContainsFile(e.ID, e.Path) {
+				return nil
+			}
+			e.Path = t.scope.Rel(e.Path)
+		}
+		return fn(e)
+	}
+	if t.scope != nil && t.scope.Type == access.ResourceFile {
+		rows, err := q.GetTreeFile(ctx, vaultsdb.GetTreeFileParams{VaultID: t.vaultID, ID: t.scope.FileID})
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if err := emit(r.ID, r.Path, r.Kind, r.CurrentRev, r.BlobHash, r.Size); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	after := ""
+	for {
+		rows, err := q.ListTreePage(ctx, vaultsdb.ListTreePageParams{VaultID: t.vaultID, After: after, Descendants: t.descendants, MaxRows: treePage})
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if err := emit(r.ID, r.Path, r.Kind, r.CurrentRev, r.BlobHash, r.Size); err != nil {
+				return err
+			}
+			after = r.PathKey
+		}
+		if len(rows) < treePage {
+			return nil
 		}
 	}
-	return out, asOf, nil
+}
+
+// Close ends the snapshot; it is safe to call more than once.
+func (t *TreeStream) Close() { _ = t.tx.Rollback(context.Background()) }
+
+// TreeScoped returns the whole manifest at once (OpenTree collected in memory),
+// for callers that need the list rather than a stream.
+func (s *Service) TreeScoped(ctx context.Context, userID, vaultID uuid.UUID, scope string) ([]TreeEntry, int64, error) {
+	t, err := s.OpenTree(ctx, userID, vaultID, scope)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer t.Close()
+	var out []TreeEntry
+	err = t.Each(ctx, func(e TreeEntry) error {
+		out = append(out, e)
+		return nil
+	})
+	return out, t.AsOfSeq, err
 }
 
 // Envelope is a stored key envelope.

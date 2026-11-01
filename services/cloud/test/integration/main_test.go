@@ -39,6 +39,10 @@ var (
 	specRouter  routers.Router
 )
 
+// postgresImage is the PostgreSQL the tests run against: the version and
+// digest the deployment pins (deploy/PINS.md), refreshed together with them.
+const postgresImage = "postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1"
+
 func TestMain(m *testing.M) {
 	os.Exit(run(m))
 }
@@ -47,7 +51,7 @@ func run(m *testing.M) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	pg, err := tcpostgres.Run(ctx, "postgres:17",
+	pg, err := tcpostgres.Run(ctx, postgresImage,
 		tcpostgres.WithDatabase("memobrain"),
 		tcpostgres.WithUsername("memobrain"),
 		tcpostgres.WithPassword("memobrain"),

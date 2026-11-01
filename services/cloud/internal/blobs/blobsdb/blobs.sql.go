@@ -28,23 +28,62 @@ func (q *Queries) AddBlobRef(ctx context.Context, arg AddBlobRefParams) error {
 	return err
 }
 
-const advanceUpload = `-- name: AdvanceUpload :exec
-UPDATE uploads SET received = received + $2, chunks = chunks + 1 WHERE id = $1
+const addBlobRefs = `-- name: AddBlobRefs :exec
+WITH d AS (
+  SELECT unnest($1::text[]) AS hash, unnest($2::int[]) AS delta
+), locked AS (
+  SELECT b.hash FROM blobs b WHERE b.hash = ANY($1::text[]) ORDER BY b.hash FOR NO KEY UPDATE
+)
+UPDATE blobs SET ref_count = blobs.ref_count + d.delta,
+  unreferenced_since = CASE WHEN blobs.ref_count + d.delta = 0 THEN now() ELSE NULL END
+FROM d JOIN locked l ON l.hash = d.hash
+WHERE blobs.hash = d.hash
+`
+
+type AddBlobRefsParams struct {
+	Hashes []string
+	Deltas []int32
+}
+
+// AddBlobRef for many blobs in one statement (end of a commit batch). The rows
+// are locked in hash order first, like the one-by-one version did, so
+// concurrent batches never deadlock on them.
+func (q *Queries) AddBlobRefs(ctx context.Context, arg AddBlobRefsParams) error {
+	_, err := q.db.Exec(ctx, addBlobRefs, arg.Hashes, arg.Deltas)
+	return err
+}
+
+const advanceUpload = `-- name: AdvanceUpload :execrows
+UPDATE uploads SET received = received + $2::bigint, chunks = chunks + 1,
+  chunk_keys = array_append(chunk_keys, $3::text)
+WHERE id = $1 AND received = $4::bigint
 `
 
 type AdvanceUploadParams struct {
-	ID       uuid.UUID
-	Received int64
+	ID         uuid.UUID
+	Size       int64
+	ChunkKey   string
+	FromOffset int64
 }
 
-func (q *Queries) AdvanceUpload(ctx context.Context, arg AdvanceUploadParams) error {
-	_, err := q.db.Exec(ctx, advanceUpload, arg.ID, arg.Received)
-	return err
+// Confirms a chunk stored at offset from in its own object: only one PATCH can
+// move the offset on (no row lock is held while the chunk streams in).
+func (q *Queries) AdvanceUpload(ctx context.Context, arg AdvanceUploadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, advanceUpload,
+		arg.ID,
+		arg.Size,
+		arg.ChunkKey,
+		arg.FromOffset,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createUpload = `-- name: CreateUpload :one
 INSERT INTO uploads (id, vault_id, user_id, expected_hash, length, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys
 `
 
 type CreateUploadParams struct {
@@ -76,6 +115,7 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (Upl
 		&i.Chunks,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.ChunkKeys,
 	)
 	return i, err
 }
@@ -131,7 +171,7 @@ func (q *Queries) GetBlobKeyShare(ctx context.Context, hash string) (Blob, error
 }
 
 const getUpload = `-- name: GetUpload :one
-SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at FROM uploads WHERE id = $1
+SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys FROM uploads WHERE id = $1
 `
 
 func (q *Queries) GetUpload(ctx context.Context, id uuid.UUID) (Upload, error) {
@@ -147,29 +187,29 @@ func (q *Queries) GetUpload(ctx context.Context, id uuid.UUID) (Upload, error) {
 		&i.Chunks,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.ChunkKeys,
 	)
 	return i, err
 }
 
-const getUploadForUpdate = `-- name: GetUploadForUpdate :one
-SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at FROM uploads WHERE id = $1 FOR UPDATE
+const getVaultBlobKeyShare = `-- name: GetVaultBlobKeyShare :one
+SELECT b.size FROM vault_blobs vb JOIN blobs b ON b.hash = vb.hash
+WHERE vb.vault_id = $1 AND vb.hash = $2
+FOR KEY SHARE OF b
 `
 
-func (q *Queries) GetUploadForUpdate(ctx context.Context, id uuid.UUID) (Upload, error) {
-	row := q.db.QueryRow(ctx, getUploadForUpdate, id)
-	var i Upload
-	err := row.Scan(
-		&i.ID,
-		&i.VaultID,
-		&i.UserID,
-		&i.ExpectedHash,
-		&i.Length,
-		&i.Received,
-		&i.Chunks,
-		&i.CreatedAt,
-		&i.ExpiresAt,
-	)
-	return i, err
+type GetVaultBlobKeyShareParams struct {
+	VaultID uuid.UUID
+	Hash    string
+}
+
+// VaultHasBlob and GetBlobKeyShare in one round trip: the size of a blob the
+// vault uploaded, locked against the garbage collector like GetBlobKeyShare.
+func (q *Queries) GetVaultBlobKeyShare(ctx context.Context, arg GetVaultBlobKeyShareParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getVaultBlobKeyShare, arg.VaultID, arg.Hash)
+	var size int64
+	err := row.Scan(&size)
+	return size, err
 }
 
 const insertBlob = `-- name: InsertBlob :execrows
@@ -242,24 +282,30 @@ func (q *Queries) ListBlobFiles(ctx context.Context, arg ListBlobFilesParams) ([
 }
 
 const listExpiredUploads = `-- name: ListExpiredUploads :many
-SELECT id, chunks FROM uploads WHERE expires_at < now() LIMIT $1
+SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys FROM uploads WHERE expires_at < now() LIMIT $1
 `
 
-type ListExpiredUploadsRow struct {
-	ID     uuid.UUID
-	Chunks int32
-}
-
-func (q *Queries) ListExpiredUploads(ctx context.Context, limit int32) ([]ListExpiredUploadsRow, error) {
+func (q *Queries) ListExpiredUploads(ctx context.Context, limit int32) ([]Upload, error) {
 	rows, err := q.db.Query(ctx, listExpiredUploads, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListExpiredUploadsRow{}
+	items := []Upload{}
 	for rows.Next() {
-		var i ListExpiredUploadsRow
-		if err := rows.Scan(&i.ID, &i.Chunks); err != nil {
+		var i Upload
+		if err := rows.Scan(
+			&i.ID,
+			&i.VaultID,
+			&i.UserID,
+			&i.ExpectedHash,
+			&i.Length,
+			&i.Received,
+			&i.Chunks,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.ChunkKeys,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -297,6 +343,45 @@ func (q *Queries) ListVaultBlobsAmong(ctx context.Context, arg ListVaultBlobsAmo
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockOwnerUploads = `-- name: LockOwnerUploads :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+`
+
+// Serializes the upload quota checks of one owner (key: the owner's id) until
+// the transaction ends.
+func (q *Queries) LockOwnerUploads(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, lockOwnerUploads, key)
+	return err
+}
+
+const pendingUploadBytes = `-- name: PendingUploadBytes :one
+SELECT (
+  COALESCE((SELECT sum(b.size) FROM blobs b JOIN vault_blobs vb ON vb.hash = b.hash
+            WHERE b.ref_count = 0 AND vb.vault_id = ANY($1::uuid[])
+              AND vb.created_at > $2::timestamptz), 0)
+  + COALESCE((SELECT sum(u.length) FROM uploads u
+              WHERE u.vault_id = ANY($1::uuid[]) AND u.expires_at > now()
+                AND u.id <> $3::uuid), 0)
+)::bigint AS pending
+`
+
+type PendingUploadBytesParams struct {
+	VaultIds     []uuid.UUID
+	Since        time.Time
+	ExceptUpload uuid.UUID
+}
+
+// Storage an owner's vaults hold but nobody pays for yet (D-03 charges only
+// committed files): blobs uploaded within the window that no revision
+// references, plus the announced length of the resumable uploads in progress
+// (except_upload: the one being finalized, counted as its blob instead).
+func (q *Queries) PendingUploadBytes(ctx context.Context, arg PendingUploadBytesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, pendingUploadBytes, arg.VaultIds, arg.Since, arg.ExceptUpload)
+	var pending int64
+	err := row.Scan(&pending)
+	return pending, err
 }
 
 const vaultHasBlob = `-- name: VaultHasBlob :one

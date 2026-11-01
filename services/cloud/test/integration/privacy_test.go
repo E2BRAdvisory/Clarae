@@ -170,13 +170,16 @@ func TestDeleteAccountFlowAndPurge(t *testing.T) {
 		t.Fatalf("deletion not audited: %d", n)
 	}
 
-	// Grants to and from Ada are gone; Bob's and Carol's own grants and Bob's vault are unaffected.
+	// Grants to Ada are gone and none names her as grantor any more; Bob's and Carol's own grants and Bob's vault are unaffected.
 	if n := e.count("SELECT COUNT(*) FROM share_grants WHERE principal_id=$1 OR granted_by=$1", ada.uid()); n != 0 {
 		t.Fatalf("%d grants of the deleted user remain", n)
 	}
-	if n := e.count("SELECT COUNT(*) FROM share_grants WHERE share_id=$1 AND principal_id=$2", bobShare.id(), carol.uid()); n != 0 {
-		// Carol's grant was made by Ada and is removed with Ada's grants.
-		t.Fatalf("carol grant made by the deleted user still present: %d", n)
+	// Carol's grant on Bob's vault was given by Ada as a manager: it stays, with Bob as grantor (ADR-0041).
+	if n := e.count("SELECT COUNT(*) FROM share_grants WHERE share_id=$1 AND principal_id=$2 AND granted_by=$3", bobShare.id(), carol.uid(), bob.uid()); n != 1 {
+		t.Fatalf("carol's grant on bob's vault was not kept and re-attributed to bob: %d", n)
+	}
+	if n := e.count("SELECT COUNT(*) FROM audit_log WHERE action='share.grants_reattributed' AND target_id=$1 AND ip IS NULL", bobShare.id()); n != 1 {
+		t.Fatalf("re-attribution not audited: %d", n)
 	}
 	expect(t, bob.json(http.MethodGet, "/vaults/"+bobVault+"/tree", nil), http.StatusOK)
 	if r := bob.json(http.MethodGet, "/vaults", nil); r.StatusCode != http.StatusOK {
@@ -250,7 +253,10 @@ func TestPurgeAlsoCompletesAdministratorDeletedAccounts(t *testing.T) {
 	victim := e.user("victim-purge")
 	victim.createVault("Victim", "shared")
 	expect(t, root.json(http.MethodDelete, "/admin/users/"+victim.userID, nil), http.StatusNoContent)
-	// The admin flow only marks the user: the purge job anonymises it with the retention.
+	// The administrator's deletion is the self-deletion (privacy.DeleteAccount): anonymised at once.
+	if n := e.count("SELECT COUNT(*) FROM users WHERE id=$1 AND status='deleted' AND username <> 'victim-purge' AND deleted_at IS NOT NULL", victim.uid()); n != 1 {
+		t.Fatal("administrator-deleted account not anonymised at once")
+	}
 	if _, err := e.jobs(time.Now().Add(31 * 24 * time.Hour)).PurgeDeletedAccounts(context.Background()); err != nil {
 		t.Fatal(err)
 	}

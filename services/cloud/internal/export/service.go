@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	stdsync "sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ import (
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/export/exportdb"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/storage"
 	"memobrain/services/cloud/internal/sync"
 	"memobrain/services/cloud/internal/vaults"
@@ -37,8 +39,17 @@ const (
 	DirectLimit int64 = 512 << 20
 	// LinkTTL is how long a finished export stays downloadable.
 	LinkTTL = 24 * time.Hour
-	// staleAfter requeues jobs whose worker disappeared while running.
+	// staleAfter requeues jobs whose worker disappeared while running: it is
+	// the lease of a running job, renewed every staleAfter/4 while it builds.
 	staleAfter = time.Hour
+	// DefaultWorkers is how many archives are built in parallel (setting exports.workers).
+	DefaultWorkers = 2
+	// DefaultMaxActivePerUser bounds the queued and running jobs of one user
+	// (setting exports.max_active_per_user).
+	DefaultMaxActivePerUser = 3
+	// jobsPerWorker bounds the jobs one worker builds per ProcessPending call,
+	// so expired archives are retired between rounds even with a long queue.
+	jobsPerWorker = 4
 )
 
 // Job statuses.
@@ -166,16 +177,43 @@ func (s *Service) filename(v vaults.Vault) string {
 	return name + "-" + s.now().UTC().Format("20060102") + ".zip"
 }
 
-// Create queues an export job for a vault of any size.
+// Create queues an export job for a vault of any size. A vault has at most
+// one job queued or running: a new request returns that job. A user has at
+// most exports.max_active_per_user of them (RATE_LIMITED beyond).
 func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb.ExportJob, error) {
 	v, err := s.vault(ctx, user, vaultID)
 	if err != nil {
 		return exportdb.ExportJob{}, err
 	}
+	limit := int(settings.Int(ctx, s.db.Pool, "exports.max_active_per_user", DefaultMaxActivePerUser))
+	if limit <= 0 {
+		limit = DefaultMaxActivePerUser
+	}
 	var j exportdb.ExportJob
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := exportdb.New(tx)
+		if err := q.LockExportRequests(ctx, "memobrain.exports:"+user.String()); err != nil {
+			return err
+		}
 		var err error
+		j, err = q.GetActiveExportJobOfVault(ctx, v.ID)
+		if err == nil {
+			return nil // the archive being built will be this request's too
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		active, err := q.CountActiveExportJobsOfUser(ctx, user)
+		if err != nil {
+			return err
+		}
+		if int(active) >= limit {
+			return &httpproblem.Error{
+				Code:   syncproto.CodeRateLimited,
+				Detail: fmt.Sprintf("%d export jobs are already queued or running: wait for one to finish", active),
+				Extra:  map[string]any{"active_exports": active, "limit": limit},
+			}
+		}
 		if j, err = q.CreateExportJob(ctx, exportdb.CreateExportJobParams{ID: uuid.Must(uuid.NewV7()), VaultID: v.ID, RequestedBy: user}); err != nil {
 			return err
 		}
@@ -244,30 +282,105 @@ func (s *Service) Open(ctx context.Context, user, vaultID, jobID uuid.UUID) (io.
 	return rc, size, s.Name(ctx, j), nil
 }
 
-// ProcessPending builds queued jobs until none is left and returns how many it handled.
+// workers is how many archives ProcessPending builds in parallel.
+func (s *Service) workers(ctx context.Context) int {
+	n := int(settings.Int(ctx, s.db.Pool, "exports.workers", DefaultWorkers))
+	if n <= 0 {
+		return DefaultWorkers
+	}
+	return min(n, 16)
+}
+
+// ProcessPending builds queued jobs with a bounded number of parallel workers,
+// each taking at most jobsPerWorker jobs, and returns how many it handled. The
+// caller runs it periodically, followed by Expire, so a long queue neither
+// monopolizes the worker nor delays the retirement of expired archives.
 func (s *Service) ProcessPending(ctx context.Context) (int, error) {
-	n := 0
-	for ctx.Err() == nil {
-		j, err := exportdb.New(s.db.Pool).ClaimExportJob(ctx)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return n, nil
-		}
-		if err != nil {
-			return n, err
-		}
-		n++
-		if err := s.build(ctx, j); err != nil {
-			s.log.Error().Err(err).Str("job", j.ID.String()).Msg("export job failed")
-			msg := err.Error()
-			if len(msg) > 500 {
-				msg = msg[:500]
+	workers := s.workers(ctx)
+	var (
+		mu    stdsync.Mutex
+		n     int
+		first error
+		wg    stdsync.WaitGroup
+	)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range jobsPerWorker {
+				done, err := s.processOne(ctx)
+				mu.Lock()
+				if done {
+					n++
+				}
+				if err != nil && first == nil {
+					first = err
+				}
+				mu.Unlock()
+				if !done || err != nil {
+					return
+				}
 			}
-			if ferr := exportdb.New(s.db.Pool).FailExportJob(context.WithoutCancel(ctx), exportdb.FailExportJobParams{ID: j.ID, Error: &msg}); ferr != nil {
-				return n, ferr
-			}
+		}()
+	}
+	wg.Wait()
+	if first == nil {
+		first = ctx.Err()
+	}
+	return n, first
+}
+
+// processOne claims and builds one queued job; done is false when the queue is empty.
+func (s *Service) processOne(ctx context.Context) (done bool, err error) {
+	if ctx.Err() != nil {
+		return false, nil
+	}
+	j, err := exportdb.New(s.db.Pool).ClaimExportJob(ctx, s.now().Add(staleAfter))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	stop := s.keepLease(ctx, j.ID)
+	err = s.build(ctx, j)
+	stop()
+	if err != nil {
+		s.log.Error().Err(err).Str("job", j.ID.String()).Msg("export job failed")
+		msg := err.Error()
+		if len(msg) > 500 {
+			msg = msg[:500]
+		}
+		if ferr := exportdb.New(s.db.Pool).FailExportJob(context.WithoutCancel(ctx), exportdb.FailExportJobParams{ID: j.ID, Error: &msg}); ferr != nil {
+			return true, ferr
 		}
 	}
-	return n, ctx.Err()
+	return true, nil
+}
+
+// keepLease renews the lease of a running job until stop is called, so a long
+// build is not mistaken for an abandoned one and built twice.
+func (s *Service) keepLease(ctx context.Context, id uuid.UUID) (stop func()) {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		t := time.NewTicker(staleAfter / 4)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if err := exportdb.New(s.db.Pool).RenewExportLease(ctx, exportdb.RenewExportLeaseParams{ID: id, LeaseUntil: s.now().Add(staleAfter)}); err != nil {
+					s.log.Warn().Err(err).Str("job", id.String()).Msg("export: cannot renew the lease")
+				}
+			}
+		}
+	}()
+	return func() { close(done); <-finished }
 }
 
 func (s *Service) build(ctx context.Context, j exportdb.ExportJob) error {
@@ -309,6 +422,6 @@ func (s *Service) Expire(ctx context.Context) error {
 			}
 		}
 	}
-	_, err = exportdb.New(s.db.Pool).RequeueStaleExportJobs(ctx, s.now().Add(-staleAfter))
+	_, err = exportdb.New(s.db.Pool).RequeueStaleExportJobs(ctx, exportdb.RequeueStaleExportJobsParams{Now: s.now(), Before: s.now().Add(-staleAfter)})
 	return err
 }

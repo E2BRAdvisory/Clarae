@@ -1,7 +1,11 @@
 package vaults
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
@@ -103,17 +107,57 @@ func (h *HTTP) RestoreVault(ctx context.Context, req api.RestoreVaultRequestObje
 	return api.RestoreVault200JSONResponse(ToAPI(v)), nil
 }
 
-// GetVaultTree implements GET /vaults/{vaultId}/tree.
+// GetVaultTree implements GET /vaults/{vaultId}/tree. The manifest is
+// streamed: the snapshot stays open while the response is written, and is
+// closed when the request ends even if the response is never written.
 func (h *HTTP) GetVaultTree(ctx context.Context, req api.GetVaultTreeRequestObject) (api.GetVaultTreeResponseObject, error) {
-	entries, asOf, err := h.svc.TreeScoped(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, deref(req.Params.Scope))
+	t, err := h.svc.OpenTree(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, deref(req.Params.Scope))
 	if err != nil {
 		return nil, err
 	}
-	items := make([]api.TreeEntry, 0, len(entries))
-	for _, e := range entries {
-		items = append(items, api.TreeEntry{Path: e.Path, FileId: e.ID, Rev: int(e.Rev), Hash: e.Hash, Size: e.Size, Kind: e.Kind})
+	context.AfterFunc(ctx, t.Close)
+	return treeResponse{ctx: ctx, tree: t}, nil
+}
+
+// treeResponse writes the Tree document ({"as_of_seq":…,"items":[…]}) entry
+// by entry. A database error midway truncates the document: the client sees
+// invalid JSON and retries, as with any interrupted transfer.
+type treeResponse struct {
+	ctx  context.Context
+	tree *TreeStream
+}
+
+func (r treeResponse) VisitGetVaultTreeResponse(w http.ResponseWriter) error {
+	defer r.tree.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	bw := bufio.NewWriterSize(w, 64<<10)
+	if _, err := fmt.Fprintf(bw, `{"as_of_seq":%d,"items":[`, r.tree.AsOfSeq); err != nil {
+		return err
 	}
-	return api.GetVaultTree200JSONResponse{Items: items, AsOfSeq: asOf}, nil
+	first := true
+	err := r.tree.Each(r.ctx, func(e TreeEntry) error {
+		b, err := json.Marshal(api.TreeEntry{Path: e.Path, FileId: e.ID, Rev: int(e.Rev), Hash: e.Hash, Size: e.Size, Kind: e.Kind})
+		if err != nil {
+			return err
+		}
+		if !first {
+			if err := bw.WriteByte(','); err != nil {
+				return err
+			}
+		}
+		first = false
+		_, err = bw.Write(b)
+		return err
+	})
+	if err != nil {
+		_ = bw.Flush()
+		return err
+	}
+	if _, err := bw.WriteString("]}\n"); err != nil {
+		return err
+	}
+	return bw.Flush()
 }
 
 // GetKeyEnvelopes implements GET /vaults/{vaultId}/key-envelopes.

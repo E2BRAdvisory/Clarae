@@ -341,6 +341,119 @@ func TestShareRootProtection(t *testing.T) {
 	}
 }
 
+// TestMovePrefixShareRoots: a folder rename (move_prefix) follows the share-root rules of the
+// file-by-file moves (§3.4.7, ADR-0040). A folder inside a share that takes every file of the
+// share elsewhere is refused with SHARE_ROOT_MOVE (it would empty the share without rebasing it);
+// one that leaves something behind, or stays inside, is an ordinary rename.
+func TestMovePrefixShareRoots(t *testing.T) {
+	e := newEnv(t)
+	ada, bob := e.user("ada"), e.user("bob")
+	vault := ada.createVault("V", "shared")
+	ada.seed(vault, map[string]string{
+		"Docs/Only/Sub/a.md": "a", "Docs/Only/Sub/Deep/b.md": "b",
+		"Docs/Part/Sub/x.md": "x", "Docs/Part/keep.md": "k",
+	})
+	only := ada.share(vault, "folder", "Docs/Only", grantTo("user", bob.userID, "editor"))
+	part := ada.share(vault, "folder", "Docs/Part", grantTo("user", bob.userID, "editor"))
+	bob.accept(only.id())
+	bob.accept(part.id())
+	prefixOf := func(sh shareView) any {
+		return decode[shareView](t, ada.json(http.MethodGet, "/shares/"+sh.id(), nil))["path_prefix"]
+	}
+	movePrefix := func(from, to string) map[string]any {
+		return map[string]any{"op_id": newID(), "op": "move_prefix", "from": from, "to": to}
+	}
+
+	// Every file of Docs/Only lives under Docs/Only/Sub: moving it out would empty the share.
+	res := ada.commit(vault, movePrefix("Docs/Only/Sub", "Archive/Sub"))
+	if res[0].status() != "rejected" || res[0].code() != "SHARE_ROOT_MOVE" {
+		t.Fatalf("folder taking the whole share out: %v", res[0])
+	}
+	if paths, _ := ada.tree(vault); paths["Docs/Only/Sub/a.md"] == nil || paths["Archive/Sub/a.md"] != nil {
+		t.Fatalf("a refused move_prefix must not touch the files: %v", paths)
+	}
+	if got := prefixOf(only); got != "Docs/Only" {
+		t.Fatalf("share prefix after the refusal: %v", got)
+	}
+
+	// Inside the share, the same folder can be renamed.
+	mustAccepted(t, ada.commit(vault, movePrefix("Docs/Only/Sub", "Docs/Only/Renamed"))[0])
+	resp := bob.json(http.MethodGet, "/vaults/"+vault+"/tree?scope=share:"+only.id(), nil)
+	expect(t, resp, http.StatusOK)
+	if items := decode[struct{ Items []map[string]any }](t, resp).Items; len(items) != 2 {
+		t.Fatalf("mount after a rename inside the share: %v", items)
+	}
+
+	// Docs/Part keeps keep.md: moving its sub-folder out is a plain move (the mount sees deletions).
+	mustAccepted(t, ada.commit(vault, movePrefix("Docs/Part/Sub", "Archive/PartSub"))[0])
+	if got := prefixOf(part); got != "Docs/Part" {
+		t.Fatalf("a share left with files keeps its prefix: %v", got)
+	}
+
+	// Renaming the share's root folder still carries the share along.
+	mustAccepted(t, ada.commit(vault, movePrefix("Docs/Only", "Shared/Only"))[0])
+	if got := prefixOf(only); got != "Shared/Only" {
+		t.Fatalf("share prefix after renaming its root: %v", got)
+	}
+}
+
+// TestMovePrefixFromMountRebasesNestedShares: an editor renaming a folder through a mount carries
+// the shares nested inside it along, and cannot take every file of a nested share out of it.
+func TestMovePrefixFromMountRebasesNestedShares(t *testing.T) {
+	e := newEnv(t)
+	ada, bob, carol := e.user("ada"), e.user("bob"), e.user("carol")
+	vault := ada.createVault("V", "shared")
+	ids := ada.seed(vault, map[string]string{
+		"Projects/Acme/Inner/r.md": "r", "Projects/Acme/Inner/s.md": "s", "Projects/readme.md": "p",
+	})
+	outer := ada.share(vault, "folder", "Projects", grantTo("user", bob.userID, "editor"))
+	nested := ada.share(vault, "folder", "Projects/Acme", grantTo("user", carol.userID, "editor"))
+	bob.accept(outer.id())
+	carol.accept(nested.id())
+	movePrefix := func(from, to string) map[string]any {
+		return map[string]any{"op_id": newID(), "op": "move_prefix", "from": from, "to": to}
+	}
+	carolTree := func() []map[string]any {
+		resp := carol.json(http.MethodGet, "/vaults/"+vault+"/tree?scope=share:"+nested.id(), nil)
+		expect(t, resp, http.StatusOK)
+		return decode[struct{ Items []map[string]any }](t, resp).Items
+	}
+
+	// Taking every file of carol's share out of it, as a folder or one file at a time, is refused.
+	res, status := bob.scopedCommit(vault, outer.id(), movePrefix("Acme/Inner", "Elsewhere"))
+	if status != http.StatusOK || res[0].status() != "rejected" || res[0].code() != "SHARE_ROOT_MOVE" {
+		t.Fatalf("emptying a nested share from the mount: %d %v", status, res)
+	}
+	if d, _ := res[0]["detail"].(string); strings.Contains(d, "Projects/") {
+		t.Errorf("the detail must use the mount's paths: %q", d)
+	}
+	res, _ = bob.scopedCommit(vault, outer.id(), move(ids["Projects/Acme/Inner/r.md"], 1, "r.md"))
+	mustAccepted(t, res[0])
+	res, _ = bob.scopedCommit(vault, outer.id(), move(ids["Projects/Acme/Inner/s.md"], 1, "s.md"))
+	if res[0].status() != "rejected" || res[0].code() != "SHARE_ROOT_MOVE" {
+		t.Fatalf("last file of a nested share moved out from the mount: %v", res[0])
+	}
+
+	// Renaming the nested share's root from the mount rebases it: carol keeps her file.
+	res, _ = bob.scopedCommit(vault, outer.id(), movePrefix("Acme", "Acme-2024"))
+	mustAccepted(t, res[0])
+	got := decode[shareView](t, ada.json(http.MethodGet, "/shares/"+nested.id(), nil))
+	if got["path_prefix"] != "Projects/Acme-2024" {
+		t.Fatalf("nested share prefix after the rename from the mount: %v", got["path_prefix"])
+	}
+	if items := carolTree(); len(items) != 1 || items[0]["path"] != "Inner/s.md" {
+		t.Fatalf("carol's mount after the rename: %v", items)
+	}
+	// bob's own share is not touched, and its root still cannot be renamed from the mount.
+	if got := decode[shareView](t, ada.json(http.MethodGet, "/shares/"+outer.id(), nil)); got["path_prefix"] != "Projects" {
+		t.Fatalf("the mount's own share moved: %v", got["path_prefix"])
+	}
+	res, _ = bob.scopedCommit(vault, outer.id(), movePrefix("", "Other"))
+	if res[0].code() != "SHARE_ROOT_MOVE" {
+		t.Fatalf("renaming the mount root: %v", res[0])
+	}
+}
+
 func TestDocumentShare(t *testing.T) {
 	e := newEnv(t)
 	ada, bob := e.user("ada"), e.user("bob")

@@ -460,11 +460,25 @@ func TestQuotaAndFileSize(t *testing.T) {
 	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET quota_bytes_override = 100 WHERE id = $1`, ada.userID); err != nil {
 		t.Fatal(err)
 	}
-	h60 := ada.putBlob(v, bytes.Repeat([]byte{'a'}, 60))
-	h50 := ada.putBlob(v, bytes.Repeat([]byte{'b'}, 50))
+	setQuota := func(n int64) {
+		t.Helper()
+		if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET quota_bytes_override = $2 WHERE id = $1`, ada.userID, n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b50 := uniq('b', 50)
+	h60 := ada.putBlob(v, uniq('a', 60))
+	// Uploaded but uncommitted bytes count (unreferenced-upload quota): 60 + 50 do not fit in 100.
+	if p := respProblem(t, ada.raw(http.MethodPut, "/vaults/"+v+"/blobs/"+hashOf(b50), "application/octet-stream", b50, nil)); p.Code != "QUOTA_EXCEEDED" {
+		t.Fatalf("upload over the quota: %+v", p)
+	}
 
 	f1 := newID()
 	mustAccepted(t, ada.commit(v, create(f1, "a.md", h60))[0])
+	// The commit checks the quota again: the blob was uploaded while the quota was higher.
+	setQuota(1 << 40)
+	h50 := ada.putBlob(v, b50)
+	setQuota(100)
 	if res := ada.commit(v, create(newID(), "b.md", h50)); res[0].code() != "QUOTA_EXCEEDED" {
 		t.Fatalf("quota: %v", res[0])
 	}
@@ -472,15 +486,22 @@ func TestQuotaAndFileSize(t *testing.T) {
 	if usage["used_bytes"].(float64) != 60 || usage["quota_bytes"].(float64) != 100 || usage["level"] != "ok" {
 		t.Fatalf("usage: %v", usage)
 	}
-	// Replacing the file with a smaller one frees space.
-	h10 := ada.putBlob(v, bytes.Repeat([]byte{'c'}, 10))
+	// The uncommitted 50 bytes still count until committed or expired.
+	c10 := uniq('c', 10)
+	if p := respProblem(t, ada.raw(http.MethodPut, "/vaults/"+v+"/blobs/"+hashOf(c10), "application/octet-stream", c10, nil)); p.Code != "QUOTA_EXCEEDED" {
+		t.Fatalf("upload next to a pending blob: %+v", p)
+	}
+	// Replacing the file with a smaller one frees space; history does not count (D-03).
+	setQuota(1 << 40)
+	h10 := ada.putBlob(v, c10)
+	setQuota(100)
 	mustAccepted(t, ada.commit(v, modify(f1, 1, h10))[0])
 	mustAccepted(t, ada.commit(v, create(newID(), "b.md", h50))[0])
 	usage = decode[map[string]any](t, ada.json(http.MethodGet, "/me/usage", nil))
 	if usage["used_bytes"].(float64) != 60 || usage["level"] != "ok" {
 		t.Fatalf("usage after: %v", usage)
 	}
-	// Deleting releases the space; history does not count (D-03).
+	// Deleting releases the space.
 	mustAccepted(t, ada.commit(v, del(f1, 2))[0])
 	usage = decode[map[string]any](t, ada.json(http.MethodGet, "/me/usage", nil))
 	if usage["used_bytes"].(float64) != 50 {

@@ -5,6 +5,19 @@
 // A blob is stored once per hash but a vault can only read or reference blobs
 // it uploaded itself (vault_blobs): that keeps "blobs:check" from revealing
 // what other users store and makes knowing a hash worthless without the bytes.
+//
+// Upload quota. D-03 charges the owner only for current files, at commit; the
+// bytes uploaded but not committed yet are "pending": blobs linked to one of
+// the owner's vaults within uploads.expiry_hours that no revision references,
+// plus the announced length of the resumable uploads in progress. An upload
+// is refused with QUOTA_EXCEEDED when used + pending + its size would exceed
+// the owner's quota: before anything reaches the object store (PUT once the
+// body is hashed, tus at creation) and again, atomically per owner, when the
+// blob is linked to the vault. Pending bytes are never added to used_bytes:
+// they stop counting when a commit references the blob (then used_bytes pays
+// for it) or when the window ends (the blob is then the garbage collector's,
+// after blobs.gc_grace_hours). So uncommitted uploads are never free storage
+// beyond the remaining quota, and committing or deleting files works as before.
 package blobs
 
 import (
@@ -17,6 +30,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"memobrain/services/cloud/internal/access"
 
@@ -26,23 +40,102 @@ import (
 	"memobrain/services/cloud/internal/blobs/blobsdb"
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/quota"
+	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/syncproto"
 )
 
 // MaxSingleUpload is the largest body accepted by PUT /blobs/{sha256} (§3.4.4).
 const MaxSingleUpload = 32 << 20
 
+// DefaultUploadExpiry is used when the uploads.expiry_hours setting is missing.
+const DefaultUploadExpiry = 24 * time.Hour
+
+// QuotaSource resolves the effective quota of a vault owner (quota module).
+type QuotaSource interface {
+	QuotaOf(ctx context.Context, userID uuid.UUID) (int64, error)
+}
+
 // Service implements the blobs module.
 type Service struct {
 	db    *db.DB
 	store storage.BlobStore
 	authz access.Authorizer
+	quota QuotaSource
 }
 
 // NewService wires the module.
 func NewService(d *db.DB, store storage.BlobStore, a access.Authorizer) *Service {
 	return &Service{db: d, store: store, authz: a}
+}
+
+// WithQuota enables the upload quota check (see the package documentation).
+func (s *Service) WithQuota(q QuotaSource) *Service {
+	s.quota = q
+	return s
+}
+
+// UploadExpiry is how long a resumable upload lives and how long an uploaded
+// but uncommitted blob counts against the owner's quota (uploads.expiry_hours).
+func (s *Service) UploadExpiry(ctx context.Context) time.Duration {
+	h := settings.Int(ctx, s.db.Pool, "uploads.expiry_hours", int64(DefaultUploadExpiry/time.Hour))
+	if h <= 0 {
+		return DefaultUploadExpiry
+	}
+	return time.Duration(h) * time.Hour
+}
+
+// noUpload is the except_upload of a check that is not the finalization of a
+// resumable upload.
+var noUpload = uuid.Nil
+
+// checkQuota refuses an upload of size bytes into v when the owner's used plus
+// pending bytes would exceed the quota. A blob the vault holds already adds
+// nothing. Inside a transaction that took lockOwner the answer stays true
+// until it ends.
+func (s *Service) checkQuota(ctx context.Context, tx db.DBTX, v access.Vault, hash string, size int64, exceptUpload uuid.UUID) error {
+	if s.quota == nil || size <= 0 {
+		return nil
+	}
+	limit, err := s.quota.QuotaOf(ctx, v.OwnerID)
+	if err != nil || limit < 0 {
+		return err
+	}
+	q := blobsdb.New(tx)
+	if hash != "" {
+		if has, err := q.VaultHasBlob(ctx, blobsdb.VaultHasBlobParams{VaultID: v.ID, Hash: hash}); err != nil || has {
+			return err
+		}
+	}
+	used, err := quota.UsedBytes(ctx, tx, v.OwnerID)
+	if err != nil {
+		return err
+	}
+	ids, err := vaults.ListVaultIDsOfOwner(ctx, tx, v.OwnerID)
+	if err != nil {
+		return err
+	}
+	pending, err := q.PendingUploadBytes(ctx, blobsdb.PendingUploadBytesParams{
+		VaultIds: ids, Since: time.Now().Add(-s.UploadExpiry(ctx)), ExceptUpload: exceptUpload,
+	})
+	if err != nil {
+		return err
+	}
+	if used+pending+size > limit {
+		return &httpproblem.Error{
+			Code:   syncproto.CodeQuotaExceeded,
+			Detail: fmt.Sprintf("storage quota exceeded: %d bytes do not fit (used %d, uploaded but not committed %d, quota %d)", size, used, pending, limit),
+			Extra:  map[string]any{"used_bytes": used, "pending_bytes": pending, "quota_bytes": limit},
+		}
+	}
+	return nil
+}
+
+// lockOwner serializes the quota checks of one owner until tx ends.
+func lockOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) error {
+	return blobsdb.New(tx).LockOwnerUploads(ctx, "memobrain.uploads:"+ownerID.String())
 }
 
 // Store exposes the object store to modules that stream blobs (revisions).
@@ -116,7 +209,8 @@ func spool(r io.Reader, max int64) (path string, size int64, hash string, err er
 // Put stores a blob uploaded in a single request: the body is hashed while it
 // is read and the upload is rejected when the digest differs from the URL.
 func (s *Service) Put(ctx context.Context, userID, vaultID uuid.UUID, scope, hash string, body io.Reader) error {
-	if _, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Editor); err != nil {
+	acc, err := s.authz.Authorize(ctx, userID, vaultID, scope, access.Editor)
+	if err != nil {
 		return err
 	}
 	path, size, got, err := spool(body, MaxSingleUpload)
@@ -127,15 +221,17 @@ func (s *Service) Put(ctx context.Context, userID, vaultID uuid.UUID, scope, has
 	if got != hash {
 		return httpproblem.Errorf(syncproto.CodeValidationFailed, "content hash %s does not match %s", got, hash)
 	}
-	return s.ingestFile(ctx, vaultID, hash, path, size)
+	// Refuse before writing to the object store; ingestFile checks again when linking.
+	if err := s.checkQuota(ctx, s.db.Pool, acc.Vault, hash, size, noUpload); err != nil {
+		return err
+	}
+	return s.ingestFile(ctx, acc.Vault, hash, path, size, noUpload)
 }
 
-// IngestFile stores an already hashed file (used by tus finalization).
-func (s *Service) IngestFile(ctx context.Context, vaultID uuid.UUID, hash, path string, size int64) error {
-	return s.ingestFile(ctx, vaultID, hash, path, size)
-}
-
-func (s *Service) ingestFile(ctx context.Context, vaultID uuid.UUID, hash, path string, size int64) error {
+// ingestFile publishes an already hashed file and links it to the vault. The
+// link is the quota check that counts (atomic per owner): a blob refused there
+// stays unlinked and the garbage collector removes it.
+func (s *Service) ingestFile(ctx context.Context, v access.Vault, hash, path string, size int64, upload uuid.UUID) error {
 	q := blobsdb.New(s.db.Pool)
 	existing, err := q.GetBlob(ctx, hash)
 	if err == nil && existing.Size == size {
@@ -163,7 +259,17 @@ func (s *Service) ingestFile(ctx context.Context, vaultID uuid.UUID, hash, path 
 	default:
 		return err
 	}
-	return q.LinkVaultBlob(ctx, blobsdb.LinkVaultBlobParams{VaultID: vaultID, Hash: hash})
+	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if s.quota != nil && size > 0 {
+			if err := lockOwner(ctx, tx, v.OwnerID); err != nil {
+				return err
+			}
+			if err := s.checkQuota(ctx, tx, v, hash, size, upload); err != nil {
+				return err
+			}
+		}
+		return blobsdb.New(tx).LinkVaultBlob(ctx, blobsdb.LinkVaultBlobParams{VaultID: v.ID, Hash: hash})
+	})
 }
 
 // Range is a resolved byte range.
@@ -290,23 +396,28 @@ func (s *Service) Size(ctx context.Context, userID, vaultID uuid.UUID, scope, ha
 // transaction ends, so a commit can safely reference it; a blob the collector
 // deleted meanwhile is reported as missing.
 func VaultBlob(ctx context.Context, tx db.DBTX, vaultID uuid.UUID, hash string) (size int64, ok bool, err error) {
-	q := blobsdb.New(tx)
-	has, err := q.VaultHasBlob(ctx, blobsdb.VaultHasBlobParams{VaultID: vaultID, Hash: hash})
-	if err != nil || !has {
-		return 0, false, err
-	}
-	b, err := q.GetBlobKeyShare(ctx, hash)
+	size, err = blobsdb.New(tx).GetVaultBlobKeyShare(ctx, blobsdb.GetVaultBlobKeyShareParams{VaultID: vaultID, Hash: hash})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
 	}
 	if err != nil {
 		return 0, false, err
 	}
-	return b.Size, true, nil
+	return size, true, nil
 }
 
 // AddRef adjusts the revision reference count of a blob; it must run in the
 // transaction that inserts or deletes the revision.
 func AddRef(ctx context.Context, tx db.DBTX, hash string, delta int32) error {
 	return blobsdb.New(tx).AddBlobRef(ctx, blobsdb.AddBlobRefParams{Hash: hash, RefCount: delta})
+}
+
+// AddRefs is AddRef for many blobs at once (deltas[i] applies to hashes[i]);
+// the rows are locked in hash order. It must run in the transaction that
+// inserts or deletes the revisions.
+func AddRefs(ctx context.Context, tx db.DBTX, hashes []string, deltas []int32) error {
+	if len(hashes) == 0 {
+		return nil
+	}
+	return blobsdb.New(tx).AddBlobRefs(ctx, blobsdb.AddBlobRefsParams{Hashes: hashes, Deltas: deltas})
 }

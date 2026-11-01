@@ -26,6 +26,7 @@
     "@lezer/common": "^1.5.4",
     "@lezer/highlight": "^1.2.5",
     "@lezer/markdown": "^1.8.1",
+    "@memobrain/api-client": "workspace:*",
     "@memobrain/cloud-features": "workspace:*",
     "@memobrain/markdown": "workspace:*",
     "@memobrain/ui": "workspace:*",

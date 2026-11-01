@@ -3,15 +3,31 @@
 -- name: SoftDeleteVaultsOfOwner :execrows
 UPDATE vaults SET deleted_at = now() WHERE owner_id = $1 AND deleted_at IS NULL;
 
--- name: ListTree :many
-SELECT id, path, kind, current_rev, blob_hash, size FROM files
-WHERE vault_id = $1 AND NOT is_deleted ORDER BY path_key;
+-- name: ListTreePage :many
+-- One page of the manifest after the key "after" (path keys of current files
+-- are unique, files_path_uq), optionally only below a folder (descendants: an
+-- escaped LIKE pattern, '' for the whole vault). A manifest is read page by
+-- page inside one REPEATABLE READ snapshot, so it is never held in memory.
+SELECT id, path, path_key, kind, current_rev, blob_hash, size FROM files
+WHERE vault_id = $1 AND NOT is_deleted AND path_key > sqlc.arg(after)::text
+  AND (sqlc.arg(descendants)::text = '' OR path_key LIKE sqlc.arg(descendants)::text ESCAPE '\')
+ORDER BY path_key LIMIT sqlc.arg(max_rows)::int;
+
+-- name: GetTreeFile :many
+-- The manifest of a document share: its one file, if current.
+SELECT id, path, path_key, kind, current_rev, blob_hash, size FROM files
+WHERE vault_id = $1 AND id = $2 AND NOT is_deleted;
 
 -- name: CreateVault :one
 INSERT INTO vaults (id, owner_id, name, kind) VALUES ($1, $2, $3, $4) RETURNING *;
 
 -- name: GetVault :one
 SELECT * FROM vaults WHERE id = $1;
+
+-- name: ListVaultIDsOfOwner :many
+-- Every vault of an owner, soft-deleted ones included (their blobs still
+-- take space until the purge): the scope of the upload quota check.
+SELECT id FROM vaults WHERE owner_id = $1;
 
 -- name: ListOwnedVaults :many
 SELECT * FROM vaults WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY lower(name), created_at;
@@ -42,6 +58,19 @@ UPDATE vaults SET last_seq = last_seq + 1 WHERE id = $1 RETURNING last_seq;
 -- UPDATE (what an UPDATE of non-key columns takes) leaves the foreign-key
 -- checks of rows referencing the vault (blob uploads, shares) unblocked.
 SELECT id FROM vaults WHERE id = $1 FOR NO KEY UPDATE;
+
+-- name: LockVaultSeq :one
+-- LockVault for a commit batch: the same row lock, plus the changelog position
+-- the batch continues from (it hands out the next seqs itself while holding
+-- the lock and stores the last one with FinishVaultBatch).
+SELECT last_seq FROM vaults WHERE id = $1 FOR NO KEY UPDATE;
+
+-- name: FinishVaultBatch :exec
+-- End of a commit batch: one update of the hot vault row instead of two per
+-- operation (NextVaultSeq, AddVaultUsage).
+UPDATE vaults SET last_seq = GREATEST(last_seq, sqlc.arg(last_seq)::bigint),
+  total_bytes = total_bytes + sqlc.arg(total_bytes)::bigint, file_count = file_count + sqlc.arg(file_count)::int
+WHERE id = $1;
 
 -- name: AdvanceCompaction :exec
 -- Changelog entries up to seq are no longer served (cursors before it expire).

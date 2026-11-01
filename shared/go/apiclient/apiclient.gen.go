@@ -734,13 +734,15 @@ type GrantStatus string
 
 // GroupMembership defines model for GroupMembership.
 type GroupMembership struct {
-	Description *string                   `json:"description,omitempty"`
-	Id          openapi_types.UUID        `json:"id"`
-	MemberRole  GroupMembershipMemberRole `json:"member_role"`
-	Name        string                    `json:"name"`
+	Description *string            `json:"description,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// MemberRole Role inside the group. `manager` is reserved in v1 and grants no extra capability (ADR-0041).
+	MemberRole GroupMembershipMemberRole `json:"member_role"`
+	Name       string                    `json:"name"`
 }
 
-// GroupMembershipMemberRole defines model for GroupMembership.MemberRole.
+// GroupMembershipMemberRole Role inside the group. `manager` is reserved in v1 and grants no extra capability (ADR-0041).
 type GroupMembershipMemberRole string
 
 // Health defines model for Health.
@@ -797,7 +799,7 @@ type KeyEnvelopes struct {
 
 // Me defines model for Me.
 type Me struct {
-	// ConfigVersion Version of the effective configuration (ETag of /config/effective)
+	// ConfigVersion Revision of the configuration: the `version` of /config/effective and of the ConfigChanged notification events (§3.6). Compare it with the one you hold to refetch.
 	ConfigVersion int                 `json:"config_version"`
 	CreatedAt     time.Time           `json:"created_at"`
 	DisplayName   *string             `json:"display_name,omitempty"`
@@ -1291,6 +1293,8 @@ type ClientInterface interface {
 
 	// SearchDirectoryUsers Find users to share with (minimal fields)
 	//
+	// q matches a substring of the username or display name (`%` and `_` are literal), or a whole e-mail address, case-insensitively. A part of an address never matches, so the directory cannot be used to guess addresses (ADR-0041). E-mail addresses are never returned.
+	//
 	// Corresponds with GET /directory/users (the `SearchDirectoryUsers` operationId).
 	SearchDirectoryUsers(ctx context.Context, params *SearchDirectoryUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1382,12 +1386,16 @@ type ClientInterface interface {
 
 	// CreateShareWithBody Share a vault, a folder or a document (shared vaults only)
 	//
+	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /shares (the `CreateShare` operationId).
 	CreateShareWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateShare Share a vault, a folder or a document (shared vaults only)
+	//
+	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1497,6 +1505,8 @@ type ClientInterface interface {
 
 	// PutBlobWithBody Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
 	//
+	// Uploaded bytes are charged to the vault owner only when a commit references them (D-03), but until then they count as pending: blobs uploaded within `uploads.expiry_hours` that no revision references, plus the resumable uploads in progress. An upload that does not fit in the quota next to the used and pending bytes is refused with `413 QUOTA_EXCEEDED` (`extra.used_bytes`, `extra.pending_bytes`, `extra.quota_bytes`). A blob the vault already holds adds nothing.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /vaults/{vaultId}/blobs/{sha256} (the `PutBlob` operationId).
@@ -1523,7 +1533,7 @@ type ClientInterface interface {
 
 	// CommitWithBody Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1532,7 +1542,7 @@ type ClientInterface interface {
 
 	// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1545,6 +1555,8 @@ type ClientInterface interface {
 	ExportVaultZip(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateExport Start an export job (any size); the ZIP is built in the background
+	//
+	// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
 	//
 	// Corresponds with POST /vaults/{vaultId}/exports (the `CreateExport` operationId).
 	CreateExport(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1594,6 +1606,8 @@ type ClientInterface interface {
 	PutKeyEnvelope(ctx context.Context, vaultId VaultId, kind KeyEnvelopeKind, body PutKeyEnvelopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVaultTree Complete manifest of current files plus the changelog position it reflects
+	//
+	// Read from one database snapshot and streamed: an interrupted or failed transfer ends with an incomplete JSON document, which the client discards and requests again.
 	//
 	// Corresponds with GET /vaults/{vaultId}/tree (the `GetVaultTree` operationId).
 	GetVaultTree(ctx context.Context, vaultId VaultId, params *GetVaultTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1652,6 +1666,8 @@ func (c *Client) SearchDirectoryGroups(ctx context.Context, params *SearchDirect
 }
 
 // SearchDirectoryUsers Find users to share with (minimal fields)
+//
+// q matches a substring of the username or display name (`%` and `_` are literal), or a whole e-mail address, case-insensitively. A part of an address never matches, so the directory cannot be used to guess addresses (ADR-0041). E-mail addresses are never returned.
 //
 // Corresponds with GET /directory/users (the `SearchDirectoryUsers` operationId).
 func (c *Client) SearchDirectoryUsers(ctx context.Context, params *SearchDirectoryUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1894,6 +1910,8 @@ func (c *Client) ListShares(ctx context.Context, params *ListSharesParams, reqEd
 
 // CreateShareWithBody Share a vault, a folder or a document (shared vaults only)
 //
+// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /shares (the `CreateShare` operationId).
@@ -1910,6 +1928,8 @@ func (c *Client) CreateShareWithBody(ctx context.Context, contentType string, bo
 }
 
 // CreateShare Share a vault, a folder or a document (shared vaults only)
+//
+// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2199,6 +2219,8 @@ func (c *Client) GetBlob(ctx context.Context, vaultId VaultId, sha256 Sha256, pa
 
 // PutBlobWithBody Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
 //
+// Uploaded bytes are charged to the vault owner only when a commit references them (D-03), but until then they count as pending: blobs uploaded within `uploads.expiry_hours` that no revision references, plus the resumable uploads in progress. An upload that does not fit in the quota next to the used and pending bytes is refused with `413 QUOTA_EXCEEDED` (`extra.used_bytes`, `extra.pending_bytes`, `extra.quota_bytes`). A blob the vault already holds adds nothing.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with PUT /vaults/{vaultId}/blobs/{sha256} (the `PutBlob` operationId).
@@ -2265,7 +2287,7 @@ func (c *Client) GetChanges(ctx context.Context, vaultId VaultId, params *GetCha
 
 // CommitWithBody Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2284,7 +2306,7 @@ func (c *Client) CommitWithBody(ctx context.Context, vaultId VaultId, params *Co
 
 // Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2317,6 +2339,8 @@ func (c *Client) ExportVaultZip(ctx context.Context, vaultId VaultId, reqEditors
 }
 
 // CreateExport Start an export job (any size); the ZIP is built in the background
+//
+// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
 //
 // Corresponds with POST /vaults/{vaultId}/exports (the `CreateExport` operationId).
 func (c *Client) CreateExport(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2456,6 +2480,8 @@ func (c *Client) PutKeyEnvelope(ctx context.Context, vaultId VaultId, kind KeyEn
 }
 
 // GetVaultTree Complete manifest of current files plus the changelog position it reflects
+//
+// Read from one database snapshot and streamed: an interrupted or failed transfer ends with an incomplete JSON document, which the client discards and requests again.
 //
 // Corresponds with GET /vaults/{vaultId}/tree (the `GetVaultTree` operationId).
 func (c *Client) GetVaultTree(ctx context.Context, vaultId VaultId, params *GetVaultTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4669,6 +4695,8 @@ type ClientWithResponsesInterface interface {
 
 	// SearchDirectoryUsersWithResponse Find users to share with (minimal fields)
 	//
+	// q matches a substring of the username or display name (`%` and `_` are literal), or a whole e-mail address, case-insensitively. A part of an address never matches, so the directory cannot be used to guess addresses (ADR-0041). E-mail addresses are never returned.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /directory/users (the `SearchDirectoryUsers` operationId).
@@ -4782,12 +4810,16 @@ type ClientWithResponsesInterface interface {
 
 	// CreateShareWithBodyWithResponse Share a vault, a folder or a document (shared vaults only)
 	//
+	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /shares (the `CreateShare` operationId).
 	CreateShareWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateShareReply, error)
 
 	// CreateShareWithResponse Share a vault, a folder or a document (shared vaults only)
+	//
+	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4915,6 +4947,8 @@ type ClientWithResponsesInterface interface {
 
 	// PutBlobWithBodyWithResponse Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
 	//
+	// Uploaded bytes are charged to the vault owner only when a commit references them (D-03), but until then they count as pending: blobs uploaded within `uploads.expiry_hours` that no revision references, plus the resumable uploads in progress. An upload that does not fit in the quota next to the used and pending bytes is refused with `413 QUOTA_EXCEEDED` (`extra.used_bytes`, `extra.pending_bytes`, `extra.quota_bytes`). A blob the vault already holds adds nothing.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /vaults/{vaultId}/blobs/{sha256} (the `PutBlob` operationId).
@@ -4943,7 +4977,7 @@ type ClientWithResponsesInterface interface {
 
 	// CommitWithBodyWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4952,7 +4986,7 @@ type ClientWithResponsesInterface interface {
 
 	// CommitWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4967,6 +5001,8 @@ type ClientWithResponsesInterface interface {
 	ExportVaultZipWithResponse(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*ExportVaultZipReply, error)
 
 	// CreateExportWithResponse Start an export job (any size); the ZIP is built in the background
+	//
+	// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -5030,6 +5066,8 @@ type ClientWithResponsesInterface interface {
 	PutKeyEnvelopeWithResponse(ctx context.Context, vaultId VaultId, kind KeyEnvelopeKind, body PutKeyEnvelopeJSONRequestBody, reqEditors ...RequestEditorFn) (*PutKeyEnvelopeReply, error)
 
 	// GetVaultTreeWithResponse Complete manifest of current files plus the changelog position it reflects
+	//
+	// Read from one database snapshot and streamed: an interrupted or failed transfer ends with an incomplete JSON document, which the client discards and requests again.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8890,6 +8928,8 @@ func (c *ClientWithResponses) SearchDirectoryGroupsWithResponse(ctx context.Cont
 
 // SearchDirectoryUsersWithResponse Find users to share with (minimal fields)
 //
+// q matches a substring of the username or display name (`%` and `_` are literal), or a whole e-mail address, case-insensitively. A part of an address never matches, so the directory cannot be used to guess addresses (ADR-0041). E-mail addresses are never returned.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /directory/users (the `SearchDirectoryUsers` operationId).
@@ -9093,6 +9133,8 @@ func (c *ClientWithResponses) ListSharesWithResponse(ctx context.Context, params
 
 // CreateShareWithBodyWithResponse Share a vault, a folder or a document (shared vaults only)
 //
+// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /shares (the `CreateShare` operationId).
@@ -9105,6 +9147,8 @@ func (c *ClientWithResponses) CreateShareWithBodyWithResponse(ctx context.Contex
 }
 
 // CreateShareWithResponse Share a vault, a folder or a document (shared vaults only)
+//
+// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9340,6 +9384,8 @@ func (c *ClientWithResponses) GetBlobWithResponse(ctx context.Context, vaultId V
 
 // PutBlobWithBodyWithResponse Upload a blob up to 32 MB; the server recomputes the hash and rejects a mismatch
 //
+// Uploaded bytes are charged to the vault owner only when a commit references them (D-03), but until then they count as pending: blobs uploaded within `uploads.expiry_hours` that no revision references, plus the resumable uploads in progress. An upload that does not fit in the quota next to the used and pending bytes is refused with `413 QUOTA_EXCEEDED` (`extra.used_bytes`, `extra.pending_bytes`, `extra.quota_bytes`). A blob the vault already holds adds nothing.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /vaults/{vaultId}/blobs/{sha256} (the `PutBlob` operationId).
@@ -9392,7 +9438,7 @@ func (c *ClientWithResponses) GetChangesWithResponse(ctx context.Context, vaultI
 
 // CommitWithBodyWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9407,7 +9453,7 @@ func (c *ClientWithResponses) CommitWithBodyWithResponse(ctx context.Context, va
 
 // CommitWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size).
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9434,6 +9480,8 @@ func (c *ClientWithResponses) ExportVaultZipWithResponse(ctx context.Context, va
 }
 
 // CreateExportWithResponse Start an export job (any size); the ZIP is built in the background
+//
+// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -9551,6 +9599,8 @@ func (c *ClientWithResponses) PutKeyEnvelopeWithResponse(ctx context.Context, va
 }
 
 // GetVaultTreeWithResponse Complete manifest of current files plus the changelog position it reflects
+//
+// Read from one database snapshot and streamed: an interrupted or failed transfer ends with an incomplete JSON document, which the client discards and requests again.
 //
 // Returns a wrapper object for the known response body format(s).
 //

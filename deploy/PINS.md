@@ -51,4 +51,4 @@ Il bootstrapper WebView2 dell'installer Windows è quello incluso nel modulo Wai
 
 ## Fuori da questo elenco
 
-Le immagini avviate dai test con testcontainers (`postgres:17` in `services/cloud/test/integration` e `apps/desktop/internal/cloudtest`) e lo script `scripts/chaos/restore-drill.sh` usano ancora tag mobili.
+Le immagini avviate dai test con testcontainers del cloud seguono i pin del deploy: PostgreSQL in `services/cloud/test/integration/main_test.go` (`postgresImage`) e RustFS in `services/cloud/internal/storage/s3_integration_test.go` (`rustfsImage`); vanno aggiornate insieme alle righe della tabella. Usano ancora tag mobili `apps/desktop/internal/cloudtest` (`postgres:17`) e lo script `scripts/chaos/restore-drill.sh`.

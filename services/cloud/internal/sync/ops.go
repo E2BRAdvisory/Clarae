@@ -9,7 +9,6 @@ import (
 	"memobrain/services/cloud/internal/access"
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/sharing"
-	"memobrain/services/cloud/internal/vaults"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -44,7 +43,11 @@ func (s *Service) create(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	if exists, err := q.FileIDExists(ctx, fileID); err != nil {
+	if b := env.batch; b != nil {
+		if b.taken[fileID] {
+			return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "file_id already exists")
+		}
+	} else if exists, err := q.FileIDExists(ctx, fileID); err != nil {
 		return syncproto.OpResult{}, err
 	} else if exists {
 		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "file_id already exists")
@@ -82,7 +85,7 @@ func (s *Service) create(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: size, FileCount: 1}); err != nil {
+	if err := addUsage(ctx, tx, env, size, 1); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, fileID, 1, seq), nil
@@ -103,12 +106,21 @@ func (s *Service) lockFile(ctx context.Context, tx db.DBTX, env commitEnv, op sy
 	if err != nil {
 		return syncdb.File{}, err
 	}
-	f, err := q.GetFileForUpdate(ctx, syncdb.GetFileForUpdateParams{ID: fileID, VaultID: env.vault.ID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return syncdb.File{}, reject(syncproto.CodeNotFound, "file not found")
+	f, cached := syncdb.File{}, false
+	if b := env.batch; b != nil {
+		f, cached = b.rows[fileID]
 	}
-	if err != nil {
-		return syncdb.File{}, err
+	if !cached {
+		f, err = q.GetFileForUpdate(ctx, syncdb.GetFileForUpdateParams{ID: fileID, VaultID: env.vault.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return syncdb.File{}, reject(syncproto.CodeNotFound, "file not found")
+		}
+		if err != nil {
+			return syncdb.File{}, err
+		}
+		if b := env.batch; b != nil {
+			b.rows[f.ID] = f
+		}
 	}
 	if env.scope != nil && !env.scope.ContainsFile(f.ID, f.Path) {
 		// Outside the share the file does not exist for the caller.
@@ -118,6 +130,18 @@ func (s *Service) lockFile(ctx context.Context, tx db.DBTX, env commitEnv, op sy
 		return syncdb.File{}, reject(syncproto.CodeValidationFailed, "base_rev is required")
 	}
 	if int64(*op.BaseRev) != int64(f.CurrentRev) {
+		// A retry that overlapped its own original (sent again while the first
+		// request was still running) may have passed the idempotency check
+		// before the original committed: what it finds now is its own write.
+		if opID, err := uuid.Parse(op.OpID); err == nil {
+			prev, err := q.GetRevisionByOpID(ctx, syncdb.GetRevisionByOpIDParams{VaultID: env.vault.ID, OpID: &opID})
+			if err == nil {
+				return syncdb.File{}, &appliedError{rev: prev}
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return syncdb.File{}, err
+			}
+		}
 		return syncdb.File{}, &conflictError{f: f}
 	}
 	return f, nil
@@ -159,7 +183,7 @@ func (s *Service) modify(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 		return syncproto.OpResult{}, err
 	}
 	opName := "modify"
-	if revive {
+	if revive || env.restore {
 		opName = "restore"
 	}
 	nf := f
@@ -173,7 +197,7 @@ func (s *Service) modify(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 	if revive {
 		files = 1
 	}
-	if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: size - old, FileCount: files}); err != nil {
+	if err := addUsage(ctx, tx, env, size-old, files); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
@@ -231,7 +255,7 @@ func (s *Service) remove(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 	if err != nil {
 		return syncproto.OpResult{}, err
 	}
-	if err := vaults.AddVaultUsage(ctx, tx, vaults.AddVaultUsageParams{ID: env.vault.ID, TotalBytes: -f.Size, FileCount: -1}); err != nil {
+	if err := addUsage(ctx, tx, env, -f.Size, -1); err != nil {
 		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, f.ID, rev, seq), nil
@@ -241,10 +265,22 @@ func (s *Service) remove(ctx context.Context, tx db.DBTX, env commitEnv, op sync
 // folder share: to the recipients the whole root would vanish (SHARE_ROOT_MOVE, §3.4.7);
 // renaming the folder is a move_prefix, which carries the share along.
 func (s *Service) checkShareRoot(ctx context.Context, tx db.DBTX, env commitEnv, f syncdb.File, newPath string) error {
-	q := syncdb.New(tx)
-	if env.private() || env.scope != nil {
+	return s.checkShareRoots(ctx, tx, env, f.Path, newPath, 1)
+}
+
+// checkShareRoots refuses a move of n files from below from (a file path, or a
+// folder for a move_prefix) to below to that would leave a folder share empty:
+// every live folder share that contains from without containing to must keep at
+// least one file. A folder rename that carries the root of a share (the root
+// itself or a folder above it) is not concerned: RebasePrefixShares moves the
+// share with it. The rule holds for the owner and for an editor working through
+// a mount: a share nested inside the mount belongs to other recipients, whose
+// whole mount would vanish just the same. Private vaults have no shares.
+func (s *Service) checkShareRoots(ctx context.Context, tx db.DBTX, env commitEnv, from, to string, n int) error {
+	if env.private() {
 		return nil
 	}
+	q := syncdb.New(tx)
 	shares, err := sharing.ListLiveSharesOfVault(ctx, tx, env.vault.ID)
 	if err != nil {
 		return err
@@ -254,19 +290,29 @@ func (s *Service) checkShareRoot(ctx context.Context, tx db.DBTX, env commitEnv,
 			continue
 		}
 		sc := access.NewScope(sh.ID, sh.ResourceType, sh.PathPrefix, sh.FileID)
-		if !sc.ContainsPath(f.Path) || sc.ContainsPath(newPath) {
+		if !sc.ContainsPath(from) || sc.ContainsPath(to) {
 			continue
 		}
 		key := pathrules.Key(sc.Prefix)
-		n, err := q.CountFilesUnderPrefix(ctx, syncdb.CountFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: key, Descendants: likeEscape(key) + "/%"})
+		count, err := q.CountFilesUnderPrefix(ctx, syncdb.CountFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: key, Descendants: likeEscape(key) + "/%"})
 		if err != nil {
 			return err
 		}
-		if n <= 1 {
-			return reject(syncproto.CodeShareRootMove, "moving %s would take the last file out of the shared folder %s: rename the folder instead", f.Path, sc.Prefix)
+		if int(count) <= n {
+			return reject(syncproto.CodeShareRootMove, "moving %s would take the last file out of the shared folder %s: rename the folder instead",
+				scopedPath(env, from), scopedPath(env, sc.Prefix))
 		}
 	}
 	return nil
+}
+
+// scopedPath is a vault path as the caller sees it: relative to the root of the
+// share it works through (a nested share's root, inside the mount), or as is.
+func scopedPath(env commitEnv, p string) string {
+	if env.scope != nil && env.scope.ContainsPath(p) {
+		return env.scope.Rel(p)
+	}
+	return p
 }
 
 // likeEscape escapes LIKE metacharacters of a path key used as a prefix.
@@ -287,12 +333,16 @@ func (s *Service) movePrefix(ctx context.Context, tx db.DBTX, env commitEnv, op 
 	if err != nil {
 		return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "from: %v", err)
 	}
-	to, err := pathrules.Normalize(op.To)
+	to, err := pathrules.NormalizePortable(op.To) // the new folder names enter the vault
 	if err != nil {
 		return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "to: %v", err)
 	}
 	fromKey, toKey := pathrules.Key(from), pathrules.Key(to)
-	if fromKey == toKey || strings.HasPrefix(toKey, fromKey+"/") {
+	if from == to {
+		return syncproto.OpResult{}, reject(syncproto.CodeValidationFailed, "path is unchanged")
+	}
+	// Equal keys with different paths is a case-only rename ("notes" to "Notes"): allowed.
+	if strings.HasPrefix(toKey, fromKey+"/") {
 		return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "a folder cannot move into itself")
 	}
 	files, err := q.ListFilesUnderPrefix(ctx, syncdb.ListFilesUnderPrefixParams{VaultID: env.vault.ID, Exact: fromKey, Descendants: likeEscape(fromKey) + "/%"})
@@ -331,6 +381,11 @@ func (s *Service) movePrefix(ctx context.Context, tx db.DBTX, env commitEnv, op 
 		}
 		targets = append(targets, target{f: f, path: np, key: nk, kind: syncproto.KindOf(np)})
 	}
+	// A folder inside a share that takes all of the share's files elsewhere would
+	// empty it, exactly as moving them one by one would (SHARE_ROOT_MOVE).
+	if err := s.checkShareRoots(ctx, tx, env, from, to, len(files)); err != nil {
+		return syncproto.OpResult{}, err
+	}
 	var last int64
 	var lastRev int32
 	for i, t := range targets {
@@ -347,13 +402,14 @@ func (s *Service) movePrefix(ctx context.Context, tx db.DBTX, env commitEnv, op 
 		}
 		last, lastRev = seq, rev
 	}
-	// The shares rooted at or below the renamed folder follow it.
-	if env.scope == nil {
-		if err := sharing.RebasePrefixShares(ctx, tx, sharing.RebasePrefixSharesParams{
-			VaultID: env.vault.ID, ToPath: to, FromPath: from, LikeFrom: likeEscape(from) + "/%",
-		}); err != nil {
-			return syncproto.OpResult{}, err
-		}
+	// The shares rooted at or below the renamed folder follow it, also when an
+	// editor renames it through a mount: the shares nested inside it would be left
+	// pointing at a folder that no longer exists. The mount's own root is never
+	// among them (scopeOp refuses renaming it, and from lies strictly below it).
+	if err := sharing.RebasePrefixShares(ctx, tx, sharing.RebasePrefixSharesParams{
+		VaultID: env.vault.ID, ToPath: to, FromPath: from, LikeFrom: likeEscape(from) + "/%",
+	}); err != nil {
+		return syncproto.OpResult{}, err
 	}
 	return accepted(op.OpID, targets[len(targets)-1].f.ID, lastRev, last), nil
 }
