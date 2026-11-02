@@ -1,11 +1,12 @@
 # ADR-0013 — Dettagli della Graph view (M6-WP1)
 
-|                       |                                                                         |
-| --------------------- | ----------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                |
-| **Data**              | 2026-10-24                                                              |
-| **Riferimenti spec**  | §2.5 `graph`; matrice funzioni (Graph view); D-06 (perimetro per-vault) |
-| **Devia dallo spec?** | no (raffina: Canvas 2D invece di WebGL, ctime da frontmatter/mtime)     |
+|                       |                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                      |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.5, §3.4.6, §4.2, Appendice A (Appendice C.4) |
+| **Data**              | 2026-10-24                                                                                     |
+| **Riferimenti spec**  | §2.5 `graph`; matrice funzioni (Graph view); D-06 (perimetro per-vault)                        |
+| **Devia dallo spec?** | no (raffina: Canvas 2D invece di WebGL, ctime da frontmatter/mtime)                            |
 
 ## Contesto
 

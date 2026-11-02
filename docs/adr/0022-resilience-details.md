@@ -1,11 +1,12 @@
 # ADR-0022 — Resilienza: fault injection, chaos su Helm, backup/PITR (M7-WP2b)
 
-|                       |                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                         |
-| **Data**              | 2026-10-27                                                                       |
-| **Riferimenti spec**  | Appendice A (Disponibilità, Affidabilità dati); §3.4.4 (pull/cursor); D-02, D-03 |
-| **Devia dallo spec?** | no                                                                               |
+|                       |                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                      |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §1.6, §3.1, §3.4.2, §3.4.4, Appendice A (Appendice C.4) |
+| **Data**              | 2026-10-27                                                                                     |
+| **Riferimenti spec**  | Appendice A (Disponibilità, Affidabilità dati); §3.4.4 (pull/cursor); D-02, D-03               |
+| **Devia dallo spec?** | no                                                                                             |
 
 ## Contesto
 

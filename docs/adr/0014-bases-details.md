@@ -1,11 +1,12 @@
 # ADR-0014 — Bases: sottoinsieme supportato, degrado e round-trip
 
-|                       |                                                     |
-| --------------------- | --------------------------------------------------- |
-| **Stato**             | proposta                                            |
-| **Data**              | 2026-10-24                                          |
-| **Riferimenti spec**  | §2.2.1 (riga Bases, P1); D-01, D-06; roadmap M6-WP2 |
-| **Devia dallo spec?** | no                                                  |
+|                       |                                                                     |
+| --------------------- | ------------------------------------------------------------------- |
+| **Stato**             | accettata                                                           |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.5 (Appendice C.4) |
+| **Data**              | 2026-10-24                                                          |
+| **Riferimenti spec**  | §2.2.1 (riga Bases, P1); D-01, D-06; roadmap M6-WP2                 |
+| **Devia dallo spec?** | no                                                                  |
 
 ## Contesto
 

@@ -2,7 +2,8 @@
 
 |                       |                                                                                                |
 | --------------------- | ---------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                       |
+| **Stato**             | accettata                                                                                      |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §3.4.6 (Appendice C.4)                          |
 | **Data**              | 2026-10-24                                                                                     |
 | **Riferimenti spec**  | §2.2.1 (Workspaces, Bookmarks, Page preview), §3.4.2 e §3.4.6 (scope di sync di `.memobrain/`) |
 | **Devia dallo spec?** | no (lo spec e `shared/go/pathrules` concordano; vedi "Scope di sync")                          |

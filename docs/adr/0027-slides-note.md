@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Stato**             | proposta                                                                                                                                         |
+| **Stato**             | accettata                                                                                                                                        |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.3.3, §4.1, §4.2, Appendice B (Appendice C.4)                                                   |
 | **Data**              | 2026-10-28                                                                                                                                       |
 | **Riferimenti spec**  | §2.2.1 (riga `slides`, P2), Appendice B (post-1.0); V-02/D-01, V-07/D-07; ADR-0004, ADR-0005, ADR-0026                                           |
 | **Devia dallo spec?** | sì (§2.2.1 riga `slides`: da P2 a P1; Appendice B: Slides esce dal post-1.0) → richiede aggiornamento di `Specifications.md` da parte dell'owner |

@@ -2,10 +2,13 @@
 
 |                       |                                                                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta (da recepire nello spec a cura dell'owner)                                                                           |
+| **Stato**             | accettata                                                                                                                     |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.6.5, §2.8.2, §3.2.2, §3.5.1, §3.7, §4.3 (Appendice C.4)                             |
 | **Data**              | 2026-10-27                                                                                                                    |
 | **Riferimenti spec**  | §3.5 (API), §3.8 (E2EE), §2.6.2 (retention), D-02, D-03, D-05                                                                 |
 | **Devia dallo spec?** | sì, in modo additivo: `GET /me/export`, `DELETE /me`, migrazione `0006`, impostazione `privacy.account_purge_days`, job purge |
+
+**Aggiornamento 2026-11-02.** Il gate di CI della decisione 6 (`security.yml`) è stato rimosso e sostituito dalle verifiche locali con `task ci` (ADR-0036); la regola sui grant concessi da un utente cancellato è modificata da ADR-0041, punto 5 (i grant concessi come _manager_ su vault altrui sono riattribuiti al proprietario del vault). Endpoint GDPR, migrazione `0006`, `privacy.account_purge_days` e job di purge restano come qui.
 
 ## Contesto
 

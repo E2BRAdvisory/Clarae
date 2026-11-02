@@ -2,10 +2,13 @@
 
 |                       |                                                                                                                            |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta (da recepire nello spec a cura dell'owner)                                                                        |
+| **Stato**             | accettata                                                                                                                  |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.6.3, §2.6.5, §2.8.1, §2.8.2, §3.1, §3.2.2, §3.5.2, §3.5.5, §3.6 (Appendice C.4)  |
 | **Data**              | 2026-10-24                                                                                                                 |
 | **Riferimenti spec**  | §2.6.2–2.6.4 (quota, export), §3.5.5 (admin), §3.6 (`AccountChanged`), §3.8 (cifratura), D-03, D-05                        |
 | **Devia dallo spec?** | sì, in modo additivo (migrazione 0005, codici d'errore su operazioni admin, `S3_PUBLIC_ENDPOINT`, `quota_bytes` opzionale) |
+
+**Aggiornamento 2026-11-02.** Il ruolo in `users.role` come semplice specchio del token è superato da ADR-0041 (`role_changed_at`: il cambio dalla console prevale sui token emessi prima); l'indirizzo IP è ora registrato in `audit_log`.
 
 ## Contesto
 

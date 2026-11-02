@@ -1,11 +1,14 @@
 # ADR-0011 — Dettagli implementativi di condivisione, gruppi e configurazione distribuita (M4)
 
-|                       |                                                                                                           |
-| --------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta (da recepire nello spec a cura dell'owner)                                                       |
-| **Data**              | 2026-10-24                                                                                                |
-| **Riferimenti spec**  | §2.6.4–2.6.6 (condivisione, gruppi, config), §3.3.2 (RBAC), §3.4.7 (scope), §3.5.4, §3.6, D-04…D-06       |
-| **Devia dallo spec?** | sì, in modo additivo (parametro `scope` esteso, codice `INVALID_STATE`, `web_client_id`, migrazione 0004) |
+|                       |                                                                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                                                                                           |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §1.3, §2.5, §2.6.4, §2.6.6, §3.1, §3.2.2, §3.3.2, §3.4.2, §3.4.4, §3.4.7, §3.5.3, §3.5.4, §3.6, §3.8.2, §4.3 (Appendice C.4) |
+| **Data**              | 2026-10-24                                                                                                                                                          |
+| **Riferimenti spec**  | §2.6.4–2.6.6 (condivisione, gruppi, config), §3.3.2 (RBAC), §3.4.7 (scope), §3.5.4, §3.6, D-04…D-06                                                                 |
+| **Devia dallo spec?** | sì, in modo additivo (parametro `scope` esteso, codice `INVALID_STATE`, `web_client_id`, migrazione 0004)                                                           |
+
+**Aggiornamento 2026-11-02.** Il limite «un `manager` gestisce i grant ma non crea share» è superato da ADR-0041 (un manager crea share dentro l'ambito dello share che gestisce).
 
 ## Contesto
 

@@ -2,10 +2,13 @@
 
 |                       |                                                                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta (da recepire nello spec a cura dell'owner)                                                                           |
+| **Stato**             | accettata                                                                                                                     |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.4, §2.6.6, §2.7, §3.4.6, §4.2 (Appendice C.4)                               |
 | **Data**              | 2026-10-27                                                                                                                    |
 | **Riferimenti spec**  | §2.7 (Excalidraw), §2.4 (indicizzazione), §3.4.5 (merge); V-02/D-01, V-08, D-04, D-06; ADR-0003, ADR-0005, ADR-0010, ADR-0021 |
 | **Devia dallo spec?** | sì, in modo puntuale: nuove funzioni di §2.7 (export, embed di parti, formule, azioni sulla scena), nuova dipendenza MathJax  |
+
+**Aggiornamento 2026-11-02.** Il sotto-flag citato in «Questioni aperte» come `drawing_scripts` è `drawing_actions` (decisione 26, schema del Config Profile); la dipendenza Excalidraw è il fork di ADR-0028.
 
 ## Contesto
 

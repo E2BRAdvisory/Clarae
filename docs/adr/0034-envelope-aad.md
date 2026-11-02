@@ -2,10 +2,13 @@
 
 |                       |                                                                                                                                           |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                  |
+| **Stato**             | accettata                                                                                                                                 |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.6.6, §3.2.2, §3.8.2, §3.8.7 (formato e migrazione v2 già nella v1.3) (Appendice C.4)            |
 | **Data**              | 2026-10-30                                                                                                                                |
 | **Riferimenti spec**  | §3.8.1 (modello di minaccia, A3 server attivamente malevolo), §3.8.2 (riga «Envelope»), §3.8.4 (flussi), §3.8.7 (test vector); D-02; O-03 |
 | **Devia dallo spec?** | sì (§3.8.2 e §3.8.7) → formato dell'envelope versionato con AAD; richiede aggiornamento di `Specifications.md` da parte dell'owner        |
+
+**Aggiornamento 2026-11-02.** L'owner ha accettato l'ADR; le frasi delle sezioni «Esito» secondo cui lo stato resta «proposta» e l'aggiornamento dello spec spetta all'owner sono superate (spec v1.4).
 
 ## Contesto
 

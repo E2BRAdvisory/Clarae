@@ -1,11 +1,12 @@
 # ADR-0020 — Prestazioni: indicizzazione a batch, cache dei candidati di ricerca, albero virtualizzato (M7-WP1)
 
-|                       |                                                                             |
-| --------------------- | --------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                    |
-| **Data**              | 2026-10-27                                                                  |
-| **Riferimenti spec**  | Appendice A (prestazioni client, indicizzazione, cloud), §2.4 ricerca; D-06 |
-| **Devia dallo spec?** | no                                                                          |
+|                       |                                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                           |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.4, §4.4, Appendice A, C.2 (Appendice C.4) |
+| **Data**              | 2026-10-27                                                                          |
+| **Riferimenti spec**  | Appendice A (prestazioni client, indicizzazione, cloud), §2.4 ricerca; D-06         |
+| **Devia dallo spec?** | no                                                                                  |
 
 ## Contesto
 

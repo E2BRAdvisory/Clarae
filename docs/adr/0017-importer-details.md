@@ -1,11 +1,12 @@
 # ADR-0017 — Importer: mappature per sorgente e limiti
 
-|                       |                                                     |
-| --------------------- | --------------------------------------------------- |
-| **Stato**             | proposta                                            |
-| **Data**              | 2026-10-24                                          |
-| **Riferimenti spec**  | matrice §2.2.1 (Importer, P1); D-06; roadmap M6-WP4 |
-| **Devia dallo spec?** | no                                                  |
+|                       |                                                                           |
+| --------------------- | ------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                 |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.5, §4.2 (Appendice C.4) |
+| **Data**              | 2026-10-24                                                                |
+| **Riferimenti spec**  | matrice §2.2.1 (Importer, P1); D-06; roadmap M6-WP4                       |
+| **Devia dallo spec?** | no                                                                        |
 
 ## Contesto
 

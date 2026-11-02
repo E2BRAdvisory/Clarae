@@ -2,10 +2,13 @@
 
 |                       |                                                                                                                                                           |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                  |
+| **Stato**             | accettata                                                                                                                                                 |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §1.1, §2.7.3, §4.3 (Appendice C.4)                                                                                 |
 | **Data**              | 2026-10-30                                                                                                                                                |
 | **Riferimenti spec**  | §4.3 (moduli del cloud, «mai alle tabelle altrui», lint `depguard`/`go-arch-lint`), §2.7.3 (Excalidraw offline), V-08                                     |
 | **Devia dallo spec?** | sì (§4.3) → eccezioni dichiarate alla regola «mai alle tabelle altrui»; nuovo modulo `settings`; l'albero di §4.3 guadagna `internal/<modulo>/<modulo>db` |
+
+**Aggiornamento 2026-11-02.** `security.yml` è stato rimosso (ADR-0036); il gate offline di Excalidraw gira nella suite locale `yarn workspace @memobrain/web e2e:security`. Le eccezioni recepite nello spec sono quelle di `ownership_test.go` alla data (tra cui le letture di `jobs` su `file_revisions` e `shares`).
 
 ## Contesto
 

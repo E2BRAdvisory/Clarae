@@ -2,10 +2,13 @@
 
 |                       |                                                                                                                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                                      |
+| **Stato**             | accettata                                                                                                                                                                     |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.6.6, §4.2 (Appendice C.4)                                                                                                   |
 | **Data**              | 2026-10-28                                                                                                                                                                    |
 | **Riferimenti spec**  | §2.2.1 (`workspace`, `sidebar`, `statusbar`, `appearance`, `bookmarks`, `outline`), §4.2 (frontend); V-02/D-01, V-07/D-07, V-08/D-02, V-09/D-06; ADR-0004, ADR-0009, ADR-0016 |
 | **Devia dallo spec?** | sì (§2.2.1 riga `statusbar`; §4.2 elenco di `sidebar/`) → richiede aggiornamento di `Specifications.md` da parte dell'owner                                                   |
+
+**Aggiornamento 2026-11-02.** La tab che qui si chiama sia «Segnalibri» sia «Link» è _Link_ nel codice (link in uscita, backlink, bookmark). La barra di stato resta eliminata: la barra opzionale di ADR-0035 è ancora una _proposta_ e non è implementata.
 
 ## Contesto
 

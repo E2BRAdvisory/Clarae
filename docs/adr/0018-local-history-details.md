@@ -1,6 +1,7 @@
 # ADR-0018: History locale e File recovery (M6-WP5)
 
-- Stato: proposto
+- Stato: accettata
+- Recepito in: `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.5, §2.9, §3.4.6, §4.2 (Appendice C.4)
 - Data: 2026-10-24
 - Riferimenti: Specifications §3.4 (`.memobrain/snapshots` locale al dispositivo), matrice §2.2.1 "File recovery", roadmap M6-WP5, D-06
 

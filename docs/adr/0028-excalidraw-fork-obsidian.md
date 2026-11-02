@@ -2,10 +2,13 @@
 
 |                       |                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                           |
+| **Stato**             | accettata                                                                          |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.7.3, §4.2, C.2 (Appendice C.4)           |
 | **Data**              | 2026-10-29                                                                         |
 | **Riferimenti spec**  | ADR-0003, ADR-0024 (limiti noti: Scribble Helper), ADR-0025 (build esbuild)        |
 | **Devia dallo spec?** | sì: dipendenza `@zsviczian/excalidraw` al posto di `@excalidraw/excalidraw` 0.18.1 |
+
+**Aggiornamento 2026-11-02.** La dipendenza sta ora in `packages/workbench/package.json` (frontend condiviso da desktop e workbench web, ADR-0029), con lo stesso alias `npm:@zsviczian/excalidraw@0.18.145`; la copia dello script è fatta da `copyExcalidrawAssets`, condivisa dalle build di desktop e web.
 
 ## Contesto
 

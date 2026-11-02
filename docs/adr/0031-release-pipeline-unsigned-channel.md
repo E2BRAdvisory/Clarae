@@ -1,11 +1,14 @@
 # ADR-0031 — Pipeline di rilascio: correzioni, canale non firmato, matrice estesa (M10)
 
-|                       |                                                                                                                                                |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | implementata, poi ridotta: dalla 1.2.2 `release.yml` non firma e non ha gate di CI (vedi "Stato attuale"); le verifiche sono locali (ADR-0036) |
-| **Data**              | 2026-10-29                                                                                                                                     |
-| **Riferimenti spec**  | §4 (supply chain, release policy: macOS firmato e notarizzato, Authenticode, immagine OCI immutabile), M7; ADR-0001, ADR-0006, ADR-0023        |
-| **Devia dallo spec?** | sì, temporaneamente: rilasci desktop non firmati finché mancano i certificati → richiede una nota in `Specifications.md` da parte dell'owner   |
+|                       |                                                                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                                                                    |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.5, §3.7, §3.8.1, §4.2, §4.5, Appendice A, Appendice B, C.2 (Appendice C.4)                         |
+| **Data**              | 2026-10-29                                                                                                                                   |
+| **Riferimenti spec**  | §4 (supply chain, release policy: macOS firmato e notarizzato, Authenticode, immagine OCI immutabile), M7; ADR-0001, ADR-0006, ADR-0023      |
+| **Devia dallo spec?** | sì, temporaneamente: rilasci desktop non firmati finché mancano i certificati → richiede una nota in `Specifications.md` da parte dell'owner |
+
+**Aggiornamento 2026-11-02.** Lo spec registra lo **stato attuale** (sezione «Stato attuale»): `release.yml` costruisce e pubblica immagine, chart e installer da un tag senza firme né controlli; installer desktop non firmati come deviazione temporanea; firma, cosign, SBOM e manifest di aggiornamento da riattivare (ADR-0023 resta _proposta_); verifiche locali (ADR-0036). I punti 3, 6 e 7 della decisione valgono quando la firma sarà riattivata.
 
 ## Contesto
 

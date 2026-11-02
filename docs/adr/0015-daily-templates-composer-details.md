@@ -1,6 +1,7 @@
 # ADR-0015 — Note giornaliere, template, composer: dettagli (M6-WP3a)
 
-- Stato: proposta
+- Stato: accettata
+- Recepito in: `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.6.6, §3.4.6 (Appendice C.4)
 - Contesto: M6-WP3 (prima metà: daily/unique note, template, composer, slash commands, nota casuale).
 
 ## Decisioni

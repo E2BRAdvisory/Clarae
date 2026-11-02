@@ -1,11 +1,12 @@
 # ADR-0009 — Dettagli implementativi del protocollo di sync (M2)
 
-|                       |                                                                                   |
-| --------------------- | --------------------------------------------------------------------------------- |
-| **Stato**             | proposta (da recepire nello spec a cura dell'owner)                               |
-| **Data**              | 2026-10-24                                                                        |
-| **Riferimenti spec**  | §3.2.2 (schema DB), §3.5 (API), §3.6 (protocollo di sync), §3.8 (E2EE), D-02/D-03 |
-| **Devia dallo spec?** | sì, in modo additivo (campi, colonne e codice di errore aggiuntivi)               |
+|                       |                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                                   |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.6.1, §3.1, §3.2.2, §3.4.3, §3.4.4, §3.5.2, §3.5.3 (Appendice C.4) |
+| **Data**              | 2026-10-24                                                                                                  |
+| **Riferimenti spec**  | §3.2.2 (schema DB), §3.5 (API), §3.6 (protocollo di sync), §3.8 (E2EE), D-02/D-03                           |
+| **Devia dallo spec?** | sì, in modo additivo (campi, colonne e codice di errore aggiuntivi)                                         |
 
 ## Contesto
 

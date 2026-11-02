@@ -2,7 +2,8 @@
 
 |                       |                                                                            |
 | --------------------- | -------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                   |
+| **Stato**             | accettata                                                                  |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.3.2 (Appendice C.4)      |
 | **Data**              | 2026-10-24                                                                 |
 | **Riferimenti spec**  | matrice §2.2.1 (Embedded search, Export P1), §2.6 impostazioni; D-01, D-06 |
 | **Devia dallo spec?** | no                                                                         |

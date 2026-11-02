@@ -1,11 +1,14 @@
 # ADR-0010 — Dettagli implementativi di disegni e canvas (M3)
 
-|                       |                                                                   |
-| --------------------- | ----------------------------------------------------------------- |
-| **Stato**             | proposta (da recepire nello spec a cura dell'owner)               |
-| **Data**              | 2026-10-24                                                        |
-| **Riferimenti spec**  | §2.2.1 (matrice funzioni), V-02/D-01, D-04, piano M3-WP1…WP4      |
-| **Devia dallo spec?** | sì, in modo puntuale (editor testo dei canvas, export, anteprime) |
+|                       |                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                           |
+| **Recepito in**       | `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.4, §2.7.1, §2.7.2, §2.7.3, §3.4.6 (Appendice C.4) |
+| **Data**              | 2026-10-24                                                                                          |
+| **Riferimenti spec**  | §2.2.1 (matrice funzioni), V-02/D-01, D-04, piano M3-WP1…WP4                                        |
+| **Devia dallo spec?** | sì, in modo puntuale (editor testo dei canvas, export, anteprime)                                   |
+
+**Aggiornamento 2026-11-02.** La versione `@excalidraw/excalidraw@0.18.1` è superata da ADR-0028 (alias `npm:@zsviczian/excalidraw@0.18.145`), e la rinomina riscrive ora anche i link dentro i disegni (ADR-0024, decisione 6); le regole offline restano quelle di questo ADR.
 
 ## Contesto
 
