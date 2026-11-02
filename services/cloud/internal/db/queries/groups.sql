@@ -28,6 +28,11 @@ FROM group_members m JOIN users u ON u.id = m.user_id
 WHERE m.group_id = $1 AND u.status <> 'deleted'
 ORDER BY lower(u.username);
 
+-- name: ListGroupMemberIDs :many
+-- Every member of a group, whatever the state of their account (the users a
+-- removal of the group concerns).
+SELECT user_id FROM group_members WHERE group_id = $1;
+
 -- name: ListGroupsOfUser :many
 SELECT g.id, g.name, g.description, m.member_role
 FROM group_members m JOIN groups g ON g.id = m.group_id

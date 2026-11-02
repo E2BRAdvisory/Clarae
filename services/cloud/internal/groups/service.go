@@ -30,19 +30,33 @@ type ConfigNotifier interface {
 	Changed(ctx context.Context, tx pgx.Tx) error
 }
 
-// GrantRemover deletes the share grants given to a principal. Grants belong
-// to the sharing module, which depends on this one: it is wired in by the
-// application (ADR-0033).
-type GrantRemover interface {
+// Shares is what group changes need of the sharing module, which owns the
+// share grants and depends on this one: it is wired in by the application
+// (ADR-0033).
+type Shares interface {
+	// DeleteGrantsOfPrincipal deletes the share grants given to a principal.
 	DeleteGrantsOfPrincipal(ctx context.Context, tx db.DBTX, principalType string, principalID uuid.UUID) error
+	// GroupChange runs change, which alters the members of a group or removes
+	// it, and tells the users listed which shares they gained or lost with it.
+	GroupChange(ctx context.Context, tx pgx.Tx, actor, groupID uuid.UUID, users []uuid.UUID, change func() error) error
 }
 
 // Service implements the groups module.
 type Service struct {
 	db     *db.DB
 	config ConfigNotifier
-	// Grants removes the grants of a deleted group (nil in unit tests).
-	Grants GrantRemover
+	// Grants removes the grants of a deleted group and tells the members about
+	// the shares a membership change gives or takes (nil in unit tests).
+	Grants Shares
+}
+
+// shareChange runs change through Grants.GroupChange when the sharing module
+// is wired in.
+func (s *Service) shareChange(ctx context.Context, tx pgx.Tx, actor, groupID uuid.UUID, users []uuid.UUID, change func() error) error {
+	if s.Grants == nil {
+		return change()
+	}
+	return s.Grants.GroupChange(ctx, tx, actor, groupID, users, change)
 }
 
 // NewService wires the module; config may be nil in unit tests.
@@ -138,19 +152,27 @@ func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, name, descrip
 func (s *Service) Delete(ctx context.Context, actor, id uuid.UUID) error {
 	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := groupsdb.New(tx)
-		n, err := q.DeleteGroup(ctx, id)
+		members, err := q.ListGroupMemberIDs(ctx, id)
 		if err != nil {
 			return err
 		}
-		if n == 0 {
-			return httpproblem.NotFound("group")
-		}
-		// Grants to the group are rows of share_grants keyed by (type, id) without a
-		// foreign key: remove them so no dangling principal keeps a share alive.
-		if s.Grants != nil {
-			if err := s.Grants.DeleteGrantsOfPrincipal(ctx, tx, "group", id); err != nil {
+		err = s.shareChange(ctx, tx, actor, id, members, func() error {
+			n, err := q.DeleteGroup(ctx, id)
+			if err != nil {
 				return err
 			}
+			if n == 0 {
+				return httpproblem.NotFound("group")
+			}
+			// Grants to the group are rows of share_grants keyed by (type, id) without a
+			// foreign key: remove them so no dangling principal keeps a share alive.
+			if s.Grants != nil {
+				return s.Grants.DeleteGrantsOfPrincipal(ctx, tx, "group", id)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 		if err := audit.Record(ctx, tx, actor, "group.delete", "group", id.String(), nil); err != nil {
 			return err
@@ -183,7 +205,10 @@ func (s *Service) SetMember(ctx context.Context, actor, groupID, userID uuid.UUI
 		} else if err != nil {
 			return err
 		}
-		if err := q.UpsertGroupMember(ctx, groupsdb.UpsertGroupMemberParams{GroupID: groupID, UserID: userID, MemberRole: role}); err != nil {
+		// A new member reaches the shares granted to the group at once.
+		if err := s.shareChange(ctx, tx, actor, groupID, []uuid.UUID{userID}, func() error {
+			return q.UpsertGroupMember(ctx, groupsdb.UpsertGroupMemberParams{GroupID: groupID, UserID: userID, MemberRole: role})
+		}); err != nil {
 			return err
 		}
 		if err := audit.Record(ctx, tx, actor, "group.member.set", "group", groupID.String(), map[string]string{"user": userID.String(), "role": role}); err != nil {
@@ -197,12 +222,19 @@ func (s *Service) SetMember(ctx context.Context, actor, groupID, userID uuid.UUI
 func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error {
 	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := groupsdb.New(tx)
-		n, err := q.RemoveGroupMember(ctx, groupsdb.RemoveGroupMemberParams{GroupID: groupID, UserID: userID})
+		// A former member loses the shares that reached them only through the group.
+		err := s.shareChange(ctx, tx, actor, groupID, []uuid.UUID{userID}, func() error {
+			n, err := q.RemoveGroupMember(ctx, groupsdb.RemoveGroupMemberParams{GroupID: groupID, UserID: userID})
+			if err != nil {
+				return err
+			}
+			if n == 0 {
+				return httpproblem.NotFound("membership")
+			}
+			return nil
+		})
 		if err != nil {
 			return err
-		}
-		if n == 0 {
-			return httpproblem.NotFound("membership")
 		}
 		if err := audit.Record(ctx, tx, actor, "group.member.remove", "group", groupID.String(), map[string]string{"user": userID.String()}); err != nil {
 			return err

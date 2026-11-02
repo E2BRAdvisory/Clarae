@@ -24,10 +24,13 @@ UPDATE shares SET display_name = $2, expires_at = $3 WHERE id = $1 AND revoked_a
 UPDATE shares SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL;
 
 -- name: UpsertGrant :one
+-- A grant given again keeps its answer, except a declined one: inviting again
+-- asks again (pending).
 INSERT INTO share_grants (id, share_id, principal_type, principal_id, permission, status, granted_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (share_id, principal_type, principal_id)
-DO UPDATE SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by
+DO UPDATE SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by,
+              status = CASE WHEN share_grants.status = 'declined' THEN 'pending' ELSE share_grants.status END
 RETURNING *;
 
 -- name: DeleteGrant :execrows
@@ -90,11 +93,14 @@ SELECT DISTINCT u FROM (
   WHERE g.share_id = $1 AND g.principal_type = 'group'
 ) r;
 
--- name: RebasePrefixShares :exec
--- A folder rename (move_prefix) carries the shares rooted at or below it.
-UPDATE shares SET path_prefix = sqlc.arg(to_path)::text || substr(path_prefix, char_length(sqlc.arg(from_path)::text) + 1)
-WHERE vault_id = sqlc.arg(vault_id) AND resource_type = 'folder'
-  AND (lower(path_prefix) = lower(sqlc.arg(from_path)::text) OR lower(path_prefix) LIKE lower(sqlc.arg(like_from)::text));
+-- name: ListFolderSharesOfVault :many
+-- Every folder share of a vault, revoked and expired ones included (a folder
+-- rename carries them all: RebasePrefixShares matches them in Go by path key).
+SELECT id, path_prefix FROM shares
+WHERE vault_id = $1 AND resource_type = 'folder' AND path_prefix IS NOT NULL;
+
+-- name: SetSharePrefix :exec
+UPDATE shares SET path_prefix = $2 WHERE id = $1;
 
 -- name: DeleteGrantsOfPrincipal :execrows
 DELETE FROM share_grants WHERE principal_type = $1 AND principal_id = $2;
@@ -139,3 +145,34 @@ WHERE s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
                 AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
                   OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id)))))
 ORDER BY s.created_at;
+
+-- name: ListLiveSharesOfGroup :many
+-- The live shares granted to a group, with the level of that grant (the shares
+-- a change of its members or its removal can give or take).
+SELECT s.id, s.vault_id, g.permission FROM share_grants g JOIN shares s ON s.id = g.share_id
+WHERE g.principal_type = 'group' AND g.principal_id = $1
+  AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now());
+
+-- name: ListReachOfUsers :many
+-- Which of some users each of some shares reaches, directly or through a group
+-- (pending or accepted; a declined grant of their own reaches them no more, so
+-- leaving a group that kept them on the share takes it away).
+SELECT g.share_id, g.principal_id AS user_id FROM share_grants g
+WHERE g.share_id = ANY(sqlc.arg(share_ids)::uuid[]) AND g.principal_type = 'user'
+  AND g.principal_id = ANY(sqlc.arg(user_ids)::uuid[]) AND g.status <> 'declined'
+UNION
+SELECT g.share_id, m.user_id FROM share_grants g JOIN group_members m ON m.group_id = g.principal_id
+WHERE g.share_id = ANY(sqlc.arg(share_ids)::uuid[]) AND g.principal_type = 'group'
+  AND m.user_id = ANY(sqlc.arg(user_ids)::uuid[]);
+
+-- name: ListCreatorGrantsOfVault :many
+-- The grants that managers hold, as users, on the shares of a vault they
+-- created, except those the owner gave (ADR-0041 §8: they last only while the
+-- creator still manages a share around them).
+SELECT g.id AS grant_id, sqlc.embed(s) FROM share_grants g
+JOIN shares s ON s.id = g.share_id JOIN vaults v ON v.id = s.vault_id
+WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND s.created_by <> v.owner_id
+  AND g.principal_type = 'user' AND g.principal_id = s.created_by AND g.granted_by <> v.owner_id;
+
+-- name: DeleteGrantByID :exec
+DELETE FROM share_grants WHERE id = $1;

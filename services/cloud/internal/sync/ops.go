@@ -407,7 +407,7 @@ func (s *Service) movePrefix(ctx context.Context, tx db.DBTX, env commitEnv, op 
 	// pointing at a folder that no longer exists. The mount's own root is never
 	// among them (scopeOp refuses renaming it, and from lies strictly below it).
 	if err := sharing.RebasePrefixShares(ctx, tx, sharing.RebasePrefixSharesParams{
-		VaultID: env.vault.ID, ToPath: to, FromPath: from, LikeFrom: likeEscape(from) + "/%",
+		VaultID: env.vault.ID, ToPath: to, FromPath: from,
 	}); err != nil {
 		return syncproto.OpResult{}, err
 	}

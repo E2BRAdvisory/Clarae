@@ -91,6 +91,15 @@ func (q *Queries) DeleteGrant(ctx context.Context, arg DeleteGrantParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const deleteGrantByID = `-- name: DeleteGrantByID :exec
+DELETE FROM share_grants WHERE id = $1
+`
+
+func (q *Queries) DeleteGrantByID(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteGrantByID, id)
+	return err
+}
+
 const deleteGrantsOfPrincipal = `-- name: DeleteGrantsOfPrincipal :execrows
 DELETE FROM share_grants WHERE principal_type = $1 AND principal_id = $2
 `
@@ -158,6 +167,85 @@ func (q *Queries) GetShare(ctx context.Context, id uuid.UUID) (Share, error) {
 		&i.RevokedAt,
 	)
 	return i, err
+}
+
+const listCreatorGrantsOfVault = `-- name: ListCreatorGrantsOfVault :many
+SELECT g.id AS grant_id, s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at FROM share_grants g
+JOIN shares s ON s.id = g.share_id JOIN vaults v ON v.id = s.vault_id
+WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND s.created_by <> v.owner_id
+  AND g.principal_type = 'user' AND g.principal_id = s.created_by AND g.granted_by <> v.owner_id
+`
+
+type ListCreatorGrantsOfVaultRow struct {
+	GrantID uuid.UUID
+	Share   Share
+}
+
+// The grants that managers hold, as users, on the shares of a vault they
+// created, except those the owner gave (ADR-0041 §8: they last only while the
+// creator still manages a share around them).
+func (q *Queries) ListCreatorGrantsOfVault(ctx context.Context, vaultID uuid.UUID) ([]ListCreatorGrantsOfVaultRow, error) {
+	rows, err := q.db.Query(ctx, listCreatorGrantsOfVault, vaultID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreatorGrantsOfVaultRow{}
+	for rows.Next() {
+		var i ListCreatorGrantsOfVaultRow
+		if err := rows.Scan(
+			&i.GrantID,
+			&i.Share.ID,
+			&i.Share.VaultID,
+			&i.Share.ResourceType,
+			&i.Share.PathPrefix,
+			&i.Share.FileID,
+			&i.Share.DisplayName,
+			&i.Share.CreatedBy,
+			&i.Share.CreatedAt,
+			&i.Share.ExpiresAt,
+			&i.Share.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFolderSharesOfVault = `-- name: ListFolderSharesOfVault :many
+SELECT id, path_prefix FROM shares
+WHERE vault_id = $1 AND resource_type = 'folder' AND path_prefix IS NOT NULL
+`
+
+type ListFolderSharesOfVaultRow struct {
+	ID         uuid.UUID
+	PathPrefix *string
+}
+
+// Every folder share of a vault, revoked and expired ones included (a folder
+// rename carries them all: RebasePrefixShares matches them in Go by path key).
+func (q *Queries) ListFolderSharesOfVault(ctx context.Context, vaultID uuid.UUID) ([]ListFolderSharesOfVaultRow, error) {
+	rows, err := q.db.Query(ctx, listFolderSharesOfVault, vaultID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFolderSharesOfVaultRow{}
+	for rows.Next() {
+		var i ListFolderSharesOfVaultRow
+		if err := rows.Scan(&i.ID, &i.PathPrefix); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGrants = `-- name: ListGrants :many
@@ -333,6 +421,40 @@ func (q *Queries) ListGrantsOfUser(ctx context.Context, principalID uuid.UUID) (
 	return items, nil
 }
 
+const listLiveSharesOfGroup = `-- name: ListLiveSharesOfGroup :many
+SELECT s.id, s.vault_id, g.permission FROM share_grants g JOIN shares s ON s.id = g.share_id
+WHERE g.principal_type = 'group' AND g.principal_id = $1
+  AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+`
+
+type ListLiveSharesOfGroupRow struct {
+	ID         uuid.UUID
+	VaultID    uuid.UUID
+	Permission string
+}
+
+// The live shares granted to a group, with the level of that grant (the shares
+// a change of its members or its removal can give or take).
+func (q *Queries) ListLiveSharesOfGroup(ctx context.Context, principalID uuid.UUID) ([]ListLiveSharesOfGroupRow, error) {
+	rows, err := q.db.Query(ctx, listLiveSharesOfGroup, principalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLiveSharesOfGroupRow{}
+	for rows.Next() {
+		var i ListLiveSharesOfGroupRow
+		if err := rows.Scan(&i.ID, &i.VaultID, &i.Permission); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLiveSharesOfVault = `-- name: ListLiveSharesOfVault :many
 SELECT id, vault_id, resource_type, path_prefix, file_id, display_name, created_by, created_at, expires_at, revoked_at FROM shares
 WHERE vault_id = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())
@@ -449,6 +571,49 @@ func (q *Queries) ListManagedSharesOfVault(ctx context.Context, arg ListManagedS
 			&i.ExpiresAt,
 			&i.RevokedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReachOfUsers = `-- name: ListReachOfUsers :many
+SELECT g.share_id, g.principal_id AS user_id FROM share_grants g
+WHERE g.share_id = ANY($1::uuid[]) AND g.principal_type = 'user'
+  AND g.principal_id = ANY($2::uuid[]) AND g.status <> 'declined'
+UNION
+SELECT g.share_id, m.user_id FROM share_grants g JOIN group_members m ON m.group_id = g.principal_id
+WHERE g.share_id = ANY($1::uuid[]) AND g.principal_type = 'group'
+  AND m.user_id = ANY($2::uuid[])
+`
+
+type ListReachOfUsersParams struct {
+	ShareIds []uuid.UUID
+	UserIds  []uuid.UUID
+}
+
+type ListReachOfUsersRow struct {
+	ShareID uuid.UUID
+	UserID  uuid.UUID
+}
+
+// Which of some users each of some shares reaches, directly or through a group
+// (pending or accepted; a declined grant of their own reaches them no more, so
+// leaving a group that kept them on the share takes it away).
+func (q *Queries) ListReachOfUsers(ctx context.Context, arg ListReachOfUsersParams) ([]ListReachOfUsersRow, error) {
+	rows, err := q.db.Query(ctx, listReachOfUsers, arg.ShareIds, arg.UserIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReachOfUsersRow{}
+	for rows.Next() {
+		var i ListReachOfUsersRow
+		if err := rows.Scan(&i.ShareID, &i.UserID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -694,30 +859,6 @@ func (q *Queries) PathKeyTaken(ctx context.Context, arg PathKeyTakenParams) (uui
 	return id, err
 }
 
-const rebasePrefixShares = `-- name: RebasePrefixShares :exec
-UPDATE shares SET path_prefix = $1::text || substr(path_prefix, char_length($2::text) + 1)
-WHERE vault_id = $3 AND resource_type = 'folder'
-  AND (lower(path_prefix) = lower($2::text) OR lower(path_prefix) LIKE lower($4::text))
-`
-
-type RebasePrefixSharesParams struct {
-	ToPath   string
-	FromPath string
-	VaultID  uuid.UUID
-	LikeFrom string
-}
-
-// A folder rename (move_prefix) carries the shares rooted at or below it.
-func (q *Queries) RebasePrefixShares(ctx context.Context, arg RebasePrefixSharesParams) error {
-	_, err := q.db.Exec(ctx, rebasePrefixShares,
-		arg.ToPath,
-		arg.FromPath,
-		arg.VaultID,
-		arg.LikeFrom,
-	)
-	return err
-}
-
 const revokeShare = `-- name: RevokeShare :execrows
 UPDATE shares SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL
 `
@@ -741,6 +882,20 @@ type SetGrantStatusParams struct {
 
 func (q *Queries) SetGrantStatus(ctx context.Context, arg SetGrantStatusParams) error {
 	_, err := q.db.Exec(ctx, setGrantStatus, arg.ID, arg.Status)
+	return err
+}
+
+const setSharePrefix = `-- name: SetSharePrefix :exec
+UPDATE shares SET path_prefix = $2 WHERE id = $1
+`
+
+type SetSharePrefixParams struct {
+	ID         uuid.UUID
+	PathPrefix *string
+}
+
+func (q *Queries) SetSharePrefix(ctx context.Context, arg SetSharePrefixParams) error {
+	_, err := q.db.Exec(ctx, setSharePrefix, arg.ID, arg.PathPrefix)
 	return err
 }
 
@@ -776,7 +931,8 @@ const upsertGrant = `-- name: UpsertGrant :one
 INSERT INTO share_grants (id, share_id, principal_type, principal_id, permission, status, granted_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (share_id, principal_type, principal_id)
-DO UPDATE SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by
+DO UPDATE SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by,
+              status = CASE WHEN share_grants.status = 'declined' THEN 'pending' ELSE share_grants.status END
 RETURNING id, share_id, principal_type, principal_id, permission, status, granted_by, created_at
 `
 
@@ -790,6 +946,8 @@ type UpsertGrantParams struct {
 	GrantedBy     uuid.UUID
 }
 
+// A grant given again keeps its answer, except a declined one: inviting again
+// asks again (pending).
 func (q *Queries) UpsertGrant(ctx context.Context, arg UpsertGrantParams) (ShareGrant, error) {
 	row := q.db.QueryRow(ctx, upsertGrant,
 		arg.ID,

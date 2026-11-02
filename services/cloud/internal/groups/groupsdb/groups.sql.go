@@ -63,6 +63,32 @@ func (q *Queries) GetGroup(ctx context.Context, id uuid.UUID) (Group, error) {
 	return i, err
 }
 
+const listGroupMemberIDs = `-- name: ListGroupMemberIDs :many
+SELECT user_id FROM group_members WHERE group_id = $1
+`
+
+// Every member of a group, whatever the state of their account (the users a
+// removal of the group concerns).
+func (q *Queries) ListGroupMemberIDs(ctx context.Context, groupID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listGroupMemberIDs, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var user_id uuid.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroupMembers = `-- name: ListGroupMembers :many
 SELECT u.id, u.username, u.email, u.display_name, m.member_role
 FROM group_members m JOIN users u ON u.id = m.user_id

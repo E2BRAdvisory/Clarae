@@ -174,7 +174,10 @@ func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
-// putGrant validates and writes one grant (a new one starts pending).
+// putGrant validates and writes one grant (a new one starts pending, a declined
+// one asks again). A manager gives nothing to themselves, directly or through a
+// group they belong to (ADR-0041 §8): such a grant would outlive the manager
+// grant the owner can take back.
 func (s *Service) putGrant(ctx context.Context, tx db.DBTX, actor uuid.UUID, v vaults.Vault, shareID uuid.UUID, g NewGrant) error {
 	q := sharingdb.New(tx)
 	if !validPrincipal(g.PrincipalType) || g.Permission < access.Viewer || g.Permission > access.Manager {
@@ -184,6 +187,9 @@ func (s *Service) putGrant(ctx context.Context, tx db.DBTX, actor uuid.UUID, v v
 	case "user":
 		if g.PrincipalID == v.OwnerID {
 			return httpproblem.Errorf(syncproto.CodeValidationFailed, "the owner already has full access")
+		}
+		if g.PrincipalID == actor {
+			return httpproblem.Errorf(syncproto.CodeForbidden, "a manager cannot grant access to themselves")
 		}
 		u, err := users.GetUserBrief(ctx, tx, g.PrincipalID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && u.Status != "active") {
@@ -197,6 +203,17 @@ func (s *Service) putGrant(ctx context.Context, tx db.DBTX, actor uuid.UUID, v v
 			return httpproblem.NotFound("group")
 		} else if err != nil {
 			return err
+		}
+		if actor != v.OwnerID {
+			mine, err := groups.ListGroupsOfUser(ctx, tx, actor)
+			if err != nil {
+				return err
+			}
+			for _, m := range mine {
+				if m.ID == g.PrincipalID {
+					return httpproblem.Errorf(syncproto.CodeForbidden, "a manager cannot grant access to a group they belong to")
+				}
+			}
 		}
 	}
 	_, err := q.UpsertGrant(ctx, sharingdb.UpsertGrantParams{
@@ -306,7 +323,9 @@ func (s *Service) Get(ctx context.Context, viewer, shareID uuid.UUID) (View, err
 	return s.view(ctx, conn, sh, viewer)
 }
 
-// requireManage loads a share for a change made by its owner or a manager.
+// requireManage loads a share for a change made by its owner or a manager. An
+// expired share gives nothing to anyone but the owner (§3.3.2): only the owner
+// changes it, and so decides whether it comes back.
 func (s *Service) requireManage(ctx context.Context, tx db.DBTX, actor, shareID uuid.UUID) (View, error) {
 	q := sharingdb.New(tx)
 	sh, err := q.GetShare(ctx, shareID)
@@ -320,7 +339,7 @@ func (s *Service) requireManage(ctx context.Context, tx db.DBTX, actor, shareID 
 	if err != nil {
 		return View{}, err
 	}
-	if sh.RevokedAt != nil {
+	if sh.RevokedAt != nil || (!v.IsOwner && !live(sh, time.Now())) {
 		return View{}, httpproblem.NotFound("share")
 	}
 	if !v.canManage() || v.MyStatus == "pending" {
@@ -402,7 +421,11 @@ func (s *Service) Revoke(ctx context.Context, actor, shareID uuid.UUID) error {
 		if err := audit.Record(ctx, tx, actor, "share.revoke", "share", shareID.String(), nil); err != nil {
 			return err
 		}
-		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareRevoked, Share: shareID})
+		if err := notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareRevoked, Share: shareID}); err != nil {
+			return err
+		}
+		// Its managers stop managing what they created inside it.
+		return s.dropStaleCreatorGrants(ctx, tx, actor, v.ID)
 	})
 }
 
@@ -423,7 +446,11 @@ func (s *Service) PutGrant(ctx context.Context, actor, shareID uuid.UUID, g NewG
 		if err := audit.Record(ctx, tx, actor, "grant.put", "share", shareID.String(), map[string]any{"principal_type": g.PrincipalType, "principal_id": g.PrincipalID, "permission": g.Permission.String()}); err != nil {
 			return err
 		}
-		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareGranted, Share: shareID})
+		if err := notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareGranted, Share: shareID}); err != nil {
+			return err
+		}
+		// A manager grant lowered to editor or viewer takes the management with it.
+		return s.dropStaleCreatorGrants(ctx, tx, actor, v.ID)
 	})
 	if err != nil {
 		return sharingdb.ListGrantsRow{}, err
@@ -444,7 +471,8 @@ func (s *Service) PutGrant(ctx context.Context, actor, shareID uuid.UUID, g NewG
 func (s *Service) DeleteGrant(ctx context.Context, actor, shareID uuid.UUID, ptype string, pid uuid.UUID) error {
 	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := sharingdb.New(tx)
-		if _, err := s.requireManage(ctx, tx, actor, shareID); err != nil {
+		cur, err := s.requireManage(ctx, tx, actor, shareID)
+		if err != nil {
 			return err
 		}
 		if !validPrincipal(ptype) {
@@ -484,7 +512,11 @@ func (s *Service) DeleteGrant(ctx context.Context, actor, shareID uuid.UUID, pty
 				return err
 			}
 		}
-		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareUpdated, Share: shareID})
+		if err := notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareUpdated, Share: shareID}); err != nil {
+			return err
+		}
+		// A removed manager grant takes the management of the shares created through it.
+		return s.dropStaleCreatorGrants(ctx, tx, actor, cur.Share.VaultID)
 	})
 }
 
@@ -506,7 +538,7 @@ func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept
 		if len(grants) == 0 {
 			return httpproblem.NotFound("share")
 		}
-		changed := false
+		changed, declined := false, false
 		for _, g := range grants {
 			switch {
 			case accept && g.Status != "accepted":
@@ -520,9 +552,15 @@ func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept
 					return err
 				}
 				changed = true
+			case !accept && g.PrincipalType == "user":
+				declined = true
 			}
 		}
 		if !accept && !changed {
+			if declined {
+				// Declined already (a retried request): the answer stands.
+				return nil
+			}
 			return httpproblem.Errorf(syncproto.CodeInvalidState, "an invitation sent to a group cannot be declined by one member")
 		}
 		action := "share.accept"
@@ -535,7 +573,8 @@ func (s *Service) respond(ctx context.Context, userID, shareID uuid.UUID, accept
 		if accept {
 			return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareGranted, Share: shareID, Users: []uuid.UUID{userID}})
 		}
-		return nil
+		// Declining an accepted manager grant gives up the management with it.
+		return s.dropStaleCreatorGrants(ctx, tx, userID, sh.VaultID)
 	})
 	if err != nil {
 		return View{}, err

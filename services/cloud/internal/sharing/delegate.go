@@ -7,17 +7,22 @@ package sharing
 // created_by records the manager, who manages it, without revoking it, for as
 // long as they still manage a live share around it. When that grant goes
 // (revoked, removed, expired share) the share stays and only its owner, or a
-// manager granted on it, can change it.
+// manager granted on it, can change it; the creator keeps no grant of their own
+// on it (putGrant refuses them, dropStaleCreatorGrants removes those another
+// manager gave).
 
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/access"
+	"memobrain/services/cloud/internal/audit"
 	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/notify"
 	"memobrain/services/cloud/internal/sharing/sharingdb"
 )
 
@@ -120,4 +125,63 @@ func creatorManaged(ctx context.Context, tx db.DBTX, rows []shareRow, viewer uui
 		}
 	}
 	return out, nil
+}
+
+// dropStaleCreatorGrants removes the grants a manager holds, as a user, on the
+// shares of a vault they created once they no longer manage a live share around
+// them: having lost the management they stop seeing what they created, and a
+// grant on it must not give the access back. Grants the owner gave stay (the
+// owner's choice); a manager cannot grant themselves anything (putGrant), so
+// the others came from another manager. It runs, in the transaction of the
+// change, wherever a manager grant can go: a grant removed or lowered, a
+// declined invitation, a revoked share, a member leaving a group, a group
+// removed. An expiry takes effect without a write; by then the creator holds no
+// grant of their own making to keep.
+func (s *Service) dropStaleCreatorGrants(ctx context.Context, tx pgx.Tx, actor, vaultID uuid.UUID) error {
+	q := sharingdb.New(tx)
+	rows, err := q.ListCreatorGrantsOfVault(ctx, vaultID)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	managed := map[uuid.UUID][]sharingdb.Share{}
+	var dropped []sharingdb.Share
+	for _, r := range rows {
+		sh := r.Share
+		m, ok := managed[sh.CreatedBy]
+		if !ok {
+			if m, err = q.ListManagedSharesOfVault(ctx, sharingdb.ListManagedSharesOfVaultParams{VaultID: vaultID, UserID: sh.CreatedBy}); err != nil {
+				return err
+			}
+			managed[sh.CreatedBy] = m
+		}
+		t, err := targetOf(ctx, q, sh)
+		if err != nil {
+			return err
+		}
+		if _, ok := coveringShare(m, t, sh.ID); ok {
+			continue
+		}
+		if err := q.DeleteGrantByID(ctx, r.GrantID); err != nil {
+			return err
+		}
+		dropped = append(dropped, sh)
+	}
+	for _, sh := range dropped {
+		if err := audit.Record(ctx, tx, actor, "grant.delete", "share", sh.ID.String(), map[string]any{"principal_type": "user", "principal_id": sh.CreatedBy, "reason": "creator_unmanaged"}); err != nil {
+			return err
+		}
+		still, err := q.ListShareRecipients(ctx, sh.ID)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(still, sh.CreatedBy) {
+			if err := notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareRevoked, Share: sh.ID, Users: []uuid.UUID{sh.CreatedBy}}); err != nil {
+				return err
+			}
+		}
+		if err := notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareUpdated, Share: sh.ID}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

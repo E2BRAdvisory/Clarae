@@ -26,6 +26,7 @@ import (
 	"memobrain/services/cloud/internal/notify"
 	"memobrain/services/cloud/internal/observability"
 	"memobrain/services/cloud/internal/quota"
+	"memobrain/services/cloud/internal/sharing"
 	"memobrain/services/cloud/internal/sync/syncdb"
 	"memobrain/shared/pathrules"
 	"memobrain/shared/syncproto"
@@ -161,6 +162,17 @@ func (s *Service) Commit(ctx context.Context, userID uuid.UUID, vaultID uuid.UUI
 	return resp, nil
 }
 
+// recheckScope runs right after a write locked the vault: the share the caller
+// works through was authorised before the lock, and a move_prefix holding it
+// meanwhile may have rebased the share (or the owner revoked it). Paths are
+// resolved against the share's root only after this check.
+func (s *Service) recheckScope(ctx context.Context, tx db.DBTX, env commitEnv) error {
+	if env.scope == nil {
+		return nil
+	}
+	return sharing.RecheckScope(ctx, tx, env.userID, env.vault, env.scope, access.Editor)
+}
+
 type commitEnv struct {
 	vault    vaults.Vault
 	userID   uuid.UUID
@@ -234,6 +246,9 @@ func (s *Service) commitBatch(ctx context.Context, env commitEnv, ops []syncprot
 	defer func() { _ = tx.Rollback(ctx) }()
 	lastSeq, err := vaults.LockVaultSeq(ctx, tx, env.vault.ID)
 	if err != nil {
+		return resp, err
+	}
+	if err := s.recheckScope(ctx, tx, env); err != nil {
 		return resp, err
 	}
 	used, err := quota.UsedBytes(ctx, tx, env.vault.OwnerID)
@@ -368,6 +383,9 @@ func (s *Service) commitEach(ctx context.Context, env commitEnv, ops []syncproto
 		for attempt := 1; ; attempt++ {
 			err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 				if err := vaults.LockVault(ctx, tx, env.vault.ID); err != nil {
+					return err
+				}
+				if err := s.recheckScope(ctx, tx, env); err != nil {
 					return err
 				}
 				var err error

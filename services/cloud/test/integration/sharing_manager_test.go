@@ -179,6 +179,132 @@ func TestManagerCannotSharePrivateVaults(t *testing.T) {
 	}
 }
 
+// ADR-0041 §8: a manager gives nothing to themselves, directly or through a group they belong
+// to, and keeps no grant on what they created once they stop managing the share around it:
+// revocation and expiry of their manager grant are the owner's to decide.
+func TestManagerKeepsNoGrantOfTheirOwnOnWhatTheyCreated(t *testing.T) {
+	e, ada, bob, _, vault, _, group := sharedFixture(t)
+	eve := e.user("eve")
+	alfa := ada.share(vault, "folder", "Projects/Alfa", grantTo("user", bob.userID, "manager"), grantTo("user", eve.userID, "manager"))
+	bob.accept(alfa.id())
+	eve.accept(alfa.id())
+	sub := map[string]any{"vault_id": vault, "resource_type": "folder", "path_prefix": "Projects/Alfa/sub"}
+
+	// Not at creation, not later, not on the share they manage by grant either.
+	for _, g := range []map[string]any{grantTo("user", bob.userID, "manager"), grantTo("group", group.String(), "viewer")} {
+		resp := bob.createShare(map[string]any{"vault_id": vault, "resource_type": "folder", "path_prefix": "Projects/Alfa/sub", "grants": []map[string]any{g}})
+		expect(t, resp, http.StatusForbidden)
+		if c := problemCode(t, resp); c != "FORBIDDEN" {
+			t.Fatalf("%v: code %s", g, c)
+		}
+	}
+	sub["grants"] = []map[string]any{grantTo("user", eve.userID, "manager")}
+	resp := bob.createShare(sub)
+	expect(t, resp, http.StatusCreated)
+	derived := decode[shareView](t, resp).id()
+	eve.accept(derived)
+	expect(t, bob.json(http.MethodPut, "/shares/"+derived+"/grants/user/"+bob.userID, map[string]any{"permission": "editor"}), http.StatusForbidden)
+	expect(t, bob.json(http.MethodPut, "/shares/"+derived+"/grants/group/"+group.String(), map[string]any{"permission": "viewer"}), http.StatusForbidden)
+	expect(t, bob.json(http.MethodPut, "/shares/"+alfa.id()+"/grants/group/"+group.String(), map[string]any{"permission": "viewer"}), http.StatusForbidden)
+
+	// Another manager of that share may grant him; so may the owner, on a second share he created.
+	expect(t, eve.json(http.MethodPut, "/shares/"+derived+"/grants/user/"+bob.userID, map[string]any{"permission": "editor"}), http.StatusOK)
+	bob.accept(derived)
+	resp = bob.createShare(map[string]any{"vault_id": vault, "resource_type": "folder", "path_prefix": "Projects/Alfa", "display_name": "Alfa again"})
+	expect(t, resp, http.StatusCreated)
+	again := decode[shareView](t, resp).id()
+	expect(t, ada.json(http.MethodPut, "/shares/"+again+"/grants/user/"+bob.userID, map[string]any{"permission": "viewer"}), http.StatusOK)
+	bob.accept(again)
+	for _, id := range []string{derived, again} {
+		if _, _, _, code := bob.scopedChanges(vault, id, 0); code != http.StatusOK {
+			t.Fatalf("bob through %s while managing: %d", id, code)
+		}
+	}
+
+	// The owner takes the manager grant: the grant eve gave him on what he created goes
+	// with it, the one the owner gave stays.
+	expect(t, ada.json(http.MethodDelete, "/shares/"+alfa.id()+"/grants/user/"+bob.userID, nil), http.StatusNoContent)
+	if _, _, _, code := bob.scopedChanges(vault, derived, 0); code != http.StatusNotFound {
+		t.Fatalf("bob keeps the share he created through another manager's grant: %d", code)
+	}
+	expect(t, bob.json(http.MethodGet, "/shares/"+derived, nil), http.StatusNotFound)
+	if _, _, _, code := bob.scopedChanges(vault, again, 0); code != http.StatusOK {
+		t.Fatalf("the owner's grant must stay: %d", code)
+	}
+	for _, g := range decode[shareView](t, ada.json(http.MethodGet, "/shares/"+derived, nil))["grants"].([]any) {
+		if g.(map[string]any)["principal_id"] == bob.userID {
+			t.Fatalf("bob's grant on %s is still listed: %v", derived, g)
+		}
+	}
+}
+
+// The same holds when the manager grant goes through a group (a member leaving it) or with
+// the share itself (revoked).
+func TestManagerGrantLostThroughAGroupOrARevocation(t *testing.T) {
+	e, ada, bob, carol, vault, _, group := sharedFixture(t)
+	eve := e.user("eve")
+	alfa := ada.share(vault, "folder", "Projects/Alfa", grantTo("group", group.String(), "manager"), grantTo("user", eve.userID, "manager"))
+	carol.accept(alfa.id())
+	eve.accept(alfa.id())
+	created := func(c *client, prefix string) string {
+		t.Helper()
+		resp := c.createShare(map[string]any{"vault_id": vault, "resource_type": "folder", "path_prefix": prefix,
+			"grants": []map[string]any{grantTo("user", eve.userID, "manager")}})
+		expect(t, resp, http.StatusCreated)
+		id := decode[shareView](t, resp).id()
+		eve.accept(id)
+		expect(t, eve.json(http.MethodPut, "/shares/"+id+"/grants/user/"+c.userID, map[string]any{"permission": "editor"}), http.StatusOK)
+		c.accept(id)
+		if _, _, _, code := c.scopedChanges(vault, id, 0); code != http.StatusOK {
+			t.Fatalf("before: %d", code)
+		}
+		return id
+	}
+	byBob, byCarol := created(bob, "Projects/Alfa/sub"), created(carol, "Projects/Alfa")
+
+	if err := e.app.Groups.RemoveMember(context.Background(), ada.uid(), group, bob.uid()); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, code := bob.scopedChanges(vault, byBob, 0); code != http.StatusNotFound {
+		t.Fatalf("bob left the managing group: %d", code)
+	}
+	if _, _, _, code := carol.scopedChanges(vault, byCarol, 0); code != http.StatusOK {
+		t.Fatalf("carol still manages: %d", code)
+	}
+	expect(t, ada.json(http.MethodDelete, "/shares/"+alfa.id(), nil), http.StatusNoContent)
+	if _, _, _, code := carol.scopedChanges(vault, byCarol, 0); code != http.StatusNotFound {
+		t.Fatalf("the managed share was revoked: %d", code)
+	}
+}
+
+// An expired share gives nothing to anyone but its owner (§3.3.2): its manager cannot
+// change it, and so cannot bring it back.
+func TestExpiredShareIsChangedOnlyByItsOwner(t *testing.T) {
+	e, ada, bob, carol, vault, _, _ := sharedFixture(t)
+	sh := ada.share(vault, "vault", "", grantTo("user", bob.userID, "manager"), grantTo("user", carol.userID, "viewer"))
+	bob.accept(sh.id())
+	e.exec("UPDATE shares SET expires_at = now() - interval '1 minute' WHERE id = $1", sh.id())
+	later := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	for _, r := range []struct {
+		method, path string
+		body         map[string]any
+	}{
+		{http.MethodPatch, "/shares/" + sh.id(), map[string]any{"clear_expiry": true}},
+		{http.MethodPatch, "/shares/" + sh.id(), map[string]any{"expires_at": later}},
+		{http.MethodPut, "/shares/" + sh.id() + "/grants/user/" + carol.userID, map[string]any{"permission": "editor"}},
+		{http.MethodDelete, "/shares/" + sh.id() + "/grants/user/" + carol.userID, nil},
+	} {
+		resp := bob.json(r.method, r.path, r.body)
+		expect(t, resp, http.StatusNotFound)
+	}
+	if _, _, _, code := bob.scopedChanges(vault, sh.id(), 0); code != http.StatusNotFound {
+		t.Fatalf("expired: %d", code)
+	}
+	// The owner brings it back; the manager manages it again.
+	expect(t, ada.json(http.MethodPatch, "/shares/"+sh.id(), map[string]any{"clear_expiry": true}), http.StatusOK)
+	expect(t, bob.json(http.MethodPatch, "/shares/"+sh.id(), map[string]any{"display_name": "Back"}), http.StatusOK)
+}
+
 // ADR-0041 §9: the manager role inside a group is stored and shown, and grants nothing.
 func TestGroupManagerRoleGrantsNothing(t *testing.T) {
 	e, ada, bob, carol, vault, _, group := sharedFixture(t)
