@@ -114,6 +114,11 @@ type Engine struct {
 	scanLoaded bool
 	// hashFile hashes a vault file (FS.HashFile; replaced by tests to count reads).
 	hashFile func(rel string) (string, int64, error)
+	// readFile reads the content to push (FS.ReadFile; replaced by tests to
+	// measure what is held), batchBytes caps the content of one push batch
+	// (maxBatchBytes; lowered by tests).
+	readFile   func(rel string) (vault.Content, error)
+	batchBytes int
 	// candidates are remote changes that hit a locally modified file; they
 	// are resolved after the pull completed (§3.4.4 B). They mirror the
 	// pending_remote table (loaded once per run, under e.run): staged are the
@@ -159,6 +164,7 @@ func New(cfg Config) *Engine {
 	}
 	e := &Engine{
 		cfg: cfg, log: cfg.Logger, candidates: map[string]transportChange{}, staged: map[string]bool{}, hashFile: cfg.FS.HashFile,
+		readFile: cfg.FS.ReadFile, batchBytes: maxBatchBytes,
 		noPrefix: map[string]bool{}, forcedPrefix: map[string]forcedMove{},
 	}
 	e.status = Status{VaultID: cfg.LocalID, Phase: PhaseIdle}

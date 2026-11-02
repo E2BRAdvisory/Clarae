@@ -27,13 +27,31 @@ const (
 type prepared struct {
 	row       File
 	op        syncproto.Op
-	data      []byte // blob to upload (nil for move/delete)
+	data      []byte // blob to upload (nil for move/delete, and once uploaded)
 	blobHash  string
 	localHash string
 	mtime     int64
 	size      int64
 	// folder is set for a move_prefix (row is then empty).
 	folder *folderMove
+}
+
+// planned is one entry of a push: a row whose operation is built, and its
+// content read (and encrypted), only when its batch is about to be sent, or a
+// move_prefix built up front (it carries no content).
+type planned struct {
+	row   File
+	ready *prepared
+}
+
+// contentEstimate is the content a planned row will add to its batch, as the
+// scan measured it: what is read may differ (the file changed since, or the
+// ciphertext is slightly larger), which the batching tolerates.
+func (pl planned) contentEstimate() int {
+	if pl.ready == nil && (pl.row.State == StateLocalNew || pl.row.State == StateLocalModify) {
+		return int(pl.row.LocalSize)
+	}
+	return 0
 }
 
 func opOrder(s State) int {
@@ -49,9 +67,11 @@ func opOrder(s State) int {
 	}
 }
 
-// push sends local changes (§3.4.4 C): blobs first (only the missing ones),
-// then the operations in batches, then the results are folded back into
-// sync_files. It reports whether anything happened that needs another round.
+// push sends local changes (§3.4.4 C) batch by batch: blobs first (only the
+// missing ones), then the operations, then the results are folded back into
+// sync_files. A batch holds at most maxBatchBytes of content (plus one file
+// read beyond it). It reports whether anything happened that needs another
+// round.
 func (e *Engine) push(ctx context.Context) (bool, error) {
 	rows, err := e.cfg.DB.Files(ctx, StateLocalNew, StateLocalModify, StateLocalMoved, StateLocalDeleted)
 	if err != nil {
@@ -70,7 +90,7 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	inFolder, early := map[string]bool{}, map[string]bool{}
-	var prefixOps []prepared
+	var prefixOps []planned
 	for _, m := range folders {
 		for _, r := range m.members {
 			inFolder[r.FileID] = true
@@ -82,9 +102,12 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		prefixOps = append(prefixOps, p)
+		prefixOps = append(prefixOps, planned{ready: &p})
 	}
-	var ops, earlyOps []prepared
+	// Only the order is decided here: reading every pending file up front
+	// would hold the whole change set in memory (a first sync of a large
+	// vault), so each batch reads its own files just before it is sent.
+	var plan, earlyPlan []planned
 	for _, r := range rows {
 		if inFolder[r.FileID] || held[r.FileID] {
 			continue
@@ -95,40 +118,70 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 		if _, pending := e.candidates[r.FileID]; pending {
 			continue // a server change waits to be merged first: sending now could only conflict
 		}
-		p, ok, err := e.prepare(ctx, r)
-		if err != nil {
-			return false, err
-		}
-		if !ok {
-			continue
-		}
 		if early[r.FileID] {
-			earlyOps = append(earlyOps, p)
+			earlyPlan = append(earlyPlan, planned{row: r})
 		} else {
-			ops = append(ops, p)
+			plan = append(plan, planned{row: r})
 		}
 	}
 	if len(prefixOps) > 0 {
-		ops = append(append(earlyOps, prefixOps...), ops...)
+		plan = append(append(earlyPlan, prefixOps...), plan...)
 	} else {
-		ops = append(earlyOps, ops...)
+		plan = append(earlyPlan, plan...)
 	}
-	if len(ops) == 0 {
+	if len(plan) == 0 {
 		return false, nil
 	}
-	e.progress(0, len(ops))
+	e.progress(0, len(plan))
 
 	again := false
 	done := 0
-	for start := 0; start < len(ops); {
-		end, bytes := start, 0
-		for end < len(ops) && end-start < maxBatchOps && (bytes == 0 || bytes+len(ops[end].data) <= maxBatchBytes) {
-			bytes += len(ops[end].data)
-			end++
+	// carry was read for a batch it did not fit in: it opens the next one, so
+	// at most one file is held beyond the batch limit.
+	var carry *prepared
+	for next := 0; next < len(plan) || carry != nil; {
+		var batch []prepared
+		bytes := 0
+		if carry != nil {
+			batch, bytes, carry = append(batch, *carry), len(carry.data), nil
 		}
-		batch := ops[start:end]
-		start = end
+		for next < len(plan) && len(batch) < maxBatchOps {
+			pl := plan[next]
+			if pl.ready != nil {
+				batch = append(batch, *pl.ready)
+				next++
+				continue
+			}
+			if bytes > 0 && bytes+pl.contentEstimate() > e.batchBytes {
+				break // not read yet: it opens the next batch
+			}
+			if err := ctx.Err(); err != nil {
+				return again, err // cancelled: read (and encrypt) nothing more
+			}
+			next++
+			p, ok, err := e.prepare(ctx, pl.row)
+			if err != nil {
+				return again, err
+			}
+			if !ok {
+				done++
+				continue
+			}
+			if bytes > 0 && bytes+len(p.data) > e.batchBytes {
+				carry = &p // larger than the scan said
+				break
+			}
+			batch = append(batch, p)
+			bytes += len(p.data)
+		}
+		if len(batch) == 0 {
+			e.progress(done, len(plan))
+			continue
+		}
 		tooLarge, err := e.upload(ctx, batch)
+		for i := range batch {
+			batch[i].data = nil // uploaded (or refused): the digests are enough from here on
+		}
 		if err != nil {
 			return again, err
 		}
@@ -143,7 +196,7 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 			}
 			done += len(batch) - len(kept)
 			if batch = kept; len(batch) == 0 {
-				e.progress(done, len(ops))
+				e.progress(done, len(plan))
 				continue
 			}
 		}
@@ -166,7 +219,7 @@ func (e *Engine) push(ctx context.Context) (bool, error) {
 			again = again || progressed
 		}
 		done += len(batch)
-		e.progress(done, len(ops))
+		e.progress(done, len(plan))
 		e.mu.Lock()
 		stop := e.stop
 		e.mu.Unlock()
@@ -227,7 +280,7 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 		if st, err := os.Stat(e.absPath(row.Path)); err == nil && st.Size() > limit {
 			return p, false, e.parkTooLarge(ctx, row, st.Size(), limit)
 		}
-		cont, err := e.cfg.FS.ReadFile(row.Path)
+		cont, err := e.readFile(row.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return p, false, nil // vanished since the scan: next round
