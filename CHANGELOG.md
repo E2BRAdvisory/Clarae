@@ -4,9 +4,9 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.3.0] - 2026-11-02
 
-Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancellazione per le copie dei vault privati nel browser, prestazioni e osservabilità del worker, e le basi della parità desktop/web/console. Le decisioni sono negli ADR 0036–0039, ancora in stato di proposta.
+Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancellazione per le copie dei vault privati nel browser, prestazioni e osservabilità, la parità completa tra desktop, workbench web e console (registro delle funzioni, `@memobrain/cloud-features`, client Go generato), path cifrati ed envelope v2 attivi per default, e la revisione dei rilievi di sicurezza. Le decisioni sono negli ADR 0029, 0030, 0032 e 0036–0044, accettati e recepiti in `Specifications.md` 1.3; ADR-0034 resta in stato di proposta. Prima di aggiornare il cloud leggere la sezione «Compatibilità».
 
 ### Compatibilità
 
