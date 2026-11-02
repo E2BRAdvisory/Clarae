@@ -4,6 +4,24 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [1.3.1] - 2026-11-02
+
+Una barra di stato facoltativa sotto l'editor e l'allineamento della specifica al codice: `Specifications.md` 1.4 recepisce gli ADR già implementati (0009–0022, 0024, 0026–0028, 0031, 0033, 0034) e la 1.5 recepisce ADR-0035. Resta in stato di proposta solo ADR-0023 (manifest firmato e aggiornamento automatico). Nessuna modifica al cloud né al protocollo di sync.
+
+### Client desktop e workbench
+
+- **Barra di stato facoltativa** (ADR-0035, accettato e recepito in `Specifications.md` 1.5): una riga sottile sotto l'area dell'editor con parole e caratteri della nota (o della selezione), riga:colonna del cursore e modalità, che un clic fa ciclare. È **spenta per default**: si accende da _Impostazioni › Aspetto_, con il comando _Mostra/nascondi barra di stato_ (`app:toggle-status-bar`) o con la chiave `appearance.statusBar` del Config Profile, che l'amministratore può anche bloccare. Sync, permessi, aggiornamenti e inviti restano nel blocco di stato del vault. Su disegni, lavagne e basi mostra solo il tipo di file e si nasconde durante le presentazioni.
+- Riga e colonna nella scheda _Statistiche_ sono giuste appena si apre una scheda o si passa a un altro pannello, senza aspettare il primo tasto.
+
+### Contratti
+
+- `info.version` del contratto OpenAPI passa a 1.3.1, come la versione del prodotto; nessuna operazione cambia.
+
+### Documentazione
+
+- `Specifications.md` 1.4 e 1.5 (registro delle revisioni e Appendice C.4): accettati e recepiti gli ADR 0009–0022, 0024, 0026–0028, 0031, 0033, 0034 e 0035; indice degli ADR, roadmap e nota sulla proposta v1.2 aggiornati.
+- Guide utente (primo vault, impostazioni, accessibilità), tabella delle chiavi del Config Profile nella guida admin e checklist QA descrivono la barra di stato.
+
 ## [1.3.0] - 2026-11-02
 
 Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancellazione per le copie dei vault privati nel browser, prestazioni e osservabilità, la parità completa tra desktop, workbench web e console (registro delle funzioni, `@memobrain/cloud-features`, client Go generato), path cifrati ed envelope v2 attivi per default, e la revisione dei rilievi di sicurezza. Le decisioni sono negli ADR 0029, 0030, 0032 e 0036–0044, accettati e recepiti in `Specifications.md` 1.3; ADR-0034 resta in stato di proposta. Prima di aggiornare il cloud leggere la sezione «Compatibilità».
