@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                        |
+| **Stato**             | accettata                                                                                                                       |
+| **Recepito in**       | `Specifications.md` v1.5 (2026-11-02): §2.2.1, §2.6.6, §4.2 (Appendice C.4)                                                     |
 | **Data**              | 2026-10-30                                                                                                                      |
 | **Riferimenti spec**  | §2.2.1 (riga «Word count», `statusbar`, P0: «Parole, caratteri, selezione»), §4.2 (frontend); V-02/D-01; ADR-0026, ADR-0004     |
 | **Devia dallo spec?** | no rispetto alla v1.1 (che prevede `statusbar`); precisa ADR-0026 → la riga `statusbar` di §2.2.1 va scritta come in questo ADR |
@@ -36,7 +37,7 @@ Gli indicatori di stato (sync, permessi, aggiornamenti, inviti) non hanno questo
   - Su un disegno, un canvas o una base mostra solo il tipo di file. Senza tab attiva è vuota.
 - **Niente duplicati:** sync, permessi, aggiornamenti e inviti non entrano nella barra. Restano nel footer e nell'header (ADR-0026), così c'è una sola fonte per ogni indicatore.
 - **Dati:** gli stessi del pannello _Statistiche_ (lo store delle statistiche dell'editor, aggiornato con debounce). Nessun binding nuovo, nessun Go.
-- **Accessibilità:** `role="status"` senza `aria-live`, perché annunciare i conteggi a ogni tasto sarebbe rumore per lo screen reader. Il comando «Leggi statistiche della nota» resta il modo accessibile di ascoltarli. Contrasto conforme a `docs/qa/a11y-desktop.md`.
+- **Accessibilità:** `role="status"` senza `aria-live`, perché annunciare i conteggi a ogni tasto sarebbe rumore per lo screen reader. La scheda _Statistiche_ (comando _Mostra statistiche_, `sidebar:stats`) resta il modo accessibile di ascoltarli. Contrasto conforme a `docs/qa/a11y-desktop.md`.
 - **Workbench web:** identico (stesso `packages/workbench`).
 
 ## Alternative considerate
@@ -48,7 +49,8 @@ Gli indicatori di stato (sync, permessi, aggiornamenti, inviti) non hanno questo
 
 ## Conseguenze
 
-- La riga `statusbar` di §2.2.1 dello spec diventa: «Word count — parole, caratteri, selezione nel pannello _Statistiche_; barra di stato compatta opzionale (spenta per default) con conteggi, posizione e modalità; P0». In §4.2, `statusbar/` sta accanto a `sidebar/`.
+- **Implementazione (2026-11-02):** `packages/workbench/src/shell/StatusBar.tsx`, montata in `shell/VaultView.tsx` tra l'area editor e lo slot della chat; impostazione `statusBar` in `state/settings.ts` (con la chiave bloccabile in `state/managed.ts`), comando `app:toggle-status-bar` nel gruppo _view_ e nel registro di parità (`appearance`). Parole e caratteri sono quelli del pannello _Statistiche_ (`textFigures`, senza frontmatter); riga:colonna e selezione vengono dallo store delle statistiche, che ora l'editor riempie anche quando una scheda si apre o un pannello prende il focus (prima solo al primo tasto o movimento del cursore). La modalità cicla Live → Sorgente → Lettura, nell'ordine dei pulsanti della nota.
+- La riga `statusbar` di §2.2.1 dello spec diventa: «Word count — parole, caratteri, selezione nel pannello _Statistiche_; barra di stato compatta opzionale (spenta per default) con conteggi, posizione e modalità; P0». In §4.2 la barra è descritta in `shell/`, dove sta il componente, e non in una cartella `statusbar/` separata.
 - Implementazione stimata piccola (un componente in `packages/workbench/src/shell/`, un'impostazione, un comando, due chiavi i18n, la chiave nello schema). Test:
   - unit (contenuto con e senza selezione, tipi di file);
   - e2e su mock (accensione dalla palette e persistenza);

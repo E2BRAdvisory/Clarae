@@ -1,6 +1,6 @@
 # Proposta di aggiornamento di `Specifications.md` alla v1.2
 
-> **Nota (2026-11-02).** Il contenuto di questa proposta è stato recepito in `Specifications.md` v1.4 (Appendice C.4), dopo una verifica sul codice e sugli ADR accettati più recenti, che prevalgono, salvo ADR-0023 (manifest di aggiornamento firmato) e ADR-0035 (barra di stato opzionale), che restano in stato _proposta_. Il documento resta come storia; il testo che segue non è aggiornato.
+> **Nota (2026-11-02).** Il contenuto di questa proposta è stato recepito in `Specifications.md` v1.4 (Appendice C.4), dopo una verifica sul codice e sugli ADR accettati più recenti, che prevalgono, salvo ADR-0023 (manifest di aggiornamento firmato), che resta in stato _proposta_, e ADR-0035 (barra di stato opzionale), accettato e recepito poi nella v1.5. Il documento resta come storia; il testo che segue non è aggiornato.
 
 |                 |                                                                                                                                                         |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
