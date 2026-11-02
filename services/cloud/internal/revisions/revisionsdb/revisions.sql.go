@@ -48,6 +48,53 @@ func (q *Queries) DeleteRevisions(ctx context.Context, dollar_1 []uuid.UUID) ([]
 	return items, nil
 }
 
+const deleteVaultRevisionsPage = `-- name: DeleteVaultRevisionsPage :many
+WITH d AS (
+  DELETE FROM file_revisions WHERE id IN (
+    SELECT r.id FROM file_revisions r WHERE r.vault_id = $1::uuid
+    ORDER BY r.seq LIMIT $2::int
+    FOR UPDATE SKIP LOCKED
+  ) RETURNING blob_hash
+)
+SELECT d.blob_hash, COUNT(*)::int AS refs FROM d GROUP BY d.blob_hash ORDER BY d.blob_hash NULLS LAST
+`
+
+type DeleteVaultRevisionsPageParams struct {
+	VaultID uuid.UUID
+	MaxRows int32
+}
+
+type DeleteVaultRevisionsPageRow struct {
+	BlobHash *string
+	Refs     int32
+}
+
+// Purge of a deleted vault (jobs module): one page of its revisions, oldest
+// first, and the blob references they held grouped by hash, in hash order
+// (the order a commit locks blob rows in); a NULL hash counts the revisions
+// without content. Rows another transaction holds (retention) are skipped
+// rather than waited for: retention locks them before the vault row, the
+// purge after it.
+func (q *Queries) DeleteVaultRevisionsPage(ctx context.Context, arg DeleteVaultRevisionsPageParams) ([]DeleteVaultRevisionsPageRow, error) {
+	rows, err := q.db.Query(ctx, deleteVaultRevisionsPage, arg.VaultID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteVaultRevisionsPageRow{}
+	for rows.Next() {
+		var i DeleteVaultRevisionsPageRow
+		if err := rows.Scan(&i.BlobHash, &i.Refs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFile = `-- name: GetFile :one
 
 SELECT id, vault_id, path, path_key, kind, current_rev, current_seq, blob_hash, size, is_deleted, updated_at FROM files WHERE id = $1 AND vault_id = $2

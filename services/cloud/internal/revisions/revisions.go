@@ -256,12 +256,13 @@ func (s *Service) deleteRevisions(ctx context.Context, ids []uuid.UUID) error {
 				return err
 			}
 		}
-		for _, h := range slices.Sorted(maps.Keys(refs)) {
-			if err := blobs.AddRef(ctx, tx, h, -refs[h]); err != nil {
-				return err
-			}
+		// One statement for the whole page, locking the blob rows in hash order.
+		hashes := slices.Sorted(maps.Keys(refs))
+		deltas := make([]int32, len(hashes))
+		for i, h := range hashes {
+			deltas[i] = -refs[h]
 		}
-		return nil
+		return blobs.AddRefs(ctx, tx, hashes, deltas)
 	})
 }
 

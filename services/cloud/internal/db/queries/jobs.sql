@@ -1,9 +1,13 @@
 -- Queries of the jobs module (ADR-0033: one sqlc package per module).
 
 -- name: ListUnreferencedBlobs :many
-SELECT hash, storage_key FROM blobs
-WHERE ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $1
-ORDER BY unreferenced_since LIMIT $2;
+-- Keyset page of the collectable blobs after (after_since, after_hash): a
+-- blob that cannot be collected is skipped rather than listed again first.
+SELECT hash, unreferenced_since::timestamptz AS unreferenced_since FROM blobs
+WHERE ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < sqlc.arg(cutoff)::timestamptz
+  AND (unreferenced_since, hash) > (sqlc.arg(after_since)::timestamptz, sqlc.arg(after_hash)::text)
+ORDER BY unreferenced_since, hash
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: DeleteCollectableBlob :one
 -- Deletes the row only if it is still unreferenced past the grace period: a
@@ -35,20 +39,46 @@ UPDATE blobs SET ref_count = $2,
   unreferenced_since = CASE WHEN $2 = 0 THEN COALESCE(unreferenced_since, now()) ELSE NULL END
 WHERE hash = $1;
 
--- name: PurgeDeletedFilesBatch :execrows
--- Tombstones whose every revision is gone, across all vaults, one bounded
--- batch at a time. Rows a commit holds are skipped (the next run takes them)
--- rather than waited for, and a tombstone a file share still points at stays:
--- deleting it would violate shares.file_id.
-DELETE FROM files WHERE id IN (
-  SELECT f.id FROM files f
-  WHERE f.is_deleted
-    AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id)
-    AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
-  ORDER BY f.id
-  LIMIT sqlc.arg(max_rows)::int
-  FOR UPDATE SKIP LOCKED
-);
+-- name: ListExpiredTombstones :many
+-- Tombstone purge (ADR-0038): deleted files whose delete revision (the
+-- current one) is older than the cutoff, or already gone, one keyset page on
+-- (vault, id) at a time (files_tombstone_ix). A tombstone a file share still
+-- points at stays: deleting it would violate shares.file_id.
+SELECT f.vault_id, f.id FROM files f
+LEFT JOIN file_revisions r ON r.file_id = f.id AND r.rev_no = f.current_rev
+WHERE f.is_deleted
+  AND (f.vault_id, f.id) > (sqlc.arg(after_vault)::uuid, sqlc.arg(after_id)::uuid)
+  AND (r.id IS NULL OR r.server_time < sqlc.arg(cutoff)::timestamptz)
+  AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+ORDER BY f.vault_id, f.id
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: LockExpiredTombstones :many
+-- The candidates of one vault that are still expired tombstones, locked: the
+-- caller holds the vault row, so no commit can bring them back meanwhile.
+SELECT f.id FROM files f
+LEFT JOIN file_revisions r ON r.file_id = f.id AND r.rev_no = f.current_rev
+WHERE f.vault_id = sqlc.arg(vault_id)::uuid AND f.id = ANY(sqlc.arg(ids)::uuid[]) AND f.is_deleted
+  AND (r.id IS NULL OR r.server_time < sqlc.arg(cutoff)::timestamptz)
+  AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+ORDER BY f.id
+FOR UPDATE OF f;
+
+-- name: ListFileBlobRefs :many
+-- The blob references held by every revision of these files, grouped and in
+-- hash order (the order a commit locks blob rows in): what deleting the files
+-- releases when their revisions go with them.
+SELECT blob_hash::text AS hash, COUNT(*)::int AS refs FROM file_revisions
+WHERE file_id = ANY(sqlc.arg(ids)::uuid[]) AND blob_hash IS NOT NULL
+GROUP BY blob_hash ORDER BY blob_hash;
+
+-- name: DeleteTombstones :one
+-- Deletes the locked tombstones (their revisions go by cascade) and returns
+-- the highest changelog seq among them: the compaction point moves past it.
+WITH d AS (
+  DELETE FROM files WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND is_deleted RETURNING current_seq
+)
+SELECT COALESCE(MAX(current_seq), 0)::bigint AS max_seq FROM d;
 
 -- name: MarkUserPurged :exec
 UPDATE users SET purged_at = now(), keycloak_sub = 'purged:' || id::text, updated_at = now() WHERE id = $1;
@@ -60,8 +90,8 @@ WHERE status = 'deleted' AND purged_at IS NULL AND COALESCE(deleted_at, updated_
 -- name: ListAllVaultIDsOfOwner :many
 SELECT id FROM vaults WHERE owner_id = $1;
 
--- name: ListRevisionBlobs :many
-SELECT blob_hash FROM file_revisions WHERE vault_id = $1 AND blob_hash IS NOT NULL;
+-- name: VaultHasRevisions :one
+SELECT EXISTS (SELECT 1 FROM file_revisions WHERE vault_id = $1);
 
 -- name: GetUserUsedForUpdate :one
 SELECT used_bytes FROM users WHERE id = $1 FOR UPDATE;
@@ -94,7 +124,21 @@ FROM (
 WHERE v.id = m.vault_id AND m.seq > v.compaction_seq;
 
 -- name: ListDeletedVaultsBefore :many
-SELECT id FROM vaults WHERE deleted_at IS NOT NULL AND deleted_at < $1;
+SELECT id FROM vaults WHERE deleted_at IS NOT NULL AND deleted_at < $1 ORDER BY id;
+
+-- name: DeleteVaultFilesPage :execrows
+-- Vault purge, once VaultHasRevisions found none in the same transaction
+-- (the vault row lock it holds keeps any from being added, so the cascade
+-- drops no revision without releasing its blob reference): one page of its
+-- files, in no particular order so that the scan stops at the page size
+-- (files_vault_prefix_ix) instead of sorting the whole vault on every page.
+-- Files a file share points at stay (the shares go with the vault row).
+DELETE FROM files WHERE id IN (
+  SELECT f.id FROM files f
+  WHERE f.vault_id = sqlc.arg(vault_id)::uuid
+    AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+  LIMIT sqlc.arg(max_rows)::int
+);
 
 -- name: DeleteVault :exec
 DELETE FROM vaults WHERE id = $1;
