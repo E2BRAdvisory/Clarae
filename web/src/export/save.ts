@@ -44,6 +44,15 @@ async function collect(stream: ReadableStream<Uint8Array>, signal?: AbortSignal)
 }
 
 /**
+ * The ZIP to save: a stream, or a function that opens it (a download that should only start once the
+ * user picked the file: the picker needs the click's activation, which a network round trip would use
+ * up). The opener may name the file for the in-memory fallback.
+ */
+export type ZipSource =
+  | ReadableStream<Uint8Array>
+  | (() => Promise<{ stream: ReadableStream<Uint8Array>; filename?: string }>);
+
+/**
  * Saves the ZIP stream. With the File System Access API the stream is piped to the chosen file
  * (an aborted or failed write is discarded, nothing half-written is committed); otherwise the
  * chunks are collected into a Blob and downloaded through an anchor. Must be called from a
@@ -51,13 +60,16 @@ async function collect(stream: ReadableStream<Uint8Array>, signal?: AbortSignal)
  * picker is dismissed or the signal aborts.
  */
 export async function saveZipStream(
-  stream: ReadableStream<Uint8Array>,
+  source: ZipSource,
   filename: string,
   signal?: AbortSignal,
 ): Promise<SaveMethod> {
+  const open = async () =>
+    typeof source === 'function' ? await source() : { stream: source, filename };
   const show = picker();
   if (!show) {
-    downloadBlob(await collect(stream, signal), filename);
+    const opened = await open();
+    downloadBlob(await collect(opened.stream, signal), opened.filename ?? filename);
     return 'blob';
   }
   const handle = await show({
@@ -66,6 +78,7 @@ export async function saveZipStream(
   });
   const writable = await handle.createWritable();
   try {
+    const { stream } = await open();
     await stream.pipeTo(writable, signal ? { signal } : {});
   } catch (err) {
     await writable.abort().catch(() => undefined);

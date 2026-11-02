@@ -3,6 +3,7 @@ import { ApiError } from '@memobrain/api-client';
 import { problem, mockApi } from '../test/utils';
 import {
   ExportJobError,
+  downloadTarget,
   exportShared,
   fetchDownload,
   filenameFromDisposition,
@@ -84,13 +85,66 @@ describe('exportShared: direct stream', () => {
   });
 });
 
+describe('fetchDownload', () => {
+  const url = `/api/v1/vaults/${V}/exports/j1/download`;
+
+  it('streams the archive with the token read at that moment, reporting the bytes', async () => {
+    let token = 'old';
+    const fetchFn = vi.fn((_url: string, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response('PK-big-archive', {
+          status: 200,
+          headers: {
+            'Content-Disposition': 'attachment; filename="big-2026.zip"',
+            'Content-Length': '14',
+          },
+        }),
+      ),
+    );
+    const deps = {
+      api: mockApi({}).client,
+      getToken: () => Promise.resolve(token),
+      fetchFn: fetchFn as unknown as typeof fetch,
+    };
+    token = 'renewed'; // the session renewed the token while the job ran
+    const progress: [number, number | undefined][] = [];
+    const d = await fetchDownload(deps, url, 'My Notes.zip', {
+      onBytes: (n, total) => progress.push([n, total]),
+    });
+    expect(d.filename).toBe('big-2026.zip');
+    expect(d.size).toBe(14);
+    expect(await new Response(d.stream).text()).toBe('PK-big-archive');
+    expect(progress.at(-1)).toEqual([14, 14]);
+    const [called, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(called).toBe(`${location.origin}${url}`);
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer renewed');
+  });
+
+  it('never sends the token to another origin', async () => {
+    const fetchFn = vi.fn();
+    await expect(
+      fetchDownload(
+        { api: mockApi({}).client, getToken: () => 'secret', fetchFn },
+        'https://evil.example/x.zip',
+        'x.zip',
+      ),
+    ).rejects.toThrow(/another origin/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('reports a problem answer as ApiError', async () => {
+    const fetchFn = () => Promise.resolve(problem(404, 'NOT_FOUND'));
+    await expect(
+      fetchDownload({ api: mockApi({}).client, getToken: () => 't', fetchFn }, url, 'x.zip'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+});
+
 describe('exportShared: job fallback', () => {
-  it('polls every 2 s through queued, running and ready, then downloads with the token', async () => {
+  it('polls every 2 s through queued, running and ready, then hands over the API download', async () => {
     vi.useFakeTimers();
     const states = ['running', 'running', 'ready'];
-    const fetchFn = vi.fn((_url: string, _init?: RequestInit) =>
-      Promise.resolve(zip('attachment; filename="big.zip"')),
-    );
+    const fetchFn = vi.fn();
     const api = mockApi({
       [`GET /vaults/${V}/export.zip`]: () => problem(409, 'INVALID_STATE', 'too large'),
       [`POST /vaults/${V}/exports`]: () => job('queued'),
@@ -98,16 +152,16 @@ describe('exportShared: job fallback', () => {
         const s = states.shift() as string;
         return job(
           s,
-          s === 'ready' ? { download_url: `/api/v1/vaults/${V}/exports/j1/download` } : {},
+          s === 'ready'
+            ? { download_url: `/api/v1/vaults/${V}/exports/j1/download`, size: 4096 }
+            : {},
         );
       },
     });
     const events: string[] = [];
-    const p = exportShared(
-      { api: api.client, getToken: () => 'secret', fetchFn: fetchFn as unknown as typeof fetch },
-      vault,
-      { onEvent: (e) => events.push(e.kind === 'job' ? e.status : e.kind) },
-    );
+    const p = exportShared({ api: api.client, getToken: () => 'secret', fetchFn }, vault, {
+      onEvent: (e) => events.push(e.kind === 'job' ? e.status : e.kind),
+    });
     await vi.advanceTimersByTimeAsync(0);
     expect(events).toEqual(['direct', 'queued']);
     expect(api.called('GET', `/vaults/${V}/exports/j1`)).toHaveLength(0);
@@ -119,30 +173,28 @@ describe('exportShared: job fallback', () => {
     await vi.advanceTimersByTimeAsync(2000);
     const r = await p;
     expect(events).toEqual(['direct', 'queued', 'running', 'running', 'ready']);
-    expect(r.kind).toBe('blob');
-    expect(r.filename).toBe('big.zip');
-    const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(`${location.origin}/api/v1/vaults/${V}/exports/j1/download`);
-    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer secret');
+    // Not fetched here: the archive is streamed to disk when the user saves it (never res.blob()).
+    expect(r).toEqual({
+      kind: 'download',
+      url: `${location.origin}/api/v1/vaults/${V}/exports/j1/download`,
+      filename: 'My Notes.zip',
+      size: 4096,
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it('hands a presigned cross-origin URL to the browser without sending the token', async () => {
-    const fetchFn = vi.fn();
-    const r = await fetchDownload(
-      {
-        api: mockApi({}).client,
-        getToken: () => 'secret',
-        fetchFn,
-      },
-      'https://s3.example.com/bucket/exp.zip?X-Amz-Signature=abc',
-      'My Notes.zip',
-    );
-    expect(r).toEqual({
+  it('hands a presigned cross-origin URL to the browser without sending the token', () => {
+    expect(
+      downloadTarget(
+        {},
+        'https://s3.example.com/bucket/exp.zip?X-Amz-Signature=abc',
+        'My Notes.zip',
+      ),
+    ).toEqual({
       kind: 'redirect',
       url: 'https://s3.example.com/bucket/exp.zip?X-Amz-Signature=abc',
       filename: 'My Notes.zip',
     });
-    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('throws a typed error when the job fails or expires', async () => {

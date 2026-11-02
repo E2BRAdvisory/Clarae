@@ -10,7 +10,11 @@ export interface AuthUser {
 
 /** What the UI needs from the identity layer (OIDC in production, a double in e2e). */
 export interface AuthService {
-  /** Current user from the session store, or null when signed out. */
+  /**
+   * Current user from the session store, with an access token renewed when it is about to expire, or
+   * null when signed out. Rejects (without signing out) when an expired token could not be renewed
+   * because the identity provider did not answer: the next call tries again.
+   */
   getUser(): Promise<AuthUser | null>;
   /** Starts the login redirect; `returnTo` is where the callback sends the user back. */
   signIn(returnTo: string): Promise<void>;

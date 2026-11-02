@@ -9,7 +9,11 @@ export type Problem = Schemas['Problem'];
 export type ErrorCode = Schemas['ErrorCode'];
 
 export interface MemobrainClientOptions extends ClientOptions {
-  /** Returns the current bearer token, or undefined when signed out. */
+  /**
+   * Returns the bearer token, or undefined when signed out. It is called before every request (never
+   * cached by the client), so it must return the session's current token, renewed when it is about to
+   * expire: a client kept for a long time (an export loop) then keeps working past a token's lifetime.
+   */
   getAccessToken?: () => Promise<string | undefined> | string | undefined;
 }
 

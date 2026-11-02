@@ -119,8 +119,10 @@ async function start(): Promise<void> {
     if (e instanceof Error && e.message === DISABLED)
       return show(message('workbench.disabled'), { error: true, back: true });
     console.error(e);
+    // A start-up that timed out (a storage that did not answer, a slow removal) may well work again.
     show(`${message('workbench.failed')} ${e instanceof Error ? e.message : String(e)}`, {
       error: true,
+      retry: true,
       back: true,
     });
   }

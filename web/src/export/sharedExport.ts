@@ -19,7 +19,8 @@ export class ExportJobError extends Error {
 
 export interface SharedExportDeps {
   api: MemobrainClient;
-  getToken: () => string | undefined;
+  /** The session's current access token, read when a request starts (renewed if about to expire). */
+  getToken: () => Promise<string | undefined> | string | undefined;
   fetchFn?: typeof fetch;
   /** Resolves after `ms`, rejects when the signal aborts. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
@@ -32,7 +33,14 @@ export type SharedExportEvent =
 
 export type SharedExportResult =
   | { kind: 'blob'; blob: Blob; filename: string }
-  | { kind: 'redirect'; url: string; filename: string };
+  /** A presigned object-store link: opened as a navigation, the browser downloads it to disk. */
+  | { kind: 'redirect'; url: string; filename: string }
+  /**
+   * The API itself serves the archive (no public object-store endpoint): it needs the bearer token, so
+   * it is fetched and streamed to the file the user picks (fetchDownload + saveZipStream), never
+   * collected in memory first. `size` is the archive size the job reported, when known.
+   */
+  | { kind: 'download'; url: string; filename: string; size?: number };
 
 export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -162,35 +170,87 @@ export async function exportShared(
     job = next.data;
   }
   if (!job.download_url) throw new ExportJobError('failed', '');
-  return fetchDownload(deps, job.download_url, fallbackName(vault.name), signal);
+  return downloadTarget(deps, job.download_url, fallbackName(vault.name), job.size);
+}
+
+const sameOrigin = (deps: Pick<SharedExportDeps, 'origin'>, downloadUrl: string): URL | null => {
+  const origin = deps.origin ?? window.location.origin;
+  const url = new URL(downloadUrl, origin);
+  return url.origin === new URL(origin).origin ? url : null;
+};
+
+/**
+ * Where the archive of a ready job is downloaded from. A relative path or same-origin URL is the API
+ * itself: it needs the bearer token (the token never goes into a URL), so the page fetches it when the
+ * user saves (fetchDownload). Any other URL is a presigned object-store link: it carries its own
+ * authorization, must not receive our token, and is opened as a navigation (the page CSP allows no
+ * cross-origin fetch), which the browser downloads straight to disk.
+ */
+export function downloadTarget(
+  deps: Pick<SharedExportDeps, 'origin'>,
+  downloadUrl: string,
+  fallback: string,
+  size?: number,
+): SharedExportResult {
+  const url = sameOrigin(deps, downloadUrl);
+  if (!url)
+    return {
+      kind: 'redirect',
+      url: new URL(downloadUrl, deps.origin ?? window.location.origin).toString(),
+      filename: fallback,
+    };
+  return { kind: 'download', url: url.toString(), filename: fallback, ...(size ? { size } : {}) };
 }
 
 /**
- * A relative path or same-origin URL is the API itself: fetched with the bearer token. Any
- * other URL is a presigned object-store link: it carries its own authorization, must not
- * receive our token, and is opened as a navigation (the page CSP allows no cross-origin fetch).
+ * Starts the download of an archive served by the API, with the session's current token, and resolves
+ * to its body as a stream (for saveZipStream: written to disk as it arrives, never buffered whole) and
+ * the name the server gave it. `onBytes` reports the bytes received so far. Refuses any other origin:
+ * the token is only ever sent to the API.
  */
 export async function fetchDownload(
   deps: SharedExportDeps,
   downloadUrl: string,
   fallback: string,
-  signal?: AbortSignal,
-): Promise<SharedExportResult> {
-  const origin = deps.origin ?? window.location.origin;
-  const url = new URL(downloadUrl, origin);
-  if (url.origin !== new URL(origin).origin)
-    return { kind: 'redirect', url: url.toString(), filename: fallback };
-  const token = deps.getToken();
+  opts: { signal?: AbortSignal; onBytes?: (received: number, total?: number) => void } = {},
+): Promise<{ stream: ReadableStream<Uint8Array>; filename: string; size?: number }> {
+  const url = sameOrigin(deps, downloadUrl);
+  if (!url) throw new Error('refusing to send the session token to another origin');
+  const token = await deps.getToken();
   const res = await (deps.fetchFn ?? fetch)(url.toString(), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
-    ...(signal ? { signal } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
   });
   if (!res.ok) throw await problemError(res);
+  if (!res.body) throw new Error('the download has no body');
+  const length = Number(res.headers.get('Content-Length'));
+  const size = Number.isFinite(length) && length > 0 ? length : undefined;
   return {
-    kind: 'blob',
-    blob: await res.blob(),
+    stream: opts.onBytes ? counting(res.body, (n) => opts.onBytes?.(n, size)) : res.body,
     filename: filenameFromDisposition(res.headers.get('Content-Disposition')) ?? fallback,
+    ...(size ? { size } : {}),
   };
+}
+
+/** Passes a stream through, reporting the bytes read so far. */
+function counting(
+  body: ReadableStream<Uint8Array>,
+  onBytes: (received: number) => void,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  let received = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(c) {
+      const { value, done } = await reader.read();
+      if (done) return c.close();
+      received += value.length;
+      onBytes(received);
+      c.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
 }
 
 /** Starts a navigation-style download of a presigned URL. */

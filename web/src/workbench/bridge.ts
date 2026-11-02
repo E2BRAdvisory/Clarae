@@ -24,6 +24,12 @@ export interface CoreOptions {
   onFatal?(message: string): void;
   /** Worker factory, for tests. */
   createWorker?(): Worker;
+  /**
+   * How long the worker may take to load the core and answer `ready` (0: no limit). Past it the worker
+   * is terminated and startCore rejects: a storage that never answers ends in an error, not in a
+   * loading screen forever.
+   */
+  readyTimeoutMs?: number;
 }
 
 /** Every call rejects with this once the core stopped (the worker failed or the Go program exited). */
@@ -59,12 +65,18 @@ export interface CoreHandle {
     method: string,
     ...args: unknown[]
   ): Promise<T>;
-  /** Wails' OnStartup / OnDomReady / OnShutdown. */
-  start(): Promise<void>;
+  /**
+   * Wails' OnStartup / OnDomReady / OnShutdown. `start` rejects with a CoreTimeoutError when the core
+   * does not answer within `timeoutMs` (no limit without it).
+   */
+  start(timeoutMs?: number): Promise<void>;
   domReady(): void;
   shutdown(): Promise<void>;
-  /** Removes a folder of the core's file system and the databases stored under it. */
-  wipe(prefix: string): Promise<void>;
+  /**
+   * Removes a folder of the core's file system and the databases stored under it. Rejects with a
+   * CoreTimeoutError when it takes longer than `timeoutMs` (the removal may still go on in the core).
+   */
+  wipe(prefix: string, timeoutMs?: number): Promise<void>;
   /** Subscribes to a Go → TypeScript event; returns the unsubscribe function. */
   on(name: string, cb: (payload: unknown) => void): () => void;
   /** Drops every subscription to an event (Wails' EventsOff). */
@@ -262,8 +274,12 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
       ): Promise<T> {
         return parse<T>(await callText(service, method, args, timeoutMs));
       },
-      async start() {
-        await request((id) => ({ type: 'start', id }));
+      async start(timeoutMs = 0) {
+        await request(
+          (id) => ({ type: 'start', id }),
+          () => new CoreTimeoutError('core', 'start', timeoutMs),
+          timeoutMs,
+        );
       },
       domReady() {
         if (deadReason === null) send({ type: 'domReady' });
@@ -271,8 +287,12 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
       async shutdown() {
         await request((id) => ({ type: 'shutdown', id }));
       },
-      async wipe(prefix) {
-        await request((id) => ({ type: 'wipe', id, prefix }));
+      async wipe(prefix, timeoutMs = 0) {
+        await request(
+          (id) => ({ type: 'wipe', id, prefix }),
+          () => new CoreTimeoutError('core', 'wipe', timeoutMs),
+          timeoutMs,
+        );
       },
       on(name, cb) {
         if (!listeners.has(name)) listeners.set(name, new Set());
@@ -290,10 +310,21 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
 
     const fatal = (message: string): void => {
       const first = deadReason === null;
+      clearTimeout(readyTimer);
       die(message);
       if (!settled) rejectReady(new Error(message));
       if (first) options.onFatal?.(message);
     };
+
+    const readyMs = options.readyTimeoutMs ?? 0;
+    const readyTimer =
+      readyMs > 0
+        ? setTimeout(() => {
+            if (settled) return;
+            worker.terminate();
+            fatal(`the vault engine did not start within ${Math.round(readyMs / 1000)} s`);
+          }, readyMs)
+        : undefined;
 
     worker.onerror = (e) => {
       fatal(`the core worker failed: ${e.message || 'unknown error'}`);
@@ -303,6 +334,7 @@ export function startCore(options: CoreOptions): Promise<CoreHandle> {
       const m = ev.data;
       switch (m.type) {
         case 'ready':
+          clearTimeout(readyTimer);
           methods = m.methods;
           settled = true;
           resolveReady(handle);

@@ -12,10 +12,18 @@ const workbenchRoute = new RegExp(WORKBENCH_ROUTE_PATTERN);
 /** Whether a path (no query string) is the workbench page. */
 export const isWorkbenchRoute = (path: string): boolean => workbenchRoute.test(path);
 
-/** The vault id of a workbench path, or null when the path is not the workbench page. */
+/**
+ * The vault id of a workbench path, or null when the path is not the workbench page or its id is not
+ * valid percent-encoding (`/vaults/%E0%A4%A/open`): such an address names no vault.
+ */
 export function workbenchVaultId(path: string): string | null {
   const m = workbenchRoute.exec(path);
-  return m ? decodeURIComponent(m[1] as string) : null;
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1] as string);
+  } catch {
+    return null; // URIError: malformed escape
+  }
 }
 
 /** Whether a same-origin return address (path and query) leads to the workbench page. */

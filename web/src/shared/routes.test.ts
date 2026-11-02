@@ -18,6 +18,9 @@ describe('workbench route', () => {
   it('extracts the vault id, decoded', () => {
     expect(workbenchVaultId('/vaults/a%20b/open')).toBe('a b');
     expect(workbenchVaultId('/vaults/a')).toBeNull();
+    // A malformed escape names no vault (the page shows "not found" instead of throwing).
+    expect(workbenchVaultId('/vaults/%E0%A4%A/open')).toBeNull();
+    expect(workbenchVaultId('/vaults/%/open')).toBeNull();
   });
 
   it('recognises a return address with a query or a fragment', () => {
