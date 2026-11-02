@@ -73,6 +73,25 @@ func TestS3Store(t *testing.T) {
 	if read(0, -1) != string(data) || read(4, 6) != "456789" || read(10, -1) != "abcdef" {
 		t.Error("range reads wrong")
 	}
+	chunk := "uploads/" + time.Now().Format("150405.000000") + "/1"
+	if err := s.Put(ctx, chunk, bytes.NewReader([]byte{1}), 1); err != nil {
+		t.Fatal(err)
+	}
+	var listed []storage.ObjectInfo
+	if err := s.List(ctx, "uploads/", func(o storage.ObjectInfo) error { listed = append(listed, o); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, o := range listed {
+		if o.Key == key {
+			t.Errorf("listed %s outside the prefix", o.Key)
+		}
+		found = found || (o.Key == chunk && o.Size == 1 && !o.Modified.IsZero())
+	}
+	if !found {
+		t.Errorf("chunk not listed: %v", listed)
+	}
+	_ = s.Delete(ctx, chunk)
 	if err := s.Delete(ctx, key); err != nil {
 		t.Fatal(err)
 	}

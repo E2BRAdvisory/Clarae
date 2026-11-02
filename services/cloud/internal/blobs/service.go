@@ -36,6 +36,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"memobrain/services/cloud/internal/blobs/blobsdb"
 	"memobrain/services/cloud/internal/db"
@@ -228,38 +229,87 @@ func (s *Service) Put(ctx context.Context, userID, vaultID uuid.UUID, scope, has
 	return s.ingestFile(ctx, acc.Vault, hash, path, size, noUpload)
 }
 
+// errBlobCollected means the garbage collector removed the blob (its row or
+// its object) while it was being ingested: ingestFile starts over.
+var errBlobCollected = errors.New("blobs: blob collected during the upload")
+
+// ingestAttempts bounds the restarts of ingestFile after losing a race with
+// the garbage collector (each collection of a hash can cost two).
+const ingestAttempts = 3
+
 // ingestFile publishes an already hashed file and links it to the vault. The
 // link is the quota check that counts (atomic per owner): a blob refused there
 // stays unlinked and the garbage collector removes it.
 func (s *Service) ingestFile(ctx context.Context, v access.Vault, hash, path string, size int64, upload uuid.UUID) error {
-	q := blobsdb.New(s.db.Pool)
-	existing, err := q.GetBlob(ctx, hash)
-	if err == nil && existing.Size == size {
-		// Deduplicated: the bytes were verified above. Trust the row only if the
-		// object is really there (a lost object must heal on the next upload).
-		if got, serr := s.store.Size(ctx, existing.StorageKey); serr != nil || got != size {
-			err = pgx.ErrNoRows
+	var err error
+	for range ingestAttempts {
+		if err = s.ingestOnce(ctx, v, hash, path, size, upload); !errors.Is(err, errBlobCollected) {
+			return err
 		}
 	}
+	return err
+}
+
+// ingestOnce is one attempt of ingestFile. The object is written (when the
+// store lacks it) before any transaction; the row is published and linked
+// under the per-hash lock that the garbage collector takes before deleting
+// an object (LockObject), after checking again that the object is there: a
+// row therefore never points to an object the collector deleted. Linking a
+// blob nobody references restarts its grace period in the same transaction,
+// so a deduplicated upload is not collected right after it.
+func (s *Service) ingestOnce(ctx context.Context, v access.Vault, hash, path string, size int64, upload uuid.UUID) error {
+	key := storage.BlobKey(hash)
+	existing, err := blobsdb.New(s.db.Pool).GetBlob(ctx, hash)
+	stored := false
 	switch {
 	case err == nil && existing.Size == size:
-		// Present in the store: nothing to write.
-	case err == nil || errors.Is(err, pgx.ErrNoRows):
+		// Deduplicated: the bytes were verified above. Trust the row only if the
+		// object is really there (a lost object must heal on the next upload).
+		got, serr := s.store.Size(ctx, existing.StorageKey)
+		stored = serr == nil && got == size
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
+	if !stored {
 		f, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		defer func() { _ = f.Close() }()
-		if err := s.store.Put(ctx, storage.BlobKey(hash), f, size); err != nil {
-			return fmt.Errorf("store blob: %w", err)
+		perr := s.store.Put(ctx, key, f, size)
+		_ = f.Close()
+		if perr != nil {
+			return fmt.Errorf("store blob: %w", perr)
 		}
-		if _, err := q.InsertBlob(ctx, blobsdb.InsertBlobParams{Hash: hash, Size: size, StorageKey: storage.BlobKey(hash)}); err != nil {
-			return err
-		}
-	default:
-		return err
 	}
 	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := blobsdb.New(tx)
+		if err := q.LockBlobHash(ctx, hash); err != nil {
+			return err
+		}
+		if !stored {
+			// Written before the lock: the collector may have deleted it since,
+			// as the object of a blob it had just collected.
+			got, err := s.store.Size(ctx, key)
+			if errors.Is(err, storage.ErrNotFound) || (err == nil && got != size) {
+				return errBlobCollected
+			}
+			if err != nil {
+				return err
+			}
+			if _, err := q.InsertBlob(ctx, blobsdb.InsertBlobParams{Hash: hash, Size: size, StorageKey: key}); err != nil {
+				return err
+			}
+		}
+		// Locks the row until the commit: the collector may have deleted it
+		// since GetBlob, and must not delete it now.
+		if _, err := q.GetBlobKeyShare(ctx, hash); errors.Is(err, pgx.ErrNoRows) {
+			return errBlobCollected
+		} else if err != nil {
+			return err
+		}
+		if err := q.RenewUnreferencedBlob(ctx, hash); err != nil {
+			return err
+		}
 		if s.quota != nil && size > 0 {
 			if err := lockOwner(ctx, tx, v.OwnerID); err != nil {
 				return err
@@ -268,8 +318,36 @@ func (s *Service) ingestFile(ctx context.Context, v access.Vault, hash, path str
 				return err
 			}
 		}
-		return blobsdb.New(tx).LinkVaultBlob(ctx, blobsdb.LinkVaultBlobParams{VaultID: v.ID, Hash: hash})
+		err := q.LinkVaultBlob(ctx, blobsdb.LinkVaultBlobParams{VaultID: v.ID, Hash: hash})
+		if isForeignKeyViolation(err) {
+			return errBlobCollected // cannot happen under the row lock; retrying is still right
+		}
+		return err
 	})
+}
+
+func isForeignKeyViolation(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "23503"
+}
+
+// LockObject takes, inside tx, the per-hash lock that orders the deletion of
+// a blob's object against its publication (ingestFile), and reports whether
+// the blob has a row. The garbage collector deletes the object of a blob it
+// collected only when no row exists, before tx ends: an upload that published
+// the blob again meanwhile keeps its object. tx must be a transaction (the
+// lock is released when it ends).
+func LockObject(ctx context.Context, tx db.DBTX, hash string) (rowExists bool, err error) {
+	q := blobsdb.New(tx)
+	if err := q.LockBlobHash(ctx, hash); err != nil {
+		return false, err
+	}
+	if _, err := q.GetBlob(ctx, hash); errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Range is a resolved byte range.

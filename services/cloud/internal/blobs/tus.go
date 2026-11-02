@@ -22,6 +22,7 @@ import (
 
 	"memobrain/services/cloud/internal/auth"
 	"memobrain/services/cloud/internal/blobs/blobsdb"
+	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/storage"
 	"memobrain/services/cloud/internal/vaults"
@@ -43,6 +44,12 @@ import (
 // The finalization runs detached from the request (a client that gives up
 // does not cancel it halfway); when it fails for a transient reason the
 // upload is kept, and a HEAD or an empty PATCH at the final offset retries it.
+// It is claimed first (uploads.finalizing_until, a lease): a request that
+// arrives while another one finalizes waits for it and answers with the same
+// outcome instead of assembling the chunks a second time.
+//
+// Chunk objects outlive their upload row only by accident (a crash between
+// the steps, a row deleted with its vault): SweepOrphanChunks removes them.
 
 const (
 	tusVersion       = "1.0.0"
@@ -50,6 +57,16 @@ const (
 	defaultMaxUpload = 100 << 20
 	// finalizeTimeout bounds the assembly of an upload (it no longer depends on the request).
 	finalizeTimeout = 10 * time.Minute
+	// finalizeLease is how long a claimed finalization keeps other requests
+	// waiting: longer than finalizeTimeout, so it never ends while one runs.
+	finalizeLease = finalizeTimeout + time.Minute
+	// finalizePoll is how often a request waiting for another one's
+	// finalization looks again.
+	finalizePoll = 200 * time.Millisecond
+	// cleanupBatch is the page size of the expired uploads cleanup.
+	cleanupBatch = 200
+	// sweepBatch is the number of chunk objects one existence check covers.
+	sweepBatch = 500
 )
 
 // TusHandler serves the upload endpoints. Mount it with Mount.
@@ -143,16 +160,20 @@ func legacyChunk(id uuid.UUID, n int32) string { return fmt.Sprintf("uploads/%s/
 // offset: the upload cannot complete and must start over.
 var errChunkMissing = httpproblem.Errorf(syncproto.CodeValidationFailed, "the upload is incomplete or corrupted: start it again")
 
-// chunkKeys lists the objects holding the confirmed bytes of an upload, in order.
+// chunkKeys lists the objects holding the confirmed bytes of an upload, in
+// order. An upload created before chunk_keys and resumed after the upgrade
+// has its first chunks numbered (chunks counts them, chunk_keys does not)
+// and the following ones in chunk_keys.
 func chunkKeys(u blobsdb.Upload) []string {
-	if len(u.ChunkKeys) > 0 || u.Chunks == 0 {
+	legacy := int(u.Chunks) - len(u.ChunkKeys)
+	if legacy <= 0 {
 		return u.ChunkKeys
 	}
-	keys := make([]string, 0, u.Chunks)
-	for i := int32(0); i < u.Chunks; i++ {
+	keys := make([]string, 0, legacy+len(u.ChunkKeys))
+	for i := int32(0); int(i) < legacy; i++ {
 		keys = append(keys, legacyChunk(u.ID, i))
 	}
-	return keys
+	return append(keys, u.ChunkKeys...)
 }
 
 // dropUpload deletes the chunks of an upload, then its row. It is best effort
@@ -360,20 +381,86 @@ func (h *TusHandler) patch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// complete finalizes an upload whose bytes all arrived. It runs detached from
-// the request, with its own deadline. A permanent failure (digest mismatch,
-// missing chunks, quota) discards the upload; a transient one keeps it for a
-// retry (HEAD, or an empty PATCH at the final offset).
+// complete finalizes an upload whose bytes all arrived. It claims the
+// finalization first; when another request holds the claim it waits for that
+// one and reports its outcome (the vault holding the blob means success).
+// The finalization itself runs detached from the request, with its own
+// deadline. A permanent failure (digest mismatch, missing chunks, quota)
+// discards the upload; a transient one keeps it for a retry (HEAD, or an
+// empty PATCH at the final offset) and releases the claim.
 func (h *TusHandler) complete(ctx context.Context, u blobsdb.Upload) error {
+	q := blobsdb.New(h.svc.db.Pool)
+	tick := time.NewTicker(finalizePoll)
+	defer tick.Stop()
+	for {
+		n, err := q.ClaimUploadFinalization(context.WithoutCancel(ctx), blobsdb.ClaimUploadFinalizationParams{ID: u.ID, LeaseSeconds: finalizeLease.Seconds()})
+		if err != nil {
+			return err
+		}
+		if n == 1 {
+			return h.finalizeClaimed(ctx, u)
+		}
+		// Another request is finalizing it, or did and dropped the upload.
+		done, err := h.finalizedElsewhere(ctx, u)
+		if done || err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+// finalizedElsewhere tells a request that could not claim the finalization
+// whether it is over: done with nil when the vault has the blob, done with
+// errChunkMissing when the upload was discarded without publishing it.
+func (h *TusHandler) finalizedElsewhere(ctx context.Context, u blobsdb.Upload) (bool, error) {
+	q := blobsdb.New(h.svc.db.Pool)
+	// The upload first: a finalizer publishes the blob before it drops the upload.
+	_, err := q.GetUpload(ctx, u.ID)
+	gone := errors.Is(err, pgx.ErrNoRows)
+	if err != nil && !gone {
+		return false, err
+	}
+	has, err := q.VaultHasBlob(ctx, blobsdb.VaultHasBlobParams{VaultID: u.VaultID, Hash: u.ExpectedHash})
+	switch {
+	case err != nil:
+		return false, err
+	case has:
+		return true, nil
+	case gone:
+		return true, errChunkMissing
+	}
+	return false, nil
+}
+
+// finalizeClaimed runs the finalization this request claimed.
+func (h *TusHandler) finalizeClaimed(ctx context.Context, u blobsdb.Upload) error {
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalizeTimeout)
 	defer cancel()
 	err := h.finalize(fctx, u)
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, errChunkMissing) {
+		// A finalizer whose claim ran out (it died) may have published the
+		// blob and deleted some chunks before dropping the upload.
+		has, herr := blobsdb.New(h.svc.db.Pool).VaultHasBlob(fctx, blobsdb.VaultHasBlobParams{VaultID: u.VaultID, Hash: u.ExpectedHash})
+		if herr == nil && has {
+			return h.svc.dropUpload(fctx, u)
+		}
+	}
 	var pe *httpproblem.Error
 	if errors.As(err, &pe) {
 		_ = h.svc.dropUpload(fctx, u)
+	} else {
+		// Not with fctx: a finalization that ran out of time must still let the
+		// next retry in at once rather than after the rest of the lease.
+		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		_ = blobsdb.New(h.svc.db.Pool).ReleaseUploadFinalization(rctx, u.ID)
+		rcancel()
 	}
 	return err
 }
@@ -427,16 +514,135 @@ func (h *TusHandler) finalize(ctx context.Context, u blobsdb.Upload) error {
 	return h.svc.dropUpload(ctx, u)
 }
 
-// CleanupExpired removes expired upload sessions and their chunks (job).
+// CleanupExpired removes expired upload sessions and their chunks (job). An
+// upload that cannot be removed is skipped: the others still are, and the
+// failures are reported at the end.
 func (s *Service) CleanupExpired(ctx context.Context) (int, error) {
-	rows, err := blobsdb.New(s.db.Pool).ListExpiredUploads(ctx, 200)
-	if err != nil {
-		return 0, err
-	}
-	for _, u := range rows {
-		if err := s.dropUpload(ctx, u); err != nil {
-			return 0, err
+	q := blobsdb.New(s.db.Pool)
+	var failed itemErrors
+	n := 0
+	for after := uuid.Nil; ; {
+		rows, err := q.ListExpiredUploads(ctx, blobsdb.ListExpiredUploadsParams{After: after, MaxRows: cleanupBatch})
+		if err != nil {
+			return n, errors.Join(err, failed.err())
 		}
+		for _, u := range rows {
+			if err := s.dropUpload(ctx, u); err != nil {
+				if ctx.Err() != nil {
+					return n, errors.Join(ctx.Err(), failed.err())
+				}
+				failed.add(fmt.Errorf("upload %s: %w", u.ID, err))
+				continue
+			}
+			n++
+		}
+		if len(rows) < cleanupBatch {
+			return n, failed.err()
+		}
+		after = rows[len(rows)-1].ID
 	}
-	return len(rows), nil
+}
+
+// UploadChunksOfVault lists, inside the transaction that deletes a vault, the
+// chunk objects of the uploads in progress in it. The rows go with the vault
+// (ON DELETE CASCADE); the caller deletes these objects once it committed.
+func UploadChunksOfVault(ctx context.Context, tx db.DBTX, vaultID uuid.UUID) ([]string, error) {
+	rows, err := blobsdb.New(tx).ListUploadsOfVault(ctx, vaultID)
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	for _, u := range rows {
+		keys = append(keys, chunkKeys(u)...)
+	}
+	return keys, nil
+}
+
+// SweepOrphanChunks deletes the chunk objects (uploads/<upload id>/...) whose
+// upload no longer exists and that are older than the upload expiry, as of
+// now: what a crash between the steps left behind, or a deletion of the rows
+// that did not reach the objects. The age spares the chunk of a PATCH in
+// flight, which deletes its own object when the upload turns out to be gone.
+// It returns the number of objects deleted; an object that cannot be deleted
+// is skipped and reported at the end.
+func (s *Service) SweepOrphanChunks(ctx context.Context, now time.Time) (int, error) {
+	cutoff := now.Add(-s.UploadExpiry(ctx))
+	type chunk struct {
+		key string
+		id  uuid.UUID
+	}
+	var (
+		batch   []chunk
+		failed  itemErrors
+		deleted int
+	)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		ids := make([]uuid.UUID, 0, len(batch))
+		for _, c := range batch {
+			ids = append(ids, c.id)
+		}
+		live, err := blobsdb.New(s.db.Pool).ListExistingUploads(ctx, ids)
+		if err != nil {
+			return err
+		}
+		exists := make(map[uuid.UUID]bool, len(live))
+		for _, id := range live {
+			exists[id] = true
+		}
+		for _, c := range batch {
+			if exists[c.id] {
+				continue
+			}
+			if err := s.store.Delete(ctx, c.key); err != nil {
+				failed.add(fmt.Errorf("delete chunk %s: %w", c.key, err))
+				continue
+			}
+			deleted++
+		}
+		batch = batch[:0]
+		return nil
+	}
+	err := s.store.List(ctx, "uploads/", func(o storage.ObjectInfo) error {
+		if !o.Modified.Before(cutoff) {
+			return nil
+		}
+		dir, _, ok := strings.Cut(strings.TrimPrefix(o.Key, "uploads/"), "/")
+		id, perr := uuid.Parse(dir)
+		if !ok || perr != nil {
+			return nil // not the chunk of an upload: not ours to delete
+		}
+		batch = append(batch, chunk{key: o.Key, id: id})
+		if len(batch) >= sweepBatch {
+			return flush()
+		}
+		return nil
+	})
+	if err == nil {
+		err = flush()
+	}
+	return deleted, errors.Join(err, failed.err())
+}
+
+// itemErrors collects the failures of a job that skips the items it cannot
+// process: every failure is counted, the first few are kept for the report.
+type itemErrors struct {
+	n     int
+	first []error
+}
+
+func (e *itemErrors) add(err error) {
+	e.n++
+	if len(e.first) < 5 {
+		e.first = append(e.first, err)
+	}
+}
+
+func (e *itemErrors) err() error {
+	if e.n == 0 {
+		return nil
+	}
+	return fmt.Errorf("%d items failed: %w", e.n, errors.Join(e.first...))
 }

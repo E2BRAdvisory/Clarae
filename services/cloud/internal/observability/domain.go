@@ -37,6 +37,10 @@ var (
 		Help:    "Background job run time by job.",
 		Buckets: []float64{.1, .5, 1, 5, 15, 60, 300, 900, 3600},
 	}, []string{"job"})
+	jobItemFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "memobrain", Subsystem: "jobs", Name: "item_failures_total",
+		Help: "Items a background job skipped after an error (it went on with the others), by job.",
+	}, []string{"job"})
 	jobLastSuccess = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "memobrain", Subsystem: "jobs", Name: "last_success_timestamp_seconds",
 		Help: "Unix time of the last successful run of each job.",
@@ -76,6 +80,9 @@ func JobRun(job string, took time.Duration, err error) {
 	jobRuns.WithLabelValues(job, result).Inc()
 	jobDuration.WithLabelValues(job).Observe(took.Seconds())
 }
+
+// JobItemFailed records one item a job could not process and skipped.
+func JobItemFailed(job string) { jobItemFailures.WithLabelValues(job).Inc() }
 
 // RegisterPool exposes the pgx pool statistics (memobrain_db_pool_*).
 func RegisterPool(reg prometheus.Registerer, pool *pgxpool.Pool) {

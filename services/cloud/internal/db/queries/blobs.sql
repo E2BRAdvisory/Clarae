@@ -19,6 +19,18 @@ FOR KEY SHARE OF b;
 -- name: InsertBlob :execrows
 INSERT INTO blobs (hash, size, storage_key) VALUES ($1, $2, $3) ON CONFLICT (hash) DO NOTHING;
 
+-- name: LockBlobHash :exec
+-- Serializes, per hash, the publication of a blob row with the deletion of
+-- its object by the garbage collector until the transaction ends: under this
+-- lock a row is inserted only once its object is verified, and the collector
+-- deletes an object only when no row exists (see ingestFile and LockObject).
+SELECT pg_advisory_xact_lock(hashtextextended('memobrain.blob:' || sqlc.arg(hash)::text, 0));
+
+-- name: RenewUnreferencedBlob :exec
+-- An upload linking a blob nobody references restarts its grace period: the
+-- garbage collector must not take it right after a deduplicated upload.
+UPDATE blobs SET unreferenced_since = now() WHERE hash = $1 AND ref_count = 0;
+
 -- name: LinkVaultBlob :exec
 INSERT INTO vault_blobs (vault_id, hash) VALUES ($1, $2) ON CONFLICT DO NOTHING;
 
@@ -36,11 +48,13 @@ WHERE hash = $1;
 -- name: AddBlobRefs :exec
 -- AddBlobRef for many blobs in one statement (end of a commit batch). The rows
 -- are locked in hash order first, like the one-by-one version did, so
--- concurrent batches never deadlock on them.
+-- concurrent batches never deadlock on them. The hashes are compared as
+-- CHAR(64), the type of blobs.hash: compared as text the primary key cannot
+-- be used and every call scanned the whole table twice.
 WITH d AS (
-  SELECT unnest(sqlc.arg(hashes)::text[]) AS hash, unnest(sqlc.arg(deltas)::int[]) AS delta
+  SELECT unnest(sqlc.arg(hashes)::text[])::char(64) AS hash, unnest(sqlc.arg(deltas)::int[]) AS delta
 ), locked AS (
-  SELECT b.hash FROM blobs b WHERE b.hash = ANY(sqlc.arg(hashes)::text[]) ORDER BY b.hash FOR NO KEY UPDATE
+  SELECT b.hash FROM blobs b WHERE b.hash = ANY(sqlc.arg(hashes)::text[]::char(64)[]) ORDER BY b.hash FOR NO KEY UPDATE
 )
 UPDATE blobs SET ref_count = blobs.ref_count + d.delta,
   unreferenced_since = CASE WHEN blobs.ref_count + d.delta = 0 THEN now() ELSE NULL END
@@ -64,8 +78,34 @@ WHERE id = $1 AND received = sqlc.arg(from_offset)::bigint;
 -- name: DeleteUpload :exec
 DELETE FROM uploads WHERE id = $1;
 
+-- name: ClaimUploadFinalization :execrows
+-- Takes the finalization of a complete upload for lease_seconds: one request
+-- assembles the chunks, the others wait for it (or take over once the lease
+-- of a finalizer that died has run out).
+UPDATE uploads SET finalizing_until = now() + make_interval(secs => sqlc.arg(lease_seconds)::double precision)
+WHERE id = $1 AND received = length AND (finalizing_until IS NULL OR finalizing_until < now());
+
+-- name: ReleaseUploadFinalization :exec
+-- A finalization that failed for a transient reason lets the next retry in at once.
+UPDATE uploads SET finalizing_until = NULL WHERE id = $1;
+
 -- name: ListExpiredUploads :many
-SELECT * FROM uploads WHERE expires_at < now() LIMIT $1;
+-- Keyset page of the expired uploads (a failing one does not hide the
+-- others); an upload being finalized is left to its finalizer.
+SELECT * FROM uploads
+WHERE expires_at < now() AND (finalizing_until IS NULL OR finalizing_until < now())
+  AND id > sqlc.arg(after)::uuid
+ORDER BY id
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: ListUploadsOfVault :many
+-- The uploads in progress in a vault, whose chunks the purge of the vault deletes.
+SELECT * FROM uploads WHERE vault_id = $1;
+
+-- name: ListExistingUploads :many
+-- Which of these uploads still exist: the sweep of the chunk objects deletes
+-- the chunks of the others.
+SELECT id FROM uploads WHERE id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: LockOwnerUploads :exec
 -- Serializes the upload quota checks of one owner (key: the owner's id) until

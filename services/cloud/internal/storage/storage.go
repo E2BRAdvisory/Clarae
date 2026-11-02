@@ -22,8 +22,18 @@ type BlobStore interface {
 	Size(ctx context.Context, key string) (int64, error)
 	// Delete removes the object; deleting a missing object is not an error.
 	Delete(ctx context.Context, key string) error
+	// List calls fn for every object whose key starts with prefix, in no
+	// particular order. An error from fn stops the listing and is returned.
+	List(ctx context.Context, prefix string, fn func(ObjectInfo) error) error
 	// Ping checks reachability (readiness probe).
 	Ping(ctx context.Context) error
+}
+
+// ObjectInfo describes a listed object.
+type ObjectInfo struct {
+	Key      string
+	Size     int64
+	Modified time.Time
 }
 
 // BlobKey is the object key of a content-addressed blob; the two-level

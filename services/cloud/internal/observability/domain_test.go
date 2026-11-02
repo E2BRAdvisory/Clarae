@@ -47,6 +47,14 @@ func TestJobRun(t *testing.T) {
 	}
 }
 
+func TestJobItemFailed(t *testing.T) {
+	JobItemFailed("unit-job")
+	JobItemFailed("unit-job")
+	if got := testutil.ToFloat64(jobItemFailures.WithLabelValues("unit-job")); got != 2 {
+		t.Fatalf("item failures %v", got)
+	}
+}
+
 // The pool collector's descriptors must be valid and unique (checked by a pedantic registry).
 func TestPoolDescriptors(t *testing.T) {
 	reg := prometheus.NewPedanticRegistry()

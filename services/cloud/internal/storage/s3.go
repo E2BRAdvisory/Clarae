@@ -132,6 +132,22 @@ func (s *S3) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+// List lists the objects below prefix.
+func (s *S3) List(ctx context.Context, prefix string, fn func(ObjectInfo) error) error {
+	// Cancelling the context stops the listing goroutine of the client.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for obj := range s.c.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if obj.Err != nil {
+			return obj.Err
+		}
+		if err := fn(ObjectInfo{Key: obj.Key, Size: obj.Size, Modified: obj.LastModified}); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
 // PresignGet returns a time-limited download URL for the object, or "" when no public
 // endpoint is configured (callers then serve the object themselves). Signing is local:
 // the region is configured, so no request is made.

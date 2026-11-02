@@ -20,14 +20,15 @@ type Blob struct {
 }
 
 type Upload struct {
-	ID           uuid.UUID
-	VaultID      uuid.UUID
-	UserID       uuid.UUID
-	ExpectedHash string
-	Length       int64
-	Received     int64
-	Chunks       int32
-	CreatedAt    time.Time
-	ExpiresAt    time.Time
-	ChunkKeys    []string
+	ID              uuid.UUID
+	VaultID         uuid.UUID
+	UserID          uuid.UUID
+	ExpectedHash    string
+	Length          int64
+	Received        int64
+	Chunks          int32
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	ChunkKeys       []string
+	FinalizingUntil *time.Time
 }

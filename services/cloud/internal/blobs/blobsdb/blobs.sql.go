@@ -30,9 +30,9 @@ func (q *Queries) AddBlobRef(ctx context.Context, arg AddBlobRefParams) error {
 
 const addBlobRefs = `-- name: AddBlobRefs :exec
 WITH d AS (
-  SELECT unnest($1::text[]) AS hash, unnest($2::int[]) AS delta
+  SELECT unnest($1::text[])::char(64) AS hash, unnest($2::int[]) AS delta
 ), locked AS (
-  SELECT b.hash FROM blobs b WHERE b.hash = ANY($1::text[]) ORDER BY b.hash FOR NO KEY UPDATE
+  SELECT b.hash FROM blobs b WHERE b.hash = ANY($1::text[]::char(64)[]) ORDER BY b.hash FOR NO KEY UPDATE
 )
 UPDATE blobs SET ref_count = blobs.ref_count + d.delta,
   unreferenced_since = CASE WHEN blobs.ref_count + d.delta = 0 THEN now() ELSE NULL END
@@ -47,7 +47,9 @@ type AddBlobRefsParams struct {
 
 // AddBlobRef for many blobs in one statement (end of a commit batch). The rows
 // are locked in hash order first, like the one-by-one version did, so
-// concurrent batches never deadlock on them.
+// concurrent batches never deadlock on them. The hashes are compared as
+// CHAR(64), the type of blobs.hash: compared as text the primary key cannot
+// be used and every call scanned the whole table twice.
 func (q *Queries) AddBlobRefs(ctx context.Context, arg AddBlobRefsParams) error {
 	_, err := q.db.Exec(ctx, addBlobRefs, arg.Hashes, arg.Deltas)
 	return err
@@ -81,9 +83,30 @@ func (q *Queries) AdvanceUpload(ctx context.Context, arg AdvanceUploadParams) (i
 	return result.RowsAffected(), nil
 }
 
+const claimUploadFinalization = `-- name: ClaimUploadFinalization :execrows
+UPDATE uploads SET finalizing_until = now() + make_interval(secs => $2::double precision)
+WHERE id = $1 AND received = length AND (finalizing_until IS NULL OR finalizing_until < now())
+`
+
+type ClaimUploadFinalizationParams struct {
+	ID           uuid.UUID
+	LeaseSeconds float64
+}
+
+// Takes the finalization of a complete upload for lease_seconds: one request
+// assembles the chunks, the others wait for it (or take over once the lease
+// of a finalizer that died has run out).
+func (q *Queries) ClaimUploadFinalization(ctx context.Context, arg ClaimUploadFinalizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimUploadFinalization, arg.ID, arg.LeaseSeconds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createUpload = `-- name: CreateUpload :one
 INSERT INTO uploads (id, vault_id, user_id, expected_hash, length, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys, finalizing_until
 `
 
 type CreateUploadParams struct {
@@ -116,6 +139,7 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (Upl
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.ChunkKeys,
+		&i.FinalizingUntil,
 	)
 	return i, err
 }
@@ -171,7 +195,7 @@ func (q *Queries) GetBlobKeyShare(ctx context.Context, hash string) (Blob, error
 }
 
 const getUpload = `-- name: GetUpload :one
-SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys FROM uploads WHERE id = $1
+SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys, finalizing_until FROM uploads WHERE id = $1
 `
 
 func (q *Queries) GetUpload(ctx context.Context, id uuid.UUID) (Upload, error) {
@@ -188,6 +212,7 @@ func (q *Queries) GetUpload(ctx context.Context, id uuid.UUID) (Upload, error) {
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.ChunkKeys,
+		&i.FinalizingUntil,
 	)
 	return i, err
 }
@@ -281,12 +306,49 @@ func (q *Queries) ListBlobFiles(ctx context.Context, arg ListBlobFilesParams) ([
 	return items, nil
 }
 
-const listExpiredUploads = `-- name: ListExpiredUploads :many
-SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys FROM uploads WHERE expires_at < now() LIMIT $1
+const listExistingUploads = `-- name: ListExistingUploads :many
+SELECT id FROM uploads WHERE id = ANY($1::uuid[])
 `
 
-func (q *Queries) ListExpiredUploads(ctx context.Context, limit int32) ([]Upload, error) {
-	rows, err := q.db.Query(ctx, listExpiredUploads, limit)
+// Which of these uploads still exist: the sweep of the chunk objects deletes
+// the chunks of the others.
+func (q *Queries) ListExistingUploads(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listExistingUploads, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExpiredUploads = `-- name: ListExpiredUploads :many
+SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys, finalizing_until FROM uploads
+WHERE expires_at < now() AND (finalizing_until IS NULL OR finalizing_until < now())
+  AND id > $1::uuid
+ORDER BY id
+LIMIT $2::int
+`
+
+type ListExpiredUploadsParams struct {
+	After   uuid.UUID
+	MaxRows int32
+}
+
+// Keyset page of the expired uploads (a failing one does not hide the
+// others); an upload being finalized is left to its finalizer.
+func (q *Queries) ListExpiredUploads(ctx context.Context, arg ListExpiredUploadsParams) ([]Upload, error) {
+	rows, err := q.db.Query(ctx, listExpiredUploads, arg.After, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +367,44 @@ func (q *Queries) ListExpiredUploads(ctx context.Context, limit int32) ([]Upload
 			&i.CreatedAt,
 			&i.ExpiresAt,
 			&i.ChunkKeys,
+			&i.FinalizingUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUploadsOfVault = `-- name: ListUploadsOfVault :many
+SELECT id, vault_id, user_id, expected_hash, length, received, chunks, created_at, expires_at, chunk_keys, finalizing_until FROM uploads WHERE vault_id = $1
+`
+
+// The uploads in progress in a vault, whose chunks the purge of the vault deletes.
+func (q *Queries) ListUploadsOfVault(ctx context.Context, vaultID uuid.UUID) ([]Upload, error) {
+	rows, err := q.db.Query(ctx, listUploadsOfVault, vaultID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Upload{}
+	for rows.Next() {
+		var i Upload
+		if err := rows.Scan(
+			&i.ID,
+			&i.VaultID,
+			&i.UserID,
+			&i.ExpectedHash,
+			&i.Length,
+			&i.Received,
+			&i.Chunks,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.ChunkKeys,
+			&i.FinalizingUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -345,6 +445,19 @@ func (q *Queries) ListVaultBlobsAmong(ctx context.Context, arg ListVaultBlobsAmo
 	return items, nil
 }
 
+const lockBlobHash = `-- name: LockBlobHash :exec
+SELECT pg_advisory_xact_lock(hashtextextended('memobrain.blob:' || $1::text, 0))
+`
+
+// Serializes, per hash, the publication of a blob row with the deletion of
+// its object by the garbage collector until the transaction ends: under this
+// lock a row is inserted only once its object is verified, and the collector
+// deletes an object only when no row exists (see ingestFile and LockObject).
+func (q *Queries) LockBlobHash(ctx context.Context, hash string) error {
+	_, err := q.db.Exec(ctx, lockBlobHash, hash)
+	return err
+}
+
 const lockOwnerUploads = `-- name: LockOwnerUploads :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
 `
@@ -382,6 +495,27 @@ func (q *Queries) PendingUploadBytes(ctx context.Context, arg PendingUploadBytes
 	var pending int64
 	err := row.Scan(&pending)
 	return pending, err
+}
+
+const releaseUploadFinalization = `-- name: ReleaseUploadFinalization :exec
+UPDATE uploads SET finalizing_until = NULL WHERE id = $1
+`
+
+// A finalization that failed for a transient reason lets the next retry in at once.
+func (q *Queries) ReleaseUploadFinalization(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, releaseUploadFinalization, id)
+	return err
+}
+
+const renewUnreferencedBlob = `-- name: RenewUnreferencedBlob :exec
+UPDATE blobs SET unreferenced_since = now() WHERE hash = $1 AND ref_count = 0
+`
+
+// An upload linking a blob nobody references restarts its grace period: the
+// garbage collector must not take it right after a deduplicated upload.
+func (q *Queries) RenewUnreferencedBlob(ctx context.Context, hash string) error {
+	_, err := q.db.Exec(ctx, renewUnreferencedBlob, hash)
+	return err
 }
 
 const vaultHasBlob = `-- name: VaultHasBlob :one

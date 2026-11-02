@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -121,6 +122,55 @@ func (f *FS) Delete(_ context.Context, key string) error {
 		return err
 	}
 	return nil
+}
+
+// List walks the files below prefix. Objects are files: the temporary files of
+// a Put in progress are listed too (the caller decides by age).
+func (f *FS) List(ctx context.Context, prefix string, fn func(ObjectInfo) error) error {
+	// The prefix is a key prefix, not necessarily a directory: walk the
+	// directory that contains it and filter.
+	dir := path.Dir(prefix + "x")
+	start, err := f.path(dir)
+	if dir == "." {
+		start, err = f.root, nil
+	}
+	if err != nil {
+		return err
+	}
+	err = filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(f.root, p)
+		if err != nil {
+			return err
+		}
+		key := filepath.ToSlash(rel)
+		if !strings.HasPrefix(key, prefix) {
+			return nil
+		}
+		info, err := d.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // deleted meanwhile
+		}
+		if err != nil {
+			return err
+		}
+		return fn(ObjectInfo{Key: key, Size: info.Size(), Modified: info.ModTime()})
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // Ping checks the root is accessible.
