@@ -25,10 +25,11 @@ const errText = (e: unknown): string => errorMessage(e);
 export function ImportWizard() {
   const open = useImporter((s) => s.open);
   if (!open) return null;
-  return <Wizard />;
+  return <ImportWizardDialog />;
 }
 
-function Wizard() {
+/** The open wizard; App loads it on demand (it stays out of the startup bundle, ADR-0020). */
+export function ImportWizardDialog() {
   const { t } = useTranslation();
   const hide = (): void => useImporter.getState().hide();
   const vault = useAppStore((s) => s.vault);

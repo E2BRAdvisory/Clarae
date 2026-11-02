@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, type AuthState, type SyncStatus } from './api';
 import {
@@ -6,10 +6,11 @@ import {
   type IndexProgressPayload,
   type OpenRequestPayload,
   type SyncConflictPayload,
+  type VaultCloudDeletedPayload,
   type VaultLockedPayload,
 } from './events';
 import { applyTheme, type Theme } from './theme';
-import { initI18n } from '../i18n';
+import { i18next, initI18n } from '../i18n';
 import { useAppStore } from '../state/store';
 import { applyAppearance, useSettings } from '../state/settings';
 import { useInvalidate } from '../state/queries';
@@ -17,24 +18,40 @@ import { SettingsPanel } from '../settings/SettingsPanel';
 import { CommandPalette } from '../commands/CommandPalette';
 import { QuickSwitcher } from '../commands/QuickSwitcher';
 import { commandForEvent } from '../commands/registry';
-import { DialogHost } from '../ui/dialogs';
+import { DialogHost, dialog } from '../ui/dialogs';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { openVaultAt } from './actions';
 import { installModalFocus } from '@memobrain/ui';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
 import { RecoveryDialogs } from '../recovery/RecoveryDialog';
 import { SharingDialogs } from '../sharing/SharingDialogs';
-import { ImportWizard } from '../importer/ImportWizard';
+import { useImporter } from '../importer/store';
+import { lazyView } from '../ui/lazyView';
 import { UpdateDialog } from '../updater/UpdateDialog';
 import { SlideShow } from '../slides/SlideShow';
 import { Header } from '../shell/Header';
 import { DeviceRevokedBanner } from '../sync/DeviceRevokedBanner';
 import { VaultView } from '../shell/VaultView';
 import { Welcome } from '../shell/Welcome';
-import { useCan, usePlatform } from '../platform';
+import { can, useCan, usePlatform } from '../platform';
 import { followLinkPath } from './open';
 import { applyVaultChanges, onVaultChanges } from './fileChanges';
 
+// The import wizard is fetched the first time it opens: it stays out of the startup bundle (ADR-0020).
+const ImportWizardDialog = lazyView(async () => ({
+  default: (await import('../importer/ImportWizard')).ImportWizardDialog,
+}));
+
+function ImportWizardGate() {
+  const open = useImporter((s) => s.open);
+  if (!open) return null;
+  return (
+    <Suspense fallback={null}>
+      <ImportWizardDialog />
+    </Suspense>
+  );
+}
 export function App() {
   const vault = useAppStore((s) => s.vault);
   const updater = useCan('updater');
@@ -106,10 +123,20 @@ export function App() {
     const offLocked = api.on<VaultLockedPayload>(Events.vaultLocked, (p) => {
       if (p.vaultId === useAppStore.getState().vault?.id) useSync.getState().setUnlockOpen(true);
     });
+    // The cloud vault was deleted from the console or another device: the core disconnected the
+    // folder (its files stay). Said once, then Settings > Sync keeps a note of it.
+    const offDeleted = api.on<VaultCloudDeletedPayload>(Events.vaultCloudDeleted, (p) => {
+      useSync.getState().cloudVaultDeleted(p);
+      const name = useSync.getState().cloudDeleted[p.vaultId] ?? p.name;
+      // The desktop connects the folder again; in the browser the copy belongs to the console.
+      const text = can('unlinkVault') ? 'sync.cloudDeletedText' : 'sync.cloudDeletedTextWeb';
+      void dialog.alert(i18next.t('sync.cloudDeletedTitle'), i18next.t(text, { name }));
+    });
     return () => {
       offStatus();
       offConflict();
       offLocked();
+      offDeleted();
     };
   }, []);
 
@@ -150,12 +177,15 @@ export function App() {
     <div className="shell">
       <Header />
       <DeviceRevokedBanner />
-      {vault ? <VaultView key={vault.id} vaultId={vault.id} /> : <Welcome onOpen={openVault} />}
+      {/* The header stays usable (vault menu, account) when the vault view fails. */}
+      <ErrorBoundary scope="view" resetKey={vault?.id}>
+        {vault ? <VaultView key={vault.id} vaultId={vault.id} /> : <Welcome onOpen={openVault} />}
+      </ErrorBoundary>
       {settingsOpen && <SettingsPanel />}
       <SyncDialogs />
       <RecoveryDialogs />
       <SharingDialogs />
-      <ImportWizard />
+      <ImportWizardGate />
       {updater && <UpdateDialog />}
       <CommandPalette />
       <QuickSwitcher />

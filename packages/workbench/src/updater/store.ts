@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { updaterApi, UpdaterEvents, type UpdateStatus } from './api';
 import { api } from '../app/api';
+import { errorMessage } from '../util/errors';
 
 interface UpdaterState {
   status: UpdateStatus | null;
@@ -18,8 +19,6 @@ interface UpdaterState {
   skip(): Promise<void>;
 }
 
-const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
 export const useUpdater = create<UpdaterState>((set, get) => ({
   status: null,
   dialogOpen: false,
@@ -34,7 +33,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
     try {
       set({ status: await updaterApi.check() });
     } catch (e) {
-      set({ error: errText(e) });
+      set({ error: errorMessage(e) });
     } finally {
       set({ busy: false });
     }
@@ -45,7 +44,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
       const res = await updaterApi.install();
       set({ message: res.message });
     } catch (e) {
-      set({ error: errText(e) });
+      set({ error: errorMessage(e) });
     } finally {
       set({ busy: false });
     }

@@ -4,6 +4,7 @@ import { api, type CloudVault } from '../app/api';
 import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
+import { errorMessage } from '../util/errors';
 import { PassphraseFields } from './PassphraseFields';
 import { RecoveryKeyStep } from './RecoveryKeyStep';
 
@@ -59,7 +60,7 @@ export function ConnectWizard({
           setExisting(vs);
           setPicked((p) => p || vs[0]?.id || '');
         })
-        .catch((e) => setError(String(e)));
+        .catch((e) => setError(errorMessage(e)));
     }
   }, [signedIn, choice]);
 
@@ -71,7 +72,7 @@ export function ConnectWizard({
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

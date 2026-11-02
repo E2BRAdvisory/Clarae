@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
 import { api } from './api';
@@ -8,6 +8,8 @@ import { installWailsMock } from '../test/wails-mock';
 import { useAppStore } from '../state/store';
 import { emptyLayout, allPanes } from '../workspace/layout';
 import { useSettings } from '../state/settings';
+import { useSync } from '../state/sync';
+import { configurePlatform } from '../platform';
 
 function renderApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -161,6 +163,44 @@ describe('App shell', () => {
       renderApp();
       useAppStore.getState().openSettings('hotkeys');
       expect(await screen.findByPlaceholderText('Filter commands…')).toBeInTheDocument();
+    });
+
+    it('says so when the cloud vault of the folder was deleted elsewhere, and shows it unlinked', async () => {
+      const { mock, info } = await openDemo();
+      await api.auth.login('https://memobrain.test');
+      useAppStore.getState().setAuth(await api.auth.status());
+      await api.sync.linkNew(info.id, 'Demo cloud', 'shared', '');
+      renderApp();
+      await waitFor(() => expect(useSync.getState().info[info.id]?.linked).toBe(true));
+
+      act(() => mock.deleteCloudVaultElsewhere('cloud-1'));
+      expect(await screen.findByText('Cloud vault deleted')).toBeInTheDocument();
+      expect(screen.getByText(/“Demo cloud” was deleted from the console/)).toHaveTextContent(
+        /connect the folder to it/,
+      );
+      expect(useSync.getState().info[info.id]?.linked).toBe(false);
+      expect(useSync.getState().cloudDeleted).toEqual({ [info.id]: 'Demo cloud' });
+      expect(await screen.findByRole('button', { name: /Not connected/ })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      await waitFor(() => expect(screen.queryByText('Cloud vault deleted')).toBeNull());
+    });
+
+    it('in the browser, sends back to the console to restore a deleted cloud vault', async () => {
+      const { mock, info } = await openDemo();
+      configurePlatform({ kind: 'web' });
+      try {
+        renderApp();
+        await waitFor(() => expect(mock.listeners('vault:cloud-deleted')).toBe(1));
+        act(() =>
+          mock.emit('vault:cloud-deleted', { vaultId: info.id, cloudVaultId: 'c', name: 'Web' }),
+        );
+        expect(
+          await screen.findByText(/copy in this browser is no longer synchronized/),
+        ).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      } finally {
+        configurePlatform();
+      }
     });
   });
 });

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { can } from '../platform';
 import { api, linkInfo, type SyncConflict, type SyncLinkInfo, type SyncStatus } from '../app/api';
+import type { VaultCloudDeletedPayload } from '../app/events';
+import { useAppStore } from './store';
 
 const unlinked: SyncLinkInfo = linkInfo();
 
@@ -14,10 +16,17 @@ interface SyncState {
   conflictsOpen: boolean;
   historyPath: string | null;
   diskWarning: boolean;
+  /**
+   * Folders disconnected because their cloud vault was deleted elsewhere (vault:cloud-deleted):
+   * local vault id -> name of the deleted cloud vault. Cleared when the folder is linked again.
+   */
+  cloudDeleted: Record<string, string>;
 
   refresh(vaultId: string): Promise<void>;
   refreshConflicts(vaultId: string): Promise<void>;
   setStatus(s: SyncStatus): void;
+  /** The core disconnected a folder whose cloud vault was deleted elsewhere. */
+  cloudVaultDeleted(p: VaultCloudDeletedPayload): void;
   setWizardOpen(open: boolean): void;
   setUnlockOpen(open: boolean): void;
   setConflictsOpen(open: boolean): void;
@@ -34,6 +43,7 @@ export const useSync = create<SyncState>((set, get) => ({
   conflictsOpen: false,
   historyPath: null,
   diskWarning: false,
+  cloudDeleted: {},
 
   async refresh(vaultId) {
     try {
@@ -41,6 +51,7 @@ export const useSync = create<SyncState>((set, get) => ({
       set((s) => ({
         info: { ...s.info, [vaultId]: info },
         status: { ...s.status, [vaultId]: status },
+        cloudDeleted: info.linked ? without(s.cloudDeleted, vaultId) : s.cloudDeleted,
       }));
       if (info.linked) void get().refreshConflicts(vaultId);
     } catch {
@@ -63,6 +74,18 @@ export const useSync = create<SyncState>((set, get) => ({
       .then((info) => set((s) => ({ info: { ...s.info, [st.vaultId]: info } })))
       .catch(() => undefined);
   },
+  cloudVaultDeleted(p) {
+    // The link, its conflicts and the dialogs about them are gone with the cloud vault; the
+    // dialogs are those of the open vault (SyncDialogs).
+    const open = p.vaultId === useAppStore.getState().vault?.id;
+    set((s) => ({
+      cloudDeleted: { ...s.cloudDeleted, [p.vaultId]: p.name || s.info[p.vaultId]?.name || '' },
+      info: { ...s.info, [p.vaultId]: unlinked },
+      conflicts: without(s.conflicts, p.vaultId),
+      ...(open ? { unlockOpen: false, conflictsOpen: false, historyPath: null } : {}),
+    }));
+    void get().refresh(p.vaultId);
+  },
   setWizardOpen: (wizardOpen) => set({ wizardOpen }),
   setUnlockOpen: (unlockOpen) => set({ unlockOpen }),
   setConflictsOpen: (conflictsOpen) => set({ conflictsOpen }),
@@ -82,3 +105,10 @@ export const useSync = create<SyncState>((set, get) => ({
 
 export const infoOf = (s: SyncState, vaultId: string | undefined): SyncLinkInfo =>
   vaultId ? (s.info[vaultId] ?? unlinked) : unlinked;
+
+function without<T>(m: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in m)) return m;
+  const next = { ...m };
+  delete next[key];
+  return next;
+}

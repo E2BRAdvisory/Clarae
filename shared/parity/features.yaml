@@ -157,7 +157,7 @@ features:
     title: Eliminazione logica di un vault cloud
     desktop:
       status: yes
-      note: dopo l'eliminazione sul server il vault locale collegato si scollega e conserva i file (D-04)
+      note: dopo l'eliminazione sul server il vault locale collegato si scollega e conserva i file (D-04); se il vault è eliminato dalla console o da un altro dispositivo un avviso lo dice (evento vault:cloud-deleted) e Impostazioni › Sync lo ricorda
       bindings: [SyncAPI.DeleteCloudVault]
       operationIds: [deleteVault]
     workbench:
@@ -170,7 +170,10 @@ features:
     tests:
       desktop:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - packages/workbench/src/app/App.test.tsx
+        - packages/workbench/src/sync/sync.test.tsx
         - apps/desktop/internal/sync/manager_vaults_test.go
+        - apps/desktop/internal/sync/manager_mounts_test.go
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       web:
@@ -283,6 +286,7 @@ features:
     title: Sincronizzazione del vault (stato, pausa, sincronizza ora)
     desktop:
       status: yes
+      note: Impostazioni › Sync mostra quanti file del cloud il dispositivo non riesce a leggere (quarantena, ADR-0039)
       commands: [sync:now, sync:settings]
       bindings: [SyncAPI.SyncNow, SyncAPI.Status, SyncAPI.SetPaused, SyncAPI.SetPollInterval]
       operationIds: [getChanges, checkBlobs, putBlob, getBlob, commit]
@@ -305,6 +309,7 @@ features:
     title: Conflitti di sincronizzazione
     desktop:
       status: yes
+      note: se il file cambia dopo che le versioni sono state mostrate, «Tieni la mia» e la fusione non scrivono nulla, le versioni si ricaricano e un avviso chiede di scegliere di nuovo
       commands: [sync:conflicts]
       bindings: [SyncAPI.Conflicts, SyncAPI.ConflictTexts, SyncAPI.ResolveConflict]
     workbench:

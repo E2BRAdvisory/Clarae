@@ -12,6 +12,8 @@ export const Events = {
   sharesChanged: 'shares:changed',
   mountsChanged: 'mounts:changed',
   mountRevoked: 'mount:revoked',
+  /** The cloud vault of a linked folder was deleted elsewhere: the folder was disconnected. */
+  vaultCloudDeleted: 'vault:cloud-deleted',
   openRequest: 'app:open-request',
   /** Desktop: the window is closing; flush, then call runtime Quit (emitted by apps/desktop/main.go). */
   beforeClose: 'app:before-close',
@@ -76,5 +78,17 @@ export interface OpenRequestPayload {
 export interface MountRevokedPayload {
   vaultId: string;
   shareId: string;
+  name: string;
+}
+
+/**
+ * `vault:cloud-deleted`: the cloud vault of a linked folder was deleted from the console or from
+ * another device. The core disconnected the folder, which keeps its files, as after a delete made
+ * here (internal/sync, cloudVaultDeleted); a `sync:status` with the reason follows.
+ */
+export interface VaultCloudDeletedPayload {
+  vaultId: string;
+  cloudVaultId: string;
+  /** The name the cloud vault had. */
   name: string;
 }

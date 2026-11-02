@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
 import { openOrCreate } from '../app/actions';
-import { Events, type FileChangedPayload } from '../app/events';
+import { onVaultChanges } from '../app/fileChanges';
 import { infoOf, useSync } from '../state/sync';
 import { useAppStore } from '../state/store';
-import './graph.css';
+import { errorMessage } from '../util/errors';
 import { GraphPanel } from './GraphPanel';
 import { startLayout, type LayoutHost } from './layoutHost';
-import { edgePairs } from './layoutEngine';
+import { edgePairs, WARM_ALPHA } from './layoutEngine';
+import { graphNeedsReload, sameGraph, seedPositions, type PreviousLayout } from './incremental';
 import { buildModel, timelapseTime, visibleAt, type GraphModel } from './model';
 import { graphCenter } from './paths';
 import { GraphRenderer, readPalette } from './renderer';
@@ -73,7 +74,17 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
   const [progress, setProgress] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [reload, setReload] = useState(0);
-  const [focusNode, setFocusNode] = useState(-1);
+  /** The node walked to with [ and ], by id: indexes change when the graph does. */
+  const [focusId, setFocusId] = useState<string | null>(null);
+  /** The next layout continues from the current one (a refresh, not new options). */
+  const warmNext = useRef(false);
+  /** The answer on screen and the vault and options it was built for. */
+  const onScreen = useRef<{ key: string; data: GraphData } | null>(null);
+  /** The nodes the renderer's positions belong to, and the heat of their layout (0 = settled). */
+  const laidOut = useRef<readonly string[]>([]);
+  const layoutAlpha = useRef(0);
+  /** A layout from scratch fits the view once it settles, unless the user moved it first. */
+  const fitWhenDone = useRef(false);
 
   useEffect(() => {
     void useGraphSettings.getState().load(vaultId);
@@ -85,16 +96,24 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
   useEffect(() => {
     if (!loaded) return;
     let cancelled = false;
+    const key = `${vaultId}\n${optionsKey}`;
     const timer = setTimeout(() => {
       api.graph
         .build(vaultId, JSON.parse(optionsKey) as GraphOptions)
         .then((d) => {
           if (cancelled) return;
           setError('');
+          // Same options as the graph on screen: a refresh after file changes. Same nodes and
+          // links: nothing to redraw; otherwise the layout continues from the current positions.
+          const prev = onScreen.current;
+          const refresh = prev?.key === key;
+          if (refresh && sameGraph(prev.data, d)) return;
+          warmNext.current = refresh;
+          onScreen.current = { key, data: d };
           setData(d);
         })
         .catch((e: unknown) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+          if (!cancelled) setError(errorMessage(e));
         });
     }, 250);
     return () => {
@@ -103,11 +122,12 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     };
   }, [vaultId, optionsKey, loaded, reload]);
 
-  // The index changed (note created, renamed, edited): rebuild, coalescing bursts.
+  // The index changed (note created, renamed, edited): rebuild, coalescing bursts. Changes that
+  // cannot alter nodes or links (settings under .memobrain/, an edited attachment) are ignored.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
-      if (p.vaultId !== vaultId) return;
+    const off = onVaultChanges((batch) => {
+      if (batch.vaultId !== vaultId || !graphNeedsReload(batch)) return;
       clearTimeout(timer);
       timer = setTimeout(() => setReload((n) => n + 1), 1500);
     });
@@ -197,7 +217,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     dirty.current = true;
   }, [settings.labelZoom]);
 
-  // ---- layout (restarts when the data changes, not when only the node size does)
+  // ---- layout (restarts when the nodes or links change, not when only the node size does)
   const forcesRef = useRef(settings.forces);
   useEffect(() => {
     forcesRef.current = settings.forces;
@@ -206,29 +226,48 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     const r = renderer.current;
     const m = modelRef.current;
     if (!r || !m) return;
+    // A refresh keeps the nodes where they are and the view where the user left it; new options
+    // (filters, depth, another centre) lay the graph out from scratch and fit it.
+    const prev: PreviousLayout = { ids: laidOut.current, positions: r.positions };
+    const seed = warmNext.current ? seedPositions(prev, m) : null;
+    warmNext.current = false;
+    laidOut.current = m.data.nodes.map((nd) => nd.id);
     r.setModel(m);
-    userMoved.current = false;
+    // Never draw the new model with the old indexes: until the layout posts, the kept nodes stay
+    // where they were (the others appear with the first post).
+    r.positions = seed ?? new Float32Array(0);
+    if (!seed) {
+      userMoved.current = false;
+      fitWhenDone.current = true;
+    }
     if (m.n === 0) {
       r.positions = new Float32Array(0);
       dirty.current = true;
       return;
     }
     const t0 = performance.now();
-    let first = true;
-    const h = startLayout(m.n, edgePairs(m.data.edges), forcesRef.current, (pos, _alpha, done) => {
+    let first = !seed;
+    const onPositions = (pos: Float32Array, alpha: number, done: boolean): void => {
       r.positions = pos;
-      if (first || (done && !userMoved.current)) {
+      layoutAlpha.current = done ? 0 : alpha;
+      if ((first || (done && fitWhenDone.current)) && !userMoved.current) {
         const { w, h: hh } = r.size;
-        if (!userMoved.current) r.view = fitView(pos, m.n, w, hh);
-        first = false;
+        r.view = fitView(pos, m.n, w, hh);
       }
+      first = false;
+      if (done) fitWhenDone.current = false;
       const st = window.__graphStats;
       if (st) {
         st.ticks++;
         if (done) st.layoutMs = performance.now() - t0;
       }
       dirty.current = true;
-    });
+    };
+    // A layout interrupted while still spreading out continues at its own heat.
+    const warm = seed
+      ? { positions: seed, alpha: Math.max(WARM_ALPHA, layoutAlpha.current) }
+      : undefined;
+    const h = startLayout(m.n, edgePairs(m.data.edges), forcesRef.current, onPositions, warm);
     host.current = h;
     return () => {
       h.dispose();
@@ -241,6 +280,16 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     if (model) renderer.current?.setModel(model);
     dirty.current = true;
   }, [model]);
+
+  // The node walked to with the keyboard, found again in a changed graph (-1 once it is gone).
+  const focusNode = useMemo(
+    () => (model && focusId !== null ? model.data.nodes.findIndex((nd) => nd.id === focusId) : -1),
+    [model, focusId],
+  );
+  useEffect(() => {
+    renderer.current?.setSelected(focusNode);
+    dirty.current = true;
+  }, [model, focusNode]);
 
   useEffect(() => {
     host.current?.setForces(settings.forces);
@@ -332,7 +381,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
       );
       const at = order.indexOf(focusNode);
       const next = order[(at + (key === ']' ? 1 : -1) + order.length) % order.length] ?? -1;
-      setFocusNode(next);
+      setFocusId(m.data.nodes[next]?.id ?? null);
       r.setSelected(next);
       setHover(next);
       const x = r.positions[2 * next] as number;

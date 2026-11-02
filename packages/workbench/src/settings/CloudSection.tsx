@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
+import { signIn } from '../app/signIn';
 import { useCan } from '../platform';
 import { useAppStore } from '../state/store';
 import { AccountDevices } from './AccountDevices';
@@ -28,9 +29,7 @@ export function CloudSection() {
   const login = async () => {
     setBusy(true);
     try {
-      setAuth(await api.auth.login(server || auth?.serverUrl || ''));
-    } catch {
-      setAuth(await api.auth.status()); // the error text is part of the state
+      setAuth(await signIn(server || auth?.serverUrl || '')); // a failure is in the state
     } finally {
       setBusy(false);
     }

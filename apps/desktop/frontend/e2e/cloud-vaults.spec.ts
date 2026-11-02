@@ -9,6 +9,7 @@ interface MockWindow {
   __mock: {
     vaults: Map<string, { info: { id: string }; files: Map<string, string> }>;
     sync: { cloudVaults: Record<string, unknown>[] };
+    deleteCloudVaultElsewhere(cloudVaultId: string): void;
   };
   go: { app: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> };
 }
@@ -94,4 +95,49 @@ test('rename, delete and restore cloud vaults from the settings', async ({ page 
   await expect(live.getByRole('rowheader', { name: 'Notes' })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Deleted vaults' })).toHaveCount(0);
   await expect(page.getByRole('status').filter({ hasText: '“Notes” restored.' })).toBeVisible();
+});
+
+test('a cloud vault deleted elsewhere disconnects the folder and says so', async ({ page }) => {
+  skipOnWeb(
+    'vault.delete',
+    'the spec deletes a cloud vault of the Wails mock (window.__mock.deleteCloudVaultElsewhere); a vault of this browser has no cloud link to lose: the console deletes cloud vaults (web/e2e)',
+  );
+  await openVault(page);
+  await openCloudSettings(page);
+  await page.getByLabel('Server address').fill('https://memobrain.test');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText(/Signed in as/)).toBeVisible();
+  await page.evaluate(async () => {
+    const w = window as unknown as MockWindow;
+    w.__mock.sync.cloudVaults.push({
+      id: 'cloud-1',
+      ownerId: 'user-1',
+      name: 'Notes',
+      kind: 'shared',
+      totalBytes: 2048,
+      fileCount: 2,
+      lastSeq: 3,
+      createdAt: '2026-10-01T10:00:00Z',
+    });
+    const v = [...w.__mock.vaults.values()][0]!;
+    v.files.set('Plan.md', '# keep me');
+    await w.go.app['SyncAPI']!['LinkExisting']!(v.info.id, 'cloud-1');
+  });
+  await page.getByRole('button', { name: 'Sync', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sync now' })).toBeVisible();
+
+  // Deleted from the console: the core disconnects the folder and tells the UI.
+  await page.evaluate(() =>
+    (window as unknown as MockWindow).__mock.deleteCloudVaultElsewhere('cloud-1'),
+  );
+  const notice = page.getByRole('dialog', { name: 'Cloud vault deleted' });
+  await expect(notice).toContainText('“Notes” was deleted from the console or from another device');
+  await notice.getByRole('button', { name: 'OK' }).click();
+  // Settings > Sync now offers to connect, and remembers why the link went.
+  await expect(page.getByText(/cloud vault “Notes” was deleted elsewhere/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect to the cloud' })).toBeVisible();
+  const note = await page.evaluate(() =>
+    [...(window as unknown as MockWindow).__mock.vaults.values()][0]!.files.get('Plan.md'),
+  );
+  expect(note).toBe('# keep me');
 });

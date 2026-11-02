@@ -1,7 +1,14 @@
 {
   "app": {
     "name": "MemoBrain Notes",
-    "backToConsole": "Back to the console"
+    "backToConsole": "Back to the console",
+    "crash": {
+      "shell": "Something went wrong and the app stopped.",
+      "view": "This view could not be displayed.",
+      "load": "This view could not be downloaded.",
+      "retry": "Try again",
+      "reload": "Reload"
+    }
   },
   "welcome": {
     "title": "Open a vault",
@@ -293,7 +300,8 @@
   },
   "dialog": {
     "filter": "Filter…",
-    "nothing": "Nothing matches"
+    "nothing": "Nothing matches",
+    "more": "{{count}} more: type to narrow the list"
   },
   "palette": {
     "title": "Command palette",
@@ -628,7 +636,15 @@
     "signedOutHintWeb": "The session with the cloud has ended: reload the page or sign in again from the console to resume. The vault stays linked.",
     "linkWarningKeychain": "The vault is linked and unlocked for this session only: its key could not be stored in the system keychain. Keep the recovery key safe: you will need the passphrase at the next start.",
     "linkWarningIncomplete": "The cloud vault was created, but linking this folder to it failed. A recovery key shown here is valid: connect the folder later with “Connect to an existing cloud vault”.",
-    "linkWarningOther": "The vault was created with a warning: {{code}}."
+    "linkWarningOther": "The vault was created with a warning: {{code}}.",
+    "cloudDeletedTitle": "Cloud vault deleted",
+    "cloudDeletedText": "The cloud vault “{{name}}” was deleted from the console or from another device. This folder was disconnected from the cloud and keeps all its files. To sync it again, restore the vault from “Deleted vaults” and connect the folder to it.",
+    "cloudDeletedTextWeb": "The cloud vault “{{name}}” was deleted from the console or from another device. The copy in this browser is no longer synchronized and keeps its files: go back to the console to restore the vault.",
+    "cloudDeletedNote": "Disconnected because the cloud vault “{{name}}” was deleted elsewhere. The files here were kept.",
+    "quarantinedN_one": "{{count}} file in the cloud cannot be read on this device",
+    "quarantinedN_other": "{{count}} files in the cloud cannot be read on this device",
+    "quarantinedHint": "Their encrypted name does not open with the key of this vault, so they are left alone: they are not downloaded, are never taken as deletions and are tried again at every sync. If the number does not go down, see the log.",
+    "conflictChanged": "The file changed after this conflict was shown: the versions below have been reloaded. Review them and choose again."
   },
   "drawing": {
     "loading": "Loading the drawing editor…",
@@ -1321,7 +1337,14 @@
     "exists": "An item with that name already exists.",
     "not-found": "The file no longer exists: it may have been moved or deleted.",
     "invalid-path": "That path is outside the vault.",
-    "too-large": "The file is too large."
+    "too-large": "The file is too large.",
+    "permission": "The operating system denied access to the file.",
+    "partial": "The operation failed and some notes could not be put back as they were: see the log.",
+    "cancelled": "The operation was cancelled or took too long.",
+    "io": "The file could not be read or written ({{detail}}).",
+    "internal": "An internal error occurred (local index): see the log.",
+    "insecure-url": "Sign-in refused: the server or its identity provider would be reached over plain http, which sends your credentials and notes unencrypted. Use an https address (http is accepted only for this computer, localhost).",
+    "wrongSecret": "Wrong passphrase or recovery key."
   },
   "embeds": {
     "depthLimit": "{{label}} (embed depth limit)",

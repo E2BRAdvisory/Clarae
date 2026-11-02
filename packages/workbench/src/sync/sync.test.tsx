@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../app/api';
+import { Events, type VaultCloudDeletedPayload } from '../app/events';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { useAppStore } from '../state/store';
@@ -50,6 +51,7 @@ beforeEach(async () => {
     conflictsOpen: false,
     historyPath: null,
     diskWarning: false,
+    cloudDeleted: {},
   });
 });
 
@@ -280,7 +282,8 @@ describe('UnlockDialog', () => {
       target: { value: 'wrong wrong wrong' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/wrong passphrase/);
+    // The core's message has no code: it is translated all the same (util/errors.ts).
+    expect(await screen.findByRole('alert')).toHaveTextContent('Wrong passphrase or recovery key.');
     fireEvent.change(document.getElementById('unlock-secret') as HTMLElement, {
       target: { value: GOOD },
     });
@@ -356,7 +359,8 @@ describe('ConflictsView', () => {
     ['Keep both', 'keep-both'],
   ])('%s resolves the conflict with %s', async (label, action) => {
     render(wrap(<ConflictsView vaultId={vaultId} />));
-    await screen.findByLabelText('Side by side comparison');
+    const diff = await screen.findByLabelText('Side by side comparison');
+    await within(diff).findByText('row 3 by A'); // "Keep mine" waits for the versions
     fireEvent.click(screen.getByRole('button', { name: label }));
     await waitFor(() =>
       expect(mock.sync.resolved).toEqual([{ vaultId, id: 7, action, merged: '' }]),
@@ -381,6 +385,68 @@ describe('ConflictsView', () => {
         merged: 'row 1\nrow 3 by A and B\n',
       }),
     );
+  });
+  it('reloads the versions when the file changed since they were shown, then lets the user choose again', async () => {
+    render(wrap(<ConflictsView vaultId={vaultId} />));
+    const diff = await screen.findByLabelText('Side by side comparison');
+    await within(diff).findByText('row 3 by A');
+    // The file is edited (or synced) after the versions were read: the core refuses the choice.
+    mock.sync.conflictTexts.set(7, {
+      current: 'row 1\nrow 3 by C\n',
+      ours: 'row 1\nrow 3 by B\n',
+      currentHash: 'h2',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Keep mine' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The file changed after this conflict was shown',
+    );
+    await within(diff).findByText('row 3 by C');
+    expect(mock.sync.resolved).toEqual([]);
+    // No error dialog: the notice says it all.
+    expect(screen.queryByRole('button', { name: 'OK' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep mine' }));
+    await waitFor(() =>
+      expect(mock.sync.resolved).toEqual([{ vaultId, id: 7, action: 'keep-local', merged: '' }]),
+    );
+  });
+
+  it('keeps the merged text when the file changed under it', async () => {
+    render(wrap(<ConflictsView vaultId={vaultId} />));
+    const merge = screen.getByRole('button', { name: 'Merge by hand' });
+    await waitFor(() => expect(merge).toBeEnabled());
+    fireEvent.click(merge);
+    fireEvent.change(screen.getByLabelText('Merged text'), { target: { value: 'my merge\n' } });
+    mock.sync.conflictTexts.set(7, {
+      current: 'row 1\nrow 3 by C\n',
+      ours: 'row 1\nrow 3 by B\n',
+      currentHash: 'h2',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save merged text' }));
+    // Back to the comparison with the new version, the merge kept for "Merge by hand".
+    const diff = await screen.findByLabelText('Side by side comparison');
+    await within(diff).findByText('row 3 by C');
+    expect(screen.getByRole('alert')).toHaveTextContent('Review them and choose again.');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Merge by hand' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Merge by hand' }));
+    expect(screen.getByLabelText('Merged text')).toHaveValue('my merge\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Save merged text' }));
+    await waitFor(() =>
+      expect(mock.sync.resolved).toEqual([
+        { vaultId, id: 7, action: 'merged', merged: 'my merge\n' },
+      ]),
+    );
+  });
+
+  it('says why the versions cannot be shown and does not offer to keep mine', async () => {
+    mock.sync.conflictTexts.delete(7);
+    render(wrap(<ConflictsView vaultId={vaultId} />));
+    expect(await screen.findByRole('alert')).toHaveTextContent('conflict not found');
+    expect(screen.getByRole('button', { name: 'Keep mine' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Merge by hand' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Keep current' })).toBeEnabled();
   });
 });
 
@@ -618,7 +684,64 @@ describe('SyncSection (settings)', () => {
     const save = screen.getByRole('button', { name: 'Save passphrase' });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
-    expect(await screen.findByText(/wrong passphrase/)).toBeInTheDocument();
+    expect(await screen.findByText('Wrong passphrase or recovery key.')).toBeInTheDocument();
     expect(mock.sync.secrets.get('cloud-1')?.passphrase).toBe(GOOD);
+  });
+
+  it('counts the files of the cloud this device cannot read, only when there are some', async () => {
+    await signIn();
+    await api.sync.linkNew(vaultId, 'Diary', 'private', GOOD);
+    await useSync.getState().refresh(vaultId);
+    const status = useSync.getState().status[vaultId];
+    if (!status) throw new Error('no status');
+    render(wrap(<SyncSection />));
+    await screen.findByRole('button', { name: 'Sync now' });
+    expect(screen.queryByText(/cannot be read on this device/)).toBeNull();
+    act(() => useSync.getState().setStatus({ ...status, quarantined: 2 }));
+    expect(
+      await screen.findByText('2 files in the cloud cannot be read on this device'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/never taken as deletions/)).toBeInTheDocument();
+  });
+
+  it('says that the folder was disconnected because its cloud vault was deleted elsewhere', async () => {
+    await signIn();
+    await api.sync.linkNew(vaultId, 'Diary', 'shared', '');
+    await useSync.getState().refresh(vaultId);
+    useSync.getState().setConflictsOpen(true);
+    render(wrap(<SyncSection />));
+    await screen.findByRole('button', { name: 'Sync now' });
+    // What App does on vault:cloud-deleted (App.test.tsx covers the listener).
+    const off = api.on(Events.vaultCloudDeleted, (p) =>
+      useSync.getState().cloudVaultDeleted(p as VaultCloudDeletedPayload),
+    );
+    act(() => mock.deleteCloudVaultElsewhere('cloud-1'));
+    off();
+    expect(
+      await screen.findByText(/cloud vault “Diary” was deleted elsewhere/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect to the cloud' })).toBeInTheDocument();
+    expect(useSync.getState().conflictsOpen).toBe(false);
+
+    // Connected again: the note goes.
+    await api.sync.linkNew(vaultId, 'Diary 2', 'shared', '');
+    await act(() => useSync.getState().refresh(vaultId));
+    expect(useSync.getState().cloudDeleted).toEqual({});
+  });
+
+  it('shows why the sign-in was refused, in the user language', async () => {
+    useAppStore.getState().setAuth(await api.auth.status());
+    mock.sync.links.set(vaultId, {
+      ...(await api.sync.info(vaultId)),
+      linked: true,
+      cloudVaultId: 'cloud-9',
+      kind: 'shared',
+      name: 'Old',
+      serverUrl: 'http://notes.example.com',
+    });
+    await useSync.getState().refresh(vaultId);
+    render(wrap(<SyncSection />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText(/Sign-in refused: the server/)).toBeInTheDocument();
   });
 });

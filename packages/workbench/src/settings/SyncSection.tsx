@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
 import { lockVault } from '../app/actions';
+import { signIn } from '../app/signIn';
 import { useCan, usePlatform } from '../platform';
 import { useAppStore } from '../state/store';
 import { isLocked, useManaged } from '../state/managed';
@@ -125,6 +126,7 @@ export function SyncSection() {
   const status = useSync((s) => (vault ? s.status[vault.id] : undefined));
   const conflicts = useSync((s) => (vault ? (s.conflicts[vault.id]?.length ?? 0) : 0));
   const disk = useSync((s) => s.diskWarning);
+  const deletedName = useSync((s) => (vault ? s.cloudDeleted[vault.id] : undefined));
   const [form, setForm] = useState<'none' | 'passphrase' | 'recovery'>('none');
   const [newKey, setNewKey] = useState('');
   const auth = useAppStore((s) => s.auth);
@@ -151,6 +153,11 @@ export function SyncSection() {
   if (!info.linked) {
     return (
       <>
+        {deletedName !== undefined && (
+          <div className="warning small" role="status">
+            {t('sync.cloudDeletedNote', { name: deletedName })}
+          </div>
+        )}
         <p className="muted">{t('sync.notConnectedText')}</p>
         <div className="actions">
           <button className="primary" onClick={() => useSync.getState().setWizardOpen(true)}>
@@ -207,10 +214,8 @@ export function SyncSection() {
             disabled={signingIn}
             onClick={() => {
               setSigningIn(true);
-              void api.auth
-                .login(info.serverUrl)
+              void signIn(info.serverUrl)
                 .then(setAuth)
-                .catch(async () => setAuth(await api.auth.status()))
                 .finally(() => setSigningIn(false));
             }}
           >
@@ -218,10 +223,23 @@ export function SyncSection() {
           </button>
         </div>
       )}
+      {(auth?.status ?? 'signed_out') === 'signed_out' && ownsSession && auth?.error && (
+        <div className="error small" role="alert">
+          {auth.error}
+        </div>
+      )}
       {status?.error && (
         <div className="error small" role="alert">
           {status.error}
         </div>
+      )}
+      {(status?.quarantined ?? 0) > 0 && (
+        <>
+          <div className="warning small" role="status">
+            {t('sync.quarantinedN', { count: status?.quarantined ?? 0 })}
+          </div>
+          <p className="muted small">{t('sync.quarantinedHint')}</p>
+        </>
       )}
       {conflicts > 0 && (
         <div className="row">

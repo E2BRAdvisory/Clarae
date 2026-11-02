@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, type ConflictAction, type SyncConflict } from '../app/api';
 import { useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
+import { errorCodeOf, errorMessage } from '../util/errors';
 import { diffLines, hasChanges } from './diff';
 
 const base = (p: string): string => p.slice(p.lastIndexOf('/') + 1).replace(/\.md$/, '');
@@ -13,22 +14,44 @@ const base = (p: string): string => p.slice(p.lastIndexOf('/') + 1).replace(/\.m
 function ConflictDetail({ vaultId, conflict }: { vaultId: string; conflict: SyncConflict }) {
   const { t } = useTranslation();
   const [merge, setMerge] = useState<string | null>(null);
+  // The text being merged when the file changed under it: offered again by "Merge by hand".
+  const [draft, setDraft] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
   const [busy, setBusy] = useState(false);
-  const { data: texts } = useQuery({
+  // Reading the texts also tells the core which version of the file the user is shown: "Keep mine"
+  // and a merge replace the file only while it still holds that version.
+  const {
+    data: texts,
+    error: textsError,
+    refetch,
+  } = useQuery({
     queryKey: ['conflict-texts', vaultId, conflict.id],
-    queryFn: () =>
-      api.sync.conflictTexts(vaultId, conflict.id).catch(() => ({ current: '', ours: '' })),
+    queryFn: () => api.sync.conflictTexts(vaultId, conflict.id),
+    retry: false,
   });
   const diff = useMemo(() => (texts ? diffLines(texts.current, texts.ours) : []), [texts]);
+  // "Keep mine" and a merge need the version of the file the core will compare with.
+  const unread = !texts || textsError !== null;
 
   const resolve = async (action: ConflictAction, merged = '') => {
     setBusy(true);
+    setChanged(false);
     try {
       await api.sync.resolveConflict(vaultId, conflict.id, action, merged);
       await useSync.getState().refreshConflicts(vaultId);
       void useSync.getState().refresh(vaultId);
     } catch (e) {
-      await dialog.error(e);
+      if (errorCodeOf(e) !== 'conflict') {
+        await dialog.error(e);
+        return;
+      }
+      // The file changed since its version was shown (edited, synced, moved): nothing was written.
+      // Show the new version, keep what was being merged, and let the user choose again.
+      if (action === 'merged') setDraft(merged);
+      setMerge(null);
+      setChanged(true);
+      await refetch();
+      void useSync.getState().refreshConflicts(vaultId);
     } finally {
       setBusy(false);
     }
@@ -39,6 +62,16 @@ function ConflictDetail({ vaultId, conflict }: { vaultId: string; conflict: Sync
       <p className="muted small">
         {t('sync.conflictExplain', { path: conflict.path, copy: conflict.copyPath })}
       </p>
+      {changed && (
+        <div className="warning small" role="alert">
+          {t('sync.conflictChanged')}
+        </div>
+      )}
+      {textsError && (
+        <div className="error small" role="alert">
+          {errorMessage(textsError)}
+        </div>
+      )}
       {merge === null ? (
         <div className="diff" aria-label={t('sync.sideBySide')}>
           <div className="diff-head">
@@ -67,13 +100,16 @@ function ConflictDetail({ vaultId, conflict }: { vaultId: string; conflict: Sync
             <button disabled={busy} onClick={() => void resolve('keep-remote')}>
               {t('sync.keepCurrent')}
             </button>
-            <button disabled={busy} onClick={() => void resolve('keep-local')}>
+            <button disabled={busy || unread} onClick={() => void resolve('keep-local')}>
               {t('sync.keepMine')}
             </button>
             <button disabled={busy} onClick={() => void resolve('keep-both')}>
               {t('sync.keepBoth')}
             </button>
-            <button disabled={!texts} onClick={() => setMerge(texts?.current ?? '')}>
+            <button
+              disabled={busy || unread}
+              onClick={() => setMerge(draft ?? texts?.current ?? '')}
+            >
               {t('sync.mergeManually')}
             </button>
           </>

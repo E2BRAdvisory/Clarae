@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorCode } from '../app/api';
 import { Events, type FileChangedPayload } from '../app/events';
 import { registerNoteFlusher, reportFlush, writeRescueCopy } from '../workspaces/flush';
+import { errorMessage } from '../util/errors';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 
@@ -81,6 +82,8 @@ export function useNoteDocument(
   /** Every load and write, in order; replaced (new identity) by each job queued. */
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const generation = useRef(0);
+  /** The last load failed: the document shows an error until a load succeeds. */
+  const failed = useRef(false);
 
   const enqueue = useCallback(<T>(job: () => Promise<T>): Promise<T> => {
     const run = chain.current.then(job);
@@ -108,7 +111,7 @@ export function useNoteDocument(
       conflict.current = true;
       setSave('conflict');
     } else {
-      setState((s) => ({ ...s, error: String(e) }));
+      setState((s) => ({ ...s, error: errorMessage(e) }));
       setSave('error');
     }
   }, []);
@@ -123,6 +126,7 @@ export function useNoteDocument(
           dirty.current = false;
           conflict.current = false;
           generation.current++;
+          failed.current = false;
           setHash(note.hash);
           setSave('saved');
           setState((s) => ({
@@ -132,7 +136,8 @@ export function useNoteDocument(
             error: '',
           }));
         } catch (e) {
-          setState((s) => ({ ...s, status: 'error', error: String(e) }));
+          failed.current = true;
+          setState((s) => ({ ...s, status: 'error', error: errorMessage(e) }));
         }
       }),
     [vaultId, path, enqueue],
@@ -221,6 +226,8 @@ export function useNoteDocument(
   );
 
   const refresh = useCallback(async (): Promise<void> => {
+    // A document that could not be loaded tries again: the file may be readable now.
+    if (failed.current) return load();
     for (let attempt = 0; attempt < REFRESH_ATTEMPTS; attempt++) {
       const before = chain.current;
       await before; // a write of ours in flight lands first
@@ -247,7 +254,7 @@ export function useNoteDocument(
       }
       return;
     }
-  }, [vaultId, path]);
+  }, [vaultId, path, load]);
 
   // Keeps edits that cannot be saved in the file in a copy next to it.
   const rescue = useCallback(
@@ -296,6 +303,16 @@ export function useNoteDocument(
       void refresh();
     });
   }, [vaultId, path, refresh]);
+
+  // Coming back to the window retries a document that could not be loaded (a transient I/O
+  // error, a file being written by the sync, the core restarting on the web).
+  useEffect(() => {
+    const onFocus = (): void => {
+      if (failed.current) void load();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   return {
     status: state.status,

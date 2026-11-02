@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
+import { signIn } from '../app/signIn';
 import { useAppStore } from '../state/store';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { reregisterDevice } from '../sync/DeviceRevokedBanner';
@@ -36,11 +37,10 @@ export function AccountButton() {
       useAppStore.getState().openSettings('cloud'); // the address is asked for there
       return;
     }
-    try {
-      setAuth(await api.auth.login(server));
-    } catch {
-      setAuth(await api.auth.status()); // the error text is part of the state
-    }
+    const next = await signIn(server);
+    setAuth(next);
+    // The reason of a failure is shown in Settings > Cloud, with the address to correct.
+    if (next.status === 'signed_out' && next.error) useAppStore.getState().openSettings('cloud');
   };
 
   if (status === 'signing_in') {

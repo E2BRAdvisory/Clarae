@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { useSync } from '../state/sync';
+import { errorMessage } from '../util/errors';
 import { PassphraseFields } from './PassphraseFields';
 import { RecoveryKeyStep } from './RecoveryKeyStep';
 
@@ -30,7 +31,7 @@ export function UnlockDialog({ vaultId }: { vaultId: string }) {
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

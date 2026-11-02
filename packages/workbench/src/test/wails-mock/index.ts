@@ -126,7 +126,20 @@ export interface WailsMock {
   emit: (name: string, payload: unknown) => void;
   /** Handlers registered through EventsOn, for assertions. */
   listeners: (name: string) => number;
+  /**
+   * The cloud vault is deleted from the console or another device: like the core, the folders
+   * linked to it are disconnected (their files stay), then `vault:cloud-deleted` and a `sync:status`
+   * carrying the reason are emitted for each.
+   */
+  deleteCloudVaultElsewhere: (cloudVaultId: string) => void;
 }
+
+/**
+ * sync.CloudVaultDeletedMessage: the Status.Error of a folder whose cloud vault was deleted
+ * elsewhere.
+ */
+export const CLOUD_VAULT_DELETED_MESSAGE =
+  'the cloud vault was deleted: this folder was disconnected and keeps its files (restore the vault from the console, then connect the folder again)';
 
 export function hashOf(s: string): string {
   let h = 2166136261;
@@ -335,6 +348,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       for (const h of handlers.get(name) ?? []) h(payload);
     },
     listeners: (name) => handlers.get(name)?.size ?? 0,
+    deleteCloudVaultElsewhere: () => undefined, // set with the SyncAPI below
   };
   const vaultOf = (id: string): MockVault => {
     const v = mock.vaults.get(id);
@@ -857,6 +871,12 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     Status: (): Promise<AuthState> => Promise.resolve(mock.auth),
     Login: (server: string): Promise<AuthState> => {
       if (server.includes('fail')) return reject('login failed');
+      // transport.CheckSecureURL: plain http only to this computer (a URL without scheme is https).
+      const http = /^http:\/\/(?:[^@/]*@)?(\[[^\]]*\]|[^:/]*)/i.exec(server.trim());
+      if (http && !/^(localhost|127(?:\.\d+){3}|\[::1\])$/i.test(http[1] ?? ''))
+        return reject(
+          `insecure-url: insecure url: use https (plain http is accepted only for localhost): "${server}"`,
+        );
       mock.auth = {
         status: 'ready',
         serverUrl: server,
@@ -954,6 +974,31 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       error: '',
       kind: '',
     });
+  };
+
+  const shownConflicts = new Map<number, string>();
+  mock.deleteCloudVaultElsewhere = (cloudVaultId) => {
+    const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+    if (v) v.deletedAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    for (const [id, l] of [...sy.links]) {
+      if (l.cloudVaultId !== cloudVaultId || l.mount) continue;
+      sy.links.delete(id);
+      sy.status.delete(id);
+      sy.conflicts.delete(id);
+      mock.emit('vault:cloud-deleted', { vaultId: id, cloudVaultId, name: l.name });
+      mock.emit('sync:status', {
+        vaultId: id,
+        phase: 'idle',
+        lastSync: '',
+        pending: 0,
+        conflicts: 0,
+        quarantined: 0,
+        done: 0,
+        total: 0,
+        error: CLOUD_VAULT_DELETED_MESSAGE,
+        kind: '',
+      });
+    }
   };
 
   const SyncAPI = {
@@ -1111,13 +1156,26 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve();
     },
     Conflicts: (id: string): Promise<SyncConflict[]> => Promise.resolve(sy.conflicts.get(id) ?? []),
+    // Like the core, ConflictTexts remembers the version of the file it showed, and keep-local and
+    // merged refuse with a conflict error once the file holds another one (a test changes
+    // conflictTexts' currentHash to simulate an edit made after the texts were read).
     ConflictTexts: (_id: string, cid: number): Promise<ConflictTexts> => {
       const t = sy.conflictTexts.get(cid);
-      return t ? Promise.resolve(t) : reject('conflict not found');
+      if (!t) return reject('conflict not found');
+      shownConflicts.set(cid, t.currentHash);
+      return Promise.resolve({ ...t });
     },
     ResolveConflict: (id: string, cid: number, action: string, merged: string): Promise<void> => {
       const list = sy.conflicts.get(id) ?? [];
       if (!list.some((c) => c.id === cid)) return reject('conflict not found or already resolved');
+      const shown = shownConflicts.get(cid);
+      if (
+        (action === 'keep-local' || action === 'merged') &&
+        shown !== undefined &&
+        shown !== sy.conflictTexts.get(cid)?.currentHash
+      )
+        return reject('conflict: the file changed since this conflict was shown: review it again');
+      shownConflicts.delete(cid);
       sy.resolved.push({ vaultId: id, id: cid, action: action as ConflictAction, merged });
       sy.conflicts.set(
         id,

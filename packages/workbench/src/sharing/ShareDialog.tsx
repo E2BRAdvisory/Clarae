@@ -19,6 +19,7 @@ import { useSharing, type ShareTarget } from '../state/sharing';
 import { infoOf, useSync } from '../state/sync';
 import { sharingKeys } from './queries';
 import { Icon } from '../shell/icons';
+import { errorMessage } from '../util/errors';
 
 const LEVELS: PermissionLevel[] = ['viewer', 'editor', 'manager'];
 
@@ -84,7 +85,7 @@ function NewShare({
       setPicked([]);
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

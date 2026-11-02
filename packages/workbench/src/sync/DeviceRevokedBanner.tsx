@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, type AuthState } from '../app/api';
 import { useAppStore } from '../state/store';
+import { errorMessage } from '../util/errors';
 
 /**
  * Registers this device again after the cloud refused it as revoked. The new state comes back
@@ -14,7 +15,7 @@ export async function reregisterDevice(setAuth: (a: AuthState) => void): Promise
     return null;
   } catch (e) {
     setAuth(await api.auth.status());
-    return e instanceof Error ? e.message : String(e);
+    return errorMessage(e);
   }
 }
 

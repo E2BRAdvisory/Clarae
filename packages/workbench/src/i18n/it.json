@@ -1,7 +1,14 @@
 {
   "app": {
     "name": "MemoBrain Notes",
-    "backToConsole": "Torna alla console"
+    "backToConsole": "Torna alla console",
+    "crash": {
+      "shell": "Si è verificato un errore e l'applicazione si è fermata.",
+      "view": "Non è stato possibile mostrare questa vista.",
+      "load": "Non è stato possibile scaricare questa vista.",
+      "retry": "Riprova",
+      "reload": "Ricarica"
+    }
   },
   "welcome": {
     "title": "Apri un vault",
@@ -293,7 +300,8 @@
   },
   "dialog": {
     "filter": "Filtra…",
-    "nothing": "Nessun risultato"
+    "nothing": "Nessun risultato",
+    "more": "Altri {{count}}: digita per restringere l'elenco"
   },
   "palette": {
     "title": "Palette comandi",
@@ -628,7 +636,15 @@
     "signedOutHintWeb": "La sessione con il cloud è terminata: ricarica la pagina o accedi di nuovo dalla console per riprendere. Il vault resta collegato.",
     "linkWarningKeychain": "Il vault è collegato e sbloccato solo per questa sessione: non è stato possibile salvarne la chiave nel portachiavi di sistema. Conserva la chiave di recupero: al prossimo avvio servirà la passphrase.",
     "linkWarningIncomplete": "Il vault cloud è stato creato, ma il collegamento di questa cartella non è riuscito. Una chiave di recupero mostrata qui è valida: collega la cartella più tardi con «Collega a un vault cloud esistente».",
-    "linkWarningOther": "Il vault è stato creato con un avviso: {{code}}."
+    "linkWarningOther": "Il vault è stato creato con un avviso: {{code}}.",
+    "cloudDeletedTitle": "Vault cloud eliminato",
+    "cloudDeletedText": "Il vault cloud «{{name}}» è stato eliminato dalla console o da un altro dispositivo. Questa cartella è stata scollegata dal cloud e conserva tutti i suoi file. Per sincronizzarla di nuovo, ripristina il vault da «Vault eliminati» e collega la cartella.",
+    "cloudDeletedTextWeb": "Il vault cloud «{{name}}» è stato eliminato dalla console o da un altro dispositivo. La copia in questo browser non è più sincronizzata e conserva i suoi file: torna alla console per ripristinare il vault.",
+    "cloudDeletedNote": "Scollegato perché il vault cloud «{{name}}» è stato eliminato altrove. I file qui sono stati conservati.",
+    "quarantinedN_one": "{{count}} file nel cloud non è leggibile su questo dispositivo",
+    "quarantinedN_other": "{{count}} file nel cloud non sono leggibili su questo dispositivo",
+    "quarantinedHint": "Il loro nome cifrato non si apre con la chiave di questo vault, quindi restano intatti: non vengono scaricati, non sono mai considerati cancellazioni e si riprova a ogni sincronizzazione. Se il numero non scende, vedi il log.",
+    "conflictChanged": "Il file è cambiato dopo che questo conflitto è stato mostrato: le versioni qui sotto sono state ricaricate. Rivedile e scegli di nuovo."
   },
   "drawing": {
     "loading": "Caricamento dell'editor di disegni…",
@@ -1321,7 +1337,14 @@
     "exists": "Esiste già un elemento con quel nome.",
     "not-found": "Il file non esiste più: potrebbe essere stato spostato o eliminato.",
     "invalid-path": "Il percorso è fuori dal vault.",
-    "too-large": "Il file è troppo grande."
+    "too-large": "Il file è troppo grande.",
+    "permission": "Il sistema operativo ha negato l’accesso al file.",
+    "partial": "L’operazione non è riuscita e alcune note non si sono potute riportare com’erano: vedi il log.",
+    "cancelled": "L’operazione è stata annullata o ha richiesto troppo tempo.",
+    "io": "Non è stato possibile leggere o scrivere il file ({{detail}}).",
+    "internal": "Si è verificato un errore interno (indice locale): vedi il log.",
+    "insecure-url": "Accesso rifiutato: il server o il suo provider di identità verrebbero raggiunti in http semplice, che invia credenziali e note senza cifratura. Usa un indirizzo https (http è accettato solo per questo computer, localhost).",
+    "wrongSecret": "Passphrase o chiave di recupero errata."
   },
   "embeds": {
     "depthLimit": "{{label}} (limite di incorporamento)",
