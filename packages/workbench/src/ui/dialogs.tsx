@@ -1,6 +1,6 @@
 // In-app dialogs. window.alert/confirm/prompt are not dependable in the native
 // webviews Wails uses, so every confirmation and text question goes through here.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog } from '@memobrain/ui';
 import { create } from 'zustand';
@@ -67,6 +67,9 @@ export const dialog = {
   error: (e: unknown): Promise<void> => dialog.alert(i18next.t('common.error'), errorMessage(e)),
 };
 
+/** Items of a pick list mounted at once. */
+const PICK_SHOWN = 200;
+
 function PickBody({
   request,
   onDone,
@@ -76,7 +79,19 @@ function PickBody({
 }) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState('');
-  const shown = request.items.filter((i) => i.label.toLowerCase().includes(filter.toLowerCase()));
+  const lowered = useMemo(() => request.items.map((i) => i.label.toLowerCase()), [request.items]);
+  // A whole vault can be offered: only the first matches are mounted, the filter narrows the rest.
+  const { shown, more } = useMemo(() => {
+    const needle = filter.toLowerCase();
+    const out: PickItem[] = [];
+    let total = 0;
+    request.items.forEach((item, k) => {
+      if (!lowered[k]?.includes(needle)) return;
+      total++;
+      if (out.length < PICK_SHOWN) out.push(item);
+    });
+    return { shown: out, more: total - out.length };
+  }, [request.items, lowered, filter]);
   return (
     <div>
       <input
@@ -101,6 +116,7 @@ function PickBody({
             <button onClick={() => onDone(i.value)}>{i.label}</button>
           </li>
         ))}
+        {more > 0 && <li className="muted">{t('dialog.more', { count: more })}</li>}
       </ul>
       <div className="actions">
         <button onClick={() => onDone(null)}>{t('common.cancel')}</button>

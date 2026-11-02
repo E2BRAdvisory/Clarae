@@ -5,6 +5,7 @@ import { api } from '../app/api';
 import { loadExcalidraw } from './excalidraw';
 import { parseScene } from './scene';
 import { refElements, refKey, type DrawingRef } from './embed/ref';
+import { PreviewUrls } from '../embeds/previewUrls';
 
 /** Thrown when an embed names a frame/group/area the drawing does not have. */
 export class MissingPartError extends Error {
@@ -39,7 +40,12 @@ export async function renderSvg(text: string, ref: DrawingRef | null = null): Pr
   return new XMLSerializer().serializeToString(svg);
 }
 
-const urls = new Map<string, string>();
+const urls = new PreviewUrls();
+
+/** Revokes the drawing previews of a vault (it was closed). */
+export function releaseDrawingPreviews(vaultId: string): void {
+  urls.releaseVault(vaultId);
+}
 
 /**
  * Blob URL of the drawing's preview, for an <img>: in an image the SVG cannot run scripts or
@@ -51,8 +57,9 @@ export async function drawingPreviewUrl(
   ref: DrawingRef | null = null,
 ): Promise<string> {
   const note = await api.vault.readNote(vaultId, path);
-  const key = `${note.hash}:${refKey(ref)}`;
-  const hit = urls.get(key);
+  const part = refKey(ref);
+  const key = `${note.hash}:${part}`;
+  const hit = urls.get(vaultId, key);
   if (hit) return hit;
   // Only whole drawings use the on-disk cache (keyed by the content hash alone).
   let svg = ref ? '' : await api.drawing.readPreview(vaultId, note.hash).catch(() => '');
@@ -60,7 +67,5 @@ export async function drawingPreviewUrl(
     svg = await renderSvg(note.content, ref);
     if (!ref) void api.drawing.savePreview(vaultId, note.hash, svg).catch(() => undefined);
   }
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  urls.set(key, url);
-  return url;
+  return urls.put(vaultId, `${path}\u0000${part}`, key, svg);
 }

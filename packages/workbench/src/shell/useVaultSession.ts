@@ -28,46 +28,54 @@ export function useVaultSession(vaultId: string): boolean {
   useEffect(() => {
     let cancelled = false;
     ready.current = false;
+    // Every await may have let another vault take over (the effect cleaned up): nothing of this
+    // vault is applied after that.
     void (async () => {
-      await useSettings.getState().load(vaultId);
       try {
+        try {
+          await useSettings.getState().load(vaultId);
+        } catch {
+          // Unreadable settings: the defaults stay in force (nothing is written over the files).
+        }
+        if (cancelled) return;
         const saved = JSON.parse(
           (await api.vault.readConfig(vaultId, 'workspace.json')) || 'null',
         ) as Record<string, unknown> | null;
         const layout = saved ? parseLayout(saved['layout']) : null;
-        if (layout && !cancelled) {
-          // Forget tabs whose file has disappeared since the last session.
-          const tree = new Set((await api.vault.listTree(vaultId)).map((e) => e.path));
-          let next = layout;
-          for (const p of allPanes(layout.root))
-            for (const tab of p.tabs)
-              if (!tree.has(tab.path) && !isGraphPath(tab.path)) next = removePath(next, tab.path);
-          useAppStore.getState().setLayout(next);
-          const l = saved?.['left'] as { open?: boolean; tab?: string; width?: number } | undefined;
-          const r = saved?.['right'] as
-            { open?: boolean; tab?: string; width?: number } | undefined;
-          if (l)
-            useAppStore.getState().setLeft({
-              ...(typeof l.open === 'boolean' ? { open: l.open } : {}),
-              // A saved 'search' starts as the file tree: the search view is opened on demand.
-              ...(l.tab ? { tab: l.tab === 'search' ? 'files' : normalizeLeftTab(l.tab) } : {}),
-              ...(typeof l.width === 'number'
-                ? { width: Math.min(600, Math.max(180, l.width)) }
-                : {}),
-            });
-          if (r)
-            useAppStore.getState().setRight({
-              ...(typeof r.open === 'boolean' ? { open: r.open } : {}),
-              ...(r.tab ? { tab: normalizeRightTab(r.tab) } : {}),
-              ...(typeof r.width === 'number'
-                ? { width: Math.min(600, Math.max(180, r.width)) }
-                : {}),
-            });
-        }
+        if (!layout || cancelled) return;
+        // Forget tabs whose file has disappeared since the last session.
+        const tree = new Set((await api.vault.listTree(vaultId)).map((e) => e.path));
+        if (cancelled) return;
+        let next = layout;
+        for (const p of allPanes(layout.root))
+          for (const tab of p.tabs)
+            if (!tree.has(tab.path) && !isGraphPath(tab.path)) next = removePath(next, tab.path);
+        useAppStore.getState().setLayout(next);
+        const l = saved?.['left'] as { open?: boolean; tab?: string; width?: number } | undefined;
+        const r = saved?.['right'] as { open?: boolean; tab?: string; width?: number } | undefined;
+        if (l)
+          useAppStore.getState().setLeft({
+            ...(typeof l.open === 'boolean' ? { open: l.open } : {}),
+            // A saved 'search' starts as the file tree: the search view is opened on demand.
+            ...(l.tab ? { tab: l.tab === 'search' ? 'files' : normalizeLeftTab(l.tab) } : {}),
+            ...(typeof l.width === 'number'
+              ? { width: Math.min(600, Math.max(180, l.width)) }
+              : {}),
+          });
+        if (r)
+          useAppStore.getState().setRight({
+            ...(typeof r.open === 'boolean' ? { open: r.open } : {}),
+            ...(r.tab ? { tab: normalizeRightTab(r.tab) } : {}),
+            ...(typeof r.width === 'number'
+              ? { width: Math.min(600, Math.max(180, r.width)) }
+              : {}),
+          });
       } catch {
         // No or unreadable workspace file: start with an empty workspace.
+      } finally {
+        // The workspace is saved from now on, even when it could not be read.
+        if (!cancelled) ready.current = true;
       }
-      ready.current = true;
     })();
 
     let timer: ReturnType<typeof setTimeout> | undefined;

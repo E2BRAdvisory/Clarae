@@ -50,15 +50,17 @@ export function installLifecycle(kind: PlatformKind): () => void {
     );
   } else {
     const beforeUnload = (e: BeforeUnloadEvent): void => {
-      if (!hasUnsavedNotes()) return;
+      const unsaved = hasUnsavedNotes();
+      // Also the settings, bookmarks and library changes still waiting for their delay.
       void flushAllNotes();
-      e.preventDefault();
+      if (unsaved) e.preventDefault();
     };
     window.addEventListener('beforeunload', beforeUnload);
     offs.push(() => window.removeEventListener('beforeunload', beforeUnload));
   }
+  // Hidden: documents with edits and the configuration writes waiting for their delay go now.
   const onHidden = (): void => {
-    if (document.visibilityState === 'hidden' && hasUnsavedNotes()) void flushAllNotes();
+    if (document.visibilityState === 'hidden') void flushAllNotes();
   };
   document.addEventListener('visibilitychange', onHidden);
   offs.push(() => document.removeEventListener('visibilitychange', onHidden));

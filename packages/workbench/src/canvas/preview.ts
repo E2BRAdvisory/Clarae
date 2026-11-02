@@ -2,6 +2,7 @@
 // It is drawn from the data alone (no DOM measurement), so it also works for embeds that
 // are rendered while the canvas editor is not open.
 import { api } from '../app/api';
+import { PreviewUrls } from '../embeds/previewUrls';
 import {
   boundsOf,
   colorOf,
@@ -92,16 +93,17 @@ export function canvasSvg(data: CanvasData): string {
   return out.join('');
 }
 
-const urls = new Map<string, string>();
+const urls = new PreviewUrls();
+
+/** Revokes the canvas previews of a vault (it was closed). */
+export function releaseCanvasPreviews(vaultId: string): void {
+  urls.releaseVault(vaultId);
+}
 
 /** Blob URL of the static picture of a canvas file, for an <img>. */
 export async function canvasPreviewUrl(vaultId: string, path: string): Promise<string> {
   const note = await api.vault.readNote(vaultId, path);
-  const hit = urls.get(note.hash);
+  const hit = urls.get(vaultId, note.hash);
   if (hit) return hit;
-  const url = URL.createObjectURL(
-    new Blob([canvasSvg(parseCanvas(note.content))], { type: 'image/svg+xml' }),
-  );
-  urls.set(note.hash, url);
-  return url;
+  return urls.put(vaultId, path, note.hash, canvasSvg(parseCanvas(note.content)));
 }

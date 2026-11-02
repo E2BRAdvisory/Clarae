@@ -232,4 +232,27 @@ describe('useNoteDocument', () => {
     expect(result.current.current()).toBe('typed');
     expect(result.current.save).toBe('conflict');
   });
+
+  it('recovers from a failed load when the file changes or the window gets the focus', async () => {
+    await setup({});
+    const { result } = renderHook(() => useNoteDocument(vaultId, 'Late.md'));
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    // The sync writes the file: its change event loads it again.
+    act(() => {
+      mock.vaults.get(vaultId)?.files.set('Late.md', 'arrived');
+      mock.emit('vault:file-changed', { vaultId, paths: ['Late.md'] });
+    });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.content).toBe('arrived');
+
+    // Unreadable again after a reload, then readable without an event: the focus retries.
+    mock.vaults.get(vaultId)?.files.delete('Late.md');
+    await act(async () => void (await result.current.reload()));
+    expect(result.current.status).toBe('error');
+    mock.vaults.get(vaultId)?.files.set('Late.md', 'back');
+    act(() => void window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.content).toBe('back');
+  });
 });

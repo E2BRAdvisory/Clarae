@@ -1,12 +1,15 @@
 // Smart paste and drop: images and files become attachments with an embed,
 // a URL pasted over a selection becomes a link, rich HTML becomes Markdown.
-import { EditorView } from '@codemirror/view';
+import { StateEffect, StateField, type Extension } from '@codemirror/state';
+import { EditorView, ViewPlugin } from '@codemirror/view';
 import TurndownService from 'turndown';
 
 export interface PasteDeps {
   /** Stores bytes as an attachment and returns the vault path. */
   saveAttachment(name: string, base64: string): Promise<string>;
   enabled(): boolean;
+  /** Shows a file that could not be stored (read-only vault, too large, disk full…). */
+  onError?(e: unknown): void;
 }
 
 const RICH = /<(p|h[1-6]|ul|ol|li|a|strong|b|em|i|table|pre|code|blockquote|img|br)\b/i;
@@ -44,13 +47,57 @@ function embedText(path: string): string {
   return `![[${path}]]`;
 }
 
-async function insertFiles(
+let lastMark = 0;
+const markAdded = StateEffect.define<{ id: number; pos: number }>();
+const markDone = StateEffect.define<number>();
+
+/**
+ * Where the embeds of files still being stored will go, by paste: each position follows the edits
+ * made while the files are converted and written, so the embed lands where the paste happened.
+ */
+const pendingInserts = StateField.define<ReadonlyMap<number, number>>({
+  create: () => new Map(),
+  update(value, tr) {
+    let next = value;
+    if (tr.docChanged && value.size) {
+      const mapped = new Map<number, number>();
+      // -1: text typed at the spot afterwards goes after the embed.
+      for (const [id, pos] of value) mapped.set(id, tr.changes.mapPos(pos, -1));
+      next = mapped;
+    }
+    for (const e of tr.effects) {
+      if (e.is(markAdded)) next = new Map(next).set(e.value.id, e.value.pos);
+      else if (e.is(markDone) && next.has(e.value)) {
+        const left = new Map(next);
+        left.delete(e.value);
+        next = left;
+      }
+    }
+    return next;
+  },
+});
+
+/** Editors that are gone: a paste that finishes later has nothing to insert into. */
+const destroyed = new WeakSet<EditorView>();
+const lifecycle = ViewPlugin.define((view) => ({ destroy: () => void destroyed.add(view) }));
+
+/**
+ * Stores the files as attachments and inserts their embeds at `at` (mapped over the edits made
+ * meanwhile). A file that cannot be stored is reported through `deps.onError` (the first failure
+ * of the batch) and skipped. Exported for the tests.
+ */
+export async function insertFiles(
   view: EditorView,
   files: File[],
   deps: PasteDeps,
   at: number,
 ): Promise<void> {
+  if (view.state.readOnly) return;
+  const id = ++lastMark;
+  const tracked = view.state.field(pendingInserts, false) !== undefined;
+  if (tracked) view.dispatch({ effects: markAdded.of({ id, pos: at }) });
   const parts: string[] = [];
+  let failure: unknown = null;
   for (const f of files) {
     const generic = /^(image|blob|unnamed)\.\w+$/i.test(f.name) || f.name === '';
     const ext = f.name.includes('.')
@@ -61,21 +108,40 @@ async function insertFiles(
     const name = generic ? `Pasted image ${stamp()}${ext}` : f.name;
     try {
       parts.push(embedText(await deps.saveAttachment(name, await toBase64(f))));
-    } catch {
-      /* the caller surfaces backend errors; skip this file */
+    } catch (e) {
+      failure ??= e;
     }
   }
-  if (parts.length) {
+  if (!destroyed.has(view) && (tracked || parts.length)) {
+    const state = view.state;
+    const pos = Math.min(
+      (tracked ? state.field(pendingInserts, false)?.get(id) : undefined) ?? at,
+      state.doc.length,
+    );
     const insert = parts.join('\n');
+    const sel = state.selection.main;
     view.dispatch({
-      changes: { from: at, insert },
-      selection: { anchor: at + insert.length },
-      userEvent: 'input.paste',
+      ...(tracked ? { effects: markDone.of(id) } : {}),
+      ...(insert
+        ? {
+            changes: { from: pos, insert },
+            // The caret follows the embed unless the user moved it meanwhile.
+            ...(sel.empty && sel.head === pos
+              ? { selection: { anchor: pos + insert.length } }
+              : {}),
+            userEvent: 'input.paste',
+          }
+        : {}),
     });
   }
+  if (failure !== null) deps.onError?.(failure);
 }
 
-export function smartPaste(deps: PasteDeps) {
+export function smartPaste(deps: PasteDeps): Extension {
+  return [pendingInserts, lifecycle, smartPasteHandlers(deps)];
+}
+
+function smartPasteHandlers(deps: PasteDeps): Extension {
   return EditorView.domEventHandlers({
     paste(event, view) {
       if (!deps.enabled() || !event.clipboardData) return false;

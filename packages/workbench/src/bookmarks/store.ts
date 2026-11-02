@@ -8,6 +8,7 @@ import { api } from '../app/api';
 import { Events, type FileChangedPayload } from '../app/events';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
+import { registerNoteFlusher } from '../workspaces/flush';
 import {
   emptyBookmarks,
   parseBookmarks,
@@ -126,6 +127,10 @@ export const useBookmarks = create<BookmarksState>((set, get) => {
     flush: write,
   };
 });
+
+// Closing or switching the vault and quitting write the changes still waiting for their delay
+// first, while the vault is still open.
+registerNoteFlusher(() => useBookmarks.getState().flush());
 
 // The list follows the open vault.
 useAppStore.subscribe((s, prev) => {

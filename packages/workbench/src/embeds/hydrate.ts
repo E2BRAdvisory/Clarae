@@ -39,8 +39,11 @@ export interface EmbedDeps {
   /** Notes already being rendered up the chain, to break cycles. */
   visited: readonly string[];
   openLink?: (spec: LinkSpec, newTab: boolean) => void;
-  /** Renders a ```query block of `fromPath` (embedded search); without it the block stays code. */
-  renderQuery?: (el: HTMLElement, source: string, fromPath: string) => void;
+  /**
+   * Renders a ```query block of `fromPath` (embedded search); without it the block stays code. The
+   * returned function stops the block following the index (called with the hydrate disposer).
+   */
+  renderQuery?: (el: HTMLElement, source: string, fromPath: string) => (() => void) | void;
 }
 
 export const MAX_EMBED_DEPTH = 5;
@@ -277,6 +280,7 @@ async function fill(
  */
 export function hydrate(root: HTMLElement, deps: EmbedDeps): () => void {
   const embeds: EmbedHandle[] = [];
+  const queries: (() => void)[] = [];
   for (const el of root.querySelectorAll<HTMLElement>('.math-inline'))
     renderMath(el, el.textContent ?? '', false);
   for (const el of root.querySelectorAll<HTMLElement>('.math-display'))
@@ -291,7 +295,8 @@ export function hydrate(root: HTMLElement, deps: EmbedDeps): () => void {
     for (const code of root.querySelectorAll<HTMLElement>('pre > code.language-query')) {
       const holder = document.createElement('div');
       code.closest('pre')?.replaceWith(holder);
-      deps.renderQuery(holder, code.textContent ?? '', deps.fromPath);
+      const stop = deps.renderQuery(holder, code.textContent ?? '', deps.fromPath);
+      if (stop) queries.push(stop);
     }
   }
   for (const el of root.querySelectorAll<HTMLElement>('span.embed')) {
@@ -304,5 +309,8 @@ export function hydrate(root: HTMLElement, deps: EmbedDeps): () => void {
     };
     embeds.push(renderEmbedInto(el, spec, deps));
   }
-  return () => embeds.splice(0).forEach((e) => e.dispose());
+  return () => {
+    embeds.splice(0).forEach((e) => e.dispose());
+    queries.splice(0).forEach((stop) => stop());
+  };
 }

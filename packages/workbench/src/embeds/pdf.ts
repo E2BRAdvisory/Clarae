@@ -18,6 +18,7 @@ export function renderPdf(
   el.textContent = path;
   let disposed = false;
   let release: (() => void) | null = null;
+  let stop: (() => void) | null = null;
   void (async () => {
     const pdfjs = await import('pdfjs-dist');
     const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
@@ -43,26 +44,48 @@ export function renderPdf(
     bar.append(prev, label, next);
     el.replaceChildren(bar, canvas);
 
+    // One render at a time on the canvas: pdf.js refuses a second one while the first runs, so a
+    // newer page (or the disposal) cancels the one in progress.
+    let rendering: { cancel(): void } | null = null;
+    stop = () => {
+      rendering?.cancel();
+      rendering = null;
+    };
     const draw = async (): Promise<void> => {
-      label.textContent = `${path.split('/').pop() ?? ''} — ${page}/${doc.numPages}`;
-      const p = await doc.getPage(page);
-      if (disposed) return;
+      const want = page;
+      label.textContent = `${path.split('/').pop() ?? ''} — ${want}/${doc.numPages}`;
+      const p = await doc.getPage(want);
+      if (disposed || want !== page) return; // gone, or a newer page was asked for meanwhile
+      rendering?.cancel();
+      rendering = null;
       const viewport = p.getViewport({ scale: 1.25 });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const ctx = canvas.getContext('2d');
-      if (ctx) await p.render({ canvasContext: ctx, viewport, canvas }).promise;
+      if (!ctx) return;
+      const task = p.render({ canvasContext: ctx, viewport, canvas });
+      rendering = task;
+      try {
+        await task.promise;
+      } catch (e) {
+        if (disposed || rendering !== task) return; // cancelled for a newer page or the disposal
+        throw e;
+      } finally {
+        if (rendering === task) rendering = null;
+      }
     };
+    // A page turn that fails (cancelled by a newer one, or after dispose) has nothing to report.
+    const show = (): void => void draw().catch(() => undefined);
     prev.onclick = () => {
       if (page > 1) {
         page--;
-        void draw();
+        show();
       }
     };
     next.onclick = () => {
       if (page < doc.numPages) {
         page++;
-        void draw();
+        show();
       }
     };
     await draw();
@@ -72,6 +95,8 @@ export function renderPdf(
   return () => {
     if (disposed) return;
     disposed = true;
+    stop?.();
+    stop = null;
     release?.();
     release = null;
   };

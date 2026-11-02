@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { releaseVaultMedia } from '../embeds/media';
+import { releaseCanvasPreviews } from '../canvas/preview';
+import { releaseDrawingPreviews } from '../drawing/preview';
 import { useAppStore } from '../state/store';
 import { WorkspaceView } from '../workspace/WorkspaceView';
 import { ChatBar } from './ChatBar';
@@ -11,8 +13,15 @@ import { useVaultSession } from './useVaultSession';
 
 export function VaultView({ vaultId }: { vaultId: string }) {
   useVaultSession(vaultId);
-  // Attachments decoded for this vault go with it.
-  useEffect(() => () => releaseVaultMedia(vaultId), [vaultId]);
+  // Attachments decoded for this vault, and the pictures of its drawings and canvases, go with it.
+  useEffect(
+    () => () => {
+      releaseVaultMedia(vaultId);
+      releaseDrawingPreviews(vaultId);
+      releaseCanvasPreviews(vaultId);
+    },
+    [vaultId],
+  );
   const left = useAppStore((s) => s.left);
   const right = useAppStore((s) => s.right);
 

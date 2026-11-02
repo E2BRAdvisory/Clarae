@@ -359,6 +359,11 @@ export class History<T> {
     this.past.push(current);
     return next;
   }
+  /** Forgets every step (the state was replaced from outside: the snapshots no longer apply). */
+  clear(): void {
+    this.past = [];
+    this.future = [];
+  }
   get canUndo(): boolean {
     return this.past.length > 0;
   }

@@ -17,7 +17,7 @@ import {
   indentUnit,
 } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
-import { Annotation, Compartment, EditorState, Prec, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state';
 import {
   crosshairCursor,
   drawSelection,
@@ -35,6 +35,7 @@ import type { EditorSettings } from '../state/settings';
 import { blockWidgets } from './blockWidgets';
 import { ofmCompletionSources, type CompletionOptions } from './completions';
 import { livePreviewContext, type LivePreviewContext } from './context';
+import { External, externalReplace } from './external';
 import { linkStatusChanged, livePreview } from './livePreview';
 import { pagePreviewHover } from '../preview/hover';
 import { smartPaste, type PasteDeps } from './paste';
@@ -43,9 +44,7 @@ import { registerEditor, setActiveEditor, unregisterEditor } from './registry';
 import { sourceMode } from './sourceMode';
 import { slashCompletionSource } from '../slash/slash';
 import { slashHost } from '../slash/host';
-
-/** Marks transactions that replace the document from outside (reload); not user edits. */
-const External = Annotation.define<boolean>();
+import { dialog } from '../ui/dialogs';
 
 export interface EditorStats {
   words: number;
@@ -161,6 +160,7 @@ export function Editor(props: Props) {
           smartPaste({
             saveAttachment: (name, b64) => latest.current.paste.saveAttachment(name, b64),
             enabled: () => latest.current.paste.enabled(),
+            onError: (e) => void dialog.error(e),
           }),
           keymap.of([
             ...closeBracketsKeymap,
@@ -238,13 +238,9 @@ export function Editor(props: Props) {
     const view = viewRef.current;
     if (!view || versionRef.current === props.version) return;
     versionRef.current = props.version;
-    if (view.state.doc.toString() === props.doc) return;
-    const sel = Math.min(view.state.selection.main.head, props.doc.length);
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: props.doc },
-      selection: { anchor: sel },
-      annotations: [External.of(true)],
-    });
+    // Kept out of the undo history: Undo must not revert a change that arrived from outside.
+    const tr = externalReplace(view.state, props.doc);
+    if (tr) view.dispatch(tr);
   }, [props.version, props.doc]);
 
   // Scroll to a heading, block or line.

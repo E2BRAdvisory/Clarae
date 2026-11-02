@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { renderEmbedInto, MAX_EMBED_DEPTH, type EmbedBackend, type EmbedDeps } from './hydrate';
+import {
+  hydrate,
+  renderEmbedInto,
+  MAX_EMBED_DEPTH,
+  type EmbedBackend,
+  type EmbedDeps,
+} from './hydrate';
 import { classify, parseSize, pdfPage } from './media';
 import { initI18n } from '../i18n';
 
@@ -38,6 +44,18 @@ const spec = (
 const wait = () => new Promise((r) => setTimeout(r, 20));
 
 describe('embeds', () => {
+  it('stops the query blocks it rendered when disposed', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<pre><code class="language-query">tag:#a</code></pre>';
+    const stop = vi.fn();
+    const renderQuery = vi.fn(() => stop);
+    const dispose = hydrate(root, deps({ renderQuery }));
+    expect(renderQuery).toHaveBeenCalledWith(expect.any(HTMLElement), 'tag:#a', 'Host.md');
+    expect(stop).not.toHaveBeenCalled();
+    dispose();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
   it('classifies files and parses hints', () => {
     expect(
       ['a.png', 'b.PDF', 'c.mp3', 'd.mov', 'e.md', 'f', 'g.excalidraw', 'h.xyz'].map(classify),

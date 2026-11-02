@@ -14,6 +14,8 @@ import { useNoteDocument } from '../editor/useNoteDocument';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { useSettings } from '../state/settings';
+import { useBookmarks } from '../bookmarks/store';
+import { fileItem } from '../bookmarks/model';
 import { useAppStore } from '../state/store';
 import { DialogHost } from '../ui/dialogs';
 import { allPanes, emptyLayout } from '../workspace/layout';
@@ -156,6 +158,42 @@ describe('teardown flush', () => {
       act(() => mock.emit(Events.beforeClose, undefined));
       await waitFor(() => expect(mock.quits).toBe(1));
       expect(disk('A.md')).toBe('closing words');
+    } finally {
+      off();
+    }
+  });
+
+  it('desktop: the window closing writes the settings and bookmarks still waiting', async () => {
+    await openVault({ 'A.md': 'one' });
+    await useSettings.getState().load(vaultId);
+    await useBookmarks.getState().load(vaultId);
+    const off = installLifecycle('desktop');
+    try {
+      useSettings.getState().setEditor({ lineNumbers: true });
+      useBookmarks.getState().update((items) => [...items, fileItem('A.md', '', 1)]);
+      act(() => mock.emit(Events.beforeClose, undefined));
+      await waitFor(() => expect(mock.quits).toBe(1));
+      expect(JSON.parse(disk('.memobrain/editor.json') ?? '{}')).toMatchObject({
+        lineNumbers: true,
+      });
+      expect(disk('.memobrain/bookmarks.json')).toContain('A.md');
+    } finally {
+      off();
+    }
+  });
+
+  it('web: hiding the page writes the settings still waiting', async () => {
+    await openVault({ 'A.md': 'one' });
+    await useSettings.getState().load(vaultId);
+    const off = installLifecycle('web');
+    try {
+      useSettings.getState().setEditor({ wrap: false });
+      const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+      hidden.mockRestore();
+      // Well before the settings' own delay (400 ms): the write was started by the hide.
+      await act(() => new Promise((r) => setTimeout(r, 50)));
+      expect(JSON.parse(disk('.memobrain/editor.json') ?? '{}')).toMatchObject({ wrap: false });
     } finally {
       off();
     }

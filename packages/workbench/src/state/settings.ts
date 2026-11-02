@@ -3,6 +3,7 @@
 // values of the wrong type are ignored so a hand-edited file cannot break the app.
 import { create } from 'zustand';
 import { api } from '../app/api';
+import { registerNoteFlusher } from '../workspaces/flush';
 import {
   editorKeyOf,
   isLocked,
@@ -208,20 +209,46 @@ interface SettingsState {
   setHotkeys: (next: HotkeyOverrides) => void;
 }
 
-const timers = new Map<string, ReturnType<typeof setTimeout>>();
+interface PendingWrite {
+  timer: ReturnType<typeof setTimeout>;
+  write: () => Promise<void>;
+}
+
+/** Settings files waiting for their write, by vault and file. */
+const pendingWrites = new Map<string, PendingWrite>();
 
 function persist(name: string, vaultId: string | null, value: unknown): void {
   if (!vaultId) return;
-  clearTimeout(timers.get(name));
-  timers.set(
-    name,
-    setTimeout(() => {
-      void api.vault
-        .writeConfig(vaultId, name, JSON.stringify(value, null, 2))
-        .catch(() => undefined);
-    }, 400),
-  );
+  const key = `${vaultId}\u0000${name}`;
+  clearTimeout(pendingWrites.get(key)?.timer);
+  const entry: PendingWrite = {
+    timer: setTimeout(() => void entry.write(), 400),
+    write: async () => {
+      clearTimeout(entry.timer);
+      if (pendingWrites.get(key) !== entry) return; // written already, or replaced by a newer value
+      pendingWrites.delete(key);
+      try {
+        await api.vault.writeConfig(vaultId, name, JSON.stringify(value, null, 2));
+      } catch {
+        // A read-only vault, or one closed meanwhile: the settings stay in force for the session.
+      }
+    },
+  };
+  pendingWrites.set(key, entry);
 }
+
+/**
+ * Writes the settings changes still waiting for their delay, now: before the vault is closed or
+ * switched and before the app quits (registered with the flushers of the open documents).
+ */
+export async function flushSettings(): Promise<void> {
+  await Promise.all([...pendingWrites.values()].map((w) => w.write()));
+}
+
+registerNoteFlusher(flushSettings);
+
+/** Bumped by every load and reset: a load that another one (or a reset) overtook is dropped. */
+let loadSeq = 0;
 
 const managedNow = (): Managed => {
   const m = useManaged.getState();
@@ -239,11 +266,13 @@ export const useSettings = create<SettingsState>((set, get) => ({
   user: emptyUser(),
   vaultId: null,
   async load(vaultId) {
+    const seq = ++loadSeq;
     const [e, a, h] = await Promise.all([
       api.vault.readConfig(vaultId, 'editor.json'),
       api.vault.readConfig(vaultId, 'appearance.json'),
       api.vault.readConfig(vaultId, 'hotkeys.json'),
     ]);
+    if (seq !== loadSeq) return; // another vault was opened (or this one closed) meanwhile
     const user: UserSettings = {
       editor: parseUser(e, defaultEditorSettings),
       appearance: parseUser(a, defaultAppearance),
@@ -251,8 +280,11 @@ export const useSettings = create<SettingsState>((set, get) => ({
     };
     set({ vaultId, user, ...resolveSettings(user, managedNow()) });
   },
-  reset: () =>
-    set({ vaultId: null, user: emptyUser(), ...resolveSettings(emptyUser(), managedNow()) }),
+  reset: () => {
+    loadSeq++;
+    void flushSettings(); // changes still waiting belong to the vault being left
+    set({ vaultId: null, user: emptyUser(), ...resolveSettings(emptyUser(), managedNow()) });
+  },
   setEditor(patch) {
     const user = { ...get().user, editor: { ...get().user.editor, ...patch } };
     set({ user, ...resolveSettings(user, managedNow()) });

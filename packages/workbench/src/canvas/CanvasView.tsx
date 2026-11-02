@@ -1,7 +1,7 @@
 // The canvas editor (M3-WP3): infinite board with pan and zoom, text / note / media / link /
 // group nodes, labelled edges, selection, drag, resize, color presets, undo and redo. The
 // file is JSON Canvas 1.0 and is autosaved (same hash precondition as notes).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as RPointerEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
@@ -41,6 +41,7 @@ import {
 import { Icon } from '../shell/icons';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 import { errorMessage } from '../util/errors';
+import { isHidden } from '../sidebar/FileExplorer';
 
 const AUTOSAVE_MS = 1000;
 const MIN_ZOOM = 0.1;
@@ -194,16 +195,22 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
       void leaveFullscreen();
     };
   }, [full]);
+  // The latest board for handlers that run after an await (a dialog, a listing): synchronised as
+  // soon as a render is committed, so they never build on a board a sync has replaced.
   const dataRef = useRef(data);
   const viewRef = useRef(view);
-  useEffect(() => {
+  useLayoutEffect(() => {
     dataRef.current = data;
     viewRef.current = view;
   });
 
-  // Load, and re-load when a newer version of the file arrives (sync or external edit).
+  // Load, and re-load when a newer version of the file arrives (sync or external edit). The undo
+  // steps are snapshots of the board before it: undoing one would silently write the old board over
+  // the change that arrived (D-04), so they are dropped, and so is a drag started on the old board.
   if (doc.status === 'ready' && doc.version !== seenVersion) {
     setSeenVersion(doc.version);
+    setCanUndo(false);
+    setCanRedo(false);
     try {
       setData(parseCanvas(doc.content));
       setError('');
@@ -211,6 +218,10 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
       setError(errorMessage(e));
     }
   }
+  useLayoutEffect(() => {
+    history.current.clear();
+    drag.current = null;
+  }, [seenVersion]);
 
   const readOnly = locked;
   const commit = useCallback(
@@ -218,6 +229,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
       history.current.record(before);
       setCanUndo(true);
       setCanRedo(false);
+      dataRef.current = next;
       setData(next);
       doc.edit(serializeCanvas(next));
     },
@@ -275,8 +287,9 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
 
   // ---- adding things ----
   const select = (ids: string[]) => setSelection(new Set(ids));
+  // Adding after a dialog: the board may have changed meanwhile (a sync), so build on the latest.
   const place = (n: NodeInit) => {
-    const r = addNode(data, n);
+    const r = addNode(dataRef.current, n);
     commit(r.data);
     select([r.id]);
     return r.id;
@@ -292,7 +305,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
   };
   const addNoteNode = async () => {
     const notes = (await api.vault.listTree(vaultId)).filter(
-      (e) => !e.isDir && e.path.endsWith('.md'),
+      (e) => !e.isDir && e.path.endsWith('.md') && !isHidden(e.path),
     );
     const picked = await dialog.pick(
       t('canvas.addNote'),
@@ -312,7 +325,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
   };
   const addMedia = async () => {
     const files = (await api.vault.listTree(vaultId)).filter(
-      (e) => !e.isDir && !/\.(md|canvas|base)$/i.test(e.path) && !e.path.startsWith('.memobrain/'),
+      (e) => !e.isDir && !/\.(md|canvas|base)$/i.test(e.path) && !isHidden(e.path),
     );
     const picked = await dialog.pick(
       t('canvas.addMedia'),
@@ -495,7 +508,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
     if (readOnly) return;
     const current = data.edges.find((x) => x.id === id)?.label ?? '';
     const label = await dialog.prompt(t('canvas.edgeLabel'), current, t('canvas.label'));
-    if (label !== null) commit(setEdgeLabel(data, id, label.trim()));
+    if (label !== null) commit(setEdgeLabel(dataRef.current, id, label.trim()));
   };
 
   if (doc.status === 'loading') return <div className="note-loading muted">…</div>;

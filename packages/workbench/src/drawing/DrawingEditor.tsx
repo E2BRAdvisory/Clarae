@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { invalidateVault } from '../app/actions';
 import { useNoteDocument } from '../editor/useNoteDocument';
+import { registerNoteFlusher } from '../workspaces/flush';
 import { effectiveTheme, type Theme } from '../app/theme';
 import { infoOf, useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
@@ -225,16 +226,37 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     useDrawingSlides.getState().publish(path, slidesOf(live.length > 0 ? live : loaded));
   }, [excalidraw, path, parsed]);
 
+  // The library write waiting for its delay: written at once when the drawing closes and before
+  // the vault is closed or switched or the app quits.
+  const libraryPending = useRef<(() => Promise<void>) | null>(null);
+  const flushLibrary = useCallback(async (): Promise<void> => {
+    clearTimeout(libraryTimer.current);
+    const write = libraryPending.current;
+    libraryPending.current = null;
+    await write?.();
+  }, []);
   const onLibraryChange = useCallback(
     (items: LibraryItems) => {
       clearTimeout(libraryTimer.current);
-      libraryTimer.current = setTimeout(() => {
-        const body = JSON.stringify({ type: 'excalidrawlib', version: 2, libraryItems: items });
-        void api.vault.writeConfig(vaultId, LIBRARY_FILE, body).catch(() => undefined);
-      }, 800);
+      const body = JSON.stringify({ type: 'excalidrawlib', version: 2, libraryItems: items });
+      libraryPending.current = async () => {
+        try {
+          await api.vault.writeConfig(vaultId, LIBRARY_FILE, body);
+        } catch {
+          // A read-only vault keeps the library for the session only.
+        }
+      };
+      libraryTimer.current = setTimeout(() => void flushLibrary(), 800);
     },
-    [vaultId],
+    [vaultId, flushLibrary],
   );
+  useEffect(() => {
+    const off = registerNoteFlusher(flushLibrary);
+    return () => {
+      off();
+      void flushLibrary();
+    };
+  }, [flushLibrary]);
 
   // Scene-action commands (palette, hotkeys) act on the editor that is mounted.
   const canEdit = useRef(false);
