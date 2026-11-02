@@ -3,7 +3,8 @@ import { expect, openVault, skipOnWeb, test } from './support';
 
 // Settings > Cloud and Settings > Sharing with the components of @memobrain/cloud-features over the
 // bindings (ADR-0037 §2): the server's quota level and the space of each vault, the devices with
-// the one in use protected, and the shares of the account (create, edit, give access, revoke).
+// the one in use protected, and the shares of the account (create, edit, give access, revoke; a
+// manager shares inside the share they manage, ADR-0041 §8).
 
 skipOnWeb(
   'devices',
@@ -151,4 +152,53 @@ test('create a share of a shared vault, edit it, give access, revoke it', async 
     .click();
   await expect(page.getByText('“Alfa project” revoked.')).toBeVisible();
   await expect(page.getByText('You have not shared anything yet')).toBeVisible();
+});
+
+test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', async ({ page }) => {
+  await openVault(page);
+  await signIn(page);
+  await seed(page);
+  // A folder of ada's vault, managed by the user: the vault is not among the user's cloud vaults.
+  await page.evaluate(() => {
+    const w = window as unknown as { __mock: { sharing: { owned: Record<string, unknown>[] } } };
+    w.__mock.sharing.owned.push({
+      id: 'share-m',
+      vaultId: 'cloud-9',
+      vaultName: 'Company',
+      resourceType: 'folder',
+      pathPrefix: 'Projects/Alfa',
+      displayName: 'Alfa',
+      ownerId: 'user-ada',
+      ownerName: 'ada',
+      createdAt: '2026-10-01T10:00:00Z',
+      expiresAt: '',
+      myPermission: 'manager',
+      myStatus: 'accepted',
+      grants: [],
+    });
+  });
+  await page.getByRole('button', { name: 'Sharing', exact: true }).click();
+
+  const alfa = page.getByRole('region', { name: 'Alfa' });
+  await expect(alfa).toContainText('only its owner can revoke it');
+  await alfa.getByRole('button', { name: 'Share inside Alfa' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share inside “Alfa”' });
+  await expect(dialog).toContainText('Inside “Alfa” · in Company · Projects/Alfa');
+  await dialog.getByLabel('Subfolder', { exact: true }).fill('Drafts');
+  await dialog.getByRole('button', { name: 'Share' }).click();
+
+  const drafts = page.getByRole('region', { name: 'Drafts' });
+  await expect(drafts).toContainText('in Company · Projects/Alfa/Drafts');
+  await expect(drafts.getByRole('button', { name: /Revoke/ })).toHaveCount(0);
+  const made = await page.evaluate(() =>
+    (
+      window as unknown as { __mock: { sharing: { owned: Record<string, unknown>[] } } }
+    ).__mock.sharing.owned.find((s) => s['displayName'] === 'Drafts'),
+  );
+  expect(made).toMatchObject({
+    vaultId: 'cloud-9',
+    pathPrefix: 'Projects/Alfa/Drafts',
+    ownerName: 'ada',
+    myPermission: 'manager',
+  });
 });

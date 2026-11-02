@@ -51,6 +51,9 @@ export function MyGroups({ port, lang }: MyGroupsProps) {
           </tbody>
         </Table>
       )}
+      {items.some((g) => g.member_role === 'manager') && (
+        <p className="mbcf-muted">{t('groups.roleReserved')}</p>
+      )}
       <p className="mbcf-muted">{t('groups.note')}</p>
     </div>
   );

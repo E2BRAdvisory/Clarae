@@ -20,6 +20,9 @@ const (
 	shareSharedVault  = "0198f1c2-aaaa-7bbb-8ccc-000000000011"
 	sharePrivateVault = "0198f1c2-aaaa-7bbb-8ccc-000000000012"
 	shareID           = "0198f1c2-aaaa-7bbb-8ccc-000000000021"
+	// shareForeignVault is somebody else's vault: GET /vaults answers 404, POST /shares is the
+	// server's decision (a manager shares inside the share they manage, ADR-0041 §8).
+	shareForeignVault = "0198f1c2-aaaa-7bbb-8ccc-000000000013"
 )
 
 // shareServer is the part of the cloud API behind account-wide share management: two vaults (one
@@ -160,6 +163,20 @@ func TestCreateCloudShareRefusesAPrivateVault(t *testing.T) {
 		if strings.HasPrefix(call, "POST /shares") {
 			t.Fatalf("a private vault must not be offered to the server: %v", ss.calls)
 		}
+	}
+}
+
+func TestCreateCloudShareAsAManagerLeavesTheDecisionToTheServer(t *testing.T) {
+	ss, c := newShareServer(t)
+	m := lifecycleManager(t, c)
+	if _, err := m.CreateCloudShare(context.Background(), shareForeignVault, "Projects/Alfa/Sub", "Sub", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if ss.created["vault_id"] != shareForeignVault || ss.created["resource_type"] != "folder" || ss.created["path_prefix"] != "Projects/Alfa/Sub" {
+		t.Fatalf("a vault that is not the caller's goes to the server: %+v", ss.created)
+	}
+	if _, err := m.CreateCloudShare(context.Background(), "not-a-uuid", "", "x", nil, nil); err == nil {
+		t.Fatal("an invalid vault id is refused")
 	}
 }
 

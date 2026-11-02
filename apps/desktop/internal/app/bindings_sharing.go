@@ -276,8 +276,9 @@ func (s *SharingAPI) ListShares(scope string) ([]ShareInfo, error) {
 }
 
 // CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud
-// vault id and without a local copy (Settings > Sharing, like the console). A private vault cannot
-// be shared (D-02). expiresAt is RFC 3339 or "".
+// vault id and without a local copy (Settings > Sharing, like the console). The caller owns the
+// vault or manages a share of it and shares inside that share (ADR-0041 §8): the server decides.
+// A private vault cannot be shared (D-02). expiresAt is RFC 3339 or "".
 func (s *SharingAPI) CreateCloudShare(cloudVaultID, pathPrefix, name string, grants []GrantInput, expiresAt string) (ShareInfo, error) {
 	exp, err := parseExpiry(expiresAt)
 	if err != nil {

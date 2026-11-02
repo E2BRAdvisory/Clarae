@@ -1,7 +1,8 @@
 // An in-memory stand-in for the account endpoints of the cloud API (devices, usage, shares, grants,
 // invitations, directory, groups, effective configuration) on top of the vault endpoints of
 // fakeVaultApi: the RestCloudPort runs against it exactly as against the server (status codes,
-// problem documents, D-02 on share creation, owner-only revoke, expiry in the future).
+// problem documents, D-02 on share creation, creation by a manager inside a managed share,
+// owner-only revoke, expiry in the future).
 import type { CloudDevice, CloudUsage, GroupMembership, Share, SharePermission } from '../port';
 import { fakeVaultApi, OWNER, type FakeVaultApi, type SeedVault } from './fakeRest';
 
@@ -114,9 +115,29 @@ export function fakeCloudApi(seed: CloudSeed, basePath = '/api/v1'): FakeCloudAp
       return json(200, url.searchParams.get('scope') === 'received' ? received : owned);
     if (req.method === 'POST' && path === '/shares') {
       const v = vaultApi.vaults.find((x) => x.id === body['vault_id'] && !x.deleted_at);
-      if (!v) return problem(404, 'NOT_FOUND', 'vault not found');
-      if (v.kind !== 'shared')
+      // Somebody else's vault: a manager shares inside a share they manage (ADR-0041 §8).
+      const managed = v
+        ? []
+        : owned.filter(
+            (x) =>
+              x.vault_id === body['vault_id'] &&
+              x.my_permission === 'manager' &&
+              x.my_status === 'accepted',
+          );
+      if (!v && managed.length === 0) return problem(404, 'NOT_FOUND', 'vault not found');
+      if (v && v.kind !== 'shared')
         return problem(409, 'VAULT_ENCRYPTED', 'private vaults cannot be shared');
+      const key = (p: unknown) => (typeof p === 'string' ? p.normalize('NFC').toLowerCase() : '');
+      const prefix = key(body['path_prefix']);
+      const via = managed.find(
+        (x) =>
+          x.resource_type === 'vault' ||
+          (x.resource_type === 'folder' &&
+            body['resource_type'] === 'folder' &&
+            (prefix === key(x.path_prefix) || prefix.startsWith(`${key(x.path_prefix)}/`))),
+      );
+      if (!v && !via)
+        return problem(403, 'FORBIDDEN', 'a manager can share only inside a share they manage');
       const name = (typeof body['display_name'] === 'string' ? body['display_name'] : '').trim();
       if (!name || name.length > 120) return problem(400, 'VALIDATION_FAILED', 'display_name');
       const expires = body['expires_at'] as string | undefined;
@@ -129,14 +150,15 @@ export function fakeCloudApi(seed: CloudSeed, basePath = '/api/v1'): FakeCloudAp
         }[]) ?? [];
       const s: Share = {
         id: `0198f1c2-bbbb-7bbb-8ccc-${String(next++).padStart(12, '0')}`,
-        vault_id: v.id,
-        vault_name: v.name,
+        vault_id: body['vault_id'] as string,
+        vault_name: v?.name ?? via?.vault_name ?? '',
         resource_type: body['resource_type'] as Share['resource_type'],
         ...(body['path_prefix'] ? { path_prefix: body['path_prefix'] as string } : {}),
         display_name: name,
-        owner_id: OWNER,
-        owner_name: 'me',
+        owner_id: via ? via.owner_id : OWNER,
+        owner_name: via ? via.owner_name : 'me',
         created_at: NOW(),
+        ...(via ? { my_permission: 'manager' as const, my_status: 'accepted' as const } : {}),
         ...(expires ? { expires_at: expires } : {}),
         grants: grants.map((g) => ({
           ...g,

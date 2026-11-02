@@ -305,6 +305,7 @@ function MembersPanel({ groupId }: { groupId: string }) {
                 </tbody>
               </Table>
             )}
+            <p className="nd-muted">{t('admin.groups.roleReservedNote')}</p>
             <AddMember groupId={groupId} existing={new Set(list.map((m) => m.user_id))} />
           </div>
         )}

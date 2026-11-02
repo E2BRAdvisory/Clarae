@@ -126,6 +126,31 @@ func (s *Scope) ContainsFile(id uuid.UUID, p string) bool {
 	return s.ContainsPath(p)
 }
 
+// ContainsScope reports whether the scope of another share of the same vault
+// lies inside this one (ADR-0041 §8: a manager shares only inside the share
+// they manage). A vault share contains everything; a folder share contains
+// itself, its subfolders and the documents below it (compared by path_key, so
+// case and Unicode normalization follow the rest of the scope code); a document
+// share contains only a share of that same document. filePath is the current
+// path of the inner document (file shares only).
+func (s *Scope) ContainsScope(resourceType, prefix string, fileID uuid.UUID, filePath string) bool {
+	switch s.Type {
+	case ResourceVault:
+		return true
+	case ResourceFolder:
+		switch resourceType {
+		case ResourceFolder:
+			k := pathrules.Key(prefix)
+			return k == s.prefixKey || strings.HasPrefix(k, s.prefixKey+"/")
+		case ResourceFile:
+			return filePath != "" && s.ContainsPath(filePath)
+		}
+	case ResourceFile:
+		return resourceType == ResourceFile && fileID == s.FileID
+	}
+	return false
+}
+
 // Rel converts a vault path to the path seen in the mount. A file share exposes
 // its document under its base name.
 func (s *Scope) Rel(p string) string {

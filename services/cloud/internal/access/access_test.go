@@ -135,3 +135,41 @@ func TestProjectRevisionsThroughAShare(t *testing.T) {
 		t.Error("another file is outside a document share")
 	}
 }
+
+func TestContainsScope(t *testing.T) {
+	fid, other := uuid.New(), uuid.New()
+	vault := NewScope(uuid.New(), ResourceVault, nil, nil)
+	folder := folderScope("Progetti/Alfa")
+	doc := NewScope(uuid.New(), ResourceFile, nil, &fid)
+	cases := []struct {
+		name   string
+		outer  *Scope
+		typ    string
+		prefix string
+		file   uuid.UUID
+		path   string
+		want   bool
+	}{
+		{"vault holds the vault", vault, ResourceVault, "", uuid.Nil, "", true},
+		{"vault holds a folder", vault, ResourceFolder, "Any/Where", uuid.Nil, "", true},
+		{"vault holds a document", vault, ResourceFile, "", fid, "x.md", true},
+		{"folder holds itself", folder, ResourceFolder, "Progetti/Alfa", uuid.Nil, "", true},
+		{"folder holds itself, other case", folder, ResourceFolder, "progetti/ALFA", uuid.Nil, "", true},
+		{"folder holds a subfolder", folder, ResourceFolder, "Progetti/Alfa/Sub", uuid.Nil, "", true},
+		{"folder holds a document below", folder, ResourceFile, "", fid, "Progetti/Alfa/Sub/x.md", true},
+		{"folder refuses a sibling with the same letters", folder, ResourceFolder, "Progetti/Alfabeto", uuid.Nil, "", false},
+		{"folder refuses its parent", folder, ResourceFolder, "Progetti", uuid.Nil, "", false},
+		{"folder refuses the vault", folder, ResourceVault, "", uuid.Nil, "", false},
+		{"folder refuses a document outside", folder, ResourceFile, "", fid, "Progetti/Beta/x.md", false},
+		{"folder refuses a document without a path", folder, ResourceFile, "", fid, "", false},
+		{"document holds itself", doc, ResourceFile, "", fid, "a/x.md", true},
+		{"document refuses another document", doc, ResourceFile, "", other, "a/x.md", false},
+		{"document refuses a folder", doc, ResourceFolder, "a", uuid.Nil, "", false},
+		{"document refuses the vault", doc, ResourceVault, "", uuid.Nil, "", false},
+	}
+	for _, c := range cases {
+		if got := c.outer.ContainsScope(c.typ, c.prefix, c.file, c.path); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
+	}
+}

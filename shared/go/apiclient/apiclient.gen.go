@@ -1386,7 +1386,7 @@ type ClientInterface interface {
 
 	// CreateShareWithBody Share a vault, a folder or a document (shared vaults only)
 	//
-	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+	// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1395,7 +1395,7 @@ type ClientInterface interface {
 
 	// CreateShare Share a vault, a folder or a document (shared vaults only)
 	//
-	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+	// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1910,7 +1910,7 @@ func (c *Client) ListShares(ctx context.Context, params *ListSharesParams, reqEd
 
 // CreateShareWithBody Share a vault, a folder or a document (shared vaults only)
 //
-// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -1929,7 +1929,7 @@ func (c *Client) CreateShareWithBody(ctx context.Context, contentType string, bo
 
 // CreateShare Share a vault, a folder or a document (shared vaults only)
 //
-// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4810,7 +4810,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateShareWithBodyWithResponse Share a vault, a folder or a document (shared vaults only)
 	//
-	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+	// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4819,7 +4819,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateShareWithResponse Share a vault, a folder or a document (shared vaults only)
 	//
-	// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+	// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -6329,6 +6329,8 @@ type CreateShareReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -6356,6 +6358,11 @@ func (r CreateShareReply) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r CreateShareReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateShareReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -9133,7 +9140,7 @@ func (c *ClientWithResponses) ListSharesWithResponse(ctx context.Context, params
 
 // CreateShareWithBodyWithResponse Share a vault, a folder or a document (shared vaults only)
 //
-// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9148,7 +9155,7 @@ func (c *ClientWithResponses) CreateShareWithBodyWithResponse(ctx context.Contex
 
 // CreateShareWithResponse Share a vault, a folder or a document (shared vaults only)
 //
-// Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+// The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -10952,6 +10959,13 @@ func ParseCreateShareReply(rsp *http.Response) (*CreateShareReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound

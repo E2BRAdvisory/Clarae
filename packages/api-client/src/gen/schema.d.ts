@@ -504,7 +504,7 @@ export interface paths {
         put?: never;
         /**
          * Share a vault, a folder or a document (shared vaults only)
-         * @description Only the owner of the vault creates shares for now (a vault of someone else answers 404). Creation by a manager of an existing share, within the scope it manages, is proposed in ADR-0041 and not implemented yet.
+         * @description The owner of the vault, or a manager (ADR-0041 §8): a user holding an accepted `manager` grant, directly or through a group, on a live share (not revoked, not expired) of the same vault may share what lies inside that share's scope: anything under a vault share, the folder itself, a subfolder or a document below it under a folder share (paths compared like `path_key`: NFC, case-insensitive), only the same document under a document share. Initial grants go up to `manager` for everyone. A scope outside every share the caller manages is `403 FORBIDDEN`; a vault where the caller is neither owner nor manager answers 404; a private vault is `409 VAULT_ENCRYPTED` (D-02). The new share belongs to the vault: its owner sees, changes and revokes it; `created_by` (audit `share.create`, with `via_share`) is the manager, who manages it (rename, expiry, grants, not revocation) while they still manage a live share around it, and sees it with `my_permission: manager` in `scope=owned`.
          */
         post: operations["createShare"];
         delete?: never;
@@ -2954,6 +2954,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];

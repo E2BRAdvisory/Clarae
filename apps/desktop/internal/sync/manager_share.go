@@ -373,31 +373,43 @@ func (m *Manager) ListShares(ctx context.Context, scope string) ([]transport.Sha
 
 // CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud
 // vault id: the account-wide "New share" of the settings and of the console, which need no local
-// copy. A private vault is never shareable (D-02): the server is not asked.
+// copy. The caller is the owner of the vault or a manager of a share of it (ADR-0041 §8), who
+// shares only inside that share: the server decides, this side does not check ownership. A private
+// vault is never shareable (D-02): when the vault is the caller's and private, the server is not
+// asked; a vault that is not the caller's (NOT_FOUND here) is left to the server.
 func (m *Manager) CreateCloudShare(ctx context.Context, cloudVaultID, pathPrefix, name string, grants []transport.NewGrant, expires *time.Time) (transport.Share, error) {
 	c, _, err := m.client()
 	if err != nil {
 		return transport.Share{}, err
 	}
-	v, err := c.GetVault(ctx, cloudVaultID)
+	vaultID, err := uuid.Parse(cloudVaultID)
 	if err != nil {
-		return transport.Share{}, err
+		return transport.Share{}, fmt.Errorf("invalid: cloud vault id %q", cloudVaultID)
 	}
-	if string(v.Kind) != "shared" {
-		return transport.Share{}, &transport.ProblemError{
-			Problem:    syncproto.Problem{Code: syncproto.CodeVaultEncrypted, Detail: "a private (end-to-end encrypted) vault cannot be shared"},
-			StatusCode: 409,
+	vaultName := ""
+	switch v, err := c.GetVault(ctx, cloudVaultID); {
+	case err == nil:
+		if string(v.Kind) != "shared" {
+			return transport.Share{}, &transport.ProblemError{
+				Problem:    syncproto.Problem{Code: syncproto.CodeVaultEncrypted, Detail: "a private (end-to-end encrypted) vault cannot be shared"},
+				StatusCode: 409,
+			}
 		}
+		vaultName = v.Name
+	case IsNotFound(err):
+		// Not the caller's vault: a manager shares inside the share they manage.
+	default:
+		return transport.Share{}, err
 	}
 	name = strings.TrimSpace(name)
 	prefix := strings.Trim(strings.TrimSpace(pathPrefix), "/")
 	if name == "" {
-		name = v.Name
+		name = vaultName
 		if prefix != "" {
 			name = filepath.Base(prefix)
 		}
 	}
-	in := transport.CreateShare{VaultId: v.Id, ResourceType: apiclient.ResourceType("vault"), DisplayName: name, ExpiresAt: expires}
+	in := transport.CreateShare{VaultId: vaultID, ResourceType: apiclient.ResourceType("vault"), DisplayName: name, ExpiresAt: expires}
 	if prefix != "" {
 		in.ResourceType = apiclient.ResourceType("folder")
 		in.PathPrefix = &prefix

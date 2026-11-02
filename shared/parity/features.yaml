@@ -438,7 +438,7 @@ features:
     title: Creazione di una condivisione (vault, cartella o file)
     desktop:
       status: yes
-      note: da Impostazioni → Condivisione («Nuova condivisione», un vault condiviso intero o una sua cartella, con @memobrain/cloud-features) e dal menu «Condividi…» dell'esplorazione (anche un documento del vault aperto)
+      note: da Impostazioni → Condivisione («Nuova condivisione», un vault condiviso intero o una sua cartella, con @memobrain/cloud-features; «Condividi una parte» su una condivisione che l'utente gestisce come manager, solo dentro il suo ambito, ADR-0041 §8) e dal menu «Condividi…» dell'esplorazione (anche un documento del vault aperto; non sui mount)
       commands: [sharing:share]
       bindings: [SharingAPI.CreateShare, SharingAPI.CreateCloudShare]
       operationIds: [createShare]
@@ -446,7 +446,7 @@ features:
       status: yes
     console:
       status: yes
-      note: «Nuova condivisione» di un vault condiviso intero o di una sua cartella (la console non conosce gli id dei documenti); i vault privati non sono proposti (D-02)
+      note: «Nuova condivisione» di un vault condiviso intero o di una sua cartella (la console non conosce gli id dei documenti); i vault privati non sono proposti (D-02); «Condividi una parte» per chi è manager di una condivisione di vault o cartella (ADR-0041 §8)
       routes: [/shares]
       operationIds: [createShare]
     tests:
@@ -456,12 +456,16 @@ features:
         - apps/desktop/internal/sync/manager_share_test.go
         - apps/desktop/internal/sync/e2e_sharing_test.go
         - apps/desktop/frontend/e2e/sharing.spec.ts
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
       web:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/shares.spec.ts
       cloud:
         - services/cloud/test/integration/sharing_test.go
+        - services/cloud/test/integration/sharing_manager_test.go
+        - services/cloud/internal/access/access_test.go
+        - services/cloud/internal/sharing/view_test.go
 
   - id: share.manage
     title: Elenco e revoca delle condivisioni create
@@ -659,7 +663,7 @@ features:
       reason: informazione dell'account, che spetta alla console
     console:
       status: yes
-      note: pagina Account, sezione «I miei gruppi» (MyGroups di @memobrain/cloud-features)
+      note: pagina Account, sezione «I miei gruppi» (MyGroups di @memobrain/cloud-features); il ruolo `manager` nel gruppo è mostrato come riservato, senza effetti in v1 (ADR-0041 §9)
       routes: [/account]
       operationIds: [listMyGroups]
     tests:
@@ -1607,6 +1611,7 @@ features:
       reason: amministrazione, solo nella console
     console:
       status: yes
+      note: il ruolo `manager` di un membro si salva e si mostra, con l'avviso che in v1 non dà permessi (ADR-0041 §9)
       routes: [/admin/groups, /admin/groups/:id]
       operationIds:
         [
@@ -1624,6 +1629,8 @@ features:
         - web/src/pages/admin/Groups.test.tsx
       cloud:
         - services/cloud/test/integration/admin_test.go
+        - services/cloud/test/integration/sharing_manager_test.go
+        - services/cloud/internal/db/reserved_role_test.go
 
   - id: admin.config
     title: Config Profile e configurazione effettiva

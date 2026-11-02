@@ -7,7 +7,7 @@ import { formatDay } from '../format';
 import { createT, type TFunction } from '../i18n';
 import type { CloudPort, NewShare, Share, ShareUpdate } from '../port';
 import { GrantEditor } from './GrantEditor';
-import { EditShareDialog, NewShareDialog } from './ShareDialogs';
+import { EditShareDialog, NewShareDialog, NewShareInsideDialog } from './ShareDialogs';
 
 export interface SharesManagerProps {
   port: CloudPort;
@@ -28,16 +28,28 @@ export function shareType(t: TFunction, s: Share): string {
 /** The owner of the vault has no `my_permission`; a manager has one and cannot revoke. */
 export const isOwnerOf = (s: Share): boolean => !s.my_permission;
 
+/**
+ * A manager (not the owner) may share again inside a vault or folder share they manage (ADR-0041
+ * §8); a document share has nothing inside it to pick, so only the server-side rule covers it.
+ */
+export const canShareInside = (s: Share): boolean =>
+  !isOwnerOf(s) &&
+  s.my_permission === 'manager' &&
+  s.my_status !== 'pending' &&
+  s.resource_type !== 'file';
+
 type Pending =
   | { kind: 'none' }
   | { kind: 'new' }
+  | { kind: 'inside'; share: Share }
   | { kind: 'edit'; share: Share }
   | { kind: 'revoke'; share: Share };
 
 /**
  * The shares the user created or manages (§2.6.4, ADR-0037 §2): creation of a share of a whole
- * shared vault or of one of its folders (private vaults are never offered, D-02), rename and
- * expiry, the people and groups with their level, revoke. Honours the `sharing` feature flag.
+ * shared vault or of one of its folders (private vaults are never offered, D-02), creation by a
+ * manager inside a share they manage (ADR-0041 §8), rename and expiry, the people and groups with
+ * their level, revoke. Honours the `sharing` feature flag.
  */
 export function SharesManager({
   port,
@@ -183,6 +195,18 @@ export function SharesManager({
                     >
                       {t('shares.edit')}
                     </Button>
+                    {canCreate && canShareInside(s) && (
+                      <Button
+                        small
+                        aria-label={t('shares.shareInsideAria', { name: s.display_name })}
+                        onClick={() => {
+                          setStatus('');
+                          setPending({ kind: 'inside', share: s });
+                        }}
+                      >
+                        {t('shares.shareInside')}
+                      </Button>
+                    )}
                     {isOwnerOf(s) && (
                       <Button
                         small
@@ -212,6 +236,16 @@ export function SharesManager({
           vaults={vaults.data ?? []}
           vaultId={vaultId}
           busy={busy || vaults.isPending}
+          error={dialogError}
+          onCancel={close}
+          onSubmit={create}
+        />
+      )}
+      {pending.kind === 'inside' && (
+        <NewShareInsideDialog
+          t={t}
+          within={pending.share}
+          busy={busy}
           error={dialogError}
           onCancel={close}
           onSubmit={create}

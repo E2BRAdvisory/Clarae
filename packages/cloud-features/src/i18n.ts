@@ -149,6 +149,8 @@ const en = {
   'shares.created': '“{{name}}” shared. Add the people and groups who can see it.',
   'shares.updated': '“{{name}}” updated.',
   'shares.managerNote': 'You manage this share: only its owner can revoke it.',
+  'shares.shareInside': 'Share inside',
+  'shares.shareInsideAria': 'Share inside {{name}}',
 
   'shareForm.newTitle': 'New share',
   'shareForm.editTitle': 'Edit “{{name}}”',
@@ -168,6 +170,14 @@ const en = {
   'shareForm.expiryHint': 'Optional: access ends at the end of this day.',
   'shareForm.clearExpiry': 'No expiry',
   'shareForm.create': 'Share',
+  'shareForm.insideTitle': 'Share inside “{{name}}”',
+  'shareForm.inside': 'Inside “{{name}}” · in {{vault}}',
+  'shareForm.insideNote':
+    'As a manager you can share only what lies inside this share, with access up to Manager. The owner of the vault can revoke what you create.',
+  'shareForm.wholeFolder': 'The whole folder',
+  'shareForm.subfolder': 'A subfolder',
+  'shareForm.subfolderPath': 'Subfolder',
+  'shareForm.subfolderHint': 'Path inside {{folder}}, for example Drafts.',
 
   'grants.caption': 'Access',
   'grants.none': 'Nobody has access yet.',
@@ -219,6 +229,7 @@ const en = {
   'groups.colRole': 'Role',
   'groups.role_member': 'Member',
   'groups.role_manager': 'Manager',
+  'groups.roleReserved': 'The manager role gives no extra permission in this version.',
   'groups.empty': 'You are not in any group.',
   'groups.note': 'Groups are managed by the administrators. People can share with a whole group.',
 
@@ -384,6 +395,8 @@ const it: Messages = {
   'shares.created': '«{{name}}» condiviso. Aggiungi le persone e i gruppi che possono vederlo.',
   'shares.updated': '«{{name}}» aggiornato.',
   'shares.managerNote': 'Gestisci questa condivisione: solo chi la possiede può revocarla.',
+  'shares.shareInside': 'Condividi una parte',
+  'shares.shareInsideAria': 'Condividi una parte di {{name}}',
 
   'shareForm.newTitle': 'Nuova condivisione',
   'shareForm.editTitle': 'Modifica «{{name}}»',
@@ -403,6 +416,14 @@ const it: Messages = {
   'shareForm.expiryHint': "Facoltativa: l'accesso termina alla fine di questo giorno.",
   'shareForm.clearExpiry': 'Nessuna scadenza',
   'shareForm.create': 'Condividi',
+  'shareForm.insideTitle': 'Condividi una parte di «{{name}}»',
+  'shareForm.inside': 'Dentro «{{name}}» · in {{vault}}',
+  'shareForm.insideNote':
+    'Come gestore puoi condividere solo ciò che sta dentro questa condivisione, con accesso fino a Gestore. Chi possiede il vault può revocare ciò che crei.',
+  'shareForm.wholeFolder': "L'intera cartella",
+  'shareForm.subfolder': 'Una sottocartella',
+  'shareForm.subfolderPath': 'Sottocartella',
+  'shareForm.subfolderHint': 'Percorso dentro {{folder}}, per esempio Bozze.',
 
   'grants.caption': 'Accessi',
   'grants.none': 'Nessuno ha ancora accesso.',
@@ -454,6 +475,7 @@ const it: Messages = {
   'groups.colRole': 'Ruolo',
   'groups.role_member': 'Membro',
   'groups.role_manager': 'Gestore',
+  'groups.roleReserved': 'In questa versione il ruolo di gestore non dà permessi in più.',
   'groups.empty': 'Non fai parte di nessun gruppo.',
   'groups.note':
     'I gruppi li gestiscono gli amministratori. Si può condividere con un intero gruppo.',

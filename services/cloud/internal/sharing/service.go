@@ -50,6 +50,9 @@ type View struct {
 	MyPermission access.Permission // None for the owner: see IsOwner
 	MyStatus     string            // accepted | pending | declined; "" for the owner
 	IsOwner      bool
+	// ByCreator is set when the viewer manages the share as the manager who
+	// created it (ADR-0041 §8): MyPermission is then at least manager.
+	ByCreator bool
 	// Grants is filled for the owner and for managers.
 	Grants []sharingdb.ListGrantsRow
 }
@@ -71,7 +74,10 @@ func checkViolation(err error, msg string) bool {
 	return errors.As(err, &pg) && pg.Code == "23514" && strings.Contains(pg.Message, msg)
 }
 
-// Create shares a vault, a folder or a document of a shared vault the caller owns.
+// Create shares a vault, a folder or a document of a shared vault. The caller is
+// the owner of the vault, or a manager (ADR-0041 §8): someone holding an
+// accepted manager grant on a live share of the vault whose scope contains the
+// new one; their grants are capped at manager like everyone's (putGrant).
 func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (View, error) {
 	name, err := validName(in.DisplayName)
 	if err != nil {
@@ -84,16 +90,27 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := sharingdb.New(tx)
 		v, err := vaults.GetVault(ctx, tx, in.VaultID)
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (v.OwnerID != actor || v.DeletedAt != nil)) {
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && v.DeletedAt != nil) {
 			return httpproblem.NotFound("vault")
 		}
 		if err != nil {
 			return err
 		}
+		// A manager creates only inside what they manage; to anyone else the vault does not exist.
+		var managed []sharingdb.Share
+		if v.OwnerID != actor {
+			if managed, err = q.ListManagedSharesOfVault(ctx, sharingdb.ListManagedSharesOfVaultParams{VaultID: v.ID, UserID: actor}); err != nil {
+				return err
+			}
+			if len(managed) == 0 {
+				return httpproblem.NotFound("vault")
+			}
+		}
 		if v.Kind != "shared" {
 			return httpproblem.Errorf(syncproto.CodeVaultEncrypted, "a private vault cannot be shared")
 		}
 		params := sharingdb.CreateShareParams{ID: uuid.Must(uuid.NewV7()), VaultID: v.ID, ResourceType: in.ResourceType, DisplayName: name, CreatedBy: actor, ExpiresAt: in.ExpiresAt}
+		t := target{Type: in.ResourceType}
 		switch in.ResourceType {
 		case access.ResourceVault:
 		case access.ResourceFolder:
@@ -108,7 +125,7 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 			if n == 0 {
 				return httpproblem.Errorf(syncproto.CodeNotFound, "there are no files under %s", prefix)
 			}
-			params.PathPrefix = &prefix
+			params.PathPrefix, t.Prefix = &prefix, prefix
 		case access.ResourceFile:
 			f, err := q.GetFile(ctx, sharingdb.GetFileParams{ID: in.FileID, VaultID: v.ID})
 			if errors.Is(err, pgx.ErrNoRows) || (err == nil && f.IsDeleted) {
@@ -117,9 +134,17 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 			if err != nil {
 				return err
 			}
-			params.FileID = &f.ID
+			params.FileID, t.FileID, t.FilePath = &f.ID, f.ID, f.Path
 		default:
 			return httpproblem.Errorf(syncproto.CodeValidationFailed, "resource_type must be vault, folder or file")
+		}
+		detail := map[string]any{"vault": v.ID, "type": in.ResourceType, "name": name}
+		if v.OwnerID != actor {
+			via, ok := coveringShare(managed, t, uuid.Nil)
+			if !ok {
+				return httpproblem.Errorf(syncproto.CodeForbidden, "a manager can share only what lies inside a share they manage")
+			}
+			detail["via_share"] = via
 		}
 		sh, err := q.CreateShare(ctx, params)
 		if checkViolation(err, "VAULT_ENCRYPTED") {
@@ -134,7 +159,7 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, in CreateInput) (
 				return err
 			}
 		}
-		if err := audit.Record(ctx, tx, actor, "share.create", "share", sh.ID.String(), map[string]any{"vault": v.ID, "type": in.ResourceType, "name": name}); err != nil {
+		if err := audit.Record(ctx, tx, actor, "share.create", "share", sh.ID.String(), detail); err != nil {
 			return err
 		}
 		return notify.PublishShare(ctx, tx, notify.ShareEvent{Kind: notify.ShareGranted, Share: sh.ID})
@@ -198,7 +223,11 @@ func (s *Service) view(ctx context.Context, tx db.DBTX, sh sharingdb.Share, view
 			return View{}, err
 		}
 	}
-	out, ok := buildView(sh, v.Name, v.OwnerID, owner.Username, viewer, mine)
+	byCreator, err := creatorManages(ctx, tx, sh, v.OwnerID, viewer)
+	if err != nil {
+		return View{}, err
+	}
+	out, ok := buildView(sh, v.Name, v.OwnerID, owner.Username, viewer, mine, byCreator)
 	if !ok {
 		return View{}, httpproblem.NotFound("share")
 	}
@@ -212,16 +241,23 @@ func (s *Service) view(ctx context.Context, tx db.DBTX, sh sharingdb.Share, view
 }
 
 // buildView computes what a viewer sees of a share from the viewer's own grants
-// on it (empty for the owner); ok is false when the viewer has no link to it.
+// on it (empty for the owner) and whether they manage it as the manager who
+// created it (byCreator); ok is false when the viewer has no link to it.
 // The full grant list is the caller's job (for canManage views only).
-func buildView(sh sharingdb.Share, vaultName string, ownerID uuid.UUID, ownerName string, viewer uuid.UUID, mine []sharingdb.ShareGrant) (View, bool) {
+func buildView(sh sharingdb.Share, vaultName string, ownerID uuid.UUID, ownerName string, viewer uuid.UUID, mine []sharingdb.ShareGrant, byCreator bool) (View, bool) {
 	out := View{Share: sh, VaultName: vaultName, OwnerID: ownerID, OwnerName: ownerName}
 	if ownerID == viewer {
 		out.IsOwner = true
 		return out, true
 	}
-	if len(mine) == 0 || sh.RevokedAt != nil {
+	if (len(mine) == 0 && !byCreator) || sh.RevokedAt != nil {
 		return View{}, false
+	}
+	if byCreator {
+		out.ByCreator = true
+		out.MyPermission = max(best(mine), access.Manager)
+		out.MyStatus = "accepted"
+		return out, true
 	}
 	out.MyPermission = best(mine)
 	out.MyStatus = myStatus(mine)
@@ -546,6 +582,10 @@ func (s *Service) views(ctx context.Context, tx db.DBTX, rows []shareRow, viewer
 	for _, g := range mineRows {
 		mine[g.ShareID] = append(mine[g.ShareID], g)
 	}
+	byCreator, err := creatorManaged(ctx, tx, rows, viewer)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]View, 0, len(rows))
 	var managed []uuid.UUID
 	for _, r := range rows {
@@ -553,7 +593,7 @@ func (s *Service) views(ctx context.Context, tx db.DBTX, rows []shareRow, viewer
 		if r.ownerID != viewer {
 			grants = mine[r.share.ID]
 		}
-		v, ok := buildView(r.share, r.vaultName, r.ownerID, r.ownerName, viewer, grants)
+		v, ok := buildView(r.share, r.vaultName, r.ownerID, r.ownerName, viewer, grants, byCreator[r.share.ID])
 		if !ok || (!keepDeclined && v.MyStatus == "declined") {
 			continue
 		}
@@ -580,7 +620,8 @@ func (s *Service) views(ctx context.Context, tx db.DBTX, rows []shareRow, viewer
 	return out, nil
 }
 
-// ListOwned returns the shares of the vaults the caller owns plus those they manage.
+// ListOwned returns the shares of the vaults the caller owns plus those they
+// manage, by grant or as the manager who created them (ADR-0041 §8).
 func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID) ([]View, error) {
 	conn := s.db.Pool
 	rows, err := sharingdb.New(conn).ListSharesOfVaultOwner(ctx, userID)

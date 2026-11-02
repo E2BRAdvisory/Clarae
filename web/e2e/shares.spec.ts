@@ -3,7 +3,8 @@ import { BOB, ME, mockApi, signedIn } from './support';
 
 // Sharing in the console (ADR-0037 §2, SharesManager of @memobrain/cloud-features over REST):
 // creation of a share of a shared vault, rename and expiry (PATCH /shares/{id}), access through the
-// directory, and the `sharing` flag. The API is a small in-memory server.
+// directory, creation by a manager inside the share they manage (ADR-0041 §8), and the `sharing`
+// flag. The API is a small in-memory server.
 
 const V_SHARED = '0198f1c2-aaaa-7bbb-8ccc-000000000001';
 const V_PRIVATE = '0198f1c2-aaaa-7bbb-8ccc-000000000002';
@@ -20,6 +21,9 @@ interface Share {
   created_at: string;
   expires_at?: string;
   grants: Record<string, unknown>[];
+  /** Set for a share the user manages but does not own. */
+  my_permission?: string;
+  my_status?: string;
 }
 
 function shareServer() {
@@ -149,4 +153,69 @@ test('with sharing turned off, the page says so and the menu has no Sharing entr
   await expect(page.getByText('Sharing is turned off by your administrator.')).toBeVisible();
   await expect(page.getByRole('navigation').getByRole('link', { name: 'Sharing' })).toHaveCount(0);
   expect(calls).not.toContain('GET /shares');
+});
+
+test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', async ({ page }) => {
+  await signedIn(page);
+  const srv = shareServer();
+  const V_COMPANY = '0198f1c2-aaaa-7bbb-8ccc-000000000009'; // ada's vault, not the user's
+  const ADA = '0198f1c2-cccc-7bbb-8ccc-0000000000ad';
+  srv.owned.push({
+    id: 'm1',
+    vault_id: V_COMPANY,
+    vault_name: 'Company',
+    resource_type: 'folder',
+    path_prefix: 'Projects/Alfa',
+    display_name: 'Alfa',
+    owner_id: ADA,
+    owner_name: 'ada',
+    created_at: '2026-10-01T10:00:00Z',
+    grants: [],
+    my_permission: 'manager',
+    my_status: 'accepted',
+  });
+  let posted: Record<string, unknown> = {};
+  const calls = await mockApi(page, {
+    ...srv.routes,
+    'POST /shares': (_route: Route, body: Record<string, unknown>) => {
+      posted = body;
+      const s: Share = {
+        id: 's2',
+        vault_id: body['vault_id'] as string,
+        vault_name: 'Company',
+        resource_type: body['resource_type'] as string,
+        path_prefix: body['path_prefix'] as string,
+        display_name: body['display_name'] as string,
+        owner_id: ADA,
+        owner_name: 'ada',
+        created_at: '2026-11-01T10:00:00Z',
+        grants: [],
+        my_permission: 'manager',
+        my_status: 'accepted',
+      };
+      srv.owned.push(s);
+      return s;
+    },
+  });
+  await page.goto('/shares');
+
+  const alfa = page.getByRole('region', { name: 'Alfa' });
+  await expect(alfa).toContainText('only its owner can revoke it');
+  await alfa.getByRole('button', { name: 'Share inside Alfa' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share inside “Alfa”' });
+  await expect(dialog).toContainText('Inside “Alfa” · in Company · Projects/Alfa');
+  await dialog.getByLabel('Subfolder', { exact: true }).fill('Drafts');
+  await expect(dialog.getByLabel('Name')).toHaveValue('Drafts');
+  await dialog.getByRole('button', { name: 'Share' }).click();
+
+  const drafts = page.getByRole('region', { name: 'Drafts' });
+  await expect(drafts).toContainText('in Company · Projects/Alfa/Drafts');
+  await expect(drafts.getByRole('button', { name: /Revoke/ })).toHaveCount(0);
+  expect(calls).toContain('POST /shares');
+  expect(posted).toMatchObject({
+    vault_id: V_COMPANY,
+    resource_type: 'folder',
+    path_prefix: 'Projects/Alfa/Drafts',
+    display_name: 'Drafts',
+  });
 });

@@ -153,6 +153,128 @@ export function NewShareDialog({
   );
 }
 
+export interface NewShareInsideDialogProps {
+  t: TFunction;
+  /** The share the user manages (not owns): the new one lies inside it (ADR-0041 §8). */
+  within: Share;
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onSubmit: (input: NewShare) => void;
+}
+
+/**
+ * A new share made by a manager inside the share they manage (ADR-0041 §8): under a vault share the
+ * whole vault or one of its folders, under a folder share the folder itself or one of its
+ * subfolders, so the scope can only lie inside. The server checks the same rule.
+ */
+export function NewShareInsideDialog({
+  t,
+  within,
+  busy,
+  error,
+  onCancel,
+  onSubmit,
+}: NewShareInsideDialogProps) {
+  const parent = within.resource_type === 'folder' ? cleanFolder(within.path_prefix ?? '') : '';
+  const [what, setWhat] = useState<'all' | 'part'>('part');
+  const [part, setPart] = useState('');
+  const [name, setName] = useState('');
+  const [nameTouched, setNameTouched] = useState(false);
+  const [day, setDay] = useState('');
+
+  const sub = cleanFolder(part);
+  const prefix = what === 'all' ? parent : parent && sub ? `${parent}/${sub}` : sub;
+  const suggested = what === 'part' ? baseName(sub) : parent ? baseName(parent) : within.vault_name;
+  const shownName = nameTouched ? name : suggested;
+  const valid =
+    shownName.trim() !== '' &&
+    shownName.trim().length <= NAME_MAX &&
+    (what === 'all' || sub !== '') &&
+    !sub.split('/').some((seg) => seg === '..' || seg === '.');
+
+  const submit = () => {
+    const expires = expiryOf(day);
+    onSubmit({
+      vault_id: within.vault_id,
+      display_name: shownName.trim(),
+      ...(prefix ? { path_prefix: prefix } : {}),
+      ...(expires ? { expires_at: expires } : {}),
+    });
+  };
+
+  const choices: Record<'all' | 'part', string> = parent
+    ? { all: t('shareForm.wholeFolder'), part: t('shareForm.subfolder') }
+    : { all: t('shareForm.wholeVault'), part: t('shareForm.folder') };
+  return (
+    <Dialog
+      title={t('shareForm.insideTitle', { name: within.display_name })}
+      onClose={onCancel}
+      actions={
+        <>
+          <Button onClick={onCancel}>{t('common.cancel')}</Button>
+          <Button variant="primary" disabled={busy || !valid} onClick={submit}>
+            {t('shareForm.create')}
+          </Button>
+        </>
+      }
+    >
+      <div className="mbcf-form">
+        <p className="mbcf-muted">
+          {t('shareForm.inside', { name: within.display_name, vault: within.vault_name })}
+          {parent ? ` · ${parent}` : ''}
+        </p>
+        <fieldset className="mbcf-choices">
+          <legend className="mbcf-legend">{t('shareForm.what')}</legend>
+          {(['all', 'part'] as const).map((w) => (
+            <label key={w} className="mbcf-choice" data-active={what === w || undefined}>
+              <input
+                type="radio"
+                name="mbcf-share-inside-what"
+                value={w}
+                checked={what === w}
+                onChange={() => setWhat(w)}
+              />
+              <span>{choices[w]}</span>
+            </label>
+          ))}
+        </fieldset>
+        {what === 'part' && (
+          <TextField
+            label={parent ? t('shareForm.subfolderPath') : t('shareForm.folderPath')}
+            hint={
+              parent ? t('shareForm.subfolderHint', { folder: parent }) : t('shareForm.folderHint')
+            }
+            value={part}
+            autoComplete="off"
+            onChange={(e) => setPart(e.target.value)}
+          />
+        )}
+        <TextField
+          label={t('shareForm.name')}
+          hint={t('shareForm.nameHint')}
+          value={shownName}
+          maxLength={NAME_MAX}
+          autoComplete="off"
+          onChange={(e) => {
+            setNameTouched(true);
+            setName(e.target.value);
+          }}
+        />
+        <TextField
+          label={t('shareForm.expiry')}
+          hint={t('shareForm.expiryHint')}
+          type="date"
+          value={day}
+          onChange={(e) => setDay(e.target.value)}
+        />
+        <p className="mbcf-muted">{t('shareForm.insideNote')}</p>
+      </div>
+      {error && <InlineError>{error}</InlineError>}
+    </Dialog>
+  );
+}
+
 export interface EditShareDialogProps {
   t: TFunction;
   share: Share;

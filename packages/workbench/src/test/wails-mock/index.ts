@@ -1270,26 +1270,47 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     ): Promise<ShareInfo> => {
       const signedOut = requireSignIn();
       if (signedOut) return signedOut;
+      const prefix = pathPrefix.trim().replace(/^\/+|\/+$/g, '');
       const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
-      if (!v) return reject('NOT_FOUND: vault not found');
-      if (v.kind !== 'shared')
+      // Not the user's vault: a manager shares inside a share they manage (ADR-0041 §8), with the
+      // server's rules (vault ⊇ folder ⊇ subfolder, path_key compared without case).
+      const key = (p: string) => p.normalize('NFC').toLowerCase();
+      const managed = v
+        ? undefined
+        : sh.owned.filter(
+            (s) =>
+              s.vaultId === cloudVaultId &&
+              s.myPermission === 'manager' &&
+              s.myStatus === 'accepted',
+          );
+      if (!v && !managed?.length) return reject('NOT_FOUND: vault not found');
+      if (v && v.kind !== 'shared')
         return reject('VAULT_ENCRYPTED: a private (end-to-end encrypted) vault cannot be shared');
+      const via = managed?.find(
+        (s) =>
+          s.resourceType === 'vault' ||
+          (s.resourceType === 'folder' &&
+            prefix !== '' &&
+            (key(prefix) === key(s.pathPrefix) || key(prefix).startsWith(`${key(s.pathPrefix)}/`))),
+      );
+      if (managed && !via)
+        return reject('FORBIDDEN: a manager can share only what lies inside a share they manage');
       if (expiresAt && new Date(expiresAt).getTime() <= Date.now())
         return reject('VALIDATION_FAILED: expires_at must be in the future');
-      const prefix = pathPrefix.trim().replace(/^\/+|\/+$/g, '');
+      const vaultName = v?.name ?? via?.vaultName ?? '';
       const share: ShareInfo = {
         id: `share-${sh.owned.length + sh.revoked.length + 1}`,
-        vaultId: v.id,
-        vaultName: v.name,
+        vaultId: cloudVaultId,
+        vaultName,
         resourceType: prefix ? 'folder' : 'vault',
         pathPrefix: prefix,
-        displayName: name.trim() || (prefix ? (prefix.split('/').pop() ?? prefix) : v.name),
-        ownerId: mock.auth.profile.userId,
-        ownerName: 'me',
+        displayName: name.trim() || (prefix ? (prefix.split('/').pop() ?? prefix) : vaultName),
+        ownerId: via ? via.ownerId : mock.auth.profile.userId,
+        ownerName: via ? via.ownerName : 'me',
         createdAt: new Date().toISOString(),
         expiresAt,
-        myPermission: '',
-        myStatus: '',
+        myPermission: via ? 'manager' : '',
+        myStatus: via ? 'accepted' : '',
         grants: grants.map((g) => ({
           principalType: g.principalType,
           principalId: g.principalId,

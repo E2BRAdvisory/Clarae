@@ -354,6 +354,66 @@ export function cloudAccountSuite(h: AccountHarness): void {
       expect(screen.getByRole('status')).toHaveTextContent('“Handbook” revoked.');
     });
 
+    it('lets a manager share inside the share they manage, never outside (ADR-0041 §8)', async () => {
+      const company = vaultId(7); // somebody else's vault: not among the user's
+      const alfa = seedShare({
+        id: 's-m',
+        display_name: 'Alfa',
+        vault_id: company,
+        vault_name: 'Company',
+        resource_type: 'folder',
+        path_prefix: 'Projects/Alfa',
+        owner_id: ADA,
+        owner_name: 'ada',
+        my_permission: 'manager',
+        my_status: 'accepted',
+      });
+      const port = await show({
+        vaults,
+        owned: [alfa, seedShare({ id: 's-1', display_name: 'Handbook' })],
+      });
+      // The owner of a share uses "New share"; only a managed share offers to share inside it.
+      expect(
+        within(await card('Handbook')).queryByRole('button', { name: /Share inside/ }),
+      ).toBeNull();
+      fireEvent.click(
+        within(await card('Alfa')).getByRole('button', { name: 'Share inside Alfa' }),
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Share inside “Alfa”' });
+      expect(dialog).toHaveTextContent('Inside “Alfa” · in Company · Projects/Alfa');
+      expect(dialog).toHaveTextContent('with access up to Manager');
+      expect(within(dialog).queryByLabelText('Vault')).toBeNull();
+      expect(within(dialog).getByRole('button', { name: 'Share' })).toBeDisabled();
+      fireEvent.change(within(dialog).getByLabelText('Subfolder'), {
+        target: { value: '/Drafts/' },
+      });
+      expect(within(dialog).getByLabelText('Name')).toHaveValue('Drafts');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
+      const drafts = await card('Drafts');
+      expect(drafts).toHaveTextContent('in Company · Projects/Alfa/Drafts');
+      expect(screen.getByRole('status')).toHaveTextContent('“Drafts” shared.');
+      // The manager who made it manages it, but only the owner of the vault revokes it.
+      expect(within(drafts).queryByRole('button', { name: /Revoke/ })).toBeNull();
+      expect(drafts).toHaveTextContent('only its owner can revoke it');
+      const made = (await port.listShares('owned')).find((x) => x.display_name === 'Drafts');
+      expect(made).toMatchObject({ owner_name: 'ada', my_permission: 'manager' });
+
+      // The whole managed folder is fine too; outside it the server says no.
+      fireEvent.click(
+        within(await card('Alfa')).getByRole('button', { name: 'Share inside Alfa' }),
+      );
+      const again = screen.getByRole('dialog', { name: 'Share inside “Alfa”' });
+      fireEvent.click(within(again).getByRole('radio', { name: 'The whole folder' }));
+      expect(within(again).queryByLabelText('Subfolder')).toBeNull();
+      expect(within(again).getByLabelText('Name')).toHaveValue('Alfa');
+      fireEvent.click(within(again).getByRole('button', { name: 'Cancel' }));
+      const err = await port
+        .createShare({ vault_id: company, display_name: 'Beta', path_prefix: 'Projects/Beta' })
+        .then(() => null)
+        .catch((e: unknown) => e);
+      expect(errorCode(err)).toBe('FORBIDDEN');
+    });
+
     it('shows only the shares of one vault when asked', async () => {
       await mount(
         {
@@ -473,6 +533,8 @@ export function cloudAccountSuite(h: AccountHarness): void {
       }
       const table = await screen.findByRole('table', { name: 'My groups' });
       expect(within(row(table, 'engineers')).getByText('Manager')).toBeInTheDocument();
+      // ADR-0041 §9: shown, but it gives nothing.
+      expect(screen.getByText(/manager role gives no extra permission/)).toBeInTheDocument();
     });
   });
 }

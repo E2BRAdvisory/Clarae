@@ -43,12 +43,15 @@ SELECT g.*,
 FROM share_grants g WHERE g.share_id = $1 ORDER BY g.created_at;
 
 -- name: ListSharesOfVaultOwner :many
--- Shares of the vaults a user owns, plus those the user manages, with what a
--- list shows of their vault and owner (one query per list, not per share).
+-- Shares of the vaults a user owns, plus those the user manages or created as
+-- a manager (ADR-0041 §8: the service keeps a created one only while the
+-- creator still manages a share around it), with what a list shows of their
+-- vault and owner (one query per list, not per share).
 SELECT sqlc.embed(s), v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
 FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
 WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
   AND (v.owner_id = sqlc.arg(user_id)
+       OR s.created_by = sqlc.arg(user_id)
        OR EXISTS (SELECT 1 FROM share_grants g
                   WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
                     AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
@@ -115,3 +118,24 @@ SELECT g.*,
        CASE g.principal_type WHEN 'user' THEN (SELECT username FROM users WHERE id = g.principal_id)
                              ELSE (SELECT name::text FROM groups WHERE id = g.principal_id) END::text AS principal_name
 FROM share_grants g WHERE g.share_id = ANY(sqlc.arg(share_ids)::uuid[]) ORDER BY g.share_id, g.created_at;
+
+-- name: ListManagedSharesOfVault :many
+-- The live shares of a vault on which a user holds an accepted manager grant,
+-- directly or through a group (ADR-0041 §8: where a manager may share).
+SELECT s.* FROM shares s
+WHERE s.vault_id = sqlc.arg(vault_id) AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+  AND EXISTS (SELECT 1 FROM share_grants g
+              WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
+                AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
+                  OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id)))))
+ORDER BY s.created_at;
+
+-- name: ListManagedSharesOfUser :many
+-- ListManagedSharesOfVault over every vault (the lists of shares).
+SELECT s.* FROM shares s
+WHERE s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+  AND EXISTS (SELECT 1 FROM share_grants g
+              WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
+                AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
+                  OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id)))))
+ORDER BY s.created_at;

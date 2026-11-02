@@ -369,6 +369,96 @@ func (q *Queries) ListLiveSharesOfVault(ctx context.Context, vaultID uuid.UUID) 
 	return items, nil
 }
 
+const listManagedSharesOfUser = `-- name: ListManagedSharesOfUser :many
+SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at FROM shares s
+WHERE s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+  AND EXISTS (SELECT 1 FROM share_grants g
+              WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
+                AND ((g.principal_type = 'user' AND g.principal_id = $1)
+                  OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $1))))
+ORDER BY s.created_at
+`
+
+// ListManagedSharesOfVault over every vault (the lists of shares).
+func (q *Queries) ListManagedSharesOfUser(ctx context.Context, userID uuid.UUID) ([]Share, error) {
+	rows, err := q.db.Query(ctx, listManagedSharesOfUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Share{}
+	for rows.Next() {
+		var i Share
+		if err := rows.Scan(
+			&i.ID,
+			&i.VaultID,
+			&i.ResourceType,
+			&i.PathPrefix,
+			&i.FileID,
+			&i.DisplayName,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listManagedSharesOfVault = `-- name: ListManagedSharesOfVault :many
+SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at FROM shares s
+WHERE s.vault_id = $1 AND s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now())
+  AND EXISTS (SELECT 1 FROM share_grants g
+              WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
+                AND ((g.principal_type = 'user' AND g.principal_id = $2)
+                  OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $2))))
+ORDER BY s.created_at
+`
+
+type ListManagedSharesOfVaultParams struct {
+	VaultID uuid.UUID
+	UserID  uuid.UUID
+}
+
+// The live shares of a vault on which a user holds an accepted manager grant,
+// directly or through a group (ADR-0041 §8: where a manager may share).
+func (q *Queries) ListManagedSharesOfVault(ctx context.Context, arg ListManagedSharesOfVaultParams) ([]Share, error) {
+	rows, err := q.db.Query(ctx, listManagedSharesOfVault, arg.VaultID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Share{}
+	for rows.Next() {
+		var i Share
+		if err := rows.Scan(
+			&i.ID,
+			&i.VaultID,
+			&i.ResourceType,
+			&i.PathPrefix,
+			&i.FileID,
+			&i.DisplayName,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listShareRecipients = `-- name: ListShareRecipients :many
 SELECT DISTINCT u FROM (
   SELECT g.principal_id AS u FROM share_grants g WHERE g.share_id = $1 AND g.principal_type = 'user'
@@ -452,6 +542,7 @@ SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_na
 FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
 WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
   AND (v.owner_id = $1
+       OR s.created_by = $1
        OR EXISTS (SELECT 1 FROM share_grants g
                   WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
                     AND ((g.principal_type = 'user' AND g.principal_id = $1)
@@ -466,8 +557,10 @@ type ListSharesOfVaultOwnerRow struct {
 	OwnerName string
 }
 
-// Shares of the vaults a user owns, plus those the user manages, with what a
-// list shows of their vault and owner (one query per list, not per share).
+// Shares of the vaults a user owns, plus those the user manages or created as
+// a manager (ADR-0041 §8: the service keeps a created one only while the
+// creator still manages a share around it), with what a list shows of their
+// vault and owner (one query per list, not per share).
 func (q *Queries) ListSharesOfVaultOwner(ctx context.Context, userID uuid.UUID) ([]ListSharesOfVaultOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listSharesOfVaultOwner, userID)
 	if err != nil {
