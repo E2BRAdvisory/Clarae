@@ -1,8 +1,10 @@
 package bases
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -56,17 +58,46 @@ type RunOptions struct {
 	This   *Note             // the note embedding the base (for "this"), may be nil
 	Now    time.Time         // zero = time.Now()
 	Schema map[string]string // declared property types (.memobrain/types.json)
+	// OnPanic receives the first unexpected failure (a bug) of the engine in
+	// a run, recovered and turned into an error, so that it reaches the log.
+	OnPanic func(error)
 }
+
+// noticeTooExpensive tells that the run-wide budget was spent: the rows or
+// cells evaluated after that point are missing or errors.
+const noticeTooExpensive = "This base is too expensive to evaluate: some rows or values are missing."
 
 type rowCtx struct {
 	note *Note
 	env  *Env
 	keys []any // sort keys
 	grp  any
+	cost int // steps of one comparison of the keys
 }
 
 // Run evaluates a view over notes. Notes are assumed Prepare()d.
 func (b *Base) Run(notes []*Note, viewIndex int, opts RunOptions) (*Result, error) {
+	return b.RunContext(context.Background(), notes, viewIndex, opts)
+}
+
+// RunContext is Run stopping with ctx's error once ctx is done. All the
+// evaluations of the run (filters, sort keys, formulas of every row) share one
+// budget of steps and bytes: past it the remaining ones fail and a notice
+// says that the result is incomplete. A panic of the engine is returned as a
+// *PanicError instead of escaping to the caller.
+func (b *Base) RunContext(ctx context.Context, notes []*Note, viewIndex int, opts RunOptions) (res *Result, err error) {
+	budget := newRunBudget(ctx, opts.OnPanic)
+	defer func() {
+		if r := recover(); r != nil {
+			pe := &PanicError{Value: r, Stack: debug.Stack()}
+			res, err = nil, pe
+			budget.report(pe)
+		}
+	}()
+	return b.run(ctx, budget, notes, viewIndex, opts)
+}
+
+func (b *Base) run(ctx context.Context, budget *runBudget, notes []*Note, viewIndex int, opts RunOptions) (*Result, error) {
 	if viewIndex < 0 || viewIndex >= len(b.Views) {
 		return nil, fmt.Errorf("view %d does not exist", viewIndex)
 	}
@@ -83,7 +114,11 @@ func (b *Base) Run(notes []*Note, viewIndex int, opts RunOptions) (*Result, erro
 
 	var rows []*rowCtx
 	for _, n := range notes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		env := NewEnv(n, opts.This, now, b.Formulas)
+		env.run = budget
 		if b.Filters.Match(env) && v.Filters.Match(env) {
 			rows = append(rows, &rowCtx{note: n, env: env})
 		}
@@ -94,7 +129,10 @@ func (b *Base) Run(notes []*Note, viewIndex int, opts RunOptions) (*Result, erro
 	if len(order) == 0 {
 		order = []string{"file.name"}
 	}
-	b.sortRows(rows, v)
+	b.sortRows(rows, v, budget)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if v.Limit > 0 && len(rows) > v.Limit {
 		rows = rows[:v.Limit]
 	}
@@ -112,6 +150,12 @@ func (b *Base) Run(notes []*Note, viewIndex int, opts RunOptions) (*Result, erro
 		}
 		res.Rows[i] = Row{Path: r.note.Path, Hash: r.note.Hash, Cells: cells}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if budget.exhausted {
+		res.Notices = append(res.Notices, noticeTooExpensive)
+	}
 	for j := range res.Columns {
 		c := &res.Columns[j]
 		if c.Kind == KindNull || c.Kind == "" {
@@ -128,18 +172,31 @@ func (b *Base) Run(notes []*Note, viewIndex int, opts RunOptions) (*Result, erro
 	return res, nil
 }
 
-func (b *Base) sortRows(rows []*rowCtx, v View) {
+// sortRows orders the rows by group and sort keys. Each comparison is paid to
+// the run's budget, a long text key by its length (texts compare without case
+// on copies): once the budget is spent or the run cancelled, the comparisons
+// stop and the order is left as it is.
+func (b *Base) sortRows(rows []*rowCtx, v View, budget *runBudget) {
 	specs := v.Sort
 	for _, r := range rows {
 		r.keys = make([]any, len(specs))
+		r.cost = 1
 		for i, s := range specs {
 			r.keys[i] = rawValue(r, s.Property)
+			r.cost += keyCost(r.keys[i])
 		}
 		if v.GroupBy != nil {
 			r.grp = rawValue(r, v.GroupBy.Property)
+			r.cost += keyCost(r.grp)
 		}
 	}
+	if len(specs) == 0 && v.GroupBy == nil {
+		return
+	}
 	sort.SliceStable(rows, func(i, j int) bool {
+		if budget.spend(rows[i].cost + rows[j].cost) {
+			return false
+		}
 		if v.GroupBy != nil {
 			c := SortCompare(rows[i].grp, rows[j].grp)
 			if v.GroupBy.Direction == "DESC" && rows[i].grp != nil && rows[j].grp != nil {
@@ -163,6 +220,14 @@ func (b *Base) sortRows(rows []*rowCtx, v View) {
 	})
 }
 
+// keyCost is the cost of comparing a sort key, in steps.
+func keyCost(v any) int {
+	if s, ok := v.(string); ok {
+		return len(s) >> 10
+	}
+	return 0
+}
+
 func (b *Base) group(rows []*rowCtx, v View, res *Result) {
 	if v.GroupBy == nil {
 		return
@@ -172,7 +237,11 @@ func (b *Base) group(rows []*rowCtx, v View, res *Result) {
 			res.Groups[n-1].Count++
 			continue
 		}
-		res.Groups = append(res.Groups, Group{Key: toCell(r.grp), Start: i, Count: 1})
+		key := toCell(r.grp)
+		if err := r.env.output(r.grp); err != nil {
+			key = Cell{K: KindError, E: err.Error()}
+		}
+		res.Groups = append(res.Groups, Group{Key: key, Start: i, Count: 1})
 	}
 }
 
@@ -228,6 +297,9 @@ func columnCell(r *rowCtx, id string) Cell {
 		return toCell(fileField(r.note, name))
 	case strings.HasPrefix(id, "formula."):
 		v, err := r.env.EvalFormula(strings.TrimPrefix(id, "formula."))
+		if err == nil {
+			err = r.env.output(v)
+		}
 		if err != nil {
 			return Cell{K: KindError, E: err.Error()}
 		}

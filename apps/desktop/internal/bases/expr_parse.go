@@ -133,15 +133,27 @@ func lex(src string) ([]token, error) {
 }
 
 type parser struct {
-	toks []token
-	pos  int
+	toks  []token
+	pos   int
+	depth int
 }
+
+// Expressions come from .base files that a shared vault may bring in: their
+// size and nesting are bounded so that parsing (recursive descent) and the
+// evaluation of the tree can never exhaust the stack, which is fatal in Go.
+const (
+	maxExprLen   = 16 << 10
+	maxExprDepth = 128
+)
 
 // ParseExpr parses the expression language: literals, property references,
 // member access, calls, index, unary/binary operators.
 func ParseExpr(src string) (Expr, error) {
 	if strings.TrimSpace(src) == "" {
 		return nil, fmt.Errorf("empty expression")
+	}
+	if len(src) > maxExprLen {
+		return nil, fmt.Errorf("expression is too long (more than %d bytes)", maxExprLen)
 	}
 	toks, err := lex(src)
 	if err != nil {
@@ -217,7 +229,24 @@ func (p *parser) binary(sub func() (Expr, error), ops ...string) (Expr, error) {
 	}
 }
 
-func (p *parser) or() (Expr, error)  { return p.binary(p.and, "||") }
+// enter accounts for one level of nesting: every sub-expression (parentheses,
+// list items, call arguments, index) starts with or(), and unary operators
+// recurse on themselves.
+func (p *parser) enter() error {
+	p.depth++
+	if p.depth > maxExprDepth {
+		return fmt.Errorf("expression is nested too deeply")
+	}
+	return nil
+}
+
+func (p *parser) or() (Expr, error) {
+	if err := p.enter(); err != nil {
+		return nil, err
+	}
+	defer func() { p.depth-- }()
+	return p.binary(p.and, "||")
+}
 func (p *parser) and() (Expr, error) { return p.binary(p.eq, "&&") }
 func (p *parser) eq() (Expr, error)  { return p.binary(p.cmp, "==", "!=") }
 func (p *parser) cmp() (Expr, error) { return p.binary(p.add, "<", ">", "<=", ">=") }
@@ -226,6 +255,10 @@ func (p *parser) mul() (Expr, error) { return p.binary(p.unary, "*", "/", "%") }
 
 func (p *parser) unary() (Expr, error) {
 	if p.isOp("!") || p.isOp("-") {
+		if err := p.enter(); err != nil {
+			return nil, err
+		}
+		defer func() { p.depth-- }()
 		op := p.next().s
 		x, err := p.unary()
 		if err != nil {

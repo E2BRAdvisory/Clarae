@@ -62,8 +62,18 @@ func (b *BasesAPI) readBase(vaultID, basePath string) (*openVault, vault.Content
 	if err != nil {
 		return nil, vault.Content{}, bindingError(err)
 	}
+	if len(c.Data) > maxBaseSize {
+		return nil, vault.Content{}, fmt.Errorf("invalid: %q is too large for a base (more than %d bytes)", c.Path, maxBaseSize)
+	}
 	return ov, c, nil
 }
+
+// A .base file may come from a shared vault: its size is bounded before the
+// YAML is parsed, and a run gets a deadline besides the engine's own budget.
+const (
+	maxBaseSize    = 1 << 20
+	baseRunTimeout = 10 * time.Second
+)
 
 // Load parses a base. Unsupported constructs never fail the call: they are
 // reported in Notices and per view.
@@ -138,11 +148,37 @@ func (b *BasesAPI) Run(vaultID, basePath string, viewIndex int, thisPath string)
 			break
 		}
 	}
-	res, err := base.Run(notes, viewIndex, opts)
-	if err != nil {
-		return bases.Result{}, fmt.Errorf("invalid: %w", err)
+	opts.OnPanic = logBasePanic
+	ctx, cancel := context.WithTimeout(context.Background(), baseRunTimeout)
+	defer cancel()
+	res, err := base.RunContext(ctx, notes, viewIndex, opts)
+	var pe *bases.PanicError
+	switch {
+	case err == nil:
+		return *res, nil
+	case errors.As(err, &pe):
+		return bases.Result{}, coded(ErrCodeInternal, "the base could not be evaluated; see the log", err)
+	case errors.Is(err, context.DeadlineExceeded):
+		return bases.Result{}, coded(ErrCodeCancelled, "the base took too long to evaluate", err)
+	case errors.Is(err, context.Canceled):
+		return bases.Result{}, bindingError(err)
 	}
-	return *res, nil
+	return bases.Result{}, fmt.Errorf("invalid: %w", err)
+}
+
+// logBasePanic logs an unexpected failure of the Bases engine with its stack:
+// the binding only answers with a generic message.
+func logBasePanic(err error) {
+	l := bindingLog.Load()
+	if l == nil {
+		return
+	}
+	ev := l.Error().Err(err)
+	var pe *bases.PanicError
+	if errors.As(err, &pe) {
+		ev = ev.Bytes("stack", pe.Stack)
+	}
+	ev.Msg("bases: evaluation failed unexpectedly")
 }
 
 // UpdateView applies a JSON-encoded bases.ViewPatch to the .base file,

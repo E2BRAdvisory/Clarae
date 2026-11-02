@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // PropEntry is one frontmatter property of a note (value already typed).
@@ -61,7 +63,21 @@ func (n *Note) Prop(key string) (PropEntry, bool) {
 // evalError is raised (panic) inside the evaluator and recovered by Eval.
 type evalError struct{ msg string }
 
-func fail(format string, a ...any) { panic(evalError{fmt.Sprintf(format, a...)}) }
+func fail(format string, a ...any) {
+	msg := fmt.Sprintf(format, a...)
+	// The message quotes values that may be long texts: the error of a cell
+	// (one per row) must not carry them.
+	if len(msg) > maxErrorLen {
+		cut := maxErrorLen
+		for cut > 0 && !utf8.RuneStart(msg[cut]) {
+			cut--
+		}
+		msg = msg[:cut] + "…"
+	}
+	panic(evalError{msg})
+}
+
+const maxErrorLen = 200
 
 type fileObj struct{ n *Note }
 type noteObj struct{ n *Note }
@@ -78,10 +94,10 @@ type Env struct {
 	cache   map[string]any
 	running map[string]bool
 	locals  map[string]any
-	steps   int
+	steps   int        // spent by the current Eval/EvalFormula
+	bytes   int        // produced for this row (see charge)
+	run     *runBudget // shared by the rows of a Run
 }
-
-const maxSteps = 200_000
 
 // Formula is a named, parsed formula ("formulas" section).
 type Formula struct {
@@ -96,32 +112,17 @@ func NewEnv(n, this *Note, now time.Time, formulas map[string]*Formula) *Env {
 	return &Env{Note: n, This: this, Now: now, Formulas: formulas}
 }
 
-// Eval evaluates e, converting evaluator failures into an error.
+// Eval evaluates e, converting evaluator failures into an error. Any other
+// panic becomes an error too (*PanicError): it must not escape to the caller.
 func (env *Env) Eval(e Expr) (v any, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			ee, ok := r.(evalError)
-			if !ok {
-				panic(r)
-			}
-			v, err = nil, fmt.Errorf("%s", ee.msg)
-		}
-	}()
+	defer env.recoverEval(&v, &err)
 	env.steps = 0
 	return env.eval(e), nil
 }
 
 // EvalFormula evaluates a named formula for the env's note (cached per row).
 func (env *Env) EvalFormula(name string) (v any, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			ee, ok := r.(evalError)
-			if !ok {
-				panic(r)
-			}
-			v, err = nil, fmt.Errorf("%s", ee.msg)
-		}
-	}()
+	defer env.recoverEval(&v, &err)
 	env.steps = 0
 	return env.formula(name), nil
 }
@@ -147,17 +148,14 @@ func (env *Env) formula(name string) any {
 	defer delete(env.running, name)
 	saved := env.locals
 	env.locals = nil
+	defer func() { env.locals = saved }()
 	v := env.eval(f.Expr)
-	env.locals = saved
 	env.cache[name] = v
 	return v
 }
 
 func (env *Env) eval(e Expr) any {
-	env.steps++
-	if env.steps > maxSteps {
-		fail("expression is too expensive to evaluate")
-	}
+	env.tick(1)
 	switch t := e.(type) {
 	case numLit:
 		return float64(t)
@@ -168,6 +166,7 @@ func (env *Env) eval(e Expr) any {
 	case nullLit:
 		return nil
 	case listLit:
+		env.chargeList(len(t))
 		out := make([]any, len(t))
 		for i, x := range t {
 			out[i] = env.eval(x)
@@ -266,6 +265,12 @@ var FileProps = []string{"name", "basename", "path", "folder", "ext", "size", "c
 func (env *Env) member(obj any, name string) any {
 	switch t := obj.(type) {
 	case fileObj:
+		switch name {
+		case "tags":
+			env.chargeList(len(t.n.Tags))
+		case "links":
+			env.chargeList(len(t.n.Links))
+		}
 		return fileField(t.n, name)
 	case noteObj:
 		return propValue(t.n, name)
@@ -277,7 +282,8 @@ func (env *Env) member(obj any, name string) any {
 		return nil
 	case string:
 		if name == "length" {
-			return float64(len([]rune(t)))
+			env.scan(len(t))
+			return float64(utf8.RuneCountInString(t))
 		}
 	case []any:
 		if name == "length" {
@@ -340,13 +346,13 @@ func (env *Env) index(obj, idx any) any {
 		}
 		return t[k]
 	case noteObj:
-		return propValue(t.n, Str(idx))
+		return propValue(t.n, env.str(idx))
 	case thisObj:
-		return propValue(t.n, Str(idx))
+		return propValue(t.n, env.str(idx))
 	case fileObj:
-		return fileField(t.n, Str(idx))
+		return env.member(t, env.str(idx))
 	case formulaObj:
-		return env.formula(Str(idx))
+		return env.formula(env.str(idx))
 	case nil:
 		return nil
 	}
@@ -371,13 +377,15 @@ func (env *Env) binary(b *binaryExpr) any {
 	l, r := env.eval(b.l), env.eval(b.r)
 	switch b.op {
 	case "==":
-		return Equal(l, r)
+		return env.equal(l, r)
 	case "!=":
-		return !Equal(l, r)
+		return !env.equal(l, r)
 	case "<", ">", "<=", ">=":
 		if l == nil || r == nil {
 			return false
 		}
+		env.scanValue(l)
+		env.scanValue(r)
 		c, ok := Compare(l, r)
 		if !ok {
 			fail("cannot compare %s with %s", KindOf(l), KindOf(r))
@@ -392,10 +400,10 @@ func (env *Env) binary(b *binaryExpr) any {
 		}
 		return c >= 0
 	}
-	return arith(b.op, l, r)
+	return env.arith(b.op, l, r)
 }
 
-func arith(op string, l, r any) any {
+func (env *Env) arith(op string, l, r any) any {
 	// Dates and durations.
 	if d, ok := l.(Date); ok {
 		switch op {
@@ -462,10 +470,13 @@ func arith(op string, l, r any) any {
 		_, ls := l.(string)
 		_, rs := r.(string)
 		if ls || rs {
-			return Str(l) + Str(r)
+			a, b := env.str(l), env.str(r)
+			env.charge(len(a) + len(b))
+			return a + b
 		}
 		if la, ok := l.([]any); ok {
 			if ra, ok := r.([]any); ok {
+				env.chargeList(len(la) + len(ra))
 				return append(append([]any{}, la...), ra...)
 			}
 		}
@@ -559,9 +570,9 @@ func (env *Env) callGlobal(name string, a []Expr) any {
 	case "link":
 		want(name, a, 1, 2)
 		args := env.args(a)
-		l := Link{Target: Str(args[0])}
+		l := Link{Target: env.str(args[0])}
 		if len(args) == 2 {
-			l.Display = Str(args[1])
+			l.Display = env.str(args[1])
 		}
 		return l
 	case "list":
@@ -575,23 +586,27 @@ func (env *Env) callGlobal(name string, a []Expr) any {
 		}
 		return []any{v}
 	case "concat":
-		var b strings.Builder
-		for _, v := range env.args(a) {
-			b.WriteString(Str(v))
+		args := env.args(a)
+		parts := make([]string, len(args))
+		size := 0
+		for i, v := range args {
+			parts[i] = env.str(v)
+			size += len(parts[i])
 		}
-		return b.String()
+		env.charge(size)
+		return strings.Join(parts, "")
 	case "min", "max":
 		if len(a) == 0 {
 			fail("%s() needs at least one argument", name)
 		}
-		return extreme(name, env.args(a))
+		return env.extreme(name, env.args(a))
 	case "abs", "round", "floor", "ceil":
 		want(name, a, 1, 2)
 		args := env.args(a)
 		return numMethod(name, toNumber(args[0]), args[1:])
 	case "duration":
 		want(name, a, 1, 1)
-		s := Str(env.eval(a[0]))
+		s := env.str(env.eval(a[0]))
 		d, ok := ParseDuration(s)
 		if !ok {
 			fail("duration(): %q is not a valid duration", s)
@@ -621,7 +636,7 @@ func toNumber(v any) float64 {
 	return 0
 }
 
-func extreme(name string, vals []any) any {
+func (env *Env) extreme(name string, vals []any) any {
 	if len(vals) == 1 {
 		if l, ok := vals[0].([]any); ok {
 			vals = l
@@ -629,9 +644,11 @@ func extreme(name string, vals []any) any {
 	}
 	var best any
 	for _, v := range vals {
+		env.tick(1)
 		if v == nil {
 			continue
 		}
+		env.scanValue(v)
 		if best == nil {
 			best = v
 			continue
@@ -685,7 +702,7 @@ func (env *Env) callMethod(recv any, name string, a []Expr) any {
 		return false
 	case "toString":
 		want(name, a, 0, 0)
-		return Str(recv)
+		return env.str(recv)
 	case "isTruthy":
 		return Truthy(recv)
 	}
@@ -704,7 +721,7 @@ func (env *Env) callMethod(recv any, name string, a []Expr) any {
 		return env.dateMethod(t, name, a)
 	case Link:
 		if name == "toString" {
-			return Str(t)
+			return env.str(t)
 		}
 	}
 	fail("%s has no method %q", KindOf(recv), name)
@@ -716,7 +733,7 @@ func (env *Env) fileMethod(n *Note, name string, a []Expr) any {
 	switch name {
 	case "hasTag":
 		for _, want := range args {
-			w := strings.TrimPrefix(Str(want), "#")
+			w := strings.TrimPrefix(env.str(want), "#")
 			for _, t := range n.Tags {
 				t = strings.TrimPrefix(t, "#")
 				if strings.EqualFold(t, w) || strings.HasPrefix(strings.ToLower(t), strings.ToLower(w)+"/") {
@@ -729,13 +746,13 @@ func (env *Env) fileMethod(n *Note, name string, a []Expr) any {
 		if len(args) != 1 {
 			fail("inFolder() takes 1 argument")
 		}
-		f := strings.Trim(Str(args[0]), "/")
+		f := strings.Trim(env.str(args[0]), "/")
 		return f == "" || n.folder == f || strings.HasPrefix(n.folder, f+"/")
 	case "hasLink":
 		if len(args) != 1 {
 			fail("hasLink() takes 1 argument")
 		}
-		w := Str(args[0])
+		w := env.str(args[0])
 		w = strings.TrimSuffix(strings.TrimSuffix(strings.TrimPrefix(w, "[["), "]]"), ".md")
 		for _, l := range n.Links {
 			if strings.TrimSuffix(l, ".md") == w || strings.TrimSuffix(path.Base(l), ".md") == w {
@@ -747,7 +764,7 @@ func (env *Env) fileMethod(n *Note, name string, a []Expr) any {
 		if len(args) != 1 {
 			fail("hasProperty() takes 1 argument")
 		}
-		_, ok := n.Prop(Str(args[0]))
+		_, ok := n.Prop(env.str(args[0]))
 		return ok
 	}
 	fail("file has no method %q", name)
@@ -758,7 +775,8 @@ func (env *Env) stringMethod(s, name string, a []Expr) any {
 	switch name {
 	case "contains", "startsWith", "endsWith":
 		want(name, a, 1, 1)
-		x := Str(env.eval(a[0]))
+		x := env.str(env.eval(a[0]))
+		env.scan(len(s))
 		switch name {
 		case "contains":
 			return strings.Contains(s, x)
@@ -767,18 +785,25 @@ func (env *Env) stringMethod(s, name string, a []Expr) any {
 		}
 		return strings.HasSuffix(s, x)
 	case "lower":
+		env.charge(caseBytes(s))
 		return strings.ToLower(s)
 	case "upper":
+		env.charge(caseBytes(s))
 		return strings.ToUpper(s)
 	case "trim":
+		env.scan(len(s))
 		return strings.TrimSpace(s)
 	case "title":
+		env.charge(caseBytes(s)) // the lower-case copy
+		env.charge(caseBytes(s)) // the result
 		words := strings.Fields(strings.ToLower(s))
 		for i, w := range words {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
+			r, size := utf8.DecodeRuneInString(w) // the first rune, not the first byte
+			words[i] = string(unicode.ToTitle(r)) + w[size:]
 		}
 		return strings.Join(words, " ")
 	case "reverse":
+		env.charge(len(s))
 		rs := []rune(s)
 		for i, j := 0, len(rs)-1; i < j; i, j = i+1, j-1 {
 			rs[i], rs[j] = rs[j], rs[i]
@@ -786,19 +811,43 @@ func (env *Env) stringMethod(s, name string, a []Expr) any {
 		return string(rs)
 	case "repeat":
 		want(name, a, 1, 1)
-		n := int(toNumber(env.eval(a[0])))
-		if n < 0 || n*len(s) > 100_000 {
+		f := math.Trunc(toNumber(env.eval(a[0])))
+		// Checked as a float: a huge count must neither wrap around once
+		// multiplied nor overflow the conversion to int.
+		if !(f >= 0) || (len(s) > 0 && f > float64(100_000/len(s))) {
 			fail("repeat(): count out of range")
 		}
+		if s == "" {
+			return ""
+		}
+		n := int(f)
+		env.charge(n * len(s))
 		return strings.Repeat(s, n)
 	case "replace":
 		want(name, a, 2, 2)
 		args := env.args(a)
-		return strings.ReplaceAll(s, Str(args[0]), Str(args[1]))
+		old, repl := env.str(args[0]), env.str(args[1])
+		env.scan(len(s))
+		// The size of the result is paid before building it: an empty old
+		// text matches before every rune and at the end.
+		if hits := strings.Count(s, old); hits > 0 {
+			if grow := len(repl) - len(old); grow > 0 && hits > maxValueBytes/grow {
+				env.charge(maxValueBytes + 1)
+			}
+			env.charge(len(s) + hits*(len(repl)-len(old)))
+		}
+		return strings.ReplaceAll(s, old, repl)
 	case "split":
 		want(name, a, 1, 2)
 		args := env.args(a)
-		parts := strings.Split(s, Str(args[0]))
+		sep := env.str(args[0])
+		env.scan(len(s))
+		if sep == "" {
+			env.chargeList(utf8.RuneCountInString(s))
+		} else {
+			env.chargeList(strings.Count(s, sep) + 1)
+		}
+		parts := strings.Split(s, sep)
 		out := make([]any, len(parts))
 		for i, p := range parts {
 			out[i] = p
@@ -807,12 +856,27 @@ func (env *Env) stringMethod(s, name string, a []Expr) any {
 	case "slice":
 		want(name, a, 1, 2)
 		args := env.args(a)
-		rs := []rune(s)
-		from, to := clampRange(len(rs), args)
-		return string(rs[from:to])
+		env.scan(len(s))
+		from, to := clampRange(utf8.RuneCountInString(s), args)
+		return s[runeOffset(s, from):runeOffset(s, to)] // shares the text: nothing to charge
 	}
 	fail("text has no method %q", name)
 	return nil
+}
+
+// caseBytes bounds the size of s after a case mapping, which may turn a rune
+// into a longer UTF-8 sequence.
+func caseBytes(s string) int { return len(s) + len(s)/2 }
+
+// runeOffset is the byte offset of the rune at index i of s (len(s) past the end).
+func runeOffset(s string, i int) int {
+	for off := range s {
+		if i == 0 {
+			return off
+		}
+		i--
+	}
+	return len(s)
 }
 
 func clampRange(n int, args []any) (int, int) {
@@ -847,7 +911,7 @@ func (env *Env) listMethod(l []any, name string, a []Expr) any {
 		want(name, a, 1, 1)
 		x := env.eval(a[0])
 		for _, e := range l {
-			if Equal(e, x) {
+			if env.equal(e, x) {
 				return true
 			}
 		}
@@ -857,7 +921,7 @@ func (env *Env) listMethod(l []any, name string, a []Expr) any {
 		hits := 0
 		for _, w := range args {
 			for _, e := range l {
-				if Equal(e, w) {
+				if env.equal(e, w) {
 					hits++
 					break
 				}
@@ -871,15 +935,27 @@ func (env *Env) listMethod(l []any, name string, a []Expr) any {
 		want(name, a, 0, 1)
 		sep := ", "
 		if len(a) == 1 {
-			sep = Str(env.eval(a[0]))
+			sep = env.str(env.eval(a[0]))
 		}
 		parts := make([]string, len(l))
+		size := 0
 		for i, e := range l {
-			parts[i] = Str(e)
+			parts[i] = env.str(e)
+			if size += len(parts[i]); size > maxValueBytes {
+				env.charge(size)
+			}
 		}
+		if len(l) > 1 {
+			if len(sep) > maxValueBytes/(len(l)-1) {
+				env.charge(maxValueBytes + 1)
+			}
+			size += (len(l) - 1) * len(sep)
+		}
+		env.charge(size)
 		return strings.Join(parts, sep)
 	case "map", "filter":
 		want(name, a, 1, 1)
+		env.chargeList(len(l))
 		out := make([]any, 0, len(l))
 		for i, e := range l {
 			r := env.withLocals(e, i, a[0])
@@ -892,36 +968,40 @@ func (env *Env) listMethod(l []any, name string, a []Expr) any {
 		return out
 	case "sum", "count", "mean", "average":
 		want(name, a, 0, 0)
+		env.tick(len(l))
 		return aggregate(name, l)
 	case "min", "max":
-		return extreme(name, []any{l})
+		return env.extreme(name, []any{l})
 	case "unique":
-		out := []any{}
-		for _, e := range l {
-			dup := false
-			for _, o := range out {
-				if Equal(o, e) {
-					dup = true
-					break
-				}
-			}
-			if !dup {
-				out = append(out, e)
-			}
-		}
-		return out
+		return env.unique(l)
 	case "sort":
+		env.chargeList(len(l))
 		out := append([]any{}, l...)
-		sort.SliceStable(out, func(i, j int) bool { return SortCompare(out[i], out[j]) < 0 })
+		sort.SliceStable(out, func(i, j int) bool {
+			env.tick(1)
+			env.scanValue(out[i])
+			env.scanValue(out[j])
+			return SortCompare(out[i], out[j]) < 0
+		})
 		return out
 	case "reverse":
+		env.chargeList(len(l))
 		out := make([]any, len(l))
 		for i, e := range l {
 			out[len(l)-1-i] = e
 		}
 		return out
 	case "flat":
-		out := []any{}
+		n := 0
+		for _, e := range l {
+			if s, ok := e.([]any); ok {
+				n += len(s)
+			} else {
+				n++
+			}
+		}
+		env.chargeList(n)
+		out := make([]any, 0, n)
 		for _, e := range l {
 			if s, ok := e.([]any); ok {
 				out = append(out, s...)
@@ -932,10 +1012,21 @@ func (env *Env) listMethod(l []any, name string, a []Expr) any {
 		return out
 	case "slice":
 		from, to := clampRange(len(l), env.args(a))
+		env.chargeList(to - from)
 		return append([]any{}, l[from:to]...)
 	case "concat":
-		out := append([]any{}, l...)
-		for _, v := range env.args(a) {
+		args := env.args(a)
+		n := len(l)
+		for _, v := range args {
+			if s, ok := v.([]any); ok {
+				n += len(s)
+			} else {
+				n++
+			}
+		}
+		env.chargeList(n)
+		out := append(make([]any, 0, n), l...)
+		for _, v := range args {
 			if s, ok := v.([]any); ok {
 				out = append(out, s...)
 			} else {
@@ -946,6 +1037,46 @@ func (env *Env) listMethod(l []any, name string, a []Expr) any {
 	}
 	fail("list has no method %q", name)
 	return nil
+}
+
+// unique keeps the first item of each group of equal items. Lists of plain
+// values (for which Equal is ==: texts, numbers, booleans, durations) use a set;
+// the others compare each item with the kept ones, one step per comparison.
+func (env *Env) unique(l []any) any {
+	env.chargeList(len(l))
+	out := []any{}
+	plain := true
+	for _, e := range l {
+		switch e.(type) {
+		case nil, bool, float64, string, Duration:
+		default:
+			plain = false // Equal differs from == (dates, links, lists, objects)
+		}
+	}
+	if plain {
+		env.tick(len(l))
+		seen := make(map[any]bool, len(l))
+		for _, e := range l {
+			if !seen[e] {
+				seen[e] = true
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+	for _, e := range l {
+		dup := false
+		for _, o := range out {
+			if env.equal(o, e) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func aggregate(name string, l []any) any {
@@ -977,7 +1108,11 @@ func (env *Env) dateMethod(d Date, name string, a []Expr) any {
 	switch name {
 	case "format":
 		want(name, a, 1, 1)
-		return FormatDate(d, Str(env.eval(a[0])))
+		layout := env.str(env.eval(a[0]))
+		env.scan(len(layout))
+		out := FormatDate(d, layout)
+		env.charge(len(out)) // a few times the layout at most
+		return out
 	case "date":
 		return Date{T: time.Date(d.T.Year(), d.T.Month(), d.T.Day(), 0, 0, 0, 0, d.T.Location())}
 	case "time":

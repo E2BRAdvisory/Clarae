@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -76,5 +78,21 @@ func TestBasesAPI(t *testing.T) {
 	after, _ := v.ReadNote(info.ID, "Tasks/Board.base")
 	if !strings.Contains(after.Content, "# mine") || !strings.Contains(after.Content, "extra: keep") || !strings.Contains(after.Content, "status") {
 		t.Fatalf("base after update:\n%s", after.Content)
+	}
+}
+
+func TestBasesAPIRefusesHugeBase(t *testing.T) {
+	a, info, root := newTestApp(t)
+	b := NewBasesAPI(a)
+	// Written behind the app's back, as a sync or another program would.
+	huge := "# " + strings.Repeat("x", maxBaseSize) + "\nviews:\n  - type: table\n    name: T\n"
+	if err := os.WriteFile(filepath.Join(root, "Huge.base"), []byte(huge), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Load(info.ID, "Huge.base"); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Errorf("load: %v", err)
+	}
+	if _, err := b.Run(info.ID, "Huge.base", 0, ""); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Errorf("run: %v", err)
 	}
 }
