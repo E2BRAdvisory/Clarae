@@ -176,8 +176,239 @@ func TestProblemDecoding(t *testing.T) {
 	c = newTestClient(t, f)
 	c.Retries = 0
 	_, err = c.ListVaults(context.Background())
-	if !errors.As(err, &pe) || pe.StatusCode != http.StatusBadGateway || pe.Problem.Code != syncproto.CodeInternal || !strings.Contains(pe.Problem.Detail, "bad gateway") {
+	if !errors.As(err, &pe) || pe.StatusCode != http.StatusBadGateway || pe.Problem.Code != syncproto.CodeInternal || strings.Contains(err.Error(), "html") {
 		t.Fatalf("err: %#v", err)
+	}
+}
+
+// An answer without a problem document (a reverse proxy in front of the
+// server) gets its code from the status, and its body, an HTML page as often
+// as not, never reaches the error the user sees.
+func TestNonProblemAnswersGetACodeFromTheStatus(t *testing.T) {
+	page := "<html><head><title>nginx</title></head><body>" + strings.Repeat("x", 4096) + "</body></html>"
+	cases := []struct {
+		status int
+		code   syncproto.Code
+	}{
+		{http.StatusUnauthorized, syncproto.CodeUnauthenticated},
+		{http.StatusForbidden, syncproto.CodeForbidden},
+		{http.StatusNotFound, syncproto.CodeInternal}, // only the server knows that a vault is gone
+		{http.StatusRequestEntityTooLarge, syncproto.CodeFileTooLarge},
+		{http.StatusTooManyRequests, syncproto.CodeRateLimited},
+		{http.StatusBadGateway, syncproto.CodeInternal},
+		{http.StatusServiceUnavailable, syncproto.CodeInternal},
+		{http.StatusGatewayTimeout, syncproto.CodeInternal},
+	}
+	for _, tc := range cases {
+		t.Run(strconv.Itoa(tc.status), func(t *testing.T) {
+			f := &fakeServer{handlers: []func(*http.Request) *http.Response{func(r *http.Request) *http.Response {
+				resp := reply(tc.status, "text/html", page)(r)
+				resp.Header.Set("Retry-After", "7")
+				return resp
+			}}}
+			c := newTestClient(t, f)
+			c.Retries = 0
+			_, err := c.ListVaults(context.Background())
+			var pe *ProblemError
+			if !errors.As(err, &pe) || pe.StatusCode != tc.status || pe.Problem.Code != tc.code {
+				t.Fatalf("err: %#v", err)
+			}
+			if msg := err.Error(); strings.Contains(msg, "<") || strings.Contains(msg, "nginx") || len(msg) > 200 {
+				t.Fatalf("the body leaks into the error: %q", msg)
+			}
+			if pe.Problem.Extra["retry_after"] != "7" {
+				t.Fatalf("retry_after: %v", pe.Problem.Extra)
+			}
+		})
+	}
+
+	// The same through a blob upload: the push parks the file on FILE_TOO_LARGE.
+	f := &fakeServer{handlers: []func(*http.Request) *http.Response{reply(http.StatusRequestEntityTooLarge, "text/html", page)}}
+	c := newTestClient(t, f)
+	err := c.PutBlob(context.Background(), testVaultID, testBlobHash, []byte("data"))
+	if !IsCode(err, syncproto.CodeFileTooLarge) || strings.Contains(err.Error(), "nginx") {
+		t.Fatalf("err: %v", err)
+	}
+}
+
+const (
+	testVaultID  = "0190a0a0-0000-7000-8000-000000000001"
+	testBlobHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+)
+
+// rotatingTokens hands out tok-1, and tok-2 once tok-1 was invalidated; with
+// stuck it cannot renew (a token from a host page).
+type rotatingTokens struct {
+	mu          sync.Mutex
+	n           int
+	stuck       bool
+	invalidated []string
+}
+
+func (r *rotatingTokens) Token(context.Context) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return "tok-" + strconv.Itoa(r.n+1), nil
+}
+
+func (r *rotatingTokens) InvalidateToken(tok string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.invalidated = append(r.invalidated, tok)
+	if !r.stuck && tok == "tok-"+strconv.Itoa(r.n+1) {
+		r.n++
+	}
+}
+
+// A 401 drops the token and the request goes again, once, with a new one; a
+// second 401 is the answer. A source that cannot renew is not asked twice.
+func TestUnauthorizedRenewsTheTokenOnce(t *testing.T) {
+	unauthorized := reply(http.StatusUnauthorized, "application/problem+json", `{"type":"x","title":"x","status":401,"code":"UNAUTHENTICATED"}`)
+	ok := reply(http.StatusOK, "application/json", `{"items":[]}`)
+	newClient := func(f *fakeServer, tokens TokenSource) *Client {
+		c, err := New("https://cloud.example", tokens, &http.Client{Transport: f}, "test-agent")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	tokens := &rotatingTokens{}
+	f := &fakeServer{handlers: []func(*http.Request) *http.Response{unauthorized, ok}}
+	if _, err := newClient(f, tokens).ListVaults(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.reqs) != 2 || f.reqs[0].header.Get("Authorization") != "Bearer tok-1" || f.reqs[1].header.Get("Authorization") != "Bearer tok-2" {
+		t.Fatalf("requests: %+v", f.reqs)
+	}
+
+	tokens = &rotatingTokens{}
+	f = &fakeServer{handlers: []func(*http.Request) *http.Response{unauthorized}}
+	if _, err := newClient(f, tokens).ListVaults(context.Background()); !IsCode(err, syncproto.CodeUnauthenticated) {
+		t.Fatalf("err: %v", err)
+	}
+	if len(f.reqs) != 2 {
+		t.Fatalf("a refused new token must not be retried: %d requests", len(f.reqs))
+	}
+
+	tokens = &rotatingTokens{stuck: true}
+	f = &fakeServer{handlers: []func(*http.Request) *http.Response{unauthorized}}
+	if _, err := newClient(f, tokens).ListVaults(context.Background()); !IsCode(err, syncproto.CodeUnauthenticated) {
+		t.Fatalf("err: %v", err)
+	}
+	if len(f.reqs) != 1 || len(tokens.invalidated) != 1 {
+		t.Fatalf("requests %d, invalidated %v", len(f.reqs), tokens.invalidated)
+	}
+}
+
+// A JSON answer larger than MaxResponseBytes fails the call, whether it says
+// so in Content-Length or not; one of exactly the limit is read.
+func TestJSONResponsesAreBounded(t *testing.T) {
+	body := `{"items":[]}`
+	for _, tc := range []struct {
+		name    string
+		limit   int64
+		length  int64
+		tooLong bool
+	}{
+		{"chunked over", int64(len(body)) - 1, -1, true},
+		{"declared over", int64(len(body)) - 1, int64(len(body)), true},
+		{"exactly the limit", int64(len(body)), -1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeServer{handlers: []func(*http.Request) *http.Response{func(r *http.Request) *http.Response {
+				resp := reply(http.StatusOK, "application/json", body)(r)
+				resp.ContentLength = tc.length
+				return resp
+			}}}
+			c := newTestClient(t, f)
+			c.MaxResponseBytes = tc.limit
+			_, err := c.ListVaults(context.Background())
+			if got := errors.Is(err, ErrResponseTooLarge); got != tc.tooLong {
+				t.Fatalf("err: %v", err)
+			}
+		})
+	}
+}
+
+// A download stops at the size announced for it, or at MaxDownloadBytes.
+func TestDownloadsAreBounded(t *testing.T) {
+	const content = "hello"
+	serve := func(length int64) *fakeServer {
+		return &fakeServer{handlers: []func(*http.Request) *http.Response{func(r *http.Request) *http.Response {
+			resp := reply(http.StatusOK, "application/octet-stream", content)(r)
+			resp.ContentLength = length
+			return resp
+		}}}
+	}
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name     string
+		ctx      context.Context
+		max      int64
+		length   int64
+		tooLarge bool
+	}{
+		{"expected size", WithExpectedSize(ctx, 5), 0, -1, false},
+		{"over the expected size", WithExpectedSize(ctx, 4), 0, -1, true},
+		{"declared over the expected size", WithExpectedSize(ctx, 4), 0, 5, true},
+		{"over the ceiling", ctx, 4, -1, true},
+		{"expected size above the ceiling", WithExpectedSize(ctx, 5), 4, -1, false},
+		{"no bound", ctx, 0, -1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestClient(t, serve(tc.length))
+			c.MaxDownloadBytes = tc.max
+			var buf strings.Builder
+			_, err := c.GetBlob(tc.ctx, testVaultID, testBlobHash, &buf)
+			if got := errors.Is(err, ErrResponseTooLarge); got != tc.tooLarge {
+				t.Fatalf("err: %v", err)
+			}
+			if !tc.tooLarge && buf.String() != content {
+				t.Fatalf("content %q", buf.String())
+			}
+		})
+	}
+}
+
+func TestCheckSecureURL(t *testing.T) {
+	for raw, ok := range map[string]bool{
+		"https://cloud.example.com":        true,
+		"HTTPS://cloud.example.com/prefix": true,
+		"http://localhost:18081":           true,
+		"http://LocalHost":                 true,
+		"http://127.0.0.1:8080":            true,
+		"http://127.9.9.9":                 true,
+		"http://[::1]:8080":                true,
+		"http://[::ffff:127.0.0.1]":        true,
+		"http://cloud.example.com":         false,
+		"HTTP://cloud.example.com":         false,
+		"http://localhost@evil.example":    false, // goes to evil.example
+		"https://user:pw@cloud.example":    false,
+		"http://user@localhost":            false,
+		"http://127.0.0.1.nip.io":          false,
+		"http://localhost.evil.example":    false,
+		"http://0x7f000001":                false,
+		"http://2130706433":                false,
+		"http://0.0.0.0":                   false,
+		"http://[::]":                      false,
+		"http://[fe80::1%25lo0]":           false,
+		"http://10.0.0.5":                  false,
+		"ftp://localhost":                  false,
+		"//localhost":                      false,
+		"localhost:8080":                   false,
+		"http://":                          false,
+	} {
+		err := CheckSecureURL(raw)
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", raw, err)
+		}
+	}
+	if err := CheckSecureURL("http://cloud.example.com"); !errors.Is(err, ErrInsecureURL) {
+		t.Fatalf("err: %v", err)
+	}
+	if err := CheckSecureURL("https://alice:secret@cloud.example"); err == nil || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("the password must not be quoted: %v", err)
 	}
 }
 

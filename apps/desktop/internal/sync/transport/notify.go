@@ -50,6 +50,12 @@ type NotifyOptions struct {
 // first, SSE when gRPC cannot be used (corporate proxies), reconnecting with
 // backoff and re-authenticating when the token expires. The WebAssembly core
 // has no gRPC (notify_js.go) and uses SSE only.
+//
+// A token the server refuses is dropped (TokenInvalidator) so that the next
+// attempt refreshes it. The first reconnection after a refusal is quick, as
+// for a token that ran out during a long stream; refusals that follow one
+// another back off, and after maxAuthRefusals of them the stream gives up and
+// reports the session (SessionReporter) instead of knocking forever.
 func (c *Client) RunNotifications(ctx context.Context, o NotifyOptions) {
 	if o.MaxBackoff == 0 {
 		o.MaxBackoff = 60 * time.Second
@@ -57,19 +63,25 @@ func (c *Client) RunNotifications(ctx context.Context, o NotifyOptions) {
 	if o.OnState == nil {
 		o.OnState = func(bool, string) {}
 	}
-	delay := time.Second
-	grpcFailures := 0
+	delay := retryBase
+	grpcFailures, refusals := 0, 0
 	for ctx.Err() == nil {
 		var err error
 		via := "grpc"
+		connected, start := false, time.Now()
+		so := o
+		so.OnState = func(up bool, via string) {
+			connected = connected || up
+			o.OnState(up, via)
+		}
 		if grpcSupported && o.GRPCEndpoint != "" && grpcFailures < 2 {
-			err = c.streamGRPC(ctx, o)
+			err = c.streamGRPC(ctx, so)
 			if err != nil && !isAuthExpiry(err) {
 				grpcFailures++
 			}
 		} else {
 			via = "sse"
-			err = c.streamSSE(ctx, o)
+			err = c.streamSSE(ctx, so)
 			// Retry gRPC now and then: the proxy may have been the problem only on that network.
 			if grpcFailures >= 2 && o.GRPCEndpoint != "" && delay >= 30*time.Second {
 				grpcFailures = 0
@@ -79,8 +91,19 @@ func (c *Client) RunNotifications(ctx context.Context, o NotifyOptions) {
 		if ctx.Err() != nil {
 			return
 		}
+		if connected || time.Since(start) >= healthyStream {
+			refusals = 0 // the token worked: whatever ends this stream starts a new count
+		}
 		if isAuthExpiry(err) {
-			delay = time.Second // the token ran out: refresh (done by Token) and reconnect at once
+			refusals++
+			if refusals >= maxAuthRefusals {
+				if r, ok := c.tokens.(SessionReporter); ok {
+					r.SessionExpired(ErrSessionRejected)
+				}
+				return
+			}
+			// 1 s after a token that ran out (refreshed by Token), then doubling.
+			delay = min(retryBase<<(refusals-1), o.MaxBackoff)
 		} else {
 			delay = min(delay*2, o.MaxBackoff)
 		}
@@ -99,6 +122,25 @@ func isAuthExpiry(err error) bool {
 }
 
 var errTokenExpired = errors.New("token expired")
+
+// ErrSessionRejected is what RunNotifications reports (SessionReporter) when
+// the server keeps refusing the session's tokens, new ones included: a
+// revoked or deleted account, or a server that no longer trusts the identity
+// provider. Signing in again is the way out.
+var ErrSessionRejected = errors.New("the cloud keeps refusing the credentials of this session: sign in again")
+
+const (
+	// maxAuthRefusals is the number of refusals in a row after which the
+	// notification stream gives up: about 30 s of backoff.
+	maxAuthRefusals = 6
+	// healthyStream is how long a stream must have lasted for its token to
+	// count as accepted (a gRPC stream says nothing until the first event,
+	// a refused token fails at once).
+	healthyStream = 30 * time.Second
+)
+
+// retryBase is the first reconnection delay of RunNotifications (shorter in tests).
+var retryBase = time.Second
 
 func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 	q := url.Values{}
@@ -131,6 +173,7 @@ func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusUnauthorized {
+		c.invalidateToken(tok)
 		return errTokenExpired
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -171,6 +214,7 @@ func (c *Client) streamSSE(ctx context.Context, o NotifyOptions) error {
 					o.OnConfig(ev.Version)
 				}
 			case "token-expired":
+				c.invalidateToken(tok) // the server's clock decides, not ours
 				return errTokenExpired
 			}
 		case line == "":

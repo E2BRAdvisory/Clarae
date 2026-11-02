@@ -155,6 +155,9 @@ type Service struct {
 	// restored without its refresh token (zero: not pending).
 	keychainTried time.Time
 	pending       *attempt
+	// rejected is the session whose tokens the cloud keeps refusing
+	// (SessionExpired): it stays disconnected until a new sign-in.
+	rejected *persisted
 	// managedMode is the redirect mode of the Config Profile ("" = none).
 	managedMode RedirectMode
 }
@@ -278,9 +281,15 @@ func (s *Service) Client() *transport.Client {
 
 // Login runs the browser flow against serverURL and, on success, loads the
 // profile and registers the device. It blocks until the flow completes.
+// serverURL, and the issuer it announces, must be https or http on this
+// computer (transport.CheckSecureURL): the error then wraps
+// transport.ErrInsecureURL.
 func (s *Service) Login(ctx context.Context, serverURL string) error {
 	if s.opts.Hosted != nil {
 		return s.hostedLogin(ctx)
+	}
+	if err := transport.CheckSecureURL(serverURL); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.opts.LoginTimeout)
 	defer cancel()
@@ -317,9 +326,17 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	if err != nil {
 		return fmt.Errorf("server configuration: %w", err)
 	}
+	// The issuer comes from the server: it is held to the same rule as the
+	// URL the user typed, and so are the endpoints it announces.
+	if err := transport.CheckSecureURL(cc.Issuer); err != nil {
+		return fmt.Errorf("identity provider: %w", err)
+	}
 	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, s.hc), cc.Issuer)
 	if err != nil {
 		return fmt.Errorf("oidc discovery: %w", err)
+	}
+	if err := checkEndpoint(provider.Endpoint()); err != nil {
+		return err
 	}
 	cfg := &oauth2.Config{
 		ClientID: cc.DesktopClientId,
@@ -686,10 +703,58 @@ func (s *Service) Token(ctx context.Context) (string, error) {
 	if unsaved {
 		s.storeRefresh(server, rt)
 	}
-	if s.State().Status == StatusDisconnected {
+	s.reconnected()
+	return tok.AccessToken, nil
+}
+
+// reconnected turns a disconnected session ready again once a token was
+// obtained, unless the cloud refuses the tokens of this session
+// (SessionExpired): a new token from the identity provider does not change
+// that, and each change of state restarts the notification stream.
+func (s *Service) reconnected() {
+	s.mu.Lock()
+	rejected := s.session != nil && s.rejected == s.session
+	s.mu.Unlock()
+	if !rejected && s.State().Status == StatusDisconnected {
 		s.setState(func(st *State) { st.Status = StatusReady; st.Error = "" })
 	}
-	return tok.AccessToken, nil
+}
+
+var (
+	_ transport.TokenInvalidator = (*Service)(nil)
+	_ transport.SessionReporter  = (*Service)(nil)
+)
+
+// InvalidateToken implements transport.TokenInvalidator: the cloud refused
+// tok (HTTP 401) although it has not expired here (clock skew, a key
+// rotation on the identity provider). The next Token call refreshes it
+// instead of returning it again. A hosted session has no token of its own
+// to drop: the host page renews it.
+func (s *Service) InvalidateToken(tok string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if tok != "" && s.access == tok {
+		s.access, s.expiry = "", time.Time{}
+	}
+}
+
+// SessionExpired implements transport.SessionReporter: the cloud keeps
+// refusing the tokens of this session, fresh ones included (an account
+// deleted or suspended, a server that no longer trusts this identity
+// provider). The session is shown disconnected with err, and stays so until
+// the user signs in again; the notification stream has stopped. Repeated
+// reports change nothing, so they do not restart the stream either.
+func (s *Service) SessionExpired(err error) {
+	s.mu.Lock()
+	sess := s.session
+	if sess == nil || s.rejected == sess {
+		s.mu.Unlock()
+		return
+	}
+	s.rejected = sess
+	s.mu.Unlock()
+	s.logger.Warn().Err(err).Msg("the cloud refuses this session's tokens")
+	s.setDisconnected(err)
 }
 
 // storeRefresh keeps a rotated refresh token in the keychain. Should that
@@ -707,6 +772,17 @@ func (s *Service) storeRefresh(server, rt string) {
 	s.mu.Unlock()
 }
 
+// checkEndpoint refuses an identity provider whose discovery document sends
+// the authorization code or the refresh token in clear (transport.CheckSecureURL).
+func checkEndpoint(ep oauth2.Endpoint) error {
+	for _, u := range []string{ep.AuthURL, ep.TokenURL} {
+		if err := transport.CheckSecureURL(u); err != nil {
+			return fmt.Errorf("identity provider: %w", err)
+		}
+	}
+	return nil
+}
+
 // ensureOAuth performs discovery lazily after a Restore (the issuer may have
 // been unreachable at startup). It runs without s.mu and installs the result
 // only if sess is still the current session.
@@ -720,6 +796,9 @@ func (s *Service) ensureOAuth(ctx context.Context, sess *persisted) error {
 	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, s.hc), sess.Issuer)
 	if err != nil {
 		return fmt.Errorf("oidc discovery: %w", err)
+	}
+	if err := checkEndpoint(provider.Endpoint()); err != nil {
+		return err
 	}
 	cfg := &oauth2.Config{ClientID: sess.ClientID, Endpoint: provider.Endpoint(), Scopes: []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess}}
 	s.mu.Lock()
@@ -791,6 +870,13 @@ func (s *Service) Restore(ctx context.Context) {
 		if err != nil {
 			s.logger.Warn().Err(err).Msg("auth session unreadable; ignoring")
 		}
+		return
+	}
+	// A session saved before plain http to another computer was refused is
+	// not resumed: the user signs in again over https.
+	if err := errors.Join(transport.CheckSecureURL(sess.ServerURL), transport.CheckSecureURL(sess.Issuer)); err != nil {
+		s.logger.Warn().Err(err).Msg("saved session uses an insecure url; not resumed")
+		s.setState(func(st *State) { *st = State{Status: StatusSignedOut, Error: err.Error()} })
 		return
 	}
 	refresh, err := s.secrets.Get(sess.ServerURL)
@@ -876,7 +962,7 @@ func (s *Service) clearSession() {
 	}
 	s.session, s.oauth, s.provider = nil, nil, nil
 	s.access, s.refresh, s.expiry = "", "", time.Time{}
-	s.refreshUnsaved, s.keychainTried = false, time.Time{}
+	s.refreshUnsaved, s.keychainTried, s.rejected = false, time.Time{}, nil
 	s.mu.Unlock()
 	if server != "" {
 		_ = s.secrets.Delete(server)

@@ -36,6 +36,23 @@ type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
 
+// TokenInvalidator is implemented by a TokenSource that can forget a token the
+// server refused with 401 although it had not expired here (clock skew, a key
+// rotation, a revoked session), so that the next Token call obtains a new one
+// instead of returning it again. A source that cannot (a token handed over by
+// a host page) simply keeps returning the same token.
+type TokenInvalidator interface {
+	// InvalidateToken forgets tok if it is still the current token.
+	InvalidateToken(tok string)
+}
+
+// SessionReporter is implemented by a TokenSource that wants to know when the
+// server keeps refusing its tokens, new ones included: the notification
+// stream reports it once, then gives up (RunNotifications).
+type SessionReporter interface {
+	SessionExpired(err error)
+}
+
 // Client talks to one cloud server.
 type Client struct {
 	base      *url.URL
@@ -53,6 +70,12 @@ type Client struct {
 	// files on slow links (transfer.go).
 	TransferIdleTimeout   time.Duration
 	TransferHeaderTimeout time.Duration
+	// MaxResponseBytes bounds the body of a JSON response, and
+	// MaxDownloadBytes a download whose size the caller does not announce
+	// (WithExpectedSize): a larger body fails with ErrResponseTooLarge
+	// instead of filling the memory. Zero or less disables the bound.
+	MaxResponseBytes int64
+	MaxDownloadBytes int64
 }
 
 // ProblemError is an API error response.
@@ -113,10 +136,17 @@ func IsCode(err error, code syncproto.Code) bool {
 
 // New creates a client for serverURL (scheme + host[:port], any path is kept as prefix).
 // tokens may be nil for a client that only calls public operations (GetClientConfig).
+// Outside the browser core the URL must be https, or http to a loopback
+// address (CheckSecureURL): tokens and vault content never travel in clear.
 func New(serverURL string, tokens TokenSource, hc *http.Client, userAgent string) (*Client, error) {
 	u, err := url.Parse(strings.TrimRight(serverURL, "/"))
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, fmt.Errorf("invalid server url %q", serverURL)
+	}
+	if requireSecureURLs {
+		if err := CheckSecureURL(u.String()); err != nil {
+			return nil, err
+		}
 	}
 	if hc == nil {
 		hc = &http.Client{Timeout: 60 * time.Second}
@@ -124,6 +154,7 @@ func New(serverURL string, tokens TokenSource, hc *http.Client, userAgent string
 	c := &Client{
 		base: u, http: hc, tokens: tokens, userAgent: userAgent, Retries: 3,
 		TransferIdleTimeout: defaultTransferIdleTimeout, TransferHeaderTimeout: defaultTransferHeaderTimeout,
+		MaxResponseBytes: defaultMaxResponseBytes, MaxDownloadBytes: defaultMaxDownloadBytes,
 	}
 	if c.api, err = apiclient.NewClientWithResponses(u.String()+BasePath, apiclient.WithHTTPClient(doer{c})); err != nil {
 		return nil, err
@@ -149,7 +180,11 @@ func (d doer) Do(req *http.Request) (*http.Response, error) {
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/json, application/problem+json")
 	}
-	return d.c.send(req, req.Context().Value(publicKey{}) == nil)
+	resp, err := d.c.send(req, req.Context().Value(publicKey{}) == nil)
+	if err != nil || isDownload(req.Context()) {
+		return resp, err // copyBody bounds a download
+	}
+	return d.c.limitBody(resp)
 }
 
 // send performs req, retrying network errors, 5xx and 429 (honouring
@@ -159,7 +194,9 @@ func (d doer) Do(req *http.Request) (*http.Response, error) {
 // When the attempts run out on a retryable status the last response is
 // returned unread, for the caller to decode as a problem. A content transfer
 // (see transfer) runs without the client's total timeout, each attempt
-// under a watchdog that a stall aborts like a network error.
+// under a watchdog that a stall aborts like a network error. A 401 drops the
+// token and, when the token source has another one, sends the request again
+// at once, a single time per operation and outside the retry budget.
 func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, error) {
 	ctx := req.Context()
 	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
@@ -171,12 +208,14 @@ func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, er
 	}
 	var lastErr error
 	var retryAfter time.Duration
+	reauthed, now := false, false
 	for attempt := 0; attempt <= c.Retries; attempt++ {
-		if attempt > 0 {
+		if attempt > 0 && !now {
 			if err := sleepCtx(ctx, backoff(attempt, retryAfter)); err != nil {
 				return nil, err
 			}
 		}
+		now = false
 		r := req.Clone(ctx)
 		if req.GetBody != nil {
 			body, err := req.GetBody()
@@ -187,12 +226,13 @@ func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, er
 		}
 		r.Header.Set("User-Agent", c.userAgent)
 		r.Header.Set("X-Request-Id", uuid.NewString())
+		var tok string
 		if authenticated {
 			if c.tokens == nil {
 				return nil, errors.New("transport: not signed in")
 			}
-			tok, err := c.tokens.Token(ctx)
-			if err != nil {
+			var err error
+			if tok, err = c.tokens.Token(ctx); err != nil {
 				return nil, err
 			}
 			r.Header.Set("Authorization", "Bearer "+tok)
@@ -205,6 +245,12 @@ func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, er
 			lastErr, retryAfter = err, 0
 			continue
 		}
+		if authenticated && resp.StatusCode == http.StatusUnauthorized && !reauthed && c.renewToken(ctx, tok) {
+			reauthed, now = true, true
+			discard(resp)
+			attempt-- // the attempt with the new token does not count
+			continue
+		}
 		if (resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests) && attempt < c.Retries {
 			retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
 			lastErr = decodeProblem(resp)
@@ -213,6 +259,32 @@ func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, er
 		return resp, nil
 	}
 	return nil, lastErr
+}
+
+// renewToken drops tok, which the server refused, and reports whether the
+// token source now has another one to try.
+func (c *Client) renewToken(ctx context.Context, tok string) bool {
+	inv, ok := c.tokens.(TokenInvalidator)
+	if !ok {
+		return false
+	}
+	inv.InvalidateToken(tok)
+	fresh, err := c.tokens.Token(ctx)
+	return err == nil && fresh != tok
+}
+
+// invalidateToken drops tok, which the server refused, when the token source can.
+func (c *Client) invalidateToken(tok string) {
+	if inv, ok := c.tokens.(TokenInvalidator); ok {
+		inv.InvalidateToken(tok)
+	}
+}
+
+// discard drains what is left of an unused response, up to a bound, so the
+// connection can be reused, and closes it.
+func discard(resp *http.Response) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	_ = resp.Body.Close()
 }
 
 // do performs one attempt; a transfer runs under a watchdog that lives until
@@ -275,7 +347,7 @@ func idempotencyKey() *string {
 // decodeProblem reads and closes an error response.
 func decodeProblem(resp *http.Response) error {
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxProblemBytes))
 	if err != nil {
 		return err
 	}
@@ -283,8 +355,8 @@ func decodeProblem(resp *http.Response) error {
 }
 
 // problemOf turns an error response (status >= 400) into a *ProblemError.
-// A body that is not a problem document becomes an INTERNAL problem carrying
-// the text, so callers always get a code to match on.
+// A body that is not a problem document gets a code from the status
+// (statusProblem), so callers always get a code to match on.
 func problemOf(resp *http.Response, body []byte) error {
 	pe := &ProblemError{StatusCode: resp.StatusCode}
 	var p apiclient.Problem
@@ -294,7 +366,7 @@ func problemOf(resp *http.Response, body []byte) error {
 			pe.Problem.Extra = *p.Extra
 		}
 	} else {
-		pe.Problem = syncproto.Problem{Status: resp.StatusCode, Code: syncproto.CodeInternal, Title: http.StatusText(resp.StatusCode), Detail: strings.TrimSpace(string(body))}
+		pe.Problem = statusProblem(resp.StatusCode)
 	}
 	if ra := resp.Header.Get("Retry-After"); ra != "" {
 		if pe.Problem.Extra == nil {
@@ -303,6 +375,34 @@ func problemOf(resp *http.Response, body []byte) error {
 		pe.Problem.Extra["retry_after"] = ra
 	}
 	return pe
+}
+
+// statusProblem is the problem of an error response without a problem
+// document: the answer of a reverse proxy or load balancer in front of the
+// server (its body size limit, a 502 while the server restarts) or of an older
+// server. The code follows the status, so callers react as they do to the
+// server's own answer: a 413 parks the one file that was too large instead of
+// failing the whole push, a 429 or a 5xx is retried later. A 404 stays
+// INTERNAL: NOT_FOUND tells the engine that a vault or a share is gone, which
+// a proxy cannot know. The body is dropped: it may be a whole HTML page, and
+// it is not written for the user.
+func statusProblem(status int) syncproto.Problem {
+	p := syncproto.Problem{Status: status, Code: syncproto.CodeInternal, Title: http.StatusText(status)}
+	switch status {
+	case http.StatusUnauthorized:
+		p.Code, p.Detail = syncproto.CodeUnauthenticated, "the server refused the credentials (HTTP 401)"
+	case http.StatusForbidden:
+		p.Code, p.Detail = syncproto.CodeForbidden, "the server refused the request (HTTP 403)"
+	case http.StatusRequestEntityTooLarge:
+		p.Code, p.Detail = syncproto.CodeFileTooLarge, "the server or a proxy in front of it refused the request as too large (HTTP 413)"
+	case http.StatusTooManyRequests:
+		p.Code, p.Detail = syncproto.CodeRateLimited, "too many requests (HTTP 429): retrying later"
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		p.Detail = fmt.Sprintf("the server is unavailable (HTTP %d): retrying later", status)
+	default:
+		p.Detail = fmt.Sprintf("unexpected answer from the server (HTTP %d)", status)
+	}
+	return p
 }
 
 // want returns the decoded body of a successful response, or the problem of

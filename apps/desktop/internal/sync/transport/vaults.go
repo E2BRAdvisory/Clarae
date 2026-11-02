@@ -455,20 +455,22 @@ func (c *Client) PutBlob(ctx context.Context, ref, hash string, data []byte) err
 	return ok(res.HTTPResponse, res.Body)
 }
 
-// GetBlob downloads a blob into w and returns its size.
+// GetBlob downloads a blob into w and returns its size. A blob larger than
+// the size announced with WithExpectedSize, or than MaxDownloadBytes, fails
+// with ErrResponseTooLarge.
 func (c *Client) GetBlob(ctx context.Context, ref, hash string, w io.Writer) (int64, error) {
 	vid, scope, err := vaultRef(ref)
 	if err != nil {
 		return 0, err
 	}
-	resp, err := c.api.GetBlob(transfer(ctx), vid, hash, &apiclient.GetBlobParams{Scope: scope}, acceptBinary)
+	resp, err := c.api.GetBlob(download(ctx), vid, hash, &apiclient.GetBlobParams{Scope: scope}, acceptBinary)
 	if err != nil {
 		return 0, err
 	}
-	return copyBody(resp, w)
+	return copyBody(resp, w, c.downloadLimit(ctx))
 }
 
-// GetRevisionContent downloads the blob of a revision into w.
+// GetRevisionContent downloads the blob of a revision into w, bounded like GetBlob.
 func (c *Client) GetRevisionContent(ctx context.Context, ref, file string, rev int, w io.Writer) (int64, error) {
 	vid, scope, err := vaultRef(ref)
 	if err != nil {
@@ -478,11 +480,11 @@ func (c *Client) GetRevisionContent(ctx context.Context, ref, file string, rev i
 	if err != nil {
 		return 0, err
 	}
-	resp, err := c.api.GetRevisionContent(transfer(ctx), vid, fid, rev, &apiclient.GetRevisionContentParams{Scope: scope}, acceptBinary)
+	resp, err := c.api.GetRevisionContent(download(ctx), vid, fid, rev, &apiclient.GetRevisionContentParams{Scope: scope}, acceptBinary)
 	if err != nil {
 		return 0, err
 	}
-	return copyBody(resp, w)
+	return copyBody(resp, w, c.downloadLimit(ctx))
 }
 
 // acceptBinary asks for the content (or a problem document) of a download.
@@ -491,11 +493,24 @@ func acceptBinary(_ context.Context, req *http.Request) error {
 	return nil
 }
 
-// copyBody streams a download into w, or decodes its problem.
-func copyBody(resp *http.Response, w io.Writer) (int64, error) {
+// copyBody streams a download of at most limit bytes (0 = no bound) into w,
+// or decodes its problem. A Content-Length over the limit fails before
+// anything is read; a body that goes past it fails as soon as it does, with
+// what was written to w to be discarded.
+func copyBody(resp *http.Response, w io.Writer, limit int64) (int64, error) {
 	if resp.StatusCode >= 400 {
 		return 0, decodeProblem(resp)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return io.Copy(w, resp.Body)
+	if limit <= 0 {
+		return io.Copy(w, resp.Body)
+	}
+	if resp.ContentLength > limit {
+		return 0, tooLarge(resp.ContentLength, limit)
+	}
+	n, err := io.Copy(w, io.LimitReader(resp.Body, limit+1))
+	if err == nil && n > limit {
+		return n, tooLarge(0, limit)
+	}
+	return n, err
 }

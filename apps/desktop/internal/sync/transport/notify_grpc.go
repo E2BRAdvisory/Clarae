@@ -5,7 +5,9 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"math"
+	"net"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -23,11 +25,17 @@ const grpcSupported = true
 
 func isGRPCAuthExpiry(err error) bool { return status.Code(err) == codes.Unauthenticated }
 
-func (c *Client) streamGRPC(ctx context.Context, o NotifyOptions) error {
+func (c *Client) streamGRPC(ctx context.Context, o NotifyOptions) (err error) {
 	var creds credentials.TransportCredentials
 	if c.base.Scheme == "https" {
 		creds = credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})
 	} else {
+		// A server reached in clear (on this computer) announces the endpoint:
+		// the bearer token must not leave the computer in clear either.
+		host, _, splitErr := net.SplitHostPort(o.GRPCEndpoint)
+		if splitErr != nil || !isLoopbackHost(host) {
+			return fmt.Errorf("%w: plaintext gRPC endpoint %q is not on this computer", ErrInsecureURL, o.GRPCEndpoint)
+		}
 		creds = insecure.NewCredentials()
 	}
 	conn, err := grpc.NewClient(o.GRPCEndpoint, grpc.WithTransportCredentials(creds))
@@ -39,6 +47,11 @@ func (c *Client) streamGRPC(ctx context.Context, o NotifyOptions) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if isGRPCAuthExpiry(err) {
+			c.invalidateToken(tok)
+		}
+	}()
 	sctx, cancel := context.WithCancel(metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tok))
 	defer cancel()
 	known := map[string]int64{}

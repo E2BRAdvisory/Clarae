@@ -90,9 +90,7 @@ func (s *Service) hostedToken(ctx context.Context) (string, error) {
 	if tok == "" {
 		return "", errors.New("the host page has no access token")
 	}
-	if s.State().Status == StatusDisconnected {
-		s.setState(func(st *State) { st.Status = StatusReady; st.Error = "" })
-	}
+	s.reconnected()
 	return tok, nil
 }
 
@@ -102,6 +100,9 @@ func (s *Service) hostedToken(ctx context.Context) (string, error) {
 // survives a wipe of the data directory.
 func (s *Service) hostedLogin(ctx context.Context) error {
 	sess := s.hostedSession()
+	s.mu.Lock()
+	s.rejected = nil // the page signed in again: its tokens get a new chance
+	s.mu.Unlock()
 	s.setState(func(st *State) { st.Status = StatusSigningIn; st.ServerURL = s.opts.Hosted.ServerURL; st.Error = "" })
 	d := s.opts.Hosted.device()
 	if d != nil {
