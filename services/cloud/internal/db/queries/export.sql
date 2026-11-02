@@ -28,11 +28,33 @@ ORDER BY created_at LIMIT 1;
 -- name: CountActiveExportJobsOfUser :one
 SELECT count(*)::int FROM export_jobs WHERE requested_by = $1 AND status IN ('queued', 'running');
 
--- name: FinishExportJob :exec
-UPDATE export_jobs SET status = 'ready', size = $2, object_key = $3, finished_at = now(), expires_at = $4 WHERE id = $1;
+-- name: GetReusableExportJobOfVault :one
+-- The newest ready archive of a vault built at its current changelog position
+-- and still valid for a while: a new request gets it instead of a copy.
+SELECT * FROM export_jobs
+WHERE vault_id = $1 AND status = 'ready' AND source_seq = sqlc.arg(last_seq)::bigint
+  AND expires_at > sqlc.arg(valid_after)::timestamptz
+ORDER BY created_at DESC LIMIT 1;
 
--- name: FailExportJob :exec
-UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now(), expires_at = NULL WHERE id = $1;
+-- name: SupersedeReadyExportJobsOfVault :execrows
+-- A new archive of a vault (keep) makes the older ones obsolete: they stay
+-- downloadable at most until valid_until, then Expire deletes them.
+UPDATE export_jobs SET expires_at = LEAST(expires_at, sqlc.arg(valid_until)::timestamptz)
+WHERE vault_id = $1 AND status = 'ready' AND id <> sqlc.arg(keep)::uuid;
+
+-- name: FinishExportJob :execrows
+-- Only a job still running: one cancelled meanwhile (account deletion) stays
+-- failed, and the caller deletes the archive it uploaded.
+UPDATE export_jobs SET status = 'ready', size = $2, object_key = $3, source_seq = $4, finished_at = now(), expires_at = $5
+WHERE id = $1 AND status = 'running';
+
+-- name: FailExportJob :execrows
+UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now(), expires_at = NULL
+WHERE id = $1 AND status = 'running';
+
+-- name: ReleaseExportJob :execrows
+-- A build interrupted by the shutdown of its worker goes back to the queue.
+UPDATE export_jobs SET status = 'queued', expires_at = NULL WHERE id = $1 AND status = 'running';
 
 -- name: ExpireExportJobs :many
 UPDATE export_jobs SET status = 'expired' WHERE status = 'ready' AND expires_at < sqlc.arg(now)::timestamptz RETURNING id, object_key;

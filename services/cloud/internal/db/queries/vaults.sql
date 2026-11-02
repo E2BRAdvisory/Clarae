@@ -19,7 +19,12 @@ SELECT id, path, path_key, kind, current_rev, blob_hash, size FROM files
 WHERE vault_id = $1 AND id = $2 AND NOT is_deleted;
 
 -- name: CreateVault :one
-INSERT INTO vaults (id, owner_id, name, kind) VALUES ($1, $2, $3, $4) RETURNING *;
+INSERT INTO vaults (id, owner_id, name, kind, idempotency_key)
+VALUES ($1, $2, $3, $4, sqlc.narg('idempotency_key')) RETURNING *;
+
+-- name: GetVaultByIdempotencyKey :one
+-- The vault a POST /vaults carrying this Idempotency-Key created, deleted or not.
+SELECT * FROM vaults WHERE owner_id = $1 AND idempotency_key = $2;
 
 -- name: GetVault :one
 SELECT * FROM vaults WHERE id = $1;

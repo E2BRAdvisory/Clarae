@@ -43,14 +43,16 @@ func (q *Queries) AdvanceCompaction(ctx context.Context, arg AdvanceCompactionPa
 }
 
 const createVault = `-- name: CreateVault :one
-INSERT INTO vaults (id, owner_id, name, kind) VALUES ($1, $2, $3, $4) RETURNING id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at
+INSERT INTO vaults (id, owner_id, name, kind, idempotency_key)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key
 `
 
 type CreateVaultParams struct {
-	ID      uuid.UUID
-	OwnerID uuid.UUID
-	Name    string
-	Kind    string
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	Name           string
+	Kind           string
+	IdempotencyKey *string
 }
 
 func (q *Queries) CreateVault(ctx context.Context, arg CreateVaultParams) (Vault, error) {
@@ -59,6 +61,7 @@ func (q *Queries) CreateVault(ctx context.Context, arg CreateVaultParams) (Vault
 		arg.OwnerID,
 		arg.Name,
 		arg.Kind,
+		arg.IdempotencyKey,
 	)
 	var i Vault
 	err := row.Scan(
@@ -72,6 +75,7 @@ func (q *Queries) CreateVault(ctx context.Context, arg CreateVaultParams) (Vault
 		&i.FileCount,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -151,7 +155,7 @@ func (q *Queries) GetTreeFile(ctx context.Context, arg GetTreeFileParams) ([]Get
 }
 
 const getVault = `-- name: GetVault :one
-SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults WHERE id = $1
+SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key FROM vaults WHERE id = $1
 `
 
 func (q *Queries) GetVault(ctx context.Context, id uuid.UUID) (Vault, error) {
@@ -168,6 +172,36 @@ func (q *Queries) GetVault(ctx context.Context, id uuid.UUID) (Vault, error) {
 		&i.FileCount,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
+const getVaultByIdempotencyKey = `-- name: GetVaultByIdempotencyKey :one
+SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key FROM vaults WHERE owner_id = $1 AND idempotency_key = $2
+`
+
+type GetVaultByIdempotencyKeyParams struct {
+	OwnerID        uuid.UUID
+	IdempotencyKey *string
+}
+
+// The vault a POST /vaults carrying this Idempotency-Key created, deleted or not.
+func (q *Queries) GetVaultByIdempotencyKey(ctx context.Context, arg GetVaultByIdempotencyKeyParams) (Vault, error) {
+	row := q.db.QueryRow(ctx, getVaultByIdempotencyKey, arg.OwnerID, arg.IdempotencyKey)
+	var i Vault
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.Kind,
+		&i.LastSeq,
+		&i.CompactionSeq,
+		&i.TotalBytes,
+		&i.FileCount,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -204,7 +238,7 @@ func (q *Queries) ListEnvelopes(ctx context.Context, vaultID uuid.UUID) ([]Vault
 }
 
 const listOwnedVaults = `-- name: ListOwnedVaults :many
-SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY lower(name), created_at
+SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key FROM vaults WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY lower(name), created_at
 `
 
 func (q *Queries) ListOwnedVaults(ctx context.Context, ownerID uuid.UUID) ([]Vault, error) {
@@ -227,6 +261,7 @@ func (q *Queries) ListOwnedVaults(ctx context.Context, ownerID uuid.UUID) ([]Vau
 			&i.FileCount,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}
@@ -239,7 +274,7 @@ func (q *Queries) ListOwnedVaults(ctx context.Context, ownerID uuid.UUID) ([]Vau
 }
 
 const listOwnedVaultsWithDeleted = `-- name: ListOwnedVaultsWithDeleted :many
-SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults
+SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key FROM vaults
 WHERE owner_id = $1 AND (deleted_at IS NULL OR deleted_at > $2::timestamptz)
 ORDER BY lower(name), created_at
 `
@@ -271,6 +306,7 @@ func (q *Queries) ListOwnedVaultsWithDeleted(ctx context.Context, arg ListOwnedV
 			&i.FileCount,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}
@@ -411,7 +447,7 @@ func (q *Queries) NextVaultSeq(ctx context.Context, id uuid.UUID) (int64, error)
 }
 
 const renameVault = `-- name: RenameVault :one
-UPDATE vaults SET name = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at
+UPDATE vaults SET name = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key
 `
 
 type RenameVaultParams struct {
@@ -433,12 +469,13 @@ func (q *Queries) RenameVault(ctx context.Context, arg RenameVaultParams) (Vault
 		&i.FileCount,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
 
 const restoreVault = `-- name: RestoreVault :one
-UPDATE vaults SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at
+UPDATE vaults SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key
 `
 
 func (q *Queries) RestoreVault(ctx context.Context, id uuid.UUID) (Vault, error) {
@@ -455,6 +492,7 @@ func (q *Queries) RestoreVault(ctx context.Context, id uuid.UUID) (Vault, error)
 		&i.FileCount,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }

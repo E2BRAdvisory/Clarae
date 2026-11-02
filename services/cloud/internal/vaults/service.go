@@ -67,8 +67,9 @@ const defaultDeletedRetention = 30 * 24 * time.Hour
 
 // Service implements the vaults and vaultkeys modules.
 type Service struct {
-	db    *db.DB
-	authz access.Authorizer
+	db       *db.DB
+	authz    access.Authorizer
+	changeID ChangeIDFunc
 }
 
 // NewService binds the module to the database.
@@ -77,6 +78,18 @@ func NewService(d *db.DB) *Service { return &Service{db: d} }
 // WithAuthorizer lets Tree serve share scopes (M4); without one only owners are served.
 func (s *Service) WithAuthorizer(a access.Authorizer) *Service {
 	s.authz = a
+	return s
+}
+
+// ChangeIDFunc returns the id of the changelog entry at seq in a vault, ok
+// false when there is none. The changelog belongs to sync, which depends on
+// this module: the lookup is handed in instead of imported (ADR-0033).
+type ChangeIDFunc func(ctx context.Context, tx db.DBTX, vaultID uuid.UUID, seq int64) (id uuid.UUID, ok bool, err error)
+
+// WithChangeIDs lets the manifest report the id of the change at its position
+// with the position, so that a client keeps the identity of its cursor (ADR-0046).
+func (s *Service) WithChangeIDs(f ChangeIDFunc) *Service {
+	s.changeID = f
 	return s
 }
 
@@ -147,9 +160,18 @@ func isUnique(err error, constraint string) bool {
 	return errors.As(err, &pg) && pg.Code == "23505" && (constraint == "" || pg.ConstraintName == constraint)
 }
 
+// MaxIdempotencyKey is the longest Idempotency-Key accepted (api/openapi.yaml).
+const MaxIdempotencyKey = 128
+
 // Create makes a vault owned by ownerID. Private vaults need both envelopes,
-// shared vaults none.
-func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind string, envs []EnvelopeInput) (vaultsdb.Vault, error) {
+// shared vaults none. A non-empty idempotencyKey makes the request safe to
+// retry: the vault an earlier attempt created with the same key is returned
+// as it is now, so a client whose response was lost gets its vault back
+// instead of NAME_IN_USE.
+func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, idempotencyKey, name, kind string, envs []EnvelopeInput) (vaultsdb.Vault, error) {
+	if len(idempotencyKey) > MaxIdempotencyKey {
+		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "Idempotency-Key must be at most %d characters", MaxIdempotencyKey)
+	}
 	n, err := ValidateName(name)
 	if err != nil {
 		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "%v", err)
@@ -176,15 +198,22 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind stri
 	default:
 		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "kind must be private or shared")
 	}
+	if v, ok, err := s.replayCreate(ctx, ownerID, idempotencyKey, kind); ok || err != nil {
+		return v, err
+	}
 	id, err := uuid.NewV7()
 	if err != nil {
 		return vaultsdb.Vault{}, err
+	}
+	var key *string
+	if idempotencyKey != "" {
+		key = &idempotencyKey
 	}
 	var v vaultsdb.Vault
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := vaultsdb.New(tx)
 		var err error
-		v, err = q.CreateVault(ctx, vaultsdb.CreateVaultParams{ID: id, OwnerID: ownerID, Name: n, Kind: kind})
+		v, err = q.CreateVault(ctx, vaultsdb.CreateVaultParams{ID: id, OwnerID: ownerID, Name: n, Kind: kind, IdempotencyKey: key})
 		if err != nil {
 			return err
 		}
@@ -200,10 +229,37 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, name, kind stri
 		}
 		return nil
 	})
+	if isUnique(err, "") && idempotencyKey != "" {
+		// A concurrent attempt with the same key committed first: whichever
+		// unique index stopped this one, the vault is that attempt's.
+		if v, ok, rerr := s.replayCreate(ctx, ownerID, idempotencyKey, kind); ok || rerr != nil {
+			return v, rerr
+		}
+	}
 	if isUnique(err, "vaults_owner_name_uq") {
 		return vaultsdb.Vault{}, httpproblem.Errorf(syncproto.CodeNameInUse, "you already have a vault named %q", n)
 	}
 	return v, err
+}
+
+// replayCreate returns the vault an earlier POST /vaults with the same
+// Idempotency-Key created (ok), deleted or not. A key reused for a vault of
+// the other kind is a client error, not a retry.
+func (s *Service) replayCreate(ctx context.Context, ownerID uuid.UUID, key, kind string) (v vaultsdb.Vault, ok bool, err error) {
+	if key == "" {
+		return vaultsdb.Vault{}, false, nil
+	}
+	v, err = vaultsdb.New(s.db.Pool).GetVaultByIdempotencyKey(ctx, vaultsdb.GetVaultByIdempotencyKeyParams{OwnerID: ownerID, IdempotencyKey: &key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return vaultsdb.Vault{}, false, nil
+	}
+	if err != nil {
+		return vaultsdb.Vault{}, false, err
+	}
+	if v.Kind != kind {
+		return vaultsdb.Vault{}, false, httpproblem.Errorf(syncproto.CodeValidationFailed, "this Idempotency-Key already created a %s vault", v.Kind)
+	}
+	return v, true, nil
 }
 
 // Open returns the vault when userID may use it. In M2 only the owner can;
@@ -339,8 +395,10 @@ const treePage = 1000
 // open while Each walks the files page by page, so a vault of any size is
 // served in bounded memory. Close ends it (Each does not).
 type TreeStream struct {
-	// AsOfSeq is the changelog position the manifest reflects.
+	// AsOfSeq is the changelog position the manifest reflects, AsOfID the id
+	// of the change at it (uuid.Nil when unknown: none, or no ChangeIDFunc).
 	AsOfSeq int64
+	AsOfID  uuid.UUID
 	tx      pgx.Tx
 	vaultID uuid.UUID
 	scope   *access.Scope
@@ -377,6 +435,12 @@ func (s *Service) OpenTree(ctx context.Context, userID, vaultID uuid.UUID, scope
 		return nil, err
 	}
 	t := &TreeStream{AsOfSeq: v.LastSeq, tx: tx, vaultID: vaultID, scope: sc}
+	if s.changeID != nil {
+		if t.AsOfID, _, err = s.changeID(ctx, tx, vaultID, v.LastSeq); err != nil {
+			_ = tx.Rollback(ctx)
+			return nil, err
+		}
+	}
 	if sc != nil && sc.Type == access.ResourceFolder {
 		t.descendants = likeEscape(pathrules.Key(sc.Prefix)) + "/%"
 	}

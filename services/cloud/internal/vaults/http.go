@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"memobrain/services/cloud/internal/api"
@@ -51,7 +52,8 @@ func (h *HTTP) ListVaults(ctx context.Context, req api.ListVaultsRequestObject) 
 	return api.ListVaults200JSONResponse{Items: items, Mounts: []api.Vault{}}, nil
 }
 
-// CreateVault implements POST /vaults.
+// CreateVault implements POST /vaults. A retry carrying the Idempotency-Key
+// of an attempt that succeeded gets that attempt's vault, with 201 again.
 func (h *HTTP) CreateVault(ctx context.Context, req api.CreateVaultRequestObject) (api.CreateVaultResponseObject, error) {
 	if req.Body == nil {
 		return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "body is required")
@@ -62,7 +64,7 @@ func (h *HTTP) CreateVault(ctx context.Context, req api.CreateVaultRequestObject
 			envs = append(envs, fromAPIEnvelope(e))
 		}
 	}
-	v, err := h.svc.Create(ctx, auth.MustPrincipal(ctx).UserID, req.Body.Name, string(req.Body.Kind), envs)
+	v, err := h.svc.Create(ctx, auth.MustPrincipal(ctx).UserID, deref(req.Params.IdempotencyKey), req.Body.Name, string(req.Body.Kind), envs)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +121,7 @@ func (h *HTTP) GetVaultTree(ctx context.Context, req api.GetVaultTreeRequestObje
 	return treeResponse{ctx: ctx, tree: t}, nil
 }
 
-// treeResponse writes the Tree document ({"as_of_seq":…,"items":[…]}) entry
+// treeResponse writes the Tree document ({"as_of_seq":…,"as_of_id":…,"items":[…]}) entry
 // by entry. A database error midway truncates the document: the client sees
 // invalid JSON and retries, as with any interrupted transfer.
 type treeResponse struct {
@@ -132,7 +134,11 @@ func (r treeResponse) VisitGetVaultTreeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	bw := bufio.NewWriterSize(w, 64<<10)
-	if _, err := fmt.Fprintf(bw, `{"as_of_seq":%d,"items":[`, r.tree.AsOfSeq); err != nil {
+	head := fmt.Sprintf(`{"as_of_seq":%d,`, r.tree.AsOfSeq)
+	if r.tree.AsOfID != uuid.Nil {
+		head += fmt.Sprintf(`"as_of_id":%q,`, r.tree.AsOfID.String())
+	}
+	if _, err := bw.WriteString(head + `"items":[`); err != nil {
 		return err
 	}
 	first := true

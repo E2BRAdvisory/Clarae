@@ -44,13 +44,45 @@ const (
 	staleAfter = time.Hour
 	// DefaultWorkers is how many archives are built in parallel (setting exports.workers).
 	DefaultWorkers = 2
-	// DefaultMaxActivePerUser bounds the queued and running jobs of one user
+	// DefaultMaxActivePerUser bounds the queued and running jobs of one user,
+	// and separately the direct streams one user has open on an API node
 	// (setting exports.max_active_per_user).
 	DefaultMaxActivePerUser = 3
 	// jobsPerWorker bounds the jobs one worker builds per ProcessPending call,
 	// so expired archives are retired between rounds even with a long queue.
 	jobsPerWorker = 4
+	// reuseMinValidity is how long a ready archive must still be downloadable
+	// for a new request on the unchanged vault to get it instead of a new one.
+	reuseMinValidity = time.Hour
+	// supersededGrace is how long older archives of a vault stay downloadable
+	// once a new one is ready: enough to finish a download in progress,
+	// short enough that repeated requests cannot fill the exports bucket.
+	supersededGrace = time.Hour
 )
+
+// Messages stored in the error of a failed job. The client sees them, so they
+// never carry the internal error (storage endpoints, node paths, SQL): that
+// goes to the log, with the job id.
+const (
+	failedBuild     = "the archive could not be built"
+	failedMissing   = "a file of the vault is missing from the storage"
+	failedVaultGone = "the vault was deleted"
+)
+
+// errVaultGone stops the build of a vault deleted after the job was queued.
+var errVaultGone = errors.New("export: the vault was deleted")
+
+// failure is the message stored for a build error.
+func failure(err error) string {
+	switch {
+	case errors.Is(err, errVaultGone):
+		return failedVaultGone
+	case errors.Is(err, storage.ErrNotFound):
+		return failedMissing
+	default:
+		return failedBuild
+	}
+}
 
 // Job statuses.
 const (
@@ -69,6 +101,10 @@ type Service struct {
 	authz   access.Authorizer
 	log     zerolog.Logger
 	now     func() time.Time
+
+	// streams counts the direct streams (Stream) open per user on this node.
+	streamsMu stdsync.Mutex
+	streams   map[uuid.UUID]int
 }
 
 // NewService wires the module. exports holds the finished archives (a separate bucket in
@@ -136,7 +172,9 @@ func (s *Service) writeZip(ctx context.Context, w io.Writer, vaultID uuid.UUID) 
 
 // Stream returns a reader producing the ZIP of a vault and the suggested file name.
 // The archive is generated while the reader is consumed; an error mid-way surfaces as a
-// read error (and a truncated, invalid ZIP for the client).
+// read error (and a truncated, invalid ZIP for the client). A user has at most
+// exports.max_active_per_user streams open on this node (RATE_LIMITED beyond),
+// and every stream is audited before it starts.
 func (s *Service) Stream(ctx context.Context, user, vaultID uuid.UUID) (io.ReadCloser, string, error) {
 	v, err := s.vault(ctx, user, vaultID)
 	if err != nil {
@@ -145,19 +183,62 @@ func (s *Service) Stream(ctx context.Context, user, vaultID uuid.UUID) (io.ReadC
 	if v.TotalBytes > DirectLimit {
 		return nil, "", httpproblem.Errorf(syncproto.CodeInvalidState, "the vault is larger than %d MB: start an export job instead", DirectLimit>>20)
 	}
+	release, err := s.acquireStream(user, s.maxActive(ctx))
+	if err != nil {
+		return nil, "", err
+	}
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return audit.Record(ctx, tx, user, "vault.export", "vault", v.ID.String(), map[string]string{"mode": "stream"})
+	})
+	if err != nil {
+		release()
+		return nil, "", err
+	}
 	pr, pw := io.Pipe()
-	go func() { pw.CloseWithError(s.writeZip(ctx, pw, vaultID)) }()
-	s.audit(ctx, user, "vault.export", v.ID, map[string]string{"mode": "stream"})
+	go func() {
+		defer release()
+		// Ends when the archive is complete, the request is cancelled or
+		// the response stops reading (the server closes pr).
+		pw.CloseWithError(s.writeZip(ctx, pw, vaultID))
+	}()
 	return pr, s.filename(v), nil
 }
 
-func (s *Service) audit(ctx context.Context, user uuid.UUID, action string, vaultID uuid.UUID, details any) {
-	err := s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return audit.Record(ctx, tx, user, action, "vault", vaultID.String(), details)
-	})
-	if err != nil {
-		s.log.Warn().Err(err).Str("action", action).Msg("export: cannot write the audit entry")
+// maxActive is the setting exports.max_active_per_user.
+func (s *Service) maxActive(ctx context.Context) int {
+	limit := int(settings.Int(ctx, s.db.Pool, "exports.max_active_per_user", DefaultMaxActivePerUser))
+	if limit <= 0 {
+		return DefaultMaxActivePerUser
 	}
+	return limit
+}
+
+// acquireStream reserves one of the limit direct streams of a user on this
+// node; release gives it back (once, however many times it is called).
+func (s *Service) acquireStream(user uuid.UUID, limit int) (release func(), err error) {
+	s.streamsMu.Lock()
+	defer s.streamsMu.Unlock()
+	if s.streams == nil {
+		s.streams = map[uuid.UUID]int{}
+	}
+	if n := s.streams[user]; n >= limit {
+		return nil, &httpproblem.Error{
+			Code:   syncproto.CodeRateLimited,
+			Detail: fmt.Sprintf("%d exports are already being downloaded: wait for one to finish", n),
+			Extra:  map[string]any{"active_streams": n, "limit": limit},
+		}
+	}
+	s.streams[user]++
+	var once stdsync.Once
+	return func() {
+		once.Do(func() {
+			s.streamsMu.Lock()
+			defer s.streamsMu.Unlock()
+			if s.streams[user]--; s.streams[user] <= 0 {
+				delete(s.streams, user)
+			}
+		})
+	}, nil
 }
 
 func (s *Service) filename(v vaults.Vault) string {
@@ -178,17 +259,20 @@ func (s *Service) filename(v vaults.Vault) string {
 }
 
 // Create queues an export job for a vault of any size. A vault has at most
-// one job queued or running: a new request returns that job. A user has at
-// most exports.max_active_per_user of them (RATE_LIMITED beyond).
+// one job queued or running: a new request returns that job. A ready archive
+// built at the vault's current changelog position, and valid for at least
+// another reuseMinValidity, is returned too instead of building a copy. A user
+// has at most exports.max_active_per_user jobs queued or running
+// (RATE_LIMITED beyond). Once a new archive is ready, the older ones of the
+// vault expire within supersededGrace (build), so the exports bucket holds
+// few per vault however often they are requested.
 func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb.ExportJob, error) {
 	v, err := s.vault(ctx, user, vaultID)
 	if err != nil {
 		return exportdb.ExportJob{}, err
 	}
-	limit := int(settings.Int(ctx, s.db.Pool, "exports.max_active_per_user", DefaultMaxActivePerUser))
-	if limit <= 0 {
-		limit = DefaultMaxActivePerUser
-	}
+	limit := s.maxActive(ctx)
+	now := s.now()
 	var j exportdb.ExportJob
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := exportdb.New(tx)
@@ -199,6 +283,16 @@ func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb
 		j, err = q.GetActiveExportJobOfVault(ctx, v.ID)
 		if err == nil {
 			return nil // the archive being built will be this request's too
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		j, err = q.GetReusableExportJobOfVault(ctx, exportdb.GetReusableExportJobOfVaultParams{
+			VaultID: v.ID, LastSeq: v.LastSeq, ValidAfter: now.Add(reuseMinValidity),
+		})
+		if err == nil {
+			// Nothing changed since that archive was built.
+			return audit.Record(ctx, tx, user, "vault.export", "vault", v.ID.String(), map[string]any{"mode": "job", "job": j.ID.String(), "reused": true})
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -330,7 +424,10 @@ func (s *Service) ProcessPending(ctx context.Context) (int, error) {
 	return n, first
 }
 
-// processOne claims and builds one queued job; done is false when the queue is empty.
+// processOne claims and builds one queued job; done is false when the queue
+// is empty or ctx ended. A build interrupted by the end of ctx (the worker
+// shutting down) is not a failure: the job goes back to the queue, for this
+// worker's successor to build.
 func (s *Service) processOne(ctx context.Context) (done bool, err error) {
 	if ctx.Err() != nil {
 		return false, nil
@@ -345,17 +442,45 @@ func (s *Service) processOne(ctx context.Context) (done bool, err error) {
 	stop := s.keepLease(ctx, j.ID)
 	err = s.build(ctx, j)
 	stop()
-	if err != nil {
-		s.log.Error().Err(err).Str("job", j.ID.String()).Msg("export job failed")
-		msg := err.Error()
-		if len(msg) > 500 {
-			msg = msg[:500]
+	switch {
+	case err == nil:
+		return true, nil
+	case ctx.Err() != nil:
+		s.log.Info().Err(err).Str("job", j.ID.String()).Msg("export job interrupted: queued again")
+		if rerr := s.endUnfinished(ctx, j.ID, func(ctx context.Context, q *exportdb.Queries) (int64, error) {
+			return q.ReleaseExportJob(ctx, j.ID)
+		}); rerr != nil {
+			// The lease runs out and RequeueStaleExportJobs queues it again.
+			s.log.Warn().Err(rerr).Str("job", j.ID.String()).Msg("export: cannot queue an interrupted job again")
 		}
-		if ferr := exportdb.New(s.db.Pool).FailExportJob(context.WithoutCancel(ctx), exportdb.FailExportJobParams{ID: j.ID, Error: &msg}); ferr != nil {
-			return true, ferr
-		}
+		return false, nil
+	}
+	msg := failure(err)
+	s.log.Error().Err(err).Str("job", j.ID.String()).Str("reported", msg).Msg("export job failed")
+	if ferr := s.endUnfinished(ctx, j.ID, func(ctx context.Context, q *exportdb.Queries) (int64, error) {
+		return q.FailExportJob(ctx, exportdb.FailExportJobParams{ID: j.ID, Error: &msg})
+	}); ferr != nil {
+		return true, ferr
 	}
 	return true, nil
+}
+
+// endUnfinished moves a running job that did not become ready out of the
+// running state (end) and deletes the archive its build may have uploaded
+// before failing or being interrupted: once the job is failed, or queued and
+// then cancelled with the account, nothing else would delete it. The row stays
+// locked until the archive is gone, so a worker claiming the job again cannot
+// see its new archive deleted. A job no longer running is left alone: it may
+// be ready after all (a commit whose acknowledgement was lost).
+func (s *Service) endUnfinished(ctx context.Context, id uuid.UUID, end func(context.Context, *exportdb.Queries) (int64, error)) error {
+	return s.db.WithTx(context.WithoutCancel(ctx), func(ctx context.Context, tx pgx.Tx) error {
+		n, err := end(ctx, exportdb.New(tx))
+		if err != nil || n == 0 {
+			return err
+		}
+		s.discard(ctx, id, objectKey(id))
+		return nil
+	})
 }
 
 // keepLease renews the lease of a running job until stop is called, so a long
@@ -383,7 +508,24 @@ func (s *Service) keepLease(ctx context.Context, id uuid.UUID) (stop func()) {
 	return func() { close(done); <-finished }
 }
 
+// liveVault returns the vault of a job, or errVaultGone once it is deleted:
+// nothing is archived after a deletion (of the vault or of the account).
+func (s *Service) liveVault(ctx context.Context, id uuid.UUID) (vaults.Vault, error) {
+	v, err := vaults.GetVault(ctx, s.db.Pool, id)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && v.DeletedAt != nil) {
+		return vaults.Vault{}, errVaultGone
+	}
+	return v, err
+}
+
 func (s *Service) build(ctx context.Context, j exportdb.ExportJob) error {
+	v, err := s.liveVault(ctx, j.VaultID)
+	if err != nil {
+		return err
+	}
+	// Read before the files: the archive is at least as recent as seq, so a
+	// later request reuses it only if nothing was committed since.
+	seq := v.LastSeq
 	tmp, err := os.CreateTemp("", "memobrain-export-*.zip")
 	if err != nil {
 		return err
@@ -399,14 +541,45 @@ func (s *Service) build(ctx context.Context, j exportdb.ExportJob) error {
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	if err := s.exports.Put(ctx, objectKey(j.ID), tmp, size); err != nil {
+	key := objectKey(j.ID)
+	if err := s.exports.Put(ctx, key, tmp, size); err != nil {
+		return err
+	}
+	// The vault may have been deleted while the archive was built.
+	if _, err := s.liveVault(ctx, j.VaultID); err != nil {
+		s.discard(ctx, j.ID, key)
 		return err
 	}
 	exp := s.now().Add(LinkTTL)
-	return exportdb.New(s.db.Pool).FinishExportJob(ctx, exportdb.FinishExportJobParams{ID: j.ID, Size: &size, ObjectKey: ptrStr(objectKey(j.ID)), ExpiresAt: &exp})
+	var finished int64
+	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		q := exportdb.New(tx)
+		var err error
+		finished, err = q.FinishExportJob(ctx, exportdb.FinishExportJobParams{ID: j.ID, Size: &size, ObjectKey: &key, SourceSeq: &seq, ExpiresAt: &exp})
+		if err != nil || finished == 0 {
+			return err
+		}
+		_, err = q.SupersedeReadyExportJobsOfVault(ctx, exportdb.SupersedeReadyExportJobsOfVaultParams{VaultID: j.VaultID, ValidUntil: s.now().Add(supersededGrace), Keep: j.ID})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if finished == 0 {
+		// Cancelled meanwhile (the account was deleted): the job stays failed
+		// and its archive must not outlive the deletion.
+		s.log.Info().Str("job", j.ID.String()).Msg("export job cancelled while it was built")
+		s.discard(ctx, j.ID, key)
+	}
+	return nil
 }
 
-func ptrStr(s string) *string { return &s }
+// discard deletes the archive of a job that will not become ready.
+func (s *Service) discard(ctx context.Context, id uuid.UUID, key string) {
+	if err := s.exports.Delete(context.WithoutCancel(ctx), key); err != nil && !errors.Is(err, storage.ErrNotFound) {
+		s.log.Warn().Err(err).Str("job", id.String()).Str("key", key).Msg("export: cannot delete a discarded archive")
+	}
+}
 
 // Expire retires finished exports past their 24 hours, deleting the archives, and requeues
 // jobs abandoned by a crashed worker.

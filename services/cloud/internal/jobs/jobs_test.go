@@ -49,3 +49,22 @@ func TestRunStepsStopsWhenTheContextEnds(t *testing.T) {
 		t.Fatalf("ran %d steps (err %v), want only the first", ran, err)
 	}
 }
+
+// An interrupted run is neither a failure nor a success: recording it as a
+// success would refresh the job's last success and hide a stalled job.
+func TestRunOutcome(t *testing.T) {
+	boom := errors.New("boom")
+	for name, c := range map[string]struct {
+		err, ctxErr error
+		want        int
+	}{
+		"success":                      {nil, nil, runSucceeded},
+		"failure":                      {boom, nil, runFailed},
+		"interrupted with an error":    {context.Canceled, context.Canceled, runInterrupted},
+		"interrupted without an error": {nil, context.Canceled, runInterrupted},
+	} {
+		if got := runOutcome(c.err, c.ctxErr); got != c.want {
+			t.Errorf("%s: outcome %d, want %d", name, got, c.want)
+		}
+	}
+}

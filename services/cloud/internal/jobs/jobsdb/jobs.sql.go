@@ -68,6 +68,22 @@ func (q *Queries) DeleteCollectableBlob(ctx context.Context, arg DeleteCollectab
 	return storage_key, err
 }
 
+const deleteTombstones = `-- name: DeleteTombstones :one
+WITH d AS (
+  DELETE FROM files WHERE id = ANY($1::uuid[]) AND is_deleted RETURNING current_seq
+)
+SELECT COALESCE(MAX(current_seq), 0)::bigint AS max_seq FROM d
+`
+
+// Deletes the locked tombstones (their revisions go by cascade) and returns
+// the highest changelog seq among them: the compaction point moves past it.
+func (q *Queries) DeleteTombstones(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteTombstones, ids)
+	var max_seq int64
+	err := row.Scan(&max_seq)
+	return max_seq, err
+}
+
 const deleteVault = `-- name: DeleteVault :exec
 DELETE FROM vaults WHERE id = $1
 `
@@ -75,6 +91,34 @@ DELETE FROM vaults WHERE id = $1
 func (q *Queries) DeleteVault(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteVault, id)
 	return err
+}
+
+const deleteVaultFilesPage = `-- name: DeleteVaultFilesPage :execrows
+DELETE FROM files WHERE id IN (
+  SELECT f.id FROM files f
+  WHERE f.vault_id = $1::uuid
+    AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+  LIMIT $2::int
+)
+`
+
+type DeleteVaultFilesPageParams struct {
+	VaultID uuid.UUID
+	MaxRows int32
+}
+
+// Vault purge, once VaultHasRevisions found none in the same transaction
+// (the vault row lock it holds keeps any from being added, so the cascade
+// drops no revision without releasing its blob reference): one page of its
+// files, in no particular order so that the scan stops at the page size
+// (files_vault_prefix_ix) instead of sorting the whole vault on every page.
+// Files a file share points at stay (the shares go with the vault row).
+func (q *Queries) DeleteVaultFilesPage(ctx context.Context, arg DeleteVaultFilesPageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteVaultFilesPage, arg.VaultID, arg.MaxRows)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getBlobRefForUpdate = `-- name: GetBlobRefForUpdate :one
@@ -102,7 +146,7 @@ func (q *Queries) GetUserUsedForUpdate(ctx context.Context, id uuid.UUID) (int64
 }
 
 const getVaultForUpdate = `-- name: GetVaultForUpdate :one
-SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at FROM vaults WHERE id = $1 FOR UPDATE
+SELECT id, owner_id, name, kind, last_seq, compaction_seq, total_bytes, file_count, created_at, deleted_at, idempotency_key FROM vaults WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetVaultForUpdate(ctx context.Context, id uuid.UUID) (Vault, error) {
@@ -119,6 +163,7 @@ func (q *Queries) GetVaultForUpdate(ctx context.Context, id uuid.UUID) (Vault, e
 		&i.FileCount,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -190,7 +235,7 @@ func (q *Queries) ListBlobRefCountsAfter(ctx context.Context, arg ListBlobRefCou
 }
 
 const listDeletedVaultsBefore = `-- name: ListDeletedVaultsBefore :many
-SELECT id FROM vaults WHERE deleted_at IS NOT NULL AND deleted_at < $1
+SELECT id FROM vaults WHERE deleted_at IS NOT NULL AND deleted_at < $1 ORDER BY id
 `
 
 func (q *Queries) ListDeletedVaultsBefore(ctx context.Context, deletedAt *time.Time) ([]uuid.UUID, error) {
@@ -213,23 +258,85 @@ func (q *Queries) ListDeletedVaultsBefore(ctx context.Context, deletedAt *time.T
 	return items, nil
 }
 
-const listRevisionBlobs = `-- name: ListRevisionBlobs :many
-SELECT blob_hash FROM file_revisions WHERE vault_id = $1 AND blob_hash IS NOT NULL
+const listExpiredTombstones = `-- name: ListExpiredTombstones :many
+SELECT f.vault_id, f.id FROM files f
+LEFT JOIN file_revisions r ON r.file_id = f.id AND r.rev_no = f.current_rev
+WHERE f.is_deleted
+  AND (f.vault_id, f.id) > ($1::uuid, $2::uuid)
+  AND (r.id IS NULL OR r.server_time < $3::timestamptz)
+  AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+ORDER BY f.vault_id, f.id
+LIMIT $4::int
 `
 
-func (q *Queries) ListRevisionBlobs(ctx context.Context, vaultID uuid.UUID) ([]*string, error) {
-	rows, err := q.db.Query(ctx, listRevisionBlobs, vaultID)
+type ListExpiredTombstonesParams struct {
+	AfterVault uuid.UUID
+	AfterID    uuid.UUID
+	Cutoff     time.Time
+	MaxRows    int32
+}
+
+type ListExpiredTombstonesRow struct {
+	VaultID uuid.UUID
+	ID      uuid.UUID
+}
+
+// Tombstone purge (ADR-0038): deleted files whose delete revision (the
+// current one) is older than the cutoff, or already gone, one keyset page on
+// (vault, id) at a time (files_tombstone_ix). A tombstone a file share still
+// points at stays: deleting it would violate shares.file_id.
+func (q *Queries) ListExpiredTombstones(ctx context.Context, arg ListExpiredTombstonesParams) ([]ListExpiredTombstonesRow, error) {
+	rows, err := q.db.Query(ctx, listExpiredTombstones,
+		arg.AfterVault,
+		arg.AfterID,
+		arg.Cutoff,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*string{}
+	items := []ListExpiredTombstonesRow{}
 	for rows.Next() {
-		var blob_hash *string
-		if err := rows.Scan(&blob_hash); err != nil {
+		var i ListExpiredTombstonesRow
+		if err := rows.Scan(&i.VaultID, &i.ID); err != nil {
 			return nil, err
 		}
-		items = append(items, blob_hash)
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFileBlobRefs = `-- name: ListFileBlobRefs :many
+SELECT blob_hash::text AS hash, COUNT(*)::int AS refs FROM file_revisions
+WHERE file_id = ANY($1::uuid[]) AND blob_hash IS NOT NULL
+GROUP BY blob_hash ORDER BY blob_hash
+`
+
+type ListFileBlobRefsRow struct {
+	Hash string
+	Refs int32
+}
+
+// The blob references held by every revision of these files, grouped and in
+// hash order (the order a commit locks blob rows in): what deleting the files
+// releases when their revisions go with them.
+func (q *Queries) ListFileBlobRefs(ctx context.Context, ids []uuid.UUID) ([]ListFileBlobRefsRow, error) {
+	rows, err := q.db.Query(ctx, listFileBlobRefs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFileBlobRefsRow{}
+	for rows.Next() {
+		var i ListFileBlobRefsRow
+		if err := rows.Scan(&i.Hash, &i.Refs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -239,24 +346,35 @@ func (q *Queries) ListRevisionBlobs(ctx context.Context, vaultID uuid.UUID) ([]*
 
 const listUnreferencedBlobs = `-- name: ListUnreferencedBlobs :many
 
-SELECT hash, storage_key FROM blobs
-WHERE ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $1
-ORDER BY unreferenced_since LIMIT $2
+SELECT hash, unreferenced_since::timestamptz AS unreferenced_since FROM blobs
+WHERE ref_count = 0 AND unreferenced_since IS NOT NULL AND unreferenced_since < $1::timestamptz
+  AND (unreferenced_since, hash) > ($2::timestamptz, $3::text)
+ORDER BY unreferenced_since, hash
+LIMIT $4::int
 `
 
 type ListUnreferencedBlobsParams struct {
-	UnreferencedSince *time.Time
-	Limit             int32
+	Cutoff     time.Time
+	AfterSince time.Time
+	AfterHash  string
+	MaxRows    int32
 }
 
 type ListUnreferencedBlobsRow struct {
-	Hash       string
-	StorageKey string
+	Hash              string
+	UnreferencedSince time.Time
 }
 
 // Queries of the jobs module (ADR-0033: one sqlc package per module).
+// Keyset page of the collectable blobs after (after_since, after_hash): a
+// blob that cannot be collected is skipped rather than listed again first.
 func (q *Queries) ListUnreferencedBlobs(ctx context.Context, arg ListUnreferencedBlobsParams) ([]ListUnreferencedBlobsRow, error) {
-	rows, err := q.db.Query(ctx, listUnreferencedBlobs, arg.UnreferencedSince, arg.Limit)
+	rows, err := q.db.Query(ctx, listUnreferencedBlobs,
+		arg.Cutoff,
+		arg.AfterSince,
+		arg.AfterHash,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +382,7 @@ func (q *Queries) ListUnreferencedBlobs(ctx context.Context, arg ListUnreference
 	items := []ListUnreferencedBlobsRow{}
 	for rows.Next() {
 		var i ListUnreferencedBlobsRow
-		if err := rows.Scan(&i.Hash, &i.StorageKey); err != nil {
+		if err := rows.Scan(&i.Hash, &i.UnreferencedSince); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -418,6 +536,44 @@ func (q *Queries) ListVaultTotalsAfter(ctx context.Context, arg ListVaultTotalsA
 	return items, nil
 }
 
+const lockExpiredTombstones = `-- name: LockExpiredTombstones :many
+SELECT f.id FROM files f
+LEFT JOIN file_revisions r ON r.file_id = f.id AND r.rev_no = f.current_rev
+WHERE f.vault_id = $1::uuid AND f.id = ANY($2::uuid[]) AND f.is_deleted
+  AND (r.id IS NULL OR r.server_time < $3::timestamptz)
+  AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
+ORDER BY f.id
+FOR UPDATE OF f
+`
+
+type LockExpiredTombstonesParams struct {
+	VaultID uuid.UUID
+	Ids     []uuid.UUID
+	Cutoff  time.Time
+}
+
+// The candidates of one vault that are still expired tombstones, locked: the
+// caller holds the vault row, so no commit can bring them back meanwhile.
+func (q *Queries) LockExpiredTombstones(ctx context.Context, arg LockExpiredTombstonesParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockExpiredTombstones, arg.VaultID, arg.Ids, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markUserPurged = `-- name: MarkUserPurged :exec
 UPDATE users SET purged_at = now(), keycloak_sub = 'purged:' || id::text, updated_at = now() WHERE id = $1
 `
@@ -439,30 +595,6 @@ func (q *Queries) OwnerActualUsage(ctx context.Context, ownerID uuid.UUID) (int6
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
-}
-
-const purgeDeletedFilesBatch = `-- name: PurgeDeletedFilesBatch :execrows
-DELETE FROM files WHERE id IN (
-  SELECT f.id FROM files f
-  WHERE f.is_deleted
-    AND NOT EXISTS (SELECT 1 FROM file_revisions r WHERE r.file_id = f.id)
-    AND NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id)
-  ORDER BY f.id
-  LIMIT $1::int
-  FOR UPDATE SKIP LOCKED
-)
-`
-
-// Tombstones whose every revision is gone, across all vaults, one bounded
-// batch at a time. Rows a commit holds are skipped (the next run takes them)
-// rather than waited for, and a tombstone a file share still points at stays:
-// deleting it would violate shares.file_id.
-func (q *Queries) PurgeDeletedFilesBatch(ctx context.Context, maxRows int32) (int64, error) {
-	result, err := q.db.Exec(ctx, purgeDeletedFilesBatch, maxRows)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const setBlobRef = `-- name: SetBlobRef :exec
@@ -525,4 +657,15 @@ func (q *Queries) VaultActualTotals(ctx context.Context, vaultID uuid.UUID) (Vau
 	var i VaultActualTotalsRow
 	err := row.Scan(&i.Bytes, &i.Files)
 	return i, err
+}
+
+const vaultHasRevisions = `-- name: VaultHasRevisions :one
+SELECT EXISTS (SELECT 1 FROM file_revisions WHERE vault_id = $1)
+`
+
+func (q *Queries) VaultHasRevisions(ctx context.Context, vaultID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, vaultHasRevisions, vaultID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

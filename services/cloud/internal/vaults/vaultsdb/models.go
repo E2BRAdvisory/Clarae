@@ -11,16 +11,17 @@ import (
 )
 
 type Vault struct {
-	ID            uuid.UUID
-	OwnerID       uuid.UUID
-	Name          string
-	Kind          string
-	LastSeq       int64
-	CompactionSeq int64
-	TotalBytes    int64
-	FileCount     int32
-	CreatedAt     time.Time
-	DeletedAt     *time.Time
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	Name           string
+	Kind           string
+	LastSeq        int64
+	CompactionSeq  int64
+	TotalBytes     int64
+	FileCount      int32
+	CreatedAt      time.Time
+	DeletedAt      *time.Time
+	IdempotencyKey *string
 }
 
 type VaultKeyEnvelope struct {

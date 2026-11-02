@@ -11,14 +11,15 @@ import (
 )
 
 type Device struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	Name       string
-	Platform   string
-	AppVersion *string
-	CreatedAt  time.Time
-	LastSeenAt *time.Time
-	RevokedAt  *time.Time
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Name           string
+	Platform       string
+	AppVersion     *string
+	CreatedAt      time.Time
+	LastSeenAt     *time.Time
+	RevokedAt      *time.Time
+	IdempotencyKey *string
 }
 
 type User struct {

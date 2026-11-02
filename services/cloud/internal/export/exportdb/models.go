@@ -21,4 +21,5 @@ type ExportJob struct {
 	CreatedAt   time.Time
 	FinishedAt  *time.Time
 	ExpiresAt   *time.Time
+	SourceSeq   *int64
 }

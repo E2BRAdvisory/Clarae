@@ -48,7 +48,9 @@ const Notice = "Vault content is not part of this file. Private vaults are end-t
 	"the server only stores ciphertext it cannot read, so only your devices can export them. " +
 	"Shared vaults can be downloaded as a ZIP from the vault export function."
 
-// Export is the JSON document returned by GET /me/export.
+// Export is the JSON document returned by GET /me/export, except its last
+// member, audit_log: the entries about a user can be many, so EachAuditEntry
+// reads them page by page while the response is written.
 type Export struct {
 	GeneratedAt    time.Time        `json:"generated_at"`
 	Notice         string           `json:"notice"`
@@ -58,10 +60,43 @@ type Export struct {
 	Vaults         []map[string]any `json:"vaults"`
 	Shares         []map[string]any `json:"shares"`
 	ReceivedGrants []map[string]any `json:"received_grants"`
-	AuditLog       []map[string]any `json:"audit_log"`
 }
 
-// Export collects the account data of a user.
+// auditPage is how many audit entries EachAuditEntry reads per query.
+const auditPage = 1000
+
+// EachAuditEntry calls fn with every audit entry about a user (as actor or
+// as target), oldest first, reading them page by page: the export is
+// complete however long the trail is, without holding it in memory.
+func (s *Service) EachAuditEntry(ctx context.Context, userID uuid.UUID, fn func(map[string]any) error) error {
+	q := privacydb.New(s.db.Pool)
+	var after int64
+	for {
+		entries, err := q.ListAuditAboutUser(ctx, privacydb.ListAuditAboutUserParams{UserID: userID, AfterID: after, PageSize: auditPage})
+		if err != nil {
+			return err
+		}
+		for _, a := range entries {
+			var details any
+			if len(a.Details) > 0 {
+				_ = json.Unmarshal(a.Details, &details)
+			}
+			if err := fn(map[string]any{
+				"id": a.ID, "at": a.At, "actor_id": a.ActorID, "action": a.Action,
+				"target_type": a.TargetType, "target_id": a.TargetID, "details": details,
+			}); err != nil {
+				return err
+			}
+			after = a.ID
+		}
+		if len(entries) < auditPage {
+			return nil
+		}
+	}
+}
+
+// Export collects the account data of a user but the audit log (see
+// EachAuditEntry).
 func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) {
 	conn := s.db.Pool
 	q := privacydb.New(conn)
@@ -78,7 +113,7 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 			"used_bytes": u.UsedBytes, "created_at": u.CreatedAt, "last_login_at": u.LastLoginAt,
 		},
 		Devices: []map[string]any{}, Groups: []map[string]any{}, Vaults: []map[string]any{},
-		Shares: []map[string]any{}, ReceivedGrants: []map[string]any{}, AuditLog: []map[string]any{},
+		Shares: []map[string]any{}, ReceivedGrants: []map[string]any{},
 	}
 
 	devices, err := q.ListAllDevicesOfUser(ctx, userID)
@@ -122,23 +157,41 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 	if err != nil {
 		return Export{}, err
 	}
+	owned := make(map[uuid.UUID]bool, len(vaults))
+	for _, v := range vaults {
+		owned[v.ID] = true
+	}
 	for _, sh := range shares {
-		grants, err := sharing.ListGrants(ctx, conn, sh.ID)
-		if err != nil {
-			return Export{}, err
-		}
-		gs := make([]map[string]any, 0, len(grants))
-		for _, g := range grants {
-			gs = append(gs, map[string]any{
-				"principal_type": g.PrincipalType, "principal_id": g.PrincipalID, "principal_name": g.PrincipalName,
-				"permission": g.Permission, "status": g.Status, "granted_by": g.GrantedBy, "created_at": g.CreatedAt,
-			})
-		}
-		out.Shares = append(out.Shares, map[string]any{
+		entry := map[string]any{
 			"id": sh.ID, "vault_id": sh.VaultID, "vault_name": sh.VaultName, "resource_type": sh.ResourceType,
 			"path_prefix": sh.PathPrefix, "display_name": sh.DisplayName, "created_by": sh.CreatedBy,
-			"created_at": sh.CreatedAt, "expires_at": sh.ExpiresAt, "revoked_at": sh.RevokedAt, "grants": gs,
-		})
+			"created_at": sh.CreatedAt, "expires_at": sh.ExpiresAt, "revoked_at": sh.RevokedAt,
+		}
+		// The recipients of a share are the owner's data, and the manager who
+		// created it sees them only while still managing it (ADR-0041 §8), as
+		// the share itself shows them: otherwise the export says only that the
+		// user created it.
+		show := owned[sh.VaultID]
+		if !show {
+			if show, err = sharing.SeesGrants(ctx, conn, sh.ID, userID); err != nil {
+				return Export{}, err
+			}
+		}
+		if show {
+			grants, err := sharing.ListGrants(ctx, conn, sh.ID)
+			if err != nil {
+				return Export{}, err
+			}
+			gs := make([]map[string]any, 0, len(grants))
+			for _, g := range grants {
+				gs = append(gs, map[string]any{
+					"principal_type": g.PrincipalType, "principal_id": g.PrincipalID, "principal_name": g.PrincipalName,
+					"permission": g.Permission, "status": g.Status, "granted_by": g.GrantedBy, "created_at": g.CreatedAt,
+				})
+			}
+			entry["grants"] = gs
+		}
+		out.Shares = append(out.Shares, entry)
 	}
 	received, err := sharing.ListGrantsOfUser(ctx, conn, userID)
 	if err != nil {
@@ -152,21 +205,8 @@ func (s *Service) Export(ctx context.Context, userID uuid.UUID) (Export, error) 
 			"expires_at": g.ExpiresAt,
 		})
 	}
-	entries, err := q.ListAuditAboutUser(ctx, &userID)
-	if err != nil {
-		return Export{}, err
-	}
-	for _, a := range entries {
-		var details any
-		if len(a.Details) > 0 {
-			_ = json.Unmarshal(a.Details, &details)
-		}
-		out.AuditLog = append(out.AuditLog, map[string]any{
-			"id": a.ID, "at": a.At, "actor_id": a.ActorID, "action": a.Action,
-			"target_type": a.TargetType, "target_id": a.TargetID, "details": details,
-		})
-	}
-	// Record that the export happened (the entry shows up in the next export).
+	// Record that the export happened; the audit log, streamed after the
+	// rest by EachAuditEntry, already includes this entry.
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return audit.Record(ctx, tx, userID, "account.export", "user", userID.String(), nil)
 	})
@@ -240,7 +280,8 @@ type Deletion struct {
 //
 // The account row is anonymised at once, the vaults enter the retention
 // period (the purge job removes them afterwards), memberships, received
-// grants, pending uploads and ready exports are removed, and the grants the
+// grants and ready exports are removed, pending uploads expire (the uploads
+// job deletes them with their chunks), and the grants the
 // account gave as a manager on other owners' vaults are re-attributed to the
 // vault owner, so their recipients keep access (ADR-0041); each such share is
 // audited and notified as updated. The caller records its own audit entry
@@ -320,7 +361,9 @@ func DeleteAccount(ctx context.Context, tx pgx.Tx, userID uuid.UUID, check func(
 	if _, err := q.DeleteGrantsGrantedBy(ctx, userID); err != nil {
 		return Deletion{}, err
 	}
-	if _, err := q.DeleteUploadsOfUser(ctx, userID); err != nil {
+	// Expired rather than deleted: the uploads job removes each one with its
+	// chunk objects, which this transaction cannot reach.
+	if _, err := q.ExpireUploadsOfUser(ctx, userID); err != nil {
 		return Deletion{}, err
 	}
 	if _, err := q.ExpireExportsOfUser(ctx, userID); err != nil {

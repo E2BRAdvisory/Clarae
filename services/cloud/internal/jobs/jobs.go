@@ -7,6 +7,7 @@
 package jobs
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"memobrain/services/cloud/internal/revisions"
 	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/storage"
+	"memobrain/services/cloud/internal/vaults"
 )
 
 // Runner schedules the jobs.
@@ -39,6 +41,7 @@ type Runner struct {
 	now       func() time.Time
 
 	exports ExportWorker
+	kc      IdentityDisabler // nil: the account purge cannot disable Keycloak accounts
 
 	// Intervals (zero values use the defaults).
 	GCInterval          time.Duration
@@ -51,6 +54,10 @@ type Runner struct {
 	// 30 s and 5 s; a negative Stagger starts every loop together).
 	FirstRunDelay time.Duration
 	Stagger       time.Duration
+
+	// PurgeBatch is the page size of the vault and tombstone purges (zero:
+	// maintenanceBatch); tests lower it to cross page boundaries.
+	PurgeBatch int
 
 	// HeartbeatInterval is how often the scheduler records that it is alive
 	// (zero value: DefaultHeartbeat); see LastTick.
@@ -119,28 +126,67 @@ func (r *Runner) setting(ctx context.Context, key string, def int) int {
 // transactions) never takes a connection from the main pool the job works on.
 // When both came from the same pool, loops starting together could take every
 // connection for their locks and then wait forever for one to work with.
+//
+// A lock that cannot be taken because of an error (not because another
+// replica holds it) counts as a failed run, so a broken lock connection shows
+// up in the logs and the job metrics instead of silently stopping the job. A
+// run interrupted by the end of ctx is not recorded at all: it is neither a
+// failure nor a success that would refresh the job's last success.
 func (r *Runner) withLock(ctx context.Context, locks *pgxpool.Pool, key int64, name string, fn func(context.Context) error) {
 	conn, err := locks.Acquire(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
+			observability.JobRun(name, 0, err)
 			r.log.Error().Err(err).Str("job", name).Msg("job: acquire lock connection")
 		}
 		return
 	}
 	defer conn.Release()
 	var got bool
-	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&got); err != nil || !got {
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&got); err != nil {
+		if ctx.Err() == nil {
+			observability.JobRun(name, 0, err)
+			r.log.Warn().Err(err).Str("job", name).Msg("job: take the advisory lock")
+		}
 		return
+	}
+	if !got {
+		return // another replica runs it
 	}
 	defer func() { _, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", key) }()
 	start := time.Now()
-	if err := fn(ctx); err != nil && ctx.Err() == nil {
+	err = fn(ctx)
+	switch runOutcome(err, ctx.Err()) {
+	case runFailed:
 		observability.JobRun(name, time.Since(start), err)
 		r.log.Error().Err(err).Str("job", name).Msg("job failed")
-		return
+	case runInterrupted:
+		r.log.Debug().Err(err).Str("job", name).Dur("took", time.Since(start)).Msg("job interrupted")
+	default:
+		observability.JobRun(name, time.Since(start), nil)
+		r.log.Debug().Str("job", name).Dur("took", time.Since(start)).Msg("job done")
 	}
-	observability.JobRun(name, time.Since(start), nil)
-	r.log.Debug().Str("job", name).Dur("took", time.Since(start)).Msg("job done")
+}
+
+// Outcomes of a job run (runOutcome).
+const (
+	runSucceeded = iota
+	runFailed
+	runInterrupted
+)
+
+// runOutcome classifies a run from the error of the job and of its context:
+// once the context has ended, neither the error nor its absence says
+// anything about the job's health.
+func runOutcome(err, ctxErr error) int {
+	switch {
+	case ctxErr != nil:
+		return runInterrupted
+	case err != nil:
+		return runFailed
+	default:
+		return runSucceeded
+	}
 }
 
 // openLocks opens the pool of the advisory locks (see withLock): the main
@@ -162,7 +208,7 @@ func (r *Runner) Run(ctx context.Context) {
 		run   func(context.Context) error
 	}{
 		{"blob-gc", r.GCInterval, time.Hour, lockGC, func(c context.Context) error { _, err := r.CollectBlobs(c); return err }},
-		{"uploads", r.UploadsInterval, 15 * time.Minute, lockUploads, func(c context.Context) error { _, err := r.blobs.CleanupExpired(c); return err }},
+		{"uploads", r.UploadsInterval, 15 * time.Minute, lockUploads, r.CleanupUploads},
 		{"retention", r.RetentionInterval, 6 * time.Hour, lockRetention, func(c context.Context) error { _, err := r.PruneRevisions(c); return err }},
 		{"maintenance", r.MaintenanceInterval, 24 * time.Hour, lockMaintenance, r.Maintain},
 	}
@@ -242,72 +288,125 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 }
 
+// gcBatch is the page size of the blob garbage collector.
+const gcBatch = 500
+
+// objectDeleteTimeout bounds the deletion of the object of a collected blob,
+// which goes on when the run is stopped (see collectBlob).
+const objectDeleteTimeout = 30 * time.Second
+
 // CollectBlobs deletes blobs that no revision references and that stayed
 // unreferenced for the grace period (default 24 h).
 //
-// Each blob goes in its own transaction: the guarded row delete first, then
-// the object, then the commit. The row lock orders the collector against a
-// concurrent commit, which locks the blob FOR SHARE before referencing it:
-// either the commit wins and the guard keeps the row (and the object), or the
-// collector wins and the commit finds no blob and answers BLOB_MISSING. If
-// the object delete fails the row is restored by the rollback and the blob is
-// retried on the next run.
+// Each blob goes in two steps. First the guarded row delete, in a transaction
+// of its own: the row lock orders the collector against a concurrent commit,
+// which locks the blob FOR KEY SHARE before referencing it, and against an
+// upload linking it, which locks it the same way and restarts its grace
+// period. Either they win and the guard keeps the row (and the object), or
+// the collector wins and the commit finds no blob (BLOB_MISSING) while the
+// upload publishes it again. Then, only once that delete is committed, the
+// object, under the per-hash lock an upload publishes a row under
+// (blobs.LockObject) and only if none did meanwhile. A failure between the
+// two steps leaves an orphan object, harmless garbage that the next upload of
+// the same content overwrites; the opposite order left a row without its
+// object when the commit failed after the object was gone.
+//
+// The candidates are walked in keyset order: a blob that cannot be collected
+// is logged, counted (memobrain_jobs_item_failures_total) and skipped, and the
+// run reports the failures at the end instead of stopping at the first one.
 func (r *Runner) CollectBlobs(ctx context.Context) (int, error) {
 	grace := time.Duration(r.setting(ctx, "blobs.gc_grace_hours", 24)) * time.Hour
-	cutoff := ptrTime(r.now().Add(-grace))
-	total := 0
+	cutoff := r.now().Add(-grace)
+	q := jobsdb.New(r.db.Pool)
+	total, failed := 0, 0
+	var errs []error
+	report := func(err error) error {
+		if failed > 0 {
+			err = errors.Join(err, fmt.Errorf("%d blobs not collected: %w", failed, errors.Join(errs...)))
+		}
+		return err
+	}
+	afterSince, afterHash := time.Time{}, ""
 	for {
-		rows, err := jobsdb.New(r.db.Pool).ListUnreferencedBlobs(ctx, jobsdb.ListUnreferencedBlobsParams{UnreferencedSince: cutoff, Limit: 500})
+		rows, err := q.ListUnreferencedBlobs(ctx, jobsdb.ListUnreferencedBlobsParams{Cutoff: cutoff, AfterSince: afterSince, AfterHash: afterHash, MaxRows: gcBatch})
 		if err != nil {
-			return total, err
+			return total, report(err)
 		}
-		if len(rows) == 0 {
-			return total, nil
-		}
-		collected := 0
 		for _, b := range rows {
-			ok, err := r.collectBlob(ctx, b.Hash, cutoff)
-			if err != nil {
-				return total, err
+			collected, err := r.collectBlob(ctx, b.Hash, cutoff)
+			if collected {
+				total++
 			}
-			if ok {
-				collected++
+			if err == nil {
+				continue
 			}
+			if ctx.Err() != nil {
+				return total, report(ctx.Err())
+			}
+			failed++
+			if len(errs) < 5 {
+				errs = append(errs, err)
+			}
+			observability.JobItemFailed("blob-gc")
+			r.log.Warn().Err(err).Str("blob", b.Hash).Msg("blob gc: blob skipped")
 		}
-		total += collected
-		if collected == 0 {
-			// Every candidate was referenced meanwhile: nothing left to do now.
-			return total, nil
+		if len(rows) < gcBatch {
+			return total, report(nil)
 		}
+		last := rows[len(rows)-1]
+		afterSince, afterHash = last.UnreferencedSince, last.Hash
 	}
 }
 
-// collectBlob deletes one blob, row and object, unless it was referenced
-// since it was listed.
-func (r *Runner) collectBlob(ctx context.Context, hash string, cutoff *time.Time) (bool, error) {
-	deleted := false
-	err := r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		q := jobsdb.New(tx)
-		key, err := q.DeleteCollectableBlob(ctx, jobsdb.DeleteCollectableBlobParams{Hash: hash, UnreferencedSince: cutoff})
+// collectBlob deletes one blob, row then object, unless it was referenced or
+// linked again since it was listed. collected reports that the row is gone;
+// an error with collected set means its object stayed behind.
+func (r *Runner) collectBlob(ctx context.Context, hash string, cutoff time.Time) (collected bool, err error) {
+	var key string
+	err = r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		k, err := jobsdb.New(tx).DeleteCollectableBlob(ctx, jobsdb.DeleteCollectableBlobParams{Hash: hash, UnreferencedSince: &cutoff})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // referenced again (or already collected): keep it
 		}
-		if err != nil {
-			return err
-		}
-		if err := r.store.Delete(ctx, key); err != nil {
-			return fmt.Errorf("delete object %s: %w", key, err)
-		}
-		deleted = true
-		return nil
+		key = k
+		return err
 	})
-	return deleted && err == nil, err
+	if err != nil || key == "" {
+		return false, err
+	}
+	// The row is gone for good: delete the object even when the run is being
+	// stopped (one short step), or it would stay behind.
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), objectDeleteTimeout)
+	defer cancel()
+	err = r.db.WithTx(dctx, func(ctx context.Context, tx pgx.Tx) error {
+		exists, err := blobs.LockObject(ctx, tx, hash)
+		if err != nil || exists {
+			return err // published again meanwhile: the object is the new row's
+		}
+		return r.store.Delete(ctx, key)
+	})
+	if err != nil {
+		return true, fmt.Errorf("delete object %s of a collected blob: %w", key, err)
+	}
+	return true, nil
+}
+
+// CleanupUploads removes the expired upload sessions with their chunks, then
+// the chunk objects no upload row accounts for any more (see
+// blobs.SweepOrphanChunks). The two steps are independent.
+func (r *Runner) CleanupUploads(ctx context.Context) error {
+	_, err := r.blobs.CleanupExpired(ctx)
+	if ctx.Err() != nil {
+		return err
+	}
+	_, serr := r.blobs.SweepOrphanChunks(ctx, r.now())
+	return errors.Join(err, serr)
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
 
-// PruneRevisions applies the retention policy and then removes tombstones
-// whose history is gone.
+// PruneRevisions applies the retention policy and then purges the expired
+// tombstones (PurgeDeletedFiles).
 func (r *Runner) PruneRevisions(ctx context.Context) (int, error) {
 	p := revisions.RetentionPolicy{
 		FullDays:  r.setting(ctx, "history.retention_days", 30),
@@ -317,23 +416,126 @@ func (r *Runner) PruneRevisions(ctx context.Context) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	// Set-based, in bounded batches across every vault: a batch skips the
-	// rows a commit holds instead of waiting for them.
+	_, err = r.PurgeDeletedFiles(ctx)
+	return n, err
+}
+
+// PurgeDeletedFiles removes the tombstones of files deleted longer ago than
+// both the daily history (history.daily_retention_days) and the changelog
+// window (sync.changelog_window_days), together with their delete revision.
+//
+// Retention never prunes the current revision of a file, and the current
+// revision of a tombstone is its delete: without this step tombstones (and
+// the path of the deleted file, in clear in shared vaults) lived forever.
+// Past both limits the history has nothing older to show and the changelog
+// window no longer serves the delete; like any other pruned structural
+// operation (ADR-0038), the vault's compaction point moves past it, so a
+// cursor from before the delete gets CURSOR_EXPIRED and bootstraps instead of
+// never hearing of the deletion. A tombstone a file share points at stays.
+// A vault that fails is logged and reported, and the purge goes on with the
+// next one, like PurgeDeletedVaults.
+func (r *Runner) PurgeDeletedFiles(ctx context.Context) (int, error) {
+	days := max(r.setting(ctx, "history.daily_retention_days", 90), r.setting(ctx, "sync.changelog_window_days", 90))
+	cutoff := r.now().AddDate(0, 0, -days)
+	q, batch := jobsdb.New(r.db.Pool), r.purgeBatch()
+	total := 0
+	var errs []error
+	var after jobsdb.ListExpiredTombstonesRow // keyset (vault, id): the zero value sorts first
 	for {
-		deleted, err := jobsdb.New(r.db.Pool).PurgeDeletedFilesBatch(ctx, maintenanceBatch)
+		rows, err := q.ListExpiredTombstones(ctx, jobsdb.ListExpiredTombstonesParams{
+			AfterVault: after.VaultID, AfterID: after.ID, Cutoff: cutoff, MaxRows: batch,
+		})
 		if err != nil {
-			return n, err
+			return total, errors.Join(append(errs, err)...)
 		}
-		if deleted < maintenanceBatch || ctx.Err() != nil {
-			return n, ctx.Err()
+		// The page is ordered by vault: one short transaction per vault.
+		for start := 0; start < len(rows); {
+			end := start + 1
+			for end < len(rows) && rows[end].VaultID == rows[start].VaultID {
+				end++
+			}
+			ids := make([]uuid.UUID, 0, end-start)
+			for _, t := range rows[start:end] {
+				ids = append(ids, t.ID)
+			}
+			n, err := r.purgeTombstones(ctx, rows[start].VaultID, ids, cutoff)
+			if ctx.Err() != nil {
+				return total, ctx.Err()
+			}
+			if err != nil {
+				r.log.Error().Err(err).Str("vault", rows[start].VaultID.String()).Msg("purge of expired tombstones failed")
+				errs = append(errs, fmt.Errorf("vault %s: %w", rows[start].VaultID, err))
+			}
+			total += n
+			start = end
 		}
+		if len(rows) < int(batch) || ctx.Err() != nil {
+			return total, cmp.Or(ctx.Err(), errors.Join(errs...))
+		}
+		after = rows[len(rows)-1]
 	}
+}
+
+// purgeTombstones deletes the candidates of one vault that are still expired
+// tombstones. Locks are taken in the order of a commit: the vault row, the
+// file rows, then the blob rows of the references the cascade releases.
+func (r *Runner) purgeTombstones(ctx context.Context, vaultID uuid.UUID, ids []uuid.UUID, cutoff time.Time) (int, error) {
+	n := 0
+	err := r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := vaults.LockVault(ctx, tx, vaultID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil // the vault was purged meanwhile
+			}
+			return err
+		}
+		q := jobsdb.New(tx)
+		locked, err := q.LockExpiredTombstones(ctx, jobsdb.LockExpiredTombstonesParams{VaultID: vaultID, Ids: ids, Cutoff: cutoff})
+		if err != nil || len(locked) == 0 {
+			return err
+		}
+		// Retention normally left only the delete revision, but whatever
+		// history is still there goes with the file: release its references.
+		refs, err := q.ListFileBlobRefs(ctx, locked)
+		if err != nil {
+			return err
+		}
+		seq, err := q.DeleteTombstones(ctx, locked)
+		if err != nil {
+			return err
+		}
+		if seq > 0 {
+			if err := vaults.AdvanceCompaction(ctx, tx, vaults.AdvanceCompactionParams{ID: vaultID, Seq: seq}); err != nil {
+				return err
+			}
+		}
+		hashes := make([]string, len(refs))
+		deltas := make([]int32, len(refs))
+		for i, ref := range refs {
+			hashes[i], deltas[i] = ref.Hash, -ref.Refs
+		}
+		if err := blobs.AddRefs(ctx, tx, hashes, deltas); err != nil {
+			return err
+		}
+		n = len(locked)
+		return nil
+	})
+	if err != nil {
+		return 0, err // rolled back, commit included
+	}
+	return n, nil
 }
 
 // maintenanceBatch is the number of rows (vaults, blobs, tombstones) one
 // maintenance statement handles: the jobs walk the tables in keyset pages
 // instead of one round trip per vault or one statement over everything.
 const maintenanceBatch = 500
+
+func (r *Runner) purgeBatch() int32 {
+	if r.PurgeBatch > 0 {
+		return int32(r.PurgeBatch) //nolint:gosec // a page size
+	}
+	return maintenanceBatch
+}
 
 // Maintain runs the daily jobs: changelog compaction, purge of deleted
 // vaults and accounts, reconciliation of counters and the storage snapshot.
@@ -403,52 +605,135 @@ func (r *Runner) CompactChangelogs(ctx context.Context) error {
 	}
 }
 
+// restoreSkew is how long after its retention a deleted vault is purged.
+// Restore checks the retention with the clock of the API and the purge with
+// the one of the worker: the margin keeps a restore that a slightly late API
+// clock still accepts from landing in the middle of a purge, which deletes in
+// many transactions and cannot be undone half way.
+const restoreSkew = time.Hour
+
 // PurgeDeletedVaults permanently removes vaults deleted longer ago than
-// vaults.deleted_retention_days, releasing blob references and quota.
+// vaults.deleted_retention_days, releasing blob references and quota. A vault
+// that fails is logged and reported, and the purge goes on with the next one:
+// a deadlock victim or a broken row must not hold back every other vault.
 func (r *Runner) PurgeDeletedVaults(ctx context.Context) (int, error) {
 	retention := time.Duration(r.setting(ctx, "vaults.deleted_retention_days", 30)) * 24 * time.Hour
-	q := jobsdb.New(r.db.Pool)
-	ids, err := q.ListDeletedVaultsBefore(ctx, ptrTime(r.now().Add(-retention)))
+	deletedBefore := r.now().Add(-retention - restoreSkew)
+	ids, err := jobsdb.New(r.db.Pool).ListDeletedVaultsBefore(ctx, &deletedBefore)
 	if err != nil {
 		return 0, err
 	}
+	purged := 0
+	var errs []error
 	for _, id := range ids {
-		if err := r.purgeVault(ctx, id); err != nil {
-			return 0, err
+		gone, err := r.purgeVault(ctx, id, &deletedBefore)
+		if ctx.Err() != nil {
+			return purged, ctx.Err()
+		}
+		if err != nil {
+			r.log.Error().Err(err).Str("vault", id.String()).Msg("purge of a deleted vault failed")
+			errs = append(errs, fmt.Errorf("vault %s: %w", id, err))
+			continue
+		}
+		if gone {
+			purged++
 		}
 	}
-	return len(ids), nil
+	return purged, errors.Join(errs...)
 }
 
-func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		q := jobsdb.New(tx)
-		v, err := q.GetVaultForUpdate(ctx, id)
-		if err != nil {
-			return err
-		}
-		hashes, err := q.ListRevisionBlobs(ctx, id)
-		if err != nil {
-			return err
-		}
-		count := map[string]int32{}
-		for _, h := range hashes {
-			if h != nil {
-				count[*h]++
+// errPurgeBusy stops the purge of a vault whose remaining revisions another
+// transaction holds (retention deleting them): the next run continues.
+var errPurgeBusy = errors.New("the remaining revisions are held by another transaction")
+
+// purgeVault deletes a vault and everything in it in short transactions: its
+// revisions one page at a time with the blob references they held, then its
+// files, and last the vault row (with what cascades from it: shares, uploads,
+// links to blobs, key envelopes) and the quota it held. Every transaction
+// locks the vault row first and, when deletedBefore is set, checks that the
+// vault is still deleted and past it: a vault restored meanwhile is left
+// alone. The account purge passes nil, its own retention governs. It reports
+// whether this call removed the vault.
+func (r *Runner) purgeVault(ctx context.Context, id uuid.UUID, deletedBefore *time.Time) (bool, error) {
+	pages, batch := 0, r.purgeBatch()
+	for {
+		var gone, stop bool
+		var chunks []string
+		err := r.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			q := jobsdb.New(tx)
+			v, err := q.GetVaultForUpdate(ctx, id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				stop = true // purged meanwhile
+				return nil
 			}
-		}
-		for h, n := range count {
-			if err := blobs.AddRef(ctx, tx, h, -n); err != nil {
+			if err != nil {
 				return err
 			}
-		}
-		if v.TotalBytes > 0 {
-			if err := quota.Release(ctx, tx, v.OwnerID, v.TotalBytes); err != nil {
+			if deletedBefore != nil && (v.DeletedAt == nil || !v.DeletedAt.Before(*deletedBefore)) {
+				stop = true
+				if pages > 0 {
+					r.log.Warn().Str("vault", id.String()).Int("pages", pages).Msg("vault restored during its purge")
+				}
+				return nil
+			}
+			// Revisions first, a page per transaction. The blob rows are
+			// locked in hash order after the vault row, like a commit does.
+			refs, err := revisions.DeleteVaultRevisionsPage(ctx, tx, id, batch)
+			if err != nil {
 				return err
 			}
+			if len(refs) > 0 {
+				hashes := make([]string, 0, len(refs))
+				deltas := make([]int32, 0, len(refs))
+				for _, ref := range refs {
+					if ref.BlobHash != nil {
+						hashes = append(hashes, *ref.BlobHash)
+						deltas = append(deltas, -ref.Refs)
+					}
+				}
+				return blobs.AddRefs(ctx, tx, hashes, deltas)
+			}
+			// Nothing deleted: none left, or what is left is held elsewhere.
+			if left, err := q.VaultHasRevisions(ctx, id); err != nil || left {
+				return cmp.Or(err, errPurgeBusy)
+			}
+			if n, err := q.DeleteVaultFilesPage(ctx, jobsdb.DeleteVaultFilesPageParams{VaultID: id, MaxRows: batch}); err != nil || n > 0 {
+				return err
+			}
+			// Last, the vault row. The quota is released after the vault row
+			// and before anything else, in the order of a commit.
+			if v.TotalBytes > 0 {
+				if err := quota.Release(ctx, tx, v.OwnerID, v.TotalBytes); err != nil {
+					return err
+				}
+			}
+			// The uploads in progress go with the vault row; their chunk
+			// objects are deleted once that is committed (best effort:
+			// SweepOrphanChunks takes what is left).
+			if chunks, err = blobs.UploadChunksOfVault(ctx, tx, id); err != nil {
+				return err
+			}
+			if err := q.DeleteVault(ctx, id); err != nil {
+				return err
+			}
+			gone = true
+			return nil
+		})
+		if errors.Is(err, errPurgeBusy) {
+			r.log.Info().Err(err).Str("vault", id.String()).Msg("vault purge postponed to the next run")
+			return false, nil
 		}
-		return q.DeleteVault(ctx, id)
-	})
+		if err != nil || gone || stop {
+			for _, k := range chunks {
+				if err != nil || !gone {
+					break // rolled back: the uploads are still there
+				}
+				_ = r.store.Delete(context.WithoutCancel(ctx), k)
+			}
+			return gone, err
+		}
+		pages++
+	}
 }
 
 // ReconcileUsage recomputes per-vault and per-user counters from the files

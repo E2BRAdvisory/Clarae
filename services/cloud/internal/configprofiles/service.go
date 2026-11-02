@@ -378,8 +378,17 @@ func (s *Service) List(ctx context.Context) ([]configprofilesdb.ConfigProfile, e
 
 // Assignment ties a profile to a group with a priority (higher wins).
 type Assignment struct {
-	ProfileID uuid.UUID
-	Priority  int32
+	ProfileID uuid.UUID `json:"profile_id"`
+	Priority  int32     `json:"priority"`
+}
+
+// assignmentsAudit is the details of config.assignments.set: an object, as
+// the audit console expects of every entry, listing the new assignments.
+func assignmentsAudit(as []Assignment) map[string]any {
+	if as == nil {
+		as = []Assignment{}
+	}
+	return map[string]any{"assignments": as}
 }
 
 // SetGroupAssignments replaces the profiles assigned to a group.
@@ -404,7 +413,7 @@ func (s *Service) SetGroupAssignments(ctx context.Context, actor, groupID uuid.U
 				return err
 			}
 		}
-		if err := audit.Record(ctx, tx, actor, "config.assignments.set", "group", groupID.String(), as); err != nil {
+		if err := audit.Record(ctx, tx, actor, "config.assignments.set", "group", groupID.String(), assignmentsAudit(as)); err != nil {
 			return err
 		}
 		return s.Changed(ctx, tx)

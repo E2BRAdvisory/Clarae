@@ -15,7 +15,7 @@ import (
 const claimExportJob = `-- name: ClaimExportJob :one
 UPDATE export_jobs SET status = 'running', expires_at = $1::timestamptz
 WHERE id = (SELECT j.id FROM export_jobs j WHERE j.status = 'queued' ORDER BY j.created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
-RETURNING id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at
+RETURNING id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at, source_seq
 `
 
 // While a job runs, expires_at is the worker's lease (renewed by RenewExportLease):
@@ -34,6 +34,7 @@ func (q *Queries) ClaimExportJob(ctx context.Context, leaseUntil time.Time) (Exp
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.ExpiresAt,
+		&i.SourceSeq,
 	)
 	return i, err
 }
@@ -51,7 +52,7 @@ func (q *Queries) CountActiveExportJobsOfUser(ctx context.Context, requestedBy u
 
 const createExportJob = `-- name: CreateExportJob :one
 
-INSERT INTO export_jobs (id, vault_id, requested_by) VALUES ($1, $2, $3) RETURNING id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at
+INSERT INTO export_jobs (id, vault_id, requested_by) VALUES ($1, $2, $3) RETURNING id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at, source_seq
 `
 
 type CreateExportJobParams struct {
@@ -75,6 +76,7 @@ func (q *Queries) CreateExportJob(ctx context.Context, arg CreateExportJobParams
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.ExpiresAt,
+		&i.SourceSeq,
 	)
 	return i, err
 }
@@ -108,8 +110,9 @@ func (q *Queries) ExpireExportJobs(ctx context.Context, now time.Time) ([]Expire
 	return items, nil
 }
 
-const failExportJob = `-- name: FailExportJob :exec
-UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now(), expires_at = NULL WHERE id = $1
+const failExportJob = `-- name: FailExportJob :execrows
+UPDATE export_jobs SET status = 'failed', error = $2, finished_at = now(), expires_at = NULL
+WHERE id = $1 AND status = 'running'
 `
 
 type FailExportJobParams struct {
@@ -117,34 +120,45 @@ type FailExportJobParams struct {
 	Error *string
 }
 
-func (q *Queries) FailExportJob(ctx context.Context, arg FailExportJobParams) error {
-	_, err := q.db.Exec(ctx, failExportJob, arg.ID, arg.Error)
-	return err
+func (q *Queries) FailExportJob(ctx context.Context, arg FailExportJobParams) (int64, error) {
+	result, err := q.db.Exec(ctx, failExportJob, arg.ID, arg.Error)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const finishExportJob = `-- name: FinishExportJob :exec
-UPDATE export_jobs SET status = 'ready', size = $2, object_key = $3, finished_at = now(), expires_at = $4 WHERE id = $1
+const finishExportJob = `-- name: FinishExportJob :execrows
+UPDATE export_jobs SET status = 'ready', size = $2, object_key = $3, source_seq = $4, finished_at = now(), expires_at = $5
+WHERE id = $1 AND status = 'running'
 `
 
 type FinishExportJobParams struct {
 	ID        uuid.UUID
 	Size      *int64
 	ObjectKey *string
+	SourceSeq *int64
 	ExpiresAt *time.Time
 }
 
-func (q *Queries) FinishExportJob(ctx context.Context, arg FinishExportJobParams) error {
-	_, err := q.db.Exec(ctx, finishExportJob,
+// Only a job still running: one cancelled meanwhile (account deletion) stays
+// failed, and the caller deletes the archive it uploaded.
+func (q *Queries) FinishExportJob(ctx context.Context, arg FinishExportJobParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishExportJob,
 		arg.ID,
 		arg.Size,
 		arg.ObjectKey,
+		arg.SourceSeq,
 		arg.ExpiresAt,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getActiveExportJobOfVault = `-- name: GetActiveExportJobOfVault :one
-SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at FROM export_jobs WHERE vault_id = $1 AND status IN ('queued', 'running')
+SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at, source_seq FROM export_jobs WHERE vault_id = $1 AND status IN ('queued', 'running')
 ORDER BY created_at LIMIT 1
 `
 
@@ -163,12 +177,13 @@ func (q *Queries) GetActiveExportJobOfVault(ctx context.Context, vaultID uuid.UU
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.ExpiresAt,
+		&i.SourceSeq,
 	)
 	return i, err
 }
 
 const getExportJob = `-- name: GetExportJob :one
-SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at FROM export_jobs WHERE id = $1 AND vault_id = $2
+SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at, source_seq FROM export_jobs WHERE id = $1 AND vault_id = $2
 `
 
 type GetExportJobParams struct {
@@ -190,6 +205,41 @@ func (q *Queries) GetExportJob(ctx context.Context, arg GetExportJobParams) (Exp
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.ExpiresAt,
+		&i.SourceSeq,
+	)
+	return i, err
+}
+
+const getReusableExportJobOfVault = `-- name: GetReusableExportJobOfVault :one
+SELECT id, vault_id, requested_by, status, size, object_key, error, created_at, finished_at, expires_at, source_seq FROM export_jobs
+WHERE vault_id = $1 AND status = 'ready' AND source_seq = $2::bigint
+  AND expires_at > $3::timestamptz
+ORDER BY created_at DESC LIMIT 1
+`
+
+type GetReusableExportJobOfVaultParams struct {
+	VaultID    uuid.UUID
+	LastSeq    int64
+	ValidAfter time.Time
+}
+
+// The newest ready archive of a vault built at its current changelog position
+// and still valid for a while: a new request gets it instead of a copy.
+func (q *Queries) GetReusableExportJobOfVault(ctx context.Context, arg GetReusableExportJobOfVaultParams) (ExportJob, error) {
+	row := q.db.QueryRow(ctx, getReusableExportJobOfVault, arg.VaultID, arg.LastSeq, arg.ValidAfter)
+	var i ExportJob
+	err := row.Scan(
+		&i.ID,
+		&i.VaultID,
+		&i.RequestedBy,
+		&i.Status,
+		&i.Size,
+		&i.ObjectKey,
+		&i.Error,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.ExpiresAt,
+		&i.SourceSeq,
 	)
 	return i, err
 }
@@ -202,6 +252,19 @@ SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
 func (q *Queries) LockExportRequests(ctx context.Context, key string) error {
 	_, err := q.db.Exec(ctx, lockExportRequests, key)
 	return err
+}
+
+const releaseExportJob = `-- name: ReleaseExportJob :execrows
+UPDATE export_jobs SET status = 'queued', expires_at = NULL WHERE id = $1 AND status = 'running'
+`
+
+// A build interrupted by the shutdown of its worker goes back to the queue.
+func (q *Queries) ReleaseExportJob(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseExportJob, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const renewExportLease = `-- name: RenewExportLease :exec
@@ -233,6 +296,27 @@ type RequeueStaleExportJobsParams struct {
 // leases existed have none: they fall back to their age.
 func (q *Queries) RequeueStaleExportJobs(ctx context.Context, arg RequeueStaleExportJobsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, requeueStaleExportJobs, arg.Now, arg.Before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const supersedeReadyExportJobsOfVault = `-- name: SupersedeReadyExportJobsOfVault :execrows
+UPDATE export_jobs SET expires_at = LEAST(expires_at, $2::timestamptz)
+WHERE vault_id = $1 AND status = 'ready' AND id <> $3::uuid
+`
+
+type SupersedeReadyExportJobsOfVaultParams struct {
+	VaultID    uuid.UUID
+	ValidUntil time.Time
+	Keep       uuid.UUID
+}
+
+// A new archive of a vault (keep) makes the older ones obsolete: they stay
+// downloadable at most until valid_until, then Expire deletes them.
+func (q *Queries) SupersedeReadyExportJobsOfVault(ctx context.Context, arg SupersedeReadyExportJobsOfVaultParams) (int64, error) {
+	result, err := q.db.Exec(ctx, supersedeReadyExportJobsOfVault, arg.VaultID, arg.ValidUntil, arg.Keep)
 	if err != nil {
 		return 0, err
 	}

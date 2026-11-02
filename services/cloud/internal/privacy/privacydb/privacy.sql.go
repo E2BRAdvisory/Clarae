@@ -77,22 +77,18 @@ func (q *Queries) DeleteMembershipsOfUser(ctx context.Context, userID uuid.UUID)
 	return result.RowsAffected(), nil
 }
 
-const deleteUploadsOfUser = `-- name: DeleteUploadsOfUser :execrows
-DELETE FROM uploads WHERE user_id = $1
-`
-
-func (q *Queries) DeleteUploadsOfUser(ctx context.Context, userID uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteUploadsOfUser, userID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const expireExportsOfUser = `-- name: ExpireExportsOfUser :execrows
-UPDATE export_jobs SET expires_at = now() WHERE requested_by = $1 AND status = 'ready'
+UPDATE export_jobs SET
+  status      = CASE WHEN status = 'ready' THEN 'ready' ELSE 'failed' END,
+  error       = CASE WHEN status = 'ready' THEN error ELSE 'the account was deleted' END,
+  finished_at = COALESCE(finished_at, now()),
+  expires_at  = CASE WHEN status = 'ready' THEN now() ELSE NULL END
+WHERE requested_by = $1 AND status IN ('queued', 'running', 'ready')
 `
 
+// Ready archives expire at once (the export job deletes them); queued and
+// running jobs fail, so no archive is built after the deletion (a running
+// build finds its job no longer running and deletes what it uploaded).
 func (q *Queries) ExpireExportsOfUser(ctx context.Context, requestedBy uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, expireExportsOfUser, requestedBy)
 	if err != nil {
@@ -101,8 +97,24 @@ func (q *Queries) ExpireExportsOfUser(ctx context.Context, requestedBy uuid.UUID
 	return result.RowsAffected(), nil
 }
 
+const expireUploadsOfUser = `-- name: ExpireUploadsOfUser :execrows
+UPDATE uploads SET expires_at = now() - interval '1 second'
+WHERE user_id = $1 AND expires_at >= now()
+`
+
+// The uploads of a deleted account end at once; the uploads job deletes their
+// chunk objects together with the rows (deleting only the rows here would
+// leave the chunks in the object store for ever).
+func (q *Queries) ExpireUploadsOfUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, expireUploadsOfUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listAllDevicesOfUser = `-- name: ListAllDevicesOfUser :many
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at FROM devices WHERE user_id = $1 ORDER BY created_at
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices WHERE user_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListAllDevicesOfUser(ctx context.Context, userID uuid.UUID) ([]Device, error) {
@@ -123,6 +135,7 @@ func (q *Queries) ListAllDevicesOfUser(ctx context.Context, userID uuid.UUID) ([
 			&i.CreatedAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}
@@ -136,9 +149,17 @@ func (q *Queries) ListAllDevicesOfUser(ctx context.Context, userID uuid.UUID) ([
 
 const listAuditAboutUser = `-- name: ListAuditAboutUser :many
 SELECT id, at, actor_id, action, target_type, target_id, details
-FROM audit_log WHERE actor_id = $1 OR (target_type = 'user' AND target_id = $1::text)
-ORDER BY id LIMIT 10000
+FROM audit_log
+WHERE (actor_id = $1::uuid OR (target_type = 'user' AND target_id = $1::uuid::text))
+  AND id > $2::bigint
+ORDER BY id LIMIT $3::int
 `
+
+type ListAuditAboutUserParams struct {
+	UserID   uuid.UUID
+	AfterID  int64
+	PageSize int32
+}
 
 type ListAuditAboutUserRow struct {
 	ID         int64
@@ -150,8 +171,10 @@ type ListAuditAboutUserRow struct {
 	Details    []byte
 }
 
-func (q *Queries) ListAuditAboutUser(ctx context.Context, actorID *uuid.UUID) ([]ListAuditAboutUserRow, error) {
-	rows, err := q.db.Query(ctx, listAuditAboutUser, actorID)
+// One page of the entries about a user, after the id after_id (keyset
+// pagination): the export reads them all, page by page.
+func (q *Queries) ListAuditAboutUser(ctx context.Context, arg ListAuditAboutUserParams) ([]ListAuditAboutUserRow, error) {
+	rows, err := q.db.Query(ctx, listAuditAboutUser, arg.UserID, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
