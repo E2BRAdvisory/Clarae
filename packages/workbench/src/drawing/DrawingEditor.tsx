@@ -216,10 +216,14 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   );
   useEffect(() => () => useDrawingSlides.getState().clear(path), [path]);
   // The frames of a freshly opened drawing (Excalidraw reports no change for the loaded scene).
+  // The API can be handed over before the initial scene is applied: then the loaded file's
+  // elements are published, otherwise the Slideshow tab would stay empty until the first edit.
   useEffect(() => {
-    if (excalidraw)
-      useDrawingSlides.getState().publish(path, slidesOf(excalidraw.getSceneElements()));
-  }, [excalidraw, path]);
+    if (!excalidraw) return;
+    const live = excalidraw.getSceneElements();
+    const loaded = 'scene' in parsed ? (parsed.scene.elements as unknown as SceneElement[]) : [];
+    useDrawingSlides.getState().publish(path, slidesOf(live.length > 0 ? live : loaded));
+  }, [excalidraw, path, parsed]);
 
   const onLibraryChange = useCallback(
     (items: LibraryItems) => {
