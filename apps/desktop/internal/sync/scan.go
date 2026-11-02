@@ -98,11 +98,7 @@ func (e *Engine) scan(ctx context.Context) error {
 		case row.State == StateLocalDeleted:
 			// The file is back.
 			row.LocalHash = h
-			if h == prevHash && row.ServerRev > 0 {
-				row.State = StateSynced
-			} else {
-				row.State = StateLocalModify
-			}
+			backFromDeleted(&row, e.cfg.Cipher != nil)
 			row.Attempts, row.LastError = 0, ""
 		case h != prevHash:
 			row.LocalHash = h
@@ -205,6 +201,31 @@ func (e *Engine) scan(ctx context.Context) error {
 	e.lastScan = started
 	e.mu.Unlock()
 	return nil
+}
+
+// backFromDeleted gives a row the scan had marked deleted, whose file is back
+// with content r.LocalHash, the state that tells what is left to send. The
+// content is compared with the server's revision, never with the hash the
+// file had before it vanished: that one may be an edit never sent. A move
+// still to send stays one. In a private vault the server hash is the digest
+// of a ciphertext and proves nothing, so the content is sent again (as
+// Engine.Renamed does).
+func backFromDeleted(r *File, private bool) {
+	same := !private && r.LocalHash == r.ServerHash
+	switch {
+	case r.ServerRev == 0:
+		r.State, r.MovedFrom, r.Dirty = StateLocalNew, "", false
+	case r.Tombstoned:
+		// Deleted on the server meanwhile: the file goes back as a revival
+		// (a modify that carries its path, §3.4.5).
+		r.State, r.MovedFrom, r.Dirty = StateLocalModify, "", false
+	case r.MovedFrom != "":
+		r.State, r.Dirty = StateLocalMoved, !same
+	case same:
+		r.State, r.Dirty = StateSynced, false
+	default:
+		r.State, r.Dirty = StateLocalModify, false
+	}
 }
 
 // racyWindow covers the coarsest file system timestamp we expect (FAT: 2 s).

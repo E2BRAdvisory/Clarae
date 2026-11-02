@@ -42,10 +42,17 @@ type Status struct {
 	Total     int       `json:"total"`
 	Error     string    `json:"error"`
 	Kind      string    `json:"kind"`
+	// Quarantined counts the server entries this device cannot read (an
+	// undecryptable path): they are neither applied nor taken for deletions.
+	Quarantined int `json:"quarantined"`
 }
 
 // ErrLocked means the private vault must be unlocked before it can sync.
 var ErrLocked = errors.New("vault is locked")
+
+// ErrUnlinked means the engine belongs to a link that no longer exists: the
+// vault was disconnected (Manager.Unlink) while something still held it.
+var ErrUnlinked = errors.New("this vault is not connected to the cloud")
 
 // ErrPaused means synchronization is paused for this vault.
 var ErrPaused = errors.New("synchronization is paused")
@@ -103,7 +110,10 @@ type Engine struct {
 	cfg Config
 	log zerolog.Logger
 
-	run stdsync.Mutex // one cycle at a time
+	// run serializes the cycles and the other users of sync_files (Exclusive,
+	// the rename hints). Take it with lockRun and release it with unlockRun:
+	// both apply the queued rename hints (see Renamed).
+	run stdsync.Mutex
 
 	mu     stdsync.Mutex
 	status Status
@@ -132,6 +142,12 @@ type Engine struct {
 	active bool
 	// tmpCleaned: stale atomic-write staging files were removed (once per run, under e.run).
 	tmpCleaned bool
+	// quarantineChecked: the quarantined entries were read again in this run
+	// (retryQuarantine, or a bootstrap; under e.run).
+	quarantineChecked bool
+	// retired is set, under e.run, once the link the engine serves is gone
+	// (Unlink): it never runs a cycle again nor writes sync.db.
+	retired bool
 	// pathV2Pinned and pathStrong cache the vault's enc2 pins (ADR-0042, see
 	// clearPath and writePathV2), read from sync.db once (pathPinLoaded,
 	// under e.run).
@@ -152,7 +168,14 @@ type Engine struct {
 	// scans counts the scans started; wantScan is the scan a SyncNow waits for
 	// (see RequestScan). Both under e.mu.
 	scans, wantScan uint64
+	// renames are the rename hints (Renamed) not applied yet, oldest first
+	// (under e.mu). Renamed never waits for e.run: whoever holds it applies
+	// them at its next safe point (applyRenames).
+	renames []renameHint
 }
+
+// renameHint is a file or folder moved by the user (Renamed).
+type renameHint struct{ from, to string }
 
 // New creates the engine.
 func New(cfg Config) *Engine {
@@ -231,9 +254,12 @@ func (e *Engine) progress(done, total int) {
 // Sync runs reconciliation rounds until nothing is left to do (or the round
 // limit is reached): scan local changes, pull, resolve, push.
 func (e *Engine) Sync(ctx context.Context) (err error) {
-	e.run.Lock()
-	defer e.run.Unlock()
+	e.lockRun(ctx)
+	defer e.unlockRun()
 
+	if e.retired {
+		return ErrUnlinked
+	}
 	if paused, _ := e.cfg.DB.Meta(ctx, MetaPaused); paused == "1" {
 		e.setStatus(func(s *Status) { s.Phase = PhasePaused })
 		return ErrPaused
@@ -246,13 +272,14 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 	defer func() {
 		pending, _ := e.cfg.DB.PendingCount(ctx)
 		conflicts, _ := e.cfg.DB.OpenConflictCount(ctx)
+		quarantined, _ := e.cfg.DB.QuarantineCount(ctx)
 		notice := ""
 		if err == nil {
 			// Not a failure of the cycle (no backoff), but the user must know.
 			notice = e.shareRootNotice(ctx)
 		}
 		e.setStatus(func(s *Status) {
-			s.Pending, s.Conflicts = pending, conflicts
+			s.Pending, s.Conflicts, s.Quarantined = pending, conflicts, quarantined
 			s.Done, s.Total = 0, 0
 			switch {
 			case err == nil && e.wantScan > e.scans:
@@ -290,6 +317,14 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 	}
 	var resolveErr error // files that could not be resolved: reported once the others are pushed
 	for round := 0; round < 6; round++ {
+		// The rename hints that came during the previous steps are applied
+		// between them, never inside one (the bootstrap and the push work on
+		// rows read at their start). So a rename made during a long cycle
+		// keeps its identity: before the scan; before the remote changes are
+		// merged (one that found the old path gone then finds the file at the
+		// new one); before the push (which would otherwise send the delete
+		// plus create that a scan between the move and the hint recorded).
+		e.flushRenames(ctx)
 		if err := e.scan(ctx); err != nil {
 			return fmt.Errorf("scan: %w", err)
 		}
@@ -297,6 +332,7 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 		if err != nil {
 			return fmt.Errorf("pull: %w", err)
 		}
+		e.flushRenames(ctx)
 		resolved, err := e.resolveCandidates(ctx)
 		var failure *resolveFailure
 		switch {
@@ -307,6 +343,7 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 		}
 		pushed := false
 		if !e.cfg.ReadOnly {
+			e.flushRenames(ctx)
 			if pushed, err = e.push(ctx); err != nil {
 				return fmt.Errorf("push: %w", err)
 			}
@@ -341,21 +378,117 @@ func (e *Engine) Active() bool {
 
 // Exclusive runs fn while no synchronization cycle is running; used for
 // operations that edit vault files on behalf of the user (conflict resolution).
+// A retired engine runs nothing (ErrUnlinked).
 func (e *Engine) Exclusive(fn func() error) error {
-	e.run.Lock()
-	defer e.run.Unlock()
+	e.lockRun(context.Background())
+	defer e.unlockRun()
+	if e.retired {
+		return ErrUnlinked
+	}
 	return fn()
+}
+
+// lockRun takes e.run, then applies the rename hints queued while somebody
+// else had it: whoever gets e.run sees the renames made before.
+func (e *Engine) lockRun(ctx context.Context) {
+	e.run.Lock()
+	e.flushRenames(ctx)
+}
+
+// unlockRun releases e.run. A hint queued after the holder's last safe point
+// found e.run taken (Renamed only tries it), so it is applied here, unless
+// somebody got e.run meanwhile: that holder applies it (lockRun, Renamed) or
+// comes back here. Every hint is so applied by the holder it found, or by the
+// first one after it, never left waiting for a later cycle.
+func (e *Engine) unlockRun() {
+	for {
+		e.run.Unlock()
+		if !e.renamesQueued() || !e.run.TryLock() {
+			return
+		}
+		e.flushRenames(context.Background())
+	}
+}
+
+func (e *Engine) renamesQueued() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.renames) > 0
+}
+
+// flushRenames applies the queued rename hints for a holder of e.run that
+// cannot report their failure: it is logged (the rename is done on disk, only
+// the file identity may be lost, as with a hint that never came).
+func (e *Engine) flushRenames(ctx context.Context) {
+	if err := e.applyRenames(ctx); err != nil {
+		e.log.Warn().Err(err).Msg("sync: rename hint failed")
+	}
+}
+
+// applyRenames applies the queued rename hints in the order they came, each
+// in its own transaction (under e.run). A hint that fails is dropped, as a
+// failed hint always was: retrying a database error forever would hold back
+// the ones queued after it. A cancelled cycle still applies them: they record
+// renames already done on disk.
+func (e *Engine) applyRenames(ctx context.Context) error {
+	ctx = context.WithoutCancel(ctx)
+	var errs []error
+	for {
+		e.mu.Lock()
+		if e.retired {
+			// Nothing to keep the identity for: the vault is no longer linked.
+			e.renames = nil
+		}
+		if len(e.renames) == 0 {
+			e.renames = nil
+			e.mu.Unlock()
+			return errors.Join(errs...)
+		}
+		h := e.renames[0]
+		e.renames = e.renames[1:]
+		e.mu.Unlock()
+		if err := e.applyRename(ctx, h.from, h.to); err != nil {
+			errs = append(errs, fmt.Errorf("rename %s to %s: %w", h.from, h.to, err))
+		}
+	}
+}
+
+// retire waits for the running cycle (or Exclusive call) to end, runs reset
+// and makes the engine refuse every later one: whoever still holds it (a
+// drain before a lock, captured before the vault was unlinked) can no longer
+// write the state reset erases. Queued rename hints are dropped.
+func (e *Engine) retire(reset func() error) error {
+	e.lockRun(context.Background())
+	defer e.unlockRun()
+	e.retired = true
+	return reset()
 }
 
 // Renamed tells the engine that a file or folder moved so identity survives
 // even if the move also rewrote content (link updates): without this hint a
 // renamed-and-edited note would look like a delete plus a new file (§3.4.4 A).
-// A scan that ran between the move and the hint may already have recorded the
-// new path as a new file (and the old one as deleted): the two rows are merged
-// back into the original identity. Everything happens in one transaction.
+//
+// It never waits for a running cycle, which may take minutes (the binding that
+// renamed the file waits for this call). The hint is queued; when e.run is
+// free it is applied at once and its error returned, otherwise the holder of
+// e.run applies it at its next safe point (Sync, unlockRun). Hints are applied
+// in the order they came.
 func (e *Engine) Renamed(ctx context.Context, from, to string) error {
-	e.run.Lock()
-	defer e.run.Unlock()
+	e.mu.Lock()
+	e.renames = append(e.renames, renameHint{from: from, to: to})
+	e.mu.Unlock()
+	if !e.run.TryLock() {
+		return nil // taken: its holder applies the hint
+	}
+	defer e.unlockRun()
+	return e.applyRenames(ctx)
+}
+
+// applyRename records one rename in sync_files (under e.run). A scan that ran
+// between the move and the hint may already have recorded the new path as a
+// new file (and the old one as deleted): the two rows are merged back into the
+// original identity. Everything happens in one transaction.
+func (e *Engine) applyRename(ctx context.Context, from, to string) error {
 	return e.cfg.DB.WithTx(ctx, func(tx *DB) error {
 		rows, err := tx.Files(ctx)
 		if err != nil {

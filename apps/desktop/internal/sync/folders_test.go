@@ -158,6 +158,16 @@ func (s *folderServer) apply(op syncproto.Op) syncproto.OpResult {
 		s.log(op.FileID, "create", "")
 		return ok(op.FileID)
 	case syncproto.OpModify:
+		if f.deleted {
+			// A modification of a deleted file brings it back, where it says.
+			if op.Path != "" {
+				if s.keyTaken(op.Path, op.FileID) {
+					return reject(op, syncproto.CodePathCollision, op.Path+" is used by another file now")
+				}
+				f.path = op.Path
+			}
+			f.deleted = false
+		}
 		f.rev, f.hash = f.rev+1, op.BlobHash
 		s.log(op.FileID, "modify", "")
 		return ok(op.FileID)
@@ -166,6 +176,9 @@ func (s *folderServer) apply(op syncproto.Op) syncproto.OpResult {
 		s.log(op.FileID, "delete", "")
 		return ok(op.FileID)
 	case syncproto.OpMove:
+		if f.deleted {
+			return reject(op, syncproto.CodeValidationFailed, "file is deleted")
+		}
 		if s.keyTaken(op.Path, op.FileID) {
 			return reject(op, syncproto.CodePathCollision, op.Path+" already exists")
 		}

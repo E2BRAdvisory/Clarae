@@ -334,7 +334,11 @@ describe('ConflictsView', () => {
     await signIn();
     await api.sync.linkNew(vaultId, 'Notes', 'shared', '');
     mock.sync.conflicts.set(vaultId, [conflict]);
-    mock.sync.conflictTexts.set(7, { current: 'row 1\nrow 3 by A\n', ours: 'row 1\nrow 3 by B\n' });
+    mock.sync.conflictTexts.set(7, {
+      current: 'row 1\nrow 3 by A\n',
+      ours: 'row 1\nrow 3 by B\n',
+      currentHash: '',
+    });
     await useSync.getState().refreshConflicts(vaultId);
   });
 

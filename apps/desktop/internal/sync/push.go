@@ -48,7 +48,7 @@ type planned struct {
 // scan measured it: what is read may differ (the file changed since, or the
 // ciphertext is slightly larger), which the batching tolerates.
 func (pl planned) contentEstimate() int {
-	if pl.ready == nil && (pl.row.State == StateLocalNew || pl.row.State == StateLocalModify) {
+	if pl.ready == nil && (pl.row.State == StateLocalNew || pl.row.State == StateLocalModify || (pl.row.State == StateLocalMoved && pl.row.Tombstoned)) {
 		return int(pl.row.LocalSize)
 	}
 	return 0
@@ -243,6 +243,11 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 		kind = "delete"
 	case StateLocalMoved:
 		kind = "move"
+		if row.Tombstoned {
+			// Deleted on the server, which refuses to move a deleted file: the
+			// revival carries the new path (and the content) instead.
+			kind = "modify"
+		}
 	case StateLocalNew:
 		kind = "create"
 	case StateLocalModify:
@@ -470,6 +475,9 @@ func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpRe
 			row.ServerRev, row.BaseRev, row.ServerHash, row.Tombstoned = res.Rev, res.Rev, p.blobHash, false
 			row.LocalHash, row.LocalSize, row.LocalMtime = p.localHash, p.size, p.mtime
 			row.State, row.ConflictOf = StateSynced, ""
+			if p.op.Path != "" {
+				row.MovedFrom, row.Dirty = "", false // a revival puts the file where it is here
+			}
 		}
 		row.Attempts, row.LastError = 0, ""
 		return true, e.cfg.DB.PutFile(ctx, row)

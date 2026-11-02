@@ -438,6 +438,25 @@ func (d *DB) Quarantine(ctx context.Context, fileID string, rev int, reason stri
 	return err
 }
 
+// DeleteQuarantine lifts the quarantine of a file when it was recorded for a
+// revision up to rev (a revision at least as new was applied since). It
+// reports whether there was one.
+func (d *DB) DeleteQuarantine(ctx context.Context, fileID string, rev int) (bool, error) {
+	res, err := d.db.ExecContext(ctx, `DELETE FROM quarantine WHERE file_id = ? AND rev <= ?`, fileID, rev)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// QuarantineCount is the number of server entries this device could not read.
+func (d *DB) QuarantineCount(ctx context.Context) (int, error) {
+	var n int
+	err := d.db.QueryRowContext(ctx, `SELECT count(*) FROM quarantine`).Scan(&n)
+	return n, err
+}
+
 // Quarantined lists the entries that could not be applied.
 func (d *DB) Quarantined(ctx context.Context) ([]Quarantined, error) {
 	rows, err := d.db.QueryContext(ctx, `SELECT file_id, rev, reason, created_at FROM quarantine ORDER BY file_id`)

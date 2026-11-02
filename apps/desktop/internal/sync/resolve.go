@@ -82,7 +82,7 @@ func (e *Engine) resolveCandidates(ctx context.Context) (bool, error) {
 }
 
 func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) error {
-	remote, err := e.fetch(ctx, c.FileID, c.BlobHash)
+	remote, err := e.fetch(ctx, c.FileID, c.BlobHash, c.Size)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -114,9 +115,11 @@ func (e *Engine) writePathV2(ctx context.Context) bool {
 }
 
 // fetch downloads a blob, verifies its digest and decrypts it when needed.
-func (e *Engine) fetch(ctx context.Context, fileID, hash string) ([]byte, error) {
+// size is the blob size the changelog or the tree announced (0 = unknown): a
+// download that goes past it fails before it is all in memory.
+func (e *Engine) fetch(ctx context.Context, fileID, hash string, size int64) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := e.cfg.Remote.Download(ctx, hash, &buf); err != nil {
+	if err := e.cfg.Remote.Download(transport.WithExpectedSize(ctx, size), hash, &buf); err != nil {
 		return nil, err
 	}
 	sum := sha256.Sum256(buf.Bytes())
@@ -306,7 +309,8 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 		}
 		saved()
 		if !ch.HasMore {
-			return applied, nil
+			retried, err := e.retryQuarantine(ctx)
+			return applied || retried, err
 		}
 	}
 }
@@ -321,6 +325,9 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 		return false, nil // already applied (our own echo, or a replay)
 	}
 	if c.Op == "delete" {
+		if row, err = e.liftQuarantine(ctx, row, has, c.FileID, c.Rev); err != nil {
+			return false, err
+		}
 		return e.applyDelete(ctx, row, has, c) // needs no path
 	}
 	path, err := e.clearPath(ctx, c.FileID, c.Path)
@@ -331,6 +338,11 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 			return false, e.lockedErr(err)
 		}
 		return false, e.quarantine(ctx, c.FileID, c.Rev, row, has, err)
+	}
+	// A readable revision supersedes a quarantined older one. Lifted before it
+	// is applied: should that fail, the cursor stays and the change comes again.
+	if row, err = e.liftQuarantine(ctx, row, has, c.FileID, c.Rev); err != nil {
+		return false, err
 	}
 	switch c.Op {
 	case "move":
@@ -361,19 +373,142 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 	}
 }
 
+// quarantinedError is File.LastError of a file whose latest server entry is
+// in quarantine.
+const quarantinedError = "the server version of this file cannot be decrypted"
+
 // quarantine records a server entry whose path cannot be decrypted with the
 // vault key (corrupt or foreign token). It is neither applied nor taken for a
-// deletion; the local file, if any, is left alone and shows the reason.
+// deletion; the local file, if any, is left alone and shows the reason. The
+// entry is lifted when a newer revision of the file is applied, retried once
+// per run of the engine (retryQuarantine) and by every bootstrap.
 func (e *Engine) quarantine(ctx context.Context, fileID string, rev int, row File, has bool, cause error) error {
 	e.log.Error().Err(cause).Str("file_id", fileID).Int("rev", rev).Msg("cannot decrypt a server path: change quarantined")
 	if err := e.cfg.DB.Quarantine(ctx, fileID, rev, "cannot decrypt the server path: "+cause.Error(), e.cfg.Now()); err != nil {
 		return err
 	}
 	if has {
-		row.LastError = "the server version of this file cannot be decrypted"
+		row.LastError = quarantinedError
 		return e.cfg.DB.PutFile(ctx, row)
 	}
 	return nil
+}
+
+// liftQuarantine forgets the quarantine of a file once its revision rev (at
+// least as new as the quarantined one) is being applied, and the error it
+// left on the file's row. It returns the row as saved.
+func (e *Engine) liftQuarantine(ctx context.Context, row File, has bool, fileID string, rev int) (File, error) {
+	if e.cfg.Cipher == nil {
+		return row, nil // only an encrypted path can be unreadable
+	}
+	lifted, err := e.cfg.DB.DeleteQuarantine(ctx, fileID, rev)
+	if err != nil || !lifted || !has || row.LastError != quarantinedError {
+		return row, err
+	}
+	row.LastError = ""
+	return row, e.cfg.DB.PutFile(ctx, row)
+}
+
+// liftApplied is liftQuarantine for a file whose row the caller does not
+// hold (it was just written by the code that applied the revision).
+func (e *Engine) liftApplied(ctx context.Context, fileID string, rev int) error {
+	row, has, err := e.cfg.DB.GetFileByID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	_, err = e.liftQuarantine(ctx, row, has, fileID, rev)
+	return err
+}
+
+// retryQuarantine reads the quarantined entries again from the manifest, once
+// per run of the engine (a newer version of the application may read what an
+// older one could not): the readable ones are applied like in a bootstrap,
+// the ones the server no longer lists are forgotten. It reports whether it
+// changed anything.
+func (e *Engine) retryQuarantine(ctx context.Context) (bool, error) {
+	if e.quarantineChecked || e.cfg.Cipher == nil {
+		return false, nil
+	}
+	qs, err := e.cfg.DB.Quarantined(ctx)
+	if err != nil || len(qs) == 0 {
+		e.quarantineChecked = err == nil
+		return false, err
+	}
+	tree, err := e.cfg.Remote.Tree(ctx)
+	if err != nil {
+		if ctx.Err() != nil || isNetwork(err) {
+			return false, err // offline: the next cycle tries again
+		}
+		// Never a reason to stop synchronizing: the next run tries again.
+		e.log.Warn().Err(err).Msg("sync: cannot read the manifest to retry the quarantined entries")
+		e.quarantineChecked = true
+		return false, nil
+	}
+	rows, err := e.cfg.DB.Files(ctx)
+	if err != nil {
+		return false, err
+	}
+	byID := make(map[string]File, len(rows))
+	byPath := make(map[string]File, len(rows))
+	for _, r := range rows {
+		byID[r.FileID] = r
+		byPath[r.Path] = r
+	}
+	listed := make(map[string]transport.TreeEntry, len(tree.Items))
+	for _, it := range tree.Items {
+		listed[it.FileID] = it
+	}
+	did := false
+	for _, q := range qs {
+		// Read again: applying an earlier entry may have moved this file aside.
+		row, has, err := e.cfg.DB.GetFileByID(ctx, q.FileID)
+		if err != nil {
+			return did, err
+		}
+		if has {
+			byID[q.FileID] = row
+		}
+		it, ok := listed[q.FileID]
+		if !ok {
+			// Gone from the server (its deletion is in the changelog): there
+			// is nothing left to read.
+			if _, err := e.liftQuarantine(ctx, row, has, q.FileID, q.Rev); err != nil {
+				return did, err
+			}
+			continue
+		}
+		p, err := e.clearPath(ctx, it.FileID, it.Path)
+		if err != nil {
+			if e.isLocked(err) {
+				return did, e.lockedErr(err)
+			}
+			if err := e.quarantine(ctx, it.FileID, it.Rev, row, has, err); err != nil {
+				return did, err
+			}
+			continue
+		}
+		// Lifted only once applied: a failure leaves it for the next try.
+		if err := e.reconcileEntry(ctx, bootstrapAuthoritative, remoteFile{it, p}, byID, byPath); err != nil {
+			if ctx.Err() != nil || e.isLocked(err) || isNetwork(err) {
+				return did, e.lockedErr(err)
+			}
+			// E.g. a content that cannot be decrypted either: it stays in
+			// quarantine and the others go on.
+			e.log.Warn().Err(err).Str("file_id", q.FileID).Msg("sync: a quarantined entry still cannot be applied")
+			continue
+		}
+		if err := e.liftApplied(ctx, q.FileID, max(q.Rev, it.Rev)); err != nil {
+			return did, err
+		}
+		did = true
+	}
+	saved, err := e.saveCandidates(ctx, e.cfg.DB)
+	if err != nil {
+		return did, err
+	}
+	saved()
+	e.quarantineChecked = true
+	return did, nil
 }
 
 // relocate moves a local file to the path the server has for it, keeping its
@@ -399,7 +534,7 @@ func (e *Engine) relocate(ctx context.Context, row File, newPath string) (File, 
 }
 
 func (e *Engine) createFromRemote(ctx context.Context, c transport.Change, path string) error {
-	data, err := e.fetch(ctx, c.FileID, c.BlobHash)
+	data, err := e.fetch(ctx, c.FileID, c.BlobHash, c.Size)
 	if err != nil {
 		return err
 	}
@@ -420,7 +555,7 @@ func (e *Engine) createFromRemote(ctx context.Context, c transport.Change, path 
 // asks to keep the local content in the history first (BeforeOverwrite): a
 // bootstrap cannot be sure the server still has it (ADR-0046).
 func (e *Engine) overwriteFromRemote(ctx context.Context, row File, c transport.Change, snapshot bool) (bool, error) {
-	data, err := e.fetch(ctx, c.FileID, c.BlobHash)
+	data, err := e.fetch(ctx, c.FileID, c.BlobHash, c.Size)
 	if err != nil {
 		return false, err
 	}
@@ -461,6 +596,15 @@ func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.
 		if row.State == StateSynced {
 			row.BaseRev = c.Rev
 		}
+		return true, e.cfg.DB.PutFile(ctx, row)
+	}
+	if row.State == StateLocalMoved && newPath == row.MovedFrom {
+		// The server still has the file where our move takes it from: a move
+		// that only rewrote its path token (the enc1 -> enc2 migration of
+		// another device, ADR-0042), or a move there and back. It is no rename
+		// to apply: ours is still to send, on the new revision. BaseRev stays:
+		// a content change parked before this move must still be resolved.
+		row.ServerRev = c.Rev
 		return true, e.cfg.DB.PutFile(ctx, row)
 	}
 	switch row.State {
@@ -520,7 +664,22 @@ func (e *Engine) applyDelete(ctx context.Context, row File, has bool, c transpor
 	switch row.State {
 	case StateSynced:
 		if e.diskExists(row.Path) {
-			if _, err := e.cfg.FS.Trash(row.Path); err != nil {
+			// The file may have been edited since the scan (the pull of a round
+			// can take long): only the content the server deleted goes to the
+			// trash, an edit wins over the deletion like any other (§3.4.5).
+			h, size, err := e.hashFile(row.Path)
+			switch {
+			case err == nil && h != row.LocalHash:
+				row.LocalHash, row.LocalSize, row.State = h, size, StateLocalModify
+				if st, err := os.Stat(e.absPath(row.Path)); err == nil {
+					row.LocalMtime = st.ModTime().UnixNano()
+				}
+				return true, e.tombstone(ctx, row, c.Rev)
+			case err == nil:
+				if _, err := e.cfg.FS.Trash(row.Path); err != nil && !os.IsNotExist(err) {
+					return false, err
+				}
+			case !os.IsNotExist(err):
 				return false, err
 			}
 		}
@@ -530,12 +689,21 @@ func (e *Engine) applyDelete(ctx context.Context, row File, has bool, c transpor
 	default:
 		// Deleted remotely, modified here: the modification wins and the file
 		// is brought back by our next push (§3.4.5).
-		row.ServerRev, row.Tombstoned = c.Rev, true
-		if row.State == StateLocalMoved && !row.Dirty {
-			row.State = StateLocalModify
-		}
-		return true, e.cfg.DB.PutFile(ctx, row)
+		return true, e.tombstone(ctx, row, c.Rev)
 	}
+}
+
+// tombstone records that the server deleted a file this device still has
+// changes for: the next push brings it back with a modify that carries its
+// path (revival). A move still to send becomes part of that revival, since the
+// server refuses to move a deleted file (a new operation: a new attempt).
+func (e *Engine) tombstone(ctx context.Context, row File, rev int) error {
+	row.ServerRev, row.Tombstoned = rev, true
+	if row.State == StateLocalMoved {
+		row.State, row.MovedFrom, row.Dirty = StateLocalModify, "", false
+		row.Attempts, row.LastError = 0, ""
+	}
+	return e.cfg.DB.PutFile(ctx, row)
 }
 
 // bootstrapMode says how far the manifest of a bootstrap is to be trusted.
@@ -553,6 +721,12 @@ const (
 	// or trashed (ADR-0046).
 	bootstrapReconcileUpload
 )
+
+// remoteFile is an entry of the server manifest with its local path.
+type remoteFile struct {
+	transport.TreeEntry
+	path string
+}
 
 // bootstrapReconcilePending is the MetaBootstrapped value of a reconcile
 // bootstrap that has not completed yet. It is resumed in the same mode: once
@@ -584,10 +758,13 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 		byID[r.FileID] = r
 		byPath[r.Path] = r
 	}
-	type remoteFile struct {
-		transport.TreeEntry
-		path string
+	// Every entry quarantined so far is read again here: the ones still
+	// unreadable are recorded anew, the others are lifted at the end.
+	stale, err := e.cfg.DB.Quarantined(ctx)
+	if err != nil {
+		return err
 	}
+	unreadable := map[string]bool{}
 	remote := make([]remoteFile, 0, len(tree.Items))
 	known := make(map[string]int, len(tree.Items)) // listed file id -> server revision
 	for _, it := range tree.Items {
@@ -602,6 +779,7 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 			if err := e.quarantine(ctx, it.FileID, it.Rev, row, has, err); err != nil {
 				return err
 			}
+			unreadable[it.FileID] = true
 			continue
 		}
 		remote = append(remote, remoteFile{it, p})
@@ -626,72 +804,7 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 			return err
 		}
 		e.progress(i+1, len(remote))
-		synthetic := transport.Change{FileID: rf.FileID, Op: "modify", Path: rf.Path, Rev: rf.Rev, BlobHash: rf.Hash, Size: rf.Size}
-		if row, ok := byID[rf.FileID]; ok {
-			if mode == bootstrapReconcileUpload && (row.ServerRev > rf.Rev || (row.ServerRev == rf.Rev && row.ServerHash != rf.Hash)) {
-				if err := e.republish(ctx, row, rf.Rev, rf.Hash, rf.path); err != nil {
-					return err
-				}
-				continue
-			}
-			if mode == bootstrapReconcileUpload && row.State == StateLocalMoved && row.MovedFrom == rf.path && row.ServerRev == rf.Rev && row.ServerHash == rf.Hash {
-				// A move still to send from where the server has the file (made
-				// here, or set by an earlier reconcile that was interrupted): the
-				// server has nothing newer, so the push moves it.
-				continue
-			}
-			// The revision alone is not enough: a move applied by an earlier,
-			// interrupted bootstrap already raised it without the content.
-			if row.ServerRev >= rf.Rev && row.ServerHash == rf.Hash && row.Path == rf.path {
-				continue
-			}
-			if row.Path != rf.path {
-				if row.State == StateSynced && row.ServerHash != rf.Hash {
-					// Moved and modified: move without claiming the new revision,
-					// which only the content applied below may do.
-					if _, err := e.relocate(ctx, row, rf.path); err != nil {
-						return err
-					}
-				} else {
-					mv := synthetic
-					mv.Op = "move"
-					if _, err := e.applyMoveClear(ctx, row, mv, rf.path); err != nil {
-						return err
-					}
-				}
-				row, _, _ = e.cfg.DB.GetFileByID(ctx, rf.FileID)
-			}
-			if row.ServerHash != rf.Hash || row.ServerRev < rf.Rev {
-				if err := e.applyContentClear(ctx, row, true, synthetic, rf.path); err != nil {
-					return err
-				}
-			}
-			continue
-		}
-		// Unknown to us. A local file at the same path with the same content is
-		// the same file (the vault was copied here): adopt it instead of copying.
-		if local, ok := byPath[rf.path]; ok && local.State == StateLocalNew && local.ServerRev == 0 {
-			same := false
-			if e.cfg.Cipher == nil {
-				same = local.LocalHash == rf.Hash
-			} else if data, err := e.fetch(ctx, rf.FileID, rf.Hash); err == nil {
-				same = hashHex(data) == local.LocalHash
-			}
-			if same {
-				oldID := local.FileID
-				local.FileID, local.ServerRev, local.BaseRev, local.ServerHash, local.State = rf.FileID, rf.Rev, rf.Rev, rf.Hash, StateSynced
-				if err := e.cfg.DB.WithTx(ctx, func(tx *DB) error {
-					if err := tx.DeleteFile(ctx, oldID); err != nil {
-						return err
-					}
-					return tx.PutFile(ctx, local)
-				}); err != nil {
-					return err
-				}
-				continue
-			}
-		}
-		if err := e.applyContentClear(ctx, File{}, false, synthetic, rf.path); err != nil {
+		if err := e.reconcileEntry(ctx, mode, rf, byID, byPath); err != nil {
 			return err
 		}
 	}
@@ -714,6 +827,14 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 			}
 		}
 	}
+	for _, q := range stale {
+		if !unreadable[q.FileID] {
+			if err := e.liftApplied(ctx, q.FileID, math.MaxInt); err != nil {
+				return err
+			}
+		}
+	}
+	e.quarantineChecked = true
 	var saved func()
 	if err := e.cfg.DB.WithTx(ctx, func(tx *DB) error {
 		var err error
@@ -729,6 +850,70 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 	}
 	saved()
 	return nil
+}
+
+// reconcileEntry brings one readable entry of the server manifest into
+// sync_files and onto the disk (a bootstrap, or the retry of a quarantined
+// entry). byID and byPath are the rows as they were before the reconcile.
+func (e *Engine) reconcileEntry(ctx context.Context, mode bootstrapMode, rf remoteFile, byID, byPath map[string]File) error {
+	synthetic := transport.Change{FileID: rf.FileID, Op: "modify", Path: rf.Path, Rev: rf.Rev, BlobHash: rf.Hash, Size: rf.Size}
+	if row, ok := byID[rf.FileID]; ok {
+		if mode == bootstrapReconcileUpload && (row.ServerRev > rf.Rev || (row.ServerRev == rf.Rev && row.ServerHash != rf.Hash)) {
+			return e.republish(ctx, row, rf.Rev, rf.Hash, rf.path)
+		}
+		if mode == bootstrapReconcileUpload && row.State == StateLocalMoved && row.MovedFrom == rf.path && row.ServerRev == rf.Rev && row.ServerHash == rf.Hash {
+			// A move still to send from where the server has the file (made
+			// here, or set by an earlier reconcile that was interrupted): the
+			// server has nothing newer, so the push moves it.
+			return nil
+		}
+		// The revision alone is not enough: a move applied by an earlier,
+		// interrupted bootstrap already raised it without the content.
+		if row.ServerRev >= rf.Rev && row.ServerHash == rf.Hash && row.Path == rf.path {
+			return nil
+		}
+		if row.Path != rf.path {
+			if row.State == StateSynced && row.ServerHash != rf.Hash {
+				// Moved and modified: move without claiming the new revision,
+				// which only the content applied below may do.
+				if _, err := e.relocate(ctx, row, rf.path); err != nil {
+					return err
+				}
+			} else {
+				mv := synthetic
+				mv.Op = "move"
+				if _, err := e.applyMoveClear(ctx, row, mv, rf.path); err != nil {
+					return err
+				}
+			}
+			row, _, _ = e.cfg.DB.GetFileByID(ctx, rf.FileID)
+		}
+		if row.ServerHash != rf.Hash || row.ServerRev < rf.Rev {
+			return e.applyContentClear(ctx, row, true, synthetic, rf.path)
+		}
+		return nil
+	}
+	// Unknown to us. A local file at the same path with the same content is
+	// the same file (the vault was copied here): adopt it instead of copying.
+	if local, ok := byPath[rf.path]; ok && local.State == StateLocalNew && local.ServerRev == 0 {
+		same := false
+		if e.cfg.Cipher == nil {
+			same = local.LocalHash == rf.Hash
+		} else if data, err := e.fetch(ctx, rf.FileID, rf.Hash, rf.Size); err == nil {
+			same = hashHex(data) == local.LocalHash
+		}
+		if same {
+			oldID := local.FileID
+			local.FileID, local.ServerRev, local.BaseRev, local.ServerHash, local.State = rf.FileID, rf.Rev, rf.Rev, rf.Hash, StateSynced
+			return e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+				if err := tx.DeleteFile(ctx, oldID); err != nil {
+					return err
+				}
+				return tx.PutFile(ctx, local)
+			})
+		}
+	}
+	return e.applyContentClear(ctx, File{}, false, synthetic, rf.path)
 }
 
 // republish settles a file that this device has at a newer revision than the
