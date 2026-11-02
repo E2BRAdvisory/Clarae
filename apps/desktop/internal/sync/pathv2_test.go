@@ -73,11 +73,12 @@ func quarantinedIDs(t *testing.T, e *Engine) map[string]bool {
 // ADR-0042: enc2 tokens are read next to enc1 ones; a file seen in enc2 is
 // pinned, so the server can no longer hand it another file's enc1 token, and
 // an enc2 token of another file never opens. The vault pin keeps new tokens
-// enc2 with features.path_v2 off.
+// enc2 with features.path_v2 off (an administrator's choice since release N+1).
 func TestPathV2PinRefusesSwapAndDowngrade(t *testing.T) {
 	ctx := context.Background()
 	remote := newScriptRemote()
-	e, _, c, dir := newCryptoEngine(t, remote)
+	e, cm, c, dir := newCryptoEngine(t, remote)
+	cm.SetPathV2(false)
 	idA, idB := newFileID(), newFileID()
 	tokA2 := pathToken(t, c, idA, "a.md", true)
 	tokB1 := pathToken(t, c, idB, "b.md", false)
@@ -122,12 +123,17 @@ func TestPathV2PinRefusesSwapAndDowngrade(t *testing.T) {
 	}
 }
 
-// New path tokens are enc1 by default, enc2 with features.path_v2 on, and the
-// server holding an enc2 token we wrote pins the file and the vault.
+// New path tokens are enc1 with features.path_v2 off (the release N default),
+// enc2 with it on, and the server holding an enc2 token we wrote pins the file
+// and the vault.
 func TestPathV2WriteFollowsFlag(t *testing.T) {
 	ctx := context.Background()
 	remote := newScriptRemote()
 	e, cm, _, dir := newCryptoEngine(t, remote)
+	if !cm.PathV2() {
+		t.Fatal("features.path_v2 must be on by default (release N+1)")
+	}
+	cm.SetPathV2(false)
 	writeFile(t, dir, "one.md", []byte("# one"))
 	if err := e.Sync(ctx); err != nil {
 		t.Fatal(err)

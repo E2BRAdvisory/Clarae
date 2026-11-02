@@ -95,3 +95,34 @@ Stato dell'implementazione al 2026-11-01: **rilascio N completato lato client**,
 - **Libreria TS** (`packages/vaultcrypto-web/src/path.ts`): `encryptPathV2`, `decryptPathFor`, `pathAadV2`, `pathTokenVersion`, `PATH_ENC_PREFIX_V2`. L'export ZIP decifra i path con `decryptPathFor` e il `file_id` della voce; l'API esistente non cambia (nessuna modifica a `web/src/export`).
 - **Client desktop e core WASM**: `sync.Cipher` espone `PathV2()`, `EncryptPath(fileID, path, v2)` e `DecryptFilePath(fileID, token)`; il motore applica pin e scelta del formato (`pull.go`, `push.go`); `crypto.Manager.SetPathV2` e `sync.Manager.SetPathV2` ricevono il flag.
 - **Prima di scrivere un token** il client applica anche la regola completa dei nomi riservati di Windows (`pathrules.NormalizePortable`), perché per i vault privati il server non può controllare i nomi.
+
+**Rilascio N+1 (2026-11-02).** L'owner ha deciso di eseguire il rilascio N+1, con le tre azioni della decisione.
+
+1. **`features.path_v2` acceso per default.** `default: true` in `api/config-profile.schema.json`, da cui si generano le costanti Go e TS (`task gen-features`). Tutti i consumatori leggono quelle:
+   - i default del prodotto distribuiti dal cloud (`configprofiles.ProductDefaults`);
+   - `crypto.NewManager`, dove `Options.PathV2` è ora un `*bool` e `nil` prende il default;
+   - `pathV2Enabled` del desktop e del core WASM (`apps/desktop/internal/app/managed.go`).
+
+   Un client senza profilo scrive quindi `enc2`. Un amministratore può spegnere il flag. Spento, il client non migra, ma un vault annotato continua a scrivere `enc2`, e un pin forte già acceso resta.
+
+2. **Migrazione in background** (`apps/desktop/internal/sync/pathmigrate.go`, chiamata da `Engine.Sync`). Con il flag acceso e il vault sbloccato, il client riscrive in `enc2` i token `enc1` rimasti.
+   - **Operazione:** un `move` verso lo stesso path, con lo stesso `hmac1` e la `base_rev` del file. Il contenuto non cambia. Il server la accetta già: `move` in `services/cloud/internal/sync/ops.go` ammette un `path_key` occupato dal file stesso e rifiuta solo un token identico, e un token nuovo ha sempre un nonce nuovo. Lo verifica `TestPrivateVaultAcceptsEnc2PathTokens`, nei test d'integrazione del cloud.
+   - **Quando:** solo alla fine di un ciclo di sync che non ha trovato altro da fare (scan, pull, risoluzione e push a vuoto), mai con una sincronizzazione richiesta in attesa né con il vault bloccato.
+   - **Ritmo:** un lotto per ciclo (`pathMigrationBatch`, 100 file, un solo commit), almeno 15 s tra due lotti (`pathMigrationSpacing`) e al massimo 30 s di lavoro per lotto. Lo scheduler torna dopo 15 s finché restano lotti (`Engine.MigrationPending`). Se nessun file si può riscrivere, il controllo successivo arriva dopo 15 minuti.
+   - **Quali file:** `GET /tree` si legge una volta per passaggio; i token `enc1` formano una coda in memoria. Un file entra in un lotto solo se è sincronizzato alla stessa revisione dell'albero e non ha modifiche locali, candidati al merge (`pending_remote`), errori o tentativi falliti. Il suo token deve inoltre decifrarsi (pin di file compresi) nel path locale. Gli altri file restano a un passaggio successivo.
+   - **Esiti:** un conflitto (il file è cambiato sul server) non tocca il file: il pull porta la modifica e il file si riprende alla nuova revisione. Un rifiuto è registrato per quella revisione, per la durata del processo, e non si ritenta. Un errore viene registrato nel log e non fa mai fallire il ciclo. Un move accettato aggiorna `server_rev` e `base_rev` della riga e accende il pin di file.
+   - **Ripresa:** il progresso è l'albero del server, perché un file migrato ha un `enc2`. `sync_meta` tiene in `path_v2_migration:<id cloud>` (JSON) i file riscritti, quelli rimasti all'ultima lettura, l'ora del lotto successivo e la fine della migrazione. Dopo un riavvio la migrazione riprende con lo stesso ritmo.
+3. **Pin forte** `path_v2_strong:<id cloud>`, insieme al pin di vault, nella stessa transazione. Si accende quando un albero completo ha almeno un file e nessun token `enc1`, e il cursore del client ha già raggiunto il suo `as_of_seq`: così una change `enc1` più vecchia, ancora da scaricare, non viene rifiutata. Da quel momento `clearPath` rifiuta ogni token `enc1` del vault con `ErrPathDowngrade`: la change va in quarantena (ADR-0039) e il file locale non viene toccato. Un vault vuoto non riceve il pin: non ha token da proteggere, e un client che non ha mai visto `enc2` potrebbe crearvi il primo file in `enc1`.
+
+Test:
+
+- unitari, con un server simulato il cui albero e changelog seguono i commit (`apps/desktop/internal/sync/pathmigrate_test.go`): lotti limitati, stesso `hmac1` e `base_rev`, file con una modifica locale lasciato fuori e niente pin forte finché resta, pin forte dopo l'ultimo token, `enc1` in quarantena dopo il pin, ritmo e ripresa dopo un riavvio, nessuna migrazione a flag spento, conflitto senza effetti sul file. Girano anche nel core WASM;
+- d'integrazione con il cloud reale (`TestPrivateVaultPathMigration` in `apps/desktop/internal/sync/e2e_pathv2_test.go`): vault scritto da un client del rilascio N (flag spento) con soli `enc1`, migrato da un client con la configurazione predefinita, pin forte dopo l'ultimo token, un `enc1` successivo in quarantena, il client a flag spento che legge tutto e, con il vault annotato, scrive `enc2`.
+
+Limiti:
+
+- Le revisioni dello storico conservano il token con cui sono state scritte. La cronologia le decifra con `DecryptFilePath` e il pin forte non la riguarda.
+- Un file cancellato prima della migrazione e ripristinato dopo il pin forte torna con il suo ultimo token, `enc1`: i dispositivi con il pin forte lo mettono in quarantena, e i dati restano sul server.
+- L'export ZIP del browser non ha stato e continua ad accettare `enc1`.
+
+**Compatibilità.** I desktop fino alla 1.2.4 non leggono i token `enc2`: saltano i file nuovi e spostati e, ripartendo dall'albero, spostano nel cestino del sistema le loro copie locali dei file migrati. Sul server non si perde nulla, e dopo l'aggiornamento tutto torna leggibile. I desktop vanno aggiornati prima del cloud, che distribuisce il flag acceso; in alternativa, finché restano dispositivi vecchi, si imposta `features.path_v2: false` nel profilo globale. Il workbench web è servito dal cloud ed è sempre aggiornato. I client del rilascio N leggono i due formati e, collegati a un cloud aggiornato, ricevono il flag acceso: scrivono `enc2` ma non migrano.

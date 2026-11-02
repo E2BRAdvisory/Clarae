@@ -8,6 +8,10 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancellazione per le copie dei vault privati nel browser, prestazioni e osservabilità del worker, e le basi della parità desktop/web/console. Le decisioni sono negli ADR 0036–0039, ancora in stato di proposta.
 
+### Compatibilità
+
+- **Desktop fino alla 1.2.4 e vault privati:** questa versione scrive per default gli envelope della chiave in formato v2 e i path cifrati in formato `enc2` (ADR-0034, ADR-0042), e il cloud distribuisce i due flag accesi. I desktop 1.2.4 e precedenti non leggono questi formati: non sbloccano un vault il cui envelope è passato al v2 e saltano i file con un path `enc2`. Aggiornare i desktop **prima** del cloud, oppure impostare `"features": {"envelope_v2": false, "path_v2": false}` nel profilo globale finché restano dispositivi vecchi (`docs/admin-guide/backup-upgrade.md`). Il workbench web è sempre aggiornato. Nessuna perdita di dati: chiave, contenuto e storico sul cloud non cambiano, e un desktop aggiornato legge tutto.
+
 ### Verifiche (ADR-0036)
 
 - **Nessun servizio di CI:** `task ci` è il controllo ufficiale da eseguire prima di ogni merge e di ogni tag. Ora comprende anche typecheck di tutti i pacchetti TypeScript, test del core in WebAssembly, controllo di parità e controllo del codice generato (`task check-gen`), e funziona su un clone pulito e su Linux. Il test che confronta dispatcher e binding generati fallisce invece di essere saltato.
@@ -66,7 +70,7 @@ Correzioni d'integrità dei dati nel cloud e nel client, una politica di cancell
 - **Audit:** registra l'IP del client (attraverso i proxy fidati) e l'eliminazione, il ripristino e il cambio di chiave dei vault; tutte le celle del CSV sono protette dalla formula injection.
 - **SRI completa nel workbench:** worker del core, chunk (import map con `integrity`), worker di layout e di pdf.js, `excalidraw.js`; la CSP aggiunge solo l'hash della import map.
 - **Passphrase normalizzate NFC** prima di Argon2id; gli envelope creati da un input non NFC continuano ad aprirsi.
-- **Envelope della VMK v2** legato a vault e tipo (ADR-0034) e **path cifrati v2** legati al file (ADR-0042): tutti i client leggono entrambi i formati; la scrittura v2 si accende con `features.envelope_v2` e `features.path_v2` (spenti per default).
+- **Envelope della VMK v2** legato a vault e tipo (ADR-0034) e **path cifrati v2** legati al file (ADR-0042): tutti i client leggono entrambi i formati, e `features.envelope_v2` e `features.path_v2` sono **accesi per default** (rilascio N+1 dei due ADR). Il client fa l'upgrade a v2 degli envelope allo sblocco e riscrive in background, a lotti e senza bloccare la sync, i token di path `enc1` rimasti. Quando l'albero di un vault non ne contiene più, accende un pin forte e da lì mette in quarantena ogni token `enc1` di quel vault. Vedi «Compatibilità».
 - Chiavi azzerate al blocco, calibrazione di Argon2id con un tetto di 256 MiB, manifest di aggiornamento con scadenza firmata.
 
 ### Deploy e supply chain

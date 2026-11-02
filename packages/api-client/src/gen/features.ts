@@ -28,13 +28,17 @@ export const Feature = {
   DrawingAutoExport: 'drawing_auto_export',
   // Scene actions of the drawing tools panel (only while drawings is on).
   DrawingActions: 'drawing_actions',
-  // Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034). Off by
-  // default: turn it on only when every client runs release N or later (they read both formats); a
-  // client that has seen a v2 envelope never writes v1 again.
+  // Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034); an
+  // unlock upgrades a v1 envelope to v2. On by default since 1.3.0: desktop 1.2.4 and earlier cannot
+  // open a v2 envelope, so update every desktop before the cloud or set false until then. Turning it
+  // off stops new upgrades only: a client that has seen a v2 envelope of a kind never writes v1
+  // again.
   EnvelopeV2: 'envelope_v2',
-  // Write the encrypted path tokens of private vaults in format v2, bound to the file id (ADR-0042).
-  // Off by default: turn it on only once the server release that accepts v2 (enc2) path tokens is
-  // deployed; clients read both formats.
+  // Write the encrypted path tokens of private vaults in format v2 (enc2), bound to the file id, and
+  // migrate the remaining enc1 tokens in the background while a vault is unlocked (ADR-0042). On by
+  // default since 1.3.0: desktop 1.2.4 and earlier cannot read enc2 paths, so update every desktop
+  // before the cloud or set false until then. Turning it off stops the migration only: a vault
+  // already seen in enc2 keeps enc2, and a fully migrated vault refuses enc1.
   PathV2: 'path_v2',
 } as const;
 
@@ -71,6 +75,6 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.DrawingMermaid]: true,
   [Feature.DrawingAutoExport]: true,
   [Feature.DrawingActions]: true,
-  [Feature.EnvelopeV2]: false,
-  [Feature.PathV2]: false,
+  [Feature.EnvelopeV2]: true,
+  [Feature.PathV2]: true,
 };

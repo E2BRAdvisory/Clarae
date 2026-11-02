@@ -70,13 +70,13 @@
         },
         "envelope_v2": {
           "type": "boolean",
-          "default": false,
-          "description": "Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034). Off by default: turn it on only when every client runs release N or later (they read both formats); a client that has seen a v2 envelope never writes v1 again."
+          "default": true,
+          "description": "Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034); an unlock upgrades a v1 envelope to v2. On by default since 1.3.0: desktop 1.2.4 and earlier cannot open a v2 envelope, so update every desktop before the cloud or set false until then. Turning it off stops new upgrades only: a client that has seen a v2 envelope of a kind never writes v1 again."
         },
         "path_v2": {
           "type": "boolean",
-          "default": false,
-          "description": "Write the encrypted path tokens of private vaults in format v2, bound to the file id (ADR-0042). Off by default: turn it on only once the server release that accepts v2 (enc2) path tokens is deployed; clients read both formats."
+          "default": true,
+          "description": "Write the encrypted path tokens of private vaults in format v2 (enc2), bound to the file id, and migrate the remaining enc1 tokens in the background while a vault is unlocked (ADR-0042). On by default since 1.3.0: desktop 1.2.4 and earlier cannot read enc2 paths, so update every desktop before the cloud or set false until then. Turning it off stops the migration only: a vault already seen in enc2 keeps enc2, and a fully migrated vault refuses enc1."
         }
       }
     },

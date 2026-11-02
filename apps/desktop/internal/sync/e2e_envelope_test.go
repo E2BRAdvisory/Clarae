@@ -47,17 +47,36 @@ func envelopeVersions(t *testing.T, c *transport.Client, cloudID string) map[str
 	return out
 }
 
-// ADR-0034 release N: the default writes v1 envelopes; with
-// features.envelope_v2 on, an unlock upgrades the passphrase envelope to v2,
-// devices with the flag off still read it, and a device that has seen v2
-// refuses a v1 envelope served in its place.
+// ADR-0034 release N+1: a vault created with the default configuration has
+// v2 envelopes right away (uploaded just after the creation, which assigns the
+// vault id).
+func TestPrivateVaultEnvelopeV2ByDefault(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t, "ada")
+	dan := newManagerEnv(t, "ada")
+	dan.attachEmpty(t, "d")
+	res, err := dan.m.Link(ctx, "d", "env-default-"+uuid.NewString()[:6], "private", "correct horse battery staple 42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := envelopeVersions(t, c, res.CloudVaultID); v[crypto.KindPassphrase] != 2 || v[crypto.KindRecovery] != 2 {
+		t.Fatalf("the default must create v2 envelopes: %v", v)
+	}
+}
+
+// ADR-0034: a vault created by a release N client (features.envelope_v2 off)
+// has v1 envelopes; a device with the flag on (the release N+1 default) that
+// unlocks upgrades the passphrase envelope to v2, then the recovery envelope
+// when the recovery key is used; devices with the flag off still read v2, and
+// a device that has seen v2 refuses a v1 envelope served in its place.
 func TestPrivateVaultEnvelopeV2Migration(t *testing.T) {
 	ctx := context.Background()
 	const pass = "correct horse battery staple 42"
 	c := newClient(t, "ada")
 
-	// Release N default: created with v1 envelopes.
+	// Release N behavior (flag off): created with v1 envelopes.
 	ada := newManagerEnv(t, "ada")
+	ada.m.SetEnvelopeV2(false)
 	ada.attachEmpty(t, "v")
 	res, err := ada.m.Link(ctx, "v", "env-"+uuid.NewString()[:6], "private", pass)
 	if err != nil {
@@ -68,10 +87,10 @@ func TestPrivateVaultEnvelopeV2Migration(t *testing.T) {
 		t.Fatalf("flag off must create v1 envelopes: %v", v)
 	}
 
-	// A device with the flag on unlocks and upgrades the passphrase envelope;
-	// the recovery envelope waits for an unlock with the recovery key.
+	// A device with the default configuration (flag on) unlocks and upgrades
+	// the passphrase envelope; the recovery envelope waits for an unlock with
+	// the recovery key.
 	bob := newManagerEnv(t, "ada")
-	bob.m.SetEnvelopeV2(true)
 	bob.attachEmpty(t, "w")
 	if err := bob.m.LinkExisting(ctx, "w", cloud); err != nil {
 		t.Fatal(err)
@@ -89,8 +108,10 @@ func TestPrivateVaultEnvelopeV2Migration(t *testing.T) {
 		t.Fatalf("recovery envelope not upgraded: %v", v)
 	}
 
-	// A device with the flag off reads v2 and, once it has, keeps writing v2.
+	// A device with the flag off (an administrator's choice) reads v2 and,
+	// once it has, keeps writing v2.
 	carol := newManagerEnv(t, "ada")
+	carol.m.SetEnvelopeV2(false)
 	carol.attachEmpty(t, "x")
 	if err := carol.m.LinkExisting(ctx, "x", cloud); err != nil {
 		t.Fatal(err)

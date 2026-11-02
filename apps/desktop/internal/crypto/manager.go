@@ -15,6 +15,7 @@ import (
 
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/shared/apiclient"
+	flags "memobrain/shared/features"
 	"memobrain/shared/vaultcrypto"
 )
 
@@ -103,8 +104,9 @@ type Manager struct {
 	remember bool
 	// kdfTarget calibrates Argon2id on this device.
 	kdfTarget time.Duration
-	// envelopeV2 writes ADR-0034 v2 envelopes (features.envelope_v2); off,
-	// new envelopes stay v1 unless the vault already has a v2 of that kind.
+	// envelopeV2 writes ADR-0034 v2 envelopes (features.envelope_v2, on by
+	// default); off, new envelopes stay v1 unless the vault already has a v2
+	// of that kind.
 	envelopeV2 bool
 	// seenV2 records, per cloud vault id, the envelope kinds known to be v2
 	// on the server (seen in a download or pinned by the sync manager), so a
@@ -125,12 +127,21 @@ type Options struct {
 	DontRemember bool
 	// KDFTarget is the Argon2id duration to calibrate to (default 500 ms).
 	KDFTarget time.Duration
-	// EnvelopeV2 writes key envelopes in format v2 (ADR-0034, release N+1
-	// behavior). Default off: release N reads both formats and writes v1.
-	EnvelopeV2 bool
-	// PathV2 writes path tokens in format enc2 (ADR-0042, release N+1
-	// behavior). Default off: release N reads both formats and writes enc1.
-	PathV2 bool
+	// EnvelopeV2 sets the writing of key envelopes in format v2 (ADR-0034);
+	// nil takes the Config Profile default of features.envelope_v2 (on since
+	// release N+1). The application applies the effective profile on top.
+	EnvelopeV2 *bool
+	// PathV2 sets the writing of path tokens in format enc2 (ADR-0042); nil
+	// takes the default of features.path_v2 (on since release N+1).
+	PathV2 *bool
+}
+
+// flagOr returns *v when set, the schema default of the Config Profile flag otherwise.
+func flagOr(v *bool, flag string) bool {
+	if v != nil {
+		return *v
+	}
+	return flags.Defaults[flag]
 }
 
 // NewManager creates a manager.
@@ -144,7 +155,7 @@ func NewManager(o Options) *Manager {
 	if o.KDFTarget == 0 {
 		o.KDFTarget = 500 * time.Millisecond
 	}
-	return &Manager{store: o.Store, now: o.Now, vaults: map[string]*unlocked{}, timeout: o.LockTimeout, remember: !o.DontRemember, kdfTarget: o.KDFTarget, envelopeV2: o.EnvelopeV2, seenV2: map[string]map[string]bool{}, pathV2: o.PathV2}
+	return &Manager{store: o.Store, now: o.Now, vaults: map[string]*unlocked{}, timeout: o.LockTimeout, remember: !o.DontRemember, kdfTarget: o.KDFTarget, envelopeV2: flagOr(o.EnvelopeV2, flags.EnvelopeV2), seenV2: map[string]map[string]bool{}, pathV2: flagOr(o.PathV2, flags.PathV2)}
 }
 
 // SetPathV2 switches the writing of enc2 path tokens (ADR-0042; the Config

@@ -29,4 +29,10 @@ I **vault privati** sono cifrati dal client: un backup del server contiene solo 
 - **Prima di aggiornare:** backup del database; leggere le note di rilascio; verificare le nuove variabili in [configurazione](configurazione.md).
 - **Procedura Helm:** `helm upgrade memobrain deploy/helm/memobrain -f my-values.yaml --set image.tag=<nuova>`; osservare `readyz`, la dashboard e i log del primo pod.
 - **Compatibilità client:** il protocollo di sync è versionato; i client più vecchi continuano a funzionare finché il server accetta la loro versione. Le versioni minime supportate saranno riportate nelle note di rilascio.
+- **Formati v2 dei vault privati (dalla 1.3.0).** Il cloud distribuisce `features.envelope_v2` e `features.path_v2` accesi per default (ADR-0034, ADR-0042): i client scrivono gli envelope della chiave e i token dei path in formato v2, e riscrivono in background i token `enc1` rimasti. I desktop fino alla **1.2.4** non sanno aprire un envelope v2 né leggere un path `enc2`: non sbloccano più un vault con envelope v2, e saltano i file con un path `enc2`. Se ripartono dall'albero del server, per esempio dopo un nuovo collegamento, spostano anche nel cestino del sistema le loro copie locali di quei file. Sul cloud non si perde nulla: chiave, contenuto e storico restano gli stessi, e dopo l'aggiornamento del desktop tutto torna leggibile. Ordine consigliato:
+  1. aggiornare tutti i desktop alla nuova versione (il workbench web è servito dal cloud ed è sempre aggiornato);
+  2. aggiornare il cloud.
+
+  Se dei dispositivi devono restare indietro, impostare prima `"features": {"envelope_v2": false, "path_v2": false}` nel profilo globale e toglierlo quando sono aggiornati. Spegnere i flag ferma solo i nuovi upgrade e la migrazione: un vault o un tipo di envelope che un client ha già visto in v2 resta v2 su quel client.
+
 - **Rollback:** tornare all'immagine precedente è sicuro solo se la migrazione era retrocompatibile; altrimenti ripristinare il backup del database. Per questo il backup precede sempre l'upgrade.

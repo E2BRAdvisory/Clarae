@@ -81,16 +81,18 @@ func (a *App) applyLockTimeout() {
 }
 
 // envelopeV2Enabled reads features.envelope_v2, which switches the writing of
-// v2 key envelopes (ADR-0034). Off unless the administrator turns it on (the
-// schema's default): release N reads both formats and writes v1, so devices
-// that are not updated yet keep unlocking.
+// v2 key envelopes (ADR-0034). On unless the administrator turns it off (the
+// schema's default since release N+1): desktop 1.2.4 and earlier cannot open a
+// v2 envelope, so an instance with such devices can postpone it. Off, a kind
+// already seen in v2 still stays v2 (crypto.Manager.writeV2).
 func envelopeV2Enabled(cfg map[string]any) bool {
 	return flags.Enabled(cfg, flags.EnvelopeV2)
 }
 
 // pathV2Enabled reads features.path_v2, which switches the writing of enc2
-// path tokens of private vaults (ADR-0042). Off by default like envelope_v2:
-// release N reads both formats and writes enc1.
+// path tokens of private vaults and the background migration of the enc1 ones
+// (ADR-0042). On by default like envelope_v2; off, a vault pinned to enc2 still
+// writes enc2 (sync.Engine.writePathV2).
 func pathV2Enabled(cfg map[string]any) bool {
 	return flags.Enabled(cfg, flags.PathV2)
 }

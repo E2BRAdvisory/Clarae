@@ -40,9 +40,12 @@ describe('managed configuration', () => {
   it('a feature missing from the configuration takes the default of the schema', () => {
     expect(featureOn({}, 'drawings')).toBe(true);
     expect(featureOn({ drawings: false }, 'drawings')).toBe(false);
-    // Off by default in api/config-profile.schema.json: the chat placeholder and the ADR-0034 switches.
+    // Off by default in api/config-profile.schema.json: the chat placeholder. The v2 formats of
+    // ADR-0034 and ADR-0042 are on by default since release N+1, and a profile can turn them off.
     expect(featureOn({}, Feature.Chat)).toBe(false);
-    expect(featureOn({}, Feature.EnvelopeV2)).toBe(false);
+    expect(featureOn({}, Feature.EnvelopeV2)).toBe(true);
+    expect(featureOn({}, Feature.PathV2)).toBe(true);
+    expect(featureOn({ envelope_v2: false }, Feature.EnvelopeV2)).toBe(false);
     expect(featureOn({ chat: true }, Feature.Chat)).toBe(true);
     for (const f of FEATURES) expect(featureOn({}, f)).toBe(FEATURE_DEFAULTS[f]);
   });

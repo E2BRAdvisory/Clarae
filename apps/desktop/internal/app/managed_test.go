@@ -121,36 +121,38 @@ func TestSnapshotBeforeOverwrite(t *testing.T) {
 	a.snapshotBeforeOverwrite(info.ID, "missing.md")
 }
 
-// ADR-0034: v2 key envelopes are written only when the Config Profile turns
-// features.envelope_v2 on; release N reads both formats and writes v1.
+// ADR-0034 release N+1: v2 key envelopes are written by default
+// (features.envelope_v2 on in the schema); a profile can turn them off, and a
+// non-boolean value falls back to the default.
 func TestEnvelopeV2FromProfile(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	if a.crypto.EnvelopeV2() {
-		t.Fatal("v2 envelopes must be off by default")
-	}
-	refreshWith(t, a, map[string]any{"features": map[string]any{"envelope_v2": true}})
 	if !a.crypto.EnvelopeV2() {
-		t.Fatal("features.envelope_v2 not applied")
+		t.Fatal("v2 envelopes must be on by default")
 	}
-	refreshWith(t, a, map[string]any{"features": map[string]any{"envelope_v2": "yes"}})
+	refreshWith(t, a, map[string]any{"features": map[string]any{"envelope_v2": false}})
 	if a.crypto.EnvelopeV2() {
-		t.Fatal("a non-boolean value must leave v2 writing off")
+		t.Fatal("features.envelope_v2 false not applied")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"envelope_v2": "no"}})
+	if !a.crypto.EnvelopeV2() {
+		t.Fatal("a non-boolean value must take the default (on)")
 	}
 }
 
-// ADR-0042: enc2 path tokens are written only when the Config Profile turns
-// features.path_v2 on; release N reads both formats and writes enc1.
+// ADR-0042 release N+1: enc2 path tokens are written by default
+// (features.path_v2 on in the schema); a profile can turn them off, and a
+// profile without the key takes the default again.
 func TestPathV2FromProfile(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	if a.crypto.PathV2() {
-		t.Fatal("enc2 paths must be off by default")
-	}
-	refreshWith(t, a, map[string]any{"features": map[string]any{"path_v2": true}})
 	if !a.crypto.PathV2() {
-		t.Fatal("features.path_v2 not applied")
+		t.Fatal("enc2 paths must be on by default")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"path_v2": false}})
+	if a.crypto.PathV2() {
+		t.Fatal("features.path_v2 false not applied")
 	}
 	refreshWith(t, a, map[string]any{"features": map[string]any{}})
-	if a.crypto.PathV2() {
-		t.Fatal("removing the flag must turn enc2 writing off")
+	if !a.crypto.PathV2() {
+		t.Fatal("removing the flag must restore the default (on)")
 	}
 }

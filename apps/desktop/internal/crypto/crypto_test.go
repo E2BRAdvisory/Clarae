@@ -250,11 +250,15 @@ func TestLockWipesKeys(t *testing.T) {
 func TestPathV2Flag(t *testing.T) {
 	m, _, _ := newManager(t)
 	c := m.Cipher(vaultID)
-	if c.PathV2() {
-		t.Fatal("enc2 writing must be off by default (release N)")
+	if !c.PathV2() || !NewManager(Options{}).PathV2() {
+		t.Fatal("enc2 writing must be on by default (release N+1)")
+	}
+	m.SetPathV2(false)
+	if c.PathV2() || NewManager(Options{PathV2: new(false)}).PathV2() {
+		t.Fatal("flag off not applied")
 	}
 	m.SetPathV2(true)
-	if !c.PathV2() || !NewManager(Options{PathV2: true}).PathV2() {
+	if !c.PathV2() || !NewManager(Options{PathV2: new(true)}).PathV2() {
 		t.Fatal("flag not applied")
 	}
 }
@@ -427,11 +431,45 @@ func replaceEnvelope(envs []transport.KeyEnvelope, e transport.KeyEnvelope) []tr
 	return out
 }
 
-// ADR-0034 release N: v1 is written by default, v2 only with the flag; both
+// ADR-0034 release N+1: with the default configuration (features.envelope_v2
+// on) an unlock of a v1 envelope, passphrase or recovery, proposes its v2
+// re-wrap, and a new passphrase or recovery key is written in v2.
+func TestEnvelopeV2OnByDefault(t *testing.T) {
+	const pass = "correct horse battery staple"
+	m, _, _ := newManager(t)
+	if !m.EnvelopeV2() {
+		t.Fatal("v2 writing must be on by default (release N+1)")
+	}
+	mat, err := m.NewMaterial(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, recovery := range []bool{false, true} {
+		secret := pass
+		if recovery {
+			secret = mat.RecoveryKey
+		}
+		dev, _, _ := newManager(t)
+		res, err := dev.UnlockWith(vaultID, mat.Envelopes, secret, recovery, UnlockOptions{})
+		if err != nil || res.Version != 1 || res.Upgrade == nil || vaultcrypto.EnvelopeVersion(res.Upgrade.WrappedVmk) != 2 {
+			t.Fatalf("recovery=%t: default unlock must propose a v2 upgrade: %+v %v", recovery, res, err)
+		}
+		if env, err := dev.NewPassphraseEnvelope(vaultID, "a brand new passphrase"); err != nil || vaultcrypto.EnvelopeVersion(env.WrappedVmk) != 2 {
+			t.Fatalf("default change of passphrase must write v2: %v", err)
+		}
+		if env, _, err := dev.NewRecoveryEnvelope(vaultID); err != nil || vaultcrypto.EnvelopeVersion(env.WrappedVmk) != 2 {
+			t.Fatalf("default new recovery key must write v2: %v", err)
+		}
+	}
+}
+
+// ADR-0034 with features.envelope_v2 off (the release N default, still
+// available to an administrator): v1 is written, v2 only with the flag; both
 // are read, a v2 envelope opens only for its vault, and a pinned kind refuses v1.
 func TestEnvelopeV2(t *testing.T) {
 	const pass = "correct horse battery staple"
 	m, _, _ := newManager(t)
+	m.SetEnvelopeV2(false)
 	mat, err := m.NewMaterial(pass)
 	if err != nil {
 		t.Fatal(err)
@@ -449,6 +487,7 @@ func TestEnvelopeV2(t *testing.T) {
 		t.Fatalf("flag off must write v1: %v", err)
 	}
 	other, _, _ := newManager(t)
+	other.SetEnvelopeV2(false)
 	res, err := other.UnlockWith(vaultID, mat.Envelopes, pass, false, UnlockOptions{})
 	if err != nil || res.Upgrade != nil || res.Version != 1 || res.Legacy {
 		t.Fatalf("v1 unlock, flag off: %+v %v", res, err)
@@ -509,7 +548,7 @@ func TestUnlockUpgradesToV2WhenEnabled(t *testing.T) {
 	const pass = "correct horse battery staple"
 	m, _, _ := newManager(t)
 	mat, _ := m.NewMaterial(pass)
-	dev := NewManager(Options{Store: NewMemoryStore(), KDFTarget: time.Millisecond, EnvelopeV2: true})
+	dev := NewManager(Options{Store: NewMemoryStore(), KDFTarget: time.Millisecond, EnvelopeV2: new(true)})
 	for _, recovery := range []bool{false, true} {
 		secret, kind := pass, KindPassphrase
 		if recovery {
@@ -553,6 +592,7 @@ func TestLegacyNonNFCPassphrase(t *testing.T) {
 	legacy := []transport.KeyEnvelope{{Kind: KindPassphrase, Kdf: kdfToTransport(kdf), WrappedVmk: w}}
 	for _, typed := range []string{nfd, nfc} {
 		m, _, _ := newManager(t)
+		m.SetEnvelopeV2(false) // the release N behavior: a legacy envelope stays as it is
 		res, err := m.UnlockWith(vaultID, legacy, typed, false, UnlockOptions{})
 		if err != nil || !res.Legacy || res.Upgrade != nil {
 			t.Fatalf("legacy envelope typed as %+q: %+v %v", typed, res, err)
@@ -561,7 +601,7 @@ func TestLegacyNonNFCPassphrase(t *testing.T) {
 			t.Fatalf("verify legacy: %v", err)
 		}
 	}
-	dev := NewManager(Options{Store: NewMemoryStore(), KDFTarget: time.Millisecond, EnvelopeV2: true})
+	dev := NewManager(Options{Store: NewMemoryStore(), KDFTarget: time.Millisecond, EnvelopeV2: new(true)})
 	res, err := dev.UnlockWith(vaultID, legacy, nfd, false, UnlockOptions{})
 	if err != nil || res.Upgrade == nil {
 		t.Fatalf("legacy upgrade: %+v %v", res, err)

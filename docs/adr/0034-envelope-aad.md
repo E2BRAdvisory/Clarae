@@ -121,3 +121,24 @@ Resta per il **rilascio N+1**:
 - aggiornare lo spec: §3.8.2, riga «Envelope», e §3.8.7, come indicato sopra in «Conseguenze».
 
 **Normalizzazione della passphrase (modifica collegata, stesso intervento).** La KEK si deriva ora dalla passphrase normalizzata in Unicode NFC (`DeriveKEKPassphrase` in Go, `deriveKekPassphrase` in TS). Ogni nuovo envelope (creazione, cambio passphrase, nuova passphrase dopo la recovery) usa questa regola. In apertura il client prova, in ordine, la forma NFC, l'input esatto e la sua forma NFD, saltando i duplicati (`PassphraseForms` / `passphraseForms`, `OpenWithPassphrase` / `openWithPassphrase`). Così gli envelope scritti prima, con i byte grezzi di un input non NFC, continuano ad aprirsi. Un envelope aperto solo con una forma legacy viene ri-avvolto sotto la forma NFC solo con il flag acceso, nello stesso upgrade: con il flag spento, un dispositivo non aggiornato che digita la stessa forma non NFC continua a sbloccare. La recovery key non cambia: alfabeto Base32 ASCII con checksum; un carattere non ASCII è già rifiutato prima di qualsiasi derivazione. Vettori: `passphrase_normalization` in `vectors.json`, con input NFC e NFD che danno la stessa KEK, la KEK grezza dell'input NFD e un envelope legacy aperto da entrambe le forme. **Lo spec va aggiornato in §3.8.2** (riga «KDF della passphrase»): la passphrase si normalizza in NFC prima di Argon2id, e in lettura si provano anche l'input esatto e la sua forma NFD.
+
+**Rilascio N+1 (2026-11-02).** L'owner ha deciso di eseguire il rilascio N+1. Il campo «Stato» resta «proposta»: l'accettazione dell'ADR e l'aggiornamento dello spec spettano all'owner.
+
+- **Flag acceso per default.** `features.envelope_v2` ha `default: true` in `api/config-profile.schema.json`. Le costanti generate (`task gen-features`: `shared/go/features`, `@memobrain/api-client/features`) valgono `true`, e tutti i consumatori leggono quelle:
+  - i default del prodotto distribuiti dal cloud (`configprofiles.ProductDefaults`), quindi anche i client del rilascio N collegati a un cloud aggiornato ricevono il flag acceso;
+  - `crypto.NewManager`: `Options.EnvelopeV2` è ora un `*bool`, e `nil` prende il default dello schema;
+  - `envelopeV2Enabled` del desktop e del core WASM del workbench web (`apps/desktop/internal/app/managed.go`).
+
+  Un client senza profilo scrive quindi v2.
+
+- **Comportamento con il default**, verificato dai test:
+  - creazione: v2 subito dopo la creazione;
+  - sblocco con la passphrase o con la recovery key: upgrade a v2;
+  - cambio della passphrase e nuova recovery key: scritti in v2.
+
+  Test unitari: `TestEnvelopeV2OnByDefault`, `TestEnvelopeV2FromProfile`. Test d'integrazione: `TestPrivateVaultEnvelopeV2ByDefault`, e `TestPrivateVaultEnvelopeV2Migration`, dove il client del rilascio N ha ora il flag spento in modo esplicito.
+
+- **Nient'altro.** Per il rilascio N+1 questo ADR non prevede un pin forte né il rifiuto dei v1 dopo un upgrade completo, e non sono stati aggiunti. Restano i pin per tipo: un envelope di recovery mai usato resta v1 e continua ad aprirsi finché l'utente non usa o non rigenera la recovery key. Nessun lockout.
+- **Flag spento dall'amministratore.** Il client smette di scrivere v2 e di fare l'upgrade allo sblocco. Un tipo di envelope già visto o scritto in v2 resta v2 (precisazione 2).
+- **Fatte anche** le altre voci rimaste per il rilascio N+1: il flag è documentato nella guida admin (`docs/admin-guide/profili-quote-audit.md`, con una nota di aggiornamento in `docs/admin-guide/backup-upgrade.md`), e la descrizione di `KeyEnvelopeInput.wrapped_vmk` in `api/openapi.yaml` cita già v1 e v2. Resta all'owner l'aggiornamento dello spec (§3.8.2 e §3.8.7).
+- **Compatibilità.** I desktop fino alla 1.2.4 non sanno aprire un envelope v2: dopo l'upgrade fatto da un altro dispositivo non sbloccano più quel vault. Il dispositivo va aggiornato prima del cloud, che distribuisce il flag acceso; in alternativa, finché restano dispositivi vecchi, si imposta `features.envelope_v2: false` nel profilo globale. Il workbench web è servito dal cloud ed è sempre aggiornato. Nessuna perdita di dati: VMK e contenuto non cambiano, e un desktop aggiornato riapre il vault con la stessa passphrase.

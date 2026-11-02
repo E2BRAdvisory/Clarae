@@ -96,9 +96,10 @@ func (m *Manager) SetLockTimeout(d time.Duration) { m.crypto.SetLockTimeout(d) }
 // and as an upgrade after an unlock.
 func (m *Manager) SetEnvelopeV2(on bool) { m.crypto.SetEnvelopeV2(on) }
 
-// SetPathV2 switches the writing of enc2 path tokens, bound to their file
-// (ADR-0042, features.path_v2). A vault already pinned to enc2 keeps writing
-// enc2 whatever the flag.
+// SetPathV2 switches the writing of enc2 path tokens, bound to their file,
+// and the background migration of the enc1 ones (ADR-0042, features.path_v2,
+// on by default). A vault already pinned to enc2 keeps writing enc2 whatever
+// the flag.
 func (m *Manager) SetPathV2(on bool) { m.crypto.SetPathV2(on) }
 
 // idleLockInterval is how often idle private vaults are looked for.
@@ -824,6 +825,11 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 			}
 			if secs > 0 {
 				wait = time.Duration(max(secs, 15)) * time.Second // the chosen interval overrides the adaptive one
+			}
+			if eng.MigrationPending() {
+				// Path tokens still to rewrite (ADR-0042): the next batch is due
+				// after the migration's own spacing.
+				wait = min(wait, eng.migrationSpacing())
 			}
 		case errors.Is(err, ErrLocked):
 			// Record the local changes the cycle could not see, so the

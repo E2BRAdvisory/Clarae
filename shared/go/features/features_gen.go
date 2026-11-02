@@ -44,13 +44,18 @@ const (
 	DrawingActions = "drawing_actions"
 
 	// EnvelopeV2: Write private-vault key envelopes in format v2, bound to the vault and kind
-	// (ADR-0034). Off by default: turn it on only when every client runs release N or later (they read
-	// both formats); a client that has seen a v2 envelope never writes v1 again.
+	// (ADR-0034); an unlock upgrades a v1 envelope to v2. On by default since 1.3.0: desktop 1.2.4 and
+	// earlier cannot open a v2 envelope, so update every desktop before the cloud or set false until
+	// then. Turning it off stops new upgrades only: a client that has seen a v2 envelope of a kind
+	// never writes v1 again.
 	EnvelopeV2 = "envelope_v2"
 
-	// PathV2: Write the encrypted path tokens of private vaults in format v2, bound to the file id
-	// (ADR-0042). Off by default: turn it on only once the server release that accepts v2 (enc2) path
-	// tokens is deployed; clients read both formats.
+	// PathV2: Write the encrypted path tokens of private vaults in format v2 (enc2), bound to the file
+	// id, and migrate the remaining enc1 tokens in the background while a vault is unlocked
+	// (ADR-0042). On by default since 1.3.0: desktop 1.2.4 and earlier cannot read enc2 paths, so
+	// update every desktop before the cloud or set false until then. Turning it off stops the
+	// migration only: a vault already seen in enc2 keeps enc2, and a fully migrated vault refuses
+	// enc1.
 	PathV2 = "path_v2"
 )
 
@@ -84,8 +89,8 @@ var Defaults = map[string]bool{
 	DrawingMermaid:    true,
 	DrawingAutoExport: true,
 	DrawingActions:    true,
-	EnvelopeV2:        false,
-	PathV2:            false,
+	EnvelopeV2:        true,
+	PathV2:            true,
 }
 
 // Descriptions documents each flag (the schema's description).
@@ -101,8 +106,8 @@ var Descriptions = map[string]string{
 	DrawingMermaid:    "Mermaid diagrams converted to drawings (only while drawings is on).",
 	DrawingAutoExport: "Automatic SVG/PNG export of drawings on save (only while drawings is on).",
 	DrawingActions:    "Scene actions of the drawing tools panel (only while drawings is on).",
-	EnvelopeV2:        "Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034). Off by default: turn it on only when every client runs release N or later (they read both formats); a client that has seen a v2 envelope never writes v1 again.",
-	PathV2:            "Write the encrypted path tokens of private vaults in format v2, bound to the file id (ADR-0042). Off by default: turn it on only once the server release that accepts v2 (enc2) path tokens is deployed; clients read both formats.",
+	EnvelopeV2:        "Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034); an unlock upgrades a v1 envelope to v2. On by default since 1.3.0: desktop 1.2.4 and earlier cannot open a v2 envelope, so update every desktop before the cloud or set false until then. Turning it off stops new upgrades only: a client that has seen a v2 envelope of a kind never writes v1 again.",
+	PathV2:            "Write the encrypted path tokens of private vaults in format v2 (enc2), bound to the file id, and migrate the remaining enc1 tokens in the background while a vault is unlocked (ADR-0042). On by default since 1.3.0: desktop 1.2.4 and earlier cannot read enc2 paths, so update every desktop before the cloud or set false until then. Turning it off stops the migration only: a vault already seen in enc2 keeps enc2, and a fully migrated vault refuses enc1.",
 }
 
 // productDefaults builds the product defaults: every "default" keyword of the schema.
@@ -120,8 +125,8 @@ func productDefaults() map[string]any {
 			"drawing_latex":       true,
 			"drawing_mermaid":     true,
 			"drawings":            true,
-			"envelope_v2":         false,
-			"path_v2":             false,
+			"envelope_v2":         true,
+			"path_v2":             true,
 			"sharing":             true,
 			"web_viewer":          false,
 			"web_workbench":       true,

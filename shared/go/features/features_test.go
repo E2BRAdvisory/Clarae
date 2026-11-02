@@ -42,8 +42,9 @@ func TestEveryFlagHasADefault(t *testing.T) {
 	if len(features.Known) != len(features.Defaults) || len(features.Known) != len(features.Descriptions) {
 		t.Fatalf("Known %d, Defaults %d, Descriptions %d", len(features.Known), len(features.Defaults), len(features.Descriptions))
 	}
-	// The flags whose default is off: functions not offered yet, and the ADR-0034 format switches.
-	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.EnvelopeV2, features.PathV2}
+	// The flags whose default is off: functions not offered yet. The format switches of ADR-0034
+	// and ADR-0042 are on by default since release N+1.
+	off := []string{features.AudioRecorder, features.WebViewer, features.Chat}
 	for _, k := range features.Known {
 		want := true
 		for _, o := range off {
@@ -88,8 +89,13 @@ func TestFlags(t *testing.T) {
 	if f[features.Drawings] || !f[features.Chat] || !f[features.Canvas] || len(f) != len(features.Known) {
 		t.Fatalf("Flags = %v", f)
 	}
-	if features.Enabled(cfg, features.Drawings) || !features.Enabled(cfg, features.Chat) || features.Enabled(nil, features.EnvelopeV2) {
+	if features.Enabled(cfg, features.Drawings) || !features.Enabled(cfg, features.Chat) || !features.Enabled(nil, features.EnvelopeV2) || !features.Enabled(nil, features.PathV2) {
 		t.Fatal("Enabled disagrees with the configuration or the defaults")
+	}
+	// An administrator can still turn the v2 formats off (ADR-0034, ADR-0042).
+	off := map[string]any{"features": map[string]any{features.EnvelopeV2: false, features.PathV2: false}}
+	if features.Enabled(off, features.EnvelopeV2) || features.Enabled(off, features.PathV2) {
+		t.Fatal("an explicit false must turn a v2 format off")
 	}
 	if !features.Enabled(nil, "unheard_of") || features.Enabled(cfg, "mystery") {
 		t.Fatal("an unknown flag is on unless the configuration switches it off")

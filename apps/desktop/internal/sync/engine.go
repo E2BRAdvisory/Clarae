@@ -91,6 +91,11 @@ type Config struct {
 	// BeforeOverwrite is called before a merge replaces local content the server
 	// does not have (may be nil): the application snapshots it (§2.9).
 	BeforeOverwrite func(path string)
+	// PathMigrationBatch and PathMigrationSpacing tune the background rewrite
+	// of enc1 path tokens (ADR-0042, pathmigrate.go): files per batch and
+	// least time between two batches (0: the defaults).
+	PathMigrationBatch   int
+	PathMigrationSpacing time.Duration
 }
 
 // Engine synchronizes one vault. Sync calls are serialized.
@@ -122,10 +127,17 @@ type Engine struct {
 	active bool
 	// tmpCleaned: stale atomic-write staging files were removed (once per run, under e.run).
 	tmpCleaned bool
-	// pathV2Pinned caches the vault's enc2 pin (ADR-0042, see writePathV2),
-	// read from sync.db once (pathPinLoaded, under e.run).
+	// pathV2Pinned and pathStrong cache the vault's enc2 pins (ADR-0042, see
+	// clearPath and writePathV2), read from sync.db once (pathPinLoaded,
+	// under e.run).
 	pathV2Pinned  bool
+	pathStrong    bool
 	pathPinLoaded bool
+	// migration is the state of the background rewrite of enc1 path tokens
+	// (pathmigrate.go, under e.run); migrating says it has work left, for the
+	// scheduler (under e.mu).
+	migration pathMigration
+	migrating bool
 	// noPrefix are the folder renames the server refused as a move_prefix
 	// (sent file by file since), forcedPrefix the share-root renames deduced
 	// from a SHARE_ROOT_MOVE, to send in the next round (see folders.go;
@@ -301,6 +313,9 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 		}
 		if !pulled && !resolved && !pushed {
 			_ = e.cfg.DB.PruneOutbox(ctx)
+			// Nothing else to do: one throttled batch of the path token
+			// migration (it never fails the cycle).
+			e.migratePaths(ctx)
 			return resolveErr
 		}
 		e.mu.Lock()

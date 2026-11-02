@@ -79,6 +79,9 @@ type device struct {
 	remote    *flaky
 	conflicts []syncpkg.Conflict
 	vaultID   string
+	// cfg is the configuration eng was built with (a test may tune it and
+	// build the engine again).
+	cfg syncpkg.Config
 	// overwritten records path and content each time a merge is about to replace local content.
 	overwritten []string
 }
@@ -124,6 +127,7 @@ func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, ciph
 	if cipher != nil {
 		cfg.Cipher = cipher
 	}
+	d.cfg = cfg
 	d.eng = syncpkg.New(cfg)
 	return d
 }
@@ -673,7 +677,8 @@ func TestPrivateVaultRoundTripAndOpacity(t *testing.T) {
 		t.Fatalf("tree: %v %v", tree, err)
 	}
 	for _, it := range tree.Items {
-		if !strings.HasPrefix(it.Path, "enc1:") || strings.Contains(it.Path, "Journal") || it.Kind != "opaque" {
+		// enc2 by default since ADR-0042 release N+1 (bound to the file).
+		if !strings.HasPrefix(it.Path, "enc2:") || strings.Contains(it.Path, "Journal") || it.Kind != "opaque" {
 			t.Errorf("server sees a readable entry: %+v", it)
 		}
 		var blob bytes.Buffer

@@ -20,8 +20,9 @@ import (
 type transportChange = transport.Change
 
 // ErrPathDowngrade means the server sent an enc1 path token for a file this
-// device has already seen with an enc2 token (ADR-0042): enc1 is not bound to
-// the file, so it may be the token of another file of the vault.
+// device has already seen with an enc2 token, or for a vault whose tokens are
+// all enc2 (the strong pin, ADR-0042): enc1 is not bound to the file, so it
+// may be the token of another file of the vault.
 var ErrPathDowngrade = errors.New("the server path of this file is in an older format than this device has already seen")
 
 // Path-token pins in sync.db (ADR-0042), trust on first use like the
@@ -31,10 +32,15 @@ var ErrPathDowngrade = errors.New("the server path of this file is in an older f
 //     features.path_v2 off, so a vault never goes back to enc1;
 //   - metaPathV2File marks one file: from then on an enc1 token for it is
 //     refused (ErrPathDowngrade). Files never seen in enc2 keep accepting
-//     enc1, which they legitimately use until they are moved.
+//     enc1, which they legitimately use until they are moved;
+//   - metaPathV2Strong marks a cloud vault whose complete tree had no enc1
+//     token left (release N+1, after the migration of pathmigrate.go): from
+//     then on every enc1 token of the vault is refused.
 func metaPathV2(cloudID string) string { return "path_v2:" + cloudID }
 
 func metaPathV2File(fileID string) string { return "path_v2_file:" + fileID }
+
+func metaPathV2Strong(cloudID string) string { return "path_v2_strong:" + cloudID }
 
 // clearPath turns the server path of a file into the local one (decrypting
 // the token in private vaults, see the pins above).
@@ -44,6 +50,9 @@ func (e *Engine) clearPath(ctx context.Context, fileID, serverPath string) (stri
 	}
 	v := vaultcrypto.PathTokenVersion(serverPath)
 	if v == 1 {
+		if e.loadPathPins(ctx); e.pathStrong {
+			return "", ErrPathDowngrade
+		}
 		if pinned, _ := e.cfg.DB.Meta(ctx, metaPathV2File(fileID)); pinned == "1" {
 			return "", ErrPathDowngrade
 		}
@@ -64,7 +73,7 @@ func (e *Engine) pinPathV2(ctx context.Context, fileID string) {
 			e.log.Warn().Err(err).Str("file_id", fileID).Msg("sync: pin path token format")
 		}
 	}
-	if e.pathV2Pinned {
+	if e.loadPathPins(ctx); e.pathV2Pinned {
 		return
 	}
 	cloud, _ := e.cfg.DB.Meta(ctx, MetaCloudVault)
@@ -75,7 +84,22 @@ func (e *Engine) pinPathV2(ctx context.Context, fileID string) {
 		e.log.Warn().Err(err).Msg("sync: pin path token format")
 		return
 	}
-	e.pathV2Pinned, e.pathPinLoaded = true, true
+	e.pathV2Pinned = true
+}
+
+// loadPathPins reads the vault pins of the linked cloud vault from sync.db
+// once (pathPinLoaded, under e.run).
+func (e *Engine) loadPathPins(ctx context.Context) {
+	if e.pathPinLoaded {
+		return
+	}
+	if cloud, _ := e.cfg.DB.Meta(ctx, MetaCloudVault); cloud != "" {
+		v, _ := e.cfg.DB.Meta(ctx, metaPathV2(cloud))
+		strong, _ := e.cfg.DB.Meta(ctx, metaPathV2Strong(cloud))
+		e.pathStrong = strong == "1"
+		e.pathV2Pinned = v == "1" || e.pathStrong
+	}
+	e.pathPinLoaded = true
 }
 
 // writePathV2 decides the format of a new path token: enc2 when
@@ -85,13 +109,7 @@ func (e *Engine) writePathV2(ctx context.Context) bool {
 	if e.cfg.Cipher.PathV2() {
 		return true
 	}
-	if !e.pathPinLoaded {
-		if cloud, _ := e.cfg.DB.Meta(ctx, MetaCloudVault); cloud != "" {
-			v, _ := e.cfg.DB.Meta(ctx, metaPathV2(cloud))
-			e.pathV2Pinned = v == "1"
-		}
-		e.pathPinLoaded = true
-	}
+	e.loadPathPins(ctx)
 	return e.pathV2Pinned
 }
 
