@@ -1,4 +1,12 @@
-import { expect, listVaultFiles, readVaultFile, seedVault, skipOnWeb, test } from './support';
+import {
+  dragAndDrop,
+  expect,
+  listVaultFiles,
+  readVaultFile,
+  seedVault,
+  skipOnWeb,
+  test,
+} from './support';
 import {
   answerPrompt,
   openDrawing,
@@ -326,8 +334,9 @@ test('another drawing is inserted as a picture, from the command and from a drop
   const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
   // (With an element selected Excalidraw shows its properties panel on the left: drop on the right.)
   const box = (await canvas.boundingBox())!;
-  await page.locator('.tree .node', { hasText: 'Other' }).dragTo(canvas, {
-    targetPosition: { x: Math.round(box.width - 140), y: Math.round(box.height - 120) },
+  await dragAndDrop(page.locator('.tree .node', { hasText: 'Other' }), canvas, {
+    x: Math.round(box.width - 140),
+    y: Math.round(box.height - 120),
   });
   await expect
     .poll(async () => (await live(page)).filter((e) => e.type === 'image').length, {

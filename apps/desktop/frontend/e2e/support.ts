@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * The same specs run on two targets (ADR-0029, P7 of the W8 review):
@@ -214,4 +214,27 @@ export async function vaultBinaries(page: Page): Promise<Record<string, string>>
       [...(window as unknown as MockWindow).__mock.vaults.values()][0]?.binaries ?? [],
     ),
   );
+}
+
+/**
+ * HTML5 drag and drop from `source` onto `target` at `position` (relative to the target's box).
+ * Playwright's emulated `dragTo` can hang in Chromium while the page is busy (Excalidraw rendering
+ * next to the WebAssembly core), so the events are dispatched directly with one real DataTransfer:
+ * dragstart on the source (the app sets its data there), then dragenter/dragover/drop on the target
+ * at the drop point, then dragend. The app's own handlers run exactly as in a real drag.
+ */
+export async function dragAndDrop(
+  source: Locator,
+  target: Locator,
+  position: { x: number; y: number },
+): Promise<void> {
+  const box = await target.boundingBox();
+  if (!box) throw new Error('drop target is not visible');
+  const point = { clientX: box.x + position.x, clientY: box.y + position.y };
+  const dataTransfer = await source.page().evaluateHandle(() => new DataTransfer());
+  await source.dispatchEvent('dragstart', { dataTransfer });
+  for (const type of ['dragenter', 'dragover', 'drop'] as const)
+    await target.dispatchEvent(type, { dataTransfer, ...point });
+  await source.dispatchEvent('dragend', { dataTransfer });
+  await dataTransfer.dispose();
 }

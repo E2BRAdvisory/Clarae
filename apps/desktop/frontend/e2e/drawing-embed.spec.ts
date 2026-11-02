@@ -1,4 +1,4 @@
-import { expect, listVaultFiles, readVaultFile, test } from './support';
+import { dragAndDrop, expect, listVaultFiles, readVaultFile, test } from './support';
 import {
   answerPrompt,
   openDrawing,
@@ -132,9 +132,7 @@ test('dragging a note and an image from the explorer onto the canvas adds them w
   const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
   const box = (await canvas.boundingBox())!;
 
-  await page
-    .locator('.tree .node', { hasText: 'Plan' })
-    .dragTo(canvas, { targetPosition: { x: 300, y: 200 } });
+  await dragAndDrop(page.locator('.tree .node', { hasText: 'Plan' }), canvas, { x: 300, y: 200 });
   await expect
     .poll(async () => (await savedDrawing(page)).elements.length, { timeout: 15_000 })
     .toBe(2);
@@ -146,8 +144,9 @@ test('dragging a note and an image from the explorer onto the canvas adds them w
   expect(card.y + card.height / 2).toBeLessThan(240);
   expect(card['link']).toBe('[[Plan]]');
 
-  await page.locator('.tree .node', { hasText: 'dot.png' }).dragTo(canvas, {
-    targetPosition: { x: Math.round(box.width - 100), y: 100 },
+  await dragAndDrop(page.locator('.tree .node', { hasText: 'dot.png' }), canvas, {
+    x: Math.round(box.width - 100),
+    y: 100,
   });
   await expect
     .poll(async () => (await savedDrawing(page)).elements.some((e) => e.type === 'image'), {

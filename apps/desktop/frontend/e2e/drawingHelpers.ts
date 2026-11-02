@@ -112,9 +112,22 @@ export async function answerPrompt(page: Page, value: string): Promise<void> {
 /** Selects everything on the canvas. */
 export async function selectAll(page: Page): Promise<void> {
   const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
-  const box = (await canvas.boundingBox())!;
-  await page.mouse.click(box.x + 4, box.y + box.height - 4); // empty corner: focuses the canvas
-  await page.keyboard.press('ControlOrMeta+a');
+  // Excalidraw shows its shape actions once something is selected. Right after the editor mounts
+  // the first Ctrl+A can be lost, so the click and the shortcut are repeated until it shows (a
+  // scene with nothing to select simply ends after the last attempt).
+  const selected = page.locator('.excalidraw .selected-shape-actions');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.click(box.x + 4, box.y + box.height - 4); // empty corner: focuses the canvas
+    await page.keyboard.press('ControlOrMeta+a');
+    if (await selected.first().isVisible()) return;
+    try {
+      await selected.first().waitFor({ state: 'visible', timeout: 2_000 });
+      return;
+    } catch {
+      // not selected yet: try again
+    }
+  }
 }
 
 export interface Saved {
