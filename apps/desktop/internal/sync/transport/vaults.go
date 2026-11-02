@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"memobrain/shared/apiclient"
 	"memobrain/shared/syncproto"
 )
@@ -41,10 +43,12 @@ type TreeEntry struct {
 	Kind   string
 }
 
-// Tree is GET /vaults/{id}/tree.
+// Tree is GET /vaults/{id}/tree. AsOfID is the id of the change at AsOfSeq
+// ("" when the server has none or predates ADR-0046): the cursor keeps it.
 type Tree struct {
 	Items   []TreeEntry
 	AsOfSeq int64
+	AsOfID  string
 }
 
 // Change is one changelog entry.
@@ -63,10 +67,12 @@ type Change struct {
 	ConflictOf string    `json:"conflict_of"`
 }
 
-// Changes is GET /vaults/{id}/changes.
+// Changes is GET /vaults/{id}/changes. NextID is the id of the change at
+// NextSeq ("" when the server has none or predates ADR-0046).
 type Changes struct {
 	Items   []Change
 	NextSeq int64
+	NextID  string
 	HasMore bool
 }
 
@@ -258,21 +264,28 @@ func (c *Client) GetTree(ctx context.Context, ref string) (Tree, error) {
 	if err != nil {
 		return Tree{}, err
 	}
-	out := Tree{AsOfSeq: t.AsOfSeq, Items: make([]TreeEntry, 0, len(t.Items))}
+	out := Tree{AsOfSeq: t.AsOfSeq, AsOfID: idString(t.AsOfId), Items: make([]TreeEntry, 0, len(t.Items))}
 	for _, e := range t.Items {
 		out.Items = append(out.Items, TreeEntry{Path: e.Path, FileID: e.FileId.String(), Rev: e.Rev, Hash: e.Hash, Size: e.Size, Kind: e.Kind})
 	}
 	return out, nil
 }
 
-// GetChanges returns changelog entries after since. A cursor older than the
-// compaction window yields an error matching CodeError(CURSOR_EXPIRED).
-func (c *Client) GetChanges(ctx context.Context, ref string, since int64, limit int) (Changes, error) {
+// GetChanges returns changelog entries after since. sinceID, the id of the
+// change at since ("" when unknown), lets the server tell a seq reused after
+// a restore of its database (ADR-0046). A cursor the server cannot continue
+// from yields an error matching CodeError(CURSOR_EXPIRED); ServerBehind
+// tells which kind.
+func (c *Client) GetChanges(ctx context.Context, ref string, since int64, sinceID string, limit int) (Changes, error) {
 	vid, scope, err := vaultRef(ref)
 	if err != nil {
 		return Changes{}, err
 	}
-	res, err := c.api.GetChangesWithResponse(ctx, vid, &apiclient.GetChangesParams{Since: since, Limit: ptrIf(limit), Scope: scope})
+	params := &apiclient.GetChangesParams{Since: since, Limit: ptrIf(limit), Scope: scope}
+	if id, err := uuid.Parse(sinceID); err == nil && since > 0 {
+		params.SinceId = &id
+	}
+	res, err := c.api.GetChangesWithResponse(ctx, vid, params)
 	if err != nil {
 		return Changes{}, err
 	}
@@ -280,7 +293,7 @@ func (c *Client) GetChanges(ctx context.Context, ref string, since int64, limit 
 	if err != nil {
 		return Changes{}, err
 	}
-	out := Changes{NextSeq: page.NextSeq, HasMore: page.HasMore, Items: make([]Change, 0, len(page.Items))}
+	out := Changes{NextSeq: page.NextSeq, NextID: idString(page.NextId), HasMore: page.HasMore, Items: make([]Change, 0, len(page.Items))}
 	for _, ch := range page.Items {
 		out.Items = append(out.Items, changeFromAPI(ch))
 	}

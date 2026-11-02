@@ -204,14 +204,25 @@ func (d *DB) Cursor(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-// SetCursor stores the position. It only moves forward unless force is set
-// (bootstrap from the manifest may legitimately reset it).
-func (d *DB) SetCursor(ctx context.Context, seq int64, force bool) error {
+// CursorID returns the id of the change at the cursor, as the server reported
+// it ("" when unknown). It is sent with the cursor so that the server can
+// tell a seq it handed out again after a restore of its database (ADR-0046).
+func (d *DB) CursorID(ctx context.Context) (string, error) {
+	var id string
+	err := d.db.QueryRowContext(ctx, `SELECT last_id FROM sync_cursor WHERE id = 1`).Scan(&id)
+	return id, err
+}
+
+// SetCursor stores the position and the id of the change at it ("" when the
+// server reported none). It only moves forward unless force is set (bootstrap
+// from the manifest may legitimately reset it); at the same position it only
+// fills in an id that was unknown.
+func (d *DB) SetCursor(ctx context.Context, seq int64, id string, force bool) error {
 	if force {
-		_, err := d.db.ExecContext(ctx, `UPDATE sync_cursor SET last_seq = ? WHERE id = 1`, seq)
+		_, err := d.db.ExecContext(ctx, `UPDATE sync_cursor SET last_seq = ?, last_id = ? WHERE id = 1`, seq, id)
 		return err
 	}
-	_, err := d.db.ExecContext(ctx, `UPDATE sync_cursor SET last_seq = ? WHERE id = 1 AND last_seq < ?`, seq, seq)
+	_, err := d.db.ExecContext(ctx, `UPDATE sync_cursor SET last_seq = ?, last_id = ? WHERE id = 1 AND (last_seq < ? OR (last_seq = ? AND last_id = ''))`, seq, id, seq, seq)
 	return err
 }
 
@@ -448,4 +459,4 @@ func (d *DB) Quarantined(ctx context.Context) ([]Quarantined, error) {
 }
 
 // resetSQL empties the synchronization state (unlink, forgotten mount).
-const resetSQL = `DELETE FROM sync_files; DELETE FROM outbox; DELETE FROM conflicts; DELETE FROM pending_remote; DELETE FROM quarantine; UPDATE sync_cursor SET last_seq = 0`
+const resetSQL = `DELETE FROM sync_files; DELETE FROM outbox; DELETE FROM conflicts; DELETE FROM pending_remote; DELETE FROM quarantine; UPDATE sync_cursor SET last_seq = 0, last_id = ''`

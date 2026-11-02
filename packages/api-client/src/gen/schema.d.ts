@@ -301,7 +301,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Changelog entries after a cursor (§3.4.4 B) */
+        /**
+         * Changelog entries after a cursor (§3.4.4 B)
+         * @description The cursor and the page come from one database snapshot. A cursor is a position (since) and, optionally, the identity of the change at that position (since_id, from next_id or the as_of_id of /tree): after a point-in-time restore of the server, new commits reuse sequence numbers a device already consumed, and only the identity tells them apart (ADR-0046).
+         */
         get: operations["getChanges"];
         put?: never;
         post?: never;
@@ -1093,7 +1096,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB) */
+        /**
+         * Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
+         * @description A user has at most `exports.max_active_per_user` (default 3) archives being streamed at once by a node of the service; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_streams`).
+         */
         get: operations["exportVaultZip"];
         put?: never;
         post?: never;
@@ -1116,7 +1122,7 @@ export interface paths {
         put?: never;
         /**
          * Start an export job (any size); the ZIP is built in the background
-         * @description A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
+         * @description A vault has at most one job queued or running: a new request returns that job. A ready job built from the vault as it is now (nothing committed since) and downloadable for at least another hour is returned as well, instead of building the same archive again. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`). Once a new archive is ready, the older ones of the vault stay downloadable for at most one more hour. A job that is cancelled (the account or the vault was deleted) ends `failed`.
          */
         post: operations["createExport"];
         delete?: never;
@@ -1391,6 +1397,11 @@ export interface components {
              * @description The changelog position the manifest reflects: continue with changes?since=as_of_seq
              */
             as_of_seq: number;
+            /**
+             * Format: uuid
+             * @description Id of the change at as_of_seq, to send as since_id with it (ADR-0046). Absent when there is none (an empty vault, or a change pruned by retention)
+             */
+            as_of_id?: string;
         };
         /** @enum {string} */
         ChangeOp: "create" | "modify" | "move" | "delete" | "restore";
@@ -1422,6 +1433,11 @@ export interface components {
             items: components["schemas"]["Change"][];
             /** Format: int64 */
             next_seq: number;
+            /**
+             * Format: uuid
+             * @description Id of the change at next_seq, to send as since_id with it (ADR-0046). Absent when there is none (next_seq 0, or a change pruned by retention)
+             */
+            next_id?: string;
             has_more: boolean;
         };
         BlobCheck: {
@@ -1840,6 +1856,7 @@ export interface components {
             status: "queued" | "running" | "ready" | "failed" | "expired";
             /** Format: int64 */
             size?: number;
+            /** @description Why a failed job failed, as a short generic message (the details are in the server log) */
             error?: string;
             /** Format: date-time */
             created_at: string;
@@ -1946,7 +1963,7 @@ export interface components {
         PrincipalType: "user" | "group";
         PrincipalId: string;
         DirectoryQuery: string;
-        /** @description Client-chosen key that makes a mutating POST safe to retry */
+        /** @description Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`. */
         IdempotencyKey: string;
     };
     requestBodies: never;
@@ -2113,7 +2130,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                /** @description Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2281,7 +2298,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                /** @description Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2517,6 +2534,8 @@ export interface operations {
         parameters: {
             query: {
                 since: number;
+                /** @description Id of the change at seq = since, as the client received it (next_id, or as_of_id of /tree). When the server has a different change at that seq, the cursor belongs to a timeline the server lost (a restored backup): 410 CURSOR_EXPIRED with last_seq. When the change was pruned by retention the cursor cannot be verified: 410 CURSOR_EXPIRED with compaction_seq. Ignored with since = 0; without it the cursor is not verified (clients before ADR-0046). */
+                since_id?: string;
                 limit?: number;
                 /** @description Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it. */
                 scope?: components["parameters"]["Scope"];
@@ -2542,7 +2561,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            /** @description The cursor predates the compaction window (code CURSOR_EXPIRED): bootstrap from /tree */
+            /** @description The cursor is not in the changelog the server serves (code CURSOR_EXPIRED): bootstrap from /tree. The extension member compaction_seq marks a cursor older than the changelog window (or whose change was pruned); last_seq marks a server that is behind the client, i.e. restored to an earlier point in time, with the cursor beyond its end or at a seq now held by another change (ADR-0022, ADR-0046) */
             410: {
                 headers: {
                     [name: string]: unknown;
@@ -2696,7 +2715,7 @@ export interface operations {
                 scope?: components["parameters"]["Scope"];
             };
             header?: {
-                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                /** @description Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2801,7 +2820,7 @@ export interface operations {
                 scope?: components["parameters"]["Scope"];
             };
             header?: {
-                /** @description Client-chosen key that makes a mutating POST safe to retry */
+                /** @description Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -4286,7 +4305,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Accepted (a new job, or the one already queued or running for the vault) */
+            /** @description Accepted (a new job, the one already queued or running for the vault, or a ready one of the unchanged vault) */
             202: {
                 headers: {
                     [name: string]: unknown;

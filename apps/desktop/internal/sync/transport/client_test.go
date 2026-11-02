@@ -159,7 +159,7 @@ func TestCommitIdempotencyKeyAndConversion(t *testing.T) {
 func TestProblemDecoding(t *testing.T) {
 	f := &fakeServer{handlers: []func(*http.Request) *http.Response{problem(http.StatusGone, syncproto.CodeCursorExpired)}}
 	c := newTestClient(t, f)
-	_, err := c.GetChanges(context.Background(), "0190a0a0-0000-7000-8000-000000000001", 5, 0)
+	_, err := c.GetChanges(context.Background(), "0190a0a0-0000-7000-8000-000000000001", 5, "", 0)
 	var pe *ProblemError
 	if !errors.As(err, &pe) || pe.StatusCode != http.StatusGone || pe.Problem.Code != syncproto.CodeCursorExpired || pe.Problem.RequestID != "rid" || pe.Problem.Detail != "d" {
 		t.Fatalf("err: %#v", err)
@@ -178,6 +178,49 @@ func TestProblemDecoding(t *testing.T) {
 	_, err = c.ListVaults(context.Background())
 	if !errors.As(err, &pe) || pe.StatusCode != http.StatusBadGateway || pe.Problem.Code != syncproto.CodeInternal || !strings.Contains(pe.Problem.Detail, "bad gateway") {
 		t.Fatalf("err: %#v", err)
+	}
+}
+
+// The identity of the cursor (ADR-0046): since_id goes with a positive
+// cursor only, next_id and as_of_id are read back, and an answer without them
+// (a server before ADR-0046) leaves them empty.
+func TestCursorIdentityOnTheWire(t *testing.T) {
+	const vid, id = "0190a0a0-0000-7000-8000-000000000001", "0190a0a0-0000-7000-8000-0000000000c1"
+	page := reply(http.StatusOK, "application/json", `{"items":[],"next_seq":5,"next_id":"`+id+`","has_more":false}`)
+	legacy := reply(http.StatusOK, "application/json", `{"items":[],"next_seq":5,"has_more":false}`)
+	f := &fakeServer{handlers: []func(*http.Request) *http.Response{page, page, page, legacy}}
+	c := newTestClient(t, f)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		since   int64
+		sinceID string
+		query   string
+		nextID  string
+	}{
+		{5, id, "since=5&since_id=" + id, id},
+		{0, id, "since=0", id},           // nothing to verify at the start
+		{5, "not-a-uuid", "since=5", id}, // an id this client cannot vouch for
+		{5, id, "since=5&since_id=" + id, ""},
+	} {
+		ch, err := c.GetChanges(ctx, vid, tc.since, tc.sinceID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.reqs[len(f.reqs)-1].query; got != tc.query || ch.NextID != tc.nextID {
+			t.Fatalf("since %d %q: query %q, next_id %q", tc.since, tc.sinceID, got, ch.NextID)
+		}
+	}
+
+	f = &fakeServer{handlers: []func(*http.Request) *http.Response{
+		reply(http.StatusOK, "application/json", `{"as_of_seq":5,"as_of_id":"`+id+`","items":[]}`),
+		reply(http.StatusOK, "application/json", `{"as_of_seq":5,"items":[]}`),
+	}}
+	c = newTestClient(t, f)
+	if tr, err := c.GetTree(ctx, vid); err != nil || tr.AsOfSeq != 5 || tr.AsOfID != id {
+		t.Fatalf("tree: %+v %v", tr, err)
+	}
+	if tr, err := c.GetTree(ctx, vid); err != nil || tr.AsOfID != "" {
+		t.Fatalf("tree without as_of_id: %+v %v", tr, err)
 	}
 }
 

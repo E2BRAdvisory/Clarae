@@ -25,7 +25,7 @@ type expiringRemote struct {
 	expired map[string]any
 }
 
-func (r *expiringRemote) Changes(ctx context.Context, since int64, limit int) (transport.Changes, error) {
+func (r *expiringRemote) Changes(ctx context.Context, since int64, sinceID string, limit int) (transport.Changes, error) {
 	r.mu.Lock()
 	extra := r.expired
 	r.expired = nil
@@ -35,7 +35,7 @@ func (r *expiringRemote) Changes(ctx context.Context, since int64, limit int) (t
 			Status: http.StatusGone, Code: syncproto.CodeCursorExpired, Extra: extra,
 		}}
 	}
-	return r.scriptRemote.Changes(ctx, since, limit)
+	return r.scriptRemote.Changes(ctx, since, sinceID, limit)
 }
 
 // restoreFixture is an engine whose cursor is at 20 while the server, restored
@@ -44,7 +44,7 @@ func restoreFixture(t *testing.T, extra map[string]any) (*Engine, *expiringRemot
 	t.Helper()
 	remote := &expiringRemote{scriptRemote: newScriptRemote(), expired: extra}
 	e, dir := newTestEngine(t, remote, 0)
-	if err := e.cfg.DB.SetCursor(context.Background(), 20, false); err != nil {
+	if err := e.cfg.DB.SetCursor(context.Background(), 20, "", false); err != nil {
 		t.Fatal(err)
 	}
 	var snapshots []string

@@ -237,7 +237,14 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 		if err != nil {
 			return applied, err
 		}
-		ch, err := e.cfg.Remote.Changes(ctx, cur, 500)
+		curID, err := e.cfg.DB.CursorID(ctx)
+		if err != nil {
+			return applied, err
+		}
+		// The id of the change at the cursor goes with it: a seq the server handed
+		// out again after a restore of its database is answered like a cursor
+		// beyond its end (ADR-0046).
+		ch, err := e.cfg.Remote.Changes(ctx, cur, curID, 500)
 		if transport.IsCode(err, syncproto.CodeCursorExpired) {
 			mode := bootstrapAuthoritative
 			if transport.ServerBehind(err) {
@@ -287,8 +294,10 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 			if saved, err = e.saveCandidates(ctx, tx); err != nil {
 				return err
 			}
-			if ch.NextSeq > cur {
-				return tx.SetCursor(ctx, ch.NextSeq, false)
+			// The same position fills in an id this cursor did not have yet (one
+			// saved before ADR-0046): from then on the server verifies it.
+			if ch.NextSeq > cur || (ch.NextSeq == cur && curID == "" && ch.NextID != "") {
+				return tx.SetCursor(ctx, ch.NextSeq, ch.NextID, false)
 			}
 			return nil
 		})
@@ -711,7 +720,7 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 		if saved, err = e.saveCandidates(ctx, tx); err != nil {
 			return err
 		}
-		if err := tx.SetCursor(ctx, tree.AsOfSeq, true); err != nil {
+		if err := tx.SetCursor(ctx, tree.AsOfSeq, tree.AsOfID, true); err != nil {
 			return err
 		}
 		return tx.SetMeta(ctx, MetaBootstrapped, "1")

@@ -45,7 +45,7 @@ type idleRemote struct{}
 func (idleRemote) Tree(context.Context) (transport.Tree, error) {
 	return transport.Tree{}, errSignedOut
 }
-func (idleRemote) Changes(context.Context, int64, int) (transport.Changes, error) {
+func (idleRemote) Changes(context.Context, int64, string, int) (transport.Changes, error) {
 	return transport.Changes{}, errSignedOut
 }
 func (idleRemote) CheckBlobs(context.Context, []string) ([]string, error) { return nil, errSignedOut }

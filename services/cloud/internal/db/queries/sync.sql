@@ -57,6 +57,12 @@ SELECT * FROM file_revisions
 WHERE vault_id = $1 AND seq > $2
 ORDER BY seq LIMIT $3;
 
+-- name: GetChangeIDAt :one
+-- The identity of the changelog entry at a seq. A client keeps it with its
+-- cursor: after a point-in-time restore the server hands out the same seqs
+-- again, to other changes (ADR-0046).
+SELECT id FROM file_revisions WHERE vault_id = $1 AND seq = $2;
+
 -- name: ListRevisionsByOpIDs :many
 -- The operations of a commit batch that were already applied (idempotency),
 -- read once under the vault lock instead of once per operation.

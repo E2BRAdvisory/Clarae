@@ -253,7 +253,7 @@ func (r *idleRemote) Tree(context.Context) (transport.Tree, error) {
 	return transport.Tree{}, errUnexpectedRemote
 }
 
-func (r *idleRemote) Changes(_ context.Context, since int64, _ int) (transport.Changes, error) {
+func (r *idleRemote) Changes(_ context.Context, since int64, _ string, _ int) (transport.Changes, error) {
 	r.firstChanges.CompareAndSwap(0, time.Now().UnixNano())
 	return transport.Changes{NextSeq: since}, nil
 }

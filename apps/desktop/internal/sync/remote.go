@@ -13,7 +13,9 @@ import (
 // Remote is the part of the cloud API the engine uses, for one vault.
 type Remote interface {
 	Tree(ctx context.Context) (transport.Tree, error)
-	Changes(ctx context.Context, since int64, limit int) (transport.Changes, error)
+	// Changes reads the changelog after the cursor since; sinceID is the id of
+	// the change at since ("" when unknown, ADR-0046).
+	Changes(ctx context.Context, since int64, sinceID string, limit int) (transport.Changes, error)
 	CheckBlobs(ctx context.Context, hashes []string) ([]string, error)
 	// Upload stores a blob (single request up to 32 MB, resumable beyond).
 	// resumeURL is the URL returned by an interrupted attempt; the returned
@@ -36,8 +38,8 @@ func (r HTTPRemote) Tree(ctx context.Context) (transport.Tree, error) {
 }
 
 // Changes implements Remote.
-func (r HTTPRemote) Changes(ctx context.Context, since int64, limit int) (transport.Changes, error) {
-	return r.C.GetChanges(ctx, r.Vault, since, limit)
+func (r HTTPRemote) Changes(ctx context.Context, since int64, sinceID string, limit int) (transport.Changes, error) {
+	return r.C.GetChanges(ctx, r.Vault, since, sinceID, limit)
 }
 
 // CheckBlobs implements Remote.

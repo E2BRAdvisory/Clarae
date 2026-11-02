@@ -6,8 +6,10 @@ package sync
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/sync/syncdb"
@@ -21,4 +23,19 @@ type (
 // ListExportFiles runs the ListExportFiles query on tx.
 func ListExportFiles(ctx context.Context, tx db.DBTX, vaultID uuid.UUID) ([]ListExportFilesRow, error) {
 	return syncdb.New(tx).ListExportFiles(ctx, vaultID)
+}
+
+// ChangeIDAt returns the id of the changelog entry at seq in the vault, ok
+// false when there is none (seq 0, or an entry pruned by retention). The
+// manifest reports it with its position so that a client can keep the
+// identity of its cursor (ADR-0046).
+func ChangeIDAt(ctx context.Context, tx db.DBTX, vaultID uuid.UUID, seq int64) (id uuid.UUID, ok bool, err error) {
+	if seq <= 0 {
+		return uuid.Nil, false, nil
+	}
+	id, err = syncdb.New(tx).GetChangeIDAt(ctx, syncdb.GetChangeIDAtParams{VaultID: vaultID, Seq: seq})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	return id, err == nil, err
 }

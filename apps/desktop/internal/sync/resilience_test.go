@@ -65,7 +65,7 @@ func (r *scriptRemote) Tree(context.Context) (transport.Tree, error) {
 	return r.tree, nil
 }
 
-func (r *scriptRemote) Changes(_ context.Context, since int64, _ int) (transport.Changes, error) {
+func (r *scriptRemote) Changes(_ context.Context, since int64, _ string, _ int) (transport.Changes, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := transport.Changes{NextSeq: since}
@@ -307,7 +307,7 @@ func TestCommitConflictSynthesizesCandidate(t *testing.T) {
 	f := syncedFile(t, e, remote, dir, "a.md", []byte(baseText))
 	writeFile(t, dir, "a.md", []byte(localText))
 	remote.put(f.FileID, 2, []byte(remoteText)) // on the server, but the cursor is past it
-	if err := e.cfg.DB.SetCursor(ctx, 2, true); err != nil {
+	if err := e.cfg.DB.SetCursor(ctx, 2, "", true); err != nil {
 		t.Fatal(err)
 	}
 

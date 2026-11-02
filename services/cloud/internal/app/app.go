@@ -61,7 +61,7 @@ func New(d *db.DB, store storage.BlobStore, log zerolog.Logger) *App {
 	a.Config = configprofiles.NewService(d)
 	a.Groups = groups.NewService(d, a.Config)
 	a.Groups.Grants = a.Sharing // grants belong to sharing, which depends on groups (ADR-0033)
-	a.Vaults = vaults.NewService(d).WithAuthorizer(a.Sharing)
+	a.Vaults = vaults.NewService(d).WithAuthorizer(a.Sharing).WithChangeIDs(syncmod.ChangeIDAt)
 	a.Quota = quota.NewService(d, a.Users)
 	a.Blobs = blobs.NewService(d, store, a.Sharing).WithQuota(a.Quota)
 	a.Sync = syncmod.NewService(d, a.Sharing, a.Quota)
@@ -72,7 +72,8 @@ func New(d *db.DB, store storage.BlobStore, log zerolog.Logger) *App {
 
 // Jobs returns the background job runner.
 func (a *App) Jobs() *jobs.Runner {
-	return jobs.New(a.DB, a.Store, a.Blobs, a.Revisions, a.Log).WithExports(export.NewService(a.DB, a.Store, a.ExportStore, a.Sharing, a.Log))
+	return jobs.New(a.DB, a.Store, a.Blobs, a.Revisions, a.Log).WithExports(export.NewService(a.DB, a.Store, a.ExportStore, a.Sharing, a.Log)).
+		WithIdentityProvider(a.Keycloak)
 }
 
 // FillDeps adds the module handlers to router dependencies.

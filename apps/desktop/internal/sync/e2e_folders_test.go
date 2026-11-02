@@ -31,7 +31,7 @@ func shareRoot(t *testing.T, shareID string) string {
 // changeOps counts the operations of the changelog after since.
 func changeOps(t *testing.T, d *device, since int64) map[string]int {
 	t.Helper()
-	ch, err := d.client.GetChanges(context.Background(), d.vaultID, since, 500)
+	ch, err := d.client.GetChanges(context.Background(), d.vaultID, since, "", 500)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func changeOps(t *testing.T, d *device, since int64) map[string]int {
 
 func lastSeq(t *testing.T, d *device) int64 {
 	t.Helper()
-	ch, err := d.client.GetChanges(context.Background(), d.vaultID, 0, 500)
+	ch, err := d.client.GetChanges(context.Background(), d.vaultID, 0, "", 500)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,7 @@ type memRemote struct {
 
 func (r *memRemote) Tree(context.Context) (transport.Tree, error) { return transport.Tree{}, nil }
 
-func (r *memRemote) Changes(context.Context, int64, int) (transport.Changes, error) {
+func (r *memRemote) Changes(context.Context, int64, string, int) (transport.Changes, error) {
 	return transport.Changes{}, nil
 }
 

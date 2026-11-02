@@ -567,7 +567,10 @@ type ChangeOp string
 type Changes struct {
 	HasMore bool     `json:"has_more"`
 	Items   []Change `json:"items"`
-	NextSeq int64    `json:"next_seq"`
+
+	// NextId Id of the change at next_seq, to send as since_id with it (ADR-0046). Absent when there is none (next_seq 0, or a change pruned by retention)
+	NextId  *openapi_types.UUID `json:"next_id,omitempty"`
+	NextSeq int64               `json:"next_seq"`
 }
 
 // ClientConfig defines model for ClientConfig.
@@ -698,13 +701,15 @@ type ExportJob struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// DownloadUrl Where to download a ready export
-	DownloadUrl *string            `json:"download_url,omitempty"`
-	Error       *string            `json:"error,omitempty"`
-	ExpiresAt   *time.Time         `json:"expires_at,omitempty"`
-	Id          openapi_types.UUID `json:"id"`
-	Size        *int64             `json:"size,omitempty"`
-	Status      ExportJobStatus    `json:"status"`
-	VaultId     openapi_types.UUID `json:"vault_id"`
+	DownloadUrl *string `json:"download_url,omitempty"`
+
+	// Error Why a failed job failed, as a short generic message (the details are in the server log)
+	Error     *string            `json:"error,omitempty"`
+	ExpiresAt *time.Time         `json:"expires_at,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Size      *int64             `json:"size,omitempty"`
+	Status    ExportJobStatus    `json:"status"`
+	VaultId   openapi_types.UUID `json:"vault_id"`
 }
 
 // ExportJobStatus defines model for ExportJob.Status.
@@ -923,6 +928,9 @@ type SharePermission string
 
 // Tree defines model for Tree.
 type Tree struct {
+	// AsOfId Id of the change at as_of_seq, to send as since_id with it (ADR-0046). Absent when there is none (an empty vault, or a change pruned by retention)
+	AsOfId *openapi_types.UUID `json:"as_of_id,omitempty"`
+
 	// AsOfSeq The changelog position the manifest reflects: continue with changes?since=as_of_seq
 	AsOfSeq int64       `json:"as_of_seq"`
 	Items   []TreeEntry `json:"items"`
@@ -1080,7 +1088,7 @@ type SearchDirectoryUsersParams struct {
 
 // RegisterDeviceParams defines parameters for RegisterDevice.
 type RegisterDeviceParams struct {
-	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1100,7 +1108,7 @@ type ListVaultsParams struct {
 
 // CreateVaultParams defines parameters for CreateVault.
 type CreateVaultParams struct {
-	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1126,7 +1134,10 @@ type CheckBlobsParams struct {
 // GetChangesParams defines parameters for GetChanges.
 type GetChangesParams struct {
 	Since int64 `form:"since" json:"since"`
-	Limit *int  `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// SinceId Id of the change at seq = since, as the client received it (next_id, or as_of_id of /tree). When the server has a different change at that seq, the cursor belongs to a timeline the server lost (a restored backup): 410 CURSOR_EXPIRED with last_seq. When the change was pruned by retention the cursor cannot be verified: 410 CURSOR_EXPIRED with compaction_seq. Ignored with since = 0; without it the cursor is not verified (clients before ADR-0046).
+	SinceId *openapi_types.UUID `form:"since_id,omitempty" json:"since_id,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
 	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
@@ -1137,7 +1148,7 @@ type CommitParams struct {
 	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
 	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
 
-	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1160,7 +1171,7 @@ type RestoreRevisionParams struct {
 	// Scope Work through a share instead of owning the vault (`share:{id}`, §3.4.7). Paths are then relative to the root of the share and every operation is checked against the caller's permission on it.
 	Scope *Scope `form:"scope,omitempty" json:"scope,omitempty"`
 
-	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry
+	// IdempotencyKey Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1528,6 +1539,8 @@ type ClientInterface interface {
 
 	// GetChanges Changelog entries after a cursor (§3.4.4 B)
 	//
+	// The cursor and the page come from one database snapshot. A cursor is a position (since) and, optionally, the identity of the change at that position (since_id, from next_id or the as_of_id of /tree): after a point-in-time restore of the server, new commits reuse sequence numbers a device already consumed, and only the identity tells them apart (ADR-0046).
+	//
 	// Corresponds with GET /vaults/{vaultId}/changes (the `GetChanges` operationId).
 	GetChanges(ctx context.Context, vaultId VaultId, params *GetChangesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1551,12 +1564,14 @@ type ClientInterface interface {
 
 	// ExportVaultZip Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
 	//
+	// A user has at most `exports.max_active_per_user` (default 3) archives being streamed at once by a node of the service; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_streams`).
+	//
 	// Corresponds with GET /vaults/{vaultId}/export.zip (the `ExportVaultZip` operationId).
 	ExportVaultZip(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateExport Start an export job (any size); the ZIP is built in the background
 	//
-	// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
+	// A vault has at most one job queued or running: a new request returns that job. A ready job built from the vault as it is now (nothing committed since) and downloadable for at least another hour is returned as well, instead of building the same archive again. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`). Once a new archive is ready, the older ones of the vault stay downloadable for at most one more hour. A job that is cancelled (the account or the vault was deleted) ends `failed`.
 	//
 	// Corresponds with POST /vaults/{vaultId}/exports (the `CreateExport` operationId).
 	CreateExport(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2272,6 +2287,8 @@ func (c *Client) CheckBlobs(ctx context.Context, vaultId VaultId, params *CheckB
 
 // GetChanges Changelog entries after a cursor (§3.4.4 B)
 //
+// The cursor and the page come from one database snapshot. A cursor is a position (since) and, optionally, the identity of the change at that position (since_id, from next_id or the as_of_id of /tree): after a point-in-time restore of the server, new commits reuse sequence numbers a device already consumed, and only the identity tells them apart (ADR-0046).
+//
 // Corresponds with GET /vaults/{vaultId}/changes (the `GetChanges` operationId).
 func (c *Client) GetChanges(ctx context.Context, vaultId VaultId, params *GetChangesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetChangesRequest(c.Server, vaultId, params)
@@ -2325,6 +2342,8 @@ func (c *Client) Commit(ctx context.Context, vaultId VaultId, params *CommitPara
 
 // ExportVaultZip Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
 //
+// A user has at most `exports.max_active_per_user` (default 3) archives being streamed at once by a node of the service; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_streams`).
+//
 // Corresponds with GET /vaults/{vaultId}/export.zip (the `ExportVaultZip` operationId).
 func (c *Client) ExportVaultZip(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewExportVaultZipRequest(c.Server, vaultId)
@@ -2340,7 +2359,7 @@ func (c *Client) ExportVaultZip(ctx context.Context, vaultId VaultId, reqEditors
 
 // CreateExport Start an export job (any size); the ZIP is built in the background
 //
-// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
+// A vault has at most one job queued or running: a new request returns that job. A ready job built from the vault as it is now (nothing committed since) and downloadable for at least another hour is returned as well, instead of building the same archive again. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`). Once a new archive is ready, the older ones of the vault stay downloadable for at most one more hour. A job that is cancelled (the account or the vault was deleted) ends `failed`.
 //
 // Corresponds with POST /vaults/{vaultId}/exports (the `CreateExport` operationId).
 func (c *Client) CreateExport(ctx context.Context, vaultId VaultId, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3909,6 +3928,18 @@ func NewGetChangesRequest(server string, vaultId VaultId, params *GetChangesPara
 			}
 		}
 
+		if params.SinceId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "since_id", *params.SinceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -4970,6 +5001,8 @@ type ClientWithResponsesInterface interface {
 
 	// GetChangesWithResponse Changelog entries after a cursor (§3.4.4 B)
 	//
+	// The cursor and the page come from one database snapshot. A cursor is a position (since) and, optionally, the identity of the change at that position (since_id, from next_id or the as_of_id of /tree): after a point-in-time restore of the server, new commits reuse sequence numbers a device already consumed, and only the identity tells them apart (ADR-0046).
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /vaults/{vaultId}/changes (the `GetChanges` operationId).
@@ -4995,6 +5028,8 @@ type ClientWithResponsesInterface interface {
 
 	// ExportVaultZipWithResponse Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
 	//
+	// A user has at most `exports.max_active_per_user` (default 3) archives being streamed at once by a node of the service; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_streams`).
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /vaults/{vaultId}/export.zip (the `ExportVaultZip` operationId).
@@ -5002,7 +5037,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateExportWithResponse Start an export job (any size); the ZIP is built in the background
 	//
-	// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
+	// A vault has at most one job queued or running: a new request returns that job. A ready job built from the vault as it is now (nothing committed since) and downloadable for at least another hour is returned as well, instead of building the same archive again. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`). Once a new archive is ready, the older ones of the vault stay downloadable for at most one more hour. A job that is cancelled (the account or the vault was deleted) ends `failed`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9432,6 +9467,8 @@ func (c *ClientWithResponses) CheckBlobsWithResponse(ctx context.Context, vaultI
 
 // GetChangesWithResponse Changelog entries after a cursor (§3.4.4 B)
 //
+// The cursor and the page come from one database snapshot. A cursor is a position (since) and, optionally, the identity of the change at that position (since_id, from next_id or the as_of_id of /tree): after a point-in-time restore of the server, new commits reuse sequence numbers a device already consumed, and only the identity tells them apart (ADR-0046).
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /vaults/{vaultId}/changes (the `GetChanges` operationId).
@@ -9475,6 +9512,8 @@ func (c *ClientWithResponses) CommitWithResponse(ctx context.Context, vaultId Va
 
 // ExportVaultZipWithResponse Stream the vault as a ZIP (shared vaults of the caller, up to 512 MB)
 //
+// A user has at most `exports.max_active_per_user` (default 3) archives being streamed at once by a node of the service; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_streams`).
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /vaults/{vaultId}/export.zip (the `ExportVaultZip` operationId).
@@ -9488,7 +9527,7 @@ func (c *ClientWithResponses) ExportVaultZipWithResponse(ctx context.Context, va
 
 // CreateExportWithResponse Start an export job (any size); the ZIP is built in the background
 //
-// A vault has at most one job queued or running: a new request returns that job. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`).
+// A vault has at most one job queued or running: a new request returns that job. A ready job built from the vault as it is now (nothing committed since) and downloadable for at least another hour is returned as well, instead of building the same archive again. A user has at most `exports.max_active_per_user` (default 3) jobs queued or running; beyond that the request is refused with `429 RATE_LIMITED` (`extra.limit`, `extra.active_exports`). Once a new archive is ready, the older ones of the vault stay downloadable for at most one more hour. A job that is cancelled (the account or the vault was deleted) ends `failed`.
 //
 // Returns a wrapper object for the known response body format(s).
 //

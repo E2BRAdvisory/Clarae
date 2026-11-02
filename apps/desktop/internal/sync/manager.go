@@ -280,8 +280,8 @@ func (r sessionRemote) Tree(ctx context.Context) (t transport.Tree, err error) {
 	return
 }
 
-func (r sessionRemote) Changes(ctx context.Context, since int64, limit int) (c transport.Changes, err error) {
-	err = r.do(func(x Remote) error { c, err = x.Changes(ctx, since, limit); return err })
+func (r sessionRemote) Changes(ctx context.Context, since int64, sinceID string, limit int) (c transport.Changes, err error) {
+	err = r.do(func(x Remote) error { c, err = x.Changes(ctx, since, sinceID, limit); return err })
 	return
 }
 

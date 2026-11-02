@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"memobrain/services/cloud/internal/api"
@@ -24,18 +25,22 @@ func (h *HTTP) GetChanges(ctx context.Context, req api.GetChangesRequestObject) 
 	if req.Params.Limit != nil {
 		limit = *req.Params.Limit
 	}
-	items, next, more, err := h.svc.Changes(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.Params.Since, limit)
+	page, err := h.svc.Changes(ctx, auth.MustPrincipal(ctx).UserID, req.VaultId, scopeOf(req.Params.Scope), req.Params.Since, req.Params.SinceId, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]api.Change, 0, len(items))
-	for _, c := range items {
+	out := make([]api.Change, 0, len(page.Items))
+	for _, c := range page.Items {
 		out = append(out, api.Change{
 			Seq: c.Seq, FileId: c.FileID, Op: api.ChangeOp(c.Op), Path: c.Path, PrevPath: c.PrevPath, Rev: int(c.Rev),
 			BlobHash: c.BlobHash, Size: c.Size, AuthorId: c.AuthorID, DeviceId: c.DeviceID, ServerTime: c.ServerTime, ConflictOf: c.ConflictOf,
 		})
 	}
-	return api.GetChanges200JSONResponse{Items: out, NextSeq: next, HasMore: more}, nil
+	resp := api.GetChanges200JSONResponse{Items: out, NextSeq: page.Next, HasMore: page.More}
+	if page.NextID != uuid.Nil {
+		resp.NextId = &page.NextID
+	}
+	return resp, nil
 }
 
 // Commit implements POST /vaults/{vaultId}/commit.

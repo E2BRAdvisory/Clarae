@@ -721,10 +721,19 @@ func TestBootstrapAfterServerRestore(t *testing.T) {
 
 	rp.restore(t)
 	a.sync() // 410 CURSOR_EXPIRED with last_seq -> bootstrap, republish one.md and notes/two.md
-	if lastSeq := vaultLastSeq(t, v); cursorOf(t, b) <= lastSeq {
-		t.Fatalf("B's cursor %d is not ahead of the server (%d): it would not see the restore", cursorOf(t, b), lastSeq)
+	// A keeps working until the server's last_seq has caught up with B's cursor:
+	// the seqs B consumed now hold other changes, and only the identity of B's
+	// cursor tells the server so (ADR-0046 point 7).
+	for i := 0; vaultLastSeq(t, v) < cursorOf(t, b); i++ {
+		name := fmt.Sprintf("after/%d.md", i)
+		want[name] = fmt.Sprintf("%d written on A after the restore\n", i)
+		a.write(name, want[name])
+		a.sync()
 	}
-	b.sync() // the same: finds A's republished files identical, uploads three.md again
+	if lastSeq := vaultLastSeq(t, v); cursorOf(t, b) > lastSeq {
+		t.Fatalf("B's cursor %d is ahead of the server (%d): the reused seqs are not exercised", cursorOf(t, b), lastSeq)
+	}
+	b.sync() // 410 with last_seq for its cursor's id: finds A's republished files identical, uploads three.md again
 	a.sync() // and A receives it
 	for _, d := range []*device{a, b} {
 		if got := d.files(); !maps.Equal(got, want) {

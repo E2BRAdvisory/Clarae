@@ -66,6 +66,25 @@ func (q *Queries) FileIDExists(ctx context.Context, id uuid.UUID) (bool, error) 
 	return exists, err
 }
 
+const getChangeIDAt = `-- name: GetChangeIDAt :one
+SELECT id FROM file_revisions WHERE vault_id = $1 AND seq = $2
+`
+
+type GetChangeIDAtParams struct {
+	VaultID uuid.UUID
+	Seq     int64
+}
+
+// The identity of the changelog entry at a seq. A client keeps it with its
+// cursor: after a point-in-time restore the server hands out the same seqs
+// again, to other changes (ADR-0046).
+func (q *Queries) GetChangeIDAt(ctx context.Context, arg GetChangeIDAtParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getChangeIDAt, arg.VaultID, arg.Seq)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getCurrentRevisionID = `-- name: GetCurrentRevisionID :one
 SELECT id FROM file_revisions WHERE file_id = $1 AND rev_no = $2
 `

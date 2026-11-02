@@ -359,13 +359,22 @@ func TestTransportHonoursTheContract(t *testing.T) {
 	}})
 	wantCode(t, "commit from an unknown device", err, syncproto.CodeValidationFailed)
 
-	changes := must[transport.Changes](t, "changes")(ada.GetChanges(ctx, vid, 0, 10))
+	changes := must[transport.Changes](t, "changes")(ada.GetChanges(ctx, vid, 0, "", 10))
 	if len(changes.Items) != 3 || changes.Items[0].FileID != fileID || changes.Items[0].AuthorID != me.Id.String() || changes.Items[0].DeviceID != dev.Id.String() {
 		t.Fatalf("changes: %+v", changes)
 	}
 	tree := must[transport.Tree](t, "tree")(ada.GetTree(ctx, vid))
-	if len(tree.Items) != 2 || tree.AsOfSeq != changes.NextSeq {
+	if len(tree.Items) != 2 || tree.AsOfSeq != changes.NextSeq || tree.AsOfID == "" || tree.AsOfID != changes.NextID {
 		t.Fatalf("tree: %+v (changes %+v)", tree, changes)
+	}
+	// The cursor with its identity continues; with another id it is refused as
+	// a cursor of a timeline the server lost (ADR-0046).
+	if again := must[transport.Changes](t, "changes at the head")(ada.GetChanges(ctx, vid, changes.NextSeq, changes.NextID, 10)); len(again.Items) != 0 || again.NextID != changes.NextID {
+		t.Fatalf("changes at the head: %+v", again)
+	}
+	_, err = ada.GetChanges(ctx, vid, changes.NextSeq, uuid.Must(uuid.NewV7()).String(), 10)
+	if !transport.ServerBehind(err) {
+		t.Fatalf("changes with another id at the cursor: %v", err)
 	}
 	var buf bytes.Buffer
 	if n := must[int64](t, "get blob")(ada.GetBlob(ctx, vid, hash2, &buf)); n != int64(len(content2)) || buf.String() != string(content2) {
@@ -426,7 +435,7 @@ func TestTransportHonoursTheContract(t *testing.T) {
 	if tr := must[transport.Tree](t, "tree through the share")(bob.GetTree(ctx, ref)); len(tr.Items) != 2 || tr.Items[0].Path == "Docs/big.bin" {
 		t.Fatalf("scoped tree: %+v", tr)
 	}
-	must[transport.Changes](t, "changes through the share")(bob.GetChanges(ctx, ref, 0, 0))
+	must[transport.Changes](t, "changes through the share")(bob.GetChanges(ctx, ref, 0, "", 0))
 	// A second invitation, declined.
 	carolGrant := []transport.NewGrant{{PrincipalType: apiclient.NewGrantPrincipalTypeUser, PrincipalId: carolMe.Id, Permission: apiclient.SharePermissionViewer}}
 	invite := must[transport.Share](t, "create share for carol")(ada.CreateShare(ctx, transport.CreateShare{VaultId: shared.Id, ResourceType: apiclient.ResourceTypeVault, DisplayName: "All", Grants: &carolGrant}))
@@ -449,7 +458,7 @@ func TestTransportHonoursTheContract(t *testing.T) {
 		}
 		return *s.PathPrefix
 	}
-	before := must[transport.Changes](t, "changes before move_prefix")(ada.GetChanges(ctx, vid, 0, 500)).NextSeq
+	before := must[transport.Changes](t, "changes before move_prefix")(ada.GetChanges(ctx, vid, 0, "", 500)).NextSeq
 	if r := movePrefix("move_prefix", "Docs", "Papers"); r.Status != syncproto.StatusAccepted {
 		t.Fatalf("move_prefix: %+v", r)
 	}
@@ -462,7 +471,7 @@ func TestTransportHonoursTheContract(t *testing.T) {
 	if p := sharePrefix(); p != "papers" {
 		t.Fatalf("share prefix after the case-only rename: %q", p)
 	}
-	moves := must[transport.Changes](t, "changes after move_prefix")(ada.GetChanges(ctx, vid, before, 500))
+	moves := must[transport.Changes](t, "changes after move_prefix")(ada.GetChanges(ctx, vid, before, "", 500))
 	if len(moves.Items) != 4 {
 		t.Fatalf("changes after two folder renames of two files: %+v", moves.Items)
 	}

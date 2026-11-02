@@ -75,7 +75,7 @@ func (s *folderServer) Tree(context.Context) (transport.Tree, error) {
 	return t, nil
 }
 
-func (s *folderServer) Changes(_ context.Context, since int64, limit int) (transport.Changes, error) {
+func (s *folderServer) Changes(_ context.Context, since int64, _ string, limit int) (transport.Changes, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := transport.Changes{NextSeq: since}
