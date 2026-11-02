@@ -10,7 +10,6 @@ import (
 	"memobrain/apps/desktop/internal/store"
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
 )
 
 // A mount is a share received from another user (§2.6.4): a folder of its own on this
@@ -50,6 +49,18 @@ type MountMeta struct {
 	OwnerName    string `json:"ownerName"`
 	ResourceType string `json:"resourceType"`
 	Revoked      bool   `json:"revoked"`
+	// UserID and ServerURL are the account the mount was accepted with: a mount belongs to that
+	// account on that server, and another sign-in leaves it alone (see belongsTo).
+	UserID    string `json:"-"`
+	ServerURL string `json:"-"`
+}
+
+// belongsTo reports whether the mount was made by the signed-in account on its server. After a
+// switch of account (or of server) the shares of the first one are not the second one's to judge:
+// they are neither revoked nor updated, and come back as they were when the first account signs
+// in again. A link that recorded no account (none does today) is taken as the session's.
+func (mm MountMeta) belongsTo(info SessionInfo) bool {
+	return (mm.UserID == "" || mm.UserID == info.UserID) && (mm.ServerURL == "" || mm.ServerURL == info.ServerURL)
 }
 
 // MountOf converts the server's description of an accepted share.
@@ -80,22 +91,24 @@ func PrepareMount(ctx context.Context, root string, m MountMeta, info SessionInf
 		return err
 	}
 	defer closeDB()
-	for k, v := range map[string]string{
-		MetaCloudVault: m.CloudVaultID, MetaKind: "shared", MetaServerURL: info.ServerURL, MetaDeviceID: info.DeviceID,
-		MetaUserID: info.UserID, MetaVaultName: m.Name, MetaScope: m.Scope, MetaPermission: m.Permission,
-		MetaShareID: m.ShareID, MetaMountName: m.Name, MetaOwnerName: m.OwnerName, MetaResourceType: m.ResourceType,
-	} {
-		if err := db.SetMeta(ctx, k, v); err != nil {
-			return err
+	// One transaction: an interrupted refresh never leaves a link half old, half new.
+	return db.WithTx(ctx, func(tx *DB) error {
+		for k, v := range map[string]string{
+			MetaCloudVault: m.CloudVaultID, MetaKind: "shared", MetaServerURL: info.ServerURL, MetaDeviceID: info.DeviceID,
+			MetaUserID: info.UserID, MetaVaultName: m.Name, MetaScope: m.Scope, MetaPermission: m.Permission,
+			MetaShareID: m.ShareID, MetaMountName: m.Name, MetaOwnerName: m.OwnerName, MetaResourceType: m.ResourceType,
+		} {
+			if err := tx.SetMeta(ctx, k, v); err != nil {
+				return err
+			}
 		}
-	}
-	if prev, _ := db.Meta(ctx, MetaLinkedAt); prev == "" {
-		if err := db.SetMeta(ctx, MetaLinkedAt, time.Now().UTC().Format(time.RFC3339)); err != nil {
-			return err
+		if prev, _ := tx.Meta(ctx, MetaLinkedAt); prev == "" {
+			if err := tx.SetMeta(ctx, MetaLinkedAt, time.Now().UTC().Format(time.RFC3339)); err != nil {
+				return err
+			}
 		}
-	}
-	_ = db.DeleteMeta(ctx, MetaRevoked)
-	return nil
+		return tx.DeleteMeta(ctx, MetaRevoked)
+	})
 }
 
 // ReadMount reads the link of a mount folder; ok is false when the folder is not a mount.
@@ -122,6 +135,7 @@ func readMountMeta(ctx context.Context, db *DB) (MountMeta, bool, error) {
 	return MountMeta{
 		ShareID: get(MetaShareID), CloudVaultID: get(MetaCloudVault), Scope: scope, Permission: get(MetaPermission),
 		Name: get(MetaMountName), OwnerName: get(MetaOwnerName), ResourceType: get(MetaResourceType), Revoked: get(MetaRevoked) == "1",
+		UserID: get(MetaUserID), ServerURL: get(MetaServerURL),
 	}, true, nil
 }
 
@@ -212,12 +226,36 @@ func (m *Manager) markRevoked(ctx context.Context, mv *managed) {
 	m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseError, Kind: "shared", Error: "this share was revoked"})
 }
 
-// isRevocation reports whether a sync error means the share is gone: the server answers
-// NOT_FOUND for a revoked, expired or foreign scope.
-func isRevocation(err error) bool { return transport.IsCode(err, syncproto.CodeNotFound) }
+// shareGone confirms that the share of a mount is gone after a cycle failed with a NOT_FOUND
+// about the share itself (scopeNotFound: its tree or its changelog). The server answers so for a
+// revoked, expired or deleted share, but also for a scope that is not the caller's: the mount must
+// belong to the signed-in account, and the share must be missing from the account's mounts on the
+// server. Anything that cannot be confirmed (offline, another account, the share still listed) is
+// an ordinary error: the cycle is tried again later, nothing is marked.
+func (m *Manager) shareGone(ctx context.Context, mv *managed) bool {
+	mm, ok, err := readMountMeta(ctx, mv.db)
+	if err != nil || !ok {
+		return false
+	}
+	c, info, err := m.client()
+	if err != nil || !mm.belongsTo(info) {
+		return false
+	}
+	remote, err := c.SharedWithMe(ctx)
+	if err != nil {
+		return false
+	}
+	for _, r := range remote {
+		if r.ShareId.String() == mm.ShareID {
+			return false
+		}
+	}
+	return true
+}
 
 // ForgetMount detaches a closed mount folder from its share: it keeps its files and becomes an
-// ordinary folder (the "keep a detached copy" choice).
+// ordinary folder (the "keep a detached copy" choice; the application then moves the folder out of
+// the mounts directory).
 func ForgetMount(ctx context.Context, root string) error {
 	sdb, err := store.Open(ctx, filepath.Join(root, pathrules.ConfigDir, "sync.db"), store.KindSync)
 	if err != nil {

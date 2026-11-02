@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,7 @@ func (m *Manager) Invitations(ctx context.Context) ([]transport.Share, error) {
 
 // Mounts lists the accepted shares and, for each, the state of its folder.
 func (m *Manager) Mounts(ctx context.Context, mountsDir string) ([]MountState, error) {
-	c, _, err := m.client()
+	c, info, err := m.client()
 	if err != nil {
 		return nil, err
 	}
@@ -82,14 +83,15 @@ func (m *Manager) Mounts(ctx context.Context, mountsDir string) ([]MountState, e
 		st.VaultID = open[mm.ShareID]
 		out = append(out, st)
 	}
-	// Mount folders whose share is gone (revoked, expired, deleted): still on disk until the user decides.
+	// Mount folders whose share is gone (revoked, expired, deleted): still on disk until the user
+	// decides. The mounts of another account (or server) are not this one's: they are not listed.
 	entries, _ := os.ReadDir(mountsDir)
 	for _, e := range entries {
 		if !e.IsDir() || seen[e.Name()] {
 			continue
 		}
 		mm, ok, err := ReadMount(ctx, filepath.Join(mountsDir, e.Name()))
-		if err != nil || !ok {
+		if err != nil || !ok || !mm.belongsTo(info) {
 			continue
 		}
 		out = append(out, MountState{
@@ -177,8 +179,11 @@ func (m *Manager) EnsureMount(ctx context.Context, shareID, mountsDir string) (s
 }
 
 // ReconcileMounts aligns the mounts on this device with the server after share events: new
-// levels and names are applied, mounts of shares that are gone are marked revoked. It
-// returns the number of mounts that changed.
+// levels and names are applied, mounts of shares that are gone are marked revoked. Only the
+// mounts of the signed-in account on its server are judged: after a switch of account the
+// others stay as they are, and come back when their account signs in again. It returns the
+// number of mounts that changed and the errors met on the way (each mount is handled even when
+// another one failed).
 func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, error) {
 	c, info, err := m.client()
 	if err != nil {
@@ -194,8 +199,15 @@ func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, e
 		byShare[mm.ShareID] = mm
 	}
 	open := m.openMounts(ctx)
-	entries, _ := os.ReadDir(mountsDir)
+	entries, err := os.ReadDir(mountsDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil // no mount on this device yet
+	}
+	if err != nil {
+		return 0, err
+	}
 	changed := 0
+	var errs []error
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -206,15 +218,21 @@ func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, e
 		if local != "" {
 			mv, err := m.get(local)
 			if err != nil {
+				continue // closed meanwhile: the next reconcile finds it closed
+			}
+			cur, ok, err := readMountMeta(ctx, mv.db)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("mount %s: %w", e.Name(), err))
 				continue
 			}
-			cur, ok, _ := readMountMeta(ctx, mv.db)
-			if !ok {
+			if !ok || !cur.belongsTo(info) {
 				continue
 			}
 			switch {
 			case live && (cur.Permission != r.Permission || cur.Name != r.Name || cur.Revoked):
-				if err := m.UpdateMount(ctx, local, r); err == nil {
+				if err := m.UpdateMount(ctx, local, r); err != nil {
+					errs = append(errs, fmt.Errorf("mount %s: update: %w", e.Name(), err))
+				} else {
 					changed++
 				}
 			case !live && !cur.Revoked:
@@ -225,30 +243,39 @@ func (m *Manager) ReconcileMounts(ctx context.Context, mountsDir string) (int, e
 		}
 		// A closed mount: edit its sync.db directly.
 		cur, ok, err := ReadMount(ctx, dir)
-		if err != nil || !ok {
+		if err != nil {
+			errs = append(errs, fmt.Errorf("mount %s: %w", e.Name(), err))
+			continue
+		}
+		if !ok || !cur.belongsTo(info) {
 			continue
 		}
 		switch {
 		case live && (cur.Permission != r.Permission || cur.Name != r.Name || cur.Revoked):
-			if PrepareMount(ctx, dir, r, info) == nil {
+			if err := PrepareMount(ctx, dir, r, info); err != nil {
+				errs = append(errs, fmt.Errorf("mount %s: update: %w", e.Name(), err))
+			} else {
 				changed++
 			}
 		case !live && !cur.Revoked:
-			if db, closeDB, err := openSyncDB(ctx, dir); err == nil {
-				_ = db.SetMeta(ctx, MetaRevoked, "1")
-				closeDB()
+			if err := setMountRevoked(ctx, dir); err != nil {
+				errs = append(errs, fmt.Errorf("mount %s: mark revoked: %w", e.Name(), err))
+			} else {
 				changed++
 			}
 		}
 	}
-	return changed, nil
+	return changed, errors.Join(errs...)
 }
 
-// DetachMount turns a mount into an ordinary folder: it stops syncing, keeps its files and
-// forgets the share (the "keep a detached copy" choice after a revocation). The vault, if open,
-// stays open as a plain local one.
-func (m *Manager) DetachMount(ctx context.Context, localID string) error {
-	return m.Unlink(ctx, localID)
+// setMountRevoked records in a closed mount folder that its share is gone.
+func setMountRevoked(ctx context.Context, dir string) error {
+	db, closeDB, err := openSyncDB(ctx, dir)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+	return db.SetMeta(ctx, MetaRevoked, "1")
 }
 
 // --- sharing a folder or a document of one's own vault -------------------------

@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"memobrain/apps/desktop/internal/links"
+	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/vault"
 	"memobrain/shared/pathrules"
 )
@@ -63,6 +64,8 @@ func bindingError(err error) error {
 		return nil
 	case errors.As(err, &ce):
 		return err
+	case errors.Is(err, syncpkg.ErrConflictChanged):
+		return coded(ErrCodeConflict, err.Error(), err)
 	case errors.Is(err, vault.ErrHashMismatch):
 		return coded(ErrCodeConflict, "file changed on disk", err)
 	case errors.Is(err, links.ErrStalePlan):

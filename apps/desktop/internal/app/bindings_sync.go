@@ -66,6 +66,9 @@ type UsageInfo struct {
 type ConflictTexts struct {
 	Current string `json:"current"` // what the path holds now (the server version)
 	Ours    string `json:"ours"`    // what this device had (the saved copy)
+	// CurrentHash is the digest of Current: keep-local and merged replace the
+	// file only while it still holds that content.
+	CurrentHash string `json:"currentHash"`
 }
 
 // SyncAPI exposes synchronization to the frontend (§2.5 "sync"). Status and
@@ -173,14 +176,17 @@ func (s *SyncAPI) Conflicts(vaultID string) ([]syncpkg.Conflict, error) {
 
 // ConflictTexts returns both versions of a conflict.
 func (s *SyncAPI) ConflictTexts(vaultID string, id int64) (ConflictTexts, error) {
-	cur, ours, err := s.app.sync.ConflictTexts(context.Background(), vaultID, id)
-	return ConflictTexts{Current: cur, Ours: ours}, bindingError(err)
+	v, err := s.app.sync.ConflictTexts(context.Background(), vaultID, id)
+	return ConflictTexts{Current: v.Current, Ours: v.Ours, CurrentHash: v.CurrentHash}, bindingError(err)
 }
 
 // ResolveConflict settles a conflict: action is "keep-remote", "keep-local",
 // "keep-both" or "merged" (merged carries the text the user composed).
+// keep-local and merged replace the file only while it holds the version the
+// last ConflictTexts showed; otherwise they fail with a conflict error and
+// the view must be loaded again.
 func (s *SyncAPI) ResolveConflict(vaultID string, id int64, action, merged string) error {
-	return bindingError(s.app.sync.ResolveConflict(context.Background(), vaultID, id, syncpkg.ConflictAction(action), merged))
+	return bindingError(s.app.sync.ResolveConflict(context.Background(), vaultID, id, syncpkg.ConflictAction(action), merged, ""))
 }
 
 // History lists the revisions of a note, newest first.

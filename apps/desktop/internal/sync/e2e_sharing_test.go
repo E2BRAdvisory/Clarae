@@ -451,12 +451,21 @@ func TestManagerSharingFlow(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(mount.Path, "plan.md")); string(b) != "the plan, edited by bob" {
 		t.Error("a revoked mount keeps its files")
 	}
-	// Keeping the copy turns it into an ordinary folder.
-	if err := bob.m.DetachMount(ctx, "bob-team"); err != nil {
+	// Keeping the copy turns it into an ordinary folder, as RemoveMount(keepCopy) does: the vault
+	// is closed, the folder forgets its share and keeps its files.
+	bob.m.Detach("bob-team")
+	if err := syncpkg.ForgetMount(ctx, mount.Path); err != nil {
 		t.Fatal(err)
 	}
-	if info, _ := bob.m.Info(ctx, "bob-team"); info.Linked {
-		t.Fatalf("a detached copy is not linked any more: %+v", info)
+	if _, isMount, err := syncpkg.ReadMount(ctx, mount.Path); err != nil || isMount {
+		t.Fatalf("a kept copy is not a mount any more: %v %v", isMount, err)
+	}
+	bob.openVault(t, "bob-kept", mount.Path)
+	if info, _ := bob.m.Info(ctx, "bob-kept"); info.Linked {
+		t.Fatalf("a kept copy is not linked any more: %+v", info)
+	}
+	if b, _ := os.ReadFile(filepath.Join(mount.Path, "plan.md")); string(b) != "the plan, edited by bob" {
+		t.Error("a kept copy keeps its files")
 	}
 }
 

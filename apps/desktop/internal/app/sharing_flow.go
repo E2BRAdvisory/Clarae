@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"memobrain/apps/desktop/internal/auth"
@@ -17,7 +18,45 @@ const (
 // onSignedIn runs after a login: configuration first, then the mounts.
 func (a *App) onSignedIn() {
 	a.refreshConfigQuietly()
-	a.reconcileMounts()
+	a.requestReconcile()
+}
+
+// requestReconcile asks for a reconcile of the mounts (after a login, after every share event).
+// The reconciles run one at a time: each one reads the server's list and then writes the mounts,
+// so two at once could apply an older list after a newer one (a revoked mount brought back, a
+// revocation announced twice). A burst of events while one runs is one more run.
+func (a *App) requestReconcile() { a.reconciler.do(a.reconcileMounts) }
+
+// coalescer runs a function on one goroutine at a time: a request while it runs queues one more
+// run, and any number of requests during that run are that one run.
+type coalescer struct {
+	mu      sync.Mutex
+	running bool
+	queued  bool
+}
+
+func (c *coalescer) do(fn func()) {
+	c.mu.Lock()
+	if c.running {
+		c.queued = true
+		c.mu.Unlock()
+		return
+	}
+	c.running = true
+	c.mu.Unlock()
+	go func() {
+		for {
+			fn()
+			c.mu.Lock()
+			if !c.queued {
+				c.running = false
+				c.mu.Unlock()
+				return
+			}
+			c.queued = false
+			c.mu.Unlock()
+		}
+	}()
 }
 
 func (a *App) refreshConfigQuietly() {
@@ -43,17 +82,22 @@ func (a *App) refreshConfig(ctx context.Context) error {
 	return err
 }
 
-// reconcileMounts applies server-side changes of shares (new level, revocation) to the mounts here.
+// reconcileMounts applies server-side changes of shares (new level, revocation) to the mounts
+// here. Call it through requestReconcile. A mount that could not be updated is logged; the
+// others are applied and announced all the same.
 func (a *App) reconcileMounts() {
 	if a.auth.State().Status != auth.StatusReady {
 		return
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	base := a.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(base, 30*time.Second)
 	defer cancel()
 	n, err := a.sync.ReconcileMounts(ctx, a.mountsDir())
 	if err != nil {
-		a.logger.Debug().Err(err).Msg("mount reconcile failed")
-		return
+		a.logger.Warn().Err(err).Int("changed", n).Msg("mount reconcile failed")
 	}
 	if n > 0 {
 		a.emit(EventMountsChanged, map[string]any{"changed": n})

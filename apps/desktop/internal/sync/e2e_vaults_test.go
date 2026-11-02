@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/shared/syncproto"
 )
@@ -21,6 +22,50 @@ func listed(vs []transport.Vault, id string) bool {
 		}
 	}
 	return false
+}
+
+// A vault deleted by another client (the console, another device) disconnects the folder linked
+// on this device at its next cycle, keeping its files, as a delete made from this device does.
+func TestManagerCloudVaultDeletedElsewhere(t *testing.T) {
+	ctx := context.Background()
+	ada := newManagerEnv(t, "ada")
+	dir := filepath.Join(ada.root, "vault")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	note := filepath.Join(dir, "plan.md")
+	if err := os.WriteFile(note, []byte("the plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ada.openVault(t, "v1", dir)
+	res, err := ada.m.Link(ctx, "v1", fmt.Sprintf("DeletedElsewhere-%d", time.Now().UnixNano()), "shared", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := newClient(t, "ada")
+	eventually(t, "the first upload", func() bool {
+		v, err := client.GetVault(ctx, res.CloudVaultID)
+		return err == nil && v.FileCount == 1
+	})
+
+	if err := client.DeleteVault(ctx, res.CloudVaultID); err != nil { // another client deletes it
+		t.Fatal(err)
+	}
+	eventually(t, "the folder to be disconnected", func() bool {
+		_ = ada.m.SyncNow("v1") // no realtime stream in this test
+		info, _ := ada.m.Info(ctx, "v1")
+		return !info.Linked
+	})
+	if ada.emitted(syncpkg.EventCloudVaultDeleted) != 1 {
+		t.Fatalf("%s emitted %d times", syncpkg.EventCloudVaultDeleted, ada.emitted(syncpkg.EventCloudVaultDeleted))
+	}
+	if b, err := os.ReadFile(note); err != nil || string(b) != "the plan" {
+		t.Fatalf("local file after the delete: %q, %v", b, err)
+	}
+	// Still restorable: the server kept it.
+	if _, err := ada.m.RestoreCloudVault(ctx, res.CloudVaultID); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // The lifecycle of a cloud vault through the manager (ADR-0037 §2): rename,

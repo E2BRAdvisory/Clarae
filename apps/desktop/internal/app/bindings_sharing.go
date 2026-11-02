@@ -31,6 +31,31 @@ func (a *App) writable(vaultID string) error {
 
 func (a *App) mountsDir() string { return filepath.Join(a.opts.DataDir, "mounts") }
 
+// sharingCallTimeout bounds a sharing call made by the UI. The transport retries network errors
+// until its context ends: without a deadline a black-holed network (a dropped VPN, a captive
+// portal) would hold the panel for minutes, and pile up a goroutine at every retry of the user.
+var sharingCallTimeout = 30 * time.Second
+
+// uiCtx is the context of a sharing binding: the application's, with sharingCallTimeout.
+func (a *App) uiCtx() (context.Context, context.CancelFunc) {
+	base := a.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	return context.WithTimeout(base, sharingCallTimeout)
+}
+
+// canonicalShareID returns the canonical form of a share id given by the UI, which names the
+// folder of its mount: anything else (a path, "<id>/.", an id in another case or form) would
+// name another folder, or the same one under a name the open mounts are not keyed by.
+func canonicalShareID(shareID string) (string, error) {
+	id, err := uuid.Parse(shareID)
+	if err != nil {
+		return "", fmt.Errorf("invalid: share id %q", shareID)
+	}
+	return id.String(), nil
+}
+
 // GrantInfo is one recipient of a share.
 type GrantInfo struct {
 	PrincipalType string `json:"principalType"` // user | group
@@ -111,7 +136,9 @@ func NewSharingAPI(a *App) *SharingAPI { return &SharingAPI{app: a} }
 
 // Invitations lists the shares waiting for the user's answer.
 func (s *SharingAPI) Invitations() ([]ShareInfo, error) {
-	shares, err := s.app.sync.Invitations(context.Background())
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	shares, err := s.app.sync.Invitations(ctx)
 	if err != nil {
 		return nil, bindingError(err)
 	}
@@ -124,7 +151,9 @@ func (s *SharingAPI) Invitations() ([]ShareInfo, error) {
 
 // Mounts lists the accepted shares with the state of their folders on this device.
 func (s *SharingAPI) Mounts() ([]syncpkg.MountState, error) {
-	m, err := s.app.sync.Mounts(context.Background(), s.app.mountsDir())
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	m, err := s.app.sync.Mounts(ctx, s.app.mountsDir())
 	if m == nil {
 		m = []syncpkg.MountState{}
 	}
@@ -133,18 +162,24 @@ func (s *SharingAPI) Mounts() ([]syncpkg.MountState, error) {
 
 // AcceptShare accepts an invitation and prepares the folder of its mount.
 func (s *SharingAPI) AcceptShare(shareID string) (syncpkg.MountState, error) {
-	st, err := s.app.sync.AcceptShare(context.Background(), shareID, s.app.mountsDir())
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	st, err := s.app.sync.AcceptShare(ctx, shareID, s.app.mountsDir())
 	return st, bindingError(err)
 }
 
 // DeclineShare declines an invitation.
 func (s *SharingAPI) DeclineShare(shareID string) error {
-	return bindingError(s.app.sync.DeclineShare(context.Background(), shareID))
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	return bindingError(s.app.sync.DeclineShare(ctx, shareID))
 }
 
 // OpenMount makes sure the folder of an accepted share exists and opens it as a vault.
 func (s *SharingAPI) OpenMount(shareID string) (VaultInfo, error) {
-	dir, err := s.app.sync.EnsureMount(context.Background(), shareID, s.app.mountsDir())
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	dir, err := s.app.sync.EnsureMount(ctx, shareID, s.app.mountsDir())
 	if err != nil {
 		return VaultInfo{}, bindingError(err)
 	}
@@ -153,25 +188,39 @@ func (s *SharingAPI) OpenMount(shareID string) (VaultInfo, error) {
 
 // RemoveMount ends a mount: the folder is deleted, or, with keepCopy, kept as an ordinary
 // vault disconnected from the share (the choice offered after a revocation). It returns the
-// vault of the kept copy (not opened) or an empty one.
+// vault of the kept copy (not opened) or an empty one. The vault of the mount, when open, is
+// closed first: nothing may index, watch or synchronize a folder that is deleted or moved.
 func (s *SharingAPI) RemoveMount(shareID string, keepCopy bool) (VaultInfo, error) {
 	a := s.app
-	ctx := context.Background()
+	shareID, err := canonicalShareID(shareID)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+	ctx, cancel := a.uiCtx()
+	defer cancel()
 	dir := syncpkg.MountDir(a.mountsDir(), shareID)
 	mm, isMount, err := syncpkg.ReadMount(ctx, dir)
 	if err != nil {
 		return VaultInfo{}, bindingError(err)
 	}
-	if !isMount {
+	if !isMount || mm.ShareID != shareID {
 		return VaultInfo{}, errors.New("not-found: this share is not mounted on this device")
 	}
+	// The open vault of the folder, found by its share and by its path (the id openVault gives it).
+	open := map[string]bool{}
 	if id := a.sync.MountVaultID(ctx, shareID); id != "" {
-		a.mu.Lock()
+		open[id] = true
+	}
+	if abs, err := filepath.Abs(dir); err == nil {
+		open[vaultID(abs)] = true
+	}
+	a.mu.Lock()
+	for id := range open {
 		if ov, ok := a.vaults[id]; ok {
 			a.closeVaultLocked(id, ov)
 		}
-		a.mu.Unlock()
 	}
+	a.mu.Unlock()
 	if !keepCopy {
 		return VaultInfo{}, bindingError(os.RemoveAll(dir))
 	}
@@ -210,7 +259,9 @@ func uniqueDir(parent, name string) string {
 
 // VaultShares lists the shares of the open vault's cloud copy that the user owns.
 func (s *SharingAPI) VaultShares(vaultID string) ([]ShareInfo, error) {
-	shares, err := s.app.sync.VaultShares(context.Background(), vaultID)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	shares, err := s.app.sync.VaultShares(ctx, vaultID)
 	if err != nil {
 		return nil, bindingError(err)
 	}
@@ -261,14 +312,18 @@ func (s *SharingAPI) CreateShare(vaultID, path string, isDir bool, name string, 
 	if err != nil {
 		return ShareInfo{}, err
 	}
-	sh, err := s.app.sync.CreateShare(context.Background(), vaultID, path, isDir, name, gs, exp)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	sh, err := s.app.sync.CreateShare(ctx, vaultID, path, isDir, name, gs, exp)
 	return toShareInfo(sh), bindingError(err)
 }
 
 // ListShares lists the shares of the account: "owned" (created or managed by the user, on any of
 // their vaults) or "received" (invitations, accepted and declined ones).
 func (s *SharingAPI) ListShares(scope string) ([]ShareInfo, error) {
-	shares, err := s.app.sync.ListShares(context.Background(), scope)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	shares, err := s.app.sync.ListShares(ctx, scope)
 	if err != nil {
 		return nil, bindingError(err)
 	}
@@ -288,7 +343,9 @@ func (s *SharingAPI) CreateCloudShare(cloudVaultID, pathPrefix, name string, gra
 	if err != nil {
 		return ShareInfo{}, err
 	}
-	sh, err := s.app.sync.CreateCloudShare(context.Background(), cloudVaultID, pathPrefix, name, gs, exp)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	sh, err := s.app.sync.CreateCloudShare(ctx, cloudVaultID, pathPrefix, name, gs, exp)
 	return toShareInfo(sh), bindingError(err)
 }
 
@@ -299,7 +356,9 @@ func (s *SharingAPI) UpdateShare(shareID, name, expiresAt string, clearExpiry bo
 	if err != nil {
 		return ShareInfo{}, err
 	}
-	sh, err := s.app.sync.UpdateShare(context.Background(), shareID, name, exp, clearExpiry)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	sh, err := s.app.sync.UpdateShare(ctx, shareID, name, exp, clearExpiry)
 	return toShareInfo(sh), bindingError(err)
 }
 
@@ -317,7 +376,9 @@ func (s *SharingAPI) Share(shareID string) (ShareInfo, error) {
 	if err != nil {
 		return ShareInfo{}, err
 	}
-	sh, err := c.GetShare(context.Background(), shareID)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	sh, err := c.GetShare(ctx, shareID)
 	return toShareInfo(sh), bindingError(err)
 }
 
@@ -327,7 +388,9 @@ func (s *SharingAPI) RevokeShare(shareID string) error {
 	if err != nil {
 		return err
 	}
-	return bindingError(c.RevokeShare(context.Background(), shareID))
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	return bindingError(c.RevokeShare(ctx, shareID))
 }
 
 // SetGrant adds a recipient or changes their level.
@@ -336,7 +399,9 @@ func (s *SharingAPI) SetGrant(shareID, principalType, principalID, permission st
 	if err != nil {
 		return GrantInfo{}, err
 	}
-	g, err := c.PutGrant(context.Background(), shareID, principalType, principalID, permission)
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	g, err := c.PutGrant(ctx, shareID, principalType, principalID, permission)
 	if err != nil {
 		return GrantInfo{}, bindingError(err)
 	}
@@ -349,7 +414,9 @@ func (s *SharingAPI) RemoveGrant(shareID, principalType, principalID string) err
 	if err != nil {
 		return err
 	}
-	return bindingError(c.DeleteGrant(context.Background(), shareID, principalType, principalID))
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	return bindingError(c.DeleteGrant(ctx, shareID, principalType, principalID))
 }
 
 // Directory searches users and groups to share with.
@@ -358,7 +425,8 @@ func (s *SharingAPI) Directory(query string) ([]DirectoryEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
+	ctx, cancel := s.app.uiCtx() // one deadline for both searches
+	defer cancel()
 	users, err := c.SearchUsers(ctx, query)
 	if err != nil {
 		return nil, bindingError(err)

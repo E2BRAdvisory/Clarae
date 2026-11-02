@@ -12,6 +12,7 @@ import (
 
 	"memobrain/apps/desktop/internal/crypto"
 	"memobrain/apps/desktop/internal/sync/transport"
+	"memobrain/apps/desktop/internal/vault"
 	"memobrain/shared/vaultcrypto"
 )
 
@@ -250,19 +251,37 @@ func (m *Manager) Unlink(ctx context.Context, localID string) error {
 	if err != nil {
 		return err
 	}
+	return m.unlink(ctx, mv)
+}
+
+// unlink is Unlink of an open vault. It waits for the vault's loop: never call it from the loop.
+func (m *Manager) unlink(ctx context.Context, mv *managed) error {
 	m.mu.Lock()
 	done := m.stopLocked(mv)
-	cloud, kind := mv.cloudID, mv.kind
+	cloud, kind, eng := mv.cloudID, mv.kind, mv.engine
 	mv.engine, mv.cloudID, mv.kind, mv.scope = nil, "", "", ""
 	m.mu.Unlock()
-	waitLoop(done) // no cycle may write the state erased below
+	waitLoop(done) // no cycle of the loop may write the state erased below
+	reset := func() error {
+		for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaLastScan, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
+			_ = mv.db.DeleteMeta(ctx, k)
+		}
+		_, err := mv.sdb.ExecContext(ctx, resetSQL)
+		return err
+	}
 	if cloud != "" && kind == "private" {
-		_ = m.crypto.Forget(cloud)
+		_ = m.crypto.Forget(cloud) // a cycle still running stops at its next use of the key
 	}
-	for _, k := range []string{MetaCloudVault, MetaKind, MetaServerURL, MetaDeviceID, MetaUserID, MetaVaultName, MetaBootstrapped, MetaPaused, MetaLinkedAt, MetaLastScan, MetaScope, MetaPermission, MetaShareID, MetaMountName, MetaOwnerName, MetaResourceType, MetaRevoked} {
-		_ = mv.db.DeleteMeta(ctx, k)
+	var err error
+	if eng != nil {
+		// Nor a cycle started outside the loop (the drain before a lock, which
+		// holds the engine it captured earlier): the reset waits for it, and
+		// the engine refuses every later one.
+		err = eng.retire(reset)
+	} else {
+		err = reset()
 	}
-	if _, err := mv.sdb.ExecContext(ctx, resetSQL); err != nil {
+	if err != nil {
 		return err
 	}
 	m.publish(mv)
@@ -533,7 +552,7 @@ func (m *Manager) drain(ctx context.Context, v linkView) {
 	}
 	dctx, cancel := context.WithTimeout(ctx, drainTimeout)
 	defer cancel()
-	if err := v.engine.Sync(dctx); err != nil && !errors.Is(err, ErrPaused) {
+	if err := v.engine.Sync(dctx); err != nil && !errors.Is(err, ErrPaused) && !errors.Is(err, ErrUnlinked) {
 		m.log.Info().Err(err).Str("vault", v.localID).Msg("sync: changes left in the outbox at lock")
 	}
 }
@@ -557,16 +576,24 @@ func (m *Manager) drainAndLock(ctx context.Context, cloud, reason string, lock f
 			return nil
 		}
 		eng := views[i].engine
-		return eng.Exclusive(func() error {
+		err := eng.Exclusive(func() error {
 			scanErrs[i] = eng.scan(ctx)
 			return hold(i + 1)
 		})
+		if errors.Is(err, ErrUnlinked) {
+			scanErrs[i] = err // unlinked since the views were taken: nothing to hold
+			return hold(i + 1)
+		}
+		return err
 	}
 	_ = hold(0)
 	if !locked {
 		return lockErr
 	}
 	for i, v := range views {
+		if errors.Is(scanErrs[i], ErrUnlinked) {
+			continue
+		}
 		m.emit(EventLocked, m.lockedEvent(ctx, v.localID, v.engine, v.db, reason, scanErrs[i]))
 	}
 	return lockErr
@@ -672,8 +699,40 @@ const (
 	UseMerged  ConflictAction = "merged"      // the user's merged text replaces the path; the copy is deleted
 )
 
+// ErrConflictChanged means the file of a conflict changed (or was moved away
+// or deleted) since its versions were shown: the choice is not applied, the
+// user must look at the conflict again.
+var ErrConflictChanged = errors.New("the file changed since this conflict was shown: review it again")
+
+// ConflictView is what the resolution view shows of a conflict.
+type ConflictView struct {
+	Current     string // what the file holds now (the server version, unless edited since)
+	Ours        string // what this device had (the saved copy)
+	CurrentHash string // digest of Current: what ResolveConflict may replace
+}
+
+// conflictFile returns the current row of a conflict's file, wherever it was
+// moved since the conflict was recorded. ok is false when the file no longer
+// exists here (deleted, or no longer synchronized).
+func conflictFile(ctx context.Context, mv linkView, c Conflict) (File, bool, error) {
+	row, ok, err := mv.db.GetFileByID(ctx, c.FileID)
+	if err != nil || !ok {
+		return File{}, false, err
+	}
+	return row, row.State != StateLocalDeleted, nil
+}
+
+func shownKey(localID string, id int64) string { return localID + "/" + strconv.FormatInt(id, 10) }
+
 // ResolveConflict applies the user's choice to the files and closes the record.
-func (m *Manager) ResolveConflict(ctx context.Context, localID string, id int64, action ConflictAction, merged string) error {
+// keep-local and merged replace the file only while it holds expectedHash, the
+// content the user was shown ("" for the one the last ConflictTexts of this
+// conflict returned); otherwise they fail with ErrConflictChanged and write
+// nothing. Without either, only a file that holds exactly what the server has
+// is replaced (nothing can be lost). The file is followed through renames, is
+// never brought back once deleted, and what it held is snapshotted in the
+// local history first.
+func (m *Manager) ResolveConflict(ctx context.Context, localID string, id int64, action ConflictAction, merged, expectedHash string) error {
 	mv, err := m.linked(localID)
 	if err != nil {
 		return err
@@ -691,12 +750,55 @@ func (m *Manager) ResolveConflict(ctx context.Context, localID string, id int64,
 	if c == nil {
 		return errors.New("conflict not found or already resolved")
 	}
+	if expectedHash == "" {
+		m.mu.Lock()
+		expectedHash = m.shown[shownKey(localID, id)]
+		m.mu.Unlock()
+	}
 	err = mv.engine.Exclusive(func() error {
 		trash := func(p string) error {
 			if p == "" {
 				return nil
 			}
 			if _, err := mv.fs.Trash(p); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			return nil
+		}
+		replace := func(data []byte) error {
+			row, ok, err := conflictFile(ctx, mv, *c)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return ErrConflictChanged
+			}
+			expected := expectedHash
+			if expected == "" {
+				// Nothing tells what the user saw: only content the server
+				// has may be replaced (a plaintext digest proves it in a
+				// shared vault only).
+				onServer := row.State == StateSynced || (row.State == StateLocalMoved && !row.Dirty) ||
+					(mv.engine.cfg.Cipher == nil && !row.Tombstoned && row.LocalHash == row.ServerHash)
+				if !onServer {
+					return ErrConflictChanged
+				}
+				expected = row.LocalHash
+			}
+			h, _, err := mv.fs.HashFile(row.Path)
+			switch {
+			case err == nil && h == hashHex(data):
+				return nil // already done (a resolution retried after its copy could not be removed)
+			case err != nil || h != expected:
+				return ErrConflictChanged
+			}
+			if hook := mv.engine.cfg.BeforeOverwrite; hook != nil {
+				hook(row.Path)
+			}
+			if _, err := mv.fs.WriteFile(row.Path, data, expected, false); err != nil {
+				if errors.Is(err, vault.ErrHashMismatch) {
+					return ErrConflictChanged
+				}
 				return err
 			}
 			return nil
@@ -709,12 +811,12 @@ func (m *Manager) ResolveConflict(ctx context.Context, localID string, id int64,
 			if err != nil {
 				return fmt.Errorf("the saved copy is gone: %w", err)
 			}
-			if _, err := mv.fs.WriteFile(c.Path, cp.Data, "", false); err != nil {
+			if err := replace(cp.Data); err != nil {
 				return err
 			}
 			return trash(c.CopyPath)
 		case UseMerged:
-			if _, err := mv.fs.WriteFile(c.Path, []byte(merged), "", false); err != nil {
+			if err := replace([]byte(merged)); err != nil {
 				return err
 			}
 			return trash(c.CopyPath)
@@ -734,35 +836,54 @@ func (m *Manager) ResolveConflict(ctx context.Context, localID string, id int64,
 	if err := mv.db.SetConflictStatus(ctx, id, status); err != nil {
 		return err
 	}
+	m.mu.Lock()
+	delete(m.shown, shownKey(localID, id))
+	m.mu.Unlock()
 	m.Kick(localID)
 	return nil
 }
 
-// ConflictTexts returns the two versions of a conflict for the side-by-side view.
-func (m *Manager) ConflictTexts(ctx context.Context, localID string, id int64) (current, ours string, err error) {
+// ConflictTexts returns the two versions of a conflict for the side-by-side
+// view, the current one read where the file is now. Its digest is remembered
+// as what ResolveConflict may replace.
+func (m *Manager) ConflictTexts(ctx context.Context, localID string, id int64) (ConflictView, error) {
 	mv, err := m.linked(localID)
 	if err != nil {
-		return "", "", err
+		return ConflictView{}, err
 	}
 	all, err := mv.db.Conflicts(ctx, "open")
 	if err != nil {
-		return "", "", err
+		return ConflictView{}, err
 	}
 	for _, c := range all {
 		if c.ID != id {
 			continue
 		}
-		cur, err := mv.fs.ReadFile(c.Path)
+		row, ok, err := conflictFile(ctx, mv, c)
 		if err != nil {
-			return "", "", err
+			return ConflictView{}, err
+		}
+		if !ok {
+			// Whatever holds the old path now is another file.
+			return ConflictView{}, errors.New("the file of this conflict was deleted")
+		}
+		cur, err := mv.fs.ReadFile(row.Path)
+		if err != nil {
+			return ConflictView{}, err
 		}
 		cp, err := mv.fs.ReadFile(c.CopyPath)
 		if err != nil {
-			return "", "", err
+			return ConflictView{}, err
 		}
-		return string(cur.Data), string(cp.Data), nil
+		m.mu.Lock()
+		if m.shown == nil {
+			m.shown = map[string]string{}
+		}
+		m.shown[shownKey(localID, id)] = cur.Hash
+		m.mu.Unlock()
+		return ConflictView{Current: string(cur.Data), Ours: string(cp.Data), CurrentHash: cur.Hash}, nil
 	}
-	return "", "", errors.New("conflict not found")
+	return ConflictView{}, errors.New("conflict not found")
 }
 
 // --- history -----------------------------------------------------------------

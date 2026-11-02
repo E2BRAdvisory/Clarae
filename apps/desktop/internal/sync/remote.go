@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -24,6 +25,58 @@ type Remote interface {
 	Download(ctx context.Context, hash string, w io.Writer) error
 	RevisionContent(ctx context.Context, fileID string, rev int, w io.Writer) error
 	Commit(ctx context.Context, req syncproto.CommitRequest) (syncproto.CommitResponse, error)
+}
+
+// scopeNotFound is a NOT_FOUND answered for the whole vault reference, by the endpoints that
+// read it as a whole (its tree and its changelog): the vault, or the share of a mount, is gone or
+// is not the caller's. A NOT_FOUND of a blob or of a revision is about that content only (a file
+// moved out of a share after the change was listed, a blob not uploaded yet) and stays an
+// ordinary error.
+type scopeNotFound struct{ err error }
+
+func (e scopeNotFound) Error() string { return e.err.Error() }
+func (e scopeNotFound) Unwrap() error { return e.err }
+
+// isScopeNotFound reports whether a sync error is a scopeNotFound.
+func isScopeNotFound(err error) bool {
+	var s scopeNotFound
+	return errors.As(err, &s)
+}
+
+func markScope(err error) error {
+	if err != nil && transport.IsCode(err, syncproto.CodeNotFound) {
+		return scopeNotFound{err: err}
+	}
+	return err
+}
+
+// scopedRemote marks the NOT_FOUND of the whole-vault endpoints (scopeNotFound); the manager
+// wraps every engine's remote with it.
+type scopedRemote struct{ Remote }
+
+// scopedRooter is a scopedRemote over a remote that lists folder shares.
+type scopedRooter struct {
+	scopedRemote
+	FolderShareRooter
+}
+
+func scoped(r Remote) Remote {
+	if l, ok := r.(FolderShareRooter); ok {
+		return scopedRooter{scopedRemote{r}, l}
+	}
+	return scopedRemote{r}
+}
+
+// Tree implements Remote.
+func (r scopedRemote) Tree(ctx context.Context) (transport.Tree, error) {
+	t, err := r.Remote.Tree(ctx)
+	return t, markScope(err)
+}
+
+// Changes implements Remote.
+func (r scopedRemote) Changes(ctx context.Context, since int64, sinceID string, limit int) (transport.Changes, error) {
+	c, err := r.Remote.Changes(ctx, since, sinceID, limit)
+	return c, markScope(err)
 }
 
 // HTTPRemote implements Remote on transport.Client.

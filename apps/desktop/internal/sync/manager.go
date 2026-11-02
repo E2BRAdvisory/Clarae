@@ -50,7 +50,15 @@ const (
 	EventShares = "shares:changed"
 	// EventConfig says that the distributed configuration has a new revision.
 	EventConfig = "config:changed"
+	// EventCloudVaultDeleted says that the cloud vault of a folder was deleted elsewhere (the
+	// console, another device): the folder was disconnected and keeps its files, as after a
+	// delete made from this device.
+	EventCloudVaultDeleted = "vault:cloud-deleted"
 )
+
+// CloudVaultDeletedMessage is the Status.Error of a folder disconnected because its cloud vault
+// was deleted elsewhere.
+const CloudVaultDeletedMessage = "the cloud vault was deleted: this folder was disconnected and keeps its files (restore the vault from the console, then connect the folder again)"
 
 // Hooks lets the application react to server events the manager only forwards: the share
 // and config events arrive on the same realtime stream as the vault ones.
@@ -156,6 +164,10 @@ type Manager struct {
 	// reactivating serializes the rebuild of the engines after the session's
 	// device changed (see SessionChanged).
 	reactivating stdsync.Mutex
+	// shown is the digest of the current version each conflict view showed
+	// last (keyed by vault and conflict id, under mu): what ResolveConflict
+	// may replace.
+	shown map[string]string
 }
 
 type managed struct {
@@ -259,12 +271,13 @@ type sessionRemote struct {
 
 var errSignedOut = errors.New("not signed in to the cloud")
 
-// remote returns the server side of the engine of a vault reference.
+// remote returns the server side of the engine of a vault reference. Its whole-vault endpoints
+// mark their NOT_FOUND (scopeNotFound), which the loop reads as "the vault or the share may be gone".
 func (m *Manager) remote(ref string) Remote {
 	if m.remoteFor != nil {
-		return m.remoteFor(ref)
+		return scoped(m.remoteFor(ref))
 	}
-	return sessionRemote{m: m, vault: ref}
+	return scoped(sessionRemote{m: m, vault: ref})
 }
 
 func (r sessionRemote) do(fn func(Remote) error) error {
@@ -586,6 +599,9 @@ func (m *Manager) SessionChanged() {
 			m.stopLocked(mv) // the same engine restarts at sign-in: no need to wait
 			kind, eng := mv.kind, mv.engine
 			m.mu.Unlock()
+			if eng == nil {
+				continue // unlinked meanwhile: Unlink has published its status
+			}
 			if info.DeviceRevoked {
 				m.emit(EventStatus, revokedView(eng.Status()))
 				continue
@@ -697,8 +713,9 @@ func (m *Manager) knownSeqs() map[string]int64 {
 func (m *Manager) Kick(localID string) {
 	m.mu.Lock()
 	mv := m.vaults[localID]
+	linked := mv != nil && mv.engine != nil
 	m.mu.Unlock()
-	if mv != nil && mv.engine != nil {
+	if linked {
 		select {
 		case mv.kick <- struct{}{}:
 		default:
@@ -713,7 +730,8 @@ func (m *Manager) kickNow(mv *managed) {
 	}
 }
 
-// Renamed forwards a rename (with its link updates) to the engine.
+// Renamed forwards a rename (with its link updates) to the engine. It never
+// waits for a running cycle: the engine queues the hint for it (Engine.Renamed).
 func (m *Manager) Renamed(ctx context.Context, localID, from, to string) {
 	mv, err := m.get(localID)
 	if err != nil {
@@ -845,8 +863,11 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 		case transport.IsDeviceRevoked(err):
 			m.deviceRevoked(eng.DeviceID())
 			return
-		case scope != "" && isRevocation(err):
+		case scope != "" && isScopeNotFound(err) && m.shareGone(ctx, mv):
 			m.markRevoked(ctx, mv)
+			return
+		case scope == "" && isScopeNotFound(err) && m.vaultGone(ctx, mv):
+			m.cloudVaultDeleted(ctx, mv)
 			return
 		default:
 			failures++
@@ -861,6 +882,55 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 		}
 		next.Reset(wait)
 	}
+}
+
+// vaultGone confirms that the cloud vault of a vault of one's own is gone after a cycle failed
+// with a NOT_FOUND about the vault itself (scopeNotFound): the vault was linked by the signed-in
+// account on this server, and the server answers NOT_FOUND for it (deleted from the console or
+// from another device; a deleted vault stays restorable for the retention period). A vault linked
+// by another account, or one the server cannot be asked about, is an ordinary error.
+func (m *Manager) vaultGone(ctx context.Context, mv *managed) bool {
+	cloud, err := mv.db.Meta(ctx, MetaCloudVault)
+	if err != nil || cloud == "" {
+		return false
+	}
+	user, _ := mv.db.Meta(ctx, MetaUserID)
+	server, _ := mv.db.Meta(ctx, MetaServerURL)
+	c, info, err := m.client()
+	if err != nil || user == "" || user != info.UserID || (server != "" && server != info.ServerURL) {
+		return false
+	}
+	_, err = c.GetVault(ctx, cloud)
+	return transport.IsCode(err, syncproto.CodeNotFound)
+}
+
+// cloudVaultDeleted disconnects a vault whose cloud vault was deleted elsewhere, as
+// DeleteCloudVault does after a delete made here: the files stay, the link and the
+// synchronization state go, and the UI is told. It runs on the vault's own loop, which returns
+// right after: the loop is stopped here without waiting, and the disconnection, which waits for
+// it, runs on its own goroutine. A vault closed or linked again meanwhile is left alone.
+func (m *Manager) cloudVaultDeleted(ctx context.Context, mv *managed) {
+	ctx = context.WithoutCancel(ctx)
+	cloud, _ := mv.db.Meta(ctx, MetaCloudVault)
+	m.mu.Lock()
+	m.stopLocked(mv) // no wait: this runs on the loop itself
+	m.mu.Unlock()
+	go func() {
+		m.mu.Lock()
+		current := m.vaults[mv.localID] == mv
+		m.mu.Unlock()
+		if now, _ := mv.db.Meta(ctx, MetaCloudVault); !current || cloud == "" || now != cloud {
+			return
+		}
+		name, _ := mv.db.Meta(ctx, MetaVaultName)
+		if err := m.unlink(ctx, mv); err != nil {
+			m.log.Warn().Err(err).Str("vault", mv.localID).Msg("sync: could not disconnect a folder whose cloud vault was deleted")
+			return
+		}
+		m.log.Warn().Str("vault", mv.localID).Str("cloud_vault", cloud).Msg("sync: the cloud vault was deleted elsewhere; the folder was disconnected and keeps its files")
+		m.emit(EventCloudVaultDeleted, map[string]any{"vaultId": mv.localID, "cloudVaultId": cloud, "name": name})
+		m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseIdle, Error: CloudVaultDeletedMessage})
+	}()
 }
 
 func errorBackoff(failures int) time.Duration {

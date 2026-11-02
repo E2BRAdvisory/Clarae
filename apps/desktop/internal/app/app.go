@@ -64,6 +64,8 @@ type App struct {
 	pending   []string                 // memobrain:// URLs received before the frontend was ready
 	updater   *updater.Service
 	updaterMu sync.Mutex
+	// reconciler runs the reconciles of the mounts one at a time (requestReconcile).
+	reconciler coalescer
 }
 
 // openVault is a vault currently open in this process.
@@ -133,7 +135,7 @@ func New(opts Options) *App {
 	a.crypto = crypto.NewManager(crypto.Options{Store: opts.KeyStore})
 	a.sync = syncpkg.NewManager(sessionAdapter{a}, a.crypto, opts.Logger.With().Str("module", "sync").Logger(), a.emit)
 	a.sync.SetHooks(syncpkg.Hooks{
-		Shares:          func(transport.ShareEvent) { go a.reconcileMounts() },
+		Shares:          func(transport.ShareEvent) { a.requestReconcile() },
 		Config:          func(int) { go a.refreshConfigQuietly() },
 		ConfigVersion:   func() int { return a.config.Version() },
 		BeforeOverwrite: a.snapshotBeforeOverwrite,
@@ -413,10 +415,7 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 				return
 			}
 			if ch.Reconcile {
-				if err := v.Indexer.Full(ctx); err != nil {
-					a.logger.Warn().Err(err).Msg("reconcile")
-				}
-				a.sync.Kick(v.Info.ID)
+				a.reconcile(ctx, v)
 				continue
 			}
 			changes := classifyChanges(ctx, v, ch.Paths) // before the index learns of the batch
@@ -428,6 +427,23 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 			a.sync.Kick(v.Info.ID)
 		}
 	}
+}
+
+// reconcile compares the whole vault with the index (the periodic pass, or events were lost).
+// What it finds changed reaches the frontend and the history like a watcher batch: otherwise a
+// file changed while events were lost would stay stale in the file tree and in an open editor,
+// and would have no snapshot.
+func (a *App) reconcile(ctx context.Context, v *openVault) {
+	r, err := v.Indexer.Reconcile(ctx)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("reconcile")
+	}
+	if !r.Empty() { // after an error too: what the pass wrote before it is in the index
+		paths, changes := reconciledChanges(v, r)
+		v.History.Observe(paths)
+		a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: paths, Changes: changes})
+	}
+	a.sync.Kick(v.Info.ID)
 }
 
 func (a *App) closeVaultLocked(id string, v *openVault) {
