@@ -2,7 +2,7 @@
 
 Il servizio è solo **resource server**: non gestisce password né sessioni. Keycloak autentica gli utenti (OIDC, Authorization Code + PKCE) e il servizio valida i JWT (chiavi JWKS, `iss`, `aud`, `azp`). In più controlla lo stato dell'utente nel proprio database (sospensione, cache `OIDC_STATUS_CACHE_TTL`).
 
-`deploy/keycloak/realm-memobrain.json` è il realm di riferimento (usato anche dallo stack di sviluppo): **importarlo e poi rivedere** i valori sensibili (segreti, redirect URI, utenti di prova) prima di un ambiente reale.
+`deploy/keycloak/realm-memobrain.json` è il realm di riferimento (usato anche dallo stack di sviluppo): **importarlo e poi rivedere** i valori sensibili (segreti, redirect URI, utenti di prova) prima di un ambiente reale. `deploy/keycloak-prod/realm-memobrain.json` è la sua variante di produzione, senza utenti di prova e con segreto e origine della Web UI presi dall'ambiente.
 
 ## Realm `memobrain`
 
@@ -19,9 +19,21 @@ Il servizio è solo **resource server**: non gestisce password né sessioni. Key
 | Client                | Tipo                                        | Uso                                                                                                                           |
 | --------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `memobrain-desktop`   | pubblico, PKCE S256, scope `offline_access` | App desktop. Redirect: `http://127.0.0.1/*` (loopback), `memobrain://auth/callback` (fallback, D-08).                         |
-| `memobrain-web`       | pubblico, PKCE                              | Web UI. Impostare i redirect URI sull'URL pubblico (`https://<host>/auth/callback`) e Web origins su `WEB_UI_ORIGIN`.         |
+| `memobrain-web`       | pubblico, PKCE                              | Web UI. Redirect URI, post-logout redirect URI e Web origins sull'origine pubblica `WEB_UI_ORIGIN` (vedi sotto).              |
 | `memobrain-api`       | solo audience                               | Il claim `aud` dei token deve contenere `memobrain-api` (client scope `memobrain-api-audience`, già assegnato ai due client). |
 | `memobrain-admin-svc` | confidential, **service account**           | Usato dal servizio per le operazioni admin sugli utenti (Admin REST API).                                                     |
+
+### Client `memobrain-web`: redirect e logout
+
+Il realm di produzione `deploy/keycloak-prod/realm-memobrain.json` (importato dallo stack Compose) prende l'origine da `WEB_UI_ORIGIN`, sostituita da Keycloak all'import. Con Helm il Keycloak è esterno e il client si configura a mano (scheda _Settings_ → _Access settings_), con l'origine pubblica della Web UI, per esempio `https://memobrain.example.com`:
+
+| Campo                           | Valore                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| Valid redirect URIs             | `https://memobrain.example.com/*` (il login torna su `/auth/callback`)   |
+| Valid post logout redirect URIs | `https://memobrain.example.com/*` (oppure `+`, che riusa i redirect URI) |
+| Web origins                     | `https://memobrain.example.com` (uguale a `WEB_UI_ORIGIN`)               |
+
+Il post-logout redirect URI è obbligatorio: all'uscita la Web UI chiede a Keycloak di tornare su `https://<host>/`, e se l'indirizzo non è ammesso Keycloak mostra «Invalid redirect uri» **senza chiudere la sessione SSO**. La Web UI sembra disconnessa, ma chi preme di nuovo _Accedi_ dallo stesso browser entra senza password con l'utente precedente (fino a `ssoSessionIdleTimeout`). Non lasciare origini di sviluppo (`localhost`, `127.0.0.1`) nel client della Web UI; il test `services/cloud/internal/keycloak/realm_test.go` lo verifica sul realm di produzione.
 
 I nomi dei client e dell'audience sono configurabili (`OIDC_DESKTOP_CLIENT_ID`, `OIDC_WEB_CLIENT_ID`, `OIDC_AUDIENCE`, `OIDC_ALLOWED_AZP`, `KC_ADMIN_CLIENT_ID`).
 

@@ -280,7 +280,7 @@
       "webOrigins": ["${WEB_UI_ORIGIN}"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:5174/*##http://localhost:18081/*"
+        "post.logout.redirect.uris": "${WEB_UI_ORIGIN}/*"
       },
       "defaultClientScopes": [
         "basic",
