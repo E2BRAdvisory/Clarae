@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"memobrain/apps/desktop/internal/properties"
 	"memobrain/apps/desktop/internal/vault"
@@ -184,7 +185,12 @@ func (t *TagsAPI) List(vaultID string) ([]TagCount, error) {
 }
 
 // PropertiesAPI exposes typed properties (§2.2.1 "Properties").
-type PropertiesAPI struct{ app *App }
+type PropertiesAPI struct {
+	app *App
+	// typesMu serialises SetType in this process; the hash check of its write covers the other
+	// writers of types.json (sync, ConfigAPI.WriteConfig).
+	typesMu sync.Mutex
+}
 
 // NewPropertiesAPI binds the API.
 func NewPropertiesAPI(a *App) *PropertiesAPI { return &PropertiesAPI{app: a} }
@@ -268,23 +274,52 @@ func (p *PropertiesAPI) SetType(vaultID, key, kind string) error {
 	if key == "" {
 		return errors.New("invalid: property name is empty")
 	}
-	schema := p.schema(ov)
-	if kind == "" {
-		delete(schema, key)
-	} else {
-		k := properties.Kind(kind)
-		if !k.Valid() {
-			return fmt.Errorf("invalid: unknown property type %q", kind)
+	k := properties.Kind(kind)
+	if kind != "" && !k.Valid() {
+		return fmt.Errorf("invalid: unknown property type %q", kind)
+	}
+	// types.json is a synced setting: the write is tied to the content it was computed from, and
+	// when another write (a concurrent SetType, a sync pull) got in between, the single key is
+	// applied again to the new content instead of overwriting it.
+	const typesFile = pathrules.ConfigDir + "/types.json"
+	p.typesMu.Lock()
+	defer p.typesMu.Unlock()
+	for attempt := 0; ; attempt++ {
+		var expected string
+		schema := properties.Schema{}
+		cur, err := ov.FS.ReadFile(typesFile)
+		switch {
+		case err == nil:
+			expected = cur.Hash
+			if schema, err = properties.ParseSchema(cur.Data); err != nil {
+				// Rewriting it would drop every declaration it holds.
+				return fmt.Errorf("invalid: %s cannot be read, fix or remove it first: %w", typesFile, err)
+			}
+		case !errors.Is(err, vault.ErrNotFound):
+			return bindingError(err)
 		}
-		schema[key] = k
+		if kind == "" {
+			if _, ok := schema[key]; !ok {
+				return nil
+			}
+			delete(schema, key)
+		} else {
+			schema[key] = k
+		}
+		data, err := schema.Marshal()
+		if err != nil {
+			return err
+		}
+		_, err = ov.FS.WriteFile(typesFile, data, expected, expected == "")
+		if (errors.Is(err, vault.ErrHashMismatch) || errors.Is(err, vault.ErrExists)) && attempt < setTypeAttempts-1 {
+			continue
+		}
+		return bindingError(err)
 	}
-	data, err := schema.Marshal()
-	if err != nil {
-		return err
-	}
-	_, err = ov.FS.WriteFile(pathrules.ConfigDir+"/types.json", data, "", false)
-	return bindingError(err)
 }
+
+// setTypeAttempts bounds the retries of SetType when types.json keeps changing under it.
+const setTypeAttempts = 8
 
 // Update sets a property of a note. valueJSON is the JSON-encoded value; it is
 // coerced to the declared (or inferred) type of the property. expectedHash

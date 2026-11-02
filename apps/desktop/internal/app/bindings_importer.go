@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -38,11 +39,41 @@ type ImportDonePayload struct {
 }
 
 type importJob struct {
-	vaultID string
-	cancel  context.CancelFunc
-	done    bool
-	report  *importer.Report
-	err     string
+	vaultID  string
+	cancel   context.CancelFunc
+	done     bool
+	finished time.Time
+	report   *importer.Report
+	err      string
+}
+
+// Finished jobs are kept for Report only for a while: a report can hold thousands of items.
+// The importer:done event already carries it, so Report is a fallback.
+const (
+	finishedImportTTL  = 15 * time.Minute
+	maxFinishedImports = 4
+)
+
+// pruneLocked drops finished jobs older than finishedImportTTL and, beyond maxFinishedImports,
+// the oldest ones. Running jobs are never dropped. The caller holds i.mu.
+func (i *ImporterAPI) pruneLocked(now time.Time) {
+	var kept []string
+	for id, j := range i.jobs {
+		switch {
+		case !j.done:
+		case now.Sub(j.finished) > finishedImportTTL:
+			delete(i.jobs, id)
+		default:
+			kept = append(kept, id)
+		}
+	}
+	if len(kept) <= maxFinishedImports {
+		return
+	}
+	sort.Slice(kept, func(a, b int) bool { return i.jobs[kept[a]].finished.Before(i.jobs[kept[b]].finished) })
+	for _, id := range kept[:len(kept)-maxFinishedImports] {
+		delete(i.jobs, id)
+	}
 }
 
 // ImporterAPI imports notes from other applications into the open vault (M6-WP4). Files are
@@ -128,6 +159,7 @@ func (i *ImporterAPI) Run(vaultID, sourceID, path string, opts importer.Options)
 		return "", err
 	}
 	i.mu.Lock()
+	i.pruneLocked(time.Now())
 	for _, j := range i.jobs {
 		if j.vaultID == vaultID && !j.done {
 			i.mu.Unlock()
@@ -152,7 +184,7 @@ func (i *ImporterAPI) Run(vaultID, sourceID, path string, opts importer.Options)
 		}
 		rep, err := imp.Run(ctx, path, opts, progress)
 		i.mu.Lock()
-		job.done = true
+		job.done, job.finished = true, time.Now()
 		payload := ImportDonePayload{JobID: id, VaultID: vaultID, OK: err == nil}
 		if err != nil {
 			job.err = err.Error()
@@ -163,6 +195,7 @@ func (i *ImporterAPI) Run(vaultID, sourceID, path string, opts importer.Options)
 			payload.Report = &rep
 			i.app.logger.Info().Str("source", sourceID).Int("notes", rep.NotesCreated).Int("attachments", rep.AttachmentsCreated).Msg("import finished")
 		}
+		i.pruneLocked(job.finished)
 		i.mu.Unlock()
 		i.app.emit(EventImportDone, payload)
 	}()
@@ -181,10 +214,12 @@ func (i *ImporterAPI) Cancel(jobID string) error {
 	return nil
 }
 
-// Report returns the report of a finished import.
+// Report returns the report of a finished import. A finished job is forgotten once its report
+// was read (and anyway after a while, see pruneLocked), so a second call is not-found.
 func (i *ImporterAPI) Report(jobID string) (importer.Report, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
+	i.pruneLocked(time.Now())
 	j, ok := i.jobs[jobID]
 	if !ok {
 		return importer.Report{}, fmt.Errorf("not-found: unknown import %q", jobID)
@@ -192,6 +227,7 @@ func (i *ImporterAPI) Report(jobID string) (importer.Report, error) {
 	if !j.done {
 		return importer.Report{}, errors.New("busy: the import is still running")
 	}
+	delete(i.jobs, jobID)
 	if j.report == nil {
 		return importer.Report{}, errors.New(j.err)
 	}

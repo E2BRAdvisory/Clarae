@@ -21,17 +21,31 @@ type Limits struct {
 	MaxEntries int
 	// MaxTotalBytes caps the uncompressed size of everything read from a source.
 	MaxTotalBytes int64
-	// MaxEntryBytes caps one file (also the size of a single-file source such as ENEX/CSV).
+	// MaxEntryBytes caps one file (also the size of a single-file source such as ENEX).
 	MaxEntryBytes int64
+	// MaxReadBytes caps a file read whole into memory to be converted (a note, its metadata, a
+	// CSV). Attachments are streamed to the vault and only bound by MaxEntryBytes. Zero (or a
+	// value above MaxEntryBytes) means MaxEntryBytes.
+	MaxReadBytes int64
 }
 
 // DefaultLimits are generous for real exports and stop zip bombs.
-var DefaultLimits = Limits{MaxEntries: 200_000, MaxTotalBytes: 8 << 30, MaxEntryBytes: 1 << 30}
+var DefaultLimits = Limits{MaxEntries: 200_000, MaxTotalBytes: 8 << 30, MaxEntryBytes: 1 << 30, MaxReadBytes: 64 << 20}
+
+// readBytes is the effective MaxReadBytes.
+func (l Limits) readBytes() int64 {
+	if l.MaxReadBytes > 0 && l.MaxReadBytes < l.MaxEntryBytes {
+		return l.MaxReadBytes
+	}
+	return l.MaxEntryBytes
+}
 
 // Errors for sources that exceed the limits.
 var (
 	ErrTooManyEntries = errors.New("too-large: the source contains too many files")
 	ErrTooLarge       = errors.New("too-large: the source is larger than the import limit")
+	// ErrTooLargeToConvert is a note or metadata file above Limits.MaxReadBytes.
+	ErrTooLargeToConvert = errors.New("too-large: the file is too large to be converted")
 )
 
 // File is one regular file of a source tree.
@@ -67,6 +81,20 @@ func validEntryName(name string) bool {
 	return true
 }
 
+// entryPath validates an archive entry name and returns it as a clean relative path. Zip tools
+// may write "." segments ("./Notes/a.md", "Notes/./a.md"): they are dropped, so the name the
+// importers see, the name Open looks up and the duplicate check are one and the same.
+func entryPath(name string) (string, bool) {
+	if !validEntryName(name) {
+		return "", false
+	}
+	clean := path.Clean(name)
+	if clean == "." {
+		return "", false
+	}
+	return clean, true
+}
+
 func skipEntry(name string) bool {
 	for _, seg := range strings.Split(name, "/") {
 		if seg == "__MACOSX" || seg == ".DS_Store" || seg == "Thumbs.db" || seg == "desktop.ini" {
@@ -81,6 +109,11 @@ type budget struct {
 	used  atomic.Int64
 	max   int64
 	entry int64
+	read  int64 // cap of a file read whole into memory (readAll)
+}
+
+func newBudget(lim Limits) *budget {
+	return &budget{max: lim.MaxTotalBytes, entry: lim.MaxEntryBytes, read: lim.readBytes()}
 }
 
 type capReader struct {
@@ -123,7 +156,7 @@ type dirTree struct {
 }
 
 func openDirTree(root string, lim Limits) (*dirTree, error) {
-	t := &dirTree{root: root, b: &budget{max: lim.MaxTotalBytes, entry: lim.MaxEntryBytes}}
+	t := &dirTree{root: root, b: newBudget(lim)}
 	var total int64
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -212,7 +245,7 @@ func openZipTree(p string, lim Limits) (*zipTree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid: not a readable zip archive: %w", err)
 	}
-	t := &zipTree{zr: zr, byName: map[string]*zip.File{}, b: &budget{max: lim.MaxTotalBytes, entry: lim.MaxEntryBytes}}
+	t := &zipTree{zr: zr, byName: map[string]*zip.File{}, b: newBudget(lim)}
 	if len(zr.File) > lim.MaxEntries {
 		_ = zr.Close()
 		return nil, ErrTooManyEntries
@@ -226,7 +259,8 @@ func openZipTree(p string, lim Limits) (*zipTree, error) {
 			}
 			continue
 		}
-		if !validEntryName(name) {
+		clean, ok := entryPath(name)
+		if !ok {
 			t.rejected = append(t.rejected, name+": unsafe path")
 			continue
 		}
@@ -234,7 +268,7 @@ func openZipTree(p string, lim Limits) (*zipTree, error) {
 			t.rejected = append(t.rejected, name+": symbolic link")
 			continue
 		}
-		if skipEntry(name) {
+		if skipEntry(clean) {
 			continue
 		}
 		if f.UncompressedSize64 > math.MaxInt64 || int64(f.UncompressedSize64) > lim.MaxEntryBytes {
@@ -246,12 +280,12 @@ func openZipTree(p string, lim Limits) (*zipTree, error) {
 			_ = zr.Close()
 			return nil, ErrTooLarge
 		}
-		if _, dup := t.byName[name]; dup {
+		if _, dup := t.byName[clean]; dup {
 			t.rejected = append(t.rejected, name+": duplicate entry")
 			continue
 		}
-		t.byName[name] = f
-		t.files = append(t.files, File{Path: path.Clean(name), Size: int64(f.UncompressedSize64)})
+		t.byName[clean] = f
+		t.files = append(t.files, File{Path: clean, Size: int64(f.UncompressedSize64)})
 	}
 	sort.Slice(t.files, func(i, j int) bool { return t.files[i].Path < t.files[j].Path })
 	return t, nil
@@ -273,14 +307,32 @@ func (t *zipTree) Open(name string) (io.ReadCloser, error) {
 	return &capReader{r: rc, c: rc, b: t.b}, nil
 }
 
-// readAll reads one tree file completely (bounded by the tree's caps).
+// readAll reads one tree file completely, for a conversion that needs it in memory (a note, its
+// metadata). Besides the tree's caps it is bound by Limits.MaxReadBytes; attachments are copied
+// with run.copyAttachment instead, which streams them.
 func readAll(t Tree, name string) ([]byte, error) {
 	rc, err := t.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rc.Close() }()
-	return io.ReadAll(rc)
+	c, ok := rc.(*capReader)
+	if !ok || c.b.read <= 0 {
+		return io.ReadAll(rc)
+	}
+	return readCapped(rc, c.b.read)
+}
+
+// readCapped reads r whole, refusing more than limit bytes (ErrTooLargeToConvert).
+func readCapped(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, ErrTooLargeToConvert
+	}
+	return data, nil
 }
 
 // openCapped opens a single-file source (ENEX, JSON, CSV) with a size cap.

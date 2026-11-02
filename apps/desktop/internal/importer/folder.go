@@ -264,12 +264,7 @@ func importFolder(r *run, p string, spec folderSpec) error {
 			r.created("attachment", e.src, e.dest, "")
 			continue
 		}
-		data, err := readAll(tree, e.src)
-		if err != nil {
-			r.fail("attachment", e.src, e.dest, err)
-			continue
-		}
-		_ = r.writeAttachment(e.src, e.dest, data)
+		_ = r.copyAttachment(tree, e.src, e.dest)
 	}
 	for _, f := range post {
 		if err := f(); err != nil {

@@ -151,6 +151,13 @@ func (d *DrawingAPI) ImportLegacy(vaultID, srcRel string) (string, error) {
 	if !strings.HasSuffix(strings.ToLower(srcRel), legacySuffix) {
 		return "", fmt.Errorf("invalid: %q is not an Obsidian Excalidraw note (%s)", srcRel, legacySuffix)
 	}
+	abs, _, err := ov.FS.Resolve(srcRel)
+	if err != nil {
+		return "", bindingError(err)
+	}
+	if st, err := os.Stat(abs); err == nil && st.Size() > drawing.MaxLegacyNoteSize {
+		return "", fmt.Errorf("invalid: %q is too large to be imported", srcRel) // not read at all
+	}
 	src, err := ov.FS.ReadFile(srcRel)
 	if err != nil {
 		return "", bindingError(err)

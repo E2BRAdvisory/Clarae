@@ -3,6 +3,7 @@ package importer
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -18,6 +19,8 @@ type Sink interface {
 	Reserve(rel string) (string, error)
 	// Write stores data at a path returned by Reserve; it never overwrites.
 	Write(rel string, data []byte) error
+	// WriteFrom is Write for content streamed from r (attachments, which can be large).
+	WriteFrom(rel string, r io.Reader) error
 	// Dry reports that nothing is written (preview).
 	Dry() bool
 }
@@ -89,5 +92,16 @@ func (s *vaultSink) Write(rel string, data []byte) error {
 		return errors.New("internal: write to an unreserved path")
 	}
 	_, err := s.fs.WriteFile(rel, data, "", true)
+	return err
+}
+
+func (s *vaultSink) WriteFrom(rel string, r io.Reader) error {
+	if s.dry {
+		return nil
+	}
+	if !s.taken[pathrules.Key(rel)] {
+		return errors.New("internal: write to an unreserved path")
+	}
+	_, _, err := s.fs.WriteFileFrom(rel, r)
 	return err
 }

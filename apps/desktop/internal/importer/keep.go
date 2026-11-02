@@ -223,12 +223,7 @@ func importKeepNote(r *run, tree Tree, byDir map[string][]string, jp string, kn 
 			r.warn("%s: attachment %s is not in the export", jp, at.FilePath)
 			continue
 		}
-		data, err := readAll(tree, src)
-		if err != nil {
-			r.fail("attachment", src, "", err)
-			continue
-		}
-		dest, err := r.putAttachment(src, path.Base(src), data)
+		dest, err := r.putAttachmentFrom(tree, src, path.Base(src))
 		if err != nil {
 			continue
 		}

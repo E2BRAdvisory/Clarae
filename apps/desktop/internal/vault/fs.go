@@ -156,12 +156,19 @@ func (f *FS) Resolve(rel string) (abs, normalized string, err error) {
 	return abs, normalized, nil
 }
 
+// inside reports whether abs (symlinks already resolved) is the root or below
+// it. Only a ".." segment leaves the root: "..Archive/n.md" is a folder of
+// the vault whose name starts with two dots.
 func (f *FS) inside(abs string) bool {
 	rel, err := filepath.Rel(f.root, abs)
 	if err != nil {
-		return false
+		return false // e.g. another volume on Windows
 	}
-	return rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) &&
+		!filepath.IsAbs(rel) && filepath.VolumeName(rel) == ""
 }
 
 // Content is a file read together with its content hash, used by WriteFile
@@ -258,6 +265,59 @@ func (f *FS) writeFile(abs, normalized string, data []byte, expectedHash string,
 	return Content{Path: normalized, Data: data, Hash: hashing.Sum(data).Hex(), Mtime: st.ModTime(), Size: st.Size()}, nil
 }
 
+// WriteFileFrom creates rel with the content read from r, streamed to the
+// staging file so that a large file (an imported attachment) never sits in
+// memory. Like WriteFile with create=true it never replaces a file: ErrExists
+// when rel exists. It returns the hash and the size of what was written.
+//
+// The copy runs without the path lock, which can take long; the existence
+// check and the publication are atomic with respect to the other mutations
+// made through this FS, as in WriteFile.
+func (f *FS) WriteFileFrom(rel string, r io.Reader) (hash string, size int64, err error) {
+	abs, normalized, err := f.Resolve(rel)
+	if err != nil {
+		return "", 0, err
+	}
+	if st, err := os.Lstat(abs); err == nil {
+		if st.IsDir() {
+			return "", 0, ErrIsDirectory
+		}
+		return "", 0, ErrExists // fail before copying anything
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return "", 0, err
+	}
+	h := sha256.New()
+	tmpName, err := stageTemp(filepath.Dir(abs), 0o644, func(w io.Writer) error {
+		var cerr error
+		size, cerr = io.Copy(io.MultiWriter(w, h), r)
+		return cerr
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	err = func() error {
+		unlock := f.lockPath(normalized)
+		defer unlock()
+		if st, err := os.Lstat(abs); err == nil {
+			_ = os.Remove(tmpName)
+			if st.IsDir() {
+				return ErrIsDirectory
+			}
+			return ErrExists
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			_ = os.Remove(tmpName)
+			return err
+		}
+		return publishTemp(tmpName, abs, true)
+	}()
+	if err != nil {
+		return "", 0, err
+	}
+	f.changed(normalized) // outside the lock: the callback may call back into the FS
+	return hex.EncodeToString(h.Sum(nil)), size, nil
+}
+
 // Steps of writeAtomic reported to crashHook (fault injection in tests).
 const (
 	stepTmpWritten = "tmp-written"   // temporary file holds the data, not yet fsynced
@@ -289,34 +349,54 @@ func crashPoint(step string) {
 // to rename, relying on the caller's lockPath to have checked that abs does
 // not exist.
 func writeAtomic(abs string, data []byte, perm fs.FileMode, noReplace bool) error {
-	dir := filepath.Dir(abs)
-	tmp, err := os.CreateTemp(dir, tmpPrefix+"*")
+	tmpName, err := stageTemp(filepath.Dir(abs), perm, func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
 	if err != nil {
 		return err
 	}
+	return publishTemp(tmpName, abs, noReplace)
+}
+
+// stageTemp creates a staging file in dir, fills it with fill, fsyncs it and
+// gives it mode perm. It returns the staging file name; on error nothing is left.
+func stageTemp(dir string, perm fs.FileMode, fill func(w io.Writer) error) (string, error) {
+	tmp, err := os.CreateTemp(dir, tmpPrefix+"*")
+	if err != nil {
+		return "", err
+	}
 	tmpName := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpName) }
-	if _, err := tmp.Write(data); err != nil {
+	if err := fill(tmp); err != nil {
 		_ = tmp.Close()
 		cleanup()
-		return err
+		return "", err
 	}
 	crashPoint(stepTmpWritten)
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		cleanup()
-		return err
+		return "", err
 	}
 	if err := tmp.Close(); err != nil {
 		cleanup()
-		return err
+		return "", err
 	}
 	crashPoint(stepSynced)
 	if err := os.Chmod(tmpName, perm); err != nil {
 		cleanup()
-		return err
+		return "", err
 	}
 	crashPoint(stepBeforeRen)
+	return tmpName, nil
+}
+
+// publishTemp publishes the staging file tmpName as abs (see writeAtomic for
+// noReplace). The staging file is gone afterwards, whatever the outcome.
+func publishTemp(tmpName, abs string, noReplace bool) error {
+	dir := filepath.Dir(abs)
+	cleanup := func() { _ = os.Remove(tmpName) }
 	if noReplace {
 		err := linkFile(tmpName, abs)
 		switch {

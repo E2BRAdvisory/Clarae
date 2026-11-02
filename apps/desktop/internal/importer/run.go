@@ -199,6 +199,33 @@ func (r *run) writeAttachment(src, dest string, data []byte) error {
 	return nil
 }
 
+// copyAttachment streams the tree file src to the already reserved path dest: attachments are
+// copied as they are, so they never sit whole in memory.
+func (r *run) copyAttachment(tree Tree, src, dest string) error {
+	rc, err := tree.Open(src)
+	if err != nil {
+		r.fail("attachment", src, dest, err)
+		return err
+	}
+	defer func() { _ = rc.Close() }()
+	if err := r.sink.WriteFrom(dest, rc); err != nil {
+		r.fail("attachment", src, dest, err)
+		return err
+	}
+	r.created("attachment", src, dest, "")
+	return nil
+}
+
+// putAttachmentFrom copies the tree file src into the attachments folder as name.
+func (r *run) putAttachmentFrom(tree Tree, src, name string) (string, error) {
+	dest, err := r.reserveAbs(joinPath(r.attachmentsDir(), sanitizeFile(name)))
+	if err != nil {
+		r.fail("attachment", src, "", err)
+		return "", err
+	}
+	return dest, r.copyAttachment(tree, src, dest)
+}
+
 // putAttachment stores generated attachment data in the attachments folder.
 func (r *run) putAttachment(src, name string, data []byte) (string, error) {
 	dest, err := r.reserveAbs(joinPath(r.attachmentsDir(), sanitizeFile(name)))

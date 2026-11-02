@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall/js"
+	"time"
 
 	"memobrain/apps/desktop/internal/auth"
 )
@@ -29,6 +30,10 @@ func defaultHost() Host { return webHost{} }
 // JavaScript event loop (callers run in their own goroutine).
 type webHost struct{}
 
+// hostTokenTimeout bounds the wait for an access token from the page when the caller's context
+// has no earlier deadline: a page whose token refresh hangs must not hold every sync call forever.
+const hostTokenTimeout = 30 * time.Second
+
 // Session lets the page own the sign-in: tokens come from the page, and the server is the origin
 // that served it (the page can override it with serverURL).
 func (h webHost) Session() *auth.Hosted {
@@ -40,11 +45,13 @@ func (h webHost) Session() *auth.Hosted {
 		server = host.Get("serverURL").String()
 	}
 	hosted := &auth.Hosted{ServerURL: server, Token: func(ctx context.Context) (string, error) {
+		ctx, cancel := context.WithTimeout(ctx, hostTokenTimeout)
+		defer cancel()
 		res, err := h.call("token")
 		if err != nil {
 			return "", err
 		}
-		v, err := await(res)
+		v, err := await(ctx, res)
 		if err != nil {
 			return "", err
 		}
@@ -62,7 +69,7 @@ func (d webDevice) available(method string) bool {
 	return host.Type() == js.TypeObject && host.Get(method).Type() == js.TypeFunction
 }
 
-func (d webDevice) LoadDevice(_ context.Context, serverURL string) (string, string, error) {
+func (d webDevice) LoadDevice(ctx context.Context, serverURL string) (string, string, error) {
 	if !d.available("loadDevice") {
 		return "", "", nil // an older page: one registration per data directory, as before
 	}
@@ -70,7 +77,7 @@ func (d webDevice) LoadDevice(_ context.Context, serverURL string) (string, stri
 	if err != nil {
 		return "", "", err
 	}
-	v, err := await(res)
+	v, err := await(ctx, res)
 	if err != nil || v.Type() != js.TypeObject {
 		return "", "", err
 	}
@@ -81,7 +88,7 @@ func (d webDevice) LoadDevice(_ context.Context, serverURL string) (string, stri
 	return id.String(), user.String(), nil
 }
 
-func (d webDevice) SaveDevice(_ context.Context, serverURL, deviceID, userID string) error {
+func (d webDevice) SaveDevice(ctx context.Context, serverURL, deviceID, userID string) error {
 	if !d.available("saveDevice") {
 		return nil
 	}
@@ -89,7 +96,7 @@ func (d webDevice) SaveDevice(_ context.Context, serverURL, deviceID, userID str
 	if err != nil {
 		return err
 	}
-	_, err = await(res)
+	_, err = await(ctx, res)
 	return err
 }
 
@@ -115,17 +122,29 @@ func jsCall(obj js.Value, method string, args ...any) (res js.Value, err error) 
 	return obj.Call(method, args...), nil
 }
 
-// await waits for a promise (or returns a plain value as is).
-func await(v js.Value) (js.Value, error) {
+// await waits for a promise (or returns a plain value as is) until it settles or ctx ends. The
+// callbacks handed to the promise release themselves when it settles, also after the wait was
+// given up: releasing them earlier would crash the runtime when the late result arrives. A
+// promise that never settles therefore keeps its two callbacks for the rest of the session.
+func await(ctx context.Context, v js.Value) (js.Value, error) {
 	if v.Type() != js.TypeObject || v.Get("then").Type() != js.TypeFunction {
 		return v, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return js.Value{}, err
 	}
 	type outcome struct {
 		val js.Value
 		err error
 	}
-	ch := make(chan outcome, 1)
-	ok := js.FuncOf(func(_ js.Value, args []js.Value) any {
+	ch := make(chan outcome, 1) // buffered: a callback never blocks on a waiter that left
+	var ok, fail js.Func
+	release := func() {
+		ok.Release()
+		fail.Release()
+	}
+	ok = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		defer release()
 		o := outcome{}
 		if len(args) > 0 {
 			o.val = args[0]
@@ -133,19 +152,39 @@ func await(v js.Value) (js.Value, error) {
 		ch <- o
 		return nil
 	})
-	fail := js.FuncOf(func(_ js.Value, args []js.Value) any {
-		msg := "rejected"
-		if len(args) > 0 {
-			msg = args[0].Get("message").String()
-		}
-		ch <- outcome{err: errors.New(msg)}
+	fail = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		defer release()
+		ch <- outcome{err: errors.New(rejectionMessage(args))}
 		return nil
 	})
-	defer ok.Release()
-	defer fail.Release()
-	v.Call("then", ok, fail)
-	o := <-ch
-	return o.val, o.err
+	if _, err := jsCall(v, "then", ok, fail); err != nil {
+		release()
+		return js.Value{}, err
+	}
+	select {
+	case o := <-ch:
+		return o.val, o.err
+	case <-ctx.Done():
+		return js.Value{}, ctx.Err()
+	}
+}
+
+// rejectionMessage describes the reason of a rejected promise: an Error, a plain value or nothing.
+func rejectionMessage(args []js.Value) string {
+	if len(args) == 0 {
+		return "rejected"
+	}
+	switch reason := args[0]; reason.Type() {
+	case js.TypeUndefined, js.TypeNull:
+		return "rejected"
+	case js.TypeObject, js.TypeFunction:
+		if m := reason.Get("message"); m.Type() == js.TypeString && m.String() != "" {
+			return m.String()
+		}
+		return "rejected"
+	default:
+		return reason.String()
+	}
 }
 
 func (h webHost) Emit(_ context.Context, name string, payload any) {
@@ -170,15 +209,15 @@ func (webHost) SaveFile(_ context.Context, d SaveDialog) (string, error) {
 	return filepath.Join(dir, name), nil
 }
 
-func (h webHost) Delivered(_ context.Context, path string) {
+func (h webHost) Delivered(ctx context.Context, path string) {
 	if res, err := h.call("deliver", path); err == nil {
-		_, _ = await(res)
+		_, _ = await(ctx, res)
 	}
 }
 
 // OpenFile lets the page show its file picker; the page copies the chosen file into the scratch
 // area and answers with its path.
-func (h webHost) OpenFile(_ context.Context, d OpenDialog) (string, error) {
+func (h webHost) OpenFile(ctx context.Context, d OpenDialog) (string, error) {
 	pats := make([]any, 0, len(d.Filters))
 	for _, f := range d.Filters {
 		pats = append(pats, f.Pattern)
@@ -187,7 +226,7 @@ func (h webHost) OpenFile(_ context.Context, d OpenDialog) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	v, err := await(res)
+	v, err := await(ctx, res)
 	if err != nil || v.IsUndefined() || v.IsNull() {
 		return "", err
 	}

@@ -176,7 +176,7 @@ func execCSV(r *run, p string) error {
 	if err != nil {
 		return err
 	}
-	data, err := io.ReadAll(rc)
+	data, err := readCapped(rc, r.lim.readBytes()) // parsed whole: bound like a note
 	_ = rc.Close()
 	if err != nil {
 		return err

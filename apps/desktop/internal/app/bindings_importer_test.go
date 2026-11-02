@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -65,6 +67,9 @@ func TestImporterRunEmitsEventsAndTheWatcherIndexesTheNotes(t *testing.T) {
 	if err != nil || rep.ReportPath != "Imported/Import report.md" {
 		t.Fatalf("report: %+v %v", rep, err)
 	}
+	if _, err := api.Report(id); err == nil || !strings.HasPrefix(err.Error(), "not-found:") {
+		t.Fatalf("a report read once must be forgotten: %v", err)
+	}
 	if b, err := os.ReadFile(filepath.Join(root, "Imported", "Index.md")); err != nil || !strings.Contains(string(b), "[[Second note#Part two]]") {
 		t.Fatalf("note: %v %s", err, b)
 	}
@@ -119,5 +124,41 @@ func TestImporterRefusesViewerMounts(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "Imported")); err == nil {
 		t.Fatal("wrote into a read-only mount")
+	}
+}
+
+func TestImporterForgetsFinishedJobs(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	api := NewImporterAPI(a)
+	now := time.Now()
+	api.mu.Lock()
+	api.jobs["running"] = &importJob{cancel: func() {}}
+	api.jobs["stale"] = &importJob{done: true, finished: now.Add(-finishedImportTTL - time.Second), report: &importer.Report{}}
+	for n := range maxFinishedImports + 2 {
+		api.jobs[fmt.Sprintf("job%d", n)] = &importJob{done: true, finished: now.Add(time.Duration(n-10) * time.Second), report: &importer.Report{}}
+	}
+	api.pruneLocked(now)
+	var left []string
+	for id := range api.jobs {
+		left = append(left, id)
+	}
+	api.mu.Unlock()
+	sort.Strings(left)
+	want := []string{"running"}
+	for n := 2; n < maxFinishedImports+2; n++ {
+		want = append(want, fmt.Sprintf("job%d", n))
+	}
+	sort.Strings(want)
+	if strings.Join(left, ",") != strings.Join(want, ",") {
+		t.Fatalf("kept %v, want %v", left, want)
+	}
+	if _, err := api.Report("running"); err == nil || !strings.HasPrefix(err.Error(), "busy:") {
+		t.Fatalf("a running job: %v", err)
+	}
+	if _, err := api.Report("job5"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.Report("job5"); err == nil {
+		t.Fatal("a report read once must be forgotten")
 	}
 }

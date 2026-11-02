@@ -3,6 +3,7 @@ package templates
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,40 @@ func TestFormatDate(t *testing.T) {
 	}
 	if got := FormatDate(now.Add(-14*time.Hour), "hh a", "en"); got != "12 am" {
 		t.Errorf("midnight in 12h = %q", got)
+	}
+	for layout, want := range map[string]string{
+		"[YYYY":        "[2026",
+		"[[x] [YYYY":   "[x [2026",
+		"é\xffYYYY":    "é�2026",
+		"YYYY\xe2\x82": "2026��",
+	} {
+		if got := FormatDate(now, layout, "en"); got != want {
+			t.Errorf("FormatDate(%q) = %q, want %q", layout, got, want)
+		}
+	}
+}
+
+// tokenize is linear: a long literal layout (a template of a shared library can carry one) costs
+// no allocation per character, and an unclosed '[' does not rescan the rest of the layout.
+func TestTokenizeIsLinear(t *testing.T) {
+	literal := strings.Repeat("é", 20000)
+	allocs := testing.AllocsPerRun(5, func() { _ = tokenize(literal) })
+	if allocs > 100 {
+		t.Fatalf("tokenize allocated %.0f times for a %d-rune literal", allocs, 20000)
+	}
+	if parts := tokenize(literal); len(parts) != 1 || parts[0].literal != literal {
+		t.Fatalf("literal not kept: %d parts", len(parts))
+	}
+	brackets := strings.Repeat("[", 1<<20)
+	done := make(chan []part, 1)
+	go func() { done <- tokenize(brackets) }()
+	select {
+	case parts := <-done:
+		if len(parts) != 1 || parts[0].literal != brackets {
+			t.Fatalf("unclosed brackets not kept: %d parts", len(parts))
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("tokenize is quadratic on unclosed '['")
 	}
 }
 

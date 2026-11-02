@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // tokens are matched longest first at every position of the layout.
@@ -47,13 +48,17 @@ func tokenize(layout string) []part {
 			lit.Reset()
 		}
 	}
+	// Once a '[' finds no ']' after it, no later one can: stop searching (an unclosed '[' per
+	// character would otherwise scan the rest of the layout each time).
+	unclosed := false
 	for i := 0; i < len(layout); {
-		if layout[i] == '[' {
+		if layout[i] == '[' && !unclosed {
 			if end := strings.IndexByte(layout[i+1:], ']'); end >= 0 {
 				lit.WriteString(layout[i+1 : i+1+end])
 				i += end + 2
 				continue
 			}
+			unclosed = true
 		}
 		matched := false
 		for _, tok := range tokens {
@@ -66,10 +71,10 @@ func tokenize(layout string) []part {
 			}
 		}
 		if !matched {
-			// Copy one whole rune so multibyte literals survive.
-			r := []rune(layout[i:])[0]
+			// Copy one whole rune so multibyte literals survive (an invalid byte becomes U+FFFD).
+			r, size := utf8.DecodeRuneInString(layout[i:])
 			lit.WriteRune(r)
-			i += len(string(r))
+			i += size
 		}
 	}
 	flush()

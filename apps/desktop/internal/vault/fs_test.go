@@ -2,10 +2,13 @@ package vault
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"testing/iotest"
 
 	"memobrain/shared/pathrules"
 )
@@ -87,6 +90,39 @@ func TestPathGuards(t *testing.T) {
 	for _, e := range entries {
 		if e.Name == "escape" {
 			t.Fatal("symlink listed")
+		}
+	}
+}
+
+// A name that only starts with ".." is an ordinary vault folder or file (Obsidian users name
+// folders "..Archive" to sort them first); only the ".." segment leaves the vault.
+func TestDotDotPrefixedNamesAreInside(t *testing.T) {
+	f := newTestFS(t)
+	for _, p := range []string{"..Archivio/nota.md", "..md", "Dir/..x/y.md"} {
+		if _, err := f.WriteFile(p, []byte(p), "", true); err != nil {
+			t.Fatalf("WriteFile(%q): %v", p, err)
+		}
+		c, err := f.ReadFile(p)
+		if err != nil || string(c.Data) != p {
+			t.Fatalf("ReadFile(%q) = %q, %v", p, c.Data, err)
+		}
+	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	// Symlinks to the parent folder, or to a sibling whose name starts with the vault's, still escape.
+	parent := filepath.Dir(f.Root())
+	sibling := f.Root() + "..x"
+	if err := os.Mkdir(sibling, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sibling) })
+	for name, target := range map[string]string{"up": parent, "..up": parent, "..sib": sibling} {
+		if err := os.Symlink(target, filepath.Join(f.Root(), name)); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := f.Resolve(name + "/secret.md"); !errors.Is(err, ErrOutsideVault) {
+			t.Fatalf("symlink %s -> %s: %v", name, target, err)
 		}
 	}
 }
@@ -208,5 +244,39 @@ func TestTrashSameNameTwice(t *testing.T) {
 		if c, err := f.ReadFile(d); err != nil || string(c.Data) != []string{"one", "two", "three"}[i] {
 			t.Fatalf("%s = %q, %v", d, c.Data, err)
 		}
+	}
+}
+
+func TestWriteFileFromStreams(t *testing.T) {
+	f := newTestFS(t)
+	var changed []string
+	f.SetOnChange(func(p []string) { changed = append(changed, p...) })
+	data := strings.Repeat("attachment bytes ", 50000)
+	hash, n, err := f.WriteFileFrom("Files/a.bin", strings.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.ReadFile("Files/a.bin")
+	if err != nil || string(got.Data) != data || got.Hash != hash || n != int64(len(data)) {
+		t.Fatalf("read back: %v hash=%s/%s n=%d", err, hash, got.Hash, n)
+	}
+	if len(changed) != 1 || changed[0] != "Files/a.bin" {
+		t.Fatalf("change callback: %v", changed)
+	}
+	// It never replaces a file.
+	if _, _, err := f.WriteFileFrom("Files/a.bin", strings.NewReader("x")); !errors.Is(err, ErrExists) {
+		t.Fatalf("existing file: %v", err)
+	}
+	// A failing reader leaves neither the file nor a staging file behind.
+	boom := errors.New("boom")
+	if _, _, err := f.WriteFileFrom("Files/b.bin", io.MultiReader(strings.NewReader("part"), iotest.ErrReader(boom))); !errors.Is(err, boom) {
+		t.Fatalf("failing reader: %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Join(f.Root(), "Files"))
+	if len(entries) != 1 || entries[0].Name() != "a.bin" {
+		t.Fatalf("leftovers: %v", entries)
+	}
+	if _, _, err := f.WriteFileFrom("../out.bin", strings.NewReader("x")); err == nil {
+		t.Fatal("a path outside the vault must be refused")
 	}
 }

@@ -199,12 +199,7 @@ func execBear(r *run, p string) error {
 			}
 			return nil
 		}
-		data, err := readAll(tree, src)
-		if err != nil {
-			r.fail("attachment", src, "", err)
-			return nil
-		}
-		d, err := r.putAttachment(src, path.Base(src), data)
+		d, err := r.putAttachmentFrom(tree, src, path.Base(src))
 		if err == nil {
 			assets[src] = target{Dest: d, Attachment: true}
 			rw.register(d, true)
