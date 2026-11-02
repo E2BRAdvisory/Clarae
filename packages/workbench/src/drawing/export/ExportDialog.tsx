@@ -131,7 +131,7 @@ export function ExportDialog({ initial, selectionCount, frames, onClose, onExpor
           {t('drawing.embedScene')}
         </label>
         <div className="actions">
-          <button onClick={onClose}>{t('dialog.cancel')}</button>
+          <button onClick={onClose}>{t('common.cancel')}</button>
           <button onClick={() => onExport(o, 'copy')}>{t('drawing.copy')}</button>
           <button onClick={() => onExport(o, 'saveAs')}>{t('drawing.saveAs')}</button>
           <button onClick={() => onExport(o, 'print')}>{t('drawing.printPdf')}</button>

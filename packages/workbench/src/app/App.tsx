@@ -19,7 +19,7 @@ import { QuickSwitcher } from '../commands/QuickSwitcher';
 import { commandForEvent } from '../commands/registry';
 import { DialogHost } from '../ui/dialogs';
 import { openVaultAt } from './actions';
-import { installModalFocus } from '../ui/modalFocus';
+import { installModalFocus } from '@memobrain/ui';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
 import { RecoveryDialogs } from '../recovery/RecoveryDialog';
@@ -57,7 +57,8 @@ export function App() {
 
   useEffect(() => applyAppearance(appearance), [appearance]);
 
-  // Every aria-modal dialog traps Tab and gives focus back to its opener on close.
+  // Every aria-modal dialog traps Tab and gives focus back to its opener on close (one handler for
+  // the page, shared with the Dialog of @memobrain/ui used by the cloud panels: ADR-0043).
   useEffect(() => installModalFocus(), []);
 
   // Cloud session: initial state, then pushed updates.

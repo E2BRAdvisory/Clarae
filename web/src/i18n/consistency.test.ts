@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { checkUsage, comparePair } from '../../../packages/ui/src/i18nCheck';
+import { checkUsage, comparePair, flatten, overlap, withShared } from '@memobrain/ui/i18nCheck';
+import { commonResources } from '@memobrain/ui/i18n';
 import en from './en.json';
 import it_ from './it.json';
 
@@ -31,8 +32,20 @@ describe('web i18n resources', () => {
     expect(f.pluralMismatch).toEqual([]);
     expect(f.italianPluralIncomplete).toEqual([]);
   });
+  it('leave the shared strings (common namespace of @memobrain/ui) to the package', () => {
+    expect(overlap(en, commonResources.en)).toEqual([]);
+    expect(overlap(it_, commonResources.it)).toEqual([]);
+  });
   it('use every key and only keys that exist', () => {
-    const u = checkUsage(en, { ...sources, ...uiSources }, { allow: DYNAMIC });
+    // Shared strings may be used or not by this host; errors.<code> are looked up by code.
+    const shared = [...flatten(commonResources.en).keys()];
+    const u = checkUsage(
+      withShared(en, commonResources.en),
+      { ...sources, ...uiSources },
+      {
+        allow: [...DYNAMIC, ...shared],
+      },
+    );
     expect(u.missing).toEqual([]);
     expect(u.unused).toEqual([]);
   });

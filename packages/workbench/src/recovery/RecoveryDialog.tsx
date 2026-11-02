@@ -187,7 +187,7 @@ function NoteRecovery({ vaultId, path }: { vaultId: string; path: string }) {
         </div>
       )}
       <div className="actions">
-        <button onClick={close}>{t('settings.close')}</button>
+        <button onClick={close}>{t('common.close')}</button>
         <button
           className="primary"
           disabled={busy || !selected || info.readOnly}
@@ -259,7 +259,7 @@ function DeletedRecovery({ vaultId }: { vaultId: string }) {
         </ul>
       )}
       <div className="actions">
-        <button onClick={() => useRecovery.getState().close()}>{t('settings.close')}</button>
+        <button onClick={() => useRecovery.getState().close()}>{t('common.close')}</button>
       </div>
     </div>
   );

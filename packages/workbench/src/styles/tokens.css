@@ -55,6 +55,34 @@
   --mark: #6b5e1a;
 }
 
+/* The shared tokens of @memobrain/ui (--nd-*, ADR-0043) with the workbench's values, so the nd-*
+   components (the cloud panels of @memobrain/cloud-features, the Dialog primitive) follow the
+   workbench palette and theme. Set on <body>, they win over the console palette of tokens.css (on
+   :root) by inheritance; the workbench variables they point to change with the theme above. */
+body {
+  --nd-bg: var(--bg);
+  --nd-surface: var(--bg);
+  --nd-surface-2: var(--bg-secondary);
+  --nd-text: var(--text);
+  --nd-text-muted: var(--text-muted);
+  --nd-border: var(--border);
+  --nd-accent: var(--accent);
+  --nd-accent-text: var(--accent-contrast);
+  --nd-danger: var(--danger);
+  --nd-danger-bg: color-mix(in srgb, var(--danger) 8%, var(--bg));
+  --nd-ok: var(--success);
+  --nd-ok-bg: color-mix(in srgb, var(--success) 8%, var(--bg));
+  --nd-warn: var(--accent-text);
+  --nd-warn-bg: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  --nd-focus: var(--accent);
+  /* the ring is drawn inside the control: lists and trees are dense and clip it otherwise */
+  --nd-focus-offset: -2px;
+  --nd-radius: var(--radius);
+  --nd-gap: 12px;
+  --nd-font: var(--font-ui);
+  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.25);
+}
+
 /* Text for assistive technology only (live regions). */
 .sr-only {
   position: absolute;
@@ -77,8 +105,8 @@ a:focus-visible,
 select:focus-visible,
 summary:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: var(--nd-focus-width) solid var(--nd-focus);
+  outline-offset: var(--nd-focus-offset);
 }
 
 /* Windows high contrast / forced colors: let the system palette win, keep focus and state visible. */

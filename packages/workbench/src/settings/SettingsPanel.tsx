@@ -407,7 +407,7 @@ export function SettingsPanel() {
           <h3>{t(`settings.section_${section}`)}</h3>
           {body()}
           <div className="actions">
-            <button onClick={close}>{t('settings.close')}</button>
+            <button onClick={close}>{t('common.close')}</button>
           </div>
         </div>
       </div>

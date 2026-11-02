@@ -1,6 +1,7 @@
 /* Components of the MemoBrain Notes UI design system: nd-* classes only, no element or global rule,
-   so they can be loaded next to another style sheet. The tokens (--nd-*) are defined by styles.css
-   (console) or by the host (see @memobrain/cloud-features/workbench.css). */
+   so they can be loaded next to another style sheet. They are drawn with the tokens (--nd-*) of
+   tokens.css, which the console (styles.css) and the workbench (style.css, with its own palette)
+   both load. */
 
 .nd-visually-hidden {
   position: absolute;
@@ -58,8 +59,8 @@
 .nd-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: var(--nd-space-1);
+  margin-bottom: var(--nd-space-3);
 }
 .nd-field__label {
   font-weight: 600;
@@ -185,7 +186,7 @@
 .nd-quota__caption {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--nd-space-3);
   flex-wrap: wrap;
   margin-top: 6px;
   color: var(--nd-text-muted);
@@ -220,7 +221,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: var(--nd-space-2);
   z-index: 1000;
   pointer-events: none;
 }
@@ -265,15 +266,15 @@
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--nd-space-2);
+  margin-top: var(--nd-space-4);
 }
 
 /* Layout helpers */
 .nd-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--nd-space-2);
   align-items: center;
 }
 .nd-stack > * + * {

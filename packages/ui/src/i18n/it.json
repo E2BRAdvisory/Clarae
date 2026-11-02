@@ -1,0 +1,22 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "retry": "Riprova",
+    "error": "Errore"
+  },
+  "errors": {
+    "UNAUTHENTICATED": "La sessione è scaduta: accedi di nuovo.",
+    "FORBIDDEN": "Non hai il permesso di farlo.",
+    "USER_SUSPENDED": "Il tuo account è sospeso.",
+    "NOT_FOUND": "Non trovato sul server, forse è stato rimosso.",
+    "QUOTA_EXCEEDED": "La tua quota di spazio è piena.",
+    "FILE_TOO_LARGE": "Il file è più grande di quanto il server accetti.",
+    "RATE_LIMITED": "Troppe richieste, riprova tra poco.",
+    "VAULT_ENCRYPTED": "Questo vault è cifrato end-to-end: il server non può farlo al posto tuo.",
+    "NAME_IN_USE": "Questo nome è già in uso.",
+    "INVALID_STATE": "Non è possibile nello stato attuale.",
+    "INTERNAL": "Il server ha avuto un problema. Riprova più tardi."
+  }
+}

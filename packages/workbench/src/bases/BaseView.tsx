@@ -402,7 +402,7 @@ function YamlEditor({
       />
       <div className="row-controls">
         <button onClick={() => void save()}>{t('bases.saveYaml')}</button>
-        <button onClick={onClose}>{t('bases.cancel')}</button>
+        <button onClick={onClose}>{t('common.cancel')}</button>
       </div>
     </div>
   );

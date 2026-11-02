@@ -14,6 +14,8 @@ Test Vitest `src/i18n/consistency.test.ts` in **entrambe** le app (logica condiv
 
 Se una chiave è composta davvero a runtime in modo non rilevabile, si aggiunge alla lista `DYNAMIC` del test con un commento.
 
+**Stringhe comuni (ADR-0043).** Le stringhe uguali in console e workbench (`common.ok`, `common.cancel`, `common.close`, `common.retry`, `common.error`) e i messaggi degli errori dell'API (`errors.<CODICE>`) stanno una sola volta in `packages/ui/src/i18n/{en,it}.json`, caricate da ogni app come namespace i18next `common` con `fallbackNS` (`withCommon` di `@memobrain/ui/i18n`). Si chiamano sempre con `t('common.cancel')` o `t('errors.NOT_FOUND')`; una chiave dell'app vince su quella comune, ma il test di consistenza fallisce se un'app ridefinisce una chiave comune. `@memobrain/cloud-features` non usa i18next e tiene il proprio dizionario.
+
 Regole di scrittura: nessuna stringa visibile nel codice (nemmeno nei messaggi di `dialog.*`: usare `i18next.t`); numeri, date e dimensioni con `Intl` (`toLocaleString(lingua)`, `Intl.NumberFormat`) e mai formattati a mano; plurali con le chiavi `_one/_other` e `count`, mai concatenando una "s".
 
 ## Terminologia italiana

@@ -1,5 +1,6 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { withCommon } from '@memobrain/ui/i18n';
 import en from './en.json';
 import it from './it.json';
 
@@ -27,8 +28,11 @@ export function detectLanguage(): Language {
 export function initI18n(language?: string): typeof i18next {
   const lng: Language = isLanguage(language) ? language : detectLanguage();
   if (!i18next.isInitialized) {
+    // The strings shared with the other UI (OK, Cancel, errors.<code>…) come from @memobrain/ui.
+    const { resources, options } = withCommon({ en, it });
     void i18next.use(initReactI18next).init({
-      resources: { en: { translation: en }, it: { translation: it } },
+      resources,
+      ...options,
       lng,
       fallbackLng: 'en',
       interpolation: { escapeValue: false },

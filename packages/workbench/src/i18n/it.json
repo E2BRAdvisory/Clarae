@@ -91,7 +91,6 @@
     "themeDark": "Scuro",
     "version": "Versione",
     "dataDir": "Cartella dati",
-    "close": "Chiudi",
     "needsVault": "Apri un vault per modificare queste impostazioni (sono salvate per vault).",
     "section_general": "Generale",
     "section_editor": "Editor",
@@ -284,11 +283,8 @@
     "list": "Note aperte"
   },
   "dialog": {
-    "ok": "OK",
-    "cancel": "Annulla",
     "filter": "Filtra…",
-    "nothing": "Nessun risultato",
-    "error": "Errore"
+    "nothing": "Nessun risultato"
   },
   "palette": {
     "title": "Palette comandi",
@@ -990,7 +986,6 @@
     "editYaml": "Modifica YAML",
     "yaml": "YAML della base",
     "saveYaml": "Salva",
-    "cancel": "Annulla",
     "cellError": "#ERRORE",
     "count": "{{shown}} di {{total}}",
     "notices_one": "1 costrutto non è supportato",
@@ -1175,8 +1170,6 @@
     "chooseSource": "Da dove arrivano le tue note?",
     "next": "Avanti",
     "back": "Indietro",
-    "cancel": "Annulla",
-    "close": "Chiudi",
     "preview": "Anteprima",
     "start": "Importa",
     "location": "File o cartella da importare",
@@ -1272,7 +1265,6 @@
     "install": "Installa e riavvia",
     "later": "Più tardi",
     "skip": "Salta questa versione",
-    "close": "Chiudi",
     "auto": "Verifica automaticamente gli aggiornamenti",
     "channel": "Canale di aggiornamento",
     "stable": "Stabile",
@@ -1319,18 +1311,7 @@
     "exists": "Esiste già un elemento con quel nome.",
     "not-found": "Il file non esiste più: potrebbe essere stato spostato o eliminato.",
     "invalid-path": "Il percorso è fuori dal vault.",
-    "too-large": "Il file è troppo grande.",
-    "UNAUTHENTICATED": "La sessione è scaduta: accedi di nuovo.",
-    "FORBIDDEN": "Non hai il permesso per farlo.",
-    "USER_SUSPENDED": "Il tuo account è sospeso.",
-    "NOT_FOUND": "Non trovato sul server, forse è stato rimosso.",
-    "QUOTA_EXCEEDED": "La tua quota di spazio è piena.",
-    "FILE_TOO_LARGE": "Il file è più grande di quanto il server accetti.",
-    "RATE_LIMITED": "Troppe richieste, riprova tra poco.",
-    "VAULT_ENCRYPTED": "Questo vault è cifrato end-to-end: il server non può farlo al posto tuo.",
-    "NAME_IN_USE": "Quel nome è già in uso.",
-    "INVALID_STATE": "Non è possibile nello stato attuale.",
-    "INTERNAL": "Il server ha avuto un problema. Riprova più tardi."
+    "too-large": "Il file è troppo grande."
   },
   "embeds": {
     "depthLimit": "{{label}} (limite di incorporamento)",

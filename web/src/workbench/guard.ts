@@ -117,7 +117,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
 
   /** Removes the copy (files and databases) and its marker, then goes to the console. */
   const wipeAndLeave = async (): Promise<void> => {
-    showOverlay({ busy: true, lines: [message('locking')] });
+    showOverlay({ busy: true, lines: [message('workbench.locking')] });
     await core.callWithin(60_000, 'VaultAPI', 'CloseVault', info.id).catch(() => undefined);
     try {
       await core.wipe(info.path);
@@ -203,7 +203,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     // Already locked and decided: the overlay (or the way out) is on screen.
     if (deciding) return Promise.resolve();
     running ??= (async () => {
-      showOverlay({ busy: true, lines: [message('locking')] });
+      showOverlay({ busy: true, lines: [message('workbench.locking')] });
       await o.flush();
       // The core knows whether the key is in memory; the page's own record is the fallback.
       const isUnlocked = await core
@@ -251,7 +251,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     if (isPrivate) return lockAndForget();
     if (running) return running;
     running = (async () => {
-      showOverlay({ busy: true, lines: [message('removing')] });
+      showOverlay({ busy: true, lines: [message('workbench.removing')] });
       await o.flush();
       await core.callWithin(15_000, 'SyncAPI', 'SyncNow', info.id).catch(() => undefined);
       await drain();
@@ -267,15 +267,15 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       // Unknown counts are kept like changes (D-04): the user decides.
       const ask = (): void =>
         void showOverlay({
-          title: message('removeKeptTitle'),
+          title: message('workbench.removeKeptTitle'),
           lines: [
             ...unsyncedLines(counts.pending, counts.conflicts, !s),
-            message('removeKeptHint'),
+            message('workbench.removeKeptHint'),
           ],
           actions: [
-            { label: message('stay'), kind: 'primary', onClick: closeOverlay },
+            { label: message('workbench.stay'), kind: 'primary', onClick: closeOverlay },
             {
-              label: message('deleteAnyway'),
+              label: message('workbench.deleteAnyway'),
               kind: 'danger',
               onClick: () => confirmDelete(() => void wipeAndLeave(), ask),
             },

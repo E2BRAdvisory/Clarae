@@ -140,7 +140,7 @@ export function HistoryView({ vaultId, path }: { vaultId: string; path: string }
           </div>
         )}
         <div className="actions">
-          <button onClick={close}>{t('settings.close')}</button>
+          <button onClick={close}>{t('common.close')}</button>
           <button
             className="primary"
             disabled={busy || selected === null}

@@ -1,0 +1,22 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Retry",
+    "error": "Error"
+  },
+  "errors": {
+    "UNAUTHENTICATED": "Your session has expired: sign in again.",
+    "FORBIDDEN": "You are not allowed to do this.",
+    "USER_SUSPENDED": "Your account is suspended.",
+    "NOT_FOUND": "Not found on the server, it may have been removed.",
+    "QUOTA_EXCEEDED": "Your storage quota is full.",
+    "FILE_TOO_LARGE": "The file is larger than the server accepts.",
+    "RATE_LIMITED": "Too many requests, try again in a moment.",
+    "VAULT_ENCRYPTED": "This vault is end-to-end encrypted: the server cannot do this for you.",
+    "NAME_IN_USE": "That name is already in use.",
+    "INVALID_STATE": "This is not possible in the current state.",
+    "INTERNAL": "The server had a problem. Try again later."
+  }
+}

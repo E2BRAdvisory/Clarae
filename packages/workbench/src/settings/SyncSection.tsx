@@ -104,7 +104,7 @@ function ChangePassphrase({ vaultId, onDone }: { vaultId: string; onDone: () => 
       />
       <PassphraseFields idPrefix="change" onValid={onValid} />
       <div className="actions">
-        <button onClick={onDone}>{t('dialog.cancel')}</button>
+        <button onClick={onDone}>{t('common.cancel')}</button>
         <button
           className="primary"
           disabled={busy || oldPass === '' || fresh === ''}

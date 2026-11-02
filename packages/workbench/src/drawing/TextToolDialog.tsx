@@ -65,7 +65,7 @@ export function TextToolDialog({
           </div>
         )}
         <div className="actions">
-          <button onClick={onClose}>{t('dialog.cancel')}</button>
+          <button onClick={onClose}>{t('common.cancel')}</button>
           <button className="primary" disabled={busy || !text.trim()} onClick={() => void submit()}>
             {submitLabel}
           </button>

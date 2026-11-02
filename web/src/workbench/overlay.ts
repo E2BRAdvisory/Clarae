@@ -78,17 +78,17 @@ export function closeOverlay(): void {
 /** The core stopped: nothing on the page works any more until it is reloaded. */
 export function showFatal(reload: () => void = () => window.location.reload()): Overlay {
   return showOverlay({
-    lines: [message('fatal')],
-    actions: [{ label: message('reload'), kind: 'primary', onClick: reload }],
+    lines: [message('workbench.fatal')],
+    actions: [{ label: message('workbench.reload'), kind: 'primary', onClick: reload }],
   });
 }
 
 /** What a copy kept in the browser holds that the cloud does not have, as sentences. */
 export function unsyncedLines(pending: number, conflicts: number, dirty = false): string[] {
   const lines: string[] = [];
-  if (pending > 0) lines.push(plural('lockedPending', pending));
-  if (conflicts > 0) lines.push(plural('lockedConflicts', conflicts));
-  if (lines.length === 0 && dirty) lines.push(message('lockedUnscanned'));
+  if (pending > 0) lines.push(plural('workbench.lockedPending', pending));
+  if (conflicts > 0) lines.push(plural('workbench.lockedConflicts', conflicts));
+  if (lines.length === 0 && dirty) lines.push(message('workbench.lockedUnscanned'));
   return lines;
 }
 
@@ -98,11 +98,11 @@ export function unsyncedLines(pending: number, conflicts: number, dirty = false)
  */
 export function confirmDelete(onDelete: () => void, back: () => void): Overlay {
   return showOverlay({
-    title: message('lockedTitle'),
-    lines: [message('deleteConfirm')],
+    title: message('workbench.lockedTitle'),
+    lines: [message('workbench.deleteConfirm')],
     actions: [
-      { label: message('cancel'), onClick: back },
-      { label: message('deleteConfirmButton'), kind: 'danger', onClick: onDelete },
+      { label: message('common.cancel'), onClick: back },
+      { label: message('workbench.deleteConfirmButton'), kind: 'danger', onClick: onDelete },
     ],
   });
 }
@@ -120,19 +120,19 @@ export function showLocked(
 ): Overlay {
   const show = (): Overlay =>
     showOverlay({
-      title: message('lockedTitle'),
+      title: message('workbench.lockedTitle'),
       lines: [
         ...unsyncedLines(counts.pending, counts.conflicts, counts.dirty),
-        message('lockedHint'),
+        message('workbench.lockedHint'),
       ],
       actions: [
-        { label: message('back'), onClick: c.backToConsole },
+        { label: message('workbench.back'), onClick: c.backToConsole },
         {
-          label: message('deleteAnyway'),
+          label: message('workbench.deleteAnyway'),
           kind: 'danger',
           onClick: () => confirmDelete(c.deleteCopy, show),
         },
-        { label: message('unlock'), kind: 'primary', onClick: c.unlock },
+        { label: message('workbench.unlock'), kind: 'primary', onClick: c.unlock },
       ],
     });
   return show();
@@ -165,10 +165,15 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
         autocomplete: 'off',
         required: true,
       });
-      const label = el('label', { htmlFor: input.id, textContent: message('passphrase') });
+      const label = el('label', {
+        htmlFor: input.id,
+        textContent: message('workbench.passphrase'),
+      });
       const recovery = el('input', { id: 'gate-recovery', type: 'checkbox' });
       recovery.addEventListener('change', () => {
-        label.textContent = message(recovery.checked ? 'recoveryKey' : 'passphrase');
+        label.textContent = message(
+          recovery.checked ? 'workbench.recoveryKey' : 'workbench.passphrase',
+        );
         input.type = recovery.checked ? 'text' : 'password';
       });
       const error = el('p', { className: 'page-overlay__error', hidden: true });
@@ -176,17 +181,20 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
       const submit = el('button', {
         type: 'submit',
         className: 'primary',
-        textContent: message('unlock'),
+        textContent: message('workbench.unlock'),
       });
       const form = el('form', { className: 'page-overlay__form' }, [
         label,
         input,
-        el('label', { className: 'page-overlay__check' }, [recovery, message('useRecoveryKey')]),
+        el('label', { className: 'page-overlay__check' }, [
+          recovery,
+          message('workbench.useRecoveryKey'),
+        ]),
         error,
         el('div', { className: 'page-overlay__actions' }, [
-          button({ label: message('back'), onClick: o.backToConsole }),
+          button({ label: message('workbench.back'), onClick: o.backToConsole }),
           button({
-            label: message('deleteAnyway'),
+            label: message('workbench.deleteAnyway'),
             kind: 'danger',
             onClick: () => confirmDelete(o.deleteCopy, secretStep),
           }),
@@ -208,10 +216,10 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
         );
       });
       showOverlay({
-        title: message('gateTitle'),
+        title: message('workbench.gateTitle'),
         lines: [
           ...unsyncedLines(o.counts.pending, o.counts.conflicts, o.counts.dirty),
-          message('lockedHint'),
+          message('workbench.lockedHint'),
         ],
         content: form,
       });
@@ -229,12 +237,12 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
       const submit = el('button', {
         type: 'submit',
         className: 'primary',
-        textContent: message('save'),
+        textContent: message('workbench.save'),
       });
       const form = el('form', { className: 'page-overlay__form' }, [
-        el('label', { htmlFor: pass.id, textContent: message('newPassphrase') }),
+        el('label', { htmlFor: pass.id, textContent: message('workbench.newPassphrase') }),
         pass,
-        el('label', { htmlFor: again.id, textContent: message('newPassphraseAgain') }),
+        el('label', { htmlFor: again.id, textContent: message('workbench.newPassphraseAgain') }),
         again,
         error,
         el('div', { className: 'page-overlay__actions' }, [submit]),
@@ -245,8 +253,8 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
       };
       form.addEventListener('submit', (ev) => {
         ev.preventDefault();
-        if (pass.value.length < 12) return fail(message('newPassphraseShort'));
-        if (pass.value !== again.value) return fail(message('newPassphraseMismatch'));
+        if (pass.value.length < 12) return fail(message('workbench.newPassphraseShort'));
+        if (pass.value !== again.value) return fail(message('workbench.newPassphraseMismatch'));
         submit.disabled = true;
         o.setPassphrase(pass.value).then(finish, (e: unknown) => {
           submit.disabled = false;
@@ -254,8 +262,8 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
         });
       });
       showOverlay({
-        title: message('gateTitle'),
-        lines: [message('newPassphraseIntro')],
+        title: message('workbench.gateTitle'),
+        lines: [message('workbench.newPassphraseIntro')],
         content: form,
       });
     };

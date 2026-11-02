@@ -7,7 +7,7 @@ import type { AuthService } from '../auth/types';
 import { parseCreation } from './create';
 import { CANCELLED, DISABLED, launchWorkbench } from './launch';
 import type { CoreAssets } from './protocol';
-import { message } from './strings';
+import { message, STEP_MESSAGE } from './strings';
 import './shell.css';
 
 const status = document.getElementById('status') as HTMLElement;
@@ -20,7 +20,7 @@ function show(text: string, opts: { error?: boolean; back?: boolean; retry?: boo
   if (opts.retry) {
     const b = Object.assign(document.createElement('button'), {
       type: 'button',
-      textContent: message('retry'),
+      textContent: message('common.retry'),
     });
     b.addEventListener('click', () => location.reload());
     status.append(b);
@@ -28,7 +28,7 @@ function show(text: string, opts: { error?: boolean; back?: boolean; retry?: boo
   if (opts.back) {
     const a = Object.assign(document.createElement('a'), {
       href: '/vaults',
-      textContent: message('back'),
+      textContent: message('workbench.back'),
     });
     a.setAttribute('data-allow-navigation', ''); // the workbench's link guard lets this one through
     status.append(a);
@@ -51,10 +51,11 @@ async function start(): Promise<void> {
   document.documentElement.lang = navigator.language.startsWith('it') ? 'it' : 'en';
   const params = new URLSearchParams(location.search);
   const vaultId = workbenchVaultId(location.pathname);
-  if (vaultId === null) return show(message('notFound'), { error: true, back: true });
+  if (vaultId === null) return show(message('workbench.notFound'), { error: true, back: true });
   // /vaults/new/open?kind=private&name=…: the console sends the creation of a private vault here.
   const create = parseCreation(vaultId, params);
-  if (create === 'invalid') return show(message('badCreate'), { error: true, back: true });
+  if (create === 'invalid')
+    return show(message('workbench.badCreate'), { error: true, back: true });
 
   // Playwright opens a folder of the browser without a cloud, using the OIDC test double.
   const localOnly = Boolean(import.meta.env.MEMOBRAIN_E2E) && params.has('local');
@@ -67,7 +68,7 @@ async function start(): Promise<void> {
   // retry, never as an endless "redirecting".
   const signInFailed = (e: unknown): void => {
     console.error(e);
-    show(message('signInFailed'), { error: true, retry: true, back: true });
+    show(message('workbench.signInFailed'), { error: true, retry: true, back: true });
   };
   if (!localOnly) {
     let user: Awaited<ReturnType<AuthService['getUser']>>;
@@ -81,13 +82,13 @@ async function start(): Promise<void> {
       return;
     }
   }
-  if (!(await takeLock())) return show(message('busy'), { error: true, back: true });
+  if (!(await takeLock())) return show(message('workbench.busy'), { error: true, back: true });
 
   const assets =
     typeof __MEMOBRAIN_CORE__ === 'undefined' ? null : (__MEMOBRAIN_CORE__ as CoreAssets | null);
-  if (!assets) return show(message('noCore'), { error: true, back: true });
+  if (!assets) return show(message('workbench.noCore'), { error: true, back: true });
 
-  show(message('core'));
+  show(message('workbench.core'));
   try {
     await launchWorkbench({
       auth,
@@ -102,7 +103,7 @@ async function start(): Promise<void> {
       fsTrace: Boolean(import.meta.env.MEMOBRAIN_E2E) && params.has('fstrace'),
       assets,
       version: typeof __MEMOBRAIN_VERSION__ === 'undefined' ? 'dev' : __MEMOBRAIN_VERSION__,
-      progress: (step) => show(message(step)),
+      progress: (step) => show(message(STEP_MESSAGE[step])),
       mount: async ({ vaultPath, onBackToConsole, onRemoveFromBrowser }) => {
         status.hidden = true;
         return mountWorkbench(root, {
@@ -116,9 +117,9 @@ async function start(): Promise<void> {
   } catch (e) {
     if (e instanceof Error && e.message === CANCELLED) return; // on the way back to the console
     if (e instanceof Error && e.message === DISABLED)
-      return show(message('disabled'), { error: true, back: true });
+      return show(message('workbench.disabled'), { error: true, back: true });
     console.error(e);
-    show(`${message('failed')} ${e instanceof Error ? e.message : String(e)}`, {
+    show(`${message('workbench.failed')} ${e instanceof Error ? e.message : String(e)}`, {
       error: true,
       back: true,
     });

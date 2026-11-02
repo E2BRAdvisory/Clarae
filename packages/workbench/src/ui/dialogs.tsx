@@ -2,6 +2,7 @@
 // webviews Wails uses, so every confirmation and text question goes through here.
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Dialog } from '@memobrain/ui';
 import { create } from 'zustand';
 import { i18next } from '../i18n';
 import { errorMessage } from '../util/errors';
@@ -63,7 +64,7 @@ export const dialog = {
   pick: (title: string, items: readonly PickItem[]): Promise<string | null> =>
     new Promise((resolve) => enqueue({ kind: 'pick', title, items, resolve })),
   /** Shows a failure from the backend. */
-  error: (e: unknown): Promise<void> => dialog.alert(i18next.t('dialog.error'), errorMessage(e)),
+  error: (e: unknown): Promise<void> => dialog.alert(i18next.t('common.error'), errorMessage(e)),
 };
 
 function PickBody({
@@ -102,7 +103,7 @@ function PickBody({
         ))}
       </ul>
       <div className="actions">
-        <button onClick={() => onDone(null)}>{t('dialog.cancel')}</button>
+        <button onClick={() => onDone(null)}>{t('common.cancel')}</button>
       </div>
     </div>
   );
@@ -139,17 +140,23 @@ function PromptBody({
       />
       <div className="actions">
         <button type="button" onClick={() => onDone(null)}>
-          {t('dialog.cancel')}
+          {t('common.cancel')}
         </button>
         <button type="submit" className="primary">
-          {t('dialog.ok')}
+          {t('common.ok')}
         </button>
       </div>
     </form>
   );
 }
 
-/** Renders the pending dialog; mount once near the root. */
+/** The workbench look of the imperative dialogs (style.css `.modal.dialog`). */
+const DIALOG_CLASSES = { backdrop: 'modal-backdrop', dialog: 'modal dialog' };
+
+/**
+ * Renders the pending dialog; mount once near the root. It goes through the Dialog primitive of
+ * @memobrain/ui (focus, Escape, labelling: ADR-0043) with the workbench classes.
+ */
 export function DialogHost() {
   const { t } = useTranslation();
   const current = useDialogs((s) => s.current);
@@ -166,45 +173,37 @@ export function DialogHost() {
     finish(current.kind === 'prompt' || current.kind === 'pick' ? null : false);
 
   return (
-    <div className="modal-backdrop" onMouseDown={cancel} role="presentation">
-      <div
-        className="modal dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={current.title}
-        onMouseDown={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            cancel();
-          }
-          if (e.key === 'Enter' && current.kind !== 'prompt' && current.kind !== 'pick') {
-            e.preventDefault();
-            finish(true);
-          }
-        }}
-      >
-        <h2>{current.title}</h2>
-        {current.kind === 'prompt' ? (
-          <PromptBody key={current.title + current.initial} request={current} onDone={finish} />
-        ) : current.kind === 'pick' ? (
-          <PickBody key={current.title} request={current} onDone={finish} />
-        ) : (
-          <>
-            {current.message && <p className="muted">{current.message}</p>}
-            <div className="actions">
-              {current.kind === 'confirm' && <button onClick={cancel}>{t('dialog.cancel')}</button>}
-              <button
-                className={current.kind === 'confirm' && current.danger ? 'danger' : 'primary'}
-                autoFocus
-                onClick={() => finish(true)}
-              >
-                {t('dialog.ok')}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <Dialog
+      title={current.title}
+      onClose={cancel}
+      classNames={DIALOG_CLASSES}
+      closeOnBackdrop
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && current.kind !== 'prompt' && current.kind !== 'pick') {
+          e.preventDefault();
+          finish(true);
+        }
+      }}
+    >
+      {current.kind === 'prompt' ? (
+        <PromptBody key={current.title + current.initial} request={current} onDone={finish} />
+      ) : current.kind === 'pick' ? (
+        <PickBody key={current.title} request={current} onDone={finish} />
+      ) : (
+        <>
+          {current.message && <p className="muted">{current.message}</p>}
+          <div className="actions">
+            {current.kind === 'confirm' && <button onClick={cancel}>{t('common.cancel')}</button>}
+            <button
+              className={current.kind === 'confirm' && current.danger ? 'danger' : 'primary'}
+              autoFocus
+              onClick={() => finish(true)}
+            >
+              {t('common.ok')}
+            </button>
+          </div>
+        </>
+      )}
+    </Dialog>
   );
 }

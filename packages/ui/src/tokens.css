@@ -1,0 +1,79 @@
+/* Design tokens of MemoBrain Notes (ADR-0043), shared by the console (styles.css) and the workbench
+   (packages/workbench/src/style.css): the --nd-* custom properties the nd-* components are drawn
+   with. Here they have the console palette, light and dark: dark follows the OS unless
+   data-theme="light" | "dark" is set on <html>, the same switch the workbench uses. A host with its
+   own palette (the workbench) gives the colour tokens its values on <body>: the custom properties
+   inherit from there to every element, so they win over these without selector games. No element
+   or global rule here, only custom properties. */
+
+:root {
+  /* shape, spacing and type */
+  --nd-radius: 8px;
+  --nd-gap: 16px;
+  --nd-space-1: 4px;
+  --nd-space-2: 8px;
+  --nd-space-3: 12px;
+  --nd-space-4: 16px;
+  --nd-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* keyboard focus ring (WCAG 2.4.7): colour, width and offset */
+  --nd-focus-width: 2px;
+  --nd-focus-offset: 2px;
+
+  /* colours (light) */
+  --nd-bg: #f6f7f9;
+  --nd-surface: #ffffff;
+  --nd-surface-2: #eef0f4;
+  --nd-text: #1b1f27;
+  --nd-text-muted: #5a6372;
+  --nd-border: #d5d9e1;
+  --nd-accent: #2f5fd0;
+  --nd-accent-text: #ffffff;
+  --nd-danger: #b3261e;
+  --nd-danger-bg: #fdecea;
+  --nd-ok: #1e7a46;
+  --nd-ok-bg: #e5f5ec;
+  --nd-warn: #8a5a00;
+  --nd-warn-bg: #fff3d6;
+  --nd-focus: #2f5fd0;
+  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --nd-bg: #14171c;
+    --nd-surface: #1d2129;
+    --nd-surface-2: #272c36;
+    --nd-text: #e8ebf1;
+    --nd-text-muted: #a2abbb;
+    --nd-border: #3a4150;
+    --nd-accent: #7ea2ff;
+    --nd-accent-text: #0e1320;
+    --nd-danger: #ff8a80;
+    --nd-danger-bg: #3a1f1d;
+    --nd-ok: #6fd69c;
+    --nd-ok-bg: #17301f;
+    --nd-warn: #f2c35b;
+    --nd-warn-bg: #3a2f14;
+    --nd-focus: #7ea2ff;
+    --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+  }
+}
+
+:root[data-theme='dark'] {
+  --nd-bg: #14171c;
+  --nd-surface: #1d2129;
+  --nd-surface-2: #272c36;
+  --nd-text: #e8ebf1;
+  --nd-text-muted: #a2abbb;
+  --nd-border: #3a4150;
+  --nd-accent: #7ea2ff;
+  --nd-accent-text: #0e1320;
+  --nd-danger: #ff8a80;
+  --nd-danger-bg: #3a1f1d;
+  --nd-ok: #6fd69c;
+  --nd-ok-bg: #17301f;
+  --nd-warn: #f2c35b;
+  --nd-warn-bg: #3a2f14;
+  --nd-focus: #7ea2ff;
+  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+}

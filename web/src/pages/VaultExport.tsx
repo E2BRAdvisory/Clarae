@@ -99,10 +99,10 @@ function SharedExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () =
         onClose={onClose}
         actions={
           working ? (
-            <Button onClick={() => abort.current?.abort()}>{t('vaultExport.cancel')}</Button>
+            <Button onClick={() => abort.current?.abort()}>{t('common.cancel')}</Button>
           ) : (
             <Button variant="primary" onClick={onClose}>
-              {t('vaultExport.close')}
+              {t('common.close')}
             </Button>
           )
         }
@@ -320,7 +320,7 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
       );
       actions =
         phase.kind === 'unlocking' ? (
-          <Button onClick={() => abort.current?.abort()}>{t('vaultExport.cancel')}</Button>
+          <Button onClick={() => abort.current?.abort()}>{t('common.cancel')}</Button>
         ) : (
           <>
             <Button onClick={close}>{t('common.cancel')}</Button>
@@ -371,7 +371,7 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
           </p>
         </div>
       );
-      actions = <Button onClick={() => abort.current?.abort()}>{t('vaultExport.cancel')}</Button>;
+      actions = <Button onClick={() => abort.current?.abort()}>{t('common.cancel')}</Button>;
       break;
     case 'done':
       body = (
@@ -412,7 +412,7 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
       );
       actions = (
         <Button variant="primary" onClick={close}>
-          {t('vaultExport.close')}
+          {t('common.close')}
         </Button>
       );
       break;
@@ -420,7 +420,7 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
       body = <p role="status">{t('vaultExport.cancelledPrivate')}</p>;
       actions = (
         <Button variant="primary" onClick={close}>
-          {t('vaultExport.close')}
+          {t('common.close')}
         </Button>
       );
       break;
@@ -428,7 +428,7 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
       body = <InlineError>{phase.message}</InlineError>;
       actions = (
         <Button variant="primary" onClick={close}>
-          {t('vaultExport.close')}
+          {t('common.close')}
         </Button>
       );
       break;

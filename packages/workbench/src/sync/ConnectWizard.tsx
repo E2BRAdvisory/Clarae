@@ -125,7 +125,7 @@ export function ConnectWizard({
           <>
             <p>{t('sync.needSignIn')}</p>
             <div className="actions">
-              <button onClick={close}>{t('dialog.cancel')}</button>
+              <button onClick={close}>{t('common.cancel')}</button>
               <button
                 className="primary"
                 onClick={() => {
@@ -207,7 +207,7 @@ export function ConnectWizard({
               </div>
             )}
             <div className="actions">
-              <button onClick={close}>{t('dialog.cancel')}</button>
+              <button onClick={close}>{t('common.cancel')}</button>
               <button
                 className="primary"
                 disabled={busy || (choice === 'existing' ? !picked : name.trim() === '')}
@@ -234,7 +234,7 @@ export function ConnectWizard({
             )}
             <div className="actions">
               {preset ? (
-                <button onClick={close}>{t('dialog.cancel')}</button>
+                <button onClick={close}>{t('common.cancel')}</button>
               ) : (
                 <button onClick={() => setStep('choose')}>{t('sync.back')}</button>
               )}

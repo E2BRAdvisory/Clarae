@@ -91,7 +91,6 @@
     "themeDark": "Dark",
     "version": "Version",
     "dataDir": "Data folder",
-    "close": "Close",
     "needsVault": "Open a vault to change these settings (they are stored per vault).",
     "section_general": "General",
     "section_editor": "Editor",
@@ -284,11 +283,8 @@
     "list": "Open notes"
   },
   "dialog": {
-    "ok": "OK",
-    "cancel": "Cancel",
     "filter": "Filter…",
-    "nothing": "Nothing matches",
-    "error": "Error"
+    "nothing": "Nothing matches"
   },
   "palette": {
     "title": "Command palette",
@@ -990,7 +986,6 @@
     "editYaml": "Edit YAML",
     "yaml": "Base YAML",
     "saveYaml": "Save",
-    "cancel": "Cancel",
     "cellError": "#ERROR",
     "count": "{{shown}} of {{total}}",
     "notices_one": "1 construct is not supported",
@@ -1175,8 +1170,6 @@
     "chooseSource": "Where are your notes coming from?",
     "next": "Next",
     "back": "Back",
-    "cancel": "Cancel",
-    "close": "Close",
     "preview": "Preview",
     "start": "Import",
     "location": "File or folder to import",
@@ -1272,7 +1265,6 @@
     "install": "Install and restart",
     "later": "Later",
     "skip": "Skip this version",
-    "close": "Close",
     "auto": "Check for updates automatically",
     "channel": "Update channel",
     "stable": "Stable",
@@ -1319,18 +1311,7 @@
     "exists": "An item with that name already exists.",
     "not-found": "The file no longer exists: it may have been moved or deleted.",
     "invalid-path": "That path is outside the vault.",
-    "too-large": "The file is too large.",
-    "UNAUTHENTICATED": "Your session has expired: sign in again.",
-    "FORBIDDEN": "You are not allowed to do this.",
-    "USER_SUSPENDED": "Your account is suspended.",
-    "NOT_FOUND": "Not found on the server, it may have been removed.",
-    "QUOTA_EXCEEDED": "Your storage quota is full.",
-    "FILE_TOO_LARGE": "The file is larger than the server accepts.",
-    "RATE_LIMITED": "Too many requests, try again in a moment.",
-    "VAULT_ENCRYPTED": "This vault is end-to-end encrypted: the server cannot do this for you.",
-    "NAME_IN_USE": "That name is already in use.",
-    "INVALID_STATE": "This is not possible in the current state.",
-    "INTERNAL": "The server had a problem. Try again later."
+    "too-large": "The file is too large."
   },
   "embeds": {
     "depthLimit": "{{label}} (embed depth limit)",

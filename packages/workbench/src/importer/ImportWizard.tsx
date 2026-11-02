@@ -258,7 +258,7 @@ function Wizard() {
             </fieldset>
             <div className="actions">
               <button type="button" onClick={close}>
-                {t('dialog.cancel')}
+                {t('common.cancel')}
               </button>
               <button type="submit" className="primary" disabled={!sourceId}>
                 {t('importer.next')}
@@ -468,7 +468,7 @@ function Wizard() {
             </p>
             <div className="actions">
               <button type="button" onClick={() => void cancel()}>
-                {t('importer.cancel')}
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -515,7 +515,7 @@ function Wizard() {
                 </button>
               )}
               <button type="button" className="primary" autoFocus onClick={() => hide()}>
-                {t('importer.close')}
+                {t('common.close')}
               </button>
             </div>
           </div>

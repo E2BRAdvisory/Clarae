@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useMenuKeyboard } from '@memobrain/ui';
 
 export interface MenuItem {
   label: string;
@@ -16,63 +17,25 @@ interface Props {
   onClose: () => void;
 }
 
-/** A small context menu positioned at the pointer; closes on outside click or Escape. */
+/**
+ * A small context menu positioned at the pointer. Keyboard and dismissal (arrows, Home/End, Escape,
+ * Tab, outside press, focus in and back) come from useMenuKeyboard of @memobrain/ui.
+ */
 export function ContextMenu({ x, y, items, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
+  const { onKeyDown } = useMenuKeyboard(ref, onClose);
 
+  // Kept inside the window.
   useEffect(() => {
     const el = ref.current;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      setPos({
-        x: Math.min(x, window.innerWidth - r.width - 4),
-        y: Math.min(y, window.innerHeight - r.height - 4),
-      });
-    }
-    const close = (e: Event): void => {
-      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      if (e instanceof MouseEvent && ref.current?.contains(e.target as Node)) return;
-      onClose();
-    };
-    window.addEventListener('mousedown', close);
-    window.addEventListener('keydown', close);
-    window.addEventListener('blur', onClose);
-    return () => {
-      window.removeEventListener('mousedown', close);
-      window.removeEventListener('keydown', close);
-      window.removeEventListener('blur', onClose);
-    };
-  }, [x, y, onClose]);
-
-  // Keyboard: the menu takes focus when it opens and gives it back to the opener on close.
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
-    return () => opener?.focus?.();
-  }, []);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    const buttons = [
-      ...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []),
-    ];
-    if (buttons.length === 0) return;
-    const at = buttons.indexOf(document.activeElement as HTMLElement);
-    let next = -1;
-    if (e.key === 'ArrowDown') next = (at + 1) % buttons.length;
-    else if (e.key === 'ArrowUp') next = (at - 1 + buttons.length) % buttons.length;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = buttons.length - 1;
-    else if (e.key === 'Tab') {
-      e.preventDefault();
-      onClose();
-      return;
-    }
-    if (next >= 0) {
-      e.preventDefault();
-      buttons[next]?.focus();
-    }
-  };
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({
+      x: Math.min(x, window.innerWidth - r.width - 4),
+      y: Math.min(y, window.innerHeight - r.height - 4),
+    });
+  }, [x, y]);
 
   return (
     <div

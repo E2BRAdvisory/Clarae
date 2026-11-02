@@ -13,6 +13,7 @@ import {
   type SelectHTMLAttributes,
   type TableHTMLAttributes,
 } from 'react';
+import { ensureModalFocus } from './focus';
 import { quotaLevel, quotaPercent, type QuotaLevel } from './quota';
 
 function cx(...parts: (string | false | undefined)[]): string {
@@ -231,10 +232,31 @@ export interface DialogProps {
   children: ReactNode;
   /** Footer buttons. */
   actions?: ReactNode;
+  /**
+   * Classes of a host's own look, used instead of the nd-* ones (the workbench keeps its `modal`
+   * classes): the behaviour stays the same.
+   */
+  classNames?: { backdrop?: string; dialog?: string };
+  /** A press on the backdrop (outside the dialog) closes it. */
+  closeOnBackdrop?: boolean;
+  /** Keys the host handles itself (Enter to confirm, …), before Escape closes the dialog. */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 }
 
-/** Modal dialog: focus moves in, Tab is trapped, Escape closes, focus returns on close. */
-export function Dialog({ title, onClose, children, actions }: DialogProps) {
+/**
+ * Modal dialog: focus moves in (unless a control inside already took it), Escape closes. Tab stays
+ * inside and focus returns to the opener on close through the document's one modal focus handler
+ * (focus.ts), which the dialog installs if the host has not.
+ */
+export function Dialog({
+  title,
+  onClose,
+  children,
+  actions,
+  classNames,
+  closeOnBackdrop,
+  onKeyDown,
+}: DialogProps) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -243,44 +265,42 @@ export function Dialog({ title, onClose, children, actions }: DialogProps) {
   });
 
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    // Before moving the focus, so the handler still sees the opener.
+    ensureModalFocus(document);
     const node = ref.current;
-    node?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-    return () => previous?.focus?.();
+    if (node && !node.contains(document.activeElement)) {
+      node.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    }
   }, []);
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
+  const keyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const handled = e.defaultPrevented;
+    onKeyDown?.(e);
+    if (!handled && e.defaultPrevented) return;
     if (e.key === 'Escape') {
+      e.preventDefault();
       e.stopPropagation();
       onCloseRef.current();
-      return;
-    }
-    if (e.key !== 'Tab' || !ref.current) return;
-    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE));
-    if (items.length === 0) return;
-    const first = items[0] as HTMLElement;
-    const last = items[items.length - 1] as HTMLElement;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
     }
   };
 
   return (
-    <div className="nd-dialog-backdrop">
+    <div
+      className={classNames?.backdrop ?? 'nd-dialog-backdrop'}
+      role="presentation"
+      onMouseDown={closeOnBackdrop ? () => onCloseRef.current() : undefined}
+    >
       <div
         ref={ref}
-        className="nd-dialog"
+        className={classNames?.dialog ?? 'nd-dialog'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        onKeyDown={onKeyDown}
+        onKeyDown={keyDown}
+        onMouseDown={closeOnBackdrop ? (e) => e.stopPropagation() : undefined}
       >
         <h2 id={titleId}>{title}</h2>
-        <div>{children}</div>
+        {children}
         {actions && <div className="nd-dialog__actions">{actions}</div>}
       </div>
     </div>

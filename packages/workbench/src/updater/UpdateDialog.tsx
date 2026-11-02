@@ -97,7 +97,7 @@ export function UpdateDialog() {
               {t('updater.install')}
             </button>
           )}
-          <button onClick={close}>{available ? t('updater.later') : t('updater.close')}</button>
+          <button onClick={close}>{available ? t('updater.later') : t('common.close')}</button>
           {available && !status?.required && (
             <button disabled={busy} onClick={() => void useUpdater.getState().skip()}>
               {t('updater.skip')}

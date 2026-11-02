@@ -5,6 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./focus": "./src/focus.ts",
+    "./i18n": "./src/i18n.ts",
+    "./i18n/en.json": "./src/i18n/en.json",
+    "./i18n/it.json": "./src/i18n/it.json",
+    "./tokens.css": "./src/tokens.css",
     "./styles.css": "./src/styles.css",
     "./components.css": "./src/components.css",
     "./i18nCheck": "./src/i18nCheck.ts"
@@ -28,5 +33,8 @@
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
-  }
+  },
+  "sideEffects": [
+    "*.css"
+  ]
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { checkUsage, comparePair } from '../../../ui/src/i18nCheck';
+import { checkUsage, comparePair, flatten, overlap, withShared } from '@memobrain/ui/i18nCheck';
+import { commonResources } from '@memobrain/ui/i18n';
+import { i18next, initI18n } from './index';
 import en from './en.json';
 import it_ from './it.json';
 
@@ -27,9 +29,30 @@ describe('desktop i18n resources', () => {
     expect(f.pluralMismatch).toEqual([]);
     expect(f.italianPluralIncomplete).toEqual([]);
   });
+  it('leave the shared strings (common namespace of @memobrain/ui) to the package', () => {
+    expect(overlap(en, commonResources.en)).toEqual([]);
+    expect(overlap(it_, commonResources.it)).toEqual([]);
+  });
   it('use every key and only keys that exist', () => {
-    const u = checkUsage(en, sources, { allow: DYNAMIC });
+    const shared = [...flatten(commonResources.en).keys()];
+    const u = checkUsage(withShared(en, commonResources.en), sources, {
+      allow: [...DYNAMIC, ...shared],
+    });
     expect(u.missing).toEqual([]);
     expect(u.unused).toEqual([]);
+  });
+});
+
+describe('shared strings', () => {
+  it('resolve through the common namespace, the host keys first', async () => {
+    initI18n('it');
+    await i18next.changeLanguage('it');
+    expect(i18next.t('common.cancel')).toBe('Annulla');
+    expect(i18next.exists('errors.FORBIDDEN')).toBe(true);
+    expect(i18next.t('errors.FORBIDDEN')).toBe(commonResources.it.errors.FORBIDDEN);
+    expect(i18next.t('errors.conflict')).toBe(it_.errors.conflict);
+    expect(i18next.exists('errors.NO_SUCH_CODE')).toBe(false);
+    await i18next.changeLanguage('en');
+    expect(i18next.t('common.ok')).toBe('OK');
   });
 });
