@@ -8,6 +8,11 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/roadmap.md) §13-quinquies). Le decisioni sono in ADR-0045 (parità per costruzione) e ADR-0046 (bootstrap dopo un ripristino del cloud), accettati.
 
+### Compatibilità
+
+- **Migrazioni 0010–0014** (indici, `purged_subjects`, chiavi di idempotenza e `export_jobs.source_seq`, `uploads.finalizing_until`, rimozione delle autoconcessioni dei creatori di condivisioni). Si applicano all'avvio come sempre. Durante le migrazioni il pod API risponde già: `healthz` 200 e `readyz` 503.
+- **Cursore della sync con identità (ADR-0046):** `GET /vaults/{id}/changes` accetta `since_id` e restituisce `next_id`; `GET /vaults/{id}/tree` restituisce `as_of_id`. I client precedenti, che non inviano `since_id`, funzionano come prima. Per riconoscere i numeri di sequenza riusati dopo un ripristino servono il desktop e il workbench di questa versione.
+
 ### Client desktop e sync
 
 - **Ripristino del cloud a un punto precedente (ADR-0046):** quando il server risponde che il cursore del dispositivo è più avanti del suo, la sync non riscrive più i file locali con le revisioni vecchie e non sposta nel cestino quelli che il server ha perso: li ripubblica. Prima di ogni sovrascrittura durante un bootstrap viene salvata una versione in _File recovery_. Un bootstrap interrotto riprende nella stessa modalità.
@@ -16,9 +21,25 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Prima sincronizzazione di vault grandi:** il push legge e cifra i file un batch alla volta invece di tenerli tutti in memoria.
 - **Basi (`.base`) ricevute da altri:** limiti di profondità (128 livelli), di lunghezza delle espressioni (16 KiB) e del file (1 MiB); budget di memoria (1 MiB per valore, 256 MiB per esecuzione) e di calcolo (10 secondi) per ogni esecuzione. Un'espressione che li supera dà un errore nella cella invece di chiudere l'app. `title()` non spezza più le iniziali accentate.
 
+### Cloud
+
+- **Pulizia dei blob:** l'oggetto in S3 viene cancellato solo dopo che la cancellazione della riga è confermata, e un upload deduplicato non può più essere raccolto subito dopo il collegamento. Un blob che non si riesce a cancellare viene saltato e contato nella metrica `memobrain_jobs_item_failures_total`, senza bloccare gli altri.
+- **Upload tus:** l'eliminazione di un account o il purge di un vault cancellano anche i chunk in S3, e uno sweep periodico rimuove quelli rimasti senza riga. La finalizzazione concorrente dello stesso upload non chiede più di ricominciare, e gli upload iniziati prima dell'aggiornamento riprendono correttamente.
+- **Tombstone e vault eliminati:** i file cancellati vengono rimossi davvero quando escono dalla retention (prima restavano per sempre). Il purge dei vault eliminati procede a pagine, in transazioni brevi e nell'ordine dei lock del commit, ricontrolla che il vault sia ancora eliminato e, se un vault fallisce, passa al successivo. Nuovi indici sulle colonne usate dai controlli delle chiavi esterne.
+- **Autenticazione:** un token con un `kid` sconosciuto non provoca più una richiesta del JWKS a Keycloak per ogni chiamata; discovery e JWKS hanno un timeout di 10 secondi. Lo stream gRPC delle notifiche ha limiti per IP e per utente. Una sospensione arrivata durante il provisioning non viene più persa dalla cache.
+- **Account eliminati:** dopo il purge, un nuovo login con la stessa identità Keycloak viene rifiutato anche se l'account Keycloak non è stato disabilitato. Il purge prova a disabilitarlo e registra l'esito nell'audit.
+- **Condivisioni:** un manager non può concedersi grant sulle condivisioni che crea, e perde quelli che aveva quando perde la gestione. Una condivisione scaduta la modifica solo il proprietario. I cambi nei gruppi inviano gli eventi di condivisione ai membri interessati. Un nuovo invito dopo un rifiuto torna «in attesa», e rifiutare due volte non dà errore. Lo spostamento delle cartelle condivise usa lo stesso confronto dei path degli ambiti.
+- **API:** `POST /vaults` e `POST /me/devices` rispettano `Idempotency-Key`.
+- **Export:** un export in corso torna in coda quando il worker si ferma. Gli errori mostrati sono generici. Un archivio pronto di un vault non cambiato viene riusato. Gli stream ZIP diretti hanno un limite per utente (`exports.max_active_per_user`). L'eliminazione dell'account o del vault ferma gli export in corso.
+- **Export GDPR:** `/me/export` include tutto il registro di audit dell'utente, non più solo le 10.000 voci più vecchie.
+- **Log delle richieste:** registra l'IP del client risolto attraverso i proxy fidati.
+- **Avvio e arresto:** l'API apre la porta prima delle migrazioni, così le probe non riavviano un pod in attesa del lock. All'arresto gli stream gRPC restano aperti per tutto il drain, come HTTP.
+
 ### Deploy
 
 - **Realm Keycloak di produzione:** l'indirizzo di ritorno dopo il logout del client `memobrain-web` usa `${WEB_UI_ORIGIN}`. Prima era fisso su `localhost`, e il logout dalla Web UI non chiudeva la sessione SSO. Nelle installazioni con un realm configurato a mano va aggiunto `<origine della Web UI>/*` ai _Valid post logout redirect URIs_ (guida admin, Keycloak).
+- **Helm:** `progressDeadlineSeconds` 900 per API e worker. I commenti su probe e tempi di arresto ora corrispondono al budget reale: `preStopSleepSeconds` + `SHUTDOWN_DRAIN` + `SHUTDOWN_TIMEOUT` deve stare sotto `terminationGracePeriodSeconds`.
+- **Compose on-premise:** header HSTS quando il servizio è in https. Lo stack di sviluppo e `run-cloud-k3d.sh` pubblicano le porte solo su `127.0.0.1`.
 
 ## [1.3.1] - 2026-11-02
 
