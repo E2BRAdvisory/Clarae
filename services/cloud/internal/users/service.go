@@ -11,11 +11,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"memobrain/services/cloud/internal/auth"
 	"memobrain/services/cloud/internal/db"
+	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/users/usersdb"
+	"memobrain/shared/syncproto"
 )
 
 // QuotaUnlimited is the sentinel stored in quota_bytes_override and returned
@@ -75,6 +78,17 @@ func (s *Service) Provision(ctx context.Context, c auth.Claims) (auth.Principal,
 		}
 	case !errors.Is(err, pgx.ErrNoRows):
 		return auth.Principal{}, fmt.Errorf("provision user: %w", err)
+	default:
+		// A new subject, unless it belonged to a purged account: the purge
+		// replaced its keycloak_sub, and the identity provider account may
+		// still be enabled. Such a login must not create a fresh account.
+		purged, err := q.IsSubjectPurged(ctx, SubjectHash(c.Subject))
+		if err != nil {
+			return auth.Principal{}, fmt.Errorf("provision user: %w", err)
+		}
+		if purged {
+			return auth.Principal{}, auth.ErrSuspended
+		}
 	}
 
 	id, err := uuid.NewV7()
@@ -186,19 +200,63 @@ func (s *Service) ListDevices(ctx context.Context, userID uuid.UUID) ([]usersdb.
 	return usersdb.New(s.db.Pool).ListDevices(ctx, userID)
 }
 
-// RegisterDevice creates a device and returns it.
-func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, name, platform string, appVersion *string) (usersdb.Device, error) {
+// MaxIdempotencyKey is the longest Idempotency-Key accepted (api/openapi.yaml).
+const MaxIdempotencyKey = 128
+
+// RegisterDevice creates a device and returns it. A non-empty
+// idempotencyKey makes the request safe to retry: the device an earlier
+// attempt registered with the same key is returned instead of a second one.
+func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, idempotencyKey, name, platform string, appVersion *string) (usersdb.Device, error) {
+	if len(idempotencyKey) > MaxIdempotencyKey {
+		return usersdb.Device{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "Idempotency-Key must be at most %d characters", MaxIdempotencyKey)
+	}
+	if d, ok, err := s.replayDevice(ctx, userID, idempotencyKey, platform); ok || err != nil {
+		return d, err
+	}
 	id, err := uuid.NewV7()
 	if err != nil {
 		return usersdb.Device{}, err
 	}
-	return usersdb.New(s.db.Pool).CreateDevice(ctx, usersdb.CreateDeviceParams{
-		ID:         id,
-		UserID:     userID,
-		Name:       name,
-		Platform:   platform,
-		AppVersion: appVersion,
+	var key *string
+	if idempotencyKey != "" {
+		key = &idempotencyKey
+	}
+	d, err := usersdb.New(s.db.Pool).CreateDevice(ctx, usersdb.CreateDeviceParams{
+		ID:             id,
+		UserID:         userID,
+		Name:           name,
+		Platform:       platform,
+		AppVersion:     appVersion,
+		IdempotencyKey: key,
 	})
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == "devices_idempotency_key_uq" {
+		// A concurrent attempt with the same key committed first.
+		if d, ok, rerr := s.replayDevice(ctx, userID, idempotencyKey, platform); ok || rerr != nil {
+			return d, rerr
+		}
+	}
+	return d, err
+}
+
+// replayDevice returns the device an earlier POST /me/devices with the same
+// Idempotency-Key registered (ok). A key reused for another platform is a
+// client error, not a retry.
+func (s *Service) replayDevice(ctx context.Context, userID uuid.UUID, key, platform string) (d usersdb.Device, ok bool, err error) {
+	if key == "" {
+		return usersdb.Device{}, false, nil
+	}
+	d, err = usersdb.New(s.db.Pool).GetDeviceByIdempotencyKey(ctx, usersdb.GetDeviceByIdempotencyKeyParams{UserID: userID, IdempotencyKey: &key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return usersdb.Device{}, false, nil
+	}
+	if err != nil {
+		return usersdb.Device{}, false, err
+	}
+	if d.Platform != platform {
+		return usersdb.Device{}, false, httpproblem.Errorf(syncproto.CodeValidationFailed, "this Idempotency-Key already registered a %s device", d.Platform)
+	}
+	return d, true, nil
 }
 
 // ErrDeviceNotFound is returned when the device does not exist, belongs to

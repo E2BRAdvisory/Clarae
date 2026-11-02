@@ -35,7 +35,7 @@ var owners = map[string][]string{
 	"settings":       {"settings"},
 	"sharing":        {"shares", "share_grants"},
 	"sync":           {"files", "file_revisions"},
-	"users":          {"users", "devices"},
+	"users":          {"users", "devices", "purged_subjects"},
 	"vaults":         {"vaults", "vault_key_envelopes"},
 }
 

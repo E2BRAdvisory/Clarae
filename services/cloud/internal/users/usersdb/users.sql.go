@@ -42,17 +42,18 @@ func (q *Queries) CountActiveAdmins(ctx context.Context) (int32, error) {
 }
 
 const createDevice = `-- name: CreateDevice :one
-INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at)
-VALUES ($1, $2, $3, $4, $5, now())
-RETURNING id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at
+INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at, idempotency_key)
+VALUES ($1, $2, $3, $4, $5, now(), $6)
+RETURNING id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key
 `
 
 type CreateDeviceParams struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	Name       string
-	Platform   string
-	AppVersion *string
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Name           string
+	Platform       string
+	AppVersion     *string
+	IdempotencyKey *string
 }
 
 func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Device, error) {
@@ -62,6 +63,7 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Dev
 		arg.Name,
 		arg.Platform,
 		arg.AppVersion,
+		arg.IdempotencyKey,
 	)
 	var i Device
 	err := row.Scan(
@@ -73,12 +75,13 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Dev
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
 
 const getDevice = `-- name: GetDevice :one
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at FROM devices WHERE id = $1 AND user_id = $2
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices WHERE id = $1 AND user_id = $2
 `
 
 type GetDeviceParams struct {
@@ -98,6 +101,34 @@ func (q *Queries) GetDevice(ctx context.Context, arg GetDeviceParams) (Device, e
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
+const getDeviceByIdempotencyKey = `-- name: GetDeviceByIdempotencyKey :one
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices WHERE user_id = $1 AND idempotency_key = $2
+`
+
+type GetDeviceByIdempotencyKeyParams struct {
+	UserID         uuid.UUID
+	IdempotencyKey *string
+}
+
+// The device a POST /me/devices carrying this Idempotency-Key registered.
+func (q *Queries) GetDeviceByIdempotencyKey(ctx context.Context, arg GetDeviceByIdempotencyKeyParams) (Device, error) {
+	row := q.db.QueryRow(ctx, getDeviceByIdempotencyKey, arg.UserID, arg.IdempotencyKey)
+	var i Device
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Platform,
+		&i.AppVersion,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.RevokedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -229,8 +260,30 @@ func (q *Queries) InsertProvisionedUser(ctx context.Context, arg InsertProvision
 	return i, err
 }
 
+const insertPurgedSubject = `-- name: InsertPurgedSubject :exec
+INSERT INTO purged_subjects (sub_hash) VALUES ($1) ON CONFLICT (sub_hash) DO NOTHING
+`
+
+func (q *Queries) InsertPurgedSubject(ctx context.Context, subHash []byte) error {
+	_, err := q.db.Exec(ctx, insertPurgedSubject, subHash)
+	return err
+}
+
+const isSubjectPurged = `-- name: IsSubjectPurged :one
+SELECT EXISTS (SELECT 1 FROM purged_subjects WHERE sub_hash = $1)
+`
+
+// Whether the subject (by its SHA-256) belonged to a purged account:
+// provisioning refuses it instead of creating a new account.
+func (q *Queries) IsSubjectPurged(ctx context.Context, subHash []byte) (bool, error) {
+	row := q.db.QueryRow(ctx, isSubjectPurged, subHash)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listDevices = `-- name: ListDevices :many
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at FROM devices
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices
 WHERE user_id = $1 AND revoked_at IS NULL
 ORDER BY created_at
 `
@@ -253,6 +306,7 @@ func (q *Queries) ListDevices(ctx context.Context, userID uuid.UUID) ([]Device, 
 			&i.CreatedAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}

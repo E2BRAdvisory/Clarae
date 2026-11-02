@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,7 +99,7 @@ type harness struct {
 	cli    notifyv1.NotifyServiceClient
 }
 
-func newHarness(t *testing.T, prov auth.Provisioner, replay []notify.Event, maxStreams int) *harness {
+func newHarness(t *testing.T, prov auth.Provisioner, replay []notify.Event, maxStreams int, opts ...Option) *harness {
 	t.Helper()
 	iss := authtest.New(t)
 	v, err := auth.NewVerifier(context.Background(), iss.URL(), "memobrain-api", nil)
@@ -107,7 +108,7 @@ func newHarness(t *testing.T, prov auth.Provisioner, replay []notify.Event, maxS
 	}
 	hub := notify.NewHub(nil, zerolog.Nop())
 	hub.MaxStreamsPerUser = maxStreams
-	srv := New(auth.NewMiddleware(v, prov, nil, time.Minute), fakeHub{hub: hub, replay: replay})
+	srv := New(auth.NewMiddleware(v, prov, nil, time.Minute), fakeHub{hub: hub, replay: replay}, opts...)
 	lis := bufconn.Listen(1 << 20)
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
@@ -238,5 +239,126 @@ func TestRecoveryInterceptorsTurnPanicsIntoInternal(t *testing.T) {
 	if err := recoverStream(zerolog.Nop())(nil, &recordingStream{ctx: context.Background()}, &grpc.StreamServerInfo{},
 		func(any, grpc.ServerStream) error { return status.Error(codes.NotFound, "x") }); status.Code(err) != codes.NotFound {
 		t.Fatalf("errors pass through: %v", err)
+	}
+}
+
+// bucketLimiter allows burst calls per key, then refuses.
+type bucketLimiter struct {
+	mu    sync.Mutex
+	burst int
+	used  map[string]int
+}
+
+func newBucketLimiter(burst int) *bucketLimiter {
+	return &bucketLimiter{burst: burst, used: map[string]int{}}
+}
+
+func (l *bucketLimiter) Take(key string) (bool, time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.used[key] >= l.burst {
+		return false, 1500 * time.Millisecond
+	}
+	l.used[key]++
+	return true, 0
+}
+
+func (l *bucketLimiter) keys() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []string
+	for k := range l.used {
+		out = append(out, k)
+	}
+	return out
+}
+
+// recordingClientIP resolves every caller to a fixed address and records its input.
+type recordingClientIP struct {
+	mu        sync.Mutex
+	forwarded []string
+}
+
+func (c *recordingClientIP) OfPeer(_ string, forwardedFor []string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.forwarded = forwardedFor
+	return "198.51.100.9"
+}
+
+// Regression (M12): the notification streams had no rate limit, and every
+// Subscribe replays the caller's positions from the database.
+func TestSubscribeIsLimitedPerUser(t *testing.T) {
+	ada, bob := uuid.New(), uuid.New()
+	perUser := newBucketLimiter(2)
+	h := newHarness(t, provisioner{users: map[string]uuid.UUID{"ada": ada, "bob": bob}}, []notify.Event{{VaultID: uuid.New(), Seq: 1}}, 0,
+		WithRateLimits(RateLimits{PerUser: perUser}))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for i := range 2 {
+		if _, err := h.subscribe(t, ctx, "ada").Recv(); err != nil {
+			t.Fatalf("subscribe %d within the budget: %v", i, err)
+		}
+	}
+	stream := h.subscribe(t, ctx, "ada")
+	_, err := stream.Recv()
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("third subscribe: %v, want RESOURCE_EXHAUSTED", err)
+	}
+	if got := stream.Trailer().Get("retry-after"); len(got) != 1 || got[0] != "2" {
+		t.Fatalf("retry-after trailer %v, want [2]", got)
+	}
+	if _, err := h.subscribe(t, ctx, "bob").Recv(); err != nil {
+		t.Fatalf("another user is limited too: %v", err)
+	}
+}
+
+// The per-IP limit runs before authentication: a flood of forged tokens is
+// refused without verifying them.
+func TestSubscribeIsLimitedPerIPBeforeAuthentication(t *testing.T) {
+	perIP := newBucketLimiter(1)
+	ip := &recordingClientIP{}
+	h := newHarness(t, provisioner{}, nil, 0, WithRateLimits(RateLimits{PerIP: perIP, ClientIP: ip}))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	call := func() error {
+		md := metadata.Pairs("authorization", "Bearer forged.token.value", "x-forwarded-for", "203.0.113.7")
+		stream, err := h.cli.Subscribe(metadata.NewOutgoingContext(ctx, md), &notifyv1.SubscribeRequest{})
+		if err == nil {
+			_, err = stream.Recv()
+		}
+		return err
+	}
+	if err := call(); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("first call: %v, want UNAUTHENTICATED", err)
+	}
+	if err := call(); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("second call: %v, want RESOURCE_EXHAUSTED before the token is looked at", err)
+	}
+	if keys := perIP.keys(); len(keys) != 1 || keys[0] != "ip:198.51.100.9" {
+		t.Fatalf("limiter keys %v, want the resolved client", keys)
+	}
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+	if len(ip.forwarded) != 1 || ip.forwarded[0] != "203.0.113.7" {
+		t.Fatalf("x-forwarded-for passed to the resolver: %v", ip.forwarded)
+	}
+}
+
+func TestOversizedSubscribeRequestIsRefused(t *testing.T) {
+	h := newHarness(t, provisioner{users: map[string]uuid.UUID{"ada": uuid.New()}}, nil, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	known := map[string]int64{}
+	for range maxRecvMsgSize / 40 {
+		known[uuid.NewString()] = 1
+	}
+	tok := h.issuer.Token(t, authtest.TokenOptions{Subject: "ada"})
+	stream, err := h.cli.Subscribe(metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tok), &notifyv1.SubscribeRequest{KnownSeq: known})
+	if err == nil {
+		_, err = stream.Recv()
+	}
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("oversized request: %v, want RESOURCE_EXHAUSTED", err)
 	}
 }

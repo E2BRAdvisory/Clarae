@@ -45,9 +45,13 @@ ORDER BY created_at;
 SELECT * FROM devices WHERE id = $1 AND user_id = $2;
 
 -- name: CreateDevice :one
-INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at, idempotency_key)
+VALUES ($1, $2, $3, $4, $5, now(), sqlc.narg('idempotency_key'))
 RETURNING *;
+
+-- name: GetDeviceByIdempotencyKey :one
+-- The device a POST /me/devices carrying this Idempotency-Key registered.
+SELECT * FROM devices WHERE user_id = $1 AND idempotency_key = $2;
 
 -- name: TouchDevice :exec
 UPDATE devices SET last_seen_at = now(), app_version = COALESCE(sqlc.narg('app_version'), app_version)
@@ -80,6 +84,14 @@ SELECT * FROM users WHERE id = $1;
 -- The read path of just-in-time provisioning: most requests find the row
 -- unchanged and write nothing.
 SELECT * FROM users WHERE keycloak_sub = $1;
+
+-- name: IsSubjectPurged :one
+-- Whether the subject (by its SHA-256) belonged to a purged account:
+-- provisioning refuses it instead of creating a new account.
+SELECT EXISTS (SELECT 1 FROM purged_subjects WHERE sub_hash = $1);
+
+-- name: InsertPurgedSubject :exec
+INSERT INTO purged_subjects (sub_hash) VALUES ($1) ON CONFLICT (sub_hash) DO NOTHING;
 
 -- name: UpsertUserFromToken :one
 -- Just-in-time provisioning on login: creates the user on first sight and

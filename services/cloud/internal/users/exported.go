@@ -6,6 +6,7 @@ package users
 
 import (
 	"context"
+	"crypto/sha256"
 	"strings"
 
 	"github.com/google/uuid"
@@ -107,4 +108,18 @@ func GetDevice(ctx context.Context, tx db.DBTX, arg GetDeviceParams) (Device, er
 // TouchDevice runs the TouchDevice query on tx.
 func TouchDevice(ctx context.Context, tx db.DBTX, arg TouchDeviceParams) error {
 	return usersdb.New(tx).TouchDevice(ctx, arg)
+}
+
+// SubjectHash is the fingerprint kept for a purged subject: the SHA-256 of
+// its UTF-8 bytes, which in SQL is sha256(convert_to(subject, 'UTF8')).
+func SubjectHash(subject string) []byte {
+	h := sha256.Sum256([]byte(subject))
+	return h[:]
+}
+
+// RecordPurgedSubject remembers on tx that the account of subject was
+// purged, so that provisioning refuses the subject from then on (the purge
+// replaces users.keycloak_sub). Idempotent.
+func RecordPurgedSubject(ctx context.Context, tx db.DBTX, subject string) error {
+	return usersdb.New(tx).InsertPurgedSubject(ctx, SubjectHash(subject))
 }

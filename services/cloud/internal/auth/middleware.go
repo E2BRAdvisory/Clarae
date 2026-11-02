@@ -49,6 +49,11 @@ type Middleware struct {
 
 	mu    sync.Mutex
 	cache map[string]cachedPrincipal // keyed by subject
+	// epoch counts the invalidations. A provisioning stores its outcome only
+	// if no invalidation happened while it read the database: otherwise a
+	// suspension committed in between would be overwritten by the active
+	// status read just before it, for a whole cacheTTL.
+	epoch uint64
 }
 
 // cachedPrincipal is the outcome of one provisioning: a principal, or the
@@ -142,15 +147,25 @@ func (m *Middleware) AuthenticateExp(ctx context.Context, raw string) (Principal
 		}
 		return c.p, claims.Expiry, nil
 	}
-	p, err := m.provisioner.Provision(ctx, claims)
-	if errors.Is(err, ErrSuspended) || errors.Is(err, ErrIdentityConflict) {
-		m.store(claims.Subject, cachedPrincipal{err: err})
-		return Principal{}, time.Time{}, err
+	// When an invalidation lands during the provisioning, its result may
+	// predate the change that caused it (a suspension): read once more, which
+	// sees the committed change, and cache only a result no invalidation raced.
+	var (
+		p      Principal
+		stored bool
+	)
+	for attempt := 0; attempt < 2 && !stored; attempt++ {
+		epoch := m.currentEpoch()
+		p, err = m.provisioner.Provision(ctx, claims)
+		refused := errors.Is(err, ErrSuspended) || errors.Is(err, ErrIdentityConflict)
+		if err != nil && !refused {
+			return Principal{}, time.Time{}, err
+		}
+		stored = m.storeAt(epoch, claims.Subject, cachedPrincipal{p: p, err: err})
 	}
 	if err != nil {
 		return Principal{}, time.Time{}, err
 	}
-	m.store(p.Subject, cachedPrincipal{p: p})
 	return p, claims.Expiry, nil
 }
 
@@ -164,7 +179,14 @@ const IdentityConflictDetail = "this sign-in cannot be linked to your MemoBrain 
 func (m *Middleware) Invalidate(subject string) {
 	m.mu.Lock()
 	delete(m.cache, subject)
+	m.epoch++
 	m.mu.Unlock()
+}
+
+func (m *Middleware) currentEpoch() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.epoch
 }
 
 func (m *Middleware) cached(subject string) (cachedPrincipal, bool) {
@@ -181,14 +203,19 @@ func (m *Middleware) cached(subject string) (cachedPrincipal, bool) {
 	return c, true
 }
 
-func (m *Middleware) store(subject string, c cachedPrincipal) {
-	if m.cacheTTL <= 0 {
-		return
-	}
+// storeAt caches c unless an invalidation happened since epoch was read; it
+// reports whether the result is current (cached, or the cache is off).
+func (m *Middleware) storeAt(epoch uint64, subject string, c cachedPrincipal) bool {
 	now := time.Now()
 	c.expires = now.Add(m.cacheTTL)
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.epoch != epoch {
+		return false
+	}
+	if m.cacheTTL <= 0 {
+		return true
+	}
 	if len(m.cache) >= cacheSweepAt {
 		for k, e := range m.cache {
 			if now.After(e.expires) {
@@ -197,6 +224,7 @@ func (m *Middleware) store(subject string, c cachedPrincipal) {
 		}
 	}
 	m.cache[subject] = c
+	return true
 }
 
 func bearerToken(r *http.Request) (string, bool) {

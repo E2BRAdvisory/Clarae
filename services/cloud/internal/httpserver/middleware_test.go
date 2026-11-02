@@ -1,11 +1,16 @@
 package httpserver
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"strconv"
 	"testing"
+	"time"
+
+	"github.com/rs/zerolog"
 )
 
 func TestClientIP(t *testing.T) {
@@ -104,5 +109,43 @@ func TestByIPLimitsPublicAndProxiedProbes(t *testing.T) {
 		if codes[2] != http.StatusTooManyRequests {
 			t.Errorf("%s: codes %v, the probe was not limited", name, codes)
 		}
+	}
+}
+
+// Regression (M12): the request log recorded the proxy's address, so behind
+// Caddy or an ingress every line had the same ip and could not be matched
+// with audit_log.ip.
+func TestRequestLoggerRecordsTheResolvedClient(t *testing.T) {
+	var buf bytes.Buffer
+	ip := NewClientIP([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")})
+	h := RequestLogger(zerolog.New(&buf), ip)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	r.RemoteAddr = "10.0.0.2:4000"
+	r.Header.Set("X-Forwarded-For", "203.0.113.7")
+	h.ServeHTTP(httptest.NewRecorder(), r)
+	var line map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+		t.Fatalf("%v: %s", err, buf.String())
+	}
+	if line["ip"] != "203.0.113.7" || line["peer"] != "10.0.0.2:4000" {
+		t.Fatalf("ip %v peer %v, want the client and the proxy", line["ip"], line["peer"])
+	}
+}
+
+func TestRateLimiterTake(t *testing.T) {
+	rl := NewRateLimiter(1, 2)
+	for i := range 2 {
+		if ok, _ := rl.Take("k"); !ok {
+			t.Fatalf("take %d refused within the burst", i)
+		}
+	}
+	ok, wait := rl.Take("k")
+	if ok || wait <= 0 || wait > time.Second {
+		t.Fatalf("over the burst: ok=%v wait=%s", ok, wait)
+	}
+	if ok, _ := rl.Take("other"); !ok {
+		t.Fatal("keys share a bucket")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"time"
 
@@ -50,23 +51,40 @@ type Verifier struct {
 // ClockSkew is the tolerance applied to exp (§3.7: ≤ 60 s).
 const ClockSkew = 60 * time.Second
 
+// oidcHTTPTimeout bounds the discovery request and every JWKS fetch: without
+// it a stalled identity provider would hold the key refresh, and with it every
+// token signed by a new key, until the process restarts.
+const oidcHTTPTimeout = 10 * time.Second
+
+// signingAlgs are the token signature algorithms accepted.
+var signingAlgs = []string{oidc.RS256, oidc.ES256, oidc.PS256}
+
 // NewVerifier discovers the issuer and prepares the JWKS cache. It fails
 // when the issuer is unreachable; callers retry at startup.
 func NewVerifier(ctx context.Context, issuer, audience string, allowedAZP []string) (*Verifier, error) {
-	provider, err := oidc.NewProvider(ctx, issuer)
+	client := &http.Client{Timeout: oidcHTTPTimeout}
+	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, client), issuer)
 	if err != nil {
 		return nil, fmt.Errorf("oidc discovery %s: %w", issuer, err)
 	}
-	return newVerifierFromProvider(provider, audience, allowedAZP), nil
-}
-
-func newVerifierFromProvider(provider *oidc.Provider, audience string, allowedAZP []string) *Verifier {
+	var doc struct {
+		Issuer  string `json:"issuer"`
+		JWKSURI string `json:"jwks_uri"`
+	}
+	if err := provider.Claims(&doc); err != nil {
+		return nil, fmt.Errorf("oidc discovery %s: %w", issuer, err)
+	}
+	if doc.JWKSURI == "" {
+		return nil, fmt.Errorf("oidc discovery %s: no jwks_uri", issuer)
+	}
 	cfg := &oidc.Config{
 		ClientID:             audience,
-		SupportedSigningAlgs: []string{oidc.RS256, oidc.ES256, oidc.PS256},
+		SupportedSigningAlgs: signingAlgs,
 		Now:                  func() time.Time { return time.Now().Add(-ClockSkew) },
 	}
-	return &Verifier{verifier: provider.Verifier(cfg), allowedAZP: allowedAZP}
+	// NewProvider checked that the document's issuer is the one configured.
+	keys := newKeySet(doc.JWKSURI, client, signingAlgs)
+	return &Verifier{verifier: oidc.NewVerifier(doc.Issuer, keys, cfg), allowedAZP: allowedAZP}, nil
 }
 
 // Verify checks signature, issuer, audience and expiry, then extracts claims

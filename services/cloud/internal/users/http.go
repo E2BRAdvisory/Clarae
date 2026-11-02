@@ -45,13 +45,19 @@ func (h *HTTP) ListMyDevices(ctx context.Context, _ api.ListMyDevicesRequestObje
 	return api.ListMyDevices200JSONResponse{Items: items}, nil
 }
 
-// RegisterDevice implements POST /me/devices.
+// RegisterDevice implements POST /me/devices. A retry carrying the
+// Idempotency-Key of an attempt that succeeded gets that attempt's device,
+// with 201 again.
 func (h *HTTP) RegisterDevice(ctx context.Context, req api.RegisterDeviceRequestObject) (api.RegisterDeviceResponseObject, error) {
 	p := auth.MustPrincipal(ctx)
 	if req.Body == nil || req.Body.Name == "" {
 		return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "name is required")
 	}
-	d, err := h.svc.RegisterDevice(ctx, p.UserID, req.Body.Name, string(req.Body.Platform), req.Body.AppVersion)
+	var key string
+	if req.Params.IdempotencyKey != nil {
+		key = *req.Params.IdempotencyKey
+	}
+	d, err := h.svc.RegisterDevice(ctx, p.UserID, key, req.Body.Name, string(req.Body.Platform), req.Body.AppVersion)
 	if err != nil {
 		return nil, err
 	}

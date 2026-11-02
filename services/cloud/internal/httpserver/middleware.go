@@ -23,7 +23,9 @@ import (
 
 // RequestLogger logs one line per request with the request id, status,
 // duration and (when authenticated) the user id set by the auth middleware.
-func RequestLogger(logger zerolog.Logger) func(http.Handler) http.Handler {
+// ip is the client address resolved through the trusted proxies (the one
+// audit_log records), peer the TCP peer, which behind a proxy is the proxy.
+func RequestLogger(logger zerolog.Logger, ip ClientIP) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -40,7 +42,8 @@ func RequestLogger(logger zerolog.Logger) func(http.Handler) http.Handler {
 				Int("status", ww.Status()).
 				Int("bytes", ww.BytesWritten()).
 				Dur("duration", time.Since(start)).
-				Str("ip", r.RemoteAddr).
+				Str("ip", ip.Of(r)).
+				Str("peer", r.RemoteAddr).
 				Msg("request")
 		})
 	}
@@ -130,6 +133,20 @@ func (rl *RateLimiter) Allow(w http.ResponseWriter, r *http.Request, key string)
 	return true
 }
 
+// Take consumes one token for key outside an HTTP request (the gRPC
+// interceptors). When the bucket is empty it returns false and the time until
+// the next token.
+func (rl *RateLimiter) Take(key string) (bool, time.Duration) {
+	lim := rl.get(key)
+	if lim.Allow() {
+		return true, 0
+	}
+	res := lim.Reserve()
+	delay := res.Delay()
+	res.Cancel()
+	return false, delay
+}
+
 // ByIP applies the limiter per client address as resolved by ip. Health
 // probes from direct internal callers are exempt: the orchestrator polls them
 // from a few addresses and a throttled probe would take the pod out of
@@ -173,14 +190,20 @@ func NewClientIP(trusted []netip.Prefix) ClientIP { return ClientIP{trusted: tru
 
 // Of returns the client address without the port.
 func (c ClientIP) Of(r *http.Request) string {
-	peer, ok := parseHost(r.RemoteAddr)
+	return c.OfPeer(r.RemoteAddr, r.Header.Values("X-Forwarded-For"))
+}
+
+// OfPeer is Of for a TCP peer ("host:port") and the X-Forwarded-For values
+// received from it (the gRPC server reads them from the request metadata).
+func (c ClientIP) OfPeer(remote string, forwardedFor []string) string {
+	peer, ok := parseHost(remote)
 	if !ok {
-		return r.RemoteAddr
+		return remote
 	}
 	if !c.isTrusted(peer) {
 		return peer.String()
 	}
-	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	hops := strings.Split(strings.Join(forwardedFor, ","), ",")
 	client := peer
 	for i := len(hops) - 1; i >= 0; i-- {
 		a, err := netip.ParseAddr(strings.TrimSpace(hops[i]))

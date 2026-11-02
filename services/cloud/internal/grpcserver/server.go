@@ -8,7 +8,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"memobrain/services/cloud/internal/auth"
@@ -42,6 +45,16 @@ const (
 	maxConnectionAgeGrace = time.Minute
 )
 
+// Per-connection limits. A client uses one stream per connection, but a
+// reverse proxy multiplexes many clients on its upstream connections (Go's
+// HTTP/2 transport opens another one when the limit is reached). The largest
+// request, SubscribeRequest, carries one known_seq entry per vault: 256 KiB
+// is several thousand vaults.
+const (
+	maxConcurrentStreams = 128
+	maxRecvMsgSize       = 256 << 10
+)
+
 // Server is the gRPC server with a graceful shutdown that also ends the
 // notification streams, which would otherwise keep GracefulStop waiting.
 type Server struct {
@@ -53,10 +66,39 @@ type Server struct {
 // Option configures New.
 type Option func(*options)
 
-type options struct{ log zerolog.Logger }
+type options struct {
+	log    zerolog.Logger
+	limits RateLimits
+}
 
 // WithLogger sets the logger of the panic recovery.
 func WithLogger(l zerolog.Logger) Option { return func(o *options) { o.log = l } }
+
+// Limiter throttles callers by key; implemented by httpserver.RateLimiter.
+type Limiter interface {
+	Take(key string) (ok bool, retryAfter time.Duration)
+}
+
+// ClientIP resolves the client address behind the trusted reverse proxies
+// from the TCP peer and the X-Forwarded-For values; implemented by
+// httpserver.ClientIP.
+type ClientIP interface {
+	OfPeer(remote string, forwardedFor []string) string
+}
+
+// RateLimits throttle the calls: PerIP before authentication (a forged token
+// still costs a signature check, and an unknown key id a look at the key
+// set), PerUser after it (every Subscribe replays the caller's positions from
+// the database). A nil limiter is skipped; without ClientIP the TCP peer is
+// the client.
+type RateLimits struct {
+	PerIP    Limiter
+	PerUser  Limiter
+	ClientIP ClientIP
+}
+
+// WithRateLimits enables the rate limiting interceptors.
+func WithRateLimits(l RateLimits) Option { return func(o *options) { o.limits = l } }
 
 // New builds the gRPC server with the recovery and auth interceptors and NotifyService.
 func New(authn *auth.Middleware, hub Hub, opts ...Option) *Server {
@@ -66,9 +108,14 @@ func New(authn *auth.Middleware, hub Hub, opts ...Option) *Server {
 	}
 	srv := &Server{done: make(chan struct{})}
 	srv.Server = grpc.NewServer(
-		// Recovery runs outermost, so a panic in authentication is caught too.
-		grpc.ChainUnaryInterceptor(recoverUnary(o.log), unaryAuth(authn)),
-		grpc.ChainStreamInterceptor(recoverStream(o.log), streamAuth(authn)),
+		// Recovery runs outermost, so a panic in authentication is caught too;
+		// the per-IP limit precedes authentication, the per-user one follows it.
+		grpc.ChainUnaryInterceptor(recoverUnary(o.log), unaryLimit(o.limits.ipKey, o.limits.PerIP),
+			unaryAuth(authn), unaryLimit(userKey, o.limits.PerUser)),
+		grpc.ChainStreamInterceptor(recoverStream(o.log), streamLimit(o.limits.ipKey, o.limits.PerIP),
+			streamAuth(authn), streamLimit(userKey, o.limits.PerUser)),
+		grpc.MaxConcurrentStreams(maxConcurrentStreams),
+		grpc.MaxRecvMsgSize(maxRecvMsgSize),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			Time: 30 * time.Second, Timeout: 10 * time.Second,
 			MaxConnectionAge: maxConnectionAge, MaxConnectionAgeGrace: maxConnectionAgeGrace,
@@ -212,6 +259,69 @@ func streamAuth(authn *auth.Middleware) grpc.StreamServerInterceptor {
 			return err
 		}
 		return handler(srv, &wrappedStream{ServerStream: ss, ctx: ctx})
+	}
+}
+
+// ipKey is the limiter key of the client address.
+func (l RateLimits) ipKey(ctx context.Context) string {
+	p, ok := peer.FromContext(ctx)
+	if !ok || p.Addr == nil {
+		return ""
+	}
+	remote := p.Addr.String()
+	if l.ClientIP == nil {
+		if host, _, err := net.SplitHostPort(remote); err == nil {
+			return "ip:" + host
+		}
+		return "ip:" + remote
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	return "ip:" + l.ClientIP.OfPeer(remote, md.Get("x-forwarded-for"))
+}
+
+// userKey is the limiter key of the authenticated caller.
+func userKey(ctx context.Context) string {
+	if p, ok := auth.PrincipalFrom(ctx); ok {
+		return "user:" + p.UserID.String()
+	}
+	return ""
+}
+
+// take consumes a token of key, or answers RESOURCE_EXHAUSTED with the
+// seconds to wait in the retry-after trailer.
+func take(lim Limiter, key string, setTrailer func(metadata.MD)) error {
+	ok, wait := lim.Take(key)
+	if ok {
+		return nil
+	}
+	secs := strconv.Itoa(int(wait.Seconds()) + 1)
+	setTrailer(metadata.Pairs("retry-after", secs))
+	return status.Error(codes.ResourceExhausted, "rate limit exceeded, retry in "+secs+" s")
+}
+
+func unaryLimit(key func(context.Context) string, lim Limiter) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if lim != nil {
+			if k := key(ctx); k != "" {
+				if err := take(lim, k, func(md metadata.MD) { _ = grpc.SetTrailer(ctx, md) }); err != nil {
+					return nil, err
+				}
+			}
+		}
+		return handler(ctx, req)
+	}
+}
+
+func streamLimit(key func(context.Context) string, lim Limiter) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if lim != nil {
+			if k := key(ss.Context()); k != "" {
+				if err := take(lim, k, ss.SetTrailer); err != nil {
+					return err
+				}
+			}
+		}
+		return handler(srv, ss)
 	}
 }
 

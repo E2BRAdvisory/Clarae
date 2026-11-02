@@ -119,8 +119,9 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(middleware.RequestID)
 	// No RealIP middleware: trusting X-Forwarded-For blindly enables spoofing.
 	// The rate limiter resolves the client through the trusted proxies only.
+	clientIP := NewClientIP(d.TrustedProxies)
 	r.Use(SecurityHeaders)
-	r.Use(RequestLogger(d.Logger))
+	r.Use(RequestLogger(d.Logger, clientIP))
 	r.Use(Recoverer)
 	if d.Metrics != nil {
 		r.Use(d.Metrics.HTTPMiddleware)
@@ -136,7 +137,6 @@ func NewRouter(d Deps) http.Handler {
 			MaxAge:           600,
 		}))
 	}
-	clientIP := NewClientIP(d.TrustedProxies)
 	r.Use(NewRateLimiter(50, 100).ByIP(clientIP))
 	r.Use(AuditClientIP(clientIP))
 	r.Use(probeDetails)

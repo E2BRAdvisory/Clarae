@@ -185,8 +185,76 @@ func TestMiddlewareSweepsExpiredEntries(t *testing.T) {
 	for i := range cacheSweepAt {
 		m.cache[uuid.NewString()] = cachedPrincipal{expires: time.Now().Add(-time.Duration(i+1) * time.Second)}
 	}
-	m.store("fresh", cachedPrincipal{})
+	m.storeAt(0, "fresh", cachedPrincipal{})
 	if len(m.cache) != 1 {
 		t.Fatalf("expired entries kept: %d", len(m.cache))
+	}
+}
+
+// hookProvisioner runs a hook during the provisioning, between the database
+// read and the cache store of the middleware.
+type hookProvisioner struct {
+	mu     sync.Mutex
+	status Status
+	calls  int
+	during func()
+}
+
+func (p *hookProvisioner) Provision(_ context.Context, c Claims) (Principal, error) {
+	p.mu.Lock()
+	p.calls++
+	st, during := p.status, p.during
+	p.during = nil
+	p.mu.Unlock()
+	if during != nil {
+		during() // the read above already happened: what follows races it
+	}
+	if st == StatusSuspended {
+		return Principal{}, ErrSuspended
+	}
+	return Principal{UserID: uuid.NewSHA1(uuid.Nil, []byte(c.Subject)), Subject: c.Subject, Role: RoleUser, Status: st}, nil
+}
+
+// Regression (M12): a suspension committed and invalidated while a request
+// was provisioning left the active principal it had read in the cache for the
+// whole TTL. The middleware reads again and caches the suspension.
+func TestMiddlewareInvalidateDuringProvisioningWins(t *testing.T) {
+	iss := authtest.New(t)
+	v, err := NewVerifier(context.Background(), iss.URL(), "memobrain-api", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &hookProvisioner{status: StatusActive}
+	m := NewMiddleware(v, p, nil, time.Hour)
+	p.during = func() {
+		p.mu.Lock()
+		p.status = StatusSuspended
+		p.mu.Unlock()
+		m.Invalidate("ada")
+	}
+	tok := iss.Token(t, authtest.TokenOptions{Subject: "ada"})
+	if _, err := m.Authenticate(context.Background(), tok); !errors.Is(err, ErrSuspended) {
+		t.Fatalf("the request racing the suspension got %v, want ErrSuspended", err)
+	}
+	if _, err := m.Authenticate(context.Background(), tok); !errors.Is(err, ErrSuspended) {
+		t.Fatalf("the next request got %v, want ErrSuspended", err)
+	}
+	if p.calls != 2 {
+		t.Fatalf("provisioned %d times, want 2 (one retry, then cached)", p.calls)
+	}
+}
+
+func TestMiddlewareDoesNotCacheAResultRacedTwice(t *testing.T) {
+	m := &Middleware{cacheTTL: time.Hour, cache: map[string]cachedPrincipal{}}
+	epoch := m.currentEpoch()
+	m.Invalidate("bob") // any subject: the epoch is global
+	if m.storeAt(epoch, "ada", cachedPrincipal{}) {
+		t.Fatal("a result read before an invalidation was stored")
+	}
+	if _, ok := m.cached("ada"); ok {
+		t.Fatal("stale entry cached")
+	}
+	if !m.storeAt(m.currentEpoch(), "ada", cachedPrincipal{}) {
+		t.Fatal("a current result was not stored")
 	}
 }
