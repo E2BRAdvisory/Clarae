@@ -45,6 +45,14 @@ type Client struct {
 	api       *apiclient.ClientWithResponses
 	// Retries bounds the number of attempts for retryable failures.
 	Retries int
+	// TransferIdleTimeout aborts a content transfer (blobs, revision content,
+	// tus chunks) whose body moves no bytes for this long, and
+	// TransferHeaderTimeout one whose response does not start this long after
+	// the request was sent; zero or less disables the bound. Such transfers
+	// ignore the total timeout of the http.Client, which would cut large
+	// files on slow links (transfer.go).
+	TransferIdleTimeout   time.Duration
+	TransferHeaderTimeout time.Duration
 }
 
 // ProblemError is an API error response.
@@ -113,7 +121,10 @@ func New(serverURL string, tokens TokenSource, hc *http.Client, userAgent string
 	if hc == nil {
 		hc = &http.Client{Timeout: 60 * time.Second}
 	}
-	c := &Client{base: u, http: hc, tokens: tokens, userAgent: userAgent, Retries: 3}
+	c := &Client{
+		base: u, http: hc, tokens: tokens, userAgent: userAgent, Retries: 3,
+		TransferIdleTimeout: defaultTransferIdleTimeout, TransferHeaderTimeout: defaultTransferHeaderTimeout,
+	}
 	if c.api, err = apiclient.NewClientWithResponses(u.String()+BasePath, apiclient.WithHTTPClient(doer{c})); err != nil {
 		return nil, err
 	}
@@ -146,11 +157,17 @@ func (d doer) Do(req *http.Request) (*http.Response, error) {
 // X-Request-Id and the body rewound, so the headers chosen once per logical
 // operation, the Idempotency-Key above all, are the same on every attempt.
 // When the attempts run out on a retryable status the last response is
-// returned unread, for the caller to decode as a problem.
+// returned unread, for the caller to decode as a problem. A content transfer
+// (see transfer) runs without the client's total timeout, each attempt
+// under a watchdog that a stall aborts like a network error.
 func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, error) {
 	ctx := req.Context()
 	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
 		return nil, errors.New("transport: request body must be rewindable for retries")
+	}
+	hc := c.http
+	if isTransfer(ctx) {
+		hc = c.transferClient()
 	}
 	var lastErr error
 	var retryAfter time.Duration
@@ -180,7 +197,7 @@ func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, er
 			}
 			r.Header.Set("Authorization", "Bearer "+tok)
 		}
-		resp, err := c.http.Do(r) //nolint:gosec // G704: requests go to the server the user signed in to
+		resp, err := c.do(hc, r)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, err
@@ -196,6 +213,39 @@ func (c *Client) send(req *http.Request, authenticated bool) (*http.Response, er
 		return resp, nil
 	}
 	return nil, lastErr
+}
+
+// do performs one attempt; a transfer runs under a watchdog that lives until
+// the response body is closed.
+func (c *Client) do(hc *http.Client, r *http.Request) (*http.Response, error) {
+	if !isTransfer(r.Context()) {
+		return hc.Do(r) //nolint:gosec // G704: requests go to the server the user signed in to
+	}
+	w := newWatchdog(r.Context(), c.TransferIdleTimeout, c.TransferHeaderTimeout)
+	r = r.WithContext(w.ctx)
+	if r.Body != nil && r.Body != http.NoBody {
+		r.Body = w.requestBody(r.Body)
+	}
+	if getBody := r.GetBody; getBody != nil {
+		// http.Transport rewinds the body through GetBody to resend it on a
+		// new connection: that copy must be watched too.
+		r.GetBody = func() (io.ReadCloser, error) {
+			body, err := getBody()
+			if err != nil || body == http.NoBody {
+				return body, err
+			}
+			return w.requestBody(body), nil
+		}
+	}
+	resp, err := hc.Do(r) //nolint:gosec // G704: requests go to the server the user signed in to
+	w.gotResponse()
+	if err != nil {
+		err = w.err(err)
+		w.stop()
+		return nil, err
+	}
+	resp.Body = w.responseBody(resp.Body)
+	return resp, nil
 }
 
 // raw performs a request outside the generated client (tus, binary bodies

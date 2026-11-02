@@ -435,7 +435,7 @@ func (c *Client) PutBlob(ctx context.Context, ref, hash string, data []byte) err
 	if err != nil {
 		return err
 	}
-	res, err := c.api.PutBlobWithBodyWithResponse(ctx, vid, hash, &apiclient.PutBlobParams{Scope: scope}, "application/octet-stream", bytes.NewReader(data))
+	res, err := c.api.PutBlobWithBodyWithResponse(transfer(ctx), vid, hash, &apiclient.PutBlobParams{Scope: scope}, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -448,7 +448,7 @@ func (c *Client) GetBlob(ctx context.Context, ref, hash string, w io.Writer) (in
 	if err != nil {
 		return 0, err
 	}
-	resp, err := c.api.GetBlob(ctx, vid, hash, &apiclient.GetBlobParams{Scope: scope}, acceptBinary)
+	resp, err := c.api.GetBlob(transfer(ctx), vid, hash, &apiclient.GetBlobParams{Scope: scope}, acceptBinary)
 	if err != nil {
 		return 0, err
 	}
@@ -465,7 +465,7 @@ func (c *Client) GetRevisionContent(ctx context.Context, ref, file string, rev i
 	if err != nil {
 		return 0, err
 	}
-	resp, err := c.api.GetRevisionContent(ctx, vid, fid, rev, &apiclient.GetRevisionContentParams{Scope: scope}, acceptBinary)
+	resp, err := c.api.GetRevisionContent(transfer(ctx), vid, fid, rev, &apiclient.GetRevisionContentParams{Scope: scope}, acceptBinary)
 	if err != nil {
 		return 0, err
 	}

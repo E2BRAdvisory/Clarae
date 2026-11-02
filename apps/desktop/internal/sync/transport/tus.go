@@ -63,7 +63,7 @@ func (c *Client) TusUpload(ctx context.Context, ref, hash string, data []byte, r
 	path := strings.TrimPrefix(loc, BasePath)
 	for offset < int64(len(data)) {
 		end := min(offset+tusChunk, int64(len(data)))
-		resp, err := c.raw(ctx, http.MethodPatch, path, data[offset:end], tusHeaders(map[string]string{
+		resp, err := c.raw(transfer(ctx), http.MethodPatch, path, data[offset:end], tusHeaders(map[string]string{
 			"Upload-Offset": strconv.FormatInt(offset, 10), "Content-Type": "application/offset+octet-stream",
 		}))
 		if err != nil {
