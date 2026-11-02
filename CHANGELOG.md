@@ -4,6 +4,22 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/roadmap.md) §13-quinquies). Le decisioni sono in ADR-0045 (parità per costruzione) e ADR-0046 (bootstrap dopo un ripristino del cloud), accettati.
+
+### Client desktop e sync
+
+- **Ripristino del cloud a un punto precedente (ADR-0046):** quando il server risponde che il cursore del dispositivo è più avanti del suo, la sync non riscrive più i file locali con le revisioni vecchie e non sposta nel cestino quelli che il server ha perso: li ripubblica. Prima di ogni sovrascrittura durante un bootstrap viene salvata una versione in _File recovery_. Un bootstrap interrotto riprende nella stessa modalità.
+- **Vault con `#` o `?` nel percorso:** `index.db` e `sync.db` venivano aperti in un file troncato fuori dal vault, e due vault potevano condividere lo stesso stato di sync. Ora il percorso è codificato correttamente. Se resta un database al vecchio percorso, il log lo segnala e il file non viene toccato: l'indice si ricostruisce da solo, mentre un vault di questo tipo collegato al cloud va ricollegato.
+- **File grandi su reti lente:** download e upload dei blob non hanno più il limite di tempo totale delle chiamate di controllo. Si interrompono solo se non arrivano byte per 60 secondi o se la risposta non inizia entro 2 minuti.
+- **Prima sincronizzazione di vault grandi:** il push legge e cifra i file un batch alla volta invece di tenerli tutti in memoria.
+- **Basi (`.base`) ricevute da altri:** limiti di profondità (128 livelli), di lunghezza delle espressioni (16 KiB) e del file (1 MiB); budget di memoria (1 MiB per valore, 256 MiB per esecuzione) e di calcolo (10 secondi) per ogni esecuzione. Un'espressione che li supera dà un errore nella cella invece di chiudere l'app. `title()` non spezza più le iniziali accentate.
+
+### Deploy
+
+- **Realm Keycloak di produzione:** l'indirizzo di ritorno dopo il logout del client `memobrain-web` usa `${WEB_UI_ORIGIN}`. Prima era fisso su `localhost`, e il logout dalla Web UI non chiudeva la sessione SSO. Nelle installazioni con un realm configurato a mano va aggiunto `<origine della Web UI>/*` ai _Valid post logout redirect URIs_ (guida admin, Keycloak).
+
 ## [1.3.1] - 2026-11-02
 
 Una barra di stato facoltativa sotto l'editor e l'allineamento della specifica al codice: `Specifications.md` 1.4 recepisce gli ADR già implementati (0009–0022, 0024, 0026–0028, 0031, 0033, 0034) e la 1.5 recepisce ADR-0035. Resta in stato di proposta solo ADR-0023 (manifest firmato e aggiornamento automatico). Nessuna modifica al cloud né al protocollo di sync.
