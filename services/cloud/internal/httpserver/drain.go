@@ -33,6 +33,10 @@ func (d *Drain) Start() { d.startOnce.Do(func() { close(d.start) }) }
 // Close ends the long-lived streams (idempotent).
 func (d *Drain) Close() { d.closeOnce.Do(func() { close(d.closed) }) }
 
+// Closed is closed by Close: the other long-lived streams of the process
+// (gRPC) end then too, once the endpoint left the load balancer.
+func (d *Drain) Closed() <-chan struct{} { return d.closed }
+
 // Draining reports whether Start was called.
 func (d *Drain) Draining() bool {
 	select {
@@ -72,8 +76,12 @@ func (d *Drain) Streams(next http.Handler) http.Handler {
 // readiness fails first, the server keeps serving for delay (so the endpoint
 // is removed from the load balancer before connections are refused), then
 // in-flight requests get up to timeout to finish. A nil drain skips the
-// readiness phase.
+// readiness phase. The drain is closed whenever Serve returns, also when the
+// listener fails, so whoever waits on Closed is never left hanging.
 func Serve(ctx context.Context, srv *http.Server, drain *Drain, delay, timeout time.Duration) error {
+	if drain != nil {
+		defer drain.Close()
+	}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	select {

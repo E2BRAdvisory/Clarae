@@ -56,6 +56,7 @@
         "pdb": { "$ref": "#/definitions/pdb" },
         "terminationGracePeriodSeconds": { "type": "integer", "minimum": 1 },
         "preStopSleepSeconds": { "type": "integer", "minimum": 0 },
+        "progressDeadlineSeconds": { "type": "integer", "minimum": 1 },
         "topologySpread": { "$ref": "#/definitions/topologySpread" },
         "antiAffinity": { "enum": ["soft", "hard", "none"] },
         "nodeSelector": { "type": "object" },

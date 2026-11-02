@@ -1,7 +1,8 @@
 # Development stack for the MemoBrain Notes Cloud Service: PostgreSQL, an S3-compatible
 # object store (RustFS: MinIO-compatible, Apache-2.0; MinIO images are no longer
 # publicly pullable) and Keycloak. The cloud service itself runs on the host
-# (`task dev-cloud`) with deploy/docker/cloud.dev.env.
+# (`task dev-cloud`) with deploy/docker/cloud.dev.env. Every port is published on 127.0.0.1 only:
+# the credentials below (Keycloak admin/admin, the dev realm's users) are public.
 name: memobrain-dev
 
 services:
@@ -12,7 +13,7 @@ services:
       POSTGRES_PASSWORD: memobrain
       POSTGRES_DB: memobrain
     ports:
-      - '5433:5432' # 5433 on the host: 5432 is often taken by a local PostgreSQL
+      - '127.0.0.1:5433:5432' # 5433 on the host: 5432 is often taken by a local PostgreSQL
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -31,8 +32,8 @@ services:
       RUSTFS_CONSOLE_ENABLE: 'true'
       RUSTFS_CONSOLE_ADDRESS: ':9001'
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     volumes:
       - s3data:/data
     healthcheck:
@@ -74,8 +75,8 @@ services:
       KC_HOSTNAME: http://localhost:8080
       KC_HOSTNAME_STRICT: 'false'
     ports:
-      - '8080:8080'
-      - '9002:9000' # management port (health/metrics)
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:9002:9000' # management port (health/metrics)
     volumes:
       - ../keycloak:/opt/keycloak/data/import:ro
     healthcheck:

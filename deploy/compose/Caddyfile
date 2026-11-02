@@ -7,7 +7,17 @@
 	{$CADDY_GLOBAL}
 }
 
+# HSTS (spec §3.7) on the HTTPS sites: after the first visit browsers never try plain HTTP again, so a
+# link or a typed host name cannot be downgraded. Only over HTTPS (a plain http:// test site sends
+# nothing), and only when the backend did not set its own (Keycloak does). No includeSubDomains: the
+# three hosts may share a parent domain with other sites that are not served over HTTPS.
+(hsts) {
+	@https protocol https
+	header @https ?Strict-Transport-Security "max-age=31536000"
+}
+
 {$MEMOBRAIN_SITE} {
+	import hsts
 	request_body {
 		max_size 64MB
 	}
@@ -22,6 +32,7 @@
 # gRPC (notification stream) needs HTTP/2 to the backend: "h2c://" is HTTP/2 without TLS inside the
 # private network. Clients reach this host over TLS (HTTP/2 via ALPN), which is mandatory for gRPC.
 {$NOTIFY_SITE} {
+	import hsts
 	reverse_proxy h2c://cloud-api:18082 {
 		flush_interval -1
 		transport http {
@@ -37,6 +48,7 @@
 # KEYCLOAK_ADMIN_FROM (space separated CIDRs; the default 127.0.0.1/32 matches no external client). The cloud
 # service calls the Admin REST API directly on keycloak:8080, not through this site.
 {$AUTH_SITE} {
+	import hsts
 	@kc_admin {
 		# ";*": Keycloak (JAX-RS) ignores matrix parameters, so /admin;x/ is the console too.
 		path /admin /admin/* /admin;* /realms/master /realms/master/* /realms/master;*

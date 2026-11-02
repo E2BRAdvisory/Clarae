@@ -109,3 +109,51 @@ func waitUp(t *testing.T, url string) {
 	}
 	t.Fatal("server did not start")
 }
+
+// TestDrainClosedFollowsTheDelay proves what the gRPC shutdown waits on: Closed
+// stays open for the drain delay after the signal, and is closed when Serve
+// returns, also when the listener could not even start.
+func TestDrainClosedFollowsTheDelay(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+	drain := NewDrain()
+	srv := &http.Server{Addr: addr, Handler: http.NotFoundHandler(), ReadHeaderTimeout: time.Second}
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, srv, drain, 400*time.Millisecond, time.Second) }()
+	waitUp(t, "http://"+addr+"/")
+	stop()
+	signalled := time.Now()
+	select {
+	case <-drain.Closed():
+		if d := time.Since(signalled); d < 300*time.Millisecond {
+			t.Fatalf("drain closed %v after the signal, before the delay", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("drain never closed")
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Serve: %v", err)
+	}
+
+	// The address is taken: Serve fails at once and still closes the drain.
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = busy.Close() }()
+	failed := NewDrain()
+	srv = &http.Server{Addr: busy.Addr().String(), Handler: http.NotFoundHandler(), ReadHeaderTimeout: time.Second}
+	if err := Serve(context.Background(), srv, failed, time.Second, time.Second); err == nil {
+		t.Fatal("Serve on a busy address returned nil")
+	}
+	select {
+	case <-failed.Closed():
+	default:
+		t.Fatal("drain left open after the listener failed")
+	}
+}

@@ -73,32 +73,15 @@ type cloudProc struct {
 	baseURL string // http://host:port/api/v1
 	root    string // http://host:port
 	logPath string
+	grpc    string // host:port of the notification stream
 	exited  chan struct{}
+	state   *os.ProcessState // set before exited is closed
 }
 
 // startCloud launches the binary against dbURL and waits for /readyz.
 func startCloud(t *testing.T, issuerURL, dbURL, storageDir string, extraEnv ...string) *cloudProc {
 	t.Helper()
-	addr := freeAddr(t)
-	logPath := filepath.Join(t.TempDir(), "cloud.log")
-	logFile, err := os.Create(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(cloudBinary(t), "--role=all") //nolint:gosec // binary built by this test
-	cmd.Env = append(os.Environ(),
-		"LISTEN_ADDR="+addr, "GRPC_LISTEN_ADDR="+freeAddr(t), "DATABASE_URL="+dbURL,
-		"STORAGE_DIR="+storageDir, "OIDC_ISSUER="+issuerURL, "OIDC_AUDIENCE=memobrain-api",
-		"OIDC_STATUS_CACHE_TTL=1s", "LOG_LEVEL=warn", "SHUTDOWN_DRAIN=0s",
-	)
-	cmd.Env = append(cmd.Env, extraEnv...)
-	cmd.Stdout, cmd.Stderr = logFile, logFile
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	p := &cloudProc{t: t, cmd: cmd, baseURL: "http://" + addr + "/api/v1", root: "http://" + addr, logPath: logPath, exited: make(chan struct{})}
-	go func() { _, _ = cmd.Process.Wait(); close(p.exited); _ = logFile.Close() }()
-	t.Cleanup(func() { p.kill() })
+	p := launchCloud(t, issuerURL, dbURL, storageDir, extraEnv...)
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		if st, _ := p.get("/readyz", ""); st == http.StatusOK {
@@ -112,6 +95,32 @@ func startCloud(t *testing.T, issuerURL, dbURL, storageDir string, extraEnv ...s
 	}
 	t.Fatalf("cloud not ready:\n%s", p.log())
 	return nil
+}
+
+// launchCloud starts the binary against dbURL without waiting for it.
+func launchCloud(t *testing.T, issuerURL, dbURL, storageDir string, extraEnv ...string) *cloudProc {
+	t.Helper()
+	addr, grpcAddr := freeAddr(t), freeAddr(t)
+	logPath := filepath.Join(t.TempDir(), "cloud.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(cloudBinary(t), "--role=all") //nolint:gosec // binary built by this test
+	cmd.Env = append(os.Environ(),
+		"LISTEN_ADDR="+addr, "GRPC_LISTEN_ADDR="+grpcAddr, "DATABASE_URL="+dbURL,
+		"STORAGE_DIR="+storageDir, "OIDC_ISSUER="+issuerURL, "OIDC_AUDIENCE=memobrain-api",
+		"OIDC_STATUS_CACHE_TTL=1s", "LOG_LEVEL=warn", "SHUTDOWN_DRAIN=0s",
+	)
+	cmd.Env = append(cmd.Env, extraEnv...)
+	cmd.Stdout, cmd.Stderr = logFile, logFile
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	p := &cloudProc{t: t, cmd: cmd, baseURL: "http://" + addr + "/api/v1", root: "http://" + addr, logPath: logPath, grpc: grpcAddr, exited: make(chan struct{})}
+	go func() { p.state, _ = cmd.Process.Wait(); close(p.exited); _ = logFile.Close() }()
+	t.Cleanup(func() { p.kill() })
+	return p
 }
 
 func (p *cloudProc) log() string { b, _ := os.ReadFile(p.logPath); return string(b) }

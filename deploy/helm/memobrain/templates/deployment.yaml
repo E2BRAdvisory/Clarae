@@ -13,6 +13,9 @@ spec:
   {{- if not $spec.autoscaling.enabled }}
   replicas: {{ $spec.replicas }}
   {{- end }}
+  {{- with $spec.progressDeadlineSeconds }}
+  progressDeadlineSeconds: {{ . }}
+  {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -61,7 +64,8 @@ spec:
               containerPort: {{ $root.Values.service.httpPort }}
             - name: grpc
               containerPort: {{ $root.Values.service.grpcPort }}
-          # startup holds liveness/readiness off until the process answers (database migrations run first);
+          # startup holds liveness/readiness off until the process answers: the listener opens before the
+          # database migrations and the OIDC discovery, during which /healthz answers 200 and /readyz 503.
           # liveness only says "alive" (/healthz), readiness also checks PostgreSQL and S3 (/readyz).
           startupProbe:
             httpGet: { path: /api/v1/healthz, port: http }

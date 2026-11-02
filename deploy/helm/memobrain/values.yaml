@@ -36,16 +36,25 @@ api:
     enabled: true
     minAvailable: 1
     maxUnavailable: null # use instead of minAvailable when set
-  # Must exceed SHUTDOWN_TIMEOUT (default 15 s) + preStopSleepSeconds, or the pod is killed mid-drain.
+  # The shutdown takes preStopSleepSeconds, then SHUTDOWN_DRAIN (config, default 5 s: /readyz fails, HTTP and
+  # the gRPC streams keep serving), then up to SHUTDOWN_TIMEOUT (default 15 s) for the requests in flight.
+  # Must exceed their sum (5 + 5 + 15 = 25 s by default), or the pod is killed mid-drain.
   terminationGracePeriodSeconds: 30
   # Delays SIGTERM so the endpoint is removed from the Service first. Rendered only on Kubernetes >= 1.30
   # (the preStop sleep action, no shell needed in the distroless image); on older clusters SHUTDOWN_DRAIN
-  # (config, default 5s) does the same inside the process: /readyz fails while it keeps serving.
+  # alone delays the shutdown inside the process.
   preStopSleepSeconds: 5
+  # The API listener opens as the process starts, before the database migrations and the OIDC discovery:
+  # meanwhile /healthz answers 200 and /readyz 503. A new pod can thus stay unready for minutes without
+  # being restarted: up to 10 min waiting for the migration lock held by another replica, plus the
+  # migrations themselves, plus about 1 min of OIDC discovery retries while Keycloak starts (30 attempts, each
+  # bounded at 10 s, then the process exits and restarts). The rollout is reported failed only
+  # past progressDeadlineSeconds (keep it above that budget; `helm upgrade --wait` needs a --timeout as long).
+  progressDeadlineSeconds: 900
   probes:
-    startup: { periodSeconds: 2, failureThreshold: 30 } # up to 60 s to reach /healthz (migrations run at start)
+    startup: { periodSeconds: 2, failureThreshold: 30 } # up to 60 s for the process to open its listener
     liveness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 }
-    readiness: { periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 } # /readyz checks PostgreSQL and S3
+    readiness: { periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 } # startup done, PostgreSQL and S3 up
   topologySpread:
     enabled: true
     maxSkew: 1
@@ -84,6 +93,8 @@ worker:
     maxUnavailable: null
   terminationGracePeriodSeconds: 30
   preStopSleepSeconds: 0
+  # A new worker stays unready until the API migrated the schema (see api.progressDeadlineSeconds).
+  progressDeadlineSeconds: 900
   topologySpread:
     enabled: false
     maxSkew: 1

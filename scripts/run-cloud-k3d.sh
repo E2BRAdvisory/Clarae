@@ -15,7 +15,7 @@
 #                                            "up" if missing. MEMOBRAIN_K3D_CLUSTER does the same
 #
 # Existing clusters are listed and a new cluster dedicated to MemoBrain Notes is suggested: it keeps
-# the host ports (18081, 18082, 18080, 9000) and the DNS override away from your other work.
+# the host ports (18081, 18082, 18080, 9000; on 127.0.0.1 only) and the DNS override away from your other work.
 # On an existing cluster the script adds those ports to its load balancer, a CoreDNS
 # override and the namespace "memobrain"; all other workloads are left alone.
 #
@@ -114,24 +114,28 @@ esac
 if cluster_exists "$CLUSTER"; then
   ok "cluster '$CLUSTER' exists"
   k3d cluster start "$CLUSTER" >/dev/null 2>&1 || true
-  # Publish the MemoBrain Notes ports on the cluster's load balancer when they are not mapped yet.
+  # Publish the MemoBrain Notes ports on the cluster's load balancer when they are not mapped yet,
+  # on loopback only: Keycloak (admin/admin), the API and S3 hold development credentials.
   mapped="$(docker inspect "k3d-$CLUSTER-serverlb" --format '{{json .HostConfig.PortBindings}}' 2>/dev/null || true)"
   for p in "${PORTS[@]}"; do
     case "$mapped" in
-      *"\"$p/tcp\""*) ;;
+      *"\"$p/tcp\":[{\"HostIp\":\"127.0.0.1\""*) ;;
+      *"\"$p/tcp\""*)
+        warn "port $p of '$CLUSTER' is published on every interface (cluster created by an older version of this script): other hosts on the network can reach it; recreate the cluster to bind it to 127.0.0.1" ;;
       *)
         log "Publishing port $p on '$CLUSTER'"
-        k3d cluster edit "$CLUSTER" --port-add "$p:$p@loadbalancer" >/dev/null \
+        k3d cluster edit "$CLUSTER" --port-add "127.0.0.1:$p:$p@loadbalancer" >/dev/null \
           || die "cannot publish port $p (already used by another cluster or process?)" ;;
     esac
   done
 else
   log "Creating k3d cluster '$CLUSTER'"
+  # Loopback only: Keycloak (admin/admin), the API and S3 hold development credentials.
   k3d cluster create "$CLUSTER" \
     --servers 1 --agents 0 --wait \
     --k3s-arg "--disable=traefik@server:0" \
-    -p "18081:18081@loadbalancer" -p "18082:18082@loadbalancer" \
-    -p "18080:18080@loadbalancer" -p "9000:9000@loadbalancer" >/dev/null \
+    -p "127.0.0.1:18081:18081@loadbalancer" -p "127.0.0.1:18082:18082@loadbalancer" \
+    -p "127.0.0.1:18080:18080@loadbalancer" -p "127.0.0.1:9000:9000@loadbalancer" >/dev/null \
     || die "cluster creation failed (ports 18081, 18082, 18080, 9000 free?)"
 fi
 # After a Docker restart (or a load-balancer recreation by "k3d cluster edit") the serverlb

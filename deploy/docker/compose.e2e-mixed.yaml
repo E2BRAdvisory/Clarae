@@ -9,16 +9,16 @@
 services:
   postgres:
     ports: !override
-      - '5434:5432'
+      - '127.0.0.1:5434:5432'
 
   s3:
     ports: !override
-      - '9010:9000'
-      - '9011:9001'
+      - '127.0.0.1:9010:9000'
+      - '127.0.0.1:9011:9001'
 
   keycloak:
     ports: !override
-      - '8080:8080' # the issuer is http://localhost:8080/realms/memobrain, as in development
-      - '9012:9000'
+      - '127.0.0.1:8080:8080' # the issuer is http://localhost:8080/realms/memobrain, as in development
+      - '127.0.0.1:9012:9000'
     volumes: !override
       - ${E2E_MIXED_REALM_DIR:?set by scripts/e2e-mixed.sh}:/opt/keycloak/data/import:ro
