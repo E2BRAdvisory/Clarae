@@ -5,9 +5,11 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
+	"memobrain/apps/desktop/internal/indexer"
 	"memobrain/apps/desktop/internal/vault"
 	"memobrain/shared/syncproto"
 )
@@ -38,32 +40,89 @@ func classifyChanges(ctx context.Context, v *openVault, paths []string) []FileCh
 	known := indexedPaths(ctx, v, paths)
 	out := make([]FileChange, 0, len(paths))
 	for _, p := range paths {
-		abs, normalized, err := v.FS.Resolve(p)
-		if err != nil {
-			continue
+		if c, ok := statChange(v, p, known); ok {
+			out = append(out, c)
 		}
-		st, err := os.Lstat(abs)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			out = append(out, FileChange{Type: ChangeDelete, Path: normalized})
-			continue
-		case err != nil || st.Mode()&fs.ModeSymlink != 0:
-			// Unreadable, or a symlink (never part of the tree): content may have changed.
-			out = append(out, FileChange{Type: ChangeModify, Path: normalized})
-			continue
-		}
-		e := &vault.Entry{Path: normalized, Name: filepath.Base(abs), IsDir: st.IsDir(), Mtime: st.ModTime()}
-		typ := ChangeCreate
-		if !e.IsDir {
-			e.Kind = syncproto.KindOf(normalized)
-			e.Size = st.Size()
-			if known[normalized] {
-				typ = ChangeModify
-			}
-		}
-		out = append(out, FileChange{Type: typ, Path: normalized, Entry: e})
 	}
 	return out
+}
+
+// statChange describes what happened to one path from a stat of it now; known lists the files
+// the index had before the change. ok is false for a path outside the vault.
+func statChange(v *openVault, p string, known map[string]bool) (c FileChange, ok bool) {
+	abs, normalized, err := v.FS.Resolve(p)
+	if err != nil {
+		return FileChange{}, false
+	}
+	st, err := os.Lstat(abs)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return FileChange{Type: ChangeDelete, Path: normalized}, true
+	case err != nil || st.Mode()&fs.ModeSymlink != 0:
+		// Unreadable, or a symlink (never part of the tree): content may have changed.
+		return FileChange{Type: ChangeModify, Path: normalized}, true
+	}
+	e := &vault.Entry{Path: normalized, Name: filepath.Base(abs), IsDir: st.IsDir(), Mtime: st.ModTime()}
+	typ := ChangeCreate
+	if !e.IsDir {
+		e.Kind = syncproto.KindOf(normalized)
+		e.Size = st.Size()
+		if known[normalized] {
+			typ = ChangeModify
+		}
+	}
+	return FileChange{Type: typ, Path: normalized, Entry: e}, true
+}
+
+// maxTypedChanges bounds the changes a reconciliation describes one by one: past it the event
+// carries the paths only, and the frontend reloads its caches instead of patching them.
+const maxTypedChanges = 5000
+
+// reconciledChanges is the vault:file-changed payload of what a reconciliation found changed
+// (indexer.Reconciled lists files only). A removed file whose folder is gone too also reports
+// that folder (the topmost one missing) as deleted, so that the file tree drops it.
+func reconciledChanges(v *openVault, r indexer.Reconciled) (paths []string, changes []FileChange) {
+	known := make(map[string]bool, len(r.Modified))
+	for _, p := range r.Modified {
+		known[p] = true
+	}
+	seen := map[string]bool{}
+	add := func(c FileChange) {
+		if !seen[c.Path] {
+			seen[c.Path] = true
+			paths = append(paths, c.Path)
+			changes = append(changes, c)
+		}
+	}
+	for _, list := range [][]string{r.Added, r.Modified, r.Removed} {
+		for _, p := range list {
+			if c, ok := statChange(v, p, known); ok {
+				add(c)
+			}
+		}
+	}
+	checked := map[string]bool{} // folders already looked at
+	for _, p := range r.Removed {
+		top := ""
+		for dir := path.Dir(p); dir != "." && !checked[dir]; dir = path.Dir(dir) {
+			checked[dir] = true
+			abs, _, err := v.FS.Resolve(dir)
+			if err != nil {
+				break
+			}
+			if _, err := os.Lstat(abs); !errors.Is(err, fs.ErrNotExist) {
+				break
+			}
+			top = dir
+		}
+		if top != "" {
+			add(FileChange{Type: ChangeDelete, Path: top})
+		}
+	}
+	if len(changes) > maxTypedChanges {
+		changes = nil
+	}
+	return paths, changes
 }
 
 // indexedPaths returns which of paths the index has a row for (nil when it cannot tell).

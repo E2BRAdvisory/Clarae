@@ -9,12 +9,15 @@
 package history
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -280,6 +283,10 @@ func (h *History) Flush() {
 // Take snapshots the current content of a file now (ignoring the interval). It returns false
 // when the content equals the newest snapshot (nothing new to keep). ErrSkipped means the file
 // is not eligible (binary, too large, excluded).
+//
+// The size is checked with a stat and the type on the first bytes before the file is read, and
+// the read is bounded: an attachment of gigabytes is skipped without being loaded. The file is
+// read without holding the lock, which only guards the snapshot store.
 func (h *History) Take(path string, reason Reason) (Snapshot, bool, error) {
 	if h.readOnly() {
 		return Snapshot{}, false, ErrReadOnly
@@ -288,22 +295,76 @@ func (h *History) Take(path string, reason Reason) (Snapshot, bool, error) {
 		return Snapshot{}, false, ErrSkipped
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	c, err := h.fs.ReadFile(path)
-	if err != nil {
-		return Snapshot{}, false, err
-	}
 	limit, textOnly := int64(h.settings.MaxFileMB)<<20, true
+	h.mu.Unlock()
 	if reason == ReasonPreSyncOverride {
 		// What a sync merge is about to replace may exist nowhere else (it
 		// was never uploaded): binary and large files are kept too, up to
 		// PreSyncMaxBytes.
 		limit, textOnly = max(limit, PreSyncMaxBytes), false
 	}
-	if c.Size > limit || (textOnly && !isText(c.Data)) {
-		return Snapshot{}, false, ErrSkipped
+	data, err := h.readEligible(path, limit, textOnly)
+	if err != nil {
+		return Snapshot{}, false, err
 	}
-	return h.takeDataLocked(path, c.Data, c.Hash, reason)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.takeDataLocked(path, data, hashing.Sum(data).Hex(), reason)
+}
+
+// sniffBytes is the prefix in which a NUL byte marks a file as binary before it is read whole.
+const sniffBytes = 8 << 10
+
+// readEligible reads a vault file of at most limit bytes (text only when textOnly is set);
+// anything else is ErrSkipped, found without reading more than limit+1 bytes.
+func (h *History) readEligible(path string, limit int64, textOnly bool) ([]byte, error) {
+	abs, _, err := h.fs.Resolve(path)
+	if err != nil {
+		return nil, err
+	}
+	st, err := os.Stat(abs)
+	switch {
+	case err != nil:
+		return nil, err
+	case st.IsDir():
+		return nil, vault.ErrIsDirectory
+	case !st.Mode().IsRegular() || st.Size() > limit:
+		return nil, ErrSkipped // a device or a pipe is never opened
+	}
+	f, err := os.Open(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	// One byte more than the stat said: reading it means the file grew meanwhile.
+	size := int(st.Size()) + 1
+	// The prefix first: most binary files have a NUL byte early.
+	data := make([]byte, min(size, sniffBytes))
+	n, err := io.ReadFull(f, data)
+	if err == nil && n < size {
+		if textOnly && bytes.IndexByte(data[:n], 0) >= 0 {
+			return nil, ErrSkipped
+		}
+		data = slices.Grow(data, size-n)[:size]
+		var m int
+		m, err = io.ReadFull(f, data[n:])
+		n += m
+	}
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	data = data[:n]
+	if n == size { // grown since the stat: the rest, still bounded
+		more, err := io.ReadAll(io.LimitReader(f, limit+1-int64(n)))
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, more...)
+	}
+	if int64(len(data)) > limit || (textOnly && !isText(data)) {
+		return nil, ErrSkipped
+	}
+	return data, nil
 }
 
 // PreSyncMaxBytes caps the files kept before a sync overwrites them

@@ -103,6 +103,7 @@ func Parse(title string, src []byte) Document {
 
 	lines := bytes.Split(body, []byte("\n"))
 	codeLines := make([]bool, len(lines))
+	starts := lineStarts(lines)
 
 	reader := text.NewReader(body)
 	root := md.Parser().Parse(reader)
@@ -115,10 +116,10 @@ func Parse(title string, src []byte) Document {
 			if v.Lines().Len() == 0 {
 				break // empty heading ("#"): nothing to report
 			}
-			line := lineOf(body, v.Lines().At(0).Start)
+			line := lineOf(starts, v.Lines().At(0).Start)
 			doc.Headings = append(doc.Headings, Heading{Level: v.Level, Text: string(headingText(v, body)), Line: line + bodyLineOffset})
 		case *ast.FencedCodeBlock, *ast.CodeBlock:
-			markCodeLines(v, body, codeLines)
+			markCodeLines(v, starts, codeLines)
 		}
 		return ast.WalkContinue, nil
 	})
@@ -145,8 +146,22 @@ func Parse(title string, src []byte) Document {
 	return doc
 }
 
-func lineOf(src []byte, offset int) int {
-	return bytes.Count(src[:offset], []byte("\n")) + 1
+// lineStarts returns the byte offset at which each line starts.
+func lineStarts(lines [][]byte) []int {
+	starts := make([]int, len(lines))
+	pos := 0
+	for i, l := range lines {
+		starts[i] = pos
+		pos += len(l) + 1
+	}
+	return starts
+}
+
+// lineOf returns the 1-based line of a byte offset: the number of lines that start at or
+// before it. A binary search, so that marking every line of a long code block stays linear
+// (counting the newlines from the start each time made large notes quadratic).
+func lineOf(starts []int, offset int) int {
+	return sort.Search(len(starts), func(i int) bool { return starts[i] > offset })
 }
 
 func headingText(h *ast.Heading, src []byte) []byte {
@@ -158,11 +173,11 @@ func headingText(h *ast.Heading, src []byte) []byte {
 	return bytes.TrimSpace(buf.Bytes())
 }
 
-func markCodeLines(n ast.Node, src []byte, codeLines []bool) {
+func markCodeLines(n ast.Node, starts []int, codeLines []bool) {
 	lines := n.Lines()
 	for i := 0; i < lines.Len(); i++ {
 		seg := lines.At(i)
-		l := lineOf(src, seg.Start) - 1
+		l := lineOf(starts, seg.Start) - 1
 		if l >= 0 && l < len(codeLines) {
 			codeLines[l] = true
 		}

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -54,10 +55,34 @@ type Indexer struct {
 	// otherwise); the Full then leaves them alone. Guarded by wmu.
 	updated map[string]bool
 
+	// linksOK is true while every link row is resolved against the current
+	// file set: a Full that finds nothing to write or remove can then skip
+	// the whole-vault resolution. Only a successful ResolveAll sets it; a
+	// Full that writes or removes, a failed Update and Rebuild clear it, so a
+	// new Indexer (a vault opened, maybe after a crash half way through a
+	// Full) always resolves once. Guarded by wmu.
+	linksOK bool
+
 	// res caches the link resolver of the current file set (see Update).
 	rmu sync.Mutex
 	res *links.Resolver
 }
+
+// Reconciled lists what a full pass found changed on disk: files it indexed
+// for the first time, files whose content changed, files that are gone.
+// Paths an Update handled meanwhile are not listed (their change was
+// reported with the watcher batch), nor files whose content is unchanged.
+type Reconciled struct {
+	Added, Modified, Removed []string
+}
+
+// Empty reports whether the pass found no change.
+func (r Reconciled) Empty() bool { return len(r.Added)+len(r.Modified)+len(r.Removed) == 0 }
+
+// maxParseBytes caps the notes, canvases and drawings whose content is
+// parsed and made searchable: a larger file (a pasted dump of hundreds of
+// MB) is indexed by name and path only. A variable for the tests.
+var maxParseBytes int64 = 8 << 20
 
 // New binds an indexer to a vault file system and its index database.
 func New(fsys *vault.FS, db *sql.DB, logger zerolog.Logger, progress func(Progress)) *Indexer {
@@ -113,15 +138,25 @@ func (j job) weight() int { return len(j.body) + 512 }
 // file set at that moment, so links written by interleaved Updates end up
 // consistent too; it holds the lock for its whole run (a few seconds on the
 // largest vaults), because resolving later chunks with a resolver that misses
-// an interleaved Update's files would undo that Update's resolution.
+// an interleaved Update's files would undo that Update's resolution. A pass
+// that wrote and removed nothing skips it when the links are known to be
+// resolved already (see linksOK).
 func (ix *Indexer) Full(ctx context.Context) error {
+	_, err := ix.Reconcile(ctx)
+	return err
+}
+
+// Reconcile is Full, reporting which files it found changed (the changes no
+// watcher batch reported: events lost or never raised).
+func (ix *Indexer) Reconcile(ctx context.Context) (Reconciled, error) {
 	ix.fullMu.Lock()
 	defer ix.fullMu.Unlock()
 	return ix.full(ctx)
 }
 
-// full is Full with fullMu held.
-func (ix *Indexer) full(ctx context.Context) error {
+// full is Reconcile with fullMu held.
+func (ix *Indexer) full(ctx context.Context) (Reconciled, error) {
+	var res Reconciled
 	start := time.Now()
 	ix.wmu.Lock()
 	ix.updated = map[string]bool{}
@@ -133,7 +168,7 @@ func (ix *Indexer) full(ctx context.Context) error {
 	}()
 	known, err := ix.loadRows(ctx)
 	if err != nil {
-		return err
+		return res, err
 	}
 	var entries []vault.Entry
 	if err := ix.fs.Walk(func(e vault.Entry) error {
@@ -142,7 +177,7 @@ func (ix *Indexer) full(ctx context.Context) error {
 		}
 		return nil
 	}); err != nil {
-		return err
+		return res, err
 	}
 	seen := make(map[string]bool, len(entries))
 	var todo []vault.Entry
@@ -154,11 +189,22 @@ func (ix *Indexer) full(ctx context.Context) error {
 		todo = append(todo, e)
 	}
 	bulk := len(todo) >= bulkMinFiles && 2*len(todo) >= len(entries)
+	apply := func(ctx context.Context, jobs []job) (delta, error) {
+		st, written, err := ix.applyFullBatch(ctx, jobs)
+		for _, p := range written {
+			if _, ok := known[p]; ok {
+				res.Modified = append(res.Modified, p)
+			} else {
+				res.Added = append(res.Added, p)
+			}
+		}
+		return st, err
+	}
 	if err := ix.withKeyIndex(ctx, bulk, func() error {
-		_, err := ix.indexBatches(ctx, todo, known, len(entries)-len(todo), len(entries), ix.applyFullBatch)
+		_, err := ix.indexBatches(ctx, todo, known, len(entries)-len(todo), len(entries), apply)
 		return err
 	}); err != nil {
-		return err
+		return res, err
 	}
 	ix.wmu.Lock()
 	defer ix.wmu.Unlock()
@@ -168,35 +214,62 @@ func (ix *Indexer) full(ctx context.Context) error {
 			gone = append(gone, p)
 		}
 	}
-	if _, err := ix.removeMany(ctx, gone); err != nil {
-		return err
+	if len(gone) > 0 {
+		ix.linksOK = false
 	}
-	removed := len(gone)
-	ix.invalidateResolver()
-	if err := links.ResolveAll(ctx, ix.db); err != nil {
-		return err
+	if _, err := ix.removeMany(ctx, gone); err != nil {
+		return res, err
+	}
+	sort.Strings(gone)
+	res.Removed = gone
+	// Nothing written or removed (by this pass, a failed Update or an earlier
+	// pass that did not finish): every link is already resolved against this
+	// file set, and resolving the whole vault again would only hold the
+	// write lock for nothing.
+	resolved := !ix.linksOK
+	if resolved {
+		ix.invalidateResolver()
+		if testHookResolveAll != nil {
+			testHookResolveAll()
+		}
+		if err := links.ResolveAll(ctx, ix.db); err != nil {
+			return res, err
+		}
+		ix.linksOK = true
 	}
 	ix.progress(Progress{Done: len(entries), Total: len(entries), Finished: true})
-	ix.logger.Info().Int("files", len(entries)).Int("changed", len(todo)).Int("removed", removed).Dur("took", time.Since(start)).Msg("index reconciled")
-	return nil
+	ix.logger.Info().Int("files", len(entries)).Int("changed", len(todo)).Int("removed", len(gone)).Bool("resolved", resolved).
+		Dur("took", time.Since(start)).Msg("index reconciled")
+	return res, nil
 }
 
+// testHookResolveAll runs before a Full resolves every link (tests).
+var testHookResolveAll func()
+
 // applyFullBatch writes one batch of a Full under the write lock, without
-// the paths an Update has written since the Full started.
-func (ix *Indexer) applyFullBatch(ctx context.Context, jobs []job) (delta, error) {
+// the paths an Update has written since the Full started. It returns the
+// paths whose content it wrote (not the ones only touched).
+func (ix *Indexer) applyFullBatch(ctx context.Context, jobs []job) (delta, []string, error) {
 	if testHookFullBatch != nil {
 		testHookFullBatch()
 	}
 	ix.wmu.Lock()
 	defer ix.wmu.Unlock()
 	keep := jobs[:0:0]
+	var written []string
 	for _, j := range jobs {
 		if !ix.updated[j.e.Path] {
 			keep = append(keep, j)
+			if !j.touch {
+				written = append(written, j.e.Path)
+			}
 		}
 	}
 	if len(keep) == 0 {
-		return delta{}, nil
+		return delta{}, nil, nil
+	}
+	if len(written) > 0 {
+		ix.linksOK = false // the links written are not resolved yet
 	}
 	st, err := ix.applyBatch(ctx, keep)
 	if st.any {
@@ -204,7 +277,7 @@ func (ix *Indexer) applyFullBatch(ctx context.Context, jobs []job) (delta, error
 		// file set as it was before this batch.
 		ix.invalidateResolver()
 	}
-	return st, err
+	return st, written, err
 }
 
 // testHookFullBatch runs before a Full takes the lock for a batch (tests).
@@ -327,9 +400,15 @@ func (ix *Indexer) indexBatches(ctx context.Context, todo []vault.Entry, known m
 // Update refreshes the given vault-relative paths after a watcher batch.
 // A path that no longer exists is removed; a folder is walked. It holds the
 // write lock from start to end (see Full).
-func (ix *Indexer) Update(ctx context.Context, paths []string) error {
+func (ix *Indexer) Update(ctx context.Context, paths []string) (err error) {
 	ix.wmu.Lock()
 	defer ix.wmu.Unlock()
+	defer func() {
+		if err != nil {
+			// What was written may be left unresolved: the next Full resolves everything.
+			ix.linksOK = false
+		}
+	}()
 	var entries []vault.Entry
 	var structural delta
 	for _, p := range paths {
@@ -454,8 +533,10 @@ func (ix *Indexer) Rebuild(ctx context.Context) error {
 		}
 	}
 	ix.invalidateResolver()
+	ix.linksOK = false
 	ix.wmu.Unlock()
-	return ix.full(ctx)
+	_, err := ix.full(ctx)
+	return err
 }
 
 func (ix *Indexer) loadRows(ctx context.Context) (map[string]fileRow, error) {
@@ -510,15 +591,23 @@ func (ix *Indexer) knownRows(ctx context.Context, entries []vault.Entry) (map[st
 // prepare reads and parses one file without touching the database.
 func (ix *Indexer) prepare(e vault.Entry, prev fileRow) (job, error) {
 	title := strings.TrimSuffix(e.Name, pathrules.Ext(e.Path))
-	if e.Kind == syncproto.KindExcalidraw || e.Kind == syncproto.KindCanvas {
-		return ix.prepareStructured(e, prev, title)
-	}
-	if e.Kind != syncproto.KindMarkdown {
+	parsed := e.Kind == syncproto.KindMarkdown || e.Kind == syncproto.KindExcalidraw || e.Kind == syncproto.KindCanvas
+	if !parsed || e.Size > maxParseBytes {
+		// Streamed, never loaded: an attachment, or a text file too large to parse.
 		hash, _, err := ix.fs.HashFile(e.Path)
 		if err != nil {
 			return job{}, err
 		}
+		if prev.hash == hash {
+			return job{e: e, touch: true}, nil // touched but identical
+		}
+		if parsed {
+			ix.logOversize(e)
+		}
 		return job{e: e, hash: hash, title: title}, nil
+	}
+	if e.Kind != syncproto.KindMarkdown {
+		return ix.prepareStructured(e, prev, title)
 	}
 	content, err := ix.fs.ReadFile(e.Path)
 	if err != nil {
@@ -527,8 +616,18 @@ func (ix *Indexer) prepare(e vault.Entry, prev fileRow) (job, error) {
 	if prev.hash == content.Hash {
 		return job{e: e, touch: true}, nil // touched but identical
 	}
+	if content.Size > maxParseBytes { // grown since the stat
+		ix.logOversize(e)
+		return job{e: e, hash: content.Hash, title: title}, nil
+	}
 	doc := parser.Parse(title, content.Data)
 	return job{e: e, hash: content.Hash, title: title, doc: &doc, body: string(content.Data)}, nil
+}
+
+// logOversize reports a file indexed by name only (see maxParseBytes).
+func (ix *Indexer) logOversize(e vault.Entry) {
+	ix.logger.Warn().Str("path", e.Path).Int64("size", e.Size).Int64("limit", maxParseBytes).
+		Msg("file too large to index its content: indexed by name only")
 }
 
 // prepareStructured handles a drawing or a canvas: the text of its elements is searchable
@@ -541,6 +640,10 @@ func (ix *Indexer) prepareStructured(e vault.Entry, prev fileRow, title string) 
 	}
 	if prev.hash == content.Hash {
 		return job{e: e, touch: true}, nil
+	}
+	if content.Size > maxParseBytes { // grown since the stat
+		ix.logOversize(e)
+		return job{e: e, hash: content.Hash, title: title}, nil
 	}
 	var text string
 	var found []parser.Link

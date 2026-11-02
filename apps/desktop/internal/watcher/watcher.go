@@ -35,6 +35,7 @@ type Change struct {
 // Options tune the watcher.
 type Options struct {
 	Debounce          time.Duration // default 1.5 s
+	MaxWait           time.Duration // default 2 s, at least Debounce: a writer that never pauses cannot postpone a change longer
 	ReconcileInterval time.Duration // default 5 min (none in the browser); negative disables
 	Logger            zerolog.Logger
 }
@@ -64,6 +65,7 @@ type Watcher struct {
 	mu      sync.Mutex
 	pending map[string]struct{}
 	timer   *time.Timer
+	first   time.Time // when the oldest pending path was queued
 
 	// degraded counts the folders a per-folder source could not watch (the
 	// inotify or descriptor limit): their changes are only found by the
@@ -76,6 +78,10 @@ func New(ctx context.Context, root string, opts Options) (*Watcher, error) {
 	if opts.Debounce <= 0 {
 		opts.Debounce = 1500 * time.Millisecond
 	}
+	if opts.MaxWait <= 0 {
+		opts.MaxWait = 2 * time.Second
+	}
+	opts.MaxWait = max(opts.MaxWait, opts.Debounce)
 	if opts.ReconcileInterval < 0 {
 		opts.ReconcileInterval = 0
 	} else if opts.ReconcileInterval == 0 {
@@ -198,10 +204,7 @@ func (w *Watcher) loop(ctx context.Context) {
 				return
 			}
 			if ev.Op == 0 { // the source lost events: compare everything
-				select {
-				case w.out <- Change{Reconcile: true}:
-				case <-ctx.Done():
-				}
+				w.reconcile(ctx)
 				continue
 			}
 			w.handle(ev)
@@ -209,13 +212,25 @@ func (w *Watcher) loop(ctx context.Context) {
 			if !ok {
 				return
 			}
+			if errors.Is(err, fsnotify.ErrEventOverflow) {
+				// The kernel queue overflowed (inotify IN_Q_OVERFLOW): some
+				// events are lost, only a full comparison finds those changes.
+				w.opts.Logger.Warn().Err(err).Msg("file system events lost; reconciling")
+				w.reconcile(ctx)
+				continue
+			}
 			w.opts.Logger.Warn().Err(err).Msg("fsnotify error")
 		case <-reconcile:
-			select {
-			case w.out <- Change{Reconcile: true}:
-			case <-ctx.Done():
-			}
+			w.reconcile(ctx)
 		}
+	}
+}
+
+// reconcile asks the consumer for a full comparison with the disk.
+func (w *Watcher) reconcile(ctx context.Context) {
+	select {
+	case w.out <- Change{Reconcile: true}:
+	case <-ctx.Done():
 	}
 }
 
@@ -272,15 +287,19 @@ func (w *Watcher) Notify(paths []string) {
 	}
 }
 
+// queue adds paths to the pending batch. Every event postpones the delivery
+// by Debounce, but never past MaxWait after the oldest pending path.
 func (w *Watcher) queue(paths []string) {
 	w.mu.Lock()
 	for _, p := range paths {
 		w.pending[p] = struct{}{}
 	}
 	if w.timer == nil {
+		w.first = time.Now()
 		w.timer = time.AfterFunc(w.opts.Debounce, w.flush)
 	} else {
-		w.timer.Reset(w.opts.Debounce)
+		left := max(w.opts.MaxWait-time.Since(w.first), 0)
+		w.timer.Reset(min(w.opts.Debounce, left))
 	}
 	w.mu.Unlock()
 }
@@ -320,10 +339,18 @@ func (w *Watcher) flush() {
 	select {
 	case w.out <- Change{Paths: paths}:
 	case <-w.done:
-	case <-time.After(5 * time.Second):
-		w.opts.Logger.Warn().Int("paths", len(paths)).Msg("watcher consumer too slow; batch dropped")
+	case <-time.After(consumerTimeout):
+		// Dropping the batch would lose these changes until the next
+		// reconciliation: they go back to the pending set and are delivered
+		// with the next batch.
+		w.opts.Logger.Warn().Int("paths", len(paths)).Msg("watcher consumer too slow; batch postponed")
+		w.queue(paths)
 	}
 }
+
+// consumerTimeout is how long flush waits for the consumer to take a batch
+// before putting it back (a variable for the tests).
+var consumerTimeout = 5 * time.Second
 
 // IsNotExist helps consumers classify a re-stat after a change.
 func IsNotExist(err error) bool { return errors.Is(err, fs.ErrNotExist) }

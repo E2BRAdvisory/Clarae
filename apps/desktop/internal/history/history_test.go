@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -130,6 +131,52 @@ func TestSkipsBinaryLargeAndExcluded(t *testing.T) {
 		if _, _, err := h.Take(p, ReasonPeriodic); !errors.Is(err, ErrSkipped) {
 			t.Fatalf("%s: %v", p, err)
 		}
+	}
+}
+
+// allocated returns the bytes allocated while fn runs.
+func allocated(fn func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	fn()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// An oversize file is skipped from its size, and a binary one from its first bytes: neither
+// is loaded in memory (a video copied in the vault, an attachment a sync replaces).
+func TestSkipsWithoutReadingOversizeOrBinary(t *testing.T) {
+	h, fsys, _ := newHist(t)
+	huge := filepath.Join(fsys.Root(), "video.md")
+	f, err := os.Create(huge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(PreSyncMaxBytes + 64<<20); err != nil { // sparse: costs no disk
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	bin := strings.Repeat("\x00", 4<<20) // under the 5 MB cap, binary from the first byte
+	write(t, fsys, "blob.md", bin)
+	n := allocated(func() {
+		for _, r := range []Reason{ReasonPeriodic, ReasonPreSyncOverride} {
+			if _, _, err := h.Take("video.md", r); !errors.Is(err, ErrSkipped) {
+				t.Errorf("oversize, %s: %v", r, err)
+			}
+		}
+		if _, _, err := h.Take("blob.md", ReasonPeriodic); !errors.Is(err, ErrSkipped) {
+			t.Errorf("binary: %v", err)
+		}
+	})
+	if n > 1<<20 {
+		t.Fatalf("skipping allocated %d bytes", n)
+	}
+	// The same file, now text, is read whole.
+	write(t, fsys, "blob.md", strings.Repeat("y", 4<<20))
+	s, created, err := h.Take("blob.md", ReasonPeriodic)
+	if err != nil || !created || s.Size != 4<<20 {
+		t.Fatalf("text: %+v %v %v", s, created, err)
 	}
 }
 
