@@ -34,6 +34,29 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Tipi delle proprietà:** due modifiche contemporanee a `types.json` non si sovrascrivono più.
 - **Core WebAssembly:** i timeout delle chiamate all'host del browser vengono rispettati.
 
+### Workbench (desktop e web)
+
+- **Annulla dopo un ricaricamento:** una nota ricaricata dal disco o dalla sync non si annulla più con Annulla, che prima poteva cancellare la modifica appena arrivata. Le lavagne azzerano la cronologia quando arriva una versione nuova.
+- **Lavagne e incolla:** le azioni che finiscono dopo un dialogo non sovrascrivono più le modifiche remote. Gli allegati incollati finiscono nel punto giusto e un errore viene mostrato.
+- **Viste che falliscono:** un errore in una vista, o un pezzo dell'app che non si scarica, mostra un messaggio con «Riprova» invece di una pagina bianca. Le altre viste restano utilizzabili.
+- **Grafo:** si aggiorna senza rifare il layout da capo e senza perdere zoom e posizione. I salvataggi automatici che non cambiano i collegamenti non lo ricalcolano.
+- **Basi e Live Preview:** le basi aggiornano i risultati con un piccolo ritardo e senza accodare esecuzioni. La Live Preview analizza solo la parte del documento cambiata, ed è molto più veloce sulle note lunghe.
+- **Stato della sync:** un avviso quando il vault cloud è stato eliminato altrove; il numero di file illeggibili in quarantena; il confronto dei conflitti si ricarica se il file è cambiato. I codici d'errore sono tradotti, compreso `insecure-url`.
+- **Impostazioni, segnalibri e libreria di Excalidraw:** le modifiche in attesa vengono scritte alla chiusura e al cambio di vault, non si perdono.
+- **Avvio più leggero:** la vista grafo e la procedura di import si caricano al primo uso.
+
+### Web UI
+
+- **Export lunghi:** il token viene rinnovato durante l'export e non scade più dopo 5 minuti. Un errore di rete al rinnovo non chiude la sessione.
+- **Export dei vault privati:** si salta solo un file che il server non ha più; per gli altri errori l'export si ferma senza salvare uno ZIP incompleto. La memoria usata è limitata.
+- **Export dei vault condivisi:** l'archivio preparato dal server si salva su disco in streaming con _Salva ZIP…_, senza caricarlo tutto in memoria.
+- **Copie nel browser per account:** le copie dei vault, i marcatori e il dispositivo sono separati per account. Un altro utente dello stesso browser non vede né cancella le copie altrui. Le copie delle versioni fino alla 1.3 vengono adottate solo se appartengono con certezza all'account, altrimenti si possono eliminare dalla pagina Account.
+- **Eliminazione dell'account:** cancella anche le copie in chiaro nel browser e la registrazione del dispositivo.
+- **Chiavi dei vault privati:** vengono azzerate in memoria e scadono dopo il tempo di blocco (`security.vault_lock_minutes`).
+- **Console:** l'area di amministrazione segue il ruolo restituito da `/me`. Le cache di vault, condivisioni e flag sono uniche.
+- **Profili di configurazione:** due amministratori che salvano insieme non si sovrascrivono più. Il secondo riceve un conflitto e può ricaricare la versione corrente (`expected_version`).
+- **Avvio del workbench web:** l'avvio del core ha limiti di tempo e offre «Riprova». Un indirizzo malformato mostra «non trovato».
+
 ### Cloud
 
 - **Pulizia dei blob:** l'oggetto in S3 viene cancellato solo dopo che la cancellazione della riga è confermata, e un upload deduplicato non può più essere raccolto subito dopo il collegamento. Un blob che non si riesce a cancellare viene saltato e contato nella metrica `memobrain_jobs_item_failures_total`, senza bloccare gli altri.
