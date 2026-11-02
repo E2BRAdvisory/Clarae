@@ -1,4 +1,5 @@
-// Figures of the status bar (words, characters, selection, line and column). Counting the words of a
+// Figures of the editor (words, characters, selection, line and column) for the Statistics panel
+// and the status bar (ADR-0035). Counting the words of a
 // long note on every keystroke and cursor move made typing lag, so the counts are kept between
 // updates: the cursor position is reported at once, the word count of the document is recomputed
 // only after typing pauses, and a selection is counted at once only while it is short.
@@ -25,6 +26,20 @@ export function countDocWords(doc: Text): number {
   let n = 0;
   for (const it = doc.iterLines(); !it.next().done;) n += countWords(it.value);
   return n;
+}
+
+/** All the figures of a state at once: for a tab just opened or a pane just focused. */
+export function statsOf(state: EditorState): EditorStats {
+  const sel = state.selection.main;
+  const line = state.doc.lineAt(sel.head);
+  return {
+    words: countDocWords(state.doc),
+    chars: state.doc.length,
+    selWords: sel.empty ? 0 : countWords(state.sliceDoc(sel.from, sel.to)),
+    selChars: sel.to - sel.from,
+    line: line.number,
+    col: sel.head - line.from + 1,
+  };
 }
 
 export interface StatsTracker {

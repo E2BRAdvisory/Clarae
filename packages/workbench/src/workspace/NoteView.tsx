@@ -6,6 +6,8 @@ import { followLink } from '../app/actions';
 import { onVaultChanges, staleTargets, type VaultChangeBatch } from '../app/fileChanges';
 import { Editor, type LinkResolver } from '../editor/Editor';
 import { EditorToolbar } from '../editor/EditorToolbar';
+import { getEditor } from '../editor/registry';
+import { statsOf } from '../editor/stats';
 import type { LinkSpec, LivePreviewContext } from '../editor/context';
 import { useNoteDocument } from '../editor/useNoteDocument';
 import { renderEmbedInto } from '../embeds/hydrate';
@@ -259,6 +261,13 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
     publish();
   }, [isActive, doc.status, vaultId, path, text]);
   useEffect(() => () => useActiveNote.getState().retire(path), [path]);
+  // The editor reports its figures when the text or the selection changes: a tab just opened, a
+  // pane just focused or a switch out of reading view reports them at once instead.
+  useEffect(() => {
+    if (!isActive || doc.status !== 'ready' || tab.mode === 'reading') return;
+    const view = getEditor(pane.id);
+    if (view) setStats(statsOf(view.state));
+  }, [isActive, doc.status, tab.mode, pane.id, setStats]);
 
   const revealHere =
     reveal && reveal.paneId === pane.id && reveal.path === path ? reveal : undefined;
