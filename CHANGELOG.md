@@ -12,6 +12,7 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 
 - **Migrazioni 0010–0014** (indici, `purged_subjects`, chiavi di idempotenza e `export_jobs.source_seq`, `uploads.finalizing_until`, rimozione delle autoconcessioni dei creatori di condivisioni). Si applicano all'avvio come sempre. Durante le migrazioni il pod API risponde già: `healthz` 200 e `readyz` 503.
 - **Cursore della sync con identità (ADR-0046):** `GET /vaults/{id}/changes` accetta `since_id` e restituisce `next_id`; `GET /vaults/{id}/tree` restituisce `as_of_id`. I client precedenti, che non inviano `since_id`, funzionano come prima. Per riconoscere i numeri di sequenza riusati dopo un ripristino servono il desktop e il workbench di questa versione.
+- **Server senza TLS:** il desktop non accetta più un server o un issuer `http://` che non sia locale (`localhost`, `127.0.0.0/8`, `::1`). Il token e i contenuti dei vault condivisi viaggerebbero in chiaro. All'accesso compare l'errore `insecure-url`, e una sessione salvata con un indirizzo così non viene ripresa.
 
 ### Client desktop e sync
 
@@ -20,6 +21,18 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **File grandi su reti lente:** download e upload dei blob non hanno più il limite di tempo totale delle chiamate di controllo. Si interrompono solo se non arrivano byte per 60 secondi o se la risposta non inizia entro 2 minuti.
 - **Prima sincronizzazione di vault grandi:** il push legge e cifra i file un batch alla volta invece di tenerli tutti in memoria.
 - **Basi (`.base`) ricevute da altri:** limiti di profondità (128 livelli), di lunghezza delle espressioni (16 KiB) e del file (1 MiB); budget di memoria (1 MiB per valore, 256 MiB per esecuzione) e di calcolo (10 secondi) per ogni esecuzione. Un'espressione che li supera dà un errore nella cella invece di chiudere l'app. `title()` non spezza più le iniziali accentate.
+- **Stati della sync:** un file cancellato e ripristinato tra due scansioni non perde le modifiche non inviate né uno spostamento in sospeso. Un file spostato qui e cancellato sul server viene ricreato invece di restare bloccato. La migrazione dei path cifrati fatta da un altro dispositivo non annulla una rinomina locale. Prima di cestinare un file cancellato sul server si controlla che non sia stato modificato nel frattempo.
+- **Conflitti:** «Mantieni la mia» e l'unione sovrascrivono il file solo se contiene ancora il testo mostrato nel confronto. La versione sostituita finisce in _File recovery_.
+- **Quarantena:** i file illeggibili vengono ritentati a ogni ciclo e ne escono quando arriva una revisione leggibile. Lo stato della sync ne riporta il numero.
+- **Rinomina durante la sync:** rinominare una nota o una cartella non aspetta più la fine del ciclo di sincronizzazione in corso.
+- **Condivisioni montate:** un errore su un singolo file non segna più la condivisione come revocata, e un cambio di account non revoca i mount dell'altro account. Un vault eliminato dalla console o da un altro dispositivo viene scollegato come se lo si eliminasse dall'app, e i file locali restano.
+- **Errori di rete:** le risposte d'errore di un proxy (413, 429, 5xx) non bloccano più tutto il push e non mostrano HTML nella UI. Un 401 rinnova il token una volta. Se la sessione viene rifiutata di continuo, lo stream delle notifiche si ferma invece di riconnettersi ogni secondo. Le risposte hanno limiti di dimensione.
+- **File grandi:** la history, il parser e l'indice non leggono più per intero i file enormi. Le note oltre 8 MiB vengono indicizzate solo per nome e percorso.
+- **Modifiche esterne:** le modifiche trovate dalla riconciliazione arrivano all'interfaccia e alla history. Un overflow del watcher avvia una riconciliazione, e un'attività continua non rinvia più all'infinito gli aggiornamenti.
+- **Cartelle che iniziano con `..`:** una cartella come `..Archivio` non viene più rifiutata come esterna al vault.
+- **Import:** gli allegati vengono copiati senza caricarli in memoria e i nomi con segmenti `.` vengono normalizzati. L'import di `.excalidraw.md` ha limiti di memoria a ogni passo.
+- **Tipi delle proprietà:** due modifiche contemporanee a `types.json` non si sovrascrivono più.
+- **Core WebAssembly:** i timeout delle chiamate all'host del browser vengono rispettati.
 
 ### Cloud
 
