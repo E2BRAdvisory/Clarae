@@ -79,7 +79,15 @@
     "indexing": "Indexing {{done}}/{{total}}",
     "indexed": "Index up to date",
     "position": "Ln {{line}}, Col {{col}}",
-    "selection": "{{words}} words, {{chars}} chars selected"
+    "selection": "{{words}} words, {{chars}} chars selected",
+    "label": "Status bar",
+    "counts": "{{words}} words, {{chars}} chars",
+    "mode": "Mode: {{mode}}. Click to switch",
+    "kindDrawing": "Drawing",
+    "kindCanvas": "Canvas",
+    "kindBase": "Base",
+    "kindGraph": "Graph",
+    "kindFile": "File"
   },
   "settings": {
     "title": "Settings",
@@ -122,6 +130,7 @@
     "interfaceFont": "Interface font",
     "interfaceFontSize": "Interface font size",
     "zoom": "Zoom",
+    "statusBar": "Status bar",
     "section_sync": "Sync",
     "section_sharing": "Sharing",
     "managedByAdmin": "Managed by your administrator",
@@ -470,6 +479,7 @@
     "folder_new": "New folder",
     "separator_insert": "Insert separator",
     "theme_toggle": "Switch light/dark theme",
+    "app_toggle_status_bar": "Toggle status bar",
     "import_open": "Import…",
     "update_check": "Check for updates",
     "drawing_mindmap_from_text": "Drawing: build a mind map from the selected outline text",

@@ -73,6 +73,8 @@ export interface AppearanceSettings {
   fontFamily: string;
   zoom: number;
   interfaceFontSize: number;
+  /** Compact bar under the editor area with the figures of the active editor (ADR-0035). */
+  statusBar: boolean;
 }
 
 export const defaultAppearance: AppearanceSettings = {
@@ -80,6 +82,7 @@ export const defaultAppearance: AppearanceSettings = {
   fontFamily: '',
   zoom: 100,
   interfaceFontSize: 14,
+  statusBar: false,
 };
 
 /** Hotkey overrides: command id -> combos ([] = unbound). */
@@ -167,6 +170,7 @@ export function resolveSettings(user: UserSettings, managed: Managed) {
   for (const field of lockedFields(managed.locked, 'appearance', {
     accent: 'accent',
     zoom: 'zoom',
+    statusBar: 'statusBar',
   })) {
     if (field in ma) appearance[field] = (ma as Record<string, unknown>)[field];
   }

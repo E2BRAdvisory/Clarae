@@ -351,6 +351,14 @@ export function SettingsPanel() {
               />
               <span className="muted">{appearance.zoom}%</span>
             </Row>
+            <Row label={t('settings.statusBar')} cfg="appearance.statusBar" htmlFor="statusBar">
+              <input
+                id="statusBar"
+                type="checkbox"
+                checked={appearance.statusBar}
+                onChange={(e) => setAppearance({ statusBar: e.target.checked })}
+              />
+            </Row>
           </>
         );
       case 'hotkeys':

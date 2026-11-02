@@ -739,7 +739,36 @@ button.icon[aria-pressed='true'] {
   text-transform: uppercase;
 }
 
-/* ---- status bar ---- */
+/* ---- status bar: optional, figures of the active editor (ADR-0035) ---- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  height: 22px;
+  flex: none;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.status-bar .status-mode {
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+  cursor: pointer;
+}
+.status-bar .status-mode:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
 
 /* ---- dialogs, palette, menus, settings ---- */
 .modal-backdrop.top {

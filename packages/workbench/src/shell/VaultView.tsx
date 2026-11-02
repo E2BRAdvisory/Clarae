@@ -6,6 +6,7 @@ import { ChatBar } from './ChatBar';
 import { LeftSidebar } from './LeftSidebar';
 import { Ribbon } from './Ribbon';
 import { RightSidebar } from './RightSidebar';
+import { StatusBar } from './StatusBar';
 import { useVaultSession } from './useVaultSession';
 
 export function VaultView({ vaultId }: { vaultId: string }) {
@@ -26,6 +27,7 @@ export function VaultView({ vaultId }: { vaultId: string }) {
       {left.open ? <LeftSidebar vaultId={vaultId} /> : <div />}
       <main className="main">
         <WorkspaceView vaultId={vaultId} />
+        <StatusBar vaultId={vaultId} />
         <ChatBar />
       </main>
       {right.open ? <RightSidebar vaultId={vaultId} /> : <div />}

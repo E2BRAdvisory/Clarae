@@ -53,6 +53,14 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Su un vault condiviso in sola lettura: si può presentare, le opzioni sono disabilitate.
 - [ ] Un vault Obsidian con plugin di slide: le note con `---` si aprono normalmente in Obsidian e le chiavi `slide-*` e `Note:` non rompono nulla.
 
+## Barra di stato (ADR-0035)
+
+- [ ] Per default non c'è: nessuna riga sotto l'editor. _Impostazioni → Aspetto → Barra di stato_ e il comando _Mostra/nascondi barra di stato_ la accendono e la spengono; la scelta resta in `.memobrain/appearance.json` alla riapertura del vault.
+- [ ] Su una nota: parole e caratteri come nella scheda _Statistiche_ (senza il frontmatter), con una selezione i conteggi della selezione al loro posto; riga:colonna segue il cursore ed è giusta appena si apre una scheda o si passa a un altro pannello; in vista Lettura niente riga:colonna.
+- [ ] Il clic sulla modalità passa Live → Sorgente → Lettura → Live; su disegno, lavagna, base e grafo compare solo il tipo; senza schede la barra è vuota.
+- [ ] Altezza dell'area editor corretta con barra e slot della chat accesi insieme (la barra sta sopra la chat); la barra non attraversa le barre laterali; sparisce durante una presentazione _Slide_ e del disegno.
+- [ ] Con `appearance.statusBar` bloccato in un profilo di configurazione il controllo è disabilitato con «gestito dall'amministratore» e il comando non la cambia.
+
 ## Chat (slot)
 
 - [ ] Per default non si vede nulla sotto l'editor. Con `features.chat=true` in un profilo di configurazione compare un campo disabilitato con la spiegazione «non ancora disponibile»; con `false` sparisce.

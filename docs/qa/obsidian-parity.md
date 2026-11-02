@@ -39,7 +39,7 @@ Segnare `[x]` con data e sistema operativo.
 
 - [ ] Properties tipizzate (testo, lista, numero, casella, data, data/ora): modifica riscrive il frontmatter preservando ordine e commenti.
 - [ ] Vista Tags gerarchica con conteggi; clic filtra la ricerca. Outline segue i titoli e porta alla riga.
-- [ ] Barra di stato: righe/colonna, parole, caratteri, selezione.
+- [ ] Barra di stato (facoltativa, spenta per default, ADR-0035): parole, caratteri, selezione, riga:colonna, modalità; spenta, gli stessi conteggi sono nella scheda _Statistiche_.
 
 ## Workspace e impostazioni
 

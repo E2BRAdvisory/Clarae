@@ -129,6 +129,10 @@
           "type": "number",
           "minimum": 0.5,
           "maximum": 3
+        },
+        "statusBar": {
+          "type": "boolean",
+          "description": "Compact status bar under the editor area with words, characters, selection, line:column and mode of the active editor (ADR-0035). Off when not set."
         }
       }
     },

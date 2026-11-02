@@ -27,11 +27,11 @@ describe('managed configuration', () => {
   it('maps the configuration to app settings', () => {
     const cfg = {
       editor: { fontSize: 18, lineWrap: false, linkFormat: 'path', unknown: 1 },
-      appearance: { accent: '#112233', zoom: 1.25, theme: 'dark' },
+      appearance: { accent: '#112233', zoom: 1.25, theme: 'dark', statusBar: true },
       hotkeys: { 'palette:open': 'Mod-j', bad: 5 },
     };
     expect(managedEditor(cfg)).toEqual({ fontSize: 18, wrap: false, linkFormat: 'path' });
-    expect(managedAppearance(cfg)).toEqual({ accent: '#112233', zoom: 125 });
+    expect(managedAppearance(cfg)).toEqual({ accent: '#112233', zoom: 125, statusBar: true });
     expect(managedTheme(cfg)).toBe('dark');
     expect(managedHotkeys(cfg)).toEqual({ 'palette:open': ['Mod-j'] });
     expect(managedTheme({})).toBeUndefined();
@@ -78,20 +78,21 @@ describe('settings resolution', () => {
     const m = managed(
       {
         editor: { fontSize: 18, lineWrap: false },
-        appearance: { zoom: 1.5 },
+        appearance: { zoom: 1.5, statusBar: true },
         hotkeys: { 'palette:open': 'Mod-j' },
       },
-      ['editor.fontSize', 'appearance.zoom', 'hotkeys.palette:open'],
+      ['editor.fontSize', 'appearance.zoom', 'appearance.statusBar', 'hotkeys.palette:open'],
     );
     const chosen = {
       editor: { fontSize: 12, wrap: true },
-      appearance: { zoom: 80 },
+      appearance: { zoom: 80, statusBar: false },
       hotkeys: { 'palette:open': ['Mod-k'] },
     };
     const r = resolveSettings(chosen, m);
     expect(r.editor.fontSize).toBe(18); // locked
     expect(r.editor.wrap).toBe(true); // managed but not locked: the user's choice stands
     expect(r.appearance.zoom).toBe(150);
+    expect(r.appearance.statusBar).toBe(true); // locked on: the status bar stays
     expect(r.hotkeys['palette:open']).toEqual(['Mod-j']);
   });
 });

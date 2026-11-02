@@ -70,6 +70,10 @@ for (const theme of ['light', 'dark'] as const) {
       await page.keyboard.press('ControlOrMeta+n');
       await expect(page.getByLabel('Note editor')).toBeVisible();
       await scan(page, 'shell');
+      // The optional status bar (ADR-0035) stays on for the scans of the sidebar panels.
+      await command(page, 'toggle status bar');
+      await expect(page.getByRole('status', { name: 'Status bar' })).toBeVisible();
+      await scan(page, 'status bar');
       await page.keyboard.press('ControlOrMeta+Shift+r');
       for (const tab of [
         'Files',

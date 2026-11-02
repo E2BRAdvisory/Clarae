@@ -128,7 +128,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, console-only 7. Wor
 | `usage` Spazio occupato e quota | yes | yes | yes | desktop (nota): UsagePanel di @memobrain/cloud-features, con il livello calcolato dal server e lo spazio di ogni vault (§2.8.2) | D: `CoreCloudPort.test.tsx`, `account-panels.spec.ts` · W: `rest.test.tsx`, `Usage.test.tsx`, `app.spec.ts`, `devices.spec.ts` · C: `quota_test.go` |
 | `config.flags` Configurazione distribuita e feature flag | yes | yes | yes | console (nota): la console applica `web_workbench` e `sharing` (gli altri flag riguardano il contenuto di un vault aperto, quindi il workbench); nomi e default dei flag vengono dallo schema del Config Profile, generati in `shared/go/features` e `@memobrain/api-client/features` (`task gen`) | D: `managed.test.ts`, `managed_test.go`, `config_test.go`, `features_test.go`, `sharing.spec.ts`, `features_test.go`, `doc_test.go` · W: `Vaults.test.tsx`, `Shares.test.tsx`, `rest.test.tsx`, `mixed.spec.ts` · C: `schema_test.go`, `config_test.go` |
 | `settings` Impostazioni dell'applicazione | yes | yes | n/a |  | D: `locations.test.ts`, `bindings_test.go` |
-| `appearance` Tema e aspetto | yes | yes | n/a |  | D: `App.test.tsx` |
+| `appearance` Tema e aspetto | yes | yes | n/a |  | D: `App.test.tsx`, `StatusBar.test.tsx`, `status-bar.spec.ts` |
 | `hotkeys` Scorciatoie da tastiera personalizzabili | yes | yes | n/a |  | D: `hotkeys.test.ts`, `registry.test.ts` |
 | `command-palette` Palette dei comandi | yes | yes | n/a |  | D: `registry.test.ts`, `keyboard.spec.ts`, `workflows.spec.ts` |
 | `app.updater` Aggiornamento automatico dell'applicazione | yes | exception | n/a | workbench: la Web UI la serve il cloud ed è sempre aggiornata (il core riporta gli aggiornamenti come disattivati) | D: `updater.test.tsx`, `parity.test.ts`, `service_test.go`, `apply_test.go` |
@@ -178,9 +178,9 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, console-only 7. Wor
 | `admin.storage` Spazio, quote e limiti | console-only | console-only | yes | desktop: amministrazione, solo nella console — workbench: amministrazione, solo nella console | W: `Storage.test.tsx`, `Limits.test.tsx`, `admin.spec.ts` · C: `quota_test.go`, `admin_test.go` |
 | `admin.audit` Registro di audit | console-only | console-only | yes | desktop: amministrazione, solo nella console — workbench: amministrazione, solo nella console | W: `Audit.test.tsx` · C: `admin_test.go` |
 
-### Comandi (181)
+### Comandi (182)
 
-179 su 181 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente.
+180 su 182 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente.
 
 | Comando | Gruppo | Sul web | Funzione | Nota |
 | --- | --- | --- | --- | --- |
@@ -227,6 +227,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, console-only 7. Wor
 | `sidebar:left` | view | yes | `workspace.layout` |  |
 | `sidebar:right` | view | yes | `workspace.layout` |  |
 | `theme:toggle` | view | yes | `appearance` |  |
+| `app:toggle-status-bar` | view | yes | `appearance` |  |
 | `separator:insert` | editor | yes | `editor.formatting` |  |
 | `sidebar:outline` | view | yes | `outline` |  |
 | `graph:open` | view | yes | `graph` |  |
@@ -593,9 +594,9 @@ Da `api/openapi.yaml`. **66 su 82** sono chiamate dalla console (`web/src`); le 
 | `getExport` | GET `/vaults/{vaultId}/exports/{exportId}` | `export.zip` | yes |
 | `downloadExport` | GET `/vaults/{vaultId}/exports/{exportId}/download` | `export.zip` | — |
 
-### Spec e2e per target (22)
+### Spec e2e per target (23)
 
-Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **15** interi, **4** in parte, **3** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
+Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **16** interi, **4** in parte, **3** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
 
 | Spec | Test | Desktop (mock) | Web (core) | Esclusioni sul web |
 | --- | --- | --- | --- | --- |
@@ -619,6 +620,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/keyboard.spec.ts` | 5 | yes | yes | — |
 | `apps/desktop/frontend/e2e/sharing.spec.ts` | 2 | yes | partial (2 of 2 skipped) | `invitations` (un test): the spec drives the invitations and the mount files of the Wails mock (window.__mock.sharing); a vault of this browser has no cloud: web/e2e-mixed covers share, accept, mount and revoke against a real cloud · `config.flags` (un test): the spec pushes a configuration through the Wails mock (config:updated); a vault of this browser has no cloud: web/e2e-mixed covers a Config Profile against a real cloud |
 | `apps/desktop/frontend/e2e/slides.spec.ts` | 3 | yes | yes | — |
+| `apps/desktop/frontend/e2e/status-bar.spec.ts` | 1 | yes | yes | — |
 | `apps/desktop/frontend/e2e/ui-perf.spec.ts` | 2 | opt-in | no | `files.explorer`: the harness seeds 10 000 notes into the Wails mock and its budgets are calibrated on it (docs/qa) |
 | `apps/desktop/frontend/e2e/workflows.spec.ts` | 4 | yes | yes | — |
 

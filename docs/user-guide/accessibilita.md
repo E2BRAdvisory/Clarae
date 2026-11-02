@@ -19,4 +19,4 @@ Lo stato dei controlli e le procedure di verifica sono in `docs/qa/a11y-desktop.
 
 ## Screen reader
 
-L'editor di testo espone un campo di testo multiriga etichettato ("Editor della nota"); lo stato di salvataggio e di sincronizzazione è annunciato senza spostare il focus. Le superfici grafiche (grafo, lavagna, disegni) **non** hanno ancora un equivalente testuale completo: per il grafo usate backlink e struttura, per le lavagne le note incorporate. Segnalateci i problemi che incontrate.
+L'editor di testo espone un campo di testo multiriga etichettato ("Editor della nota"); la barra di stato facoltativa è una regione `status` che non annuncia i conteggi a ogni tasto (sarebbe rumore): per ascoltarli aprite la scheda _Statistiche_ (_Mostra statistiche_); lo stato di salvataggio e di sincronizzazione è annunciato senza spostare il focus. Le superfici grafiche (grafo, lavagna, disegni) **non** hanno ancora un equivalente testuale completo: per il grafo usate backlink e struttura, per le lavagne le note incorporate. Segnalateci i problemi che incontrate.

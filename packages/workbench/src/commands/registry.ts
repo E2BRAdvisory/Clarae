@@ -480,6 +480,15 @@ export const commands: Command[] = [
     run: toggleTheme,
   },
   {
+    id: 'app:toggle-status-bar',
+    group: 'view',
+    defaults: [],
+    run: () => {
+      const s = useSettings.getState();
+      s.setAppearance({ statusBar: !s.appearance.statusBar });
+    },
+  },
+  {
     id: 'separator:insert',
     group: 'editor',
     defaults: [],

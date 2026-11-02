@@ -76,6 +76,7 @@ export function managedAppearance(cfg: Record<string, unknown>): Partial<Appeara
   const out: Partial<AppearanceSettings> = {};
   if (typeof src['accent'] === 'string') out.accent = src['accent'];
   if (typeof src['zoom'] === 'number') out.zoom = Math.round(src['zoom'] * 100);
+  if (typeof src['statusBar'] === 'boolean') out.statusBar = src['statusBar'];
   return out;
 }
 

@@ -31,6 +31,7 @@ Totale dopo le correzioni: **0 violazioni** (di qualunque impatto) in 20 scansio
 - **Menu contestuale:** il focus entra nel menu all'apertura, frecce/`Home`/`End`, `Esc`/`Tab` chiudono e il focus torna all'origine.
 - **Palette e selettore rapido:** pattern combobox/listbox.
 - **Stato di sincronizzazione:** regione `role=status` (`aria-live=polite`) nel blocco di stato del vault (footer della barra destra, o intestazione a barra chiusa).
+- **Barra di stato facoltativa** (ADR-0035): `role=status` **senza** `aria-live`, perché annunciare i conteggi a ogni tasto sarebbe rumore; il pulsante della modalità ha un nome accessibile («Modalità: Live. Clic per cambiare»). La scansione axe della shell la accende (scenario «status bar», `e2e/a11y.spec.ts`).
 - **Focus visibile** ovunque (`:focus-visible`), **colori forzati** (`forced-colors: active`: focus, scheda attiva e voce selezionata con i colori di sistema) e **movimento ridotto** (`prefers-reduced-motion`).
 - `<html lang>` segue la lingua scelta; stringhe prima fisse in inglese (titolo "Error", etichetta dell'editor) spostate in i18n.
 

@@ -797,12 +797,14 @@ features:
     title: Tema e aspetto
     desktop:
       status: yes
-      commands: [theme:toggle]
+      commands: [theme:toggle, app:toggle-status-bar]
     workbench:
       status: yes
     tests:
       desktop:
         - packages/workbench/src/app/App.test.tsx
+        - packages/workbench/src/shell/StatusBar.test.tsx
+        - apps/desktop/frontend/e2e/status-bar.spec.ts
 
   - id: hotkeys
     title: Scorciatoie da tastiera personalizzabili

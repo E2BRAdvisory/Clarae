@@ -79,7 +79,15 @@
     "indexing": "Indicizzazione {{done}}/{{total}}",
     "indexed": "Indice aggiornato",
     "position": "Rg {{line}}, Col {{col}}",
-    "selection": "{{words}} parole, {{chars}} caratteri selezionati"
+    "selection": "{{words}} parole, {{chars}} caratteri selezionati",
+    "label": "Barra di stato",
+    "counts": "{{words}} parole, {{chars}} caratteri",
+    "mode": "Modalità: {{mode}}. Clic per cambiare",
+    "kindDrawing": "Disegno",
+    "kindCanvas": "Lavagna",
+    "kindBase": "Base",
+    "kindGraph": "Grafo",
+    "kindFile": "File"
   },
   "settings": {
     "title": "Impostazioni",
@@ -122,6 +130,7 @@
     "interfaceFont": "Carattere dell'interfaccia",
     "interfaceFontSize": "Dimensione del carattere dell'interfaccia",
     "zoom": "Zoom",
+    "statusBar": "Barra di stato",
     "section_sync": "Sincronizzazione",
     "section_sharing": "Condivisione",
     "managedByAdmin": "Gestito dall'amministratore",
@@ -470,6 +479,7 @@
     "folder_new": "Nuova cartella",
     "separator_insert": "Inserisci separatore",
     "theme_toggle": "Passa a tema chiaro/scuro",
+    "app_toggle_status_bar": "Mostra/nascondi barra di stato",
     "import_open": "Importa…",
     "update_check": "Verifica aggiornamenti",
     "drawing_mindmap_from_text": "Disegno: crea una mappa mentale dal testo-elenco selezionato",
