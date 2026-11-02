@@ -16,6 +16,13 @@ func TestParseDSN(t *testing.T) {
 		{dsn: "file:/a/b.db", path: "/a/b.db"},
 		{dsn: "/plain/path.db", path: "/plain/path.db"},
 		{dsn: "file:?_pragma=x", wantErr: true},
+		// The escaped URI internal/store builds: '#', '?', '%', spaces and UTF-8 are percent-encoded.
+		{dsn: "file:///v/My%20%23notes%3F%25/%C3%A8/index.db?_pragma=foreign_keys%28ON%29", path: "/v/My #notes?%/è/index.db", pragmas: []string{"foreign_keys(ON)"}},
+		{dsn: "file://localhost/v/a.db", path: "/v/a.db"},
+		{dsn: "file:///C:/Users/a%20b/v.db", path: "/C:/Users/a b/v.db"},
+		{dsn: "file:rel.db?_pragma=x", path: "rel.db", pragmas: []string{"x"}},
+		{dsn: "file://host/v/a.db", wantErr: true},
+		{dsn: "file:///v/bad%zz.db", wantErr: true},
 	}
 	for _, tt := range tests {
 		path, pragmas, err := parseDSN(tt.dsn)

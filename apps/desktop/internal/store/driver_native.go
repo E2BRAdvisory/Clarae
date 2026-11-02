@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"io"
 	"os"
 
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
@@ -27,3 +28,23 @@ func removeDatabase(path string) error {
 	}
 	return nil
 }
+
+// legacyDatabase returns where store.Open before M12 put the database at path (legacyURIPath)
+// and whether an SQLite database is there, when that is not path itself.
+func legacyDatabase(path string) (string, bool) {
+	legacy := legacyURIPath(path)
+	if legacy == "" || legacy == path {
+		return legacy, false
+	}
+	f, err := os.Open(legacy)
+	if err != nil {
+		return legacy, false
+	}
+	defer func() { _ = f.Close() }()
+	header := make([]byte, len(sqliteHeader))
+	_, err = io.ReadFull(f, header)
+	return legacy, err == nil && string(header) == sqliteHeader
+}
+
+// sqliteHeader opens every SQLite database file.
+const sqliteHeader = "SQLite format 3\x00"
