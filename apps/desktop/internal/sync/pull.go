@@ -223,7 +223,11 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 	if boot, err := e.cfg.DB.Meta(ctx, MetaBootstrapped); err != nil {
 		return false, err
 	} else if boot != "1" {
-		if err := e.bootstrap(ctx); err != nil {
+		mode := bootstrapAuthoritative
+		if boot == bootstrapReconcilePending {
+			mode = bootstrapReconcileUpload // an interrupted one, resumed as such
+		}
+		if err := e.bootstrap(ctx, mode); err != nil {
 			return false, err
 		}
 		applied = true
@@ -235,7 +239,14 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 		}
 		ch, err := e.cfg.Remote.Changes(ctx, cur, 500)
 		if transport.IsCode(err, syncproto.CodeCursorExpired) {
-			if err := e.bootstrap(ctx); err != nil {
+			mode := bootstrapAuthoritative
+			if transport.ServerBehind(err) {
+				// The server went back in time (a restored backup): what it lost
+				// is republished from here, never destroyed (ADR-0046).
+				e.log.Warn().Int64("cursor", cur).Msg("sync: the server is behind this device, republishing what it lost")
+				mode = bootstrapReconcileUpload
+			}
+			if err := e.bootstrap(ctx, mode); err != nil {
 				return applied, err
 			}
 			applied = true
@@ -334,7 +345,7 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 					return false, err
 				}
 			}
-			return e.overwriteFromRemote(ctx, row, c)
+			return e.overwriteFromRemote(ctx, row, c, false)
 		}
 		e.addCandidate(c)
 		return false, nil
@@ -396,10 +407,16 @@ func (e *Engine) createFromRemote(ctx context.Context, c transport.Change, path 
 	})
 }
 
-func (e *Engine) overwriteFromRemote(ctx context.Context, row File, c transport.Change) (bool, error) {
+// overwriteFromRemote replaces a synced file with a remote revision. snapshot
+// asks to keep the local content in the history first (BeforeOverwrite): a
+// bootstrap cannot be sure the server still has it (ADR-0046).
+func (e *Engine) overwriteFromRemote(ctx context.Context, row File, c transport.Change, snapshot bool) (bool, error) {
 	data, err := e.fetch(ctx, c.FileID, c.BlobHash)
 	if err != nil {
 		return false, err
+	}
+	if snapshot && e.cfg.BeforeOverwrite != nil && hashHex(data) != row.LocalHash {
+		e.cfg.BeforeOverwrite(row.Path)
 	}
 	cont, err := e.cfg.FS.WriteFile(row.Path, data, row.LocalHash, false)
 	if errors.Is(err, vault.ErrHashMismatch) {
@@ -512,9 +529,38 @@ func (e *Engine) applyDelete(ctx context.Context, row File, has bool, c transpor
 	}
 }
 
+// bootstrapMode says how far the manifest of a bootstrap is to be trusted.
+type bootstrapMode int
+
+const (
+	// bootstrapAuthoritative: first link of an existing vault, or a cursor
+	// older than the changelog window (compaction_seq). The tree is the truth:
+	// what it does not list was deleted on the server (§3.4.4 B).
+	bootstrapAuthoritative bootstrapMode = iota
+	// bootstrapReconcileUpload: a cursor ahead of the server (last_seq), whose
+	// database was restored to an earlier point in time. What this device has
+	// at a newer revision, or the server no longer lists, is what the server
+	// lost: it is republished by the next push instead of being overwritten
+	// or trashed (ADR-0046).
+	bootstrapReconcileUpload
+)
+
+// bootstrapReconcilePending is the MetaBootstrapped value of a reconcile
+// bootstrap that has not completed yet. It is resumed in the same mode: once
+// other devices republished past this device's cursor, the server answers
+// GET /changes normally, and the rows not reconciled yet (revisions the
+// server no longer has, files it no longer lists) would never be.
+const bootstrapReconcilePending = "reconcile"
+
 // bootstrap reconciles with the full manifest: first link of an existing
-// vault, or a cursor older than the changelog window (§3.4.4 B).
-func (e *Engine) bootstrap(ctx context.Context) error {
+// vault, a cursor older than the changelog window (§3.4.4 B), or a server
+// that went back in time (mode, ADR-0046).
+func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
+	if mode == bootstrapReconcileUpload {
+		if err := e.cfg.DB.SetMeta(ctx, MetaBootstrapped, bootstrapReconcilePending); err != nil {
+			return err
+		}
+	}
 	tree, err := e.cfg.Remote.Tree(ctx)
 	if err != nil {
 		return err
@@ -534,10 +580,10 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 		path string
 	}
 	remote := make([]remoteFile, 0, len(tree.Items))
-	known := make(map[string]bool, len(tree.Items))
+	known := make(map[string]int, len(tree.Items)) // listed file id -> server revision
 	for _, it := range tree.Items {
 		// Listed by the server: never a deletion, even when unreadable.
-		known[it.FileID] = true
+		known[it.FileID] = it.Rev
 		p, err := e.clearPath(ctx, it.FileID, it.Path)
 		if err != nil {
 			if e.isLocked(err) {
@@ -552,6 +598,18 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 		remote = append(remote, remoteFile{it, p})
 	}
 	sort.Slice(remote, func(i, j int) bool { return remote[i].path < remote[j].path })
+	if mode == bootstrapReconcileUpload {
+		// Parked changes of the lost timeline name revisions the restored
+		// server does not have: their authors republish them, and a merge
+		// against them would base our next push on a revision that is gone.
+		for id, c := range e.candidates {
+			if rev, listed := known[id]; !listed || c.Rev > rev {
+				if err := e.dropCandidate(ctx, id); err != nil {
+					return err
+				}
+			}
+		}
+	}
 
 	e.progress(0, len(remote))
 	for i, rf := range remote {
@@ -561,6 +619,18 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 		e.progress(i+1, len(remote))
 		synthetic := transport.Change{FileID: rf.FileID, Op: "modify", Path: rf.Path, Rev: rf.Rev, BlobHash: rf.Hash, Size: rf.Size}
 		if row, ok := byID[rf.FileID]; ok {
+			if mode == bootstrapReconcileUpload && (row.ServerRev > rf.Rev || (row.ServerRev == rf.Rev && row.ServerHash != rf.Hash)) {
+				if err := e.republish(ctx, row, rf.Rev, rf.Hash, rf.path); err != nil {
+					return err
+				}
+				continue
+			}
+			if mode == bootstrapReconcileUpload && row.State == StateLocalMoved && row.MovedFrom == rf.path && row.ServerRev == rf.Rev && row.ServerHash == rf.Hash {
+				// A move still to send from where the server has the file (made
+				// here, or set by an earlier reconcile that was interrupted): the
+				// server has nothing newer, so the push moves it.
+				continue
+			}
 			// The revision alone is not enough: a move applied by an earlier,
 			// interrupted bootstrap already raised it without the content.
 			if row.ServerRev >= rf.Rev && row.ServerHash == rf.Hash && row.Path == rf.path {
@@ -616,11 +686,18 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 			return err
 		}
 	}
-	// Files we know that the server no longer has were deleted there.
+	// Files we know that the server no longer has were deleted there, or, on
+	// a server that went back in time, created after its restore point.
 	for _, r := range rows {
-		if r.ServerRev > 0 && !known[r.FileID] {
+		if _, listed := known[r.FileID]; r.ServerRev > 0 && !listed {
 			cur, ok, _ := e.cfg.DB.GetFileByID(ctx, r.FileID)
 			if !ok {
+				continue
+			}
+			if mode == bootstrapReconcileUpload {
+				if err := e.reupload(ctx, cur); err != nil {
+					return err
+				}
 				continue
 			}
 			if _, err := e.applyDelete(ctx, cur, true, transport.Change{FileID: r.FileID, Op: "delete", Rev: r.ServerRev + 1}); err != nil {
@@ -645,6 +722,53 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 	return nil
 }
 
+// republish settles a file that this device has at a newer revision than the
+// server restored from a backup, or at the same revision with other content
+// (ADR-0046). The server's revision becomes the base and nothing remote is
+// applied: whatever differs from it (content, path) is sent by the next push,
+// which merges as usual if another device republished first. A local deletion
+// is sent against the restored revision.
+func (e *Engine) republish(ctx context.Context, row File, rev int, hash, serverPath string) error {
+	content := row.ServerHash != hash || row.Tombstoned
+	row.ServerRev, row.BaseRev, row.ServerHash, row.Tombstoned = rev, rev, hash, false
+	row.Attempts, row.LastError = 0, ""
+	if row.State != StateLocalDeleted {
+		dirty := content || row.State == StateLocalModify || row.State == StateConflict || (row.State == StateLocalMoved && row.Dirty)
+		row.MovedFrom, row.Dirty = "", false
+		switch {
+		case row.Path != serverPath:
+			// The newer path is ours: keep it and let the push move the file.
+			row.State, row.MovedFrom, row.Dirty = StateLocalMoved, serverPath, dirty
+		case dirty:
+			row.State = StateLocalModify
+		default:
+			row.State = StateSynced // the server has this very content and path
+		}
+	}
+	// A new operation id: one the restored server may still know would be
+	// answered with its old result.
+	if err := e.cfg.DB.DeleteOutbox(ctx, row.Path); err != nil {
+		return err
+	}
+	return e.cfg.DB.PutFile(ctx, row)
+}
+
+// reupload handles a file this device had from the server that the server,
+// restored from a backup, no longer lists (ADR-0046): it was created after the
+// restore point, so it is uploaded again as a new file (same id, new
+// operation id) instead of being trashed. A file gone here too is forgotten.
+func (e *Engine) reupload(ctx context.Context, row File) error {
+	if err := e.cfg.DB.DeleteOutbox(ctx, row.Path); err != nil {
+		return err
+	}
+	if row.State == StateLocalDeleted || !e.diskExists(row.Path) {
+		return e.cfg.DB.DeleteFile(ctx, row.FileID)
+	}
+	row.ServerRev, row.BaseRev, row.ServerHash, row.State = 0, 0, "", StateLocalNew
+	row.MovedFrom, row.Dirty, row.Tombstoned, row.Attempts, row.LastError = "", false, false, 0, ""
+	return e.cfg.DB.PutFile(ctx, row)
+}
+
 // applyMoveClear and applyContentClear are the entry points used by bootstrap
 // with paths that are already in clear text.
 func (e *Engine) applyMoveClear(ctx context.Context, row File, c transport.Change, path string) (bool, error) {
@@ -656,7 +780,7 @@ func (e *Engine) applyContentClear(ctx context.Context, row File, has bool, c tr
 		return e.createFromRemote(ctx, c, path)
 	}
 	if row.State == StateSynced {
-		_, err := e.overwriteFromRemote(ctx, row, c)
+		_, err := e.overwriteFromRemote(ctx, row, c, true)
 		return err
 	}
 	e.addCandidate(c)

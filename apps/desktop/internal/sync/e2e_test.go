@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -593,6 +594,152 @@ func TestBootstrapAfterCompaction(t *testing.T) {
 	b.sync() // 410 CURSOR_EXPIRED -> bootstrap from the manifest
 	if b.read("one.md") != "1 edited\n" || b.read("two.md") != "2\n" {
 		t.Fatalf("B after bootstrap: %v", b.files())
+	}
+}
+
+// restorePoint is what a point-in-time restore of the cloud database brings a
+// vault back to: its files and its changelog position. Revisions committed
+// later are gone; blobs in object storage stay, as with a real PITR.
+type restorePoint struct {
+	vault      string
+	lastSeq    int64
+	totalBytes int64
+	fileCount  int
+	files      []restoredFile
+}
+
+type restoredFile struct {
+	id, path, pathKey, kind string
+	rev                     int
+	seq                     int64
+	blob                    *string
+	size                    int64
+	deleted                 bool
+}
+
+func takeRestorePoint(t *testing.T, vaultID string) restorePoint {
+	t.Helper()
+	ctx := context.Background()
+	pool := openDB(t)
+	rp := restorePoint{vault: vaultID}
+	if err := pool.QueryRow(ctx, `SELECT last_seq, total_bytes, file_count FROM vaults WHERE id = $1`, vaultID).Scan(&rp.lastSeq, &rp.totalBytes, &rp.fileCount); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.Query(ctx, `SELECT id::text, path, path_key, kind, current_rev, current_seq, blob_hash, size, is_deleted FROM files WHERE vault_id = $1`, vaultID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var f restoredFile
+		if err := rows.Scan(&f.id, &f.path, &f.pathKey, &f.kind, &f.rev, &f.seq, &f.blob, &f.size, &f.deleted); err != nil {
+			t.Fatal(err)
+		}
+		rp.files = append(rp.files, f)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return rp
+}
+
+func vaultLastSeq(t *testing.T, vaultID string) int64 {
+	t.Helper()
+	var n int64
+	if err := openDB(t).QueryRow(context.Background(), `SELECT last_seq FROM vaults WHERE id = $1`, vaultID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// restore brings the vault back to the restore point in one transaction.
+func (rp restorePoint) restore(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := openDB(t).Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	ids := make([]string, 0, len(rp.files))
+	for _, f := range rp.files {
+		ids = append(ids, f.id)
+	}
+	type stmt struct {
+		sql  string
+		args []any
+	}
+	stmts := []stmt{
+		{`DELETE FROM file_revisions WHERE vault_id = $1 AND seq > $2`, []any{rp.vault, rp.lastSeq}},
+		{`DELETE FROM files WHERE vault_id = $1 AND id::text <> ALL($2::text[])`, []any{rp.vault, ids}},
+		{`UPDATE vaults SET last_seq = $2, total_bytes = $3, file_count = $4 WHERE id = $1`, []any{rp.vault, rp.lastSeq, rp.totalBytes, rp.fileCount}},
+	}
+	for _, f := range rp.files {
+		stmts = append(stmts, stmt{`UPDATE files SET path = $2, path_key = $3, kind = $4, current_rev = $5, current_seq = $6, blob_hash = $7, size = $8, is_deleted = $9 WHERE id = $1`,
+			[]any{f.id, f.path, f.pathKey, f.kind, f.rev, f.seq, f.blob, f.size, f.deleted}})
+	}
+	for _, st := range stmts {
+		if _, err := tx.Exec(ctx, st.sql, st.args...); err != nil {
+			t.Fatalf("restore: %s: %v", st.sql, err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The cloud database goes back to a point in time before the last changes
+// (a restored backup): the devices, now ahead of it, republish what it lost
+// instead of taking its older content or trashing the files it no longer
+// lists (ADR-0046), and the server ends up with the newest content again.
+func TestBootstrapAfterServerRestore(t *testing.T) {
+	v := createVault(t, "ada", "restore")
+	a := newDevice(t, "ada", "laptop", v, nil)
+	b := newDevice(t, "ada", "desktop", v, nil)
+	a.write("one.md", "1\n")
+	a.write("keep.md", "untouched\n")
+	a.sync()
+	b.sync()
+	rp := takeRestorePoint(t, v)
+
+	// After the backup: an edit and a new file, which both devices receive,
+	// then a file of B's that A has not pulled yet (B's cursor is the furthest).
+	a.write("one.md", "1 edited after the backup\n")
+	a.write("notes/two.md", "2 created after the backup\n")
+	a.sync()
+	b.sync()
+	b.write("three.md", "3 created on B after the backup\n")
+	b.sync()
+	want := map[string]string{"one.md": "1 edited after the backup\n", "keep.md": "untouched\n", "notes/two.md": "2 created after the backup\n"}
+	if got := a.files(); !maps.Equal(got, want) {
+		t.Fatalf("A before the restore: %v", got)
+	}
+	want["three.md"] = "3 created on B after the backup\n"
+	if got := b.files(); !maps.Equal(got, want) {
+		t.Fatalf("B before the restore: %v", got)
+	}
+
+	rp.restore(t)
+	a.sync() // 410 CURSOR_EXPIRED with last_seq -> bootstrap, republish one.md and notes/two.md
+	if lastSeq := vaultLastSeq(t, v); cursorOf(t, b) <= lastSeq {
+		t.Fatalf("B's cursor %d is not ahead of the server (%d): it would not see the restore", cursorOf(t, b), lastSeq)
+	}
+	b.sync() // the same: finds A's republished files identical, uploads three.md again
+	a.sync() // and A receives it
+	for _, d := range []*device{a, b} {
+		if got := d.files(); !maps.Equal(got, want) {
+			t.Errorf("%s after the restore: %v", d.name, got)
+		}
+		if len(d.overwritten) != 0 || len(d.conflicts) != 0 {
+			t.Errorf("%s: overwritten %q, conflicts %+v", d.name, d.overwritten, d.conflicts)
+		}
+	}
+
+	// A device linked now gets the newest content from the server alone.
+	c := newDevice(t, "ada", "tablet", v, nil)
+	c.sync()
+	if got := c.files(); !maps.Equal(got, want) {
+		t.Fatalf("new device after the restore: %v", got)
 	}
 }
 
