@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Versione documento** | 1.2 — Decisioni D-01…D-08 e ADR 0036–0044 recepiti (vedi Appendice C) |
+| **Versione documento** | 1.3 — Decisioni D-01…D-08 e ADR 0029, 0030, 0032, 0036–0044 recepiti (vedi Appendice C) |
 | **Data** | 2 novembre 2026 |
 | **Nome del prodotto** | *MemoBrain Notes* (identificatori `memobrain`; già "Nodus" come nome in codice) |
 | **Stack** | Wails (Go + React/TypeScript) · Cloud Service in Go · Keycloak · PostgreSQL · Object Storage S3-compatibile |
@@ -14,6 +14,7 @@
 
 | Versione | Data | Modifiche |
 |---|---|---|
+| 1.3 | 2 novembre 2026 | Recepiti gli ADR accettati dall'owner il 2 novembre 2026 (Appendice C.4): **ADR-0029** workbench del vault nella Web UI (stessa UI del client desktop, `@memobrain/workbench`, su `/vaults/:id/open`; il browser è un dispositivo di sync come gli altri, online-first con copia in OPFS; politica dei vault privati nel browser; CSP e SRI della pagina del workbench; flag `features.web_workbench`); **ADR-0030** core Go del client desktop compilato in WebAssembly (`apps/desktop/cmd/memobrain-core`, dispatcher `internal/rpc`, interfaccia `Host`, sqlite-wasm con `opfs-sahpool`, shim `fs` su OPFS, solo SSE, budget di dimensione, `task test-wasm` in `task ci`); **ADR-0032** Task (`Taskfile.yml`, pinnato in `tools/go.mod`) come unico task runner al posto di make. A-03 non dice più che la Web UI non è un editor. **Feature flag:** l'owner ha acceso per default `features.envelope_v2` e `features.path_v2`, cioè il rilascio N+1 di ADR-0034 (envelope della VMK v2 con AAD) e di ADR-0042 (token di path `enc2`): i client scrivono envelope v2 (convertendo i v1 allo sblocco) e token `enc2`, migrano in background i token `enc1` rimasti e poi rifiutano `enc1` per quel vault (pin forte); i client desktop fino alla 1.2.4 non sbloccano vault con envelope v2 né leggono path `enc2` (§3.8.7). ADR-0034 resta in stato *proposta*: il comportamento dei suoi rilasci N e N+1 è registrato qui (§3.8.2, §3.8.7) come implementato, perché l'owner ha acceso il flag. Sezioni modificate: §0.1, §0.3 (A-03), §1.1, §1.2, §1.7 (nuova), §2.1, §2.1.1, §2.5, §2.6.1, §2.6.6, §2.8 (con §2.8.3 nuova), §3.5.1, §3.6, §3.7, §3.8.1, §3.8.2, §3.8.6, §3.8.7, §4.1–§4.5, App. A, C.2, C.3, C.4. |
 | 1.2 | 2 novembre 2026 | Recepiti gli ADR accettati dall'owner (decisioni e sezioni in Appendice C.4): **ADR-0036** verifiche locali con `task ci` al posto di un servizio di CI; **ADR-0037** registro delle funzioni, `@memobrain/cloud-features` con `CloudPort`, client Go generato, ciclo di vita dei vault su tutte le superfici, feature flag generati dallo schema del Config Profile; **ADR-0038** retention delle revisioni, copie di conflitto e finestra effettiva del changelog; **ADR-0039** candidati al merge persistenti e quarantena in `sync.db`; **ADR-0040** `move_prefix` come rename delle cartelle condivise (anche solo maiuscole/minuscole) e regole sulle radici condivise; **ADR-0041** ruolo autorevole dopo un cambio dalla console, conflitti di identità, ultimo amministratore, eliminazione unificata degli account con riattribuzione dei grant, rubrica, `config_version`, `POST /shares` da parte di un manager, ruolo `manager` dei gruppi riservato, hub delle notifiche; **ADR-0042** token di path `enc2` legati al file; **ADR-0043** primitive UI condivise in `@memobrain/ui`; **ADR-0044** watcher con FSEvents su macOS e modalità degradata. Sezioni modificate: §1.3, §1.4, §2.3.3, §2.4, §2.5, §2.6.1–§2.6.6, §2.7.3, §2.8.1, §2.8.2, §3.1, §3.2.2, §3.3.2, §3.4.3–§3.4.5, §3.4.7, §3.5.1–§3.5.5, §3.6, §3.7, §3.8.3, §3.8.5, §3.8.7, §4.1–§4.5, App. A, C.2, C.4 (nuova). Restano in stato *proposta* e **non** sono recepiti gli ADR 0009–0024 e 0026–0035: la raccolta `docs/spec-v1.2-proposta.md`, che li riguarda, resta da decidere e confluirà in una versione successiva. |
 | 1.1 | 23 ottobre 2026 | Decisioni D-01…D-08 recepite (Appendice C.1). |
 
@@ -40,7 +41,7 @@ Il documento definisce l'architettura e le specifiche di *MemoBrain Notes*, un'a
 
 1. **Client desktop** (Windows, macOS, Linux) realizzato con Wails: backend nativo in Go, frontend React/TypeScript. Funziona interamente offline su vault locali (cartelle di file Markdown).
 2. **Cloud Service** in Go: sincronizzazione multi-dispositivo dei vault, condivisione, gruppi, quote, distribuzione centralizzata delle configurazioni.
-3. **Web UI del Cloud Service**: console amministrativa e area utente (quota, download ZIP).
+3. **Web UI del Cloud Service**: console amministrativa, area utente (quota, dispositivi, condivisioni, download ZIP) e **workbench del vault** (modifica nel browser con le stesse funzioni e la stessa interfaccia del client desktop, §2.8.3, ADR-0029).
 4. **Keycloak** come Identity Provider (OIDC/OAuth2, JWT).
 
 ### 0.2 Vincoli non negoziabili
@@ -62,7 +63,7 @@ Il documento definisce l'architettura e le specifiche di *MemoBrain Notes*, un'a
 
 - **A-01** — Il formato di storage resta *file-first*: il vault è una cartella di file ordinari (`.md`, immagini, PDF, `.canvas`, `.base`, `.excalidraw`). Nessun lock-in: l'utente può aprire il vault con qualsiasi editor.
 - **A-02** — L'help di Obsidian è il riferimento per il *comportamento*; la sintassi Markdown estesa (wikilink, embed, callout, ecc.) è mantenuta compatibile così che un vault Obsidian esistente si apra senza conversioni.
-- **A-03** — Wails **v2** (D-07) è desktop-only e gestisce una sola finestra per processo: **le app mobile non sono nel perimetro** e le finestre separate (pop-out) non sono nativamente disponibili (§2.2.1). La Web UI del cloud non è un editor (solo gestione/download).
+- **A-03** — Wails **v2** (D-07) è desktop-only e gestisce una sola finestra per processo: **le app mobile non sono nel perimetro** e le finestre separate (pop-out) non sono nativamente disponibili (§2.2.1). La Web UI del cloud comprende console amministrativa, area utente e un **workbench del vault** con le stesse funzioni del client desktop, salvo le eccezioni dichiarate di ADR-0029 (updater, vault su cartella locale, integrazioni native del sistema operativo: §2.8.3). Il workbench web è un dispositivo di sync come gli altri: **online-first**, con copia locale nel browser, e non è un'app mobile né una PWA offline (ADR-0029).
 - **A-04** — Il cloud è single-tenant per installazione (una realm Keycloak, un'organizzazione). Il multi-tenant è fuori ambito.
 - **A-05** — La collaborazione è **asincrona** (sync + merge) e il merge multi-utente è garantito per i soli file `.md` condivisi (D-04). L'editing simultaneo in tempo reale (CRDT, presenza) non è previsto.
 - **A-06** — Cifratura (D-02): TLS in transito e cifratura a riposo lato server per tutti i vault. I vault **privati** sono inoltre cifrati end-to-end dal client (§3.8) e non possono essere condivisi; i vault **condivisi** non sono cifrati end-to-end, perché la condivisione con utenti e gruppi (con revoca, ACL e membership dinamiche) richiederebbe una gestione di chiavi condivise fuori ambito.
@@ -115,7 +116,7 @@ flowchart LR
     SHARE["Sharing & ACL Module"]
     ADM["Admin Module<br/>Users · Groups · Quota · Config"]
     EXP["Export Worker (ZIP)"]
-    WEB["Web UI (SPA statica)"]
+    WEB["Web UI statica<br/>console (SPA) · workbench del vault"]
     GW --> SYNC & VAULT & SHARE & ADM
     ADM --> EXP
   end
@@ -126,8 +127,19 @@ flowchart LR
 
   BE <-->|"HTTPS: REST + gRPC stream"| GW
   BE -->|"Authorization Code + PKCE<br/>(browser di sistema)"| KC
+  subgraph BROWSER["Browser: workbench web (ADR-0029, ADR-0030)"]
+    direction TB
+    WFE["@memobrain/workbench<br/>(stessa UI del desktop)"]
+    WCORE["Web Worker: core Go in WASM<br/>stessi binding · sqlite-wasm"]
+    OPFS[("OPFS<br/>copia del vault · index.db · sync.db")]
+    WFE <-->|"bridge window.go / RPC"| WCORE
+    WCORE <--> OPFS
+  end
+
   WEB -->|"PKCE (SPA)"| KC
   WEB -->|"REST /api/v1"| GW
+  WEB -.->|"serve workbench.html + asset con SRI"| WFE
+  WCORE <-->|"HTTPS: REST + SSE"| GW
   GW -->|"JWKS: validazione JWT"| KC
   ADM -->|"Admin REST API<br/>(service account)"| KC
   SYNC & VAULT & SHARE & ADM --> PG
@@ -140,8 +152,9 @@ flowchart LR
 
 | Componente | Responsabilità |
 |---|---|
-| **Frontend (React/TS)** | UI, editor, rendering, grafo, Excalidraw, Canvas, Bases. Nessun accesso diretto a rete o disco: tutto passa dai binding Wails. |
-| **Backend client (Go)** | Accesso al file system del vault, watcher, parsing/indicizzazione, ricerca FTS, sync engine, cifratura/decifratura dei vault privati, OIDC, keychain, auto-update, import. |
+| **Frontend (React/TS)** | UI, editor, rendering, grafo, Excalidraw, Canvas, Bases, nel pacchetto `@memobrain/workbench` condiviso da client desktop e workbench web (ADR-0029). Nessun accesso diretto a rete o disco: tutto passa dai binding Wails (nel browser, dagli stessi binding serviti dal core in WebAssembly). |
+| **Backend client (Go)** | Accesso al file system del vault, watcher, parsing/indicizzazione, ricerca FTS, sync engine, cifratura/decifratura dei vault privati, OIDC, keychain, auto-update, import. Lo stesso codice, compilato per `js/wasm`, è il core del workbench web (§1.7, ADR-0030). |
+| **Workbench web** | Pagina della Web UI che apre un vault cloud nel browser: UI del client desktop, core Go in un Web Worker, copia del vault e database in OPFS; dispositivo di sync `web` (§1.7, §2.8.3). |
 | **API Gateway** | TLS, routing, validazione JWT, rate limiting, request-id, CORS (solo origine Web UI), OpenTelemetry. |
 | **Sync Module** | Changelog per vault, commit con concorrenza ottimistica, rilevamento conflitti, notifiche realtime. |
 | **Vault & Revision** | CRUD vault, storico revisioni, restore, snapshot/tree, GC dei blob. |
@@ -255,6 +268,21 @@ Il protocollo completo è definito al §3.4. Il merge è sempre eseguito dal cli
 
 Pacchetti: container OCI + Helm chart + `docker-compose` per sviluppo e piccole installazioni on-premise.
 
+### 1.7 Workbench web e core del client in WebAssembly (ADR-0029, ADR-0030)
+
+La Web UI apre un vault cloud nel browser con **le stesse funzioni e la stessa interfaccia** del client desktop. Non c'è una seconda implementazione: la UI è il pacchetto `@memobrain/workbench` (`packages/workbench`), montato da entrambi gli host, e la logica è il backend Go del client compilato con `GOOS=js GOARCH=wasm`.
+
+- **Il browser è un dispositivo come gli altri.** Registra un dispositivo (`POST /me/devices`, `platform: "web"`, uno per profilo del browser), apre il vault con il flusso di "Collega vault esistente" (copia locale, pull, indice locale, commit con `base_rev`, merge sul client) e usa il protocollo di sync e le API invariati: nessuna API di contenuto nuova, il server resta cieco al contenuto (§3.4.1). Calcolo lato server (indice, ricerca) escluso: violerebbe §3.4.1 e non funzionerebbe sui vault privati.
+- **Core** (`apps/desktop/cmd/memobrain-core`, eseguito in un **Web Worker** dedicato). Il dispatcher `internal/rpc` chiama i binding per nome (`Call(service, method, argsJSON)`) con la semantica di Wails; `App.Services()` (`internal/app/services.go`) è l'**unico elenco** dei servizi, usato da `main.go` per Wails e da `memobrain-core` per il dispatcher, così le due API non possono divergere (test di parità dispatcher ↔ binding generati, obbligatorio in `task ci`). Nella pagina un bridge installa `window.go`/`window.runtime` sopra un RPC verso il worker: i binding generati non cambiano.
+- **Host.** `internal/app` dipende da un'interfaccia `Host` (`host.go`: eventi verso la UI, dialoghi, download, apertura URL, stampa, uscita, errori fatali), implementata da `host_wails.go` (`!js`, unico file che importa Wails) e da `host_web.go` (`js`, inoltra a `globalThis.__memobrainHost` del worker). Ciò che dipende dalla piattaforma sta dietro `Host` o in file `*_js.go`/`*_native.go` (driver SQLite, watcher, updater, budget della cache di ricerca, notifiche); una costante `isWeb` spegne ciò che il browser non ha (updater, cestino di sistema, file watcher). Nel browser la sessione è quella OIDC della pagina (`SessionHost`: token chiesto alla pagina a ogni richiesta, niente refresh token né keychain) e le chiavi dei vault privati stanno solo in memoria (`crypto.MemoryStore`).
+- **Dati nel browser.** Il pacchetto `os` di Go su `js` passa da `globalThis.fs`: il worker fornisce uno shim `fs` su **OPFS** (`FileSystemSyncAccessHandle`, `move()` per i rename), quindi scrittura atomica (tmp + fsync + rename) e rifiuto del path traversal restano quelli di `vault`. I database (`index.db`, `sync.db`, `app.db`) usano **sqlite-wasm** con il VFS **`opfs-sahpool`**, tramite il driver `database/sql` `internal/sqlitejs` (chiamate sincrone verso `@memobrain/sqlite-bridge` nello stesso worker); migrazioni, FTS5 `trigram` e query sono gli stessi del desktop. Senza fsnotify, le modifiche arrivano dal callback di `vault.FS` dopo ogni scrittura del core; la riconciliazione periodica è spenta (§2.5).
+- **Rete.** `net/http` su `js/wasm` usa la Fetch API, same-origin. Le notifiche usano solo **SSE** (`/api/v1/events`): il client gRPC non è compilato per `js/wasm` (nel browser non c'è TCP) e la sessione ospitata non annuncia l'endpoint gRPC (§3.6).
+- **Una scheda per browser.** Gli handle sincroni di OPFS e il pool di SQLite sono esclusivi per l'origine: un Web Lock (`memobrain-workbench`) consente un solo workbench aperto per browser; una seconda scheda mostra "aperto in un'altra scheda", come l'istanza singola del desktop.
+- **Identità del dispositivo.** La registrazione (id del dispositivo, account, server) sta in IndexedDB, fuori dalla cartella OPFS cancellata da logout e "Dimentica questo browser": un browser resta un solo dispositivo per profilo e per account. Se il dispositivo è stato revocato, il core ne registra uno nuovo all'apertura.
+- **Dispositivo revocato** (client desktop e workbench). Il cloud rifiuta il `commit` con `403 FORBIDDEN` ed `extra.reason = "device_revoked"`; il client ferma gli engine di quel dispositivo senza toccare file, `sync.db` né outbox, porta la sessione nello stato `device_revoked` e offre "Registra di nuovo questo dispositivo", che registra un nuovo dispositivo dello stesso account e invia ciò che era in attesa.
+- **Online-first con cache.** Le modifiche fatte durante brevi disconnessioni restano nell'outbox; non ci sono service worker né installazione PWA e serve una sessione OIDC valida. La politica dei vault privati nel browser è al §2.8.3.
+- **Build e budget.** `task wasm-core` produce `memobrain-core.wasm` (`-trimpath -ldflags "-s -w"`) e `wasm_exec.js` della stessa toolchain; la build della Web UI lo copia con hash e SRI e il cloud lo serve compresso. La build fallisce oltre il budget: core ≤ 8 MB gzip (circa 6,8 MB a novembre 2026), `sqlite3.wasm` ≤ 1,5 MB gzip. `task test-wasm` esegue i test Go di `apps/desktop/internal/...` e `cmd/...` sotto `GOOS=js GOARCH=wasm` in Node con sqlite-wasm ed è parte di `task ci` (§4.5). Il codice Go sotto WASM è circa 4,5 volte più lento del nativo: l'indicizzazione iniziale di vault grandi nel browser è lunga e avviene in background.
+
 ---
 
 ## 2. Functional Specifications
@@ -262,6 +290,7 @@ Pacchetti: container OCI + Helm chart + `docker-compose` per sviluppo e piccole 
 ### 2.1 Modello di prodotto
 
 - **Local-first**: ogni funzione di editing, ricerca, grafo e Excalidraw lavora senza rete. Il cloud è un livello opzionale di sync/condivisione.
+- **Workbench web** (ADR-0029): gli stessi vault cloud si possono aprire e modificare anche dal browser, con le stesse funzioni del client desktop; lì il funzionamento è *online-first* con copia locale nel browser (§1.7, §2.8.3).
 - Un utente può avere **più vault locali** (anche non sincronizzati) e collegare al cloud solo quelli scelti, scegliendone il tipo al momento del collegamento (§2.1.1).
 - **Configurazione vault** in `.memobrain/` (analoga a `.obsidian/`), con scope di sync differenziato (§3.4.6).
 
@@ -279,7 +308,7 @@ In fase di creazione (o di collegamento di un vault locale al cloud) l'utente sc
 | Recupero dell'accesso | Passphrase **oppure** recovery key; **senza nessuna delle due i dati sono irrecuperabili**, anche per l'amministratore | Il reset delle credenziali Keycloak è sufficiente |
 | Template e cartelle distribuiti dai gruppi | Non applicabile | Sì (§2.6.6) |
 
-**Wizard di creazione** (client): 1) scelta del tipo, con descrizione esplicita delle conseguenze (irrecuperabilità e impossibilità di condividere per il privato); 2) solo per il privato: definizione della passphrase del vault, distinta dalla password Keycloak, con indicatore di robustezza e minimo 12 caratteri; 3) visualizzazione della **recovery key** con obbligo di conferma dell'avvenuto salvataggio (ri-digitazione di alcuni caratteri); 4) avvio del primo upload.
+**Wizard di creazione** (client desktop o workbench web, §2.6.1): 1) scelta del tipo, con descrizione esplicita delle conseguenze (irrecuperabilità e impossibilità di condividere per il privato); 2) solo per il privato: definizione della passphrase del vault, distinta dalla password Keycloak, con indicatore di robustezza e minimo 12 caratteri; 3) visualizzazione della **recovery key** con obbligo di conferma dell'avvenuto salvataggio (ri-digitazione di alcuni caratteri); 4) avvio del primo upload.
 
 ### 2.1.2 Perimetro del vault (D-06)
 
@@ -444,11 +473,11 @@ Risultati con contesto (snippet evidenziati), ordinamento (rilevanza, nome, modi
 | `graph` | Costruisce nodi/archi dall'indice | Calcolo layout lato frontend |
 | `history` | Snapshot locali | Retention configurabile (default 7 giorni / ogni 5 min se modificato) |
 | `importer` | Conversione da altri sistemi | Anteprima, report di conversione |
-| `crypto` | Cifratura E2EE dei vault privati (§3.8) | Cifra/decifra blob e path; gestione di VMK, passphrase (Argon2id) e recovery key; VMK nel keychain di sistema; il vault locale resta in chiaro sul disco |
+| `crypto` | Cifratura E2EE dei vault privati (§3.8) | Cifra/decifra blob e path; gestione di VMK, passphrase (Argon2id) e recovery key; VMK nel keychain di sistema (nel workbench web solo in memoria del worker, §1.7); il vault locale resta in chiaro sul disco |
 | `sync` | Engine di sincronizzazione (§3.4) | Esecuzione in goroutine dedicate, pause/resume, indicatori di stato |
-| `auth` | OIDC + token store | Refresh silenzioso; keychain: macOS Keychain, Windows Credential Manager, Secret Service (Linux) |
+| `auth` | OIDC + token store | Refresh silenzioso; keychain: macOS Keychain, Windows Credential Manager, Secret Service (Linux). Nel workbench web: sessione ospitata, token dato dalla pagina (§1.7) |
 | `config` | Config locale + config effettiva da cloud | Merge e `locked` (§2.6) |
-| `updater` | Aggiornamenti app | Canale firmato (code signing + verifica firma) |
+| `updater` | Aggiornamenti app | Canale firmato (code signing + verifica firma); disattivato nel workbench web, servito dal cloud |
 | `platform` | URI scheme, single-instance lock, menu nativo, dialoghi | Finestra singola (Wails v2) |
 
 **Superficie Wails (esempio, tipizzata e generata)**
@@ -487,6 +516,8 @@ type VaultCryptoAPI interface {            // solo vault privati
 
 `WriteNote` richiede `expectedHash` (hash del contenuto letto) per evitare di sovrascrivere modifiche esterne avvenute nel frattempo.
 
+**Stesso backend nel browser (ADR-0030).** Tutti i moduli della tabella compilano e passano i test anche per `js/wasm` (`task test-wasm`, in `task ci`): sono il core del workbench web (§1.7). Le differenze di piattaforma stanno solo dietro l'interfaccia `Host` di `internal/app` o in file `*_js.go`/`*_native.go`; `updater`, file watcher, keychain e cestino di sistema sono esclusi o neutralizzati nel build `js`. I binding esposti sono quelli elencati da `App.Services()`, identici sui due host.
+
 ### 2.6 Servizio cloud — moduli funzionali
 
 #### 2.6.1 Gestione vault
@@ -494,7 +525,7 @@ type VaultCryptoAPI interface {            // solo vault privati
 - Creazione con scelta del tipo (privato cifrato / condiviso, §2.1.1; immutabile), rinomina, eliminazione logica (retention 30 giorni, ripristinabile dall'utente; purge definitivo dopo). Il nome del vault è un metadato in chiaro anche per i vault privati.
 - Più vault per utente; un vault locale esistente può essere "caricato" nel cloud (upload iniziale con barra di avanzamento e ripresa).
 - Un secondo dispositivo si collega scaricando il *manifest* (`/tree`) e poi i blob mancanti. Per i vault privati serve prima lo sblocco con passphrase o recovery key (§3.8.4).
-- Registro dispositivi (`devices`): nome, piattaforma, ultimo accesso; revoca da Web UI e dal client (il dispositivo corrente è indicato come tale e non si revoca dal proprio elenco, ADR-0037).
+- Registro dispositivi (`devices`): nome, piattaforma (`platform: "web"` per il workbench web, uno per profilo del browser, §1.7), ultimo accesso; revoca da Web UI e dal client (il dispositivo corrente è indicato come tale e non si revoca dal proprio elenco, ADR-0037).
 - **Ciclo di vita su tutte le superfici (ADR-0037).** Creazione, rinomina, eliminazione logica, elenco dei vault eliminati (`GET /vaults?include_deleted=true`) e ripristino sono disponibili nel client desktop, nel workbench web (ADR-0029) e nella console web, realizzati una volta sola in `@memobrain/cloud-features` (§4.2). L'eliminazione di un vault, vista da un dispositivo collegato, lo **scollega e conserva i file locali**: mai una cancellazione locale (D-04). Un vault privato si crea solo dove è disponibile il codice crittografico Go (client desktop o workbench web): la console apre il workbench su una rotta di creazione (`/vaults/new/open?kind=private&name=…`) e non duplica la crittografia in TypeScript.
 
 #### 2.6.2 Storico revisioni e ripristino
@@ -535,6 +566,16 @@ Ogni commit crea una revisione immutabile. Retention di sistema configurabile (d
 **Config Profile**: documento JSON versionato, validato da JSON Schema, assegnabile a uno o più gruppi con priorità.
 
 **Schema unico e feature flag generati (ADR-0037).** Lo schema è uno solo, `api/config-profile.schema.json`. Ogni feature flag (`features.<nome>`, booleani piatti con underscore, es. `web_workbench`, `sharing`, `path_v2`) vi è dichiarato con default e descrizione; `task gen` ne ricava nomi, default dei flag e default di prodotto per Go (`shared/go/features`, usato dal cloud e dal core del client, che incorpora una copia byte per byte dello schema per la validazione) e per TypeScript (`@memobrain/api-client/features`, usato da workbench e console). Nessun altro punto elenca i flag a mano. Un flag sconosciuto alla build è considerato acceso salvo che la configurazione lo spenga, così una funzione più recente della build resta disponibile.
+
+Flag con effetti su sicurezza e compatibilità:
+
+| Flag | Default | Effetto |
+|---|---|---|
+| `features.web_workbench` | acceso | Apertura dei vault nel browser (workbench web, §2.8.3, ADR-0029); spento, la console non offre "Apri" né la creazione di vault privati e la pagina del workbench rifiuta l'apertura. Il client desktop lo ignora |
+| `features.envelope_v2` | **acceso dalla v1.3** | Scrittura degli envelope della VMK in formato v2, legati a vault e tipo (§3.8.2); rilascio N+1 di ADR-0034 |
+| `features.path_v2` | **acceso dalla v1.3** | Scrittura dei token di path `enc2` e migrazione dei token `enc1` (§3.8.3, §3.8.7); rilascio N+1 di ADR-0042 |
+
+Spegnere `envelope_v2` o `path_v2` rimanda la migrazione su un'istanza con client desktop non aggiornati (fino alla 1.2.4: §3.8.7), ma non declassa nulla: un dispositivo che ha già visto il formato v2 di un vault continua a scriverlo (pin).
 
 Ordine di risoluzione (ultimo vince):
 
@@ -581,7 +622,10 @@ Il client conserva l'ultima config valida in cache locale (utilizzabile offline)
 
 ### 2.8 Interfaccia web del servizio cloud
 
-SPA React/TS servita dal Cloud Service, autenticata via OIDC PKCE verso Keycloak; la visibilità delle viste dipende dal ruolo nel token **e** viene riverificata lato API (la UI non è un controllo di sicurezza).
+Applicazione React/TS servita dal Cloud Service (asset incorporati nel binario), autenticata via OIDC PKCE verso Keycloak (client pubblico `memobrain-web`); la visibilità delle viste dipende dal ruolo nel token **e** viene riverificata lato API (la UI non è un controllo di sicurezza). È composta da due documenti HTML distinti, ciascuno con bundle, foglio di stile e CSP propri, tra cui si passa sempre con un caricamento completo della pagina:
+
+- la **console** (`index.html`, SPA): vista amministratore (§2.8.1) e vista utente (§2.8.2), con la CSP più stretta;
+- il **workbench del vault** (`workbench.html`, §2.8.3, ADR-0029): la UI del client desktop sul core Go in WebAssembly (§1.7). Lo stile globale della UI desktop non deve toccare la console, per questo il workbench non è una rotta della SPA.
 
 #### 2.8.1 Vista Amministratore
 
@@ -601,10 +645,36 @@ Principio di riservatezza: gli amministratori gestiscono **metadati** (utenti, q
 | Schermata | Funzioni |
 |---|---|
 | **Spazio utilizzato** | Barra di utilizzo vs quota, dettaglio per vault, avvisi alle soglie. |
-| **I miei vault** | Elenco con tipo (privato cifrato / condiviso), dimensione, numero file, ultima sincronizzazione; creazione, rinomina, eliminazione logica e sezione dei vault eliminati con ripristino (gli stessi componenti del client, §2.6.1; un vault privato si crea aprendo il workbench, ADR-0037); **Download ZIP**. |
+| **I miei vault** | Elenco con tipo (privato cifrato / condiviso), dimensione, numero file, ultima sincronizzazione; creazione, rinomina, eliminazione logica e sezione dei vault eliminati con ripristino (gli stessi componenti del client, §2.6.1; un vault privato si crea aprendo il workbench, ADR-0037); **Apri** nel workbench (§2.8.3); **Download ZIP**. |
 | **Download ZIP** | Archivio dell'ultima revisione di tutti i file del vault (path originali, escluse le parti di `.memobrain/` specifiche del dispositivo). **Vault condivisi:** lo ZIP è generato dal server (streaming immediato per i vault piccoli; job asincrono con link temporaneo, scadenza 24 h, per i grandi). **Vault privati:** il server non può leggere i contenuti, quindi i blob cifrati vengono scaricati e decifrati **nel browser** dopo l'inserimento della passphrase (o della recovery key) e lo ZIP è assemblato localmente in streaming; passphrase e chiavi non lasciano mai il browser. Per vault molto grandi si raccomanda l'esportazione dal client desktop ("Esporta vault come ZIP"). |
 | **Dispositivi** | Elenco e revoca. |
-| **Condivisioni** | Cartelle condivise da me / con me. |
+| **Condivisioni** | Cartelle condivise da me / con me; le condivisioni ricevute e accettate si aprono nel workbench come mount (§2.8.3). |
+
+#### 2.8.3 Workbench del vault (ADR-0029)
+
+Il workbench apre un vault cloud nel browser con le stesse funzioni e la stessa interfaccia del client desktop (`@memobrain/workbench` sul core in WebAssembly, §1.7). È governato dal flag `features.web_workbench` del Config Profile (acceso per default, spegnibile per gruppo, §2.6.6); il controllo vale anche per un indirizzo digitato a mano.
+
+| Rotta | Cosa apre |
+|---|---|
+| `/vaults/:id/open` | Il vault cloud `:id`, collegato al browser come dispositivo `web` |
+| `/vaults/:id/open?share=<id>` | Una condivisione ricevuta e accettata, come mount (§2.6.4) |
+| `/vaults/new/open?kind=private&name=…` | Creazione di un vault privato nel browser: passphrase, envelope e recovery key li produce il core Go (§2.1.1, §2.6.1); al termine l'indirizzo diventa `/vaults/<id>/open`. Altri valori di `kind`, un nome vuoto o oltre 120 caratteri sono un errore |
+
+**Eccezioni di parità** (le sole funzioni del client desktop assenti o diverse nel browser; elenco misurato in `docs/web-workbench-parity.md`, generato dal registro delle funzioni, §4.5): aggiornamento automatico (la Web UI è servita dal cloud ed è sempre aggiornata); vault su una cartella del computer e importer da cartella (si aprono solo vault cloud copiati nel browser); avviso sul disco non cifrato; link `memobrain://` (sostituiti dalle rotte); schermo intero della finestra (solo Fullscreen API); cestino di sistema (si usa `.trash/` del vault); più vault aperti insieme (uno per browser). Salvataggi, stampa e scelta dei file passano dalle API del browser (download, `window.print()`, `<input type=file>`). Ogni altra funzione del client desktop è presente.
+
+**Copia locale e scheda singola.** Copia del vault e database in OPFS, un solo workbench aperto per browser (Web Lock, §1.7). "Rimuovi da questo browser" sostituisce "Scollega": scrive le modifiche, sincronizza, attende lo svuotamento dell'outbox e solo allora cancella la copia; se restano modifiche o conflitti chiede conferma (D-04).
+
+**Vault privati nel browser.** La copia di un vault privato nel browser è in chiaro, quindi non deve sopravvivere al blocco:
+
+1. Sblocco con passphrase o recovery key, con la stessa UI del desktop; la VMK resta solo in memoria nel worker.
+2. Il **core è l'unico timer di inattività**, come sul desktop (`security.vault_lock_minutes` del Config Profile o impostazione dell'utente); la UI gli segnala l'attività dell'utente e la sync in background non lo riavvia.
+3. Al blocco **manuale o per inattività**, se non ci sono modifiche da inviare né conflitti, il workbench chiude il vault, **cancella la copia in chiaro** (cartella OPFS e database del vault) e torna alla console. Se invece qualcosa è in attesa (o il conteggio è ignoto) la copia non si cancella: un overlay bloccante dice cosa resta e offre "Sblocca", "Elimina comunque" o "Torna alla console" (D-04, nessuna perdita silenziosa).
+4. Uscire dal workbench (ritorno alla console, logout, richiesta della console) scrive le modifiche, sincronizza, attende lo svuotamento dell'outbox (al massimo 15 s), blocca e decide come al punto 3.
+5. Logout e "Dimentica questo browser" cancellano le copie dei vault nel browser; se una copia ha modifiche non inviate o conflitti, la console elenca i vault e chiede conferma.
+6. **Sweep all'avvio:** le copie in chiaro lasciate da una scheda chiusa vengono rimosse, salvo quelle con modifiche non inviate.
+7. **Unlock gate:** una copia privata conservata va sbloccata prima che il workbench ne mostri il contenuto.
+
+**Sicurezza della pagina.** `workbench.html` ha una CSP dedicata, derivata da quella di rilascio del client desktop, mentre la console mantiene la propria, più stretta (§3.7). Ogni script della build è verificato con **SRI** lungo una catena che parte dalla pagina: script e CSS d'ingresso con `integrity`; chunk statici e lazy fissati da un **import map** inline con il campo `integrity` (unico script inline ammesso, autorizzato dal suo hash nella CSP); worker (core, layout del grafo, pdf.js) scaricati con `fetch` + `integrity` e avviati da un URL `blob:` dei byte verificati, perché `new Worker()` non accetta `integrity`; WASM del core e di sqlite verificati nel worker (un hash mancante è un errore); lo script di Excalidraw aggiunto da un tag con `integrity`. SRI protegge da file alterati tra il server e il browser o nello storage degli asset, non da un server d'origine compromesso (§3.8.1).
 
 ### 2.9 Gestione conflitti: aspetti di esperienza utente
 
@@ -1109,12 +1179,12 @@ Base URL: `https://<host>/api/v1`. Colonna **Ruolo**: `U` = utente autenticato (
 
 | Metodo | Path | Ruolo | Descrizione |
 |---|---|---|---|
-| GET | `/client-config` | pubblico | Bootstrap del client: `issuer` OIDC, `desktop_client_id`, `audience`, `grpc_endpoint`, `api_version`. Permette di avviare il login conoscendo solo l'URL del server (ADR-0008) |
+| GET | `/client-config` | pubblico | Bootstrap del client: `issuer` OIDC, `desktop_client_id`, `web_client_id` (console e workbench web), `audience`, `grpc_endpoint`, `api_version`. Permette di avviare il login conoscendo solo l'URL del server (ADR-0008) |
 | GET | `/me` | U | Profilo, ruolo, quota effettiva, uso, versione config (`config_version` = revisione di configurazione `config.revision`, la stessa di `ConfigChanged.version` e della config effettiva: il client la confronta con la propria per sapere se rileggere `/config/effective`, ADR-0041) |
 | GET | `/me/usage` | U | Uso per vault e soglie |
 | GET | `/me/devices` | U | Dispositivi registrati |
-| POST | `/me/devices` | U | Registra dispositivo (ritorna `device_id`) |
-| DELETE | `/me/devices/{id}` | U | Revoca dispositivo |
+| POST | `/me/devices` | U | Registra dispositivo (ritorna `device_id`; `platform: "web"` per il workbench web, §1.7) |
+| DELETE | `/me/devices/{id}` | U | Revoca dispositivo; il `commit` successivo di quel dispositivo risponde `403 FORBIDDEN` con `extra.reason = "device_revoked"` (§1.7) |
 | GET | `/me/groups` | U | Gruppi di cui sono membro |
 | GET | `/config/effective` | U | Config effettiva (supporta `ETag`/`If-None-Match`) |
 | GET | `/directory/users?q=` | U | Ricerca utenti per condivisione (campi minimi, senza e-mail): username e nome visualizzato per sottostringa (`%` e `_` letterali), e-mail solo per **corrispondenza esatta** senza distinzione di maiuscole, così non si ricostruisce un indirizzo per tentativi né si elencano gli utenti di un dominio (ADR-0041) |
@@ -1315,7 +1385,7 @@ Ogni azione amministrativa che modifica stato produce una riga di `audit_log`.
 
 ### 3.6 gRPC
 
-REST è il contratto normativo; gRPC è usato per lo **streaming di notifiche** e, opzionalmente, per i trasferimenti bulk. HTTP/2 richiesto; il client degrada a SSE/polling se il proxy lo blocca.
+REST è il contratto normativo; gRPC è usato per lo **streaming di notifiche** e, opzionalmente, per i trasferimenti bulk. HTTP/2 richiesto; il client degrada a SSE/polling se il proxy lo blocca. Il core del workbench web usa solo SSE (`GET /events`): il client gRPC non è compilato per `js/wasm` (§1.7, ADR-0030).
 
 ```proto
 syntax = "proto3";
@@ -1364,6 +1434,7 @@ Autenticazione: metadata `authorization: Bearer <JWT>`; a token scaduto lo strea
 | Input | Validazione schema OpenAPI; limiti su dimensioni, profondità path e cardinalità batch (es. ≤ 500 op/commit) |
 | Path | Anti path traversal sia client (vault FS) sia server (nomi virtuali, mai usati come path del filesystem) |
 | Contenuti | Sanificazione HTML (DOMPurify), CSP restrittiva nel webview (`default-src 'self'`; niente `unsafe-eval`), Mermaid in modalità `strict`, nessun caricamento di risorse remote automatico negli embed |
+| Web UI | Due CSP (ADR-0029). **Console:** `default-src 'self'`, `script-src 'self' 'wasm-unsafe-eval'` (solo per compilare WebAssembly), `style-src 'self'` senza stili inline, `connect-src 'self'` più l'origine dell'issuer OIDC, nessun `blob:`. **Workbench** (solo `workbench.html`): derivata da quella di rilascio del desktop, con `script-src 'self' 'wasm-unsafe-eval' 'sha256-<import map>'` (l'unico script inline è l'import map con gli hash SRI dei chunk, il cui hash il server calcola all'avvio), `style-src 'self' 'unsafe-inline'` (stili calcolati da CodeMirror, KaTeX ed Excalidraw; gli script inline restano vietati), `worker-src 'self' blob:` (worker avviati dai byte verificati con SRI), `connect-src 'self' blob:` più l'issuer, `img-src`/`media-src` con `blob:`. Entrambe: `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, nessuna risorsa di altre origini (D-01, V-02). SRI su ogni script della build (§2.8.3); header `nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin` |
 | Storage | Cifratura a riposo (SSE) del bucket e del volume PG; chiavi gestite dall'infrastruttura; vault privati: cifratura end-to-end aggiuntiva lato client (§3.8) |
 | Segreti | Secret manager / variabili d'ambiente; secret del service account Keycloak ruotabile |
 | Audit | Registro di azioni amministrative e di condivisione |
@@ -1377,7 +1448,7 @@ Autenticazione: metadata `authorization: Bearer <JWT>`; a token scaduto lo strea
 | | |
 |---|---|
 | **Protegge da** | Lettura di contenuti e path da parte di amministratori, operatori dell'infrastruttura, leak del database o del bucket, compromissione del server. |
-| **Non protegge da** | Compromissione del dispositivo dell'utente; metadati osservabili dal server (nome del vault, dimensione e numero dei file, timestamp, sequenza e frequenza delle modifiche, elenco dispositivi); un server malevolo che serva JavaScript alterato alla **Web UI** (la decifratura nel browser si fida del codice servito: per il massimo livello di fiducia si usa il client desktop firmato). |
+| **Non protegge da** | Compromissione del dispositivo dell'utente; metadati osservabili dal server (nome del vault, dimensione e numero dei file, timestamp, sequenza e frequenza delle modifiche, elenco dispositivi); un server malevolo che serva JavaScript alterato alla **Web UI**: la decifratura nell'export ZIP e, con il workbench web (ADR-0029), anche la lettura e la **scrittura** dei vault privati nel browser si fidano del codice servito. Mitigazioni: CSP e SRI (§2.8.3, §3.7, che non proteggono da un server d'origine compromesso), VMK solo in memoria, blocco per inattività e cancellazione della copia in chiaro, flag `features.web_workbench` per disattivare il workbench; per il massimo livello di fiducia si usa il client desktop firmato. |
 | **Fuori ambito** | Condivisione di vault cifrati; rotazione della VMK (post-1.0). |
 
 #### 3.8.2 Gerarchia delle chiavi
@@ -1397,8 +1468,8 @@ recovery key ──HKDF──────► KEK_rec ──┘                  
 | Passphrase | Distinta dalla password Keycloak (che il server conosce al login). Minimo 12 caratteri, stima di robustezza (zxcvbn ≥ 3) |
 | KDF della passphrase | Argon2id, parametri minimi t=3, m=64 MiB, p=4 (calibrati sul dispositivo e salvati nell'envelope) |
 | Recovery key | 256 bit casuali mostrati come Base32 raggruppato con checksum; KEK derivata con HKDF-SHA256 |
-| Envelope | `AES-256-GCM(KEK, VMK)` salvato sul server (`vault_key_envelopes`); la lettura richiede un token valido dell'owner |
-| Cache locale | Dopo il primo sblocco la VMK è conservata nel keychain del sistema operativo; blocco manuale e timeout configurabili |
+| Envelope | `AES-256-GCM(KEK, VMK)` salvato sul server (`vault_key_envelopes`); la lettura richiede un token valido dell'owner. Due formati, distinti dalla lunghezza (ADR-0034): **v1** = `nonce (12) ‖ AES-256-GCM(KEK, VMK) ‖ tag (16)`, 60 byte senza AAD; **v2** = `0x02 ‖ nonce (12) ‖ AES-256-GCM(KEK, VMK; AAD) ‖ tag (16)`, 61 byte, con `AAD = "memobrain/v2/envelope" (21 B ASCII) ‖ vault_id (16 B) ‖ kind ("passphrase" \| "recovery")`. Tutti i client leggono entrambi; un v2 aperto con `vault_id` o `kind` diversi fallisce come una passphrase errata, e un v2 privato del byte di versione non si apre come v1. Il server accetta 60 byte, oppure 61 con il primo byte `0x02`, senza interpretare altro. Scrittura e migrazione: §3.8.7 |
+| Cache locale | Dopo il primo sblocco la VMK è conservata nel keychain del sistema operativo; blocco manuale e timeout configurabili. Nel workbench web la VMK resta solo in memoria nel worker e il blocco cancella la copia in chiaro (§2.8.3) |
 | Algoritmi | AES-256-GCM (disponibile sia in Go sia in WebCrypto, quindi stessa specifica per client e browser), HKDF-SHA256, HMAC-SHA256, Argon2id |
 
 > **Trade-off dichiarato.** Poiché l'envelope della passphrase risiede sul server, chi ottenesse database e token dell'owner potrebbe tentare un attacco offline alla passphrase. Si mitiga con Argon2id e politica di robustezza; la scelta consente l'uso multi-dispositivo senza trasferire chiavi a mano (vedi O-03 in Appendice C).
@@ -1453,6 +1524,8 @@ AAD    : vault_id ‖ file_id ‖ indice_chunk ‖ flag_ultimo_chunk
 
 La copia del vault sul disco del dispositivo e gli indici locali (`index.db`, `sync.db`) sono **in chiaro**: la protezione a riposo sul dispositivo è demandata alla cifratura del disco del sistema operativo (BitLocker, FileVault, LUKS). Il client mostra un avviso se non rileva la cifratura del disco, dove rilevabile.
 
+Nel **workbench web** la copia del vault e i database stanno in OPFS, nello storage dell'origine del browser, anch'essi in chiaro: per un vault privato questa copia non sopravvive al blocco, al logout né a "Dimentica questo browser", salvo che contenga modifiche non ancora inviate (in quel caso resta finché l'utente non decide, e il workbench la mostra solo dopo un nuovo sblocco: §2.8.3).
+
 #### 3.8.7 Implementazione e verifica
 
 Go: `crypto/aes`, `crypto/cipher`, `golang.org/x/crypto/argon2` e `hkdf`. Browser: WebCrypto più una libreria Argon2id in WASM. Formato e parametri sono definiti in `shared/go/vaultcrypto` con **test vector** condivisi (`shared/conformance`) eseguiti in Go e in TypeScript da `task ci` (ADR-0036). Audit esterno del design e dell'implementazione prima della 1.0.
@@ -1461,10 +1534,19 @@ Go: `crypto/aes`, `crypto/cipher`, `golang.org/x/crypto/argon2` e `hkdf`. Browse
 
 **Migrazione dei path a `enc2` e pinning (ADR-0042).** Nessun passo può rendere illeggibile un vault a un dispositivo aggiornato (D-02):
 
-1. **Rilascio N:** tutti i client leggono `enc1` ed `enc2`; il client scrive `enc2` solo se il flag del Config Profile `features.path_v2` è acceso (**spento per default**) oppure se il vault è già annotato come passato a `enc2` su quel dispositivo; altrimenti scrive `enc1`. Il token si riscrive solo quando un file nasce o si sposta. Il flag va acceso solo con un server che accetta `enc2` (§3.8.5).
-2. **Rilascio N+1:** `features.path_v2` acceso per default; il client, a vault sbloccato, riscrive in background in `enc2` i path rimasti `enc1` (move verso lo stesso path, stesso `hmac1`: il server deve ammettere un move il cui `path_key` resta quello del file stesso); quando un tree completo non contiene più token `enc1`, il client accende un **pin forte** di vault e da lì rifiuta qualunque `enc1`.
+1. **Rilascio N:** tutti i client leggono `enc1` ed `enc2`; il client scrive `enc2` solo se il flag del Config Profile `features.path_v2` è acceso oppure se il vault è già annotato come passato a `enc2` su quel dispositivo; altrimenti scrive `enc1`. Il token si riscrive solo quando un file nasce o si sposta. Il flag va acceso solo con un server che accetta `enc2` (§3.8.5).
+2. **Rilascio N+1 (in vigore dalla v1.3):** `features.path_v2` è **acceso per default**. Il client scrive `enc2` e, a vault sbloccato, riscrive in background in `enc2` i path rimasti `enc1` (move verso lo stesso path, stesso `hmac1`: il server ammette un move il cui `path_key` resta quello del file stesso); quando un tree completo non contiene più token `enc1`, il client accende un **pin forte** di vault e da lì rifiuta qualunque `enc1` per quel vault.
 
 Pinning (trust on first use, client desktop e core WASM, che hanno `sync.db`): il **pin di vault** `path_v2:<id cloud>` in `sync_meta` si accende quando il motore decifra un token `enc2` del vault o quando il server accetta un `enc2` scritto dal dispositivo, e da allora i nuovi token restano `enc2` anche a flag spento; il **pin di file** `path_v2_file:<file_id>` si accende alle stesse condizioni per quel file, e da allora un token `enc1` per quel file è rifiutato come downgrade e la change va in quarantena (§3.4.3) senza toccare il file locale. Durante il rilascio N restano esposti allo scambio di token i file ancora `enc1` mai visti in `enc2` dal dispositivo e l'export ZIP del browser, che non ha stato persistente, per i file `enc1`.
+
+**Migrazione degli envelope a v2 e pinning (ADR-0034).** Stesso schema in due rilasci, per non chiudere fuori i dispositivi non aggiornati:
+
+1. **Rilascio N:** tutti i client (desktop, core del workbench web, export ZIP del browser) leggono v1 e v2; scrivono v2 solo con `features.envelope_v2` acceso.
+2. **Rilascio N+1 (in vigore dalla v1.3):** `features.envelope_v2` è **acceso per default**. Il client scrive v2 al cambio di passphrase e alla rigenerazione della recovery key; alla creazione il vault nasce con envelope v1 (l'id lo assegna il server) e il client carica subito le versioni v2. A ogni sblocco con passphrase di un envelope ancora v1, il client ri-avvolge la stessa VMK in v2 con gli stessi parametri KDF e lo carica (`PUT /vaults/{vid}/key-envelopes/passphrase`); l'envelope di recovery passa al v2 quando l'utente sblocca con la recovery key o la rigenera, e fino ad allora resta v1. Il caricamento è best effort (la VMK non cambia e l'envelope precedente continua a funzionare) e sostituisce l'envelope solo se sul server c'è ancora quello aperto, per non sovrascrivere una passphrase cambiata nel frattempo da un altro dispositivo. L'export ZIP del browser non riscrive mai gli envelope.
+
+Pinning per **tipo** di envelope: il client annota in `sync.db` (`envelope_v2:<id cloud>:<kind>`) che quel tipo di envelope del vault è passato al v2, quando ne apre o ne carica uno; da allora rifiuta un v1 di quel tipo come downgrade e continua a scrivere v2 anche a flag spento. Il pin non riguarda l'intero vault, perché l'envelope di recovery legittimo può restare v1.
+
+**Compatibilità del rilascio N+1 (v1.3).** I client desktop precedenti al rilascio che legge i formati v2 (fino alla **1.2.4** compresa) non sbloccano un vault con envelope v2 e non leggono i path `enc2`: prima di accendere i flag su un'istanza (o di aggiornare il cloud con i nuovi default) va distribuito il nuovo client desktop; dove non è possibile, l'amministratore spegne `features.envelope_v2` e `features.path_v2` nel profilo globale finché i dispositivi non sono aggiornati. Il workbench web è servito dal cloud ed è sempre aggiornato. Nessun dato va perso: la VMK e i blob non cambiano, un dispositivo vecchio che non riesce a sbloccare torna operativo dopo l'aggiornamento, e un token `enc1` scritto da un client vecchio (che ha ancora la VMK nel keychain) in un vault già passato al pin forte va in quarantena sui dispositivi aggiornati (§3.4.3), senza toccare i file locali né lo storico.
 
 ---
 
@@ -1476,7 +1558,8 @@ Pinning (trust on first use, client desktop e core WASM, che hanno `sync.db`): i
 memobrain/
 ├── go.work                         # workspace Go: apps/desktop, services/cloud, shared/go
 ├── package.json                    # workspace npm (Yarn): apps/*/frontend, web, packages/*
-├── Taskfile.yml                    # task ci | test | lint | gen | … (task runner Task, cancello locale `task ci`: §4.5, ADR-0036)
+├── Taskfile.yml                    # task ci | test | lint | gen | wasm-core | … (task runner Task, unico entry point; cancello locale `task ci`: §4.5, ADR-0032, ADR-0036)
+├── tools/go.mod                    # strumenti di sviluppo Go pinnati, Task compreso (fuori dal workspace: GOWORK=off)
 ├── api/
 │   ├── openapi.yaml                # contratto REST (fonte unica)
 │   ├── config-profile.schema.json  # schema unico del Config Profile; da qui i feature flag generati (§2.6.6)
@@ -1493,14 +1576,17 @@ memobrain/
 │   └── conformance/                # fixture Markdown → JSON atteso + test vector crittografici (Go + TS)
 ├── packages/                       # pacchetti TS condivisi
 │   ├── api-client/                 # client generato da openapi.yaml (+ feature flag generati)
+│   ├── workbench/                  # UI del vault (@memobrain/workbench) condivisa da client desktop e workbench web (§4.2, ADR-0029)
 │   ├── cloud-features/             # UI di gestione dei vault cloud con CloudPort (§4.2, ADR-0037)
 │   ├── ui/                         # primitive UI condivise e token di stile (§4.2, ADR-0043)
+│   ├── markdown/                   # estrattore Markdown TS verificato con le fixture di shared/conformance
+│   ├── sqlite-bridge/              # bridge sincrono tra il driver database/sql del core WASM e sqlite-wasm (§1.7, ADR-0030)
 │   └── vaultcrypto-web/            # decifratura nel browser (WebCrypto + Argon2id WASM) per lo ZIP dei vault privati
 ├── apps/
-│   └── desktop/                    # progetto Wails (§4.2)
+│   └── desktop/                    # progetto Wails; lo stesso backend Go compilato in WASM è il core del workbench web (§4.2)
 ├── services/
 │   └── cloud/                      # servizio Go (§4.3)
-├── web/                            # Web UI del cloud (§4.4)
+├── web/                            # Web UI del cloud: console e workbench del vault (§4.4)
 ├── deploy/
 │   ├── docker/                     # Dockerfile cloud, compose di sviluppo
 │   ├── helm/memobrain/                 # chart Kubernetes
@@ -1513,18 +1599,27 @@ memobrain/
 
 ```text
 apps/desktop/
-├── main.go                         # bootstrap Wails (finestra, menu, assetserver, single-instance)
+├── main.go                         # bootstrap Wails (finestra, menu, assetserver, single-instance); servizi da App.Services()
 ├── wails.json
 ├── build/                          # icone, manifest, installer (NSIS/dmg/AppImage), firma
+├── cmd/
+│   ├── memobrain-core/             # core per il browser (GOOS=js GOARCH=wasm): globalThis.__memobrainCore, protocollo in doc.go (ADR-0030)
+│   └── e2e-device/                 # dispositivo desktop headless per gli e2e con client misti
 ├── internal/
 │   ├── app/                        # composizione: DI, ciclo di vita, binding esposti al frontend
 │   │   ├── bindings.go             # VaultAPI, SearchAPI, SyncAPI, AuthAPI, SettingsAPI…
+│   │   ├── services.go             # App.Services(): unico elenco dei servizi, per Wails e per il dispatcher WASM
+│   │   ├── host.go                 # interfaccia Host (eventi, dialoghi, download, URL, stampa, uscita, errori)
+│   │   ├── host_wails.go           # Host con il runtime Wails (!js): unico file che importa Wails
+│   │   ├── host_web.go             # Host verso globalThis.__memobrainHost del worker (js); sessione ospitata
 │   │   └── events.go               # emissione eventi Go → TS
+│   ├── rpc/                        # dispatcher per nome con la semantica dei binding Wails (core WASM)
+│   ├── sqlitejs/                   # driver database/sql su sqlite-wasm tramite @memobrain/sqlite-bridge (solo js)
 │   ├── vault/                      # operazioni FS atomiche, vault manager, cestino, allegati
 │   ├── watcher/                    # FSEvents (macOS, via purego) / fsnotify + riconciliazione (ADR-0044)
 │   ├── parser/                     # goldmark + estensioni OFM (wikilink, embed, callout, ^id, ==hl==, %%)
 │   ├── indexer/                    # pipeline incrementale → index.db
-│   ├── store/                      # SQLite (modernc): migrazioni index.db / sync.db / app.db
+│   ├── store/                      # SQLite: driver_native.go (modernc) / driver_js.go (sqlitejs); migrazioni index.db / sync.db / app.db
 │   │   └── migrations/
 │   ├── search/                     # parser query, esecutore FTS5, snippet
 │   ├── links/                      # risoluzione link, refactoring al rename
@@ -1541,43 +1636,50 @@ apps/desktop/
 │   │   ├── engine.go               # ciclo pull/push, scheduler, backoff
 │   │   ├── detect.go               # rilevamento modifiche locali, rename
 │   │   ├── resolve.go              # risoluzione conflitti (usa shared/go/merge)
-│   │   ├── transport/              # involucro del client Go generato (shared/go/apiclient) + gRPC stream + SSE fallback
+│   │   ├── transport/              # involucro del client Go generato (shared/go/apiclient) + gRPC stream (!js) + SSE fallback (unico canale nel core WASM)
 │   │   └── scope.go                # vault shared (montaggio, scope)
 │   ├── auth/                       # OIDC PKCE: loopback con fallback custom scheme (D-08), keychain, refresh
 │   ├── crypto/                     # E2EE vault privati: VMK, envelope, cifratura blob e path (§3.8)
 │   ├── config/                     # config locale + config effettiva da cloud (merge/locked)
 │   ├── features/                   # feature flags (da Config Profile)
-│   ├── updater/                    # update firmati
+│   ├── updater/                    # update firmati (disattivato nel core WASM)
 │   ├── platform/                   # URI scheme + single-instance lock, menu, notifiche (finestra singola, Wails v2)
 │   └── telemetry/                  # log strutturati (zerolog), crash report opt-in
-├── pkg/                            # (vuoto salvo necessità di export)
-└── frontend/
+└── frontend/                       # host desktop della UI condivisa
     ├── index.html
-    ├── vite.config.ts
-    ├── tsconfig.json
-    ├── wailsjs/                    # binding generati da Wails (non modificare a mano)
-    └── src/
-        ├── main.tsx
-        ├── app/                    # shell, routing, provider, tema
-        ├── workspace/              # pannelli, tab, split, sidebar, workspaces
-        ├── editor/                 # CodeMirror 6: estensioni, live-preview, widget, autocomplete
-        │   ├── extensions/         # wikilink, embed, callout, math, mermaid, table, tasks…
-        │   └── commands/
-        ├── reading/                # pipeline remark/rehype, TOC, hover preview
-        ├── drawing/                # wrapper Excalidraw (lazy), embed SVG, export, libreria
-        ├── canvas/                 # editor JSON Canvas
-        ├── bases/                  # viste tabella/card
-        ├── graph/                  # rendering grafo + worker layout
-        ├── sidebar/                # file explorer, search, tags, backlinks, outline, bookmarks, properties
-        ├── search/                 # UI ricerca
-        ├── sync/                   # stato sync, conflitti, cronologia, login, wizard di creazione vault (privato/condiviso), sblocco con passphrase
-        ├── cloud/                  # CoreCloudPort: adattatore dei pannelli di @memobrain/cloud-features sui binding Go
-        ├── settings/               # pannelli impostazioni (rispetta le chiavi locked)
-        ├── commands/               # command palette, hotkeys, quick switcher
-        ├── state/                  # store (Zustand) + query cache
-        ├── i18n/                   # it, en (+ namespace common di @memobrain/ui)
-        ├── styles/                 # temi chiaro/scuro sui token condivisi di @memobrain/ui
-        └── test/                   # unit (Vitest), componenti, e2e (Playwright)
+    ├── scripts/esbuild.mjs         # build e dev server (ADR-0025)
+    ├── src/main.tsx                # mountWorkbench(root) di @memobrain/workbench, kind "desktop"
+    └── e2e/                        # Playwright sul mock dei binding; gli stessi spec girano sul workbench web
+```
+
+La UI del vault è il pacchetto `packages/workbench` (`@memobrain/workbench`, ADR-0029), montato da entrambi gli host con `mountWorkbench(root, options)`; le capability dell'host (`desktop` o `web`: cartelle locali, updater, finestra nativa, cestino di sistema, più vault, sessione propria…) decidono cosa la UI offre e i comandi che ne dipendono lo dichiarano (`Command.requires`).
+
+```text
+packages/workbench/
+├── wailsjs/                        # binding generati da Wails (non modificare a mano), usati da entrambi gli host
+└── src/
+    ├── mount.tsx                   # mountWorkbench: monta la UI, imposta le capability, handle con flush()
+    ├── platform/                   # capability dell'host (useCan, can)
+    ├── app/                        # shell, routing, provider, tema
+    ├── workspace/                  # pannelli, tab, split, sidebar, workspaces
+    ├── editor/                     # CodeMirror 6: estensioni, live-preview, widget, autocomplete
+    │   ├── extensions/             # wikilink, embed, callout, math, mermaid, table, tasks…
+    │   └── commands/
+    ├── reading/                    # pipeline remark/rehype, TOC, hover preview
+    ├── drawing/                    # wrapper Excalidraw (lazy), embed SVG, export, libreria
+    ├── canvas/                     # editor JSON Canvas
+    ├── bases/                      # viste tabella/card
+    ├── graph/                      # rendering grafo + worker layout
+    ├── sidebar/                    # file explorer, search, tags, backlinks, outline, bookmarks, properties
+    ├── search/                     # UI ricerca
+    ├── sync/                       # stato sync, conflitti, cronologia, login, wizard di creazione vault (privato/condiviso), sblocco con passphrase
+    ├── cloud/                      # CoreCloudPort: adattatore dei pannelli di @memobrain/cloud-features sui binding Go
+    ├── settings/                   # pannelli impostazioni (rispetta le chiavi locked)
+    ├── commands/                   # command palette, hotkeys, quick switcher
+    ├── state/                      # store (Zustand) + query cache
+    ├── i18n/                       # it, en (+ namespace common di @memobrain/ui)
+    ├── styles/                     # temi chiaro/scuro sui token condivisi di @memobrain/ui
+    └── test/                       # unit (Vitest) e componenti; gli e2e sono negli host
 ```
 
 **Gestione dei vault cloud: `@memobrain/cloud-features` (ADR-0037).** Tutta la UI di gestione dei vault cloud vive una volta sola nel pacchetto `packages/cloud-features`: tabella dei vault con creazione, rinomina, eliminazione e sezione dei vault eliminati con ripristino (`CloudVaultsTable`), dispositivi con il dispositivo corrente protetto (`DevicesPanel`), utilizzo con il livello di quota del server e il dettaglio per vault (`UsagePanel`), condivisioni, inviti, grant e ricerca nella rubrica. I componenti dipendono solo dall'interfaccia `CloudPort` (vault, dispositivi, utilizzo, condivisioni, grant, inviti, rubrica, configurazione effettiva), con i tipi generati da OpenAPI (`@memobrain/api-client`), e da due adattatori: **`RestCloudPort`** per la console web (REST) e **`CoreCloudPort`** per client desktop e workbench web (binding Go), che sta nel frontend del client accanto alla facciata dei binding, così la dipendenza va in un solo verso. Una sola suite di test dei componenti gira su entrambi gli adattatori; i testi it/en stanno nel pacchetto e l'host passa la lingua. **Regola:** ogni funzione di gestione dei vault cloud nasce in `@memobrain/cloud-features`, mai direttamente nelle pagine della console né nelle impostazioni del client.
@@ -1617,7 +1719,7 @@ services/cloud/
 │   ├── jobs/                       # scheduler: GC blob, riconciliazione quote, purge, scadenze
 │   ├── observability/              # metrics, tracing, health
 │   └── api/                        # codice generato da openapi.yaml (stub + tipi)
-├── web-embed/                      # artefatti compilati di /web inclusi con go:embed
+├── web-embed/                      # artefatti compilati di /web inclusi con go:embed: scelta della pagina (console o workbench), CSP, header, cache e gzip (§4.4)
 ├── test/
 │   ├── integration/                # testcontainers: PG + MinIO + Keycloak
 │   └── contract/                   # verifica conformità a openapi.yaml
@@ -1630,29 +1732,36 @@ Regole di modularità: ogni package `internal/<modulo>` espone una **interfaccia
 
 ```text
 web/
-├── index.html
-├── vite.config.ts
+├── index.html                      # console (SPA)
+├── workbench.html                  # workbench del vault (§2.8.3): pagina separata, import map con SRI
+├── scripts/esbuild.mjs             # build e dev server (ADR-0025): SRI, import map, budget di dimensione
 └── src/
-    ├── main.tsx
+    ├── main.tsx                    # ingresso della console
     ├── auth/                       # OIDC PKCE (oidc-client-ts), guardie di ruolo
-    ├── routes/
-    │   ├── user/                   # usage, vaults, devices, shares: pannelli di @memobrain/cloud-features con RestCloudPort; download ZIP (decifratura nel browser per i privati)
-    │   └── admin/                  # dashboard, users, groups, quotas, config-profiles, audit
-    ├── components/                 # tabelle, form, barre quota (primitive e token da packages/ui, ADR-0043)
+    ├── pages/                      # usage, vaults, devices, shares, account: pannelli di @memobrain/cloud-features con RestCloudPort; download ZIP (decifratura nel browser per i privati)
+    │   └── admin/                  # storage, limits, users, groups, config-profiles, audit
+    ├── layout/                     # shell della console, tema, "Dimentica questo browser" (primitive e token da packages/ui, ADR-0043)
+    ├── workbench/                  # host del browser del workbench (ADR-0029, ADR-0030):
+    │                               #   main.tsx/launch.ts (OIDC, Web Lock, flag, apertura e collegamento del vault),
+    │                               #   worker.ts (Web Worker: shim fs su OPFS, sqlite-wasm opfs-sahpool, core WASM),
+    │                               #   bridge.ts (RPC, window.go / window.runtime), sri.ts (worker verificati),
+    │                               #   guard.ts, markers.ts, overlay.ts (politica dei vault privati), device.ts (identità in IndexedDB)
+    ├── export/                     # download ZIP: stream o job per i condivisi, decifratura nel browser per i privati
     ├── api/                        # usa packages/api-client
     ├── i18n/
     └── test/
 ```
 
-La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:embed`) e serviti sotto `/` con fallback SPA; le API stanno sotto `/api/v1`.
+La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:embed`, pacchetto `services/cloud/web-embed`); le API stanno sotto `/api/v1`. Il server sceglie la pagina: un percorso `^/vaults/[^/]+/open/?$` riceve `workbench.html` con la CSP del workbench, ogni altro percorso senza estensione riceve `index.html` (fallback SPA) con la CSP della console (§3.7); un file inesistente con estensione è un 404. `task web-build` esegue `task wasm-core` e la build della Web UI include il core WASM e `sqlite3.wasm` con il loro hash; la build fallisce se un budget è superato (core ≤ 8 MB gzip, `sqlite3.wasm` ≤ 1,5 MB gzip, bundle iniziale della console e del workbench entro i limiti di ADR-0020).
 
 ### 4.5 Convenzioni di sviluppo
 
 | Tema | Scelta |
 |---|---|
 | Linguaggi/toolchain | Wails v2 (versione fissata); Go ≥ versione stabile corrente; Node LTS + Yarn; TypeScript `strict` |
+| Task runner | **Task** (`Taskfile.yml`, ADR-0032) è l'unico entry point del monorepo, al posto di make (non disponibile di default su Windows): `task` elenca i task; variabili come `task perf PERF_NOTES=1000`, argomenti extra dopo `--`. Task è pinnato come `tool` in `tools/go.mod` insieme agli altri strumenti Go (bootstrap: `cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task`, poi `task tools`); i comandi girano in un interprete POSIX e quelli che richiedono bash lo invocano esplicitamente |
 | Qualità Go | `golangci-lint`, `govulncheck`, test con `-race`, tabelle di test per parser e merge |
-| Qualità TS | ESLint, Prettier, Vitest, Playwright (e2e sul webview) |
+| Qualità TS | ESLint, Prettier, Vitest, Playwright (e2e sul webview; gli stessi spec del desktop girano anche sul workbench web con il core vero) |
 | Migrazioni | SQL versionato, solo forward + script di rollback documentato |
 | Generazione codice | `task gen`: schema del Config Profile → feature flag Go/TS, OpenAPI → stub Go del server, client Go (`shared/go/apiclient`) e client TS, proto → Go, sqlc, binding Wails |
 | Branching/verifiche | Trunk-based. **Nessun servizio di CI** (ADR-0036): l'unico workflow, `release.yml`, parte sui tag e costruisce e pubblica senza eseguire controlli. Il cancello obbligatorio è **`task ci`** in locale, con esito verde prima di ogni merge su `main` e prima di ogni tag di rilascio: `lint` (golangci-lint, ESLint, Prettier), `typecheck` (tutti i pacchetti TypeScript), `vuln` (govulncheck), generazione dei binding Wails, `test-go` (`-race`, tag `webkit2_41` dove serve, `MEMOBRAIN_REQUIRE_BINDINGS=1`: il test dispatcher/binding fallisce invece di essere saltato), `test-ts`, `conformance` (fixture Markdown, merge e test vector crittografici, Go + TS), `test-wasm` (core Go in WebAssembly), `parity` (`scripts/parity.mjs --check`), `check-gen` (fallisce se `task gen` modifica l'albero). **Suite lente**, da eseguire quando si tocca l'area relativa e comunque prima di un rilascio: `task test-integration` (cloud con testcontainers), `task test-desktop-e2e` (sync a due dispositivi e contract test del client REST), `task e2e` e `e2e:workbench-ui` (Playwright), `e2e:cloud` ed `e2e:security` (stack di sviluppo); elenco aggiornato in `docs/dev-setup.md`. La protezione dipende dalla disciplina di chi fa merge e rilasci: con più contributori va valutato un workflow minimo che esegua `task ci` |
@@ -1674,6 +1783,7 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | **Affidabilità dati** | RPO ≤ 5 min (PITR PG, versioning bucket); nessuna perdita silenziosa in conflitto; scritture client atomiche | Test di fault injection |
 | **Sicurezza** | §3.7; pen test prima della 1.0 | Report |
 | **Privacy** | Conformità GDPR; admin senza accesso al contenuto; vault privati E2EE | DPIA, audit crittografico |
+| **Workbench web** | Core WASM ≤ 8 MB gzip e `sqlite3.wasm` ≤ 1,5 MB gzip (circa 6,8 MB e 0,4 MB a novembre 2026); stesse funzioni del client desktop salvo le eccezioni dichiarate (§2.8.3); indicizzazione di vault grandi in background | Budget nella build della Web UI; `task test-wasm` e controllo di parità in `task ci`; e2e del workbench prima del rilascio |
 | **Accessibilità** | WCAG 2.1 AA per Web UI; navigazione da tastiera e screen reader nel client | Audit a11y |
 | **Internazionalizzazione** | IT e EN; struttura per ulteriori lingue; date/numeri localizzati | Test i18n |
 | **Piattaforme** | Windows 10+/11, macOS (versioni supportate da Wails), Linux (GTK/WebKitGTK) | Matrice di build di `release.yml` + verifiche locali per sistema prima del rilascio (ADR-0036) |
@@ -1728,7 +1838,9 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | Dipendenza da Keycloak Admin API (versioni) | Basso | Wrapper isolato in `internal/keycloak`, test d'integrazione con testcontainers |
 | Perdita di passphrase e recovery key di un vault privato | Alto | Dati irrecuperabili per design: recovery key obbligatoria con conferma, testi espliciti nel wizard, promemoria periodico, nessuna promessa di recupero da parte dell'amministratore |
 | Errori nell'implementazione crittografica o nel formato blob | Alto | Primitive standard (AES-GCM, HKDF, Argon2id), nessun algoritmo custom, test vector condivisi Go/TS, audit esterno prima della 1.0 |
-| Web UI come anello debole dell'E2EE (JavaScript servito dal server) | Medio | Documentare il limite; export dal client desktop come percorso ad alta fiducia; CSP rigida e SRI sugli asset |
+| Web UI come anello debole dell'E2EE (JavaScript servito dal server), che con il workbench web (ADR-0029) vale anche per lettura e scrittura dei vault privati | Medio | Limite documentato (§3.8.1); CSP per pagina e SRI su ogni script della build, WASM compreso (§2.8.3, §3.7); VMK solo in memoria, blocco per inattività e cancellazione della copia in chiaro; flag `features.web_workbench` per disattivare il workbench; client desktop firmato come percorso ad alta fiducia |
+| Prestazioni e dimensione del core WASM (Go sotto WASM circa 4,5× più lento del nativo; download di diversi MB) | Medio | Budget di dimensione bloccante nella build (§4.4), client gRPC escluso dal build `js`, indicizzazione in background, cache del browser per gli asset con hash (ADR-0030) |
+| Divergenza tra client desktop e workbench web | Medio | Una sola UI (`@memobrain/workbench`) e un solo core (stesso codice Go, `App.Services()` come unico elenco dei binding), test dispatcher ↔ binding e `task test-wasm` in `task ci`, registro delle funzioni con `parity --check` (§1.7, §4.5) |
 | Registrazione dello scheme `memobrain://` non riuscita (AppImage, installazioni portable, policy aziendali) | Medio | Loopback come percorso primario; diagnostica nel client; documentazione di installazione per Linux |
 | Limiti di Wails v2 (finestra singola, API di piattaforma) | Basso | Pop-out rinviate (P2); test di single-instance lock e handler URL su ciascun OS |
 
@@ -1745,6 +1857,7 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | Gruppi e distribuzione config | §2.6.5, §2.6.6, §3.2.2, §3.5.5 |
 | Keycloak, OIDC/JWT, RBAC e permessi | §1.3, §3.3 |
 | Web UI Admin / Utente (quote, utenti, ZIP) | §2.8, §3.5.2, §3.5.5 |
+| Workbench web e core in WebAssembly (ADR-0029, ADR-0030) | §0.3 (A-03), §1.7, §2.8.3, §3.7, §3.8.1, §3.8.6, §4.2, §4.4 |
 | Tipologie di vault ed E2EE (D-02) | §2.1.1, §3.2.2, §3.8 |
 | Perimetro per-vault (D-06) | §2.1.2, §2.6.4 |
 | Redirect OIDC con fallback (D-08) | §1.3, §3.3.1 |
@@ -1752,16 +1865,19 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 
 ### C.4 ADR recepiti
 
-Le deviazioni e le precisazioni rispetto allo spec si registrano come ADR in `docs/adr/`. Dalla v1.2 sono recepiti gli ADR accettati dall'owner elencati qui; gli ADR 0001–0008 e 0025, già accettati, erano decisioni d'implementazione citate dove servono (es. ADR-0008 in §3.5.1). Restano in stato *proposta*, e quindi non recepiti, gli ADR 0009–0024 e 0026–0035.
+Le deviazioni e le precisazioni rispetto allo spec si registrano come ADR in `docs/adr/`. Dalla v1.2 sono recepiti gli ADR accettati dall'owner elencati qui (0036–0044 nella v1.2; 0029, 0030 e 0032 nella v1.3); gli ADR 0001–0008 e 0025, già accettati, erano decisioni d'implementazione citate dove servono (es. ADR-0008 in §3.5.1). Restano in stato *proposta*, e quindi non recepiti, gli ADR 0009–0024, 0026–0028, 0031 e 0033–0035. Fa eccezione la parte di ADR-0034 sul formato e sulla migrazione degli envelope della VMK: con il flag `features.envelope_v2` acceso per default dall'owner, il comportamento implementato dei rilasci N e N+1 è registrato in §3.8.2 e §3.8.7 (v1.3), mentre l'ADR resta *proposta*.
 
 | ADR | Tema | Decisione | Recepito in |
 |---|---|---|---|
+| ADR-0029 | Workbench web | Workbench del vault nella Web UI con la UI del client desktop (`@memobrain/workbench`) su `/vaults/:id/open` (anche `?share=` per i mount e `/vaults/new/open?kind=private` per creare un vault privato); browser come dispositivo `web`, online-first con copia in OPFS, un workbench per browser (Web Lock); vault privati: core come unico timer di blocco, cancellazione della copia in chiaro al blocco solo senza modifiche in attesa (overlay altrimenti), sweep all'avvio, unlock gate; identità del dispositivo in IndexedDB e stato `device_revoked`; CSP propria del workbench e SRI su ogni script; flag `features.web_workbench` (v1.3) | §0.1, §0.3 (A-03), §1.1, §1.2, §1.7, §2.1, §2.1.1, §2.5, §2.6.1, §2.6.6, §2.8, §2.8.3, §3.5.1, §3.7, §3.8.1, §3.8.2, §3.8.6, §4.1–§4.5, App. A, C.2, C.3 |
+| ADR-0030 | Core WASM | Backend Go del client compilato per `js/wasm` (`cmd/memobrain-core`) in un Web Worker; dispatcher `internal/rpc` e `App.Services()` come unico elenco dei servizi; interfaccia `Host` (`host_wails.go`/`host_web.go`) e file `*_js.go`; sqlite-wasm con `opfs-sahpool` via `internal/sqlitejs`; shim `fs` su OPFS; solo SSE (gRPC escluso dal build `js`); budget core ≤ 8 MB gzip; `task test-wasm` in `task ci` (v1.3) | §1.1, §1.2, §1.7, §2.5, §3.6, §4.1, §4.2, §4.4, App. A, C.2 |
+| ADR-0032 | Task runner | Task (`Taskfile.yml`, pinnato in `tools/go.mod`) al posto di make; stessi nomi dei target (v1.3) | §4.1, §4.5 |
 | ADR-0036 | Verifiche | Nessun servizio di CI: `task ci` in locale è il cancello obbligatorio prima di merge e tag; suite lente prima dei rilasci | §2.3.3, §2.7.3, §3.7, §3.8.7, §4.1, §4.3, §4.5, App. A, C.2 |
 | ADR-0037 | Parità e contratti | Registro delle funzioni `shared/parity/features.yaml` con `parity --check`; UI di gestione dei vault cloud in `@memobrain/cloud-features` (`CloudPort`, `RestCloudPort`, `CoreCloudPort`); client Go generato da OpenAPI e contract test; ciclo di vita dei vault su tutte le superfici (`GET /vaults?include_deleted=true`); feature flag generati dallo schema unico del Config Profile | §2.5, §2.6.1, §2.6.6, §2.8.2, §3.1, §3.5.2, §4.1, §4.2, §4.4, §4.5 |
 | ADR-0038 | Retention e changelog | `conflict_of` `ON DELETE SET NULL` con `conflict_of_file`; compattazione del changelog avanzata dalla retention (finestra effettiva); paginazione keyset; indici; riconciliazione dei contatori sotto lock | §2.6.2, §2.6.3, §3.2.2, §3.4.4, C.2 |
 | ADR-0039 | Stato locale di sync | `pending_remote` e `quarantine` in `sync.db`; pull interrotto prima del cursore a vault bloccato; transazioni; copia di conflitto prima dell'originale | §3.4.3, §3.4.4, §3.4.5 |
 | ADR-0040 | Rename di cartelle condivise | `move_prefix` e `SHARE_ROOT_MOVE` restano il rename atomico (anche solo maiuscole/minuscole); comportamento del client e regole del server sulle radici condivise | §2.6.4, §3.4.7, §3.5.3, §3.8.5 |
 | ADR-0041 | Control plane | Ruolo autorevole dopo un cambio dalla console (`role_changed_at`), conflitto di identità senza ricollegamento per e-mail, provisioning in lettura, ultimo amministratore sotto lock, eliminazione unificata con riattribuzione dei grant concessi (modifica ADR-0021), rubrica con e-mail esatta, `/me.config_version`, `POST /shares` da manager dentro l'ambito, ruolo `manager` dei gruppi riservato in v1, hub delle notifiche | §1.3, §2.6.4, §2.6.5, §2.8.1, §3.1, §3.2.2, §3.3.2, §3.5.1, §3.5.4, §3.5.5, §3.6, §3.7 |
-| ADR-0042 | E2EE dei path | Token di path `enc2` legati al file (AAD con `file_id`), `enc1` accettato in lettura, server che accetta entrambi i prefissi, migrazione in due rilasci con `features.path_v2` e pinning | §3.2.2, §3.4.3, §3.8.3, §3.8.5, §3.8.7 |
+| ADR-0042 | E2EE dei path | Token di path `enc2` legati al file (AAD con `file_id`), `enc1` accettato in lettura, server che accetta entrambi i prefissi, migrazione in due rilasci con `features.path_v2` e pinning; rilascio N+1 (flag acceso per default) in vigore dalla v1.3 | §2.6.6, §3.2.2, §3.4.3, §3.8.3, §3.8.5, §3.8.7 |
 | ADR-0043 | UI condivisa | `@memobrain/ui` come pacchetto di primitive senza stile globale per console, `@memobrain/cloud-features` e workbench: focus dei modali, menu da tastiera, `Dialog`, token di stile, namespace i18n `common` | §4.1, §4.2, §4.4 |
 | ADR-0044 | Watcher | FSEvents su macOS via `purego` con ripiego su `fsnotify`; modalità degradata ai limiti di sistema su Linux/Windows; nessuna riconciliazione periodica nel browser | §1.4, §2.4, §2.5, §3.4.4, §4.2, C.2 |

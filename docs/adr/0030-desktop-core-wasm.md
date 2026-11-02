@@ -1,11 +1,12 @@
 # ADR-0030 — Core del desktop compilato in WebAssembly per il workbench web
 
-|                       |                                                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Stato**             | proposta (spike M9-WP1 eseguito in parte: via libera provvisorio, vedi "Esito dello spike")            |
-| **Data**              | 2026-10-29                                                                                             |
-| **Riferimenti spec**  | §1.2 (struttura del client), §3.4 (sync e merge sul client), §3.7 (index.db); ADR-0029, ADR-0020, D-07 |
-| **Devia dallo spec?** | no di per sé: è la realizzazione tecnica di ADR-0029                                                   |
+|                       |                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Stato**             | accettata                                                                                                          |
+| **Recepito in**       | `Specifications.md` v1.3 (2026-11-02): §1.1, §1.2, §1.7, §2.5, §3.6, §4.1, §4.2, §4.4, App. A, C.2 (Appendice C.4) |
+| **Data**              | 2026-10-29                                                                                                         |
+| **Riferimenti spec**  | §1.2 (struttura del client), §3.4 (sync e merge sul client), §3.7 (index.db); ADR-0029, ADR-0020, D-07             |
+| **Devia dallo spec?** | no di per sé: è la realizzazione tecnica di ADR-0029                                                               |
 
 ## Contesto
 
@@ -139,3 +140,5 @@ Provato in un Chromium vero (Playwright), con il core reale e senza cloud:
 - Refactoring del desktop (VFS, `Host`, driver SQL) a rischio controllato: deve restare verde a ogni passo con i test esistenti.
 - Il download del WASM è grande (diversi MB), ma solo per chi apre il workbench e in cache dopo il primo accesso.
 - La toolchain Go entra nella build della Web UI: Dockerfile, CI e `make web-build` dipendono da `make wasm-core`.
+
+**Aggiornamento 2026-11-02:** l'owner ha accettato l'ADR, recepito in `Specifications.md` v1.3 (§1.7). Superati rispetto al testo sopra: lo stato «via libera provvisorio» dello spike (il core gira in produzione nel workbench web); il job CI `wasm-core` e le conformance nel WASM «da aggiungere» (non c'è un servizio di CI: `task test-wasm` è in `task ci`, ADR-0036); il client gRPC non è più compilato nel build `js` (`notify_grpc.go` con `//go:build !js`, solo SSE), e il core è sceso a circa 6,75 MB gzip contro un budget di 8 MB (`docs/web-ui.md`); i target `make …` sono `task …` (ADR-0032).

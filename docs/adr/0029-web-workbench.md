@@ -1,11 +1,12 @@
 # ADR-0029 — Workbench del vault nella Web UI (M9)
 
-|                       |                                                                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                             |
-| **Data**              | 2026-10-29                                                                                                                                                           |
-| **Riferimenti spec**  | §0.1 punto 3, A-03, §2.8, §3.4.1, §3.8.1, §4.4, tabella rischi (Web UI anello debole dell'E2EE); D-02, D-04, D-06; V-02; ADR-0020, ADR-0025, ADR-0030                |
-| **Devia dallo spec?** | sì (A-03, §0.1, §2.8, §4.4, tabella rischi) → richiede aggiornamento di `Specifications.md` da parte dell'owner; testo proposto in "Proposta di modifica dello spec" |
+|                       |                                                                                                                                                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata                                                                                                                                                                                                       |
+| **Recepito in**       | `Specifications.md` v1.3 (2026-11-02): §0.1, §0.3 (A-03), §1.1, §1.2, §1.7, §2.1, §2.1.1, §2.5, §2.6.1, §2.6.6, §2.8, §2.8.3, §3.5.1, §3.7, §3.8.1, §3.8.2, §3.8.6, §4.1–§4.5, App. A, C.2, C.3 (Appendice C.4) |
+| **Data**              | 2026-10-29                                                                                                                                                                                                      |
+| **Riferimenti spec**  | §0.1 punto 3, A-03, §2.8, §3.4.1, §3.8.1, §4.4, tabella rischi (Web UI anello debole dell'E2EE); D-02, D-04, D-06; V-02; ADR-0020, ADR-0025, ADR-0030                                                           |
+| **Devia dallo spec?** | sì (A-03, §0.1, §2.8, §4.4, tabella rischi) → richiede aggiornamento di `Specifications.md` da parte dell'owner; testo proposto in "Proposta di modifica dello spec"                                            |
 
 ## Contesto
 
@@ -107,3 +108,5 @@ Scostamenti dalla decisione scritta sopra, emersi realizzandola:
 - Il bundle del workbench è grande (WASM, Excalidraw, mermaid, pdfjs). È accettato con caricamento lazy e budget separato.
 - Il modello di fiducia della Web UI si allarga alla scrittura dei vault privati. Il limite è documentato e mitigato; l'audit crittografico esterno (M7-WP2) deve includerlo.
 - Da rivalutare dopo il primo rilascio: PWA offline, apertura di più vault in schede diverse, condivisione della cache tra schede.
+
+**Aggiornamento 2026-11-02:** l'owner ha accettato l'ADR, recepito in `Specifications.md` v1.3 (A-03 riscritta, §1.7 e §2.8.3 nuove). Il punto 6 della decisione e l'«Esito» descrivono una politica superata dall'onda W3 di M11: il timer di inattività è uno solo, quello del core (`security.vault_lock_minutes`, non 15 minuti fissi in `launch.ts`), e al blocco manuale o per inattività la copia in chiaro si cancella solo se non ci sono modifiche da inviare né conflitti, altrimenti un overlay chiede cosa fare; si aggiungono lo sweep all'avvio e l'unlock gate (spec §2.8.3, `docs/desktop-web-sync.md`).

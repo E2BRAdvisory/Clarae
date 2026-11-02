@@ -2,7 +2,8 @@
 
 |                       |                                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                        |
+| **Stato**             | accettata                                                                                       |
+| **Recepito in**       | `Specifications.md` v1.3 (2026-11-02): §4.1, §4.5 (Appendice C.4)                               |
 | **Data**              | 2026-10-30                                                                                      |
 | **Riferimenti spec**  | §4.1 (Monorepo, `Makefile`) e §4.5 (Convenzioni di sviluppo, `make gen`) di `Specifications.md` |
 | **Devia dallo spec?** | sì (§4.1 e §4.5) → `Makefile` diventa `Taskfile.yml`, `make <target>` diventa `task <target>`   |
@@ -30,3 +31,5 @@ Gli entry point del monorepo erano in un `Makefile`. Make non è disponibile di 
 - Un passo di bootstrap in più (installare Task) prima di `task tools`.
 - I comandi di Task girano nell'interprete `mvdan.cc/sh` (POSIX), non in bash: i comandi che richiedono bash (`dev-cloud`, `release-desktop`) lo invocano esplicitamente.
 - Gli ADR precedenti, il `CHANGELOG` e `Specifications.md` citano ancora `make <target>`: i nomi dei target sono invariati, quindi basta leggere `task` al posto di `make`. Lo spec va aggiornato dall'owner.
+
+**Aggiornamento 2026-11-02:** l'owner ha accettato l'ADR, recepito in `Specifications.md` v1.3 (§4.1, §4.5); lo spec non cita più make. Non c'è più una CI che installi Task (ADR-0036): il bootstrap descritto sopra vale per le verifiche locali.

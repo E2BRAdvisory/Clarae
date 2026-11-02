@@ -508,7 +508,7 @@ Ordine: WP0 → WP1 → (WP2 ∥ WP3 ∥ WP4) → WP5 → (WP6 ∥ WP7) → WP8 
 
 ## 13-bis. M9 — Workbench del vault nella Web UI (esito: parità web/desktop)
 
-> **Stato (2026-10-29):** pianificata. ADR-0029 (workbench web, deviazione da A-03) e ADR-0030 (core Go in WASM) in stato _proposta_: in attesa dello spike WP1 e dell'aggiornamento di `Specifications.md` da parte dell'owner. Piano di dettaglio: `.claude/roadmap/progetta-e-pianifica-gli-glistening-kahan.md`.
+> **Stato (2026-11-02):** WP0–WP7 implementati, con i criteri di uscita soddisfatti solo in parte (stato di ogni WP sotto, M9-WP7). ADR-0029 (workbench web, deviazione da A-03) e ADR-0030 (core Go in WASM) accettati dall'owner il 2026-11-02 e recepiti in `Specifications.md` v1.3 (§1.7, §2.8.3, A-03). Piano di dettaglio: `.claude/roadmap/progetta-e-pianifica-gli-glistening-kahan.md`.
 
 Decisioni dell'owner:
 
@@ -522,7 +522,7 @@ Ordine: WP0 → WP1 (gate go/no-go) → WP2 → WP3 → WP4 → WP5 → WP6 → 
 
 ### M9-WP0 ADR e documenti
 
-- ADR-0029 e ADR-0030; questa sezione; budget separato del chunk workbench (revisione di ADR-0020); testo proposto per lo spec (A-03, §0.1, §2.8, §4.4, §3.8.1, tabella rischi), che l'owner riporta in `Specifications.md`.
+- ADR-0029 e ADR-0030; questa sezione; budget separato del chunk workbench (revisione di ADR-0020); testo proposto per lo spec (A-03, §0.1, §2.8, §4.4, §3.8.1, tabella rischi), che l'owner riporta in `Specifications.md` (fatto nella v1.3, 2026-11-02).
 
 ### M9-WP1 Spike core WASM (time-boxed)
 
