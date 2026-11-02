@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                            |
+| **Stato**             | accettata                                                                                                           |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §2.6.4, §3.4.7, §3.5.3, §3.8.5 (Appendice C.4)                               |
 | **Data**              | 2026-11-01                                                                                                          |
 | **Riferimenti spec**  | §3.4.7 (share e mount, rename della radice condivisa), §3.5.3 (operazioni del commit), §3.8.5 (vault privati); D-04 |
 | **Devia dallo spec?** | no: conferma §3.4.7; precisa solo che un rename che cambia soltanto maiuscole/minuscole è ammesso                   |

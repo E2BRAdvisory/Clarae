@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                 |
 | --------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                        |
+| **Stato**             | accettata                                                                                                       |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §1.4, §2.4, §2.5, §3.4.4 A, §4.2, C.2 (Appendice C.4)                    |
 | **Data**              | 2026-11-01                                                                                                      |
 | **Riferimenti spec**  | §2.5 "watcher" (tabella dei moduli), §3.8 A "Rilevamento locale", registro dei rischi (affidabilità `fsnotify`) |
 | **Devia dallo spec?** | sì (§2.5 e §3.8 A citano solo `fsnotify`) → richiede aggiornamento di `Specifications.md` da parte dell'owner   |

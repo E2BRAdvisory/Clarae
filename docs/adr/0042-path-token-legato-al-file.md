@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                    |
+| **Stato**             | accettata                                                                                                                                   |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §3.2.2, §3.4.3, §3.8.3, §3.8.5, §3.8.7 (Appendice C.4)                                               |
 | **Data**              | 2026-11-01                                                                                                                                  |
 | **Riferimenti spec**  | §3.8.1 (modello di minaccia, A3 server attivamente malevolo), §3.8.3 (path cifrati), §3.8.5, §3.8.7 (test vector); D-02; ADR-0009           |
 | **Devia dallo spec?** | sì (§3.8.3 e §3.8.7) → nuovo formato del token di path accanto a `enc1:`; richiede aggiornamento di `Specifications.md` da parte dell'owner |
@@ -87,6 +88,8 @@ Il pin di file non produce falsi positivi tra client del rilascio N: per scriver
 ## Esito
 
 Stato dell'implementazione al 2026-11-01: **rilascio N completato lato client**, in attesa della modifica server. Lo stato resta «proposta» finché l'owner non accetta l'ADR e aggiorna lo spec.
+
+**Aggiornamento 2026-11-02:** l'owner ha accettato l'ADR, recepito in `Specifications.md` v1.2. Il server accetta ora anche i token `enc2:` (`resolvePath` in `services/cloud/internal/sync/service.go` e `syncproto.IsOpaquePath`), prerequisito per accendere `features.path_v2`.
 
 - **Libreria Go** (`shared/go/vaultcrypto/path.go`): `EncryptPathV2`/`EncryptPathV2WithNonce`, `DecryptPathFor`, `PathAADV2`, `PathTokenVersion`, `PathEncPrefixV2`. `EncryptPath` (enc1) resta lo scrittore di default; `DecryptPath` legge solo `enc1`.
 - **Libreria TS** (`packages/vaultcrypto-web/src/path.ts`): `encryptPathV2`, `decryptPathFor`, `pathAadV2`, `pathTokenVersion`, `PATH_ENC_PREFIX_V2`. L'export ZIP decifra i path con `decryptPathFor` e il `file_id` della voce; l'API esistente non cambia (nessuna modifica a `web/src/export`).

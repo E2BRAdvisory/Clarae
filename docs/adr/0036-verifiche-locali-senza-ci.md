@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                    |
+| **Stato**             | accettata                                                                                                                                   |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §2.3.3, §2.7.3, §3.7, §3.8.7, §4.1, §4.3, §4.5, Appendice A, C.2 (Appendice C.4)                     |
 | **Data**              | 2026-11-01                                                                                                                                  |
 | **Riferimenti spec**  | §6 (qualità, CI); ADR-0029/0030 (parità web), ADR-0031 (pipeline di rilascio), ADR-0032 (Task)                                              |
 | **Devia dallo spec?** | sì: lo spec e la roadmap presuppongono una CI bloccante su ogni push (conformance, parità) → la parte su CI va riscritta come in questo ADR |

@@ -4,11 +4,18 @@
 
 | | |
 |---|---|
-| **Versione documento** | 1.1 — Decisioni D-01…D-08 recepite (vedi Appendice C) |
-| **Data** | 23 ottobre 2026 |
+| **Versione documento** | 1.2 — Decisioni D-01…D-08 e ADR 0036–0044 recepiti (vedi Appendice C) |
+| **Data** | 2 novembre 2026 |
 | **Nome del prodotto** | *MemoBrain Notes* (identificatori `memobrain`; già "Nodus" come nome in codice) |
 | **Stack** | Wails (Go + React/TypeScript) · Cloud Service in Go · Keycloak · PostgreSQL · Object Storage S3-compatibile |
 | **Riferimento funzionale** | Obsidian Help — <https://obsidian.md/help/> |
+
+**Registro delle revisioni**
+
+| Versione | Data | Modifiche |
+|---|---|---|
+| 1.2 | 2 novembre 2026 | Recepiti gli ADR accettati dall'owner (decisioni e sezioni in Appendice C.4): **ADR-0036** verifiche locali con `task ci` al posto di un servizio di CI; **ADR-0037** registro delle funzioni, `@memobrain/cloud-features` con `CloudPort`, client Go generato, ciclo di vita dei vault su tutte le superfici, feature flag generati dallo schema del Config Profile; **ADR-0038** retention delle revisioni, copie di conflitto e finestra effettiva del changelog; **ADR-0039** candidati al merge persistenti e quarantena in `sync.db`; **ADR-0040** `move_prefix` come rename delle cartelle condivise (anche solo maiuscole/minuscole) e regole sulle radici condivise; **ADR-0041** ruolo autorevole dopo un cambio dalla console, conflitti di identità, ultimo amministratore, eliminazione unificata degli account con riattribuzione dei grant, rubrica, `config_version`, `POST /shares` da parte di un manager, ruolo `manager` dei gruppi riservato, hub delle notifiche; **ADR-0042** token di path `enc2` legati al file; **ADR-0043** primitive UI condivise in `@memobrain/ui`; **ADR-0044** watcher con FSEvents su macOS e modalità degradata. Sezioni modificate: §1.3, §1.4, §2.3.3, §2.4, §2.5, §2.6.1–§2.6.6, §2.7.3, §2.8.1, §2.8.2, §3.1, §3.2.2, §3.3.2, §3.4.3–§3.4.5, §3.4.7, §3.5.1–§3.5.5, §3.6, §3.7, §3.8.3, §3.8.5, §3.8.7, §4.1–§4.5, App. A, C.2, C.4 (nuova). Restano in stato *proposta* e **non** sono recepiti gli ADR 0009–0024 e 0026–0035: la raccolta `docs/spec-v1.2-proposta.md`, che li riguarda, resta da decidere e confluirà in una versione successiva. |
+| 1.1 | 23 ottobre 2026 | Decisioni D-01…D-08 recepite (Appendice C.1). |
 
 ---
 
@@ -179,7 +186,10 @@ sequenceDiagram
 
 - Access token vita breve (5 min); refresh con **rotation** e riuso rilevato da Keycloak.
 - Validazione JWT lato Cloud: firma (JWKS in cache con rotazione), `iss`, `aud` (= `memobrain-api`), `exp`, `azp`.
-- **Sospensione utente**: Keycloak `enabled=false` + revoca sessioni; in aggiunta il Cloud controlla `users.status` (cache 30 s) così l'accesso decade entro secondi e non alla scadenza del token.
+- **Sospensione utente**: Keycloak `enabled=false` + revoca sessioni; in aggiunta il Cloud controlla `users.status` (cache 30 s) così l'accesso decade entro secondi e non alla scadenza del token. La cache memorizza per lo stesso TTL anche i rifiuti (account sospeso, conflitto di identità), mai gli errori interni; attivazione, cambio di ruolo ed eliminazione la invalidano (ADR-0041).
+- **Provisioning just-in-time (ADR-0041).** L'utente è collegato all'identità **solo per `sub`**. La riga `users` si legge per `sub` e si scrive solo se il token porta un cambio di profilo o di ruolo, o se `last_login_at` ha più di 15 minuti; gli account sospesi o eliminati non vengono mai scritti.
+- **Ruolo autorevole dopo un cambio dalla console (ADR-0041).** Un cambio di ruolo fatto dalla console imposta `users.role_changed_at`. Il provisioning prende il ruolo dai realm role del token solo se il suo `iat` è successivo a `role_changed_at`; il principal della richiesta usa sempre il ruolo della riga. Una degradazione vale dalla richiesta successiva (subito sulla replica che la esegue, entro il TTL della cache sulle altre), una promozione non attende un nuovo token, e i token emessi dopo il cambio tornano a rispecchiare Keycloak, che resta la fonte del ruolo per chi lo gestisce lì.
+- **Conflitto di identità (ADR-0041).** Un token con un'e-mail già usata da un altro account non eliminato produce `409 INVALID_STATE` (gRPC `FAILED_PRECONDITION`) con l'indicazione di rivolgersi a un amministratore; non si crea né si modifica alcuna riga e **non si ricollega mai un account per e-mail** (darebbe i vault di un account a chiunque controlli quell'indirizzo nel provider di identità). Il rimedio (eliminare o rinominare l'account precedente) è nel runbook.
 - **Redirect (D-08).** Modalità predefinita `auto`: il client prova il redirect **loopback** con porta variabile (RFC 8252 §7.3) e passa al **custom URI scheme** `memobrain://auth/callback` se (a) non riesce ad aprire il listener, (b) Keycloak risponde `invalid_redirect_uri`, oppure (c) la modalità è forzata a `scheme` da Config Profile. Entrambi gli URI sono registrati sul client `memobrain-desktop`.
 - Il callback via custom scheme arriva al sistema operativo come URL `memobrain://…` e viene consegnato all'istanza già in esecuzione tramite il single-instance lock di Wails v2 (argomenti della seconda istanza; su macOS tramite l'handler di apertura URL, da verificare sulla versione v2 adottata). Registrazione dello scheme: installer Windows (chiave di registro), `Info.plist` su macOS, file `.desktop` con `x-scheme-handler/memobrain` su Linux.
 - Poiché uno scheme custom può essere rivendicato da altre applicazioni, la sicurezza si basa su PKCE (S256) e sul controllo di `state`; `code_verifier` e `state` restano solo in memoria dell'istanza che ha avviato il login.
@@ -195,7 +205,7 @@ sequenceDiagram
   participant PG as PostgreSQL
   participant S3 as Object Storage
 
-  FS-->>SE: fsnotify (debounce 1–2 s) / riconciliazione all'avvio
+  FS-->>SE: watcher, FSEvents su macOS e fsnotify altrove (debounce 1–2 s) / riconciliazione all'avvio
   SE->>SE: calcola SHA-256, confronta con sync.db → coda locale (outbox)
 
   rect rgb(235,245,255)
@@ -393,14 +403,14 @@ Esistono due consumatori del Markdown con esigenze diverse:
 | **Indicizzazione** (backend) | `goldmark` + estensioni custom | link, embed, tag, heading, block-id, task, properties, footnote |
 | **Rendering/Editor** (frontend) | Lezer-markdown (editor), remark/rehype (reading) | DOM |
 
-Per evitare divergenze (es. un link visto dal grafo ma non dal renderer) si impone una **suite di conformità condivisa**: fixture `.md` + JSON atteso in `shared/conformance/`, eseguita sia in Go che in TypeScript a ogni CI. Nessuna release con fixture non verdi.
+Per evitare divergenze (es. un link visto dal grafo ma non dal renderer) si impone una **suite di conformità condivisa**: fixture `.md` + JSON atteso in `shared/conformance/`, eseguita sia in Go che in TypeScript da `task conformance`, parte del cancello locale `task ci` (§4.5, ADR-0036). Nessun merge su `main` né release con fixture non verdi.
 
 ### 2.4 Indicizzazione e ricerca locale
 
 **Indicizzatore (Go, incrementale)**
 
 1. All'apertura del vault: scansione e confronto `(path, mtime, size, hash)` con `index.db`; re-parse solo dei file cambiati.
-2. A runtime: `fsnotify` con debounce; coalescing di rename (stesso hash, path diverso).
+2. A runtime: eventi del watcher (FSEvents su macOS, `fsnotify` altrove, §2.5) con debounce; coalescing di rename (stesso hash, path diverso).
 3. Per ogni nota estrae: titolo, alias, heading (con livello e posizione), link/embed (con target, heading, block, testo alias, posizione), tag, properties tipizzate, task (stato, riga), block-id, footnote, conteggio parole.
 4. Per i file `.excalidraw`/`.canvas`: testo degli elementi e link degli elementi (diventano archi del grafo e occorrenze di ricerca).
 5. `index.db` è **derivato e non sincronizzato**: può essere ricostruito in ogni momento (comando "Ricostruisci indice").
@@ -427,7 +437,7 @@ Risultati con contesto (snippet evidenziati), ordinamento (rilevanza, nome, modi
 | Modulo | Responsabilità | Dettagli chiave |
 |---|---|---|
 | `vault` | Operazioni su file, vault manager | Scritture **atomiche** (tmp + fsync + rename); rifiuto path traversal (`..`, symlink fuori vault); normalizzazione NFC dei nomi |
-| `watcher` | Eventi FS | `fsnotify` + riconciliazione periodica (gli eventi FS non sono affidabili su tutte le piattaforme) |
+| `watcher` | Eventi FS | **macOS: FSEvents**, un solo stream ricorsivo sulla radice del vault (latenza 50 ms), nessun descrittore per file; CoreServices è raggiunto con `purego`, senza cgo; se FSEvents non si inizializza si torna a `fsnotify`. I flag di eventi persi (`MustScanSubDirs`, `UserDropped`, `KernelDropped`, `RootChanged`) producono una riconciliazione completa. **Linux/Windows: `fsnotify`** (un watch per cartella); al raggiungimento di un limite di sistema (`ENOSPC` di `max_user_watches`, `EMFILE`/`ENFILE`) modalità degradata: nessun nuovo watch, cartelle non osservate contate e registrate una volta, riconciliazione ogni minuto. Ovunque riconciliazione periodica (5 min), perché gli eventi FS non sono affidabili su tutte le piattaforme; nel core eseguito nel browser (workbench web, ADR-0029) è disattivata per default, perché scrive solo il core, che notifica ogni scrittura (ADR-0044) |
 | `parser` / `indexer` | §2.4 | Pool di worker, backpressure |
 | `search` | Query FTS5 | |
 | `links` | Risoluzione link, refactoring al rename | Preview dei file impattati; riscrittura transazionale |
@@ -460,6 +470,11 @@ type SyncAPI interface {
     SyncNow(vaultID string) error
     ListConflicts(vaultID string) ([]ConflictItem, error)
     ResolveConflict(vaultID, conflictID string, choice ResolutionChoice) error
+    // ciclo di vita dei vault cloud (§2.6.1, ADR-0037)
+    ListDeletedCloudVaults() ([]CloudVault, error)
+    RenameCloudVault(cloudVaultID, name string) (CloudVault, error)
+    DeleteCloudVault(cloudVaultID string) error              // scollega i dispositivi, conserva i file locali
+    RestoreCloudVault(cloudVaultID string) (CloudVault, error)
 }
 type VaultCryptoAPI interface {            // solo vault privati
     CreateEncryptedVault(name, passphrase string) (VaultInfo, RecoveryKey, error)
@@ -479,41 +494,47 @@ type VaultCryptoAPI interface {            // solo vault privati
 - Creazione con scelta del tipo (privato cifrato / condiviso, §2.1.1; immutabile), rinomina, eliminazione logica (retention 30 giorni, ripristinabile dall'utente; purge definitivo dopo). Il nome del vault è un metadato in chiaro anche per i vault privati.
 - Più vault per utente; un vault locale esistente può essere "caricato" nel cloud (upload iniziale con barra di avanzamento e ripresa).
 - Un secondo dispositivo si collega scaricando il *manifest* (`/tree`) e poi i blob mancanti. Per i vault privati serve prima lo sblocco con passphrase o recovery key (§3.8.4).
-- Registro dispositivi (`devices`): nome, piattaforma, ultimo accesso; revoca da Web UI.
+- Registro dispositivi (`devices`): nome, piattaforma, ultimo accesso; revoca da Web UI e dal client (il dispositivo corrente è indicato come tale e non si revoca dal proprio elenco, ADR-0037).
+- **Ciclo di vita su tutte le superfici (ADR-0037).** Creazione, rinomina, eliminazione logica, elenco dei vault eliminati (`GET /vaults?include_deleted=true`) e ripristino sono disponibili nel client desktop, nel workbench web (ADR-0029) e nella console web, realizzati una volta sola in `@memobrain/cloud-features` (§4.2). L'eliminazione di un vault, vista da un dispositivo collegato, lo **scollega e conserva i file locali**: mai una cancellazione locale (D-04). Un vault privato si crea solo dove è disponibile il codice crittografico Go (client desktop o workbench web): la console apre il workbench su una rotta di creazione (`/vaults/new/open?kind=private&name=…`) e non duplica la crittografia in TypeScript.
 
 #### 2.6.2 Storico revisioni e ripristino
 
-Ogni commit crea una revisione immutabile. Retention di sistema configurabile (default: tutte le revisioni per 30 giorni, poi 1 al giorno fino a 90 giorni). UI client "Cronologia nota": elenco, diff, ripristino come nuova revisione. Nei vault privati le revisioni sono ciphertext: il diff è calcolato dal client dopo la decifratura e il ripristino riutilizza il blob della revisione scelta.
+Ogni commit crea una revisione immutabile. Retention di sistema configurabile (default: tutte le revisioni per 30 giorni, poi 1 al giorno fino a 90 giorni). Il job di retention scorre i candidati con paginazione keyset per `(file_id, server_time, id)`, così la regola "ultima revisione del giorno" vale anche tra una pagina e l'altra; le copie di conflitto non lo bloccano (il riferimento `conflict_of` si azzera quando la revisione dell'originale viene potata, §3.2.2); nella stessa transazione avanza la compattazione del changelog (§3.4.4 B) (ADR-0038). UI client "Cronologia nota": elenco, diff, ripristino come nuova revisione. Nei vault privati le revisioni sono ciphertext: il diff è calcolato dal client dopo la decifratura e il ripristino riutilizza il blob della revisione scelta.
 
 #### 2.6.3 Quote di archiviazione
 
 - Quota **globale di default** (`settings.storage.default_quota_bytes`) e **override per utente** (anche "illimitata").
 - Uso = somma delle dimensioni dei file correnti dei vault di cui l'utente è owner (le cartelle condivise gravano sull'owner). Lo storico revisioni **non** è conteggiato (D-03). Nei vault privati si misura la dimensione del ciphertext (pochi byte in più per file).
 - Soglie: 80% avviso, 95% avviso forte, 100% blocco delle scritture (`413 QUOTA_EXCEEDED`); letture, cancellazioni ed export restano consentiti.
-- Il contatore `users.used_bytes` è aggiornato nella stessa transazione del commit; un job notturno di riconciliazione corregge eventuali derive.
+- Il contatore `users.used_bytes` è aggiornato nella stessa transazione del commit; un job notturno di riconciliazione corregge eventuali derive (ogni correzione blocca la riga, ricalcola il valore e scrive solo se differisce, ADR-0038).
 
 #### 2.6.4 Condivisione
 
 - Solo i vault di tipo **condiviso** possono essere condivisi (D-02). Unità condivisibile: **vault intero**, **cartella** (prefisso di path) o **documento singolo**.
 - Destinatari: utenti e/o gruppi. Livelli: `viewer`, `editor`, `manager`.
+- **Chi crea uno share (ADR-0041).** L'owner del vault, oppure un utente con un grant `manager` **accettato** su uno share attivo (non revocato né scaduto) dello stesso vault, ma solo **dentro l'ambito** di quello share (vault ⊇ cartella con il prefisso ⊇ file) e con grant iniziali non superiori a `manager`; lo share creato ha `created_by` = il manager. Revoca dello share ed eliminazione del vault restano al solo owner (§3.3.2). Il manager che ha creato uno share può rinominarlo, cambiarne la scadenza e gestirne i grant finché conserva un grant `manager` valido su uno share che lo contiene; se lo perde (revoca o scadenza), gli share che ha creato **restano attivi** con i loro grant e passano alla sola gestione dell'owner. Una richiesta fuori dall'ambito di ogni share gestito risponde `403 FORBIDDEN`; l'audit `share.create` registra il manager come attore e lo share che copre l'ambito (`via_share`). Senza il vincolo di contenimento un manager di una cartella potrebbe condividere l'intero vault.
+- **Cancellazione di un account che ha concesso grant (ADR-0041, modifica ADR-0021).** I grant concessi dall'utente come `manager` su vault di **altri** proprietari restano validi e sono riattribuiti al proprietario del vault (`granted_by`), con audit `share.grants_reattributed` e notifica `ShareChanged{kind: updated}` per ogni share toccato; i grant sui vault dell'account stesso sono cancellati, perché quei vault entrano in conservazione.
 - Il destinatario vede la risorsa come **mount**, cioè come vault separato (cartella radice col nome dello share). I documenti singoli compaiono in un mount virtuale "Condivisi con me".
 - Nessuna funzione cross-vault (D-06): un link tra una nota di un altro vault e una nota del mount (o viceversa) non viene risolto; grafo, ricerca e backlink non attraversano i vault.
 - **Collaborazione asincrona** (D-04): non c'è editing simultaneo né presenza. Il merge automatico tra utenti diversi è garantito per i soli file `.md`; per gli altri tipi di file un conflitto tra autori diversi produce sempre una copia di conflitto (§3.4.5).
 - Revoca immediata: al successivo evento/sync il client smonta il contenuto condiviso e lo rimuove (opzione: mantenere copia locale scollegata).
-- Lo spostamento di file fuori dal prefisso condiviso appare ai destinatari come cancellazione.
+- Lo spostamento di file fuori dal prefisso condiviso appare ai destinatari come cancellazione. Il rename di una cartella condivisa (anche se cambia solo maiuscole/minuscole) è invece un'operazione atomica `move_prefix`: lo share segue la cartella e i destinatari continuano a sincronizzare (§3.4.7, ADR-0040).
 
 #### 2.6.5 Utenze e gruppi
 
 | Funzione | Descrizione |
 |---|---|
 | Utenti | Provisioning just-in-time al primo login + creazione da admin (che crea l'utente in Keycloak via Admin API con azione richiesta "imposta password / verifica email"). |
-| Gruppi | **Entità applicative** nel DB del Cloud (non gruppi Keycloak), per tenere separati identità e autorizzazione. Un utente può appartenere a più gruppi; ruolo nel gruppo `member` / `manager`. I gruppi sono gestiti **esclusivamente** dal Cloud Service (D-05): nessun import da Keycloak/LDAP e nessun claim di gruppo nel token; la membership è sempre risolta lato server. |
+| Gruppi | **Entità applicative** nel DB del Cloud (non gruppi Keycloak), per tenere separati identità e autorizzazione. Un utente può appartenere a più gruppi; ruolo nel gruppo `member` / `manager`. In v1 il ruolo `manager` è **riservato**: memorizzato e mostrato, ma senza effetti di autorizzazione (gruppi e membri si gestiscono solo da `/admin/groups`, §3.5.5); un'estensione, ad esempio la gestione dei membri del proprio gruppo, va decisa in una versione successiva dello spec (ADR-0041). I gruppi sono gestiti **esclusivamente** dal Cloud Service (D-05): nessun import da Keycloak/LDAP e nessun claim di gruppo nel token; la membership è sempre risolta lato server. |
+| Ruoli ed eliminazione | Il ruolo globale (`admin`/`user`) cambiato dalla console prevale sui token emessi prima del cambio (§1.3); il cambio richiede l'Admin API di Keycloak (`409 INVALID_STATE` se non è configurata, invece di un ruolo che il token successivo annullerebbe). Sospensione, degradazione ed eliminazione non possono lasciare il servizio senza amministratori attivi: la verifica avviene sotto lock delle righe di tutti gli amministratori attivi, rileggendo il bersaglio. L'eliminazione dalla console segue lo stesso percorso della cancellazione dell'account (§3.7): anonimizzazione immediata, vault in conservazione, rimozione di appartenenze, grant ricevuti, upload ed export pronti, riattribuzione dei grant concessi su vault altrui (§2.6.4) (ADR-0041). |
 | Condivisione di massa | Un grant a un gruppo vale per tutti i membri presenti e futuri. |
 | Config distribuita | Vedi §2.6.6. |
 
 #### 2.6.6 Distribuzione centralizzata delle configurazioni
 
 **Config Profile**: documento JSON versionato, validato da JSON Schema, assegnabile a uno o più gruppi con priorità.
+
+**Schema unico e feature flag generati (ADR-0037).** Lo schema è uno solo, `api/config-profile.schema.json`. Ogni feature flag (`features.<nome>`, booleani piatti con underscore, es. `web_workbench`, `sharing`, `path_v2`) vi è dichiarato con default e descrizione; `task gen` ne ricava nomi, default dei flag e default di prodotto per Go (`shared/go/features`, usato dal cloud e dal core del client, che incorpora una copia byte per byte dello schema per la validazione) e per TypeScript (`@memobrain/api-client/features`, usato da workbench e console). Nessun altro punto elenca i flag a mano. Un flag sconosciuto alla build è considerato acceso salvo che la configurazione lo spenga, così una funzione più recente della build resta disponibile.
 
 Ordine di risoluzione (ultimo vince):
 
@@ -554,7 +575,7 @@ Il client conserva l'ultima config valida in cache locale (utilizzabile offline)
 #### 2.7.3 Requisiti tecnici
 
 - Dipendenza `@excalidraw/excalidraw` (licenza MIT) caricata **lazy** (code-splitting) per non penalizzare l'avvio.
-- **Offline obbligatorio**: di default Excalidraw può caricare font/asset da CDN; impostare `window.EXCALIDRAW_ASSET_PATH` verso asset locali inclusi nel bundle e verificare in CI l'assenza di richieste di rete.
+- **Offline obbligatorio**: di default Excalidraw può caricare font/asset da CDN; impostare `window.EXCALIDRAW_ASSET_PATH` verso asset locali inclusi nel bundle e verificare con i test end-to-end (`task e2e`, suite da eseguire prima di ogni rilascio, §4.5, ADR-0036) l'assenza di richieste di rete.
 - Verificare la compatibilità tra la versione di Excalidraw e la major di React adottata prima di fissare il lockfile.
 - Il disegno è un file come gli altri per sync, storico, quota e permessi; la strategia di merge specifica è al §3.4.5.
 
@@ -568,7 +589,7 @@ SPA React/TS servita dal Cloud Service, autenticata via OIDC PKCE verso Keycloak
 |---|---|
 | **Dashboard storage** | Spazio totale usato, top utenti per consumo, utenti oltre soglia, trend. |
 | **Limiti di archiviazione** | Modifica quota globale di default; quota personalizzata per singolo utente (valore, "usa default", "illimitata"); azioni in blocco da selezione. |
-| **Utenti** | Tabella con ricerca/filtri (stato, ruolo, gruppo); creazione; **attivazione / sospensione**; assegnazione ruolo (`admin`/`user`); reset password (azione Keycloak); eliminazione con conferma; dettaglio con vault (nome, tipo privato/condiviso, dimensione, **mai il contenuto**), dispositivi, sessioni. |
+| **Utenti** | Tabella con ricerca/filtri (stato, ruolo, gruppo); creazione; **attivazione / sospensione**; assegnazione ruolo (`admin`/`user`, prevale sui token emessi prima del cambio e richiede l'Admin API di Keycloak, §2.6.5); reset password (azione Keycloak); eliminazione con conferma (stesso percorso della cancellazione dell'account; mai l'ultimo amministratore attivo, §2.6.5); dettaglio con vault (nome, tipo privato/condiviso, dimensione, **mai il contenuto**), dispositivi, sessioni. |
 | **Gruppi** | CRUD gruppi; gestione membri (aggiunta/rimozione, ruolo nel gruppo); profili di configurazione assegnati con priorità. |
 | **Config Profile** | Editor JSON con validazione da schema, anteprima della config effettiva per un utente, cronologia versioni, rollback. |
 | **Audit log** | Ricerca per attore/azione/periodo; export CSV. |
@@ -580,7 +601,7 @@ Principio di riservatezza: gli amministratori gestiscono **metadati** (utenti, q
 | Schermata | Funzioni |
 |---|---|
 | **Spazio utilizzato** | Barra di utilizzo vs quota, dettaglio per vault, avvisi alle soglie. |
-| **I miei vault** | Elenco con tipo (privato cifrato / condiviso), dimensione, numero file, ultima sincronizzazione; **Download ZIP**. |
+| **I miei vault** | Elenco con tipo (privato cifrato / condiviso), dimensione, numero file, ultima sincronizzazione; creazione, rinomina, eliminazione logica e sezione dei vault eliminati con ripristino (gli stessi componenti del client, §2.6.1; un vault privato si crea aprendo il workbench, ADR-0037); **Download ZIP**. |
 | **Download ZIP** | Archivio dell'ultima revisione di tutti i file del vault (path originali, escluse le parti di `.memobrain/` specifiche del dispositivo). **Vault condivisi:** lo ZIP è generato dal server (streaming immediato per i vault piccoli; job asincrono con link temporaneo, scadenza 24 h, per i grandi). **Vault privati:** il server non può leggere i contenuti, quindi i blob cifrati vengono scaricati e decifrati **nel browser** dopo l'inserimento della passphrase (o della recovery key) e lo ZIP è assemblato localmente in streaming; passphrase e chiavi non lasciano mai il browser. Per vault molto grandi si raccomanda l'esportazione dal client desktop ("Esporta vault come ZIP"). |
 | **Dispositivi** | Elenco e revoca. |
 | **Condivisioni** | Cartelle condivise da me / con me. |
@@ -600,7 +621,7 @@ Principio di riservatezza: gli amministratori gestiscono **metadati** (utenti, q
 | Tema | Specifica |
 |---|---|
 | Versionamento | `/api/v1`; modifiche breaking → `/api/v2`. |
-| Contratto | **OpenAPI 3.1** come fonte unica (`api/openapi.yaml`); generazione stub Go (`oapi-codegen`) e client TS tipizzato. gRPC con `proto/` + `buf`. |
+| Contratto | **OpenAPI 3.1** come fonte unica (`api/openapi.yaml`); con `oapi-codegen` e il generatore TS si producono gli stub del server Go, il client TS tipizzato (`@memobrain/api-client`) e il **client Go** (tipi e client in `shared/go/apiclient`) usato dal motore di sync del client, il cui `sync/transport` è un involucro sottile (retry, `Idempotency-Key`, decodifica di `problem+json`, request id) senza strutture copiate a mano. Upload tus e stream SSE `/events` restano fuori dal codice generato ma sono documentati nell'OpenAPI. **Contract test**: ogni richiesta e risposta del client di sync è validata contro `openapi.yaml` (kin-openapi `openapi3filter`) e un test allinea l'enum `ErrorCode` alle costanti di `shared/go/syncproto` (ADR-0037). gRPC con `proto/` + `buf`. |
 | Autenticazione | `Authorization: Bearer <JWT Keycloak>` su ogni chiamata (tranne `/healthz`, `/readyz`). |
 | Formato | JSON UTF-8; timestamp RFC 3339 UTC; dimensioni in byte; ID = UUID v7. |
 | Errori | `application/problem+json` (RFC 9457) con campo `code` applicativo. |
@@ -625,7 +646,7 @@ Principio di riservatezza: gli amministratori gestiscono **metadati** (utenti, q
 }
 ```
 
-Codici applicativi principali: `UNAUTHENTICATED`, `FORBIDDEN`, `USER_SUSPENDED`, `NOT_FOUND`, `VALIDATION_FAILED`, `QUOTA_EXCEEDED`, `FILE_TOO_LARGE`, `REV_CONFLICT`, `PATH_INVALID`, `PATH_COLLISION`, `SHARE_ROOT_MOVE`, `BLOB_MISSING`, `VAULT_ENCRYPTED` (operazione non ammessa su vault privato: share, export lato server, `move_prefix`), `VAULT_KIND_IMMUTABLE`, `RATE_LIMITED`.
+Codici applicativi principali: `UNAUTHENTICATED`, `FORBIDDEN`, `USER_SUSPENDED`, `NOT_FOUND`, `VALIDATION_FAILED`, `QUOTA_EXCEEDED`, `FILE_TOO_LARGE`, `REV_CONFLICT`, `PATH_INVALID`, `PATH_COLLISION`, `SHARE_ROOT_MOVE`, `BLOB_MISSING`, `VAULT_ENCRYPTED` (operazione non ammessa su vault privato: share, export lato server, `move_prefix`), `VAULT_KIND_IMMUTABLE`, `CURSOR_EXPIRED` (§3.4.4 B), `INVALID_STATE` (operazione non ammessa nello stato corrente, con `detail`: ad es. conflitto di identità al login, cambio di ruolo senza Admin API di Keycloak, ADR-0041), `RATE_LIMITED`.
 
 ### 3.2 Schema del database (PostgreSQL)
 
@@ -661,7 +682,8 @@ CREATE TABLE users (
   email                 CITEXT      NOT NULL,
   display_name          TEXT,
   role                  TEXT        NOT NULL DEFAULT 'user'
-                         CHECK (role IN ('admin','user')),   -- specchio del realm role
+                         CHECK (role IN ('admin','user')),   -- realm role del token, salvo cambio più recente dalla console
+  role_changed_at       TIMESTAMPTZ,                         -- ultimo cambio di ruolo dalla console: vale il token solo se iat > role_changed_at (ADR-0041)
   status                TEXT        NOT NULL DEFAULT 'active'
                          CHECK (status IN ('pending','active','suspended','deleted')),
   quota_bytes_override  BIGINT      CHECK (quota_bytes_override >= -1),  -- NULL=default, -1=illimitata
@@ -712,6 +734,7 @@ CREATE TABLE vaults (
   name        TEXT NOT NULL,
   kind        TEXT NOT NULL CHECK (kind IN ('private','shared')),  -- immutabile (D-02)
   last_seq    BIGINT NOT NULL DEFAULT 0,          -- contatore monotono del changelog
+  compaction_seq BIGINT NOT NULL DEFAULT 0,       -- le voci del changelog fino a qui non sono più servite (§3.4.4 B, ADR-0038)
   total_bytes BIGINT NOT NULL DEFAULT 0,
   file_count  INT    NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -741,7 +764,7 @@ CREATE TABLE blobs (
 CREATE TABLE files (
   id          UUID PRIMARY KEY,                   -- file_id stabile
   vault_id    UUID NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
-  path        TEXT NOT NULL,                      -- shared: path in chiaro (NFC); private: token opaco "enc1:<base64url>" (path cifrato)
+  path        TEXT NOT NULL,                      -- shared: path in chiaro (NFC); private: token opaco "enc1:…" o "enc2:…" (path cifrato, §3.8.3)
   path_key    TEXT NOT NULL,                      -- shared: NFC + casefold (unicità cross-OS); private: "hmac1:<hex>" (HMAC del path normalizzato)
   kind        TEXT NOT NULL DEFAULT 'other',      -- md|canvas|base|excalidraw|attachment|config|other ('opaque' nei vault privati)
   current_rev INT  NOT NULL,                      -- rev_no corrente
@@ -753,6 +776,7 @@ CREATE TABLE files (
 );
 CREATE UNIQUE INDEX files_path_uq ON files (vault_id, path_key) WHERE NOT is_deleted;
 CREATE INDEX files_vault_prefix_ix ON files (vault_id, path_key text_pattern_ops);
+CREATE INDEX files_blob_ix ON files (blob_hash) WHERE blob_hash IS NOT NULL;  -- controllo del GC dei blob (ADR-0038)
 
 CREATE TABLE file_revisions (                      -- append-only
   id          UUID PRIMARY KEY,
@@ -770,11 +794,13 @@ CREATE TABLE file_revisions (                      -- append-only
   device_id   UUID REFERENCES devices(id),
   client_mtime TIMESTAMPTZ,                        -- solo informativo
   server_time TIMESTAMPTZ NOT NULL DEFAULT now(),  -- tempo autoritativo
-  conflict_of UUID REFERENCES file_revisions(id),  -- se è una conflict copy
-  UNIQUE (vault_id, seq),
+  conflict_of UUID REFERENCES file_revisions(id) ON DELETE SET NULL,  -- conflict copy: revisione dell'originale (si azzera se la retention la pota)
+  conflict_of_file UUID,                           -- conflict copy: file originale, scritto al commit; il changelog lo restituisce come conflict_of
+  UNIQUE (vault_id, seq),                          -- serve anche il changelog per vault (nessun indice separato)
   UNIQUE (file_id, rev_no)
 );
-CREATE INDEX file_revisions_changes_ix ON file_revisions (vault_id, seq);
+CREATE INDEX file_revisions_conflict_of_ix ON file_revisions (conflict_of) WHERE conflict_of IS NOT NULL;
+CREATE INDEX file_revisions_retention_ix ON file_revisions (file_id, server_time, id);  -- paginazione keyset della retention
 
 -- ===== Condivisione e permessi =====
 CREATE TABLE shares (
@@ -862,6 +888,8 @@ CREATE INDEX audit_log_at_ix ON audit_log (at DESC);
 - Nei vault `private`, `files.path`, `file_revisions.path` e `prev_path` contengono token opachi; `blobs.hash` è lo SHA-256 del **ciphertext**; `files.kind` vale `opaque`.
 - L'indice `files_vault_prefix_ix` serve solo i vault `shared` (scope di share per prefisso).
 - Ricerca full-text lato server: **non prevista** (la ricerca è locale; i contenuti non vengono indicizzati dal server).
+- **Copie di conflitto e retention (ADR-0038).** `conflict_of` è `ON DELETE SET NULL`: la retention può potare la revisione dell'originale senza fallire. Il changelog restituisce come `conflict_of` il valore di `conflict_of_file`, quindi la risposta API non dipende dalla sopravvivenza della revisione referenziata (migrazione `0007_retention_fixes.sql`).
+- Il DDL è di riferimento: le tabelle operative non riportate (ad es. `uploads` delle sessioni tus, con `chunk_keys` dalla migrazione `0009_upload_chunk_keys.sql`) e i dettagli esatti sono nelle migrazioni versionate di `services/cloud/internal/db/migrations`, che fanno fede.
 
 ### 3.3 Autenticazione e autorizzazione
 
@@ -897,6 +925,7 @@ CREATE INDEX audit_log_at_ix ON audit_log (at DESC);
 | Vedere storico revisioni | ✓ | ✓ | ✓ | ✓ |
 | Ripristinare revisioni | — | ✓ | ✓ | ✓ |
 | Gestire grant dello share | — | — | ✓ | ✓ |
+| Creare share (il manager solo dentro l'ambito dello share che gestisce e con grant fino a `manager`, ADR-0041) | — | — | ✓ | ✓ |
 | Eliminare lo share / il vault | — | — | — | ✓ |
 
 **Algoritmo di permesso effettivo** per `(utente U, vault V, path P)`:
@@ -940,11 +969,21 @@ sync_files(vault_id, path, file_id, server_rev, server_hash, local_hash, local_s
 sync_cursor(vault_id, last_seq)
 outbox(op_id, vault_id, kind, payload, created_at, attempts)
 conflicts(id, vault_id, file_id, path, local_hash, remote_rev, created_at, status)
+pending_remote(file_id PK, rev, change JSON, created_at)   -- candidati al merge (ADR-0039)
+quarantine(file_id PK, rev, reason, created_at)            -- voci del server illeggibili (ADR-0039)
 ```
+
+Regole (ADR-0039):
+
+- **Candidati al merge persistenti.** Una modifica remota che trova il file con modifiche locali si scrive in `pending_remote` **nella stessa transazione** che avanza il cursore della pagina di pull. Il candidato si cancella solo dopo un merge riuscito o quando è superato da una revisione più nuova; se il file cambia durante il merge resta per il ciclo successivo. Un file con un candidato pendente non viene pushato; un commit rifiutato con una revisione corrente più nuova genera un candidato sintetico, così il ciclo successivo esegue il merge invece di ritentare alla cieca. Un candidato irrisolvibile (es. blob sparito) tiene il file fuori dal push e segnala un errore a ogni ciclo, finché una modifica più recente del server non lo sostituisce.
+- **Vault privato bloccato.** Un errore di tipo "bloccato" interrompe il pull **prima** che il cursore avanzi (fase `locked`); il blocco manuale attende la fine del ciclo in corso.
+- **Quarantena.** Un path che non si decifra per un motivo diverso dal blocco (o un token rifiutato dal pinning di §3.8.7) va in `quarantine`, con `last_error` della riga e log: il file locale non si tocca. Nel bootstrap ogni voce dell'albero conta come "nota" prima della decifratura, quindi non è mai interpretata come una cancellazione del server.
+- **Transazioni.** Una pagina di pull, l'adozione nel bootstrap, il merge (copia di conflitto, conflitto, originale) e il rename dalla UI sono atomici su `sync.db`.
+- Unlink del vault e rimozione di un mount svuotano anche `pending_remote` e `quarantine`.
 
 #### 3.4.4 Ciclo di sincronizzazione
 
-**A. Rilevamento locale.** `fsnotify` (debounce 1–2 s) + riconciliazione all'avvio e ogni 5 min: per ogni file confronta `(mtime,size)` e, se diversi, ricalcola SHA-256 → aggiorna `state`. Un rename è riconosciuto se sparisce un path e ne compare un altro con **stesso hash** (o, per modifiche contestuali, stesso `file_id` noto tramite il binding `RenameWithLinkUpdate`) → op `move`.
+**A. Rilevamento locale.** Eventi del watcher (FSEvents su macOS, `fsnotify` su Linux/Windows, §2.5, ADR-0044; debounce 1–2 s) + riconciliazione all'avvio e ogni 5 min (ogni minuto in modalità degradata): per ogni file confronta `(mtime,size)` e, se diversi, ricalcola SHA-256 → aggiorna `state`. Un rename è riconosciuto se sparisce un path e ne compare un altro con **stesso hash** (o, per modifiche contestuali, stesso `file_id` noto tramite il binding `RenameWithLinkUpdate`) → op `move`.
 
 **B. Pull.**
 
@@ -958,10 +997,12 @@ Per ogni modifica remota (in ordine di `seq`):
 |---|---|
 | `synced` | Scarica blob, scrittura atomica, aggiorna `server_rev/hash` |
 | Non esiste localmente | Crea |
-| `local_modified` / `local_moved` / `local_deleted` | **Candidato conflitto** → risoluzione (§3.4.5), dopo aver completato il pull |
+| `local_modified` / `local_moved` / `local_deleted` | **Candidato conflitto**, salvato in `pending_remote` (§3.4.3) → risoluzione (§3.4.5), dopo aver completato il pull |
 | Modifica originata dallo stesso `device_id` | Ignora (eco) |
 
-Il `cursor` avanza solo dopo l'applicazione durevole del batch. Se `since` è più vecchio della finestra di compattazione del changelog → risposta `410 CURSOR_EXPIRED` e il client esegue **bootstrap** da `GET /tree`.
+Il `cursor` avanza solo dopo l'applicazione durevole del batch (i candidati al conflitto sono salvati nella stessa transazione, §3.4.3). Se `since` è più vecchio della finestra di compattazione del changelog (`since < vaults.compaction_seq`) → risposta `410 CURSOR_EXPIRED` e il client esegue **bootstrap** da `GET /tree`.
+
+**Finestra effettiva del changelog (ADR-0038).** La finestra nominale è `sync.changelog_window_days` (90 giorni), ma la retention dello storico (§2.6.2) pota prima le revisioni non correnti. Per non servire mai un changelog con dei salti, nella stessa transazione del prune `compaction_seq` avanza, per ogni vault, fino al `seq` più alto tra le revisioni cancellate con operazione **diversa da `modify`** (`create`, `move`, `delete`, `restore`). Le `modify` superate si possono perdere senza danno, perché una revisione successiva dello stesso file porta il contenuto aggiornato. Un cursore precedente a un'operazione strutturale potata riceve quindi `CURSOR_EXPIRED` e il client esegue il bootstrap, che non cestina alcun file locale senza prova: per un client rimasto indietro oltre una tale operazione la finestra effettiva si riduce a circa `history.retention_days`.
 
 **C. Push.**
 
@@ -971,7 +1012,7 @@ Il `cursor` avanza solo dopo l'applicazione durevole del batch. Se `since` è pi
 
 Nelle op `create` il `file_id` è generato dal client (UUID v7; nei vault privati entra anche nei dati autenticati della cifratura, §3.8); il server rifiuta identificativi già esistenti.
 
-**D. Notifica.** Dopo il commit, il server emette un evento (`vault_id`, `seq`) via stream gRPC `Subscribe` (o SSE `/events` come fallback per proxy aziendali). I client interessati avviano un pull; in assenza di stream, polling adattivo (30 s → 5 min).
+**D. Notifica.** Dopo il commit, il server emette un evento (`vault_id`, `seq`) via stream gRPC `Subscribe` (o SSE `/events` come fallback per proxy aziendali). I client interessati avviano un pull; in assenza di stream, polling adattivo (30 s → 5 min). Comportamento dell'hub (riallineamento dopo una riconnessione, limiti per utente) al §3.6.
 
 Backoff esponenziale con jitter su errori di rete e `5xx`; `429` rispetta `Retry-After`.
 
@@ -996,7 +1037,7 @@ Backoff esponenziale con jitter su errori di rete e `5xx`; `429` rispetta `Retry
 | **Rename vs rename (stesso file)** | Vince il primo commit; il secondo viene rimappato | |
 | **Create vs create sullo stesso path** (file_id diversi) | Il secondo diventa `nome (1).md` | `PATH_COLLISION` |
 
-**Conflict copy**: nome `<nome> (conflitto <dispositivo> <AAAA-MM-GG HH-mm>).<ext>`, creato come nuovo file (nuovo `file_id`, `conflict_of` valorizzato), sincronizzato come ogni altro file affinché tutti i dispositivi lo vedano.
+**Conflict copy**: nome `<nome> (conflitto <dispositivo> <AAAA-MM-GG HH-mm>).<ext>`, creato come nuovo file (nuovo `file_id`, `conflict_of` valorizzato), sincronizzato come ogni altro file affinché tutti i dispositivi lo vedano. La copia si scrive sul disco **prima** di sovrascrivere l'originale e lo stato in `sync.db` (copia, conflitto, originale) si aggiorna in una sola transazione; il nome si tronca su confini di carattere UTF-8, entro i limiti di §3.4.2 (ADR-0039).
 
 **Flusso di decisione (client, per ogni candidato conflitto)**
 
@@ -1043,6 +1084,23 @@ Il server filtra le revisioni per prefisso e ACL e applica queste trasformazioni
 
 Un rename della cartella radice condivisa è gestito con l'op atomica `move_prefix` (aggiorna anche `shares.path_prefix`); un rename "file per file" che sposterebbe fuori dallo scope l'intera radice è rifiutato con `SHARE_ROOT_MOVE`.
 
+**Rename di cartelle nei vault condivisi (ADR-0040).** `move_prefix` (una revisione `move` per ogni file sotto il prefisso, nella stessa transazione, con ribasamento degli share di cartella) e `SHARE_ROOT_MOVE` sono l'unico modo di rinominare una cartella condivisa.
+
+*Regole del server:*
+
+- `move_prefix` ammette il rename che cambia solo maiuscole/minuscole (stessa `path_key`, path diverso); un path identico è rifiutato con `VALIDATION_FAILED`, lo spostamento di una cartella dentro sé stessa con `PATH_INVALID`;
+- una `move_prefix` di una cartella **dentro** uno share di cartella verso un path **fuori** da esso, che porterebbe via tutti i file dello share, è rifiutata con `SHARE_ROOT_MOVE`, come la `move` dell'ultimo file; se nello share resta almeno un file è un rename normale e i destinatari vedono le cancellazioni;
+- una `move_prefix` fatta da un editor **attraverso un mount** ribasa gli share annidati nella cartella spostata; la radice del mount non è rinominabile (`SHARE_ROOT_MOVE`). La stessa protezione degli share annidati vale per le `move` per file fatte da un mount, con i path dell'errore relativi al mount.
+
+*Comportamento del client* (motore di sync del desktop, che è anche il core del workbench web):
+
+- **vault condiviso:** una cartella rinominata (azione della UI o scansione) diventa una sola `move_prefix` quando tutti i file che il server ha sotto la vecchia cartella risultano spostati allo stesso path relativo sotto la nuova (o cancellati) e la vecchia cartella non esiste più sul disco, con confronto esatto del nome, così il rename solo-maiuscole su un file system case-insensitive è riconosciuto; si sceglie la cartella più esterna che soddisfa la regola. Le `delete` sotto la cartella partono prima della `move_prefix`; dopo `accepted` le revisioni arrivano con l'eco delle `move` al pull successivo. Un file con un candidato al merge pendente trattiene l'intero rename;
+- **`move_prefix` rifiutata** (collisione, `FORBIDDEN`, `NOT_FOUND`, …): il round successivo invia le `move` singole, ciascuna con il proprio esito;
+- **`SHARE_ROOT_MOVE` su una `move` singola:** il client chiede le radici degli share di cartella del vault (`GET /shares?scope=owned`) e, se il file ha mantenuto il suo posto sotto il nuovo nome della radice, invia la `move_prefix` della radice, e lo share segue. Altrimenti lo spostamento resta **parcheggiato** in locale (riga `local_moved` ferma, `last_error` con il codice del server, stato della sync che spiega che il file è uscito da una cartella condivisa), il file resta dove l'utente l'ha messo (D-04); riportarlo dentro o spostarlo di nuovo lo sblocca. Da un mount la radice non è ricostruibile e lo spostamento resta parcheggiato;
+- **mount (destinatario editor):** stesso comportamento con path relativi alla radice dello share; dopo il rename della radice da parte dell'owner i file "rientrano" allo stesso path relativo e, con lo stesso blob, il client aggiorna solo la revisione senza riscaricarli;
+- **pull:** una serie consecutiva di `move` che rinomina un'intera cartella locale (nessun altro file sotto la cartella, destinazione libera) si applica con un solo rename della directory e una transazione su `sync.db`; negli altri casi le `move` si applicano una per una;
+- **vault privato:** invariato, `move` per file con il path cifrato di nuovo (§3.8.5).
+
 ### 3.5 Specifica delle API REST
 
 Base URL: `https://<host>/api/v1`. Colonna **Ruolo**: `U` = utente autenticato (con i permessi sulla risorsa), `A` = admin.
@@ -1052,25 +1110,25 @@ Base URL: `https://<host>/api/v1`. Colonna **Ruolo**: `U` = utente autenticato (
 | Metodo | Path | Ruolo | Descrizione |
 |---|---|---|---|
 | GET | `/client-config` | pubblico | Bootstrap del client: `issuer` OIDC, `desktop_client_id`, `audience`, `grpc_endpoint`, `api_version`. Permette di avviare il login conoscendo solo l'URL del server (ADR-0008) |
-| GET | `/me` | U | Profilo, ruolo, quota effettiva, uso, versione config |
+| GET | `/me` | U | Profilo, ruolo, quota effettiva, uso, versione config (`config_version` = revisione di configurazione `config.revision`, la stessa di `ConfigChanged.version` e della config effettiva: il client la confronta con la propria per sapere se rileggere `/config/effective`, ADR-0041) |
 | GET | `/me/usage` | U | Uso per vault e soglie |
 | GET | `/me/devices` | U | Dispositivi registrati |
 | POST | `/me/devices` | U | Registra dispositivo (ritorna `device_id`) |
 | DELETE | `/me/devices/{id}` | U | Revoca dispositivo |
 | GET | `/me/groups` | U | Gruppi di cui sono membro |
 | GET | `/config/effective` | U | Config effettiva (supporta `ETag`/`If-None-Match`) |
-| GET | `/directory/users?q=` | U | Ricerca utenti per condivisione (campi minimi) |
-| GET | `/directory/groups?q=` | U | Ricerca gruppi (campi minimi) |
+| GET | `/directory/users?q=` | U | Ricerca utenti per condivisione (campi minimi, senza e-mail): username e nome visualizzato per sottostringa (`%` e `_` letterali), e-mail solo per **corrispondenza esatta** senza distinzione di maiuscole, così non si ricostruisce un indirizzo per tentativi né si elencano gli utenti di un dominio (ADR-0041) |
+| GET | `/directory/groups?q=` | U | Ricerca gruppi (campi minimi; caratteri jolly trattati come letterali) |
 
 #### 3.5.2 Vault e storico
 
 | Metodo | Path | Ruolo | Descrizione |
 |---|---|---|---|
-| GET | `/vaults` | U | Vault propri (+ campo `mounts`) |
+| GET | `/vaults` | U | Vault propri (+ campo `mounts`); con `?include_deleted=true` anche i propri vault eliminati logicamente e ancora ripristinabili (`deleted_at` valorizzato, mai in `mounts`; ADR-0037) |
 | POST | `/vaults` | U | Crea vault `{name, kind, key_envelopes?}` (`kind` immutabile; `key_envelopes` obbligatorio per `private`) |
 | GET | `/vaults/{vid}` | U | Dettaglio (dimensione, file, `last_seq`) |
 | PATCH | `/vaults/{vid}` | U (owner) | Rinomina |
-| DELETE | `/vaults/{vid}` | U (owner) | Eliminazione logica |
+| DELETE | `/vaults/{vid}` | U (owner) | Eliminazione logica (i dispositivi collegati si scollegano e conservano i file, §2.6.1) |
 | POST | `/vaults/{vid}:restore` | U (owner) | Ripristino entro la retention |
 | GET | `/vaults/{vid}/tree` | U | Manifest completo `{path,file_id,rev,hash,size}` + `as_of_seq` |
 | GET | `/vaults/{vid}/files/{fid}/revisions` | U | Storico di un file |
@@ -1185,12 +1243,14 @@ Risposta `200` (esito per operazione):
 
 Un conflitto è restituito come `{"status":"conflict","code":"REV_CONFLICT","current_rev":9,"current_hash":"…","current_seq":10488}` per la singola op.
 
+L'op `move_prefix` (`from`, `to`) rinomina atomicamente una cartella dei vault condivisi, anche solo nelle maiuscole/minuscole; nei vault privati non è ammessa (`VAULT_ENCRYPTED`, §3.8.5). Regole del server e comportamento del client sono al §3.4.7 (ADR-0040).
+
 #### 3.5.4 Condivisione
 
 | Metodo | Path | Ruolo | Descrizione |
 |---|---|---|---|
 | GET | `/shares?scope=owned\|received` | U | Elenco share |
-| POST | `/shares` | U (owner/manager) | Crea share con grant iniziali (solo vault condivisi; `409 VAULT_ENCRYPTED` altrimenti) |
+| POST | `/shares` | U (owner/manager) | Crea share con grant iniziali (solo vault condivisi; `409 VAULT_ENCRYPTED` altrimenti). L'owner del vault su qualunque ambito; un *manager* è chi ha un grant `manager` **accettato** su uno share attivo (non revocato né scaduto) dello stesso vault, e può creare share solo **dentro l'ambito** di quello share (vault ⊇ cartella con il prefisso ⊇ file) con grant iniziali fino a `manager`; `created_by` è il manager; fuori ambito `403 FORBIDDEN`; gli share creati restano attivi anche se il manager perde il grant (ADR-0041) |
 | GET | `/shares/{id}` | U | Dettaglio (con grant se manager) |
 | PATCH | `/shares/{id}` | U (manager+) | Nome, scadenza |
 | DELETE | `/shares/{id}` | U (owner) | Revoca |
@@ -1219,9 +1279,9 @@ Un conflitto è restituito come `{"status":"conflict","code":"REV_CONFLICT","cur
 |---|---|---|
 | GET | `/admin/users?q=&status=&role=&group=` | Elenco paginato |
 | POST | `/admin/users` | Crea utente (anche in Keycloak) |
-| GET · PATCH · DELETE | `/admin/users/{id}` | Dettaglio / modifica anagrafica / eliminazione |
+| GET · PATCH · DELETE | `/admin/users/{id}` | Dettaglio / modifica anagrafica (prima il DB, poi Keycloak nella stessa transazione: un'e-mail duplicata fallisce prima di toccare Keycloak, un errore di Keycloak annulla la modifica) / eliminazione (stesso percorso della cancellazione dell'account, §2.6.5) |
 | POST | `/admin/users/{id}:suspend` · `:activate` | Sospensione/attivazione (propaga a Keycloak, revoca sessioni) |
-| PUT | `/admin/users/{id}/role` | `{ "role": "admin" \| "user" }` |
+| PUT | `/admin/users/{id}/role` | `{ "role": "admin" \| "user" }`; imposta `role_changed_at`; richiede l'Admin API di Keycloak (`409 INVALID_STATE` se non configurata). Sospensione, degradazione ed eliminazione dell'ultimo amministratore attivo sono rifiutate, con verifica sotto lock (ADR-0041) |
 | PUT | `/admin/users/{id}/quota` | `{ "quota_bytes": 10737418240 }` · `null` = default · `-1` = illimitata |
 | POST | `/admin/users/{id}:reset-password` | Invia azione richiesta Keycloak |
 | GET | `/admin/users/{id}/vaults` | Solo metadati (nome, tipo, dimensioni) |
@@ -1288,6 +1348,12 @@ message AccountChanged { string kind = 1; }
 
 Autenticazione: metadata `authorization: Bearer <JWT>`; a token scaduto lo stream è chiuso con `UNAUTHENTICATED` e il client lo riapre dopo il refresh.
 
+**Hub delle notifiche (ADR-0041).**
+
+- Il listener PostgreSQL (`LISTEN/NOTIFY`) non interroga il database: accoda gli eventi dei vault (coalescendoli per vault) e quelli degli share (coda limitata a 10 000; oltre, si svuota e si chiede un riallineamento) a un dispatcher che risolve proprietari e lettori di un intero lotto con due query. Gli iscritti sono indicizzati per utente; un evento di share invalida solo il vault dello share. Il canale e il payload di `vault_changed` sono definiti una sola volta nel modulo `notify`.
+- **Riallineamento dopo una riconnessione:** quando la connessione `LISTEN` cade e torna in ascolto, l'hub riallinea ogni iscritto dal database, senza nuovi tipi di evento: `VaultChanged` per i vault e `ConfigChanged` per la revisione di configurazione più avanti di quanto l'iscritto conosce (posizioni inviate alla connessione con `known_seq`/`config_version` e quelle spedite dopo), e l'evento di sospensione, che chiude lo stream, per gli account sospesi o eliminati nel frattempo. Gli eventi di share non sono ricostruibili: un vault condiviso nel frattempo compare come evento di vault, uno revocato risponde `NOT_FOUND` al pull successivo.
+- **Limiti:** al massimo 32 stream per utente e per replica (`RESOURCE_EXHAUSTED` su gRPC, `429 RATE_LIMITED` su SSE); ogni scrittura SSE ha una deadline di 30 s. gRPC: recovery dei panic, `MaxConnectionAge` 30 minuti con 1 minuto di grazia, spegnimento che chiude prima gli stream (`UNAVAILABLE`) e poi attende `GracefulStop` entro `SHUTDOWN_TIMEOUT`.
+
 ### 3.7 Sicurezza (sintesi dei requisiti)
 
 | Ambito | Requisito |
@@ -1301,8 +1367,8 @@ Autenticazione: metadata `authorization: Bearer <JWT>`; a token scaduto lo strea
 | Storage | Cifratura a riposo (SSE) del bucket e del volume PG; chiavi gestite dall'infrastruttura; vault privati: cifratura end-to-end aggiuntiva lato client (§3.8) |
 | Segreti | Secret manager / variabili d'ambiente; secret del service account Keycloak ruotabile |
 | Audit | Registro di azioni amministrative e di condivisione |
-| Supply chain | SBOM, `govulncheck`, `npm audit`, lockfile firmati, firma e notarizzazione dei binari desktop |
-| Privacy (GDPR) | Esportazione dati utente, cancellazione account con purge, minimizzazione (nessun contenuto indicizzato server-side), retention documentata |
+| Supply chain | SBOM, `govulncheck` (in `task ci`, ADR-0036), `npm audit`, lockfile firmati, firma e notarizzazione dei binari desktop |
+| Privacy (GDPR) | Esportazione dati utente, cancellazione account con purge (anonimizzazione immediata, vault in conservazione; un solo percorso per la cancellazione chiesta dall'utente e l'eliminazione dalla console; i grant concessi su vault altrui sono riattribuiti al proprietario del vault, §2.6.4, ADR-0041), minimizzazione (nessun contenuto indicizzato server-side), retention documentata |
 
 ### 3.8 Cifratura end-to-end dei vault privati (D-02)
 
@@ -1349,7 +1415,17 @@ AAD    : vault_id ‖ file_id ‖ indice_chunk ‖ flag_ultimo_chunk
 - Ogni upload usa un `salt_file` casuale: una nuova `K_file` per ogni revisione, quindi nessun riuso di nonce con la stessa chiave.
 - L'AAD lega il ciphertext a vault, file e posizione: impedisce lo scambio di blob tra file e il troncamento.
 - `blob_hash` è lo SHA-256 dell'intero blob **cifrato**: il server verifica l'integrità del trasferimento senza accedere al contenuto. Non c'è deduplicazione tra file; il client evita i re-upload confrontando l'hash del *plaintext*, conservato solo in `sync.db`.
-- Path: `path_enc = AES-256-GCM(K_path_enc, nonce casuale, path NFC; AAD = vault_id)`, serializzato come `enc1:<base64url>`. Unicità e `PATH_COLLISION`: `path_key = "hmac1:" + hex(HMAC-SHA256(K_path_key, NFC+casefold(path)))`.
+- Path (ADR-0042): due formati del token, distinti dal prefisso, che è la versione. Stessa chiave `K_path_enc`, nonce casuale a 96 bit:
+
+  ```text
+  enc1 = "enc1:" + base64url(nonce (12) ‖ AES-256-GCM(K_path_enc, path NFC; AAD) ‖ tag (16))
+         AAD = vault_id (16 B)
+  enc2 = "enc2:" + base64url(nonce (12) ‖ AES-256-GCM(K_path_enc, path NFC; AAD) ‖ tag (16))
+         AAD = "memobrain/v2/path" (17 B ASCII) ‖ vault_id (16 B) ‖ file_id (16 B)
+  ```
+
+  `enc2` lega il path al file, come l'AAD dei blob: un server che associ a un file il token di path di un altro file dello stesso vault viene rilevato (decifratura fallita, change in quarantena, file locale intatto, §3.4.3). Le due AAD hanno lunghezze diverse e la v2 ha un prefisso di dominio, quindi un token rietichettato da una versione all'altra non si apre (né upgrade né downgrade). Tutti i client leggono entrambi i formati (`DecryptPathFor(…, vault_id, file_id, token)` in Go, `decryptPathFor` in TS, che passano il `file_id` della change, della voce del tree o della voce del manifest dell'export); la scrittura segue la regola di migrazione del §3.8.7.
+- Unicità e `PATH_COLLISION`: `path_key = "hmac1:" + hex(HMAC-SHA256(K_path_key, NFC+casefold(path)))`, identico per `enc1` ed `enc2` (dipende solo dal path, non dalla versione del token né dal `file_id`), così unicità, ricerca per prefisso e deduplica sul server restano invariate anche in un vault misto.
 
 #### 3.8.4 Flussi
 
@@ -1364,9 +1440,9 @@ AAD    : vault_id ‖ file_id ‖ indice_chunk ‖ flag_ultimo_chunk
 | Funzione | Vault condiviso | Vault privato |
 |---|---|---|
 | Contenuto dei blob | In chiaro | Ciphertext (§3.8.3) |
-| Path nelle API (`changes`, `tree`, `commit`) | In chiaro | Token opaco `enc1:…` |
+| Path nelle API (`changes`, `tree`, `commit`) | In chiaro | Token opaco `enc1:…` o `enc2:…`: il server accetta entrambi i prefissi e li convalida solo per forma (lunghezza, alfabeto base64url, niente separatori), senza interpretarli; nessuna migrazione dello schema (ADR-0042) |
 | Merge e conflitti | Client | Client (invariato) |
-| `move_prefix` e `scope=share` | Supportati | **Non supportati**: i rename di cartella sono emessi dal client come singole op `move` |
+| `move_prefix` e `scope=share` | Supportati (`move_prefix` è il rename delle cartelle, §3.4.7) | **Non supportati**: i rename di cartella sono emessi dal client come singole op `move`, ciascuna con il path cifrato di nuovo (ADR-0040) |
 | Storico e ripristino | Server (riferimento al blob) + diff sul client | Come il condiviso; il diff richiede la decifratura sul client |
 | Quota e limite di dimensione | Dimensione del file | Dimensione del ciphertext |
 | Export ZIP | Server | Browser (WebCrypto) o client desktop |
@@ -1379,7 +1455,16 @@ La copia del vault sul disco del dispositivo e gli indici locali (`index.db`, `s
 
 #### 3.8.7 Implementazione e verifica
 
-Go: `crypto/aes`, `crypto/cipher`, `golang.org/x/crypto/argon2` e `hkdf`. Browser: WebCrypto più una libreria Argon2id in WASM. Formato e parametri sono definiti in `shared/go/vaultcrypto` con **test vector** condivisi (`shared/conformance`) eseguiti in Go e in TypeScript a ogni CI. Audit esterno del design e dell'implementazione prima della 1.0.
+Go: `crypto/aes`, `crypto/cipher`, `golang.org/x/crypto/argon2` e `hkdf`. Browser: WebCrypto più una libreria Argon2id in WASM. Formato e parametri sono definiti in `shared/go/vaultcrypto` con **test vector** condivisi (`shared/conformance`) eseguiti in Go e in TypeScript da `task ci` (ADR-0036). Audit esterno del design e dell'implementazione prima della 1.0.
+
+**Test vector dei path (ADR-0042).** `shared/conformance/crypto/vectors.json` ha la sezione `paths_v2` (vault, file, path, nonce, AAD in esadecimale, token, `hmac1`), con lo stesso path cifrato per due `file_id` diversi; `negative-vectors.json`, sezione `paths` (campo opzionale `file_id`), copre: token `enc2` alterato, di un altro file (`file_id` scambiato), di un altro vault, `enc2` rietichettato `enc1` (downgrade), `enc1` rietichettato `enc2` (upgrade forgiato), `enc2` troncato o non base64url, prefisso sconosciuto `enc3:`. Go (`shared/go/vaultcrypto`) e TS (`packages/vaultcrypto-web`) li verificano entrambi.
+
+**Migrazione dei path a `enc2` e pinning (ADR-0042).** Nessun passo può rendere illeggibile un vault a un dispositivo aggiornato (D-02):
+
+1. **Rilascio N:** tutti i client leggono `enc1` ed `enc2`; il client scrive `enc2` solo se il flag del Config Profile `features.path_v2` è acceso (**spento per default**) oppure se il vault è già annotato come passato a `enc2` su quel dispositivo; altrimenti scrive `enc1`. Il token si riscrive solo quando un file nasce o si sposta. Il flag va acceso solo con un server che accetta `enc2` (§3.8.5).
+2. **Rilascio N+1:** `features.path_v2` acceso per default; il client, a vault sbloccato, riscrive in background in `enc2` i path rimasti `enc1` (move verso lo stesso path, stesso `hmac1`: il server deve ammettere un move il cui `path_key` resta quello del file stesso); quando un tree completo non contiene più token `enc1`, il client accende un **pin forte** di vault e da lì rifiuta qualunque `enc1`.
+
+Pinning (trust on first use, client desktop e core WASM, che hanno `sync.db`): il **pin di vault** `path_v2:<id cloud>` in `sync_meta` si accende quando il motore decifra un token `enc2` del vault o quando il server accetta un `enc2` scritto dal dispositivo, e da allora i nuovi token restano `enc2` anche a flag spento; il **pin di file** `path_v2_file:<file_id>` si accende alle stesse condizioni per quel file, e da allora un token `enc1` per quel file è rifiutato come downgrade e la change va in quarantena (§3.4.3) senza toccare il file locale. Durante il rilascio N restano esposti allo scambio di token i file ancora `enc1` mai visti in `enc2` dal dispositivo e l'export ZIP del browser, che non ha stato persistente, per i file `enc1`.
 
 ---
 
@@ -1391,20 +1476,25 @@ Go: `crypto/aes`, `crypto/cipher`, `golang.org/x/crypto/argon2` e `hkdf`. Browse
 memobrain/
 ├── go.work                         # workspace Go: apps/desktop, services/cloud, shared/go
 ├── package.json                    # workspace npm (Yarn): apps/*/frontend, web, packages/*
-├── Makefile                        # make dev | test | lint | gen | build-desktop | build-cloud
+├── Taskfile.yml                    # task ci | test | lint | gen | … (task runner Task, cancello locale `task ci`: §4.5, ADR-0036)
 ├── api/
 │   ├── openapi.yaml                # contratto REST (fonte unica)
+│   ├── config-profile.schema.json  # schema unico del Config Profile; da qui i feature flag generati (§2.6.6)
 │   └── proto/memobrain/v1/notify.proto # gRPC
 ├── shared/
 │   ├── go/                         # modulo Go condiviso client/server
 │   │   ├── syncproto/              # tipi di commit/changes, codici errore, hashing
 │   │   ├── pathrules/              # validazione/normalizzazione path (NFC, casefold, riservati)
 │   │   ├── merge/                  # merge 3-way md, JSON per-id (excalidraw/canvas)
-│   │   └── vaultcrypto/            # formato blob E2EE, KDF, envelope (§3.8)
+│   │   ├── vaultcrypto/            # formato blob E2EE, KDF, envelope, token di path enc1/enc2 (§3.8)
+│   │   ├── apiclient/              # tipi e client Go generati da openapi.yaml (ADR-0037)
+│   │   └── features/               # feature flag e default generati dallo schema del Config Profile
+│   ├── parity/features.yaml        # registro delle funzioni per superficie (ADR-0037, §4.5)
 │   └── conformance/                # fixture Markdown → JSON atteso + test vector crittografici (Go + TS)
 ├── packages/                       # pacchetti TS condivisi
-│   ├── api-client/                 # client generato da openapi.yaml
-│   ├── ui/                         # design system (componenti, tokens, icone)
+│   ├── api-client/                 # client generato da openapi.yaml (+ feature flag generati)
+│   ├── cloud-features/             # UI di gestione dei vault cloud con CloudPort (§4.2, ADR-0037)
+│   ├── ui/                         # primitive UI condivise e token di stile (§4.2, ADR-0043)
 │   └── vaultcrypto-web/            # decifratura nel browser (WebCrypto + Argon2id WASM) per lo ZIP dei vault privati
 ├── apps/
 │   └── desktop/                    # progetto Wails (§4.2)
@@ -1416,7 +1506,7 @@ memobrain/
 │   ├── helm/memobrain/                 # chart Kubernetes
 │   └── keycloak/realm-memobrain.json   # export realm (client, ruoli, mapper) per bootstrap
 ├── docs/                           # ADR, specifiche, runbook
-└── .github/workflows/              # CI: lint, test, conformance, build firmati
+└── .github/workflows/release.yml   # solo build e pubblicazione sui tag, senza controlli: nessun servizio di CI (ADR-0036, §4.5)
 ```
 
 ### 4.2 Client desktop (Wails, Go + React/TS)
@@ -1431,7 +1521,7 @@ apps/desktop/
 │   │   ├── bindings.go             # VaultAPI, SearchAPI, SyncAPI, AuthAPI, SettingsAPI…
 │   │   └── events.go               # emissione eventi Go → TS
 │   ├── vault/                      # operazioni FS atomiche, vault manager, cestino, allegati
-│   ├── watcher/                    # fsnotify + riconciliazione
+│   ├── watcher/                    # FSEvents (macOS, via purego) / fsnotify + riconciliazione (ADR-0044)
 │   ├── parser/                     # goldmark + estensioni OFM (wikilink, embed, callout, ^id, ==hl==, %%)
 │   ├── indexer/                    # pipeline incrementale → index.db
 │   ├── store/                      # SQLite (modernc): migrazioni index.db / sync.db / app.db
@@ -1451,7 +1541,7 @@ apps/desktop/
 │   │   ├── engine.go               # ciclo pull/push, scheduler, backoff
 │   │   ├── detect.go               # rilevamento modifiche locali, rename
 │   │   ├── resolve.go              # risoluzione conflitti (usa shared/go/merge)
-│   │   ├── transport/              # client REST + gRPC stream + SSE fallback
+│   │   ├── transport/              # involucro del client Go generato (shared/go/apiclient) + gRPC stream + SSE fallback
 │   │   └── scope.go                # vault shared (montaggio, scope)
 │   ├── auth/                       # OIDC PKCE: loopback con fallback custom scheme (D-08), keychain, refresh
 │   ├── crypto/                     # E2EE vault privati: VMK, envelope, cifratura blob e path (§3.8)
@@ -1480,14 +1570,19 @@ apps/desktop/
         ├── graph/                  # rendering grafo + worker layout
         ├── sidebar/                # file explorer, search, tags, backlinks, outline, bookmarks, properties
         ├── search/                 # UI ricerca
-        ├── sync/                   # stato sync, conflitti, cronologia, condivisioni, login, wizard di creazione vault (privato/condiviso), sblocco con passphrase
+        ├── sync/                   # stato sync, conflitti, cronologia, login, wizard di creazione vault (privato/condiviso), sblocco con passphrase
+        ├── cloud/                  # CoreCloudPort: adattatore dei pannelli di @memobrain/cloud-features sui binding Go
         ├── settings/               # pannelli impostazioni (rispetta le chiavi locked)
         ├── commands/               # command palette, hotkeys, quick switcher
         ├── state/                  # store (Zustand) + query cache
-        ├── i18n/                   # it, en
-        ├── styles/                 # tokens, temi chiaro/scuro
+        ├── i18n/                   # it, en (+ namespace common di @memobrain/ui)
+        ├── styles/                 # temi chiaro/scuro sui token condivisi di @memobrain/ui
         └── test/                   # unit (Vitest), componenti, e2e (Playwright)
 ```
+
+**Gestione dei vault cloud: `@memobrain/cloud-features` (ADR-0037).** Tutta la UI di gestione dei vault cloud vive una volta sola nel pacchetto `packages/cloud-features`: tabella dei vault con creazione, rinomina, eliminazione e sezione dei vault eliminati con ripristino (`CloudVaultsTable`), dispositivi con il dispositivo corrente protetto (`DevicesPanel`), utilizzo con il livello di quota del server e il dettaglio per vault (`UsagePanel`), condivisioni, inviti, grant e ricerca nella rubrica. I componenti dipendono solo dall'interfaccia `CloudPort` (vault, dispositivi, utilizzo, condivisioni, grant, inviti, rubrica, configurazione effettiva), con i tipi generati da OpenAPI (`@memobrain/api-client`), e da due adattatori: **`RestCloudPort`** per la console web (REST) e **`CoreCloudPort`** per client desktop e workbench web (binding Go), che sta nel frontend del client accanto alla facciata dei binding, così la dipendenza va in un solo verso. Una sola suite di test dei componenti gira su entrambi gli adattatori; i testi it/en stanno nel pacchetto e l'host passa la lingua. **Regola:** ogni funzione di gestione dei vault cloud nasce in `@memobrain/cloud-features`, mai direttamente nelle pagine della console né nelle impostazioni del client.
+
+**Primitive UI condivise: `@memobrain/ui` (ADR-0043).** `@memobrain/ui` è il pacchetto delle **primitive** di interfaccia, senza stile globale, consumato dalla console, da `@memobrain/cloud-features` e dal frontend del client (workbench): un solo gestore del focus dei modali (`installModalFocus`: Tab ciclico sul modale in cima, ritorno del focus all'opener), il comportamento da tastiera dei menu (hook `useMenuKeyboard`: frecce, Home/End, Escape, chiusura al click esterno), la primitiva `Dialog`, attraverso cui rendono anche i dialoghi imperativi del workbench (`dialog.prompt/confirm/alert/pick`), i token di stile condivisi (`tokens.css`: colori, spaziature, raggi, focus ring, tema chiaro/scuro) con componenti che usano solo classi con prefisso `nd-` e token, mai selettori globali né stili inline, e un namespace i18n comune `common` (`@memobrain/ui/i18n/{en,it}.json`) per le stringhe condivise e i messaggi di errore dell'API (`errors.<code>`), che ogni host aggiunge alla propria istanza di i18next. Nessuna libreria di componenti esterna (V-02, D-01). Console e workbench mantengono ciascuno la propria CSP di pagina (la console senza stili inline) e i propri insiemi di componenti specifici (editor, albero, pannelli restano nel workbench).
 
 ### 4.3 Servizio cloud (Go)
 
@@ -1529,7 +1624,7 @@ services/cloud/
 └── Dockerfile
 ```
 
-Regole di modularità: ogni package `internal/<modulo>` espone una **interfaccia** e un'implementazione; dipendenze solo verso `db`, `storage`, `audit`, `notify` e verso interfacce di altri moduli (mai verso le loro tabelle). Lint di dipendenze in CI (`depguard`/`go-arch-lint`).
+Regole di modularità: ogni package `internal/<modulo>` espone una **interfaccia** e un'implementazione; dipendenze solo verso `db`, `storage`, `audit`, `notify` e verso interfacce di altri moduli (mai verso le loro tabelle). Lint di dipendenze in `task lint`, parte di `task ci` (`depguard`/`go-arch-lint`, ADR-0036).
 
 ### 4.4 Web UI del cloud
 
@@ -1541,9 +1636,9 @@ web/
     ├── main.tsx
     ├── auth/                       # OIDC PKCE (oidc-client-ts), guardie di ruolo
     ├── routes/
-    │   ├── user/                   # usage, vaults (download ZIP; decifratura nel browser per i privati), devices, shares
+    │   ├── user/                   # usage, vaults, devices, shares: pannelli di @memobrain/cloud-features con RestCloudPort; download ZIP (decifratura nel browser per i privati)
     │   └── admin/                  # dashboard, users, groups, quotas, config-profiles, audit
-    ├── components/                 # tabelle, form, barre quota (da packages/ui)
+    ├── components/                 # tabelle, form, barre quota (primitive e token da packages/ui, ADR-0043)
     ├── api/                        # usa packages/api-client
     ├── i18n/
     └── test/
@@ -1559,8 +1654,9 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | Qualità Go | `golangci-lint`, `govulncheck`, test con `-race`, tabelle di test per parser e merge |
 | Qualità TS | ESLint, Prettier, Vitest, Playwright (e2e sul webview) |
 | Migrazioni | SQL versionato, solo forward + script di rollback documentato |
-| Generazione codice | `make gen`: OpenAPI → Go/TS, proto → Go, sqlc, binding Wails |
-| Branching/CI | Trunk-based con PR; CI obbligatoria: lint, unit, conformance Markdown, integration cloud, build desktop cross-platform |
+| Generazione codice | `task gen`: schema del Config Profile → feature flag Go/TS, OpenAPI → stub Go del server, client Go (`shared/go/apiclient`) e client TS, proto → Go, sqlc, binding Wails |
+| Branching/verifiche | Trunk-based. **Nessun servizio di CI** (ADR-0036): l'unico workflow, `release.yml`, parte sui tag e costruisce e pubblica senza eseguire controlli. Il cancello obbligatorio è **`task ci`** in locale, con esito verde prima di ogni merge su `main` e prima di ogni tag di rilascio: `lint` (golangci-lint, ESLint, Prettier), `typecheck` (tutti i pacchetti TypeScript), `vuln` (govulncheck), generazione dei binding Wails, `test-go` (`-race`, tag `webkit2_41` dove serve, `MEMOBRAIN_REQUIRE_BINDINGS=1`: il test dispatcher/binding fallisce invece di essere saltato), `test-ts`, `conformance` (fixture Markdown, merge e test vector crittografici, Go + TS), `test-wasm` (core Go in WebAssembly), `parity` (`scripts/parity.mjs --check`), `check-gen` (fallisce se `task gen` modifica l'albero). **Suite lente**, da eseguire quando si tocca l'area relativa e comunque prima di un rilascio: `task test-integration` (cloud con testcontainers), `task test-desktop-e2e` (sync a due dispositivi e contract test del client REST), `task e2e` e `e2e:workbench-ui` (Playwright), `e2e:cloud` ed `e2e:security` (stack di sviluppo); elenco aggiornato in `docs/dev-setup.md`. La protezione dipende dalla disciplina di chi fa merge e rilasci: con più contributori va valutato un workflow minimo che esegua `task ci` |
+| Parità delle funzioni | Registro dichiarativo `shared/parity/features.yaml`, unica fonte della parità (ADR-0037): una voce per funzione utente (es. `vault.create`, `vault.rename`, `vault.delete`, `vault.restore`, `share.create`, `devices`, `usage`) con comandi e binding di client desktop e workbench, rotte e `operationId` della console, stato per superficie (`yes`, `partial`, `exception`, `console-only`, `missing`, con motivazione obbligatoria per tutto ciò che non è `yes`) e test per target. `scripts/parity.mjs --check` (in `task ci`) legge il registro dei comandi a runtime (campo `Command.requires`), i binding generati e gli `operationId` di `api/openapi.yaml`, e fallisce se un comando, un binding o un'operazione utente non compare in nessuna voce, se una voce rimanda a un elemento inesistente o se manca una motivazione; le tabelle di `docs/web-workbench-parity.md` sono generate |
 | Release | Versionamento semantico; desktop firmato/notarizzato (macOS), firma Authenticode (Windows); cloud come immagine OCI immutabile |
 
 ---
@@ -1580,9 +1676,9 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | **Privacy** | Conformità GDPR; admin senza accesso al contenuto; vault privati E2EE | DPIA, audit crittografico |
 | **Accessibilità** | WCAG 2.1 AA per Web UI; navigazione da tastiera e screen reader nel client | Audit a11y |
 | **Internazionalizzazione** | IT e EN; struttura per ulteriori lingue; date/numeri localizzati | Test i18n |
-| **Piattaforme** | Windows 10+/11, macOS (versioni supportate da Wails), Linux (GTK/WebKitGTK) | Matrice CI |
+| **Piattaforme** | Windows 10+/11, macOS (versioni supportate da Wails), Linux (GTK/WebKitGTK) | Matrice di build di `release.yml` + verifiche locali per sistema prima del rilascio (ADR-0036) |
 | **Osservabilità** | Log strutturati JSON, metriche RED, tracing distribuito, dashboard e alert | Runbook |
-| **Manutenibilità** | Moduli con interfacce, copertura test ≥ 80% su `parser`, `merge`, `sync`, `sharing` | CI gate |
+| **Manutenibilità** | Moduli con interfacce, copertura test ≥ 80% su `parser`, `merge`, `sync`, `sharing` | Misura locale prima del rilascio (nessun servizio di CI, ADR-0036) |
 
 ---
 
@@ -1622,13 +1718,13 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | Rischio | Impatto | Mitigazione |
 |---|---|---|
 | Parità di rendering Live Preview con Obsidian (complessità di CodeMirror decorations) | Alto | Rilascio incrementale per elemento; suite di conformità; budget dedicato in M1 |
-| Divergenza parser Go ↔ TS | Medio | Fixture condivise e CI bloccante (§2.3.3) |
+| Divergenza parser Go ↔ TS | Medio | Fixture condivise, bloccanti in `task ci` eseguito in locale prima di merge e tag (§2.3.3, §4.5, ADR-0036) |
 | Conflitti frequenti su note condivise | Medio | Merge a 3 vie, vista di risoluzione, sync rapido (debounce breve), notifiche push per ridurre la finestra di conflitto |
-| Affidabilità `fsnotify` su volumi di rete / cartelle sincronizzate da altri tool | Medio | Riconciliazione periodica; avviso se il vault è in cartelle gestite da altri sync |
+| Affidabilità del watcher (`fsnotify`, FSEvents) su volumi di rete / cartelle sincronizzate da altri tool; esaurimento di descrittori o watch su vault grandi | Medio | Riconciliazione periodica; avviso se il vault è in cartelle gestite da altri sync; FSEvents su macOS (nessun descrittore per file) e modalità degradata con riconciliazione ogni minuto ai limiti di sistema su Linux/Windows (§2.5, ADR-0044) |
 | Dimensione bundle (Excalidraw, Mermaid, KaTeX) | Medio | Lazy loading, code-splitting, asset locali |
 | Webview diversi per OS (WebView2/WKWebView/WebKitGTK) con differenze di comportamento | Medio | Matrice di test e2e per OS; polyfill/limiti documentati (es. Audio recorder) |
 | Web viewer in iframe bloccato da `X-Frame-Options` | Basso | Funzione P2 con limitazioni dichiarate o webview nativa dedicata |
-| Crescita del changelog | Basso | Compattazione con finestra (`CURSOR_EXPIRED` → bootstrap) |
+| Crescita del changelog | Basso | Compattazione con finestra (`CURSOR_EXPIRED` → bootstrap), avanzata anche dalla retention quando pota operazioni strutturali, così non si serve mai un changelog con dei salti (§3.4.4 B, ADR-0038) |
 | Dipendenza da Keycloak Admin API (versioni) | Basso | Wrapper isolato in `internal/keycloak`, test d'integrazione con testcontainers |
 | Perdita di passphrase e recovery key di un vault privato | Alto | Dati irrecuperabili per design: recovery key obbligatoria con conferma, testi espliciti nel wizard, promemoria periodico, nessuna promessa di recupero da parte dell'amministratore |
 | Errori nell'implementazione crittografica o nel formato blob | Alto | Primitive standard (AES-GCM, HKDF, Argon2id), nessun algoritmo custom, test vector condivisi Go/TS, audit esterno prima della 1.0 |
@@ -1653,3 +1749,19 @@ La build produce asset statici incorporati nel binario `memobrain-cloud` (`go:em
 | Perimetro per-vault (D-06) | §2.1.2, §2.6.4 |
 | Redirect OIDC con fallback (D-08) | §1.3, §3.3.1 |
 | Deliverable 1–4 | §1, §2, §3, §4 |
+
+### C.4 ADR recepiti
+
+Le deviazioni e le precisazioni rispetto allo spec si registrano come ADR in `docs/adr/`. Dalla v1.2 sono recepiti gli ADR accettati dall'owner elencati qui; gli ADR 0001–0008 e 0025, già accettati, erano decisioni d'implementazione citate dove servono (es. ADR-0008 in §3.5.1). Restano in stato *proposta*, e quindi non recepiti, gli ADR 0009–0024 e 0026–0035.
+
+| ADR | Tema | Decisione | Recepito in |
+|---|---|---|---|
+| ADR-0036 | Verifiche | Nessun servizio di CI: `task ci` in locale è il cancello obbligatorio prima di merge e tag; suite lente prima dei rilasci | §2.3.3, §2.7.3, §3.7, §3.8.7, §4.1, §4.3, §4.5, App. A, C.2 |
+| ADR-0037 | Parità e contratti | Registro delle funzioni `shared/parity/features.yaml` con `parity --check`; UI di gestione dei vault cloud in `@memobrain/cloud-features` (`CloudPort`, `RestCloudPort`, `CoreCloudPort`); client Go generato da OpenAPI e contract test; ciclo di vita dei vault su tutte le superfici (`GET /vaults?include_deleted=true`); feature flag generati dallo schema unico del Config Profile | §2.5, §2.6.1, §2.6.6, §2.8.2, §3.1, §3.5.2, §4.1, §4.2, §4.4, §4.5 |
+| ADR-0038 | Retention e changelog | `conflict_of` `ON DELETE SET NULL` con `conflict_of_file`; compattazione del changelog avanzata dalla retention (finestra effettiva); paginazione keyset; indici; riconciliazione dei contatori sotto lock | §2.6.2, §2.6.3, §3.2.2, §3.4.4, C.2 |
+| ADR-0039 | Stato locale di sync | `pending_remote` e `quarantine` in `sync.db`; pull interrotto prima del cursore a vault bloccato; transazioni; copia di conflitto prima dell'originale | §3.4.3, §3.4.4, §3.4.5 |
+| ADR-0040 | Rename di cartelle condivise | `move_prefix` e `SHARE_ROOT_MOVE` restano il rename atomico (anche solo maiuscole/minuscole); comportamento del client e regole del server sulle radici condivise | §2.6.4, §3.4.7, §3.5.3, §3.8.5 |
+| ADR-0041 | Control plane | Ruolo autorevole dopo un cambio dalla console (`role_changed_at`), conflitto di identità senza ricollegamento per e-mail, provisioning in lettura, ultimo amministratore sotto lock, eliminazione unificata con riattribuzione dei grant concessi (modifica ADR-0021), rubrica con e-mail esatta, `/me.config_version`, `POST /shares` da manager dentro l'ambito, ruolo `manager` dei gruppi riservato in v1, hub delle notifiche | §1.3, §2.6.4, §2.6.5, §2.8.1, §3.1, §3.2.2, §3.3.2, §3.5.1, §3.5.4, §3.5.5, §3.6, §3.7 |
+| ADR-0042 | E2EE dei path | Token di path `enc2` legati al file (AAD con `file_id`), `enc1` accettato in lettura, server che accetta entrambi i prefissi, migrazione in due rilasci con `features.path_v2` e pinning | §3.2.2, §3.4.3, §3.8.3, §3.8.5, §3.8.7 |
+| ADR-0043 | UI condivisa | `@memobrain/ui` come pacchetto di primitive senza stile globale per console, `@memobrain/cloud-features` e workbench: focus dei modali, menu da tastiera, `Dialog`, token di stile, namespace i18n `common` | §4.1, §4.2, §4.4 |
+| ADR-0044 | Watcher | FSEvents su macOS via `purego` con ripiego su `fsnotify`; modalità degradata ai limiti di sistema su Linux/Windows; nessuna riconciliazione periodica nel browser | §1.4, §2.4, §2.5, §3.4.4, §4.2, C.2 |

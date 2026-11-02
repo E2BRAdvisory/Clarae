@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                                          |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                 |
+| **Stato**             | accettata                                                                                                                                |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §2.6.2, §2.6.3, §3.2.2, §3.4.4 B, C.2 (Appendice C.4)                                             |
 | **Data**              | 2026-11-01                                                                                                                               |
 | **Riferimenti spec**  | §2.6.2 (storico e retention), §3.2.2 (DDL `file_revisions`), §3.4 (protocollo di sync, `CURSOR_EXPIRED`); D-03, D-04; ADR-0009, ADR-0033 |
 | **Devia dallo spec?** | sì: §3.2.2 (DDL) e la descrizione della finestra del changelog in §3.4 vanno aggiornate come in questo ADR                               |

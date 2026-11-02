@@ -2,7 +2,8 @@
 
 |                       |                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                          |
+| **Stato**             | accettata                                                                                         |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §3.4.3, §3.4.4 B, §3.4.5 (Appendice C.4)                   |
 | **Data**              | 2026-11-01                                                                                        |
 | **Riferimenti spec**  | §3.4 (protocollo di sync), §3.4.3 (stato locale `sync.db`); D-02 (vault privati), D-04; ADR-0009  |
 | **Devia dallo spec?** | sì: §3.4.3 va esteso con le tabelle `pending_remote` e `quarantine` e con le regole di questo ADR |

@@ -2,7 +2,8 @@
 
 |                       |                                                                                                                                                                              |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                                     |
+| **Stato**             | accettata                                                                                                                                                                    |
+| **Recepito in**       | `Specifications.md` v1.2 (2026-11-02): §2.5, §2.6.1, §2.6.6, §2.8.2, §3.1, §3.5.2, §4.1, §4.2, §4.4, §4.5 (Appendice C.4)                                                    |
 | **Data**              | 2026-11-01                                                                                                                                                                   |
 | **Riferimenti spec**  | §2.6.1 (creazione, rinomina, eliminazione logica e ripristino dei vault), §2.8 (spazio e dispositivi), §3.5 (API), §4.2 (frontend); D-02, D-05; ADR-0029, ADR-0030, ADR-0036 |
 | **Devia dallo spec?** | no nei requisiti (li completa); sì nella struttura del frontend (§4.2) e nell'elenco dei contratti generati (§3.5) → da recepire nello spec                                  |
