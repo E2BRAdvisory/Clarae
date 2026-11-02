@@ -3,6 +3,7 @@
 // as the Go core's: a flag missing from the effective configuration takes the schema's default.
 import { useQuery } from '@tanstack/react-query';
 import { featureEnabled, type Feature } from '@memobrain/api-client/features';
+import { cloudKeys } from './CloudVaultsTable';
 import type { CloudPort } from './port';
 
 /** Flags read by the components of this package and by their hosts. */
@@ -36,7 +37,7 @@ export function useFeatureFlag(
   name: CloudFeature,
 ): { on: boolean; ready: boolean } {
   const q = useQuery({
-    queryKey: ['cloud-features', port.id, 'features'],
+    queryKey: cloudKeys.features(port),
     queryFn: () => port.getFeatures(),
     staleTime: 60_000,
   });

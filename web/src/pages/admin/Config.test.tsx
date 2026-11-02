@@ -125,8 +125,52 @@ describe('config profile editor', () => {
       is_global: false,
       config: { editor: { fontSize: 18 } },
       locked_keys: ['editor.fontSize', 'features.sharing'],
+      // Saved from the version on screen: another administrator's change is never overwritten.
+      expected_version: 3,
     });
     expect(await screen.findByText('Profile saved (version 4).')).toBeInTheDocument();
+  });
+
+  it('keeps the edits and offers the newer version when another administrator saved meanwhile', async () => {
+    const user = userEvent.setup();
+    let current = profile();
+    const { api } = renderApp({
+      path: `/admin/config/${P}`,
+      user: ADMIN,
+      routes: {
+        'GET /admin/config-profiles': () => [current],
+        [`GET /admin/config-profiles/${P}`]: () => current,
+        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`PUT /admin/config-profiles/${P}`]: (c: RecordedCall) =>
+          (c.body as { expected_version?: number }).expected_version === current.version
+            ? (current = profile({ ...(c.body as object), version: current.version + 1 }))
+            : problem(409, 'REV_CONFLICT', 'the profile is at version 4, not 3'),
+      },
+    });
+    const editor = await screen.findByLabelText('Configuration (JSON)');
+    // Meanwhile another administrator saves version 4.
+    current = profile({ version: 4, config: { editor: { fontSize: 20 } } });
+    fireEvent.change(editor, { target: { value: '{"editor":{"fontSize":18}}' } });
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(await screen.findByText(/Another administrator saved this profile/)).toBeInTheDocument();
+    expect(await screen.findByText(/Version 4 is the current one/)).toBeInTheDocument();
+    // The edits are still there.
+    expect(editor).toHaveValue('{"editor":{"fontSize":18}}');
+    expect(api.called('PUT', `/admin/config-profiles/${P}`)).toHaveLength(1);
+
+    // Reloading shows version 4; saving from it succeeds.
+    await user.click(screen.getByRole('button', { name: 'Load the current version' }));
+    await waitFor(() =>
+      expect(editor).toHaveValue(JSON.stringify({ editor: { fontSize: 20 } }, null, 2)),
+    );
+    expect(screen.queryByText(/Version 4 is the current one/)).not.toBeInTheDocument();
+    fireEvent.change(editor, { target: { value: '{"editor":{"fontSize":22}}' } });
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(await screen.findByText('Profile saved (version 5).')).toBeInTheDocument();
+    expect(api.called('PUT', `/admin/config-profiles/${P}`)[1]?.body).toMatchObject({
+      expected_version: 4,
+    });
   });
 
   it('shows the server validation message on a 400', async () => {

@@ -1,12 +1,4 @@
-import {
-  aesKey,
-  DecryptError,
-  fileKey,
-  NONCE_SIZE,
-  SALT_SIZE,
-  TAG_SIZE,
-  type Subkeys,
-} from './keys';
+import { DecryptError, fileCryptoKey, NONCE_SIZE, SALT_SIZE, TAG_SIZE, type Subkeys } from './keys';
 import { buf, concat, enc, randomBytes } from './bytes';
 
 export const MAGIC = 'NDS1';
@@ -46,7 +38,7 @@ export async function encryptBlob(
   const salt = opts.salt ?? randomBytes(SALT_SIZE);
   const chunkSize = opts.chunkSize ?? DEFAULT_CHUNK_SIZE;
   if (chunkSize <= 0 || chunkSize > MAX_CHUNK_SIZE) throw new Error('invalid chunk size');
-  const key = await aesKey(await fileKey(s, fileId, salt), ['encrypt']);
+  const key = await fileCryptoKey(s, fileId, salt, ['encrypt']);
   const header = new Uint8Array(HEADER_SIZE);
   header.set(enc.encode(MAGIC), 0);
   header[4] = FORMAT_VERSION;
@@ -78,6 +70,19 @@ export async function decryptBlob(
   fileId: Uint8Array,
   blob: Uint8Array,
 ): Promise<Uint8Array> {
+  return concat(...(await decryptBlobChunks(s, vaultId, fileId, blob)));
+}
+
+/**
+ * Like {@link decryptBlob}, but resolves to the plaintext chunks instead of one buffer, so a large file
+ * is not copied once more. Every chunk is authenticated before it resolves: a failure leaves nothing.
+ */
+export async function decryptBlobChunks(
+  s: Subkeys,
+  vaultId: Uint8Array,
+  fileId: Uint8Array,
+  blob: Uint8Array,
+): Promise<Uint8Array[]> {
   if (
     blob.length < HEADER_SIZE ||
     new TextDecoder().decode(blob.subarray(0, 4)) !== MAGIC ||
@@ -93,7 +98,7 @@ export async function decryptBlob(
   const chunks = Math.ceil(body.length / sealedSize);
   const lastLen = body.length - (chunks - 1) * sealedSize;
   if (lastLen < TAG_SIZE) throw new FormatError(); // trailing bytes too short to be a chunk
-  const key = await aesKey(await fileKey(s, fileId, salt), ['decrypt']);
+  const key = await fileCryptoKey(s, fileId, salt, ['decrypt']);
   const out: Uint8Array[] = [];
   for (let i = 0; i < chunks; i++) {
     const sealed = body.subarray(i * sealedSize, Math.min((i + 1) * sealedSize, body.length));
@@ -113,5 +118,5 @@ export async function decryptBlob(
       throw new DecryptError();
     }
   }
-  return concat(...out);
+  return out;
 }

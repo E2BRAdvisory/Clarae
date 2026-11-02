@@ -219,6 +219,58 @@ describe('shared vault download', () => {
     expect(saved).toHaveLength(0);
   });
 
+  it('streams an archive the API serves itself when the user saves it, with the current token', async () => {
+    const fetchFn = vi.fn((_url: string, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response('PK-job', {
+          headers: {
+            'Content-Disposition': 'attachment; filename="Notes-20260101.zip"',
+            'Content-Length': '6',
+          },
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchFn);
+    try {
+      const user = userEvent.setup();
+      renderApp({
+        path: '/vaults',
+        routes: {
+          'GET /vaults': { items: [vaultRow('s1', 'Notes', 'shared')], mounts: [] },
+          'GET /vaults/s1/export.zip': () => problem(409, 'INVALID_STATE'),
+          'POST /vaults/s1/exports': () =>
+            new Response(
+              JSON.stringify({
+                id: 'j1',
+                vault_id: 's1',
+                status: 'ready',
+                size: 6,
+                download_url: '/api/v1/vaults/s1/exports/j1/download',
+                created_at: '2026-01-01T00:00:00Z',
+              }),
+              { status: 202, headers: { 'Content-Type': 'application/json' } },
+            ),
+        },
+      });
+      await user.click(await screen.findByRole('button', { name: 'Download ZIP: Notes' }));
+      const dialog = await screen.findByRole('dialog');
+      // Nothing is downloaded before the user saves: the picker needs the click.
+      expect(await within(dialog).findByText(/The export is ready \(6 B\)/)).toBeInTheDocument();
+      expect(fetchFn).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole('button', { name: 'Save ZIP…' }));
+      expect(
+        await within(dialog).findByText('The download of Notes-20260101.zip started.'),
+      ).toBeInTheDocument();
+      const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`${location.origin}/api/v1/vaults/s1/exports/j1/download`);
+      expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer tok');
+      expect(downloads).toEqual(['Notes-20260101.zip']);
+      expect(await saved[0]?.text()).toBe('PK-job');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('stops polling when the dialog is closed', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const job = (status: string) =>
@@ -332,6 +384,36 @@ describe('private vault download (decrypted in the browser)', () => {
     expect(await within(dialog).findByText(/Unlocked: 2 files/)).toBeInTheDocument();
   }, 30_000);
 
+  it('locks the keys again after the idle time of the configuration', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    try {
+      const { user, dialog } = await open({
+        ...privateRoutes(),
+        'GET /config/effective': { version: 1, config: { security: { vault_lock_minutes: 2 } } },
+      });
+      await user.selectOptions(within(dialog).getByLabelText('Unlock with'), 'recovery');
+      await user.type(within(dialog).getByLabelText('Recovery key'), fx.recoveryText);
+      await user.click(within(dialog).getByRole('button', { name: 'Unlock' }));
+      expect(await within(dialog).findByText(/Unlocked: 2 files/)).toBeInTheDocument();
+      await act(async () => {
+        vi.advanceTimersByTime(119_000);
+        await Promise.resolve();
+      });
+      expect(within(dialog).getByText(/Unlocked: 2 files/)).toBeInTheDocument();
+      await act(async () => {
+        vi.advanceTimersByTime(2_000);
+        await Promise.resolve();
+      });
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'locked again after a period without use',
+      );
+      expect(within(dialog).getByRole('button', { name: 'Unlock' })).toBeInTheDocument();
+      expect(within(dialog).queryByRole('button', { name: 'Save ZIP…' })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 30_000);
+
   it('reports a malformed recovery key and a missing key type', async () => {
     const { user, dialog } = await open(privateRoutes());
     await user.selectOptions(within(dialog).getByLabelText('Unlock with'), 'recovery');
@@ -357,6 +439,22 @@ describe('private vault download (decrypted in the browser)', () => {
     expect(within(dialog).getByText('Content is corrupt')).toBeInTheDocument();
     const z = await unzip(saved[0] as Blob);
     expect(z.entries.map((e) => e.name)).toEqual(['notes/a.md']);
+  }, 30_000);
+
+  it('stops with a clear error, and saves nothing, when a blob is refused (not "missing")', async () => {
+    const routes = privateRoutes();
+    const second = fx.tree[1] as Fixture['tree'][number];
+    routes[`GET /vaults/${V}/blobs/${second.hash}`] = () => problem(403, 'FORBIDDEN', 'no access');
+    const { user, dialog } = await open(routes);
+    await user.type(within(dialog).getByLabelText('Passphrase'), PASS);
+    await user.click(within(dialog).getByRole('button', { name: 'Unlock' }));
+    await user.click(await within(dialog).findByRole('button', { name: 'Save ZIP…' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(/The export stopped: b\.txt could not be downloaded/);
+    expect(alert).toHaveTextContent(/No incomplete ZIP was kept/);
+    expect(within(dialog).queryByText(/skipped/)).not.toBeInTheDocument();
+    expect(saved).toHaveLength(0);
+    expect(downloads).toHaveLength(0);
   }, 30_000);
 
   it('can be cancelled while exporting: no file is saved and the state is visible', async () => {

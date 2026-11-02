@@ -275,6 +275,19 @@ describe('admin user detail', () => {
     expect(api.called('POST', `/admin/users/${U1}:suspend`)).toHaveLength(1);
   });
 
+  it('offers no suspension or deletion of oneself (the server always refuses them)', async () => {
+    renderApp({
+      path: `/admin/users/${U1}`,
+      user: ADMIN,
+      routes: detailRoutes(() => user(), {
+        'GET /me': { id: U1, username: 'alice', role: 'admin' },
+      }),
+    });
+    expect(await screen.findByRole('button', { name: 'Reset password' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument();
+  });
+
   it('explains INVALID_STATE (last administrator / yourself) in the dialog', async () => {
     const user_ = userEvent.setup();
     renderApp({

@@ -23,20 +23,47 @@ async function bind<T>(
   ) as Promise<T>;
 }
 
-/** The localStorage key of the workbench's vault markers (web/src/workbench/markers.ts). */
-const MARKERS = 'memobrain.workbench.vaults';
+/**
+ * The storage key of an account (web/src/workbench/storage.ts accountKey). A page opened with `?local`
+ * and nobody signed in works for the subject "local"; the E2E sign-in double's subject is "e2e-user".
+ */
+const accountOf = (page: Page, subject = 'local'): Promise<string> =>
+  page.evaluate(async (subject) => {
+    const data = new TextEncoder().encode(
+      `memobrain/workbench-account\n${location.origin}\n${subject}`,
+    );
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+    return 'a' + Array.from(d.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
+  }, subject);
 
-/** Whether this browser holds the folder of a vault (OPFS `fs/vaults/<name>`). */
-const vaultFolder = (page: Page, name: string): Promise<boolean> =>
-  page.evaluate(async (name) => {
-    try {
-      const fs = await (await navigator.storage.getDirectory()).getDirectoryHandle('fs');
-      await (await fs.getDirectoryHandle('vaults')).getDirectoryHandle(name);
-      return true;
-    } catch {
-      return false;
-    }
-  }, name);
+/** The localStorage key of an account's vault markers (web/src/workbench/markers.ts). */
+const markersOf = async (page: Page, subject?: string): Promise<string> =>
+  `memobrain.workbench.vaults@${await accountOf(page, subject)}`;
+
+/** Whether this browser holds the folder of a vault (OPFS `accounts/<key>/fs/vaults/<name>`). */
+const vaultFolder = async (page: Page, name: string, subject?: string): Promise<boolean> =>
+  page.evaluate(
+    async ({ name, account }) => {
+      try {
+        let d = await navigator.storage.getDirectory();
+        for (const part of ['accounts', account, 'fs', 'vaults', name])
+          d = await d.getDirectoryHandle(part);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { name, account: await accountOf(page, subject) },
+  );
+
+/** Signs the E2E double in (subject "e2e-user") for the pages of a context opened from now on. */
+const signInAlice = async (page: Page): Promise<void> => {
+  await page
+    .context()
+    .addInitScript(() =>
+      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
+    );
+};
 
 async function openWorkbench(page: Page, vault = 'e2e-vault'): Promise<{ id: string }> {
   await page.goto(`/vaults/${vault}/open?local`);
@@ -241,21 +268,24 @@ test.describe('vault workbench', () => {
       )
       .toBe(1);
     // What the workbench records of private vaults linked to the cloud (?local links nothing).
-    await page.evaluate((key) => {
-      const marker = (name: string, pending: number) => ({
-        name,
-        kind: 'private',
-        localPath: `/vaults/${name}`,
-        pending,
-        conflicts: 0,
-        dirty: false,
-        updatedAt: Date.now(),
-      });
-      localStorage.setItem(
-        key,
-        JSON.stringify({ swept: marker('swept', 0), kept: marker('kept', 2) }),
-      );
-    }, MARKERS);
+    await page.evaluate(
+      (key) => {
+        const marker = (name: string, pending: number) => ({
+          name,
+          kind: 'private',
+          localPath: `/vaults/${name}`,
+          pending,
+          conflicts: 0,
+          dirty: false,
+          updatedAt: Date.now(),
+        });
+        localStorage.setItem(
+          key,
+          JSON.stringify({ swept: marker('swept', 0), kept: marker('kept', 2) }),
+        );
+      },
+      await markersOf(page),
+    );
     expect(await vaultFolder(page, 'swept')).toBe(true);
 
     // The tab is closed and the workbench opened again: the clean copy is gone before anything opens.
@@ -283,7 +313,7 @@ test.describe('vault workbench', () => {
     expect(await vaultFolder(page, 'kept')).toBe(true);
     const markers = await page.evaluate(
       (key) => JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>,
-      MARKERS,
+      await markersOf(page),
     );
     expect(Object.keys(markers)).toEqual(['kept']);
   });
@@ -316,6 +346,8 @@ test.describe('vault workbench', () => {
   test('"Forget this browser" in the console removes every vault copy and its databases', async ({
     page,
   }) => {
+    // The workbench and the console of the same account (the E2E sign-in double).
+    await signInAlice(page);
     const { id } = await openWorkbench(page, 'to-forget');
     await bind(page, 'VaultAPI', 'WriteNote', id, 'Kept.md', 'a note held in this browser\n', '');
     const folders = () =>
@@ -329,12 +361,32 @@ test.describe('vault workbench', () => {
           out.push(name);
         return out.sort();
       });
-    expect(await folders()).toEqual(['fs', 'memobrain-sqlite']);
+    expect(await folders()).toEqual(['accounts']);
+    expect(await vaultFolder(page, 'to-forget', 'e2e-user')).toBe(true);
+    const markers = await markersOf(page, 'e2e-user');
+    // Another account's copy in the same browser: never listed nor removed by Alice.
+    const bob = await accountOf(page, 'bob');
+    await page.evaluate(async (bob) => {
+      let d = await navigator.storage.getDirectory();
+      for (const part of ['accounts', bob, 'fs', 'vaults', 'bob-vault'])
+        d = await d.getDirectoryHandle(part, { create: true });
+      localStorage.setItem(
+        `memobrain.workbench.vaults@${bob}`,
+        JSON.stringify({
+          'bob-1': {
+            name: 'Bob diary',
+            kind: 'private',
+            localPath: '/vaults/bob-vault',
+            pending: 1,
+            conflicts: 0,
+            dirty: false,
+            updatedAt: Date.now(),
+          },
+        }),
+      );
+    }, bob);
 
     // Leaving the workbench ends its worker, which releases the files; then the console can remove them.
-    await page.evaluate(() =>
-      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
-    );
     await mockApi(page, {
       'GET /me': { id: ME, username: 'alice' },
       'GET /vaults': { items: [], mounts: [] },
@@ -356,31 +408,37 @@ test.describe('vault workbench', () => {
             },
           }),
         ),
-      MARKERS,
+      markers,
     );
     await page.goto('/account');
     await page.getByRole('button', { name: 'Forget this browser' }).click();
     const dialog = page.getByRole('dialog', { name: 'Changes not uploaded' });
     await expect(dialog).toContainText('Team notes — 3 changes not uploaded');
+    await expect(dialog).not.toContainText('Bob diary');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
-    expect(await folders()).toEqual(['fs', 'memobrain-sqlite']);
+    expect(await vaultFolder(page, 'to-forget', 'e2e-user')).toBe(true);
     await page.getByRole('button', { name: 'Forget this browser' }).click();
     await page.getByRole('button', { name: 'Delete them' }).click();
-    await expect(page.getByText('This browser no longer holds any vault.')).toBeVisible();
-    expect(await folders()).toEqual([]);
-    expect(await page.evaluate((key) => localStorage.getItem(key), MARKERS)).toBeNull();
+    await expect(page.getByText('This browser no longer holds any of your vaults.')).toBeVisible();
+    expect(await vaultFolder(page, 'to-forget', 'e2e-user')).toBe(false);
+    expect(await page.evaluate((key) => localStorage.getItem(key), markers)).toBeNull();
+    // Bob's copy and markers are still there.
+    expect(await folders()).toEqual(['accounts']);
+    expect(await vaultFolder(page, 'bob-vault', 'bob')).toBe(true);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), `memobrain.workbench.vaults@${bob}`),
+    ).toContain('Bob diary');
   });
 
   test('forgetting the browser while a workbench tab is open asks that tab to leave', async ({
     page,
     context,
   }) => {
+    // The workbench tab and the console are the same account's.
+    await signInAlice(page);
     const { id } = await openWorkbench(page, 'busy-tab');
     await bind(page, 'VaultAPI', 'WriteNote', id, 'Open.md', 'held by the other tab\n', '');
     const consolePage = await context.newPage();
-    await consolePage.addInitScript(() =>
-      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
-    );
     await mockApi(consolePage, {
       'GET /me': { id: ME, username: 'alice' },
       'GET /vaults': { items: [], mounts: [] },
@@ -392,7 +450,9 @@ test.describe('vault workbench', () => {
     await dialog.getByRole('button', { name: 'Close that tab and retry' }).click();
     // The workbench tab writes its edits and goes back to the console, releasing the files.
     await expect(page).toHaveURL(/\/vaults$|e2e-signin/, { timeout: 30_000 });
-    await expect(consolePage.getByText('This browser no longer holds any vault.')).toBeVisible({
+    await expect(
+      consolePage.getByText('This browser no longer holds any of your vaults.'),
+    ).toBeVisible({
       timeout: 30_000,
     });
   });

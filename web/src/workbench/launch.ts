@@ -6,14 +6,26 @@
  * (ADR-0029 §6): the core locks the vault (manually or after the idle time it is configured with) and the
  * guard (guard.ts) then removes the copy; a copy left behind by a closed tab is removed by the sweep at the
  * next start. Copies with changes not uploaded yet are never removed without asking (D-04).
+ *
+ * Everything the workbench keeps belongs to the signed-in account (storage.ts): its own folders, markers
+ * and device registration. The copies an earlier version kept for everyone are adopted only by the
+ * account shown to own them all, and never opened otherwise.
  */
 import { Feature, featureEnabled } from '@memobrain/api-client/features';
 import type { AuthService } from '../auth/types';
-import { createCoreWorker, installWailsGlobals, startCore, type CoreHandle } from './bridge';
+import {
+  CoreTimeoutError,
+  createCoreWorker,
+  installWailsGlobals,
+  startCore,
+  type CoreHandle,
+} from './bridge';
 import { VAULTS_DIR, folderOf, runCreation, type Creation, type MountCreate } from './create';
+import { legacyDeviceUser } from './device';
 import { onLeaveRequest } from './forget';
 import { createVaultGuard, needsGate, type VaultGuard } from './guard';
 import { sweepPrivateCopies } from './markers';
+import { LOCAL_SUBJECT, accountKey, adoptLegacyCopies, storageOf, type CloudView } from './storage';
 import { showFatal, showUnlockGate } from './overlay';
 import type { CoreAssets } from './protocol';
 
@@ -72,15 +84,22 @@ const LEAVE_FLUSH_MS = 5_000;
 
 /**
  * Time limits of the start-up calls: a core that stopped answering must end in an error message, not
- * in a loading screen forever. Opening and linking index the vault, hence the generous limits.
+ * in a loading screen forever. Opening and linking index the vault, hence the generous limits; loading
+ * the core (the WebAssembly, the storage) and its OnStartup too. A removal of the sweep that takes
+ * longer is left running and the sweep stops waiting; unlocking derives a key with Argon2id, slow on a
+ * weak computer.
  */
-const LIMITS = {
+export const LIMITS = {
+  ready: 120_000,
+  start: 120_000,
+  wipe: 120_000,
   status: 10_000,
   config: 30_000,
   info: 30_000,
   open: 180_000,
   link: 180_000,
   close: 60_000,
+  unlock: 180_000,
 };
 
 let workbench: WorkbenchHandle | null = null;
@@ -124,6 +143,36 @@ interface AuthState {
   error?: string;
 }
 
+/**
+ * What the cloud says the account can reach, for adopting the copies of an earlier version
+ * (storage.ts ownsLegacy). Read with the page's own token, before the core starts.
+ */
+async function fetchCloudView(
+  token: string,
+  need: { vaults: boolean; shares: boolean },
+): Promise<CloudView> {
+  const get = async (path: string, optional = false): Promise<unknown> => {
+    const res = await fetch(`/api/v1${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    // Sharing turned off for the account: it has no share to prove anything with.
+    if (optional && (res.status === 403 || res.status === 404)) return [];
+    if (!res.ok) throw new Error(`GET ${path}: HTTP ${res.status}`);
+    return res.json();
+  };
+  const me = (await get('/me')) as { id?: string };
+  if (!me.id) throw new Error('GET /me: no user id');
+  const vaults = need.vaults
+    ? (((await get('/vaults?include_deleted=true')) as { items?: { id: string }[] }).items ?? [])
+    : [];
+  const shares = need.shares
+    ? ((await get('/shares?scope=received', true)) as { id: string }[])
+    : [];
+  return {
+    userId: me.id,
+    vaultIds: new Set(vaults.map((v) => v.id)),
+    shareIds: new Set(Array.isArray(shares) ? shares.map((s) => s.id) : []),
+  };
+}
+
 /** Waits until the core has a cloud session (it asks the page for a token and loads the profile). */
 async function waitForSession(core: CoreHandle, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -150,13 +199,76 @@ function watchUnlock(localId: string, g: VaultGuard): void {
   };
 }
 
+/** The error launchWorkbench throws when the copy to open is the one a slow removal is still deleting. */
+export const STILL_REMOVING =
+  'the copy of this vault left by an earlier session is still being removed: try again in a moment';
+
+/**
+ * The start-up sweep (sweepPrivateCopies) with a limit on each removal. Resolves to the folder whose
+ * removal did not finish in time (the core goes on with it), or null; after one such removal the
+ * remaining copies are left for the next start.
+ */
+export async function sweepWithin(
+  account: string,
+  core: CoreHandle,
+  limitMs: number,
+): Promise<string | null> {
+  let stuck: string | null = null;
+  await sweepPrivateCopies(account, async (path) => {
+    if (stuck !== null) throw new Error('skipped: an earlier removal is still running');
+    try {
+      await core.wipe(path, limitMs);
+    } catch (e) {
+      if (e instanceof CoreTimeoutError) stuck = path;
+      throw e;
+    }
+  });
+  return stuck;
+}
+
 export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
+  // The account this page works for, and its storage (storage.ts). A page without a cloud
+  // (`?local`, E2E builds only) uses the signed-in test user when there is one.
+  const signedIn = await o.auth.getUser().catch(() => null);
+  if (!signedIn && !o.localOnly) throw new Error('signed out');
+  const server = location.origin;
+  const subject = signedIn?.sub ?? LOCAL_SUBJECT;
+  const account = await accountKey({ server, subject });
+  if (!o.localOnly && signedIn) {
+    const adoption = await adoptLegacyCopies({
+      key: account,
+      server,
+      deviceUserId: () => legacyDeviceUser(server),
+      cloud: (need) => fetchCloudView(signedIn.accessToken, need),
+    });
+    if (adoption === 'unproven' || adoption === 'kept')
+      console.info(
+        'memobrain: the vault copies of an earlier version stay unopened (they cannot be shown to belong to this account)',
+      );
+  }
+  const storage = await storageOf(account);
+
   let redirecting = false;
+  let switched = false;
   const getToken = async (): Promise<string> => {
+    // An identity provider that cannot be reached rejects here (the session is kept): the core gets an
+    // error, its sync waits and tries again, and the page does not go to sign in.
+    // A page without a cloud never signs the core in, even with a test user signed in.
+    if (o.localOnly) throw new Error('signed out');
     const user = await o.auth.getUser();
+    if (user && user.sub !== subject) {
+      // Another account signed in meanwhile (another tab): this page holds the first account's
+      // copies and must not work on them with the other's token. Its edits are written, then it
+      // goes back to the console, which starts over with the new account.
+      if (!switched) {
+        switched = true;
+        await flushWorkbench();
+        goToConsole();
+      }
+      throw new Error('signed out');
+    }
     if (!user) {
-      // A page without a cloud (localOnly) has nobody to sign in: the core simply stays disconnected.
-      if (!o.localOnly && !redirecting) {
+      if (!redirecting) {
         redirecting = true;
         // The session could not be renewed: the edits are written before the page goes to sign in.
         await flushWorkbench();
@@ -177,6 +289,8 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       version: o.version,
       logLevel: 'warn',
       ...(o.fsTrace ? { fsTrace: true } : {}),
+      storage: { fs: storage.fs, sqlite: storage.sqlite },
+      account: subject,
     },
     getToken,
     onQuit: () => void backToConsole(),
@@ -185,9 +299,16 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       if (started) showFatal();
     },
     createWorker: () => (worker = createCoreWorker()),
+    readyTimeoutMs: LIMITS.ready,
   });
   started = true;
-  await core.start();
+  try {
+    await core.start(LIMITS.start);
+  } catch (e) {
+    // A core stuck in its start-up is of no use: stop it so the error page is the end of it.
+    core.terminate();
+    throw e;
+  }
   installWailsGlobals(core);
   core.domReady();
   // Leaving the page: let the core close its databases (best effort, the page may already be going away).
@@ -196,7 +317,9 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   void navigator.storage?.persist?.().catch(() => false);
 
   // Clear text of private vaults left behind by a tab that was closed (best effort: each copy on its own).
-  await sweepPrivateCopies((path) => core.wipe(path));
+  // A removal that does not end in time goes on in the core while the page moves on; the sweep stops
+  // there (the next ones would queue behind it), and that copy must not be opened meanwhile (below).
+  const stuck = await sweepWithin(account, core, LIMITS.wipe);
 
   if (!o.localOnly) {
     // The administrator may have switched the workbench off (feature `web_workbench`): a typed address does not bypass it.
@@ -219,6 +342,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     await waitForSession(core);
     o.progress('vault');
     const created = await runCreation({
+      account,
       core,
       creation: o.create,
       mount: o.mountCreate,
@@ -247,7 +371,8 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     o.progress('vault');
     // The copy's folder: the one its marker records (a vault created in this browser lives in a
     // `new-…` folder, see create.ts), or the folder named by the cloud id.
-    const path = folderOf(vaultId);
+    const path = folderOf(account, vaultId);
+    if (stuck === path) throw new Error(STILL_REMOVING);
     info = await core.callWithin<VaultInfo>(LIMITS.open, 'VaultAPI', 'OpenVault', path);
     if (!o.localOnly) {
       const link = await core.callWithin<LinkInfo>(LIMITS.info, 'SyncAPI', 'Info', info.id);
@@ -268,6 +393,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     const markerId = o.share ? `share:${o.share}` : vaultId;
     const g = createVaultGuard({
       core,
+      account,
       markerId,
       info,
       kind,
@@ -280,12 +406,13 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
 
     // A private copy with changes that were not uploaded survived a closed tab: it is clear text, so it
     // is unlocked before the workbench shows it.
-    const kept = needsGate(markerId, kind, Boolean(link.locked));
+    const kept = needsGate(account, markerId, kind, Boolean(link.locked));
     if (kept)
       await showUnlockGate({
         counts: kept,
         unlock: async (secret, recovery) => {
-          const mustChange = await core.call<boolean>(
+          const mustChange = await core.callWithin<boolean>(
+            LIMITS.unlock,
             'VaultCryptoAPI',
             'Unlock',
             info.id,
@@ -296,15 +423,27 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
           return Boolean(mustChange);
         },
         setPassphrase: (passphrase) =>
-          core.call<void>('VaultCryptoAPI', 'SetPassphrase', info.id, passphrase),
+          core.callWithin<void>(
+            LIMITS.unlock,
+            'VaultCryptoAPI',
+            'SetPassphrase',
+            info.id,
+            passphrase,
+          ),
         deleteCopy: () => void g.deleteCopy(),
         backToConsole: goToConsole,
       });
   }
 
-  // The console, about to remove the copies (signing out, "forget this browser"), asks this tab to leave:
-  // it uploads, locks and removes what it can, and releases the files.
-  onLeaveRequest(() => void backToConsole());
+  // The console, about to remove the account's copies (signing out, "forget this browser"), asks this
+  // tab to leave: it uploads, locks and removes what it can, and releases the files. After the account
+  // was deleted nothing can be uploaded: the engine stops at once (`discard`). Requests about another
+  // account's copies are not for this tab.
+  onLeaveRequest(account, (discard) => {
+    if (!discard) return void backToConsole();
+    core.terminate();
+    goToConsole();
+  });
 
   o.progress('ui');
   const vaultGuard = guard;

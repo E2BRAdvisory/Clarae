@@ -40,6 +40,8 @@ function fakeCore(handlers: Record<string, Handler> = {}) {
   return { core: core as unknown as CoreHandle, wipe: core.wipe, calls, emit };
 }
 
+/** The account's storage key (storage.ts). */
+const A = 'a-alice';
 const info = { id: 'local-1', name: 'Diary', path: '/vaults/cloud-1' };
 
 function guardWith(handlers: Record<string, Handler> = {}, extra: Partial<GuardOptions> = {}) {
@@ -47,6 +49,7 @@ function guardWith(handlers: Record<string, Handler> = {}, extra: Partial<GuardO
   let t = 0;
   const opts = {
     core: fake.core,
+    account: A,
     markerId: 'cloud-1',
     info,
     kind: 'private',
@@ -69,7 +72,7 @@ afterEach(() => closeOverlay());
 describe('vault guard: marker', () => {
   it('records the copy when it starts and follows the sync status', () => {
     const { emit } = guardWith();
-    expect(readMarkers()['cloud-1']).toMatchObject({
+    expect(readMarkers(A)['cloud-1']).toMatchObject({
       name: 'Diary',
       kind: 'private',
       localPath: '/vaults/cloud-1',
@@ -77,22 +80,22 @@ describe('vault guard: marker', () => {
       dirty: false,
     });
     emit('sync:status', { vaultId: 'local-1', phase: 'offline', pending: 3, conflicts: 1 });
-    expect(readMarkers()['cloud-1']).toMatchObject({ pending: 3, conflicts: 1 });
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 3, conflicts: 1 });
     emit('sync:status', { vaultId: 'other', phase: 'idle', pending: 0, conflicts: 0 });
-    expect(readMarkers()['cloud-1']).toMatchObject({ pending: 3 });
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 3 });
   });
 
   it('flags a changed file until a sync that started afterwards ends clean', () => {
     const { emit } = guardWith();
     emit('sync:status', { vaultId: 'local-1', phase: 'syncing', pending: 0, conflicts: 0 });
     emit('vault:file-changed', { vaultId: 'local-1', paths: ['a.md'] });
-    expect(readMarkers()['cloud-1']?.dirty).toBe(true);
+    expect(readMarkers(A)['cloud-1']?.dirty).toBe(true);
     // The run in progress started before the change: it may not have scanned it.
     emit('sync:status', { vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 });
-    expect(readMarkers()['cloud-1']?.dirty).toBe(true);
+    expect(readMarkers(A)['cloud-1']?.dirty).toBe(true);
     emit('sync:status', { vaultId: 'local-1', phase: 'syncing', pending: 0, conflicts: 0 });
     emit('sync:status', { vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 });
-    expect(readMarkers()['cloud-1']?.dirty).toBe(false);
+    expect(readMarkers(A)['cloud-1']?.dirty).toBe(false);
   });
 });
 
@@ -112,7 +115,7 @@ describe('vault guard: lock of a private vault', () => {
     await vi.waitFor(() => expect(opts.goToConsole).toHaveBeenCalledOnce());
     expect(calls).toContain('VaultAPI.CloseVault');
     expect(wipe).toHaveBeenCalledWith('/vaults/cloud-1');
-    expect(readMarkers()['cloud-1']).toBeUndefined();
+    expect(readMarkers(A)['cloud-1']).toBeUndefined();
   });
 
   it('keeps a copy with changes not uploaded and says so, with the ways out', async () => {
@@ -124,7 +127,7 @@ describe('vault guard: lock of a private vault', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('1 conflict is not resolved yet.')).toBeInTheDocument();
     expect(wipe).not.toHaveBeenCalled();
-    expect(readMarkers()['cloud-1']).toMatchObject({ pending: 2, conflicts: 1 });
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 2, conflicts: 1 });
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -139,7 +142,7 @@ describe('vault guard: lock of a private vault', () => {
     await user.click(screen.getByRole('button', { name: 'Delete anyway' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     await vi.waitFor(() => expect(wipe).toHaveBeenCalledWith('/vaults/cloud-1'));
-    expect(readMarkers()['cloud-1']).toBeUndefined();
+    expect(readMarkers(A)['cloud-1']).toBeUndefined();
   });
 
   it('asks the core for the counts when the event carries only the vault id', async () => {
@@ -184,7 +187,7 @@ describe('vault guard: lock of a private vault', () => {
     emit('vault:locked', { vaultId: 'local-1', reason: 'manual', pending: -1, conflicts: 0 });
     expect(await screen.findByText(/may not have been uploaded yet/)).toBeInTheDocument();
     expect(wipe).not.toHaveBeenCalled();
-    expect(readMarkers()['cloud-1']?.dirty).toBe(true);
+    expect(readMarkers(A)['cloud-1']?.dirty).toBe(true);
   });
 });
 
@@ -262,13 +265,13 @@ describe('vault guard: lock and forget', () => {
 
 describe('needsGate', () => {
   it('asks for the passphrase first only for a locked private copy holding changes', () => {
-    updateMarker('p', { kind: 'private', pending: 1 });
-    updateMarker('clean', { kind: 'private' });
-    expect(needsGate('p', 'private', true)).toMatchObject({ pending: 1 });
-    expect(needsGate('p', 'private', false)).toBeNull();
-    expect(needsGate('p', 'shared', true)).toBeNull();
-    expect(needsGate('clean', 'private', true)).toBeNull();
-    expect(needsGate('missing', 'private', true)).toBeNull();
+    updateMarker(A, 'p', { kind: 'private', pending: 1 });
+    updateMarker(A, 'clean', { kind: 'private' });
+    expect(needsGate(A, 'p', 'private', true)).toMatchObject({ pending: 1 });
+    expect(needsGate(A, 'p', 'private', false)).toBeNull();
+    expect(needsGate(A, 'p', 'shared', true)).toBeNull();
+    expect(needsGate(A, 'clean', 'private', true)).toBeNull();
+    expect(needsGate(A, 'missing', 'private', true)).toBeNull();
   });
 });
 
@@ -283,7 +286,7 @@ describe('vault guard: remove from this browser', () => {
     expect(calls).toContain('SyncAPI.SyncNow');
     expect(calls).not.toContain('SyncAPI.Unlink'); // the launcher would only link it again
     expect(wipe).toHaveBeenCalledWith('/vaults/cloud-1');
-    expect(readMarkers()['cloud-1']).toBeUndefined();
+    expect(readMarkers(A)['cloud-1']).toBeUndefined();
     expect(opts.goToConsole).toHaveBeenCalled();
   });
 

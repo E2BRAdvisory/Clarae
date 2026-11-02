@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@memobrain/ui';
 import { useSharingAllowed } from '../api/cloud';
+import { useAdminAccess } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
 import { setLanguage, supportedLanguages, isLanguage } from '../i18n';
 import { applyTheme, loadTheme, type Theme } from './theme';
@@ -10,13 +11,15 @@ import { useForgetBrowser } from './ForgetBrowser';
 
 export function Shell() {
   const { t, i18n } = useTranslation();
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { isAdmin } = useAdminAccess();
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const lang = isLanguage(i18n.language) ? i18n.language : 'en';
   const sharingOn = useSharingAllowed();
   // A shared computer must not keep a clear-text copy of the vaults opened in the browser: signing out
   // removes them, after asking when one holds changes that were not uploaded.
   const forget = useForgetBrowser({
+    subject: user?.sub,
     confirmLabel: t('forget.confirmSignOut'),
     onDone: signOut,
     // An unexpected failure must not keep the user signed in on a shared computer.

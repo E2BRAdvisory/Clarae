@@ -67,4 +67,30 @@ describe('role guard', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Administration' })).toBeInTheDocument();
   });
+
+  it('follows the role of /me, not the realm role of an older token (ADR-0041)', async () => {
+    // Demoted from the console: the token still has the realm role until it is renewed.
+    renderApp({
+      path: '/admin',
+      routes: { ...usage, 'GET /me': { id: 'u1', username: 'alice', role: 'user' } },
+      user: { roles: ['memobrain-admin'] },
+    });
+    expect(await screen.findByText('Not allowed')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Administration' })).not.toBeInTheDocument();
+  });
+
+  it('opens the administration console to an administrator whose token has no realm role yet', async () => {
+    renderApp({
+      path: '/admin',
+      routes: {
+        ...usage,
+        'GET /me': { id: 'u1', username: 'alice', role: 'admin' },
+        'GET /admin/storage/overview': new Response(null, { status: 500 }),
+      },
+    });
+    expect(
+      await screen.findByRole('navigation', { name: 'Administration sections' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Administration' })).toBeInTheDocument();
+  });
 });

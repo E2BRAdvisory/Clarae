@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RestCloudPort, useFeature } from '@memobrain/cloud-features';
+import { useAuth } from '../auth/AuthProvider';
 import { thisBrowserDevice } from '../workbench/device';
 import { useApi } from './context';
 import { useMe, useWorkbenchAllowed } from './queries';
@@ -25,10 +26,11 @@ export function useSharingAllowed(): boolean {
  */
 export function useThisBrowserDeviceId(): string | undefined {
   const userId = useMe().data?.id;
+  const subject = useAuth().user?.sub;
   const q = useQuery({
-    queryKey: ['this-browser-device', userId],
-    queryFn: async () => (userId ? await thisBrowserDevice(userId) : null),
-    enabled: Boolean(userId),
+    queryKey: ['this-browser-device', userId, subject],
+    queryFn: async () => (userId && subject ? await thisBrowserDevice(userId, subject) : null),
+    enabled: Boolean(userId && subject),
     staleTime: 60_000,
   });
   return q.data ?? undefined;

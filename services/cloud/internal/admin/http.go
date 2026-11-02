@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -527,6 +528,14 @@ func profileInput(b *api.ConfigProfileInput) (configprofiles.ProfileInput, error
 	}
 	if b.LockedKeys != nil {
 		in.LockedKeys = *b.LockedKeys
+	}
+	if b.ExpectedVersion != nil {
+		v := *b.ExpectedVersion
+		if v < 1 || v > math.MaxInt32 {
+			return configprofiles.ProfileInput{}, bad("expected_version must be a profile version")
+		}
+		ev := int32(v)
+		in.ExpectedVersion = &ev
 	}
 	return in, nil
 }

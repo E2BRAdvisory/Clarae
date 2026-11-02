@@ -15,7 +15,13 @@ const assets: CoreAssets = {
   core: { url: '/core/c.wasm', integrity: 'sha384-x' },
   sqlite: { url: '/core/s.wasm', integrity: 'sha384-y' },
 };
-const config = { dataDir: '/data', version: 't', logLevel: 'warn' as const };
+const config = {
+  dataDir: '/data',
+  version: 't',
+  logLevel: 'warn' as const,
+  storage: { fs: 'accounts/a1/fs', sqlite: '/accounts/a1/sqlite' },
+  account: 'sub-1',
+};
 
 /** A worker that behaves like the real one, scripted by the test. */
 class FakeWorker {
@@ -194,6 +200,48 @@ describe('startCore', () => {
       if (m.type === 'init') w.emit({ type: 'fatal', error: 'cannot load /core/c.wasm: HTTP 404' });
     });
     await expect(core).rejects.toThrow('cannot load /core/c.wasm: HTTP 404');
+  });
+
+  it('terminates a worker that does not get ready in time and rejects', async () => {
+    vi.useFakeTimers();
+    try {
+      const onFatal = vi.fn();
+      // A storage that never answers: the worker never reports `ready`.
+      const { worker, core } = start(() => undefined, { onFatal, readyTimeoutMs: 120_000 });
+      const settled = core.catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(worker.terminated).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await settled).toMatchObject({
+        message: 'the vault engine did not start within 120 s',
+      });
+      expect(worker.terminated).toBe(true);
+      // A late `ready` changes nothing.
+      worker.emit({ type: 'ready', methods });
+      expect(await settled).toBeInstanceOf(Error);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds start and wipe when given a limit', async () => {
+    vi.useFakeTimers();
+    try {
+      // A core that answers nothing after `ready`.
+      const { core } = start((m, w) => void ready(m, w), { readyTimeoutMs: 1_000 });
+      const handle = await core;
+      const starting = handle.start(5_000).catch((e: unknown) => e);
+      const wiping = handle.wipe('/vaults/v', 2_000).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(await wiping).toBeInstanceOf(CoreTimeoutError);
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(await starting).toBeInstanceOf(CoreTimeoutError);
+      // The ready limit no longer applies once the core started.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(handle.dead).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a later fatal error through onFatal', async () => {

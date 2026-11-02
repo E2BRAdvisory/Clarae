@@ -952,7 +952,10 @@ export interface paths {
         };
         /** One profile */
         get: operations["adminGetConfigProfile"];
-        /** Replace a profile: its version grows and the old one goes to the history */
+        /**
+         * Replace a profile: its version grows and the old one goes to the history
+         * @description With `expected_version` the update applies only to that version of the profile; another administrator's change saved in the meantime answers 409 with code REV_CONFLICT.
+         */
         put: operations["adminUpdateConfigProfile"];
         post?: never;
         /** Delete a profile and its assignments */
@@ -1768,6 +1771,8 @@ export interface components {
                 [key: string]: unknown;
             };
             locked_keys?: string[];
+            /** @description Optimistic concurrency on update (PUT): the `version` the change was made from. When the profile is at another version the update is refused with 409 REV_CONFLICT and nothing changes. Omitted, the update replaces whatever version is current. Ignored on create. */
+            expected_version?: number;
         };
         ProfileVersion: {
             version: number;
@@ -1903,7 +1908,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION or NAME_IN_USE) */
+        /** @description State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION, NAME_IN_USE or REV_CONFLICT) */
         Conflict: {
             headers: {
                 [name: string]: unknown;

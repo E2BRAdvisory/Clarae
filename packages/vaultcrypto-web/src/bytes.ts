@@ -63,3 +63,24 @@ export function randomBytes(n: number): Uint8Array {
 export function buf(b: Uint8Array): Uint8Array<ArrayBuffer> {
   return new Uint8Array(b);
 }
+
+/**
+ * Overwrites key material with zeros. In JavaScript this is best effort (the engine and WebCrypto
+ * may hold copies of their own), but no copy made by this package outlives its use.
+ */
+export function wipeBytes(...parts: (Uint8Array | undefined | null)[]): void {
+  for (const p of parts) p?.fill(0);
+}
+
+/** Runs `fn` on a copy of `secret` made for WebCrypto, and zeroes the copy afterwards. */
+export async function withCopy<T>(
+  secret: Uint8Array,
+  fn: (copy: Uint8Array<ArrayBuffer>) => Promise<T>,
+): Promise<T> {
+  const copy = buf(secret);
+  try {
+    return await fn(copy);
+  } finally {
+    copy.fill(0);
+  }
+}

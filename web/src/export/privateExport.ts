@@ -2,6 +2,7 @@
 // the API (ciphertext only); everything else happens in packages/vaultcrypto-web.
 import { ApiError, isProblem, type MemobrainClient } from '@memobrain/api-client';
 import {
+  BlobNotFoundError,
   DecryptError,
   MissingEnvelopeError,
   RecoveryKeyError,
@@ -51,10 +52,23 @@ export function apiVaultSource(
         parseAs: 'arrayBuffer',
         ...(signal ? { signal } : {}),
       });
+      // Only a blob the server does not have is "missing": anything else is retried or stops the export.
+      if (r.response.status === 404 || r.response.status === 410) throw new BlobNotFoundError(hash);
       if (!r.response.ok) throw apiError(r.response, r.error);
       return new Uint8Array(r.data as unknown as ArrayBuffer);
     },
   };
+}
+
+/**
+ * Whether a failed blob download of the private export is worth trying again: the network, a
+ * timeout, a busy or restarting server, and a 401 (each request reads the session's current token,
+ * renewed in the meantime). A refusal (403, other 4xx) will not change: the export stops at once.
+ */
+export function retryableBlobError(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return true;
+  const s = err.status;
+  return s === 401 || s === 408 || s === 425 || s === 429 || s >= 500;
 }
 
 /**
@@ -72,7 +86,7 @@ export async function openPrivateVault(
     ...(signal ? { signal } : {}),
   });
   if (!env.response.ok || !env.data) throw apiError(env.response, env.error);
-  const keys = await unlockVault(env.data.items, secret, vaultId);
+  const keys = await unlockVault(env.data.items, secret, vaultId, signal);
   try {
     const tree = await apiVaultSource(api, vaultId).tree(signal);
     return {

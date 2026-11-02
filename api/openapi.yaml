@@ -2352,6 +2352,9 @@ paths:
       security:
         - bearerAuth: []
       summary: 'Replace a profile: its version grows and the old one goes to the history'
+      description: >-
+        With `expected_version` the update applies only to that version of the profile; another
+        administrator's change saved in the meantime answers 409 with code REV_CONFLICT.
       requestBody:
         required: true
         content:
@@ -2994,7 +2997,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Conflict:
-      description: 'State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION or NAME_IN_USE)'
+      description: 'State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION, NAME_IN_USE or REV_CONFLICT)'
       content:
         application/problem+json:
           schema:
@@ -4040,6 +4043,14 @@ components:
         locked_keys:
           type: array
           items: { type: string }
+        expected_version:
+          type: integer
+          minimum: 1
+          description: >-
+            Optimistic concurrency on update (PUT): the `version` the change was made from. When
+            the profile is at another version the update is refused with 409 REV_CONFLICT and
+            nothing changes. Omitted, the update replaces whatever version is current. Ignored on
+            create.
     ProfileVersion:
       type: object
       required: [version, name, is_global, config, locked_keys, updated_at]

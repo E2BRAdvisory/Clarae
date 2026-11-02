@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ADMIN_ROLE, type AuthService, type AuthUser } from './types';
+import type { AuthService, AuthUser } from './types';
 
 export interface AuthState {
   /** `loading` until the session store has been read. */
@@ -20,11 +20,15 @@ export interface AuthState {
   error: Error | null;
   /** Reads the session again after an error. */
   retry: () => void;
-  isAdmin: boolean;
   signIn: (returnTo?: string) => void;
   signOut: () => void;
   completeSignIn: () => Promise<string>;
-  getAccessToken: () => string | undefined;
+  /**
+   * The access token for a request about to be sent, read from the session at that moment (and renewed
+   * when it is about to expire): never one captured earlier, so a long export keeps working past the
+   * token's lifetime. Stable for the life of the provider.
+   */
+  getAccessToken: () => Promise<string | undefined>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -74,8 +78,7 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
     setUser(await service.getUser());
     return to;
   }, [service]);
-  const token = user?.accessToken;
-  const getAccessToken = useCallback(() => token, [token]);
+  const getAccessToken = useCallback(async () => (await service.getUser())?.accessToken, [service]);
 
   const value = useMemo<AuthState>(
     () => ({
@@ -83,7 +86,6 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
       user,
       error,
       retry,
-      isAdmin: user?.roles.includes(ADMIN_ROLE) ?? false,
       signIn,
       signOut,
       completeSignIn,

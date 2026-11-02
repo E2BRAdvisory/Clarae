@@ -1,5 +1,5 @@
 import { aesKey, DecryptError, NONCE_SIZE, TAG_SIZE, type Subkeys } from './keys';
-import { b64url, buf, concat, dec, enc, hex, randomBytes, unb64url } from './bytes';
+import { b64url, buf, concat, dec, enc, hex, randomBytes, unb64url, withCopy } from './bytes';
 import { FormatError } from './blob';
 
 export const PATH_ENC_PREFIX = 'enc1:';
@@ -127,12 +127,8 @@ export async function decryptPathFor(
 }
 
 export async function pathKey(s: Subkeys, path: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    buf(s.pathKey),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
+  const key = await withCopy(s.pathKey, (raw) =>
+    crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']),
   );
   const mac = await crypto.subtle.sign('HMAC', key, buf(enc.encode(foldPath(normalizePath(path)))));
   return PATH_KEY_PREFIX + hex(new Uint8Array(mac));

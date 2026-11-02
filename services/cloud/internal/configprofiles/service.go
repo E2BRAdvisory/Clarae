@@ -194,6 +194,9 @@ type ProfileInput struct {
 	IsGlobal    bool
 	Config      json.RawMessage
 	LockedKeys  []string
+	// ExpectedVersion, when set, makes Update apply only to that version of the profile
+	// (optimistic concurrency between administrators); Create ignores it.
+	ExpectedVersion *int32
 }
 
 func validateInput(in ProfileInput) (string, []string, error) {
@@ -313,17 +316,21 @@ func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in ProfileInp
 	var p configprofilesdb.ConfigProfile
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := configprofilesdb.New(tx)
-		if _, err := q.GetConfigProfile(ctx, id); errors.Is(err, pgx.ErrNoRows) {
+		cur, err := q.LockConfigProfile(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return httpproblem.NotFound("profile")
 		} else if err != nil {
 			return err
+		}
+		if in.ExpectedVersion != nil && *in.ExpectedVersion != cur.Version {
+			return httpproblem.Errorf(syncproto.CodeRevConflict,
+				"the profile is at version %d, not %d: another change was saved meanwhile", cur.Version, *in.ExpectedVersion)
 		}
 		if in.IsGlobal {
 			if err := s.demoteGlobal(ctx, q, id, actor); err != nil {
 				return err
 			}
 		}
-		var err error
 		p, err = q.UpdateConfigProfile(ctx, configprofilesdb.UpdateConfigProfileParams{
 			ID: id, Name: name, Description: nilIfEmpty(in.Description), IsGlobal: in.IsGlobal, Config: cfg, LockedKeys: locked, UpdatedBy: &actor,
 		})

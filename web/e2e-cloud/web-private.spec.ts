@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, bind, signIn } from './support';
+import { VAULTS_PATH, api, bind, markersKey, signIn } from './support';
 
 // A private (end-to-end encrypted) vault in the browser workbench: the copy the browser keeps is clear
 // text, so locking it removes the copy, unless that would lose changes that were not uploaded (D-04,
@@ -8,27 +8,32 @@ import { api, bind, signIn } from './support';
 // Run with: yarn workspace @memobrain/web e2e:cloud
 
 const PASSPHRASE = 'correct horse battery staple 42';
-const MARKERS = 'memobrain.workbench.vaults';
 
 interface Status {
   pending: number;
   phase: string;
 }
 
-/** Whether this browser holds the folder of a vault (OPFS `fs/vaults/<id>`). */
-const holdsCopy = (page: Page, cloudId: string): Promise<boolean> =>
-  page.evaluate(async (id) => {
-    try {
-      const fs = await (await navigator.storage.getDirectory()).getDirectoryHandle('fs');
-      await (await fs.getDirectoryHandle('vaults')).getDirectoryHandle(id);
-      return true;
-    } catch {
-      return false;
-    }
-  }, cloudId);
+/** Whether this browser holds the folder of a vault (OPFS `accounts/<key>/fs/vaults/<id>`). */
+const holdsCopy = async (page: Page, cloudId: string): Promise<boolean> =>
+  page.evaluate(
+    async (path) => {
+      try {
+        let d = await navigator.storage.getDirectory();
+        for (const name of path) d = await d.getDirectoryHandle(name);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [...(await VAULTS_PATH(page)), cloudId],
+  );
 
-const markers = (page: Page): Promise<Record<string, { pending: number; dirty: boolean }>> =>
-  page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '{}') as never, MARKERS);
+const markers = async (page: Page): Promise<Record<string, { pending: number; dirty: boolean }>> =>
+  page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) ?? '{}') as never,
+    await markersKey(page),
+  );
 
 const read = async (page: Page, id: string, path: string): Promise<string> => {
   try {

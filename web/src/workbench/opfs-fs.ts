@@ -190,7 +190,10 @@ export interface OpfsFs {
 }
 
 export interface InstallOptions {
-  /** Name of the OPFS folder that holds the whole file system (default "fs"). */
+  /**
+   * The OPFS folder that holds the whole file system (default "fs"): a name, or a path of folders
+   * ("accounts/<key>/fs", see storage.ts), created when missing.
+   */
   rootName?: string;
   /** Where Go's stdout/stderr (descriptors 1 and 2) go (default: the console). */
   onStdio?: (fd: 1 | 2, text: string) => void;
@@ -206,10 +209,10 @@ export async function installOpfsFs(
   target: Record<string, unknown> = globalThis,
   options: InstallOptions = {},
 ): Promise<OpfsFs> {
-  const base = await navigator.storage.getDirectory();
-  const root = (await base.getDirectoryHandle(options.rootName ?? 'fs', {
-    create: true,
-  })) as DirHandle;
+  let root = (await navigator.storage.getDirectory()) as DirHandle;
+  const rootPath = segments(options.rootName ?? 'fs');
+  if (rootPath.length === 0) throw new Error('the file system needs a folder of its own');
+  for (const name of rootPath) root = await root.getDirectoryHandle(name, { create: true });
   const decoder = new TextDecoder();
   const onStdio =
     options.onStdio ??

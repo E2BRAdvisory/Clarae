@@ -40,9 +40,9 @@ export function parseCreation(
   return { kind: 'private', name };
 }
 
-/** The copy's folder of a vault: where its marker says, or the folder named by its id. */
-export function folderOf(vaultId: string): string {
-  const recorded = readMarkers()[vaultId]?.localPath;
+/** The copy's folder of a vault: where the account's marker says, or the folder named by its id. */
+export function folderOf(account: string, vaultId: string): string {
+  const recorded = readMarkers(account)[vaultId]?.localPath;
   return recorded?.startsWith(`${VAULTS_DIR}/`) ? recorded : `${VAULTS_DIR}/${vaultId}`;
 }
 
@@ -55,6 +55,8 @@ export interface MountCreate {
 }
 
 export interface CreationDeps {
+  /** The signed-in account's key (storage.ts): whose markers record the new copy. */
+  account: string;
   core: Pick<CoreHandle, 'callWithin' | 'wipe'>;
   creation: Creation;
   /** Mounts the workbench's connect wizard; resolves to its unmount. */
@@ -82,7 +84,7 @@ export async function runCreation(
   const tempId = `new-${d.newId ? d.newId() : crypto.randomUUID()}`;
   const path = `${VAULTS_DIR}/${tempId}`;
   // A tab closed before the vault exists leaves an empty private copy: the start-up sweep removes it.
-  updateMarker(tempId, { name: d.creation.name, kind: 'private', localPath: path });
+  updateMarker(d.account, tempId, { name: d.creation.name, kind: 'private', localPath: path });
   const info = await d.core.callWithin<VaultInfo>(limits.open, 'VaultAPI', 'OpenVault', path);
 
   let unmount: () => void = () => undefined;
@@ -104,7 +106,7 @@ export async function runCreation(
   if (!cloudId) {
     try {
       await d.core.wipe(path);
-      removeMarker(tempId);
+      removeMarker(d.account, tempId);
     } catch (e) {
       // The marker stays: the next start-up sweep removes the folder.
       console.warn('memobrain: could not remove the folder of a cancelled vault:', e);
@@ -113,8 +115,8 @@ export async function runCreation(
   }
   // The copy now belongs to the cloud vault: its marker follows the cloud id (the guard keeps it
   // current from here on), and so does the address.
-  removeMarker(tempId);
-  updateMarker(cloudId, { name: d.creation.name, kind: 'private', localPath: path });
+  removeMarker(d.account, tempId);
+  updateMarker(d.account, cloudId, { name: d.creation.name, kind: 'private', localPath: path });
   d.replaceUrl(`${VAULTS_DIR}/${encodeURIComponent(cloudId)}/open`);
   return { vaultId: cloudId, path };
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '@memobrain/api-client';
 import { Badge, Button, Card, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
 import {
   useDeleteProfile,
@@ -118,12 +119,26 @@ const EMPTY: ConfigProfile = {
   updated_at: '',
 };
 
+/** The editor's fields for a profile, as they are shown before any edit. */
+function fieldsOf(p: ConfigProfile) {
+  return {
+    name: p.name,
+    description: p.description ?? '',
+    isGlobal: p.is_global,
+    configText: JSON.stringify(p.config, null, 2),
+    lockedText: p.locked_keys.join('\n'),
+  };
+}
+
 function Editor({
   profile,
   existingGlobal,
+  reload,
 }: {
   profile: ConfigProfile;
   existingGlobal?: ConfigProfile;
+  /** Reads the profile again from the server (after a conflict). */
+  reload?: () => Promise<ConfigProfile | undefined>;
 }) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
@@ -131,14 +146,50 @@ function Editor({
   const save = useSaveProfile();
   const del = useDeleteProfile();
   const isNew = profile.id === '';
-  const [name, setName] = useState(profile.name);
-  const [description, setDescription] = useState(profile.description ?? '');
-  const [isGlobal, setIsGlobal] = useState(profile.is_global);
-  const [configText, setConfigText] = useState(JSON.stringify(profile.config, null, 2));
-  const [lockedText, setLockedText] = useState(profile.locked_keys.join('\n'));
+  // The version the fields were loaded from: a save applies only to it (expected_version), so a
+  // change another administrator saved meanwhile is never overwritten silently.
+  const [base, setBase] = useState(() => ({ version: profile.version, fields: fieldsOf(profile) }));
+  const [name, setName] = useState(base.fields.name);
+  const [description, setDescription] = useState(base.fields.description);
+  const [isGlobal, setIsGlobal] = useState(base.fields.isGlobal);
+  const [configText, setConfigText] = useState(base.fields.configText);
+  const [lockedText, setLockedText] = useState(base.fields.lockedText);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmGlobal, setConfirmGlobal] = useState(false);
+  const [seenVersion, setSeenVersion] = useState(profile.version);
+
+  const dirty =
+    name !== base.fields.name ||
+    description !== base.fields.description ||
+    isGlobal !== base.fields.isGlobal ||
+    configText !== base.fields.configText ||
+    lockedText !== base.fields.lockedText;
+
+  const loadFrom = (p: ConfigProfile) => {
+    const f = fieldsOf(p);
+    setBase({ version: p.version, fields: f });
+    setSeenVersion(p.version);
+    setName(f.name);
+    setDescription(f.description);
+    setIsGlobal(f.isGlobal);
+    setConfigText(f.configText);
+    setLockedText(f.lockedText);
+    setError(null);
+  };
+
+  // Another version arrived (a restore from the history, another administrator's save): an editor
+  // without edits shows it, one with edits keeps them and says that a newer version exists. While
+  // a save is pending the version that arrives is its own (loaded when the save answers).
+  if (!isNew && profile.version !== seenVersion && !save.isPending) {
+    setSeenVersion(profile.version);
+    if (!dirty && profile.version !== base.version) loadFrom(profile);
+  }
+  const newer = !isNew && profile.version > base.version ? profile.version : null;
+
+  const reloadLatest = () => {
+    void (reload ? reload() : Promise.resolve(profile)).then((p) => p && loadFrom(p));
+  };
 
   const check = useMemo(() => checkConfigText(configText), [configText]);
   const locked = useMemo(() => parseKeys(lockedText), [lockedText]);
@@ -159,6 +210,7 @@ function Editor({
           is_global: isGlobal,
           config: check.value,
           locked_keys: locked,
+          ...(isNew ? {} : { expected_version: base.version }),
         },
       },
       {
@@ -166,9 +218,17 @@ function Editor({
           toast.push(t('admin.config.savedToast', { version: saved.version }));
           setConfirmGlobal(false);
           if (isNew) void navigate(`/admin/config/${saved.id}`, { replace: true });
+          else loadFrom(saved);
         },
         onError: (err) => {
           setConfirmGlobal(false);
+          if (err instanceof ApiError && err.code === 'REV_CONFLICT') {
+            // Another administrator saved meanwhile: the edits stay, the newer version is read so
+            // the editor can offer it.
+            setError(t('admin.config.conflict'));
+            void reload?.();
+            return;
+          }
           setError(adminError(err, t));
         },
       },
@@ -274,9 +334,19 @@ function Editor({
 
           {!isNew && (
             <p className="nd-muted">
-              {t('admin.config.version', { version: profile.version })} ·{' '}
+              {t('admin.config.version', { version: base.version })} ·{' '}
               {t('admin.config.updated', { date: formatDate(profile.updated_at, i18n.language) })}
             </p>
+          )}
+          {newer !== null && (
+            <div role="alert" className="admin-warning nd-stack">
+              <p>{t('admin.config.newerVersion', { version: newer })}</p>
+              <div>
+                <Button small onClick={reloadLatest}>
+                  {t('admin.config.reload')}
+                </Button>
+              </div>
+            </div>
           )}
           {error && <InlineError>{error}</InlineError>}
           <div className="nd-row">
@@ -494,8 +564,9 @@ export function ConfigDetailPage() {
             <>
               <h2 id="admin-profile">{p.name}</h2>
               <Editor
-                key={`${p.id}:${p.version}`}
+                key={p.id}
                 profile={p}
+                reload={() => profile.refetch().then((r) => r.data)}
                 {...(existingGlobal ? { existingGlobal } : {})}
               />
             </>

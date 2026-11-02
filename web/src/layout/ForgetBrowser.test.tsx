@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@memobrain/ui';
 import type { ForgetResult } from '../workbench/forget';
 import { updateMarker } from '../workbench/markers';
+import { accountKey } from '../workbench/storage';
 import { useForgetBrowser } from './ForgetBrowser';
 
 const forget = vi.hoisted(() => ({
@@ -11,21 +12,33 @@ const forget = vi.hoisted(() => ({
   afterLeave: [] as ForgetResult[],
   calls: 0,
   leaveCalls: 0,
+  accounts: [] as string[],
 }));
 
 vi.mock('../workbench/forget', () => ({
-  forgetThisBrowser: () => {
+  forgetThisBrowser: (account: string) => {
     forget.calls++;
+    forget.accounts.push(account);
     return Promise.resolve(forget.results.shift() ?? { removed: true, busy: false });
   },
-  forgetAfterLeave: () => {
+  forgetAfterLeave: (account: string) => {
     forget.leaveCalls++;
+    forget.accounts.push(account);
     return Promise.resolve(forget.afterLeave.shift() ?? { removed: true, busy: false });
   },
 }));
 
+/** The signed-in account's storage key, and another account's of the same browser. */
+let account = '';
+let other = '';
+
 function Harness({ onDone, onError }: { onDone: () => void; onError: (e: unknown) => void }) {
-  const f = useForgetBrowser({ confirmLabel: 'Delete and sign out', onDone, onError });
+  const f = useForgetBrowser({
+    subject: 'alice',
+    confirmLabel: 'Delete and sign out',
+    onDone,
+    onError,
+  });
   return (
     <>
       <Button onClick={f.start} disabled={f.working}>
@@ -43,8 +56,11 @@ const setup = () => {
   return { onDone, onError, user: userEvent.setup() };
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  account = await accountKey({ server: location.origin, subject: 'alice' });
+  other = await accountKey({ server: location.origin, subject: 'bob' });
   localStorage.clear();
+  forget.accounts = [];
   forget.results = [];
   forget.afterLeave = [];
   forget.calls = 0;
@@ -53,7 +69,7 @@ beforeEach(() => {
 
 describe('forgetting this browser from the console', () => {
   it('removes the copies at once when none holds changes', async () => {
-    updateMarker('v1', { name: 'Clean', kind: 'private' });
+    updateMarker(account, 'v1', { name: 'Clean', kind: 'private' });
     const { onDone, user } = setup();
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
@@ -61,10 +77,10 @@ describe('forgetting this browser from the console', () => {
   });
 
   it('lists the copies with changes not uploaded and deletes them only after a confirmation', async () => {
-    updateMarker('v1', { name: 'Diary', kind: 'private', pending: 2 });
-    updateMarker('v2', { name: 'Team', kind: 'shared', conflicts: 1 });
-    updateMarker('share:s1', { name: 'From Bob', kind: 'shared', dirty: true });
-    updateMarker('v3', { name: 'Clean', kind: 'shared' });
+    updateMarker(account, 'v1', { name: 'Diary', kind: 'private', pending: 2 });
+    updateMarker(account, 'v2', { name: 'Team', kind: 'shared', conflicts: 1 });
+    updateMarker(account, 'share:s1', { name: 'From Bob', kind: 'shared', dirty: true });
+    updateMarker(account, 'v3', { name: 'Clean', kind: 'shared' });
     const { onDone, user } = setup();
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     const dialog = screen.getByRole('dialog', { name: 'Changes not uploaded' });
@@ -85,6 +101,16 @@ describe('forgetting this browser from the console', () => {
     await user.click(screen.getByRole('button', { name: 'Delete and sign out' }));
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
     expect(forget.calls).toBe(1);
+    expect(forget.accounts).toEqual([account]);
+  });
+
+  it("acts on the signed-in account only: another account's changes are not listed", async () => {
+    updateMarker(other, 'b1', { name: 'Bob diary', kind: 'private', pending: 4 });
+    const { onDone, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(screen.queryByText(/Bob diary/)).not.toBeInTheDocument();
+    expect(forget.accounts).toEqual([account]);
   });
 
   it('says when a workbench tab holds the files, and can ask it to leave', async () => {

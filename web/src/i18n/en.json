@@ -343,7 +343,10 @@
       "restoreAria": "Restore version {{version}}",
       "restoreTitle": "Restore version {{version}}?",
       "restoreBody": "A new version with the content of version {{version}} is created. Nothing is lost: the current version stays in the history.",
-      "restoredToast": "Restored as version {{version}}."
+      "restoredToast": "Restored as version {{version}}.",
+      "conflict": "Another administrator saved this profile while you were editing it: your changes were not saved.",
+      "newerVersion": "Version {{version}} is the current one. Load it to go on (your unsaved changes are discarded: copy them first if you need them).",
+      "reload": "Load the current version"
     },
     "audit": {
       "filters": "Audit filters",
@@ -406,6 +409,7 @@
     "secretRequired": "Enter the passphrase or the recovery key.",
     "unlock": "Unlock",
     "unlocking": "Unlocking the vault… this can take a few seconds.",
+    "expired": "The vault was locked again after a period without use. Unlock it to download the ZIP.",
     "failure_wrongSecret": "Wrong passphrase or recovery key.",
     "failure_badRecoveryKey": "This is not a valid recovery key. Check it for typing mistakes.",
     "failure_weakKdf": "The key derivation settings stored for this vault are not acceptable, so it was not unlocked.",
@@ -433,7 +437,11 @@
     "reason_duplicate_path": "Duplicate path",
     "reason_blob_missing": "Content not available on the server",
     "reason_blob_corrupt": "Content is corrupt",
-    "reason_decrypt_failed": "Content could not be decrypted"
+    "reason_decrypt_failed": "Content could not be decrypted",
+    "interrupted": "The export stopped: {{path}} could not be downloaded ({{reason}}). No incomplete ZIP was kept: try again.",
+    "jobReadySave": "The export is ready ({{size}}). Save the ZIP to download it.",
+    "downloadProgress": "{{done}} of {{total}} downloaded",
+    "saved": "{{name}} saved."
   },
   "account": {
     "title": "Account",
@@ -453,9 +461,16 @@
     "confirmLabel": "Type your username ({{username}}) to confirm",
     "dialogConfirm": "Delete permanently",
     "forgetTitle": "This browser",
-    "forgetBody": "Vaults you open in the browser are kept on this computer while you work. Remove those copies and the data that indexes them: they are downloaded again the next time you open a vault. Signing out does this too.",
+    "forgetBody": "Vaults you open in the browser are kept on this computer while you work. Remove your copies and the data that indexes them: they are downloaded again the next time you open a vault. Signing out does this too. Copies kept for other accounts of this browser are not affected: each account removes its own.",
     "forgetButton": "Forget this browser",
-    "forgetDone": "This browser no longer holds any vault."
+    "forgetDone": "This browser no longer holds any of your vaults.",
+    "legacyTitle": "Copies from an earlier version",
+    "legacyBody": "An earlier version kept the vaults opened in this browser without recording which account they belong to. They cannot be shown to be yours, so they are never opened. If nobody using this browser needs them, delete them.",
+    "legacyButton": "Delete these copies",
+    "legacyConfirmTitle": "Delete the copies of the earlier version?",
+    "legacyConfirmBody": "They may belong to another account of this browser and hold changes that were never uploaded: deleted, those changes cannot be recovered.",
+    "legacyDone": "The copies of the earlier version were deleted.",
+    "legacyBusy": "A tab of the earlier version keeps them open. Close it and try again."
   },
   "forget": {
     "confirmTitle": "Changes not uploaded",

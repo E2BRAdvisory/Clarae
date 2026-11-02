@@ -20,6 +20,13 @@ export interface CoreConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   /** Log every file system call of the core to the console (diagnostics). */
   fsTrace?: boolean;
+  /**
+   * The signed-in account's storage (storage.ts): the OPFS folder of the core's file system and the
+   * directory of the SQLite pool. Read by the worker, not by the Go core.
+   */
+  storage: { fs: string; sqlite: string };
+  /** The account's subject: the key of its device registration (device.ts). Worker only. */
+  account: string;
 }
 
 /** What the page can ask of the user's browser on behalf of the core (Go's `Host`). */

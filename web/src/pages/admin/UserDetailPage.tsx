@@ -27,6 +27,7 @@ import {
   type AdminUser,
   type Role,
 } from '../../api/admin';
+import { useMe } from '../../api/queries';
 import { formatBytes, formatDate } from '../../format';
 import { QueryState } from '../QueryState';
 import { adminError } from './adminError';
@@ -269,6 +270,8 @@ function Actions({ user }: { user: AdminUser }) {
   const setRole = useSetRole(user.id);
   const setQuota = useSetQuota(user.id);
   const del = useDeleteUser();
+  // The server never lets administrators suspend or delete themselves: no button that always fails.
+  const self = useMe().data?.id === user.id;
   const [dlg, setDlg] = useState<Dlg>(null);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole_] = useState<Role>(user.role);
@@ -335,14 +338,18 @@ function Actions({ user }: { user: AdminUser }) {
               {t('admin.user.activate')}
             </Button>
           ) : (
-            <Button variant="danger" onClick={() => open('suspend')}>
-              {t('admin.user.suspend')}
-            </Button>
+            !self && (
+              <Button variant="danger" onClick={() => open('suspend')}>
+                {t('admin.user.suspend')}
+              </Button>
+            )
           )}
           <Button onClick={() => open('reset')}>{t('admin.user.resetPassword')}</Button>
-          <Button variant="danger" onClick={() => open('delete')}>
-            {t('admin.user.delete')}
-          </Button>
+          {!self && (
+            <Button variant="danger" onClick={() => open('delete')}>
+              {t('admin.user.delete')}
+            </Button>
+          )}
         </div>
         {resetInfo !== null && (
           <p role="status">

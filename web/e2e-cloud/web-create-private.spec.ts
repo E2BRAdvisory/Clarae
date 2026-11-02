@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, bind, signIn } from './support';
+import { VAULTS_PATH, api, bind, markersKey, signIn } from './support';
 
 // Creating a private vault from the console (ADR-0037 §2): "New vault" opens the browser workbench on
 // /vaults/new/open?kind=private&name=…, whose connect wizard asks for the passphrase and shows the
@@ -9,7 +9,6 @@ import { api, bind, signIn } from './support';
 // Run with: yarn workspace @memobrain/web e2e:cloud
 
 const PASSPHRASE = 'correct horse battery staple 42';
-const MARKERS = 'memobrain.workbench.vaults';
 
 interface Vault {
   id: string;
@@ -18,20 +17,23 @@ interface Vault {
   file_count: number;
 }
 
-/** The folders of this browser's vault copies (OPFS `fs/vaults/*`). */
-const copies = (page: Page): Promise<string[]> =>
-  page.evaluate(async () => {
-    try {
-      const fs = await (await navigator.storage.getDirectory()).getDirectoryHandle('fs');
-      const dir = await fs.getDirectoryHandle('vaults');
-      const names: string[] = [];
-      for await (const name of (dir as unknown as { keys(): AsyncIterable<string> }).keys())
-        names.push(name);
-      return names;
-    } catch {
-      return [];
-    }
-  });
+/** The folders of this browser's vault copies (OPFS `accounts/<key>/fs/vaults/*`). */
+const copies = async (page: Page): Promise<string[]> =>
+  page.evaluate(
+    async (path) => {
+      try {
+        let dir = await navigator.storage.getDirectory();
+        for (const name of path) dir = await dir.getDirectoryHandle(name);
+        const names: string[] = [];
+        for await (const name of (dir as unknown as { keys(): AsyncIterable<string> }).keys())
+          names.push(name);
+        return names;
+      } catch {
+        return [];
+      }
+    },
+    await VAULTS_PATH(page),
+  );
 
 async function startCreation(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'New vault' }).click();
@@ -77,7 +79,7 @@ test('a private vault created from the console opens in the browser, encrypted',
   ).toMatchObject({ locked: false, kind: 'private' });
   const marker = await page.evaluate(
     ({ key, id }) => (JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>)[id],
-    { key: MARKERS, id: cloudId },
+    { key: await markersKey(page), id: cloudId },
   );
   expect(marker).toMatchObject({
     kind: 'private',
@@ -114,6 +116,8 @@ test('cancelling the creation goes back to the console and leaves nothing behind
   const after = await api<{ items: Vault[] }>(page, 'GET', '/vaults');
   expect(after.items.length).toBe(before.items.length);
   expect((await copies(page)).filter((n) => n.startsWith('new-'))).toEqual([]);
-  expect(await page.evaluate((key) => localStorage.getItem(key), MARKERS)).toBeNull();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), await markersKey(page)),
+  ).toBeNull();
   await context.close();
 });

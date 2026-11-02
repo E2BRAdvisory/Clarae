@@ -1,23 +1,32 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Dialog, InlineError, SelectField, Table, TextField } from '@memobrain/ui';
-import { exportPrivateVault, type ExportReport, type Secret } from '@memobrain/vaultcrypto-web';
+import {
+  ExportInterruptedError,
+  expireWhenIdle,
+  exportPrivateVault,
+  type ExportReport,
+  type Secret,
+} from '@memobrain/vaultcrypto-web';
 import { ApiError } from '@memobrain/api-client';
 import { useApi } from '../api/context';
 import { describeError } from '../api/errors';
+import { useVaultLockMs } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
 import { downloadBlob } from '../export/download';
 import {
   classifyUnlockError,
   openPrivateVault,
+  retryableBlobError,
   type PrivateSession,
   type UnlockFailure,
 } from '../export/privateExport';
-import { BLOB_WARN_BYTES, canSaveToDisk, saveZipStream } from '../export/save';
+import { BLOB_WARN_BYTES, canSaveToDisk, saveZipStream, type SaveMethod } from '../export/save';
 import {
   ExportJobError,
   exportShared,
   fallbackName,
+  fetchDownload,
   isAbort,
   openDownload,
   type SharedExportEvent,
@@ -31,9 +40,22 @@ interface VaultRef {
 
 /* ---- Shared vault: direct stream, falling back to an export job ------------------------- */
 
+/** How often the download progress of a shared export is redrawn. */
+const PROGRESS_MS = 250;
+
+/** A ready archive that the API serves itself: downloaded with the token when the user saves it. */
+interface ApiDownload {
+  url: string;
+  filename: string;
+  size?: number;
+}
+
 type SharedPhase =
   | { kind: 'direct' }
   | { kind: 'job'; status: 'queued' | 'running' | 'ready' | 'failed' | 'expired' }
+  | { kind: 'save'; target: ApiDownload }
+  | { kind: 'saving'; target: ApiDownload; received: number; total?: number }
+  | { kind: 'saved'; filename: string; method: SaveMethod }
   | { kind: 'done'; filename: string }
   | { kind: 'cancelled' }
   | { kind: 'error'; message: string };
@@ -45,6 +67,21 @@ function SharedExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () =
   const [phase, setPhase] = useState<SharedPhase>({ kind: 'direct' });
   const abort = useRef<AbortController | null>(null);
 
+  const fail = useCallback(
+    (err: unknown) => {
+      if (err instanceof ExportJobError)
+        return setPhase({
+          kind: 'error',
+          message:
+            err.status === 'expired'
+              ? t('vaultExport.jobExpired')
+              : t('vaultExport.jobFailed', { error: err.message || '—' }),
+        });
+      setPhase({ kind: 'error', message: describeError(err, t) });
+    },
+    [t],
+  );
+
   useEffect(() => {
     const ac = new AbortController();
     abort.current = ac;
@@ -53,6 +90,11 @@ function SharedExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () =
     exportShared({ api, getToken: getAccessToken }, vault, { signal: ac.signal, onEvent })
       .then((result) => {
         if (abort.current !== ac || ac.signal.aborted) return;
+        if (result.kind === 'download') {
+          // Saving is a click of its own: the file picker needs the user's gesture.
+          const { url, filename, size } = result;
+          return setPhase({ kind: 'save', target: { url, filename, ...(size ? { size } : {}) } });
+        }
         if (result.kind === 'blob') downloadBlob(result.blob, result.filename);
         else openDownload(result.url, result.filename);
         setPhase({ kind: 'done', filename: result.filename });
@@ -60,23 +102,65 @@ function SharedExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () =
       .catch((err: unknown) => {
         if (abort.current !== ac) return; // superseded (React StrictMode remount)
         if (isAbort(err) || ac.signal.aborted) return setPhase({ kind: 'cancelled' });
-        if (err instanceof ExportJobError)
-          return setPhase({
-            kind: 'error',
-            message:
-              err.status === 'expired'
-                ? t('vaultExport.jobExpired')
-                : t('vaultExport.jobFailed', { error: err.message || '—' }),
-          });
-        setPhase({ kind: 'error', message: describeError(err, t) });
+        fail(err);
       });
-    // Leaving the page stops the transfer and the polling.
-    return () => ac.abort();
+    // Leaving the page stops the transfer and the polling, and a download being saved.
+    return () => {
+      ac.abort();
+      abort.current?.abort();
+    };
     // The export starts once per dialog instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const busy = phase.kind === 'direct' || (phase.kind === 'job' && phase.status !== 'ready');
+  /** Streams the archive from the API into the file the user picks (or a Blob without the picker). */
+  const save = async (target: ApiDownload) => {
+    const ac = new AbortController();
+    abort.current = ac;
+    setPhase({
+      kind: 'saving',
+      target,
+      received: 0,
+      ...(target.size ? { total: target.size } : {}),
+    });
+    let filename = target.filename;
+    let shown = 0; // the progress is redrawn a few times a second, not once per network chunk
+    try {
+      const method = await saveZipStream(
+        async () => {
+          const d = await fetchDownload({ api, getToken: getAccessToken }, target.url, filename, {
+            signal: ac.signal,
+            onBytes: (received, total) => {
+              const now = Date.now();
+              if (now - shown < PROGRESS_MS) return;
+              shown = now;
+              setPhase((p) =>
+                p.kind === 'saving'
+                  ? { ...p, received, ...((total ?? p.total) ? { total: total ?? p.total } : {}) }
+                  : p,
+              );
+            },
+          });
+          filename = d.filename;
+          return d;
+        },
+        target.filename,
+        ac.signal,
+      );
+      if (abort.current === ac) setPhase({ kind: 'saved', filename, method });
+    } catch (err) {
+      if (abort.current !== ac) return;
+      if (ac.signal.aborted) return setPhase({ kind: 'cancelled' });
+      // The file picker was dismissed: nothing was downloaded, the archive can still be saved.
+      if (isAbort(err)) return setPhase({ kind: 'save', target });
+      fail(err);
+    }
+  };
+
+  const busy =
+    phase.kind === 'direct' ||
+    phase.kind === 'saving' ||
+    (phase.kind === 'job' && phase.status !== 'ready');
   let status: string;
   switch (phase.kind) {
     case 'direct':
@@ -84,12 +168,71 @@ function SharedExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () =
     case 'job':
       status = t(`vaultExport.job_${phase.status}`);
       return renderShared(status, busy);
+    case 'save':
+    case 'saving':
+      return renderSave(phase);
+    case 'saved':
+      return renderShared(
+        phase.method === 'disk'
+          ? t('vaultExport.saved', { name: phase.filename })
+          : t('vaultExport.done', { name: phase.filename }),
+        false,
+      );
     case 'done':
       return renderShared(t('vaultExport.done', { name: phase.filename }), false);
     case 'cancelled':
       return renderShared(t('vaultExport.cancelled'), false);
     case 'error':
       return renderShared(phase.message, false, true);
+  }
+
+  function renderSave(p: Extract<SharedPhase, { kind: 'save' | 'saving' }>) {
+    const size = p.kind === 'saving' ? p.total : p.target.size;
+    const memoryWarning = !canSaveToDisk() && size !== undefined && size > BLOB_WARN_BYTES;
+    return (
+      <Dialog
+        title={t('vaultExport.title', { name: vault.name })}
+        onClose={p.kind === 'saving' ? () => abort.current?.abort() : onClose}
+        actions={
+          p.kind === 'saving' ? (
+            <Button onClick={() => abort.current?.abort()}>{t('common.cancel')}</Button>
+          ) : (
+            <>
+              <Button onClick={onClose}>{t('common.cancel')}</Button>
+              <Button variant="primary" onClick={() => void save(p.target)}>
+                {t('vaultExport.saveZip')}
+              </Button>
+            </>
+          )
+        }
+      >
+        {p.kind === 'save' ? (
+          <div className="nd-stack">
+            <p role="status">
+              {t('vaultExport.jobReadySave', { size: formatBytes(p.target.size ?? 0) })}
+            </p>
+            <p className="nd-muted">
+              {canSaveToDisk() ? t('vaultExport.saveToDisk') : t('vaultExport.saveBlob')}
+            </p>
+            {memoryWarning && <InlineError>{t('vaultExport.memoryWarning')}</InlineError>}
+          </div>
+        ) : (
+          <div className="nd-stack">
+            <progress
+              className="admin-progress"
+              aria-label={t('vaultExport.exporting')}
+              {...(p.total ? { max: p.total, value: p.received } : {})}
+            />
+            <p role="status">
+              {t('vaultExport.downloadProgress', {
+                done: formatBytes(p.received),
+                total: p.total ? formatBytes(p.total) : '—',
+              })}
+            </p>
+          </div>
+        )}
+      </Dialog>
+    );
   }
 
   function renderShared(message: string, working: boolean, isError = false) {
@@ -167,11 +310,16 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
   const [progress, setProgress] = useState<Progress>({ exported: 0, skipped: 0, total: 0 });
   const [report, setReport] = useState<ExportReport | null>(null);
   const [info, setInfo] = useState<{ files: number; bytes: number } | null>(null);
-  // Key material lives only here, in memory, and is wiped when the dialog ends.
+  // Key material lives only here, in memory, and is wiped when the dialog ends, or when it stays
+  // unlocked and unused for the time the core locks a private vault after (vault_lock_minutes).
   const session = useRef<PrivateSession | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const expiry = useRef<ReturnType<typeof expireWhenIdle> | null>(null);
+  const lockMs = useVaultLockMs();
 
   const wipe = useCallback(() => {
+    expiry.current?.stop();
+    expiry.current = null;
     session.current?.keys.wipe();
     session.current = null;
   }, []);
@@ -202,9 +350,17 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
         ? { kind: 'passphrase', passphrase: secret }
         : { kind: 'recovery', recoveryKey: secret };
     try {
-      session.current = await openPrivateVault(api, vault.id, value, ac.signal);
+      const opened = await openPrivateVault(api, vault.id, value, ac.signal);
+      session.current = opened;
       setSecret(''); // the secret is not needed any more
-      setInfo({ files: session.current.tree.length, bytes: session.current.totalBytes });
+      setInfo({ files: opened.tree.length, bytes: opened.totalBytes });
+      expiry.current = expireWhenIdle(opened.keys, lockMs, () => {
+        if (session.current === opened) session.current = null;
+        expiry.current = null;
+        setInfo(null);
+        setError(t('vaultExport.expired'));
+        setPhase({ kind: 'form' });
+      });
       setPhase({ kind: 'ready' });
     } catch (err) {
       if (isAbort(err) || ac.signal.aborted) return setPhase({ kind: 'cancelled' });
@@ -221,6 +377,8 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
   const save = async () => {
     const s = session.current;
     if (!s) return;
+    // In use from here: no expiry while the archive is written (the keys are wiped at the end).
+    expiry.current?.pause();
     const ac = new AbortController();
     abort.current = ac;
     const filename = fallbackName(vault.name);
@@ -232,6 +390,9 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
       keys: s.keys.keys,
       source: s.source,
       signal: ac.signal,
+      // A blob the network, the session or the server failed to deliver is tried again, then stops the
+      // export: only a blob the server does not have is skipped as missing.
+      isRetryable: retryableBlobError,
       onProgress: (r) =>
         setProgress({ exported: r.exported, skipped: r.skipped.length, total: r.total }),
     });
@@ -251,11 +412,21 @@ function PrivateExportDialog({ vault, onClose }: { vault: VaultRef; onClose: () 
   };
 
   const describeExportError = (err: unknown): string =>
-    err instanceof ApiError
-      ? describeError(err, t)
-      : err instanceof Error && err.message
-        ? t('vaultExport.exportFailed', { message: err.message })
-        : t('common.errorGeneric');
+    err instanceof ExportInterruptedError
+      ? t('vaultExport.interrupted', {
+          path: err.path,
+          reason:
+            err.cause instanceof ApiError
+              ? describeError(err.cause, t)
+              : err.cause instanceof Error && err.cause.message
+                ? err.cause.message
+                : t('common.errorGeneric'),
+        })
+      : err instanceof ApiError
+        ? describeError(err, t)
+        : err instanceof Error && err.message
+          ? t('vaultExport.exportFailed', { message: err.message })
+          : t('common.errorGeneric');
 
   const working = phase.kind === 'unlocking' || phase.kind === 'exporting';
   const memoryWarning = info !== null && !canSaveToDisk() && info.bytes > BLOB_WARN_BYTES;

@@ -2,7 +2,7 @@ import { render, type RenderResult } from '@testing-library/react';
 import { vi, type Mock } from 'vitest';
 import { createClient, type MemobrainClient } from '@memobrain/api-client';
 import { TestApp } from '../App';
-import type { AuthService, AuthUser } from '../auth/types';
+import { ADMIN_ROLE, type AuthService, type AuthUser } from '../auth/types';
 
 export interface RecordedCall {
   method: string;
@@ -93,7 +93,12 @@ export function renderApp(opts: {
   user?: Partial<AuthUser> | null;
   auth?: AuthService;
 }): RenderResult & { api: MockApi; auth: AuthService } {
-  const api = mockApi({ 'GET /me': { id: 'u1', username: 'alice' }, ...opts.routes });
+  // /me carries the role the console trusts (ADR-0041 §1): the one the user's token has, by default.
+  const admin = opts.user?.roles?.includes(ADMIN_ROLE) ?? false;
+  const api = mockApi({
+    'GET /me': { id: 'u1', username: 'alice', role: admin ? 'admin' : 'user' },
+    ...opts.routes,
+  });
   const auth = opts.auth ?? fakeAuth(opts.user === undefined ? {} : opts.user);
   const view = render(
     <TestApp auth={auth} client={api.client} router={{ initialEntries: [opts.path] }} />,

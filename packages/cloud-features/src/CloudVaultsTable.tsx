@@ -42,6 +42,8 @@ export const cloudKeys = {
   directory: (port: CloudPort, type: string, q: string) =>
     ['cloud-features', port.id, 'directory', type, q] as const,
   groups: (port: CloudPort) => ['cloud-features', port.id, 'groups'] as const,
+  /** The `features` of the effective configuration (useFeatureFlag). */
+  features: (port: CloudPort) => ['cloud-features', port.id, 'features'] as const,
 };
 
 /** What an error is about, for the words of NOT_FOUND and VALIDATION_FAILED. */

@@ -33,6 +33,8 @@ interface SyncStatus {
 
 export interface GuardOptions {
   core: CoreHandle;
+  /** The signed-in account's key (storage.ts): whose marker follows the vault. */
+  account: string;
   /** The marker's key: the cloud vault id (or `share:<id>` for a received share). */
   markerId: string;
   info: { id: string; name: string; path: string };
@@ -80,14 +82,14 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   let deciding = false;
 
   // A change the core may not have scanned yet: cleared by a sync that started after it and ended clean.
-  let dirtyAt = readMarkers()[o.markerId]?.dirty ? now() : 0;
+  let dirtyAt = readMarkers(o.account)[o.markerId]?.dirty ? now() : 0;
   let runStartedAt = 0;
 
-  const marker = (): VaultMarker | undefined => readMarkers()[o.markerId];
+  const marker = (): VaultMarker | undefined => readMarkers(o.account)[o.markerId];
   const patch = (p: Partial<VaultMarker>): void => {
     const m = marker();
     if (m && Object.entries(p).every(([k, v]) => m[k as keyof VaultMarker] === v)) return;
-    updateMarker(o.markerId, p, now());
+    updateMarker(o.account, o.markerId, p, now());
   };
   patch({ name: info.name, kind: o.kind, localPath: info.path });
 
@@ -121,7 +123,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     await core.callWithin(60_000, 'VaultAPI', 'CloseVault', info.id).catch(() => undefined);
     try {
       await core.wipe(info.path);
-      removeMarker(o.markerId);
+      removeMarker(o.account, o.markerId);
     } catch (e) {
       // The marker stays: the next start-up sweep removes the copy.
       console.error('memobrain: could not remove the copy of the vault:', e);
@@ -310,8 +312,13 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
 }
 
 /** Whether the copy of `markerId` must be unlocked before the workbench may show it (see launch.ts). */
-export function needsGate(markerId: string, kind: string, locked: boolean): VaultMarker | null {
+export function needsGate(
+  account: string,
+  markerId: string,
+  kind: string,
+  locked: boolean,
+): VaultMarker | null {
   if (kind !== 'private' || !locked) return null;
-  const m = readMarkers()[markerId];
+  const m = readMarkers(account)[markerId];
   return m && unsynced(m) ? m : null;
 }

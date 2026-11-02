@@ -336,6 +336,29 @@ func (q *Queries) ListUserConfigProfiles(ctx context.Context, userID uuid.UUID) 
 	return items, nil
 }
 
+const lockConfigProfile = `-- name: LockConfigProfile :one
+SELECT id, name, description, is_global, version, config, locked_keys, updated_by, updated_at FROM config_profiles WHERE id = $1 FOR UPDATE
+`
+
+// The profile about to be replaced, locked until the end of the transaction, so the version an
+// update checks (expected_version) is still the one it replaces.
+func (q *Queries) LockConfigProfile(ctx context.Context, id uuid.UUID) (ConfigProfile, error) {
+	row := q.db.QueryRow(ctx, lockConfigProfile, id)
+	var i ConfigProfile
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.IsGlobal,
+		&i.Version,
+		&i.Config,
+		&i.LockedKeys,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateConfigProfile = `-- name: UpdateConfigProfile :one
 UPDATE config_profiles
 SET name = $2, description = $3, is_global = $4, config = $5, locked_keys = $6,

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
 import { MyGroups } from '@memobrain/cloud-features';
@@ -9,12 +10,75 @@ import { useMe, useVaults } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
 import { downloadBlob } from '../export/download';
 import { useForgetBrowser } from '../layout/ForgetBrowser';
+import { forgetThisBrowserDevice } from '../workbench/device';
+import { discardAccountStorage } from '../workbench/forget';
+import { accountKey, removeUnownedLegacy, unownedLegacyPresent } from '../workbench/storage';
+
+/**
+ * The copies an earlier version kept without an account (storage.ts): nobody can be shown to own
+ * them, so they are never opened; here they can be deleted, after a warning.
+ */
+function LegacyCopies() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const present = useQuery({
+    queryKey: ['workbench', 'legacy-copies'],
+    queryFn: () => unownedLegacyPresent().catch(() => false),
+    staleTime: Infinity,
+  });
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!present.data) return null;
+  const remove = () => {
+    setBusy(true);
+    setError(null);
+    removeUnownedLegacy()
+      .then((r) => {
+        if (r.busy) return setError(t('account.legacyBusy'));
+        setConfirm(false);
+        toast.push(t('account.legacyDone'));
+        void qc.invalidateQueries({ queryKey: ['workbench', 'legacy-copies'] });
+      })
+      .catch((e: unknown) => setError(describeError(e, t)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="nd-stack">
+      <h3>{t('account.legacyTitle')}</h3>
+      <p>{t('account.legacyBody')}</p>
+      <div>
+        <Button variant="danger" onClick={() => setConfirm(true)}>
+          {t('account.legacyButton')}
+        </Button>
+      </div>
+      {confirm && (
+        <Dialog
+          title={t('account.legacyConfirmTitle')}
+          onClose={() => setConfirm(false)}
+          actions={
+            <>
+              <Button onClick={() => setConfirm(false)}>{t('common.cancel')}</Button>
+              <Button variant="danger" onClick={remove} disabled={busy}>
+                {t('account.legacyButton')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('account.legacyConfirmBody')}</p>
+          {error && <InlineError>{error}</InlineError>}
+        </Dialog>
+      )}
+    </div>
+  );
+}
 
 export function AccountPage() {
   const { t, i18n } = useTranslation();
   const port = useCloudPort();
   const toast = useToast();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const me = useMe();
   const vaults = useVaults();
   const exportData = useExportMyData();
@@ -27,6 +91,7 @@ export function AccountPage() {
   const [forgetError, setForgetError] = useState<string | null>(null);
 
   const forgetBrowser = useForgetBrowser({
+    subject: user?.sub,
     confirmLabel: t('forget.confirmForget'),
     onDone: () => toast.push(t('account.forgetDone')),
     onError: (e) => setForgetError(describeError(e, t)),
@@ -37,7 +102,7 @@ export function AccountPage() {
   };
 
   const username = me.data?.username ?? '';
-  const privateVaults = (vaults.data?.items ?? []).filter((v) => v.kind === 'private');
+  const privateVaults = (vaults.data ?? []).filter((v) => v.kind === 'private');
   const canDelete = username !== '' && confirm === username && (privateVaults.length === 0 || ack);
 
   const close = () => {
@@ -58,13 +123,25 @@ export function AccountPage() {
     });
   };
 
+  const forgetDeletedAccount = async (): Promise<void> => {
+    const subject = user?.sub;
+    if (!subject) return;
+    const account = await accountKey({ server: location.origin, subject });
+    await discardAccountStorage(account);
+    await forgetThisBrowserDevice(subject, me.data?.id);
+  };
+
   const remove = () => {
     deleteAccount.mutate(
       { confirm, ...(privateVaults.length > 0 ? { acknowledge_data_loss: ack } : {}) },
       {
         onSuccess: () => {
           close();
-          signOut();
+          // The account is gone: the copies of its vaults leave this browser too, without asking
+          // (changes not uploaded can never be uploaded now), and so does its device registration.
+          void forgetDeletedAccount()
+            .catch((e: unknown) => console.error('memobrain: forgetting the browser failed:', e))
+            .finally(signOut);
         },
         onError: (e) => setError(describeError(e, t)),
       },
@@ -101,6 +178,7 @@ export function AccountPage() {
         </div>
         {forgetError && <InlineError>{forgetError}</InlineError>}
         {forgetBrowser.dialogs}
+        <LegacyCopies />
       </section>
 
       <section aria-labelledby="account-delete" className="nd-stack">

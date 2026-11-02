@@ -58,7 +58,8 @@ const shareCommon = {
 
 /** Routes that make every page of the SPA render with realistic data. */
 export const allRoutes: Record<string, unknown> = {
-  'GET /me': { id: ME },
+  // The role the console trusts for the administration area (ADR-0041 §1).
+  'GET /me': { id: ME, role: 'admin' },
   'GET /me/usage': { used_bytes: 96 * MB, quota_bytes: 100 * MB, level: 'critical' },
   'GET /me/devices': {
     items: [

@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   DecryptError,
   RecoveryKeyError,
@@ -20,8 +20,13 @@ import {
   type Subkeys,
 } from './index';
 import {
+  BlobNotFoundError,
+  ExportInterruptedError,
+  KeysWipedError,
   MissingEnvelopeError,
+  expireWhenIdle,
   exportPrivateVault,
+  holdKeys,
   unlockVault,
   type Envelope,
   type TreeItem,
@@ -105,7 +110,7 @@ function source(f: Pick<Fixture, 'tree' | 'blobs'>, tweak?: Partial<VaultSource>
     tree: () => Promise.resolve(f.tree),
     blob: (h) => {
       const b = f.blobs.get(h);
-      return b ? Promise.resolve(b) : Promise.reject(new Error('404'));
+      return b ? Promise.resolve(b) : Promise.reject(new BlobNotFoundError(h));
     },
     ...tweak,
   };
@@ -115,8 +120,31 @@ describe('unlockVault', () => {
   it('unlocks with the passphrase', async () => {
     const u = await unlockVault(fx.envelopes, { kind: 'passphrase', passphrase: PASS }, VAULT);
     expect(hex(u.keys.vmk)).toBe(hex(fx.keys.vmk));
+    const { vmk, pathEnc, pathKey } = u.keys;
     u.wipe();
-    expect(u.keys.vmk.every((x) => x === 0)).toBe(true);
+    // Every key is zeroed and dropped: a later use fails instead of working on zeros.
+    for (const k of [vmk, pathEnc, pathKey]) expect(k.every((x) => x === 0)).toBe(true);
+    expect(u.wiped).toBe(true);
+    expect(() => u.keys).toThrow(KeysWipedError);
+    u.wipe(); // idempotent
+  }, 60_000);
+
+  it('stops on an aborted signal and keeps no key', async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      unlockVault(fx.envelopes, { kind: 'passphrase', passphrase: PASS }, VAULT, ac.signal),
+    ).rejects.toThrow();
+    // Aborted during the derivation: the unlock does not finish.
+    const late = new AbortController();
+    const pending = unlockVault(
+      fx.envelopes,
+      { kind: 'passphrase', passphrase: PASS },
+      VAULT,
+      late.signal,
+    );
+    late.abort();
+    await expect(pending).rejects.toThrow();
   }, 60_000);
 
   it('rejects a wrong passphrase with DecryptError', async () => {
@@ -284,6 +312,117 @@ describe('exportPrivateVault', () => {
     expect(report).toMatchObject({ exported: f.tree.length, skipped: [], total: f.tree.length });
   });
 
+  it('tries a blob again after a transient failure, and the archive is complete', async () => {
+    const failures = new Map<string, number>();
+    const { stream, report } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      retryMs: [0, 0],
+      source: source(fx, {
+        blob: (h) => {
+          const n = failures.get(h) ?? 0;
+          failures.set(h, n + 1);
+          // Every blob fails twice (a network blip, a 503) before it is served.
+          if (n < 2) return Promise.reject(new TypeError('Failed to fetch'));
+          return Promise.resolve(fx.blobs.get(h) as Uint8Array);
+        },
+      }),
+    });
+    const z = readZip(await collect(stream));
+    expect(z.entries).toHaveLength(3);
+    expect(report).toMatchObject({ exported: 3, skipped: [] });
+    expect([...failures.values()]).toEqual([3, 3, 3]);
+  });
+
+  it('stops with ExportInterruptedError, not "missing", when a blob keeps failing', async () => {
+    const { stream, report } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      retryMs: [0, 0],
+      source: source(fx, { blob: () => Promise.reject(new Error('503 Service Unavailable')) }),
+    });
+    const err = await collect(stream).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ExportInterruptedError);
+    expect((err as ExportInterruptedError).path).toBe('notes/a.md');
+    expect((err as Error).message).toContain('503');
+    expect(report.skipped).toEqual([]); // nothing is reported as missing
+  });
+
+  it('stops at once on an error that is not worth retrying (a 401 or 403)', async () => {
+    let calls = 0;
+    const denied = Object.assign(new Error('403 Forbidden'), { status: 403 });
+    const { stream } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      concurrency: 1,
+      retryMs: [0, 0, 0],
+      isRetryable: (e) => (e as { status?: number }).status !== 403,
+      source: source(fx, {
+        blob: () => {
+          calls++;
+          return Promise.reject(denied);
+        },
+      }),
+    });
+    const err = await collect(stream).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ExportInterruptedError);
+    expect((err as Error).cause).toBe(denied);
+    expect(calls).toBe(1);
+  });
+
+  it('cancels the downloads still in flight once the export failed', async () => {
+    const signals: AbortSignal[] = [];
+    const { stream } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      retryMs: [],
+      source: source(fx, {
+        blob: (h, signal) => {
+          signals.push(signal as AbortSignal);
+          // The first file fails for good; the others never answer.
+          if (h === fx.tree[0]?.hash)
+            return new Promise<Uint8Array>((_, reject) =>
+              setTimeout(() => reject(new Error('500')), 10),
+            );
+          return new Promise<Uint8Array>(() => undefined);
+        },
+      }),
+    });
+    await expect(collect(stream)).rejects.toBeInstanceOf(ExportInterruptedError);
+    expect(signals.length).toBeGreaterThan(1);
+    expect(signals.every((s) => s.aborted)).toBe(true);
+  });
+
+  it('bounds the bytes fetched ahead, a file larger than the budget going alone', async () => {
+    const f = { tree: [...fx.tree], blobs: new Map(fx.blobs), keys: fx.keys };
+    for (let i = 0; i < 6; i++)
+      await addFile(f, `big/${i}.bin`, 'x'.repeat(200), `0190a3b4-eeee-7222-8333-00000000000${i}`);
+    let inFlight = 0;
+    let peakBytes = 0;
+    const sizes = new Map(f.tree.map((t) => [t.hash, t.size]));
+    const { stream } = exportPrivateVault({
+      vaultId: VAULT,
+      keys: fx.keys,
+      concurrency: 6,
+      maxBytesAhead: 300, // each big file is ~350 bytes of ciphertext: one at a time
+      source: source(f, {
+        blob: async (h) => {
+          inFlight += sizes.get(h) as number;
+          peakBytes = Math.max(peakBytes, inFlight);
+          await new Promise((r) => setTimeout(r, 2));
+          inFlight -= sizes.get(h) as number;
+          return f.blobs.get(h) as Uint8Array;
+        },
+      }),
+    });
+    const z = readZip(await collect(stream));
+    expect(z.entries).toHaveLength(f.tree.length);
+    const big = Math.max(...f.tree.map((t) => t.size));
+    expect(big).toBeGreaterThan(300);
+    expect(peakBytes).toBe(big);
+    expect(new TextDecoder().decode(z.entries.at(-1)?.data)).toBe('x'.repeat(200));
+  });
+
   it('stops when aborted', async () => {
     const ac = new AbortController();
     const { stream } = exportPrivateVault({
@@ -318,3 +457,49 @@ async function encryptPathRaw(plain: string): Promise<string> {
   );
   return 'enc1:' + b64url(concat(nonce, new Uint8Array(sealed)));
 }
+
+describe('key expiry', () => {
+  const keys = (): Subkeys => ({
+    vmk: new Uint8Array(32).fill(1),
+    pathEnc: new Uint8Array(32).fill(2),
+    pathKey: new Uint8Array(32).fill(3),
+  });
+
+  it('wipes the keys after the idle time, unless touched or paused', () => {
+    vi.useFakeTimers();
+    try {
+      const k = keys();
+      const u = holdKeys(k);
+      const onExpire = vi.fn();
+      const watch = expireWhenIdle(u, 1_000, onExpire);
+      vi.advanceTimersByTime(900);
+      watch.touch();
+      vi.advanceTimersByTime(900);
+      expect(u.wiped).toBe(false);
+      watch.pause(); // an export is running
+      vi.advanceTimersByTime(5_000);
+      expect(u.wiped).toBe(false);
+      watch.touch();
+      vi.advanceTimersByTime(1_000);
+      expect(u.wiped).toBe(true);
+      expect(onExpire).toHaveBeenCalledOnce();
+      expect(k.vmk.every((x) => x === 0) && k.pathKey.every((x) => x === 0)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never expires without a positive time, and stop() ends the watch', () => {
+    vi.useFakeTimers();
+    try {
+      const u = holdKeys(keys());
+      expireWhenIdle(u, 0, () => undefined);
+      const v = holdKeys(keys());
+      expireWhenIdle(v, 1_000, () => undefined).stop();
+      vi.advanceTimersByTime(60_000);
+      expect(u.wiped || v.wiped).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

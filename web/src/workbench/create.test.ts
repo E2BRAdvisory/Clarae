@@ -3,7 +3,10 @@ import type { CoreHandle } from './bridge';
 import { folderOf, parseCreation, runCreation, type MountCreate } from './create';
 import { clearMarkers, readMarkers, updateMarker } from './markers';
 
-afterEach(() => clearMarkers());
+/** The account's storage key (storage.ts). */
+const A = 'a-alice';
+
+afterEach(() => clearMarkers(A));
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -25,11 +28,11 @@ describe('parseCreation', () => {
 
 describe('folderOf', () => {
   it('follows the marker of a copy created in this browser', () => {
-    expect(folderOf('c1')).toBe('/vaults/c1');
-    updateMarker('c1', { kind: 'private', localPath: '/vaults/new-abc' });
-    expect(folderOf('c1')).toBe('/vaults/new-abc');
-    updateMarker('c2', { kind: 'shared', localPath: '/elsewhere/c2' });
-    expect(folderOf('c2')).toBe('/vaults/c2');
+    expect(folderOf(A, 'c1')).toBe('/vaults/c1');
+    updateMarker(A, 'c1', { kind: 'private', localPath: '/vaults/new-abc' });
+    expect(folderOf(A, 'c1')).toBe('/vaults/new-abc');
+    updateMarker(A, 'c2', { kind: 'shared', localPath: '/elsewhere/c2' });
+    expect(folderOf(A, 'c2')).toBe('/vaults/c2');
   });
 });
 
@@ -58,6 +61,7 @@ describe('runCreation', () => {
     const unmount = vi.fn();
     let seen: MountCreate | undefined;
     const done = runCreation({
+      account: A,
       core,
       creation: { kind: 'private', name: 'Diary' },
       newId: () => 'abc',
@@ -65,7 +69,7 @@ describe('runCreation', () => {
       mount: (o) => {
         seen = o;
         // While the wizard is up, a closed tab leaves a private copy the next start-up sweeps.
-        expect(readMarkers()['new-abc']).toMatchObject({
+        expect(readMarkers(A)['new-abc']).toMatchObject({
           kind: 'private',
           localPath: '/vaults/new-abc',
         });
@@ -79,14 +83,15 @@ describe('runCreation', () => {
     expect(calls).toEqual(['VaultAPI.OpenVault /vaults/new-abc', 'VaultAPI.CloseVault local-1']);
     expect(replaceUrl).toHaveBeenCalledWith('/vaults/cloud-1/open');
     expect(wipe).not.toHaveBeenCalled();
-    expect(Object.keys(readMarkers())).toEqual(['cloud-1']);
-    expect(folderOf('cloud-1')).toBe('/vaults/new-abc');
+    expect(Object.keys(readMarkers(A))).toEqual(['cloud-1']);
+    expect(folderOf(A, 'cloud-1')).toBe('/vaults/new-abc');
   });
 
   it('cancelled: removes the empty folder and its marker', async () => {
     const { core, wipe } = fakeCore();
     const replaceUrl = vi.fn();
     const result = await runCreation({
+      account: A,
       core,
       creation: { kind: 'private', name: 'Diary' },
       newId: () => 'abc',
@@ -98,7 +103,7 @@ describe('runCreation', () => {
     });
     expect(result).toBeNull();
     expect(wipe).toHaveBeenCalledWith('/vaults/new-abc');
-    expect(readMarkers()).toEqual({});
+    expect(readMarkers(A)).toEqual({});
     expect(replaceUrl).not.toHaveBeenCalled();
   });
 });

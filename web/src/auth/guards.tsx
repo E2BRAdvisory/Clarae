@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button, EmptyState } from '@memobrain/ui';
+import { useAdminAccess } from '../api/queries';
 import { useAuth } from './AuthProvider';
 
 /** Routes below this one need a signed-in user; anonymous visitors are sent to sign in. */
@@ -27,11 +28,15 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
-/** Routes below this one need a realm role; others see a "not allowed" page. */
-export function RequireRole({ role }: { role: string }) {
+/**
+ * Routes below this one need the administrator role, as /me reports it (useAdminAccess); others see
+ * a "not allowed" page.
+ */
+export function RequireAdmin() {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  if (!user?.roles.includes(role)) {
+  const { isAdmin, pending } = useAdminAccess();
+  if (pending) return <p role="status">{t('app.loading')}</p>;
+  if (!isAdmin) {
     return <EmptyState title={t('forbidden.title')}>{t('forbidden.body')}</EmptyState>;
   }
   return <Outlet />;

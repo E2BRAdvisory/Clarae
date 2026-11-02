@@ -1,9 +1,8 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Table } from '@memobrain/ui';
 import { CloudVaultsTable } from '@memobrain/cloud-features';
 import { useCloudPort, useSharingAllowed } from '../api/cloud';
-import { keys, useShares, useWorkbenchAllowed, type Share } from '../api/queries';
+import { useShares, useWorkbenchAllowed, type Share } from '../api/queries';
 import { mountHref } from './Shares';
 import { VaultExport } from './VaultExport';
 
@@ -58,7 +57,6 @@ function SharedWithMe({ shares }: { shares: Share[] }) {
 
 export function VaultsPage() {
   const { t, i18n } = useTranslation();
-  const qc = useQueryClient();
   const canOpen = useWorkbenchAllowed();
   // The cloud vault lifecycle lives in @memobrain/cloud-features (ADR-0037 §2); a private vault is
   // created in the browser workbench, which holds the Go core's cryptography.
@@ -81,9 +79,6 @@ export function VaultsPage() {
             render: (v) => <VaultExport vault={{ id: v.id, name: v.name }} kind={v.kind} />,
           }}
           onCreatePrivate={(name) => navigation.assign(privateCreationHref(name))}
-          onChanged={() => {
-            void qc.invalidateQueries({ queryKey: keys.vaults });
-          }}
         />
         {mounts.length > 0 && <SharedWithMe shares={mounts} />}
       </div>

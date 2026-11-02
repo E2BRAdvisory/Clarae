@@ -1,5 +1,5 @@
 import { argon2id } from 'hash-wasm';
-import { b64, buf, concat, enc, equal, randomBytes, unb64 } from './bytes';
+import { b64, buf, concat, enc, equal, randomBytes, unb64, wipeBytes, withCopy } from './bytes';
 
 export const KEY_SIZE = 32;
 export const NONCE_SIZE = 12;
@@ -53,7 +53,9 @@ export async function hkdf(
   salt: Uint8Array,
   info: Uint8Array,
 ): Promise<Uint8Array> {
-  const key = await subtle().importKey('raw', buf(secret), 'HKDF', false, ['deriveBits']);
+  const key = await withCopy(secret, (raw) =>
+    subtle().importKey('raw', raw, 'HKDF', false, ['deriveBits']),
+  );
   const bits = await subtle().deriveBits(
     { name: 'HKDF', hash: 'SHA-256', salt: buf(salt), info: buf(info) },
     key,
@@ -100,15 +102,20 @@ export async function deriveKekPassphraseRaw(
     throw new WeakKdfError('bad salt');
   }
   if (salt.length < 8) throw new WeakKdfError('bad salt');
-  return argon2id({
-    password: enc.encode(passphrase),
-    salt,
-    parallelism: par,
-    iterations: t,
-    memorySize: m,
-    hashLength: KEY_SIZE,
-    outputType: 'binary',
-  });
+  const password = enc.encode(passphrase);
+  try {
+    return await argon2id({
+      password,
+      salt,
+      parallelism: par,
+      iterations: t,
+      memorySize: m,
+      hashLength: KEY_SIZE,
+      outputType: 'binary',
+    });
+  } finally {
+    password.fill(0);
+  }
 }
 
 export function newPassphraseKdf(t = MIN_T, mKiB = MIN_M_KIB, p = MIN_P): KdfParams {
@@ -138,11 +145,13 @@ export async function deriveKekRecovery(
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 async function recoveryChecksum(key: Uint8Array): Promise<Uint8Array> {
-  const h = await subtle().digest(
-    'SHA-256',
-    buf(concat(enc.encode('memobrain/v1/recovery-checksum'), key)),
-  );
-  return new Uint8Array(h).slice(0, 2);
+  const input = concat(enc.encode('memobrain/v1/recovery-checksum'), key);
+  try {
+    const h = await withCopy(input, (data) => subtle().digest('SHA-256', data));
+    return new Uint8Array(h).slice(0, 2);
+  } finally {
+    input.fill(0);
+  }
 }
 
 function base32(b: Uint8Array): string {
@@ -179,7 +188,9 @@ function unbase32(s: string): Uint8Array | null {
 }
 
 export async function encodeRecoveryKey(key: Uint8Array): Promise<string> {
-  const raw = base32(concat(key, await recoveryChecksum(key)));
+  const bytes = concat(key, await recoveryChecksum(key));
+  const raw = base32(bytes);
+  bytes.fill(0);
   const groups: string[] = [];
   for (let i = 0; i < raw.length; i += 5) groups.push(raw.slice(i, i + 5));
   return groups.join('-');
@@ -188,16 +199,24 @@ export async function encodeRecoveryKey(key: Uint8Array): Promise<string> {
 export async function parseRecoveryKey(s: string): Promise<Uint8Array> {
   const clean = s.replace(/[-\s]/g, '').toUpperCase();
   const raw = unbase32(clean);
-  if (!raw || raw.length !== KEY_SIZE + 2) throw new RecoveryKeyError();
+  if (!raw || raw.length !== KEY_SIZE + 2) {
+    wipeBytes(raw);
+    throw new RecoveryKeyError();
+  }
   const key = raw.slice(0, KEY_SIZE);
-  if (!equal(raw.slice(KEY_SIZE), await recoveryChecksum(key))) throw new RecoveryKeyError();
+  const sum = raw.slice(KEY_SIZE);
+  raw.fill(0);
+  if (!equal(sum, await recoveryChecksum(key))) {
+    key.fill(0);
+    throw new RecoveryKeyError();
+  }
   return key;
 }
 
 // ---- wrap / subkeys ----------------------------------------------------------
 
 async function aesKey(raw: Uint8Array, usage: KeyUsage[]): Promise<CryptoKey> {
-  return subtle().importKey('raw', buf(raw), 'AES-GCM', false, usage);
+  return withCopy(raw, (copy) => subtle().importKey('raw', copy, 'AES-GCM', false, usage));
 }
 
 // Envelope formats (ADR-0034). v1 is nonce ‖ AES-256-GCM(KEK, VMK) ‖ tag without AAD,
@@ -231,10 +250,9 @@ export async function wrap(
   vmk: Uint8Array,
   nonce: Uint8Array = randomBytes(NONCE_SIZE),
 ): Promise<Uint8Array> {
-  const ct = await subtle().encrypt(
-    { name: 'AES-GCM', iv: buf(nonce), tagLength: 128 },
-    await aesKey(kek, ['encrypt']),
-    buf(vmk),
+  const key = await aesKey(kek, ['encrypt']);
+  const ct = await withCopy(vmk, (plain) =>
+    subtle().encrypt({ name: 'AES-GCM', iv: buf(nonce), tagLength: 128 }, key, plain),
   );
   return concat(nonce, new Uint8Array(ct));
 }
@@ -247,15 +265,18 @@ export async function wrapV2(
   kind: EnvelopeKind,
   nonce: Uint8Array = randomBytes(NONCE_SIZE),
 ): Promise<Uint8Array> {
-  const ct = await subtle().encrypt(
-    {
-      name: 'AES-GCM',
-      iv: buf(nonce),
-      additionalData: buf(envelopeAad(vaultId, kind)),
-      tagLength: 128,
-    },
-    await aesKey(kek, ['encrypt']),
-    buf(vmk),
+  const key = await aesKey(kek, ['encrypt']);
+  const ct = await withCopy(vmk, (plain) =>
+    subtle().encrypt(
+      {
+        name: 'AES-GCM',
+        iv: buf(nonce),
+        additionalData: buf(envelopeAad(vaultId, kind)),
+        tagLength: 128,
+      },
+      key,
+      plain,
+    ),
   );
   return concat(Uint8Array.of(ENVELOPE_V2), nonce, new Uint8Array(ct));
 }
@@ -320,31 +341,44 @@ export interface PassphraseUnlock {
 
 /**
  * Derives the KEK from each form of the passphrase and unwraps with the first that works.
- * WeakKdfError comes before any derivation; DecryptError means no form opened it.
+ * WeakKdfError comes before any derivation; DecryptError means no form opened it. An aborted
+ * `signal` stops between two derivations (one Argon2id run cannot be interrupted) and leaves no
+ * key behind.
  */
 export async function openWithPassphrase(
   passphrase: string,
   p: KdfParams,
   wrapped: Uint8Array,
   vaultId: Uint8Array,
+  signal?: AbortSignal,
 ): Promise<PassphraseUnlock> {
   const version = envelopeVersion(wrapped);
   if (version === 0) throw new DecryptError();
   const forms = passphraseForms(passphrase);
   let nfcKek: Uint8Array | undefined;
   for (const [i, form] of forms.entries()) {
-    const kek = await deriveKekPassphraseRaw(form, p);
-    if (i === 0) nfcKek = kek;
+    let kek: Uint8Array | undefined;
     try {
+      signal?.throwIfAborted();
+      kek = await deriveKekPassphraseRaw(form, p);
+      if (i === 0) nfcKek = kek;
+      signal?.throwIfAborted();
       const vmk = await unwrap(kek, wrapped, vaultId, 'passphrase');
+      if (signal?.aborted) {
+        vmk.fill(0);
+        signal.throwIfAborted();
+      }
       if (i > 0) kek.fill(0);
       return { vmk, kek: nfcKek ?? kek, version, legacy: i > 0 };
     } catch (err) {
-      if (!(err instanceof DecryptError)) throw err;
-      if (i > 0) kek.fill(0);
+      if (i > 0) wipeBytes(kek);
+      if (!(err instanceof DecryptError)) {
+        wipeBytes(nfcKek);
+        throw err;
+      }
     }
   }
-  nfcKek?.fill(0);
+  wipeBytes(nfcKek);
   throw new DecryptError();
 }
 
@@ -369,6 +403,26 @@ export async function fileKey(
   salt: Uint8Array,
 ): Promise<Uint8Array> {
   return hkdf(s.vmk, new Uint8Array(0), concat(enc.encode(INFO_FILE), fileId, salt));
+}
+
+/** The AES-GCM key of a file, imported for WebCrypto; the raw file key is zeroed at once. */
+export async function fileCryptoKey(
+  s: Subkeys,
+  fileId: Uint8Array,
+  salt: Uint8Array,
+  usage: KeyUsage[],
+): Promise<CryptoKey> {
+  const raw = await fileKey(s, fileId, salt);
+  try {
+    return await aesKey(raw, usage);
+  } finally {
+    raw.fill(0);
+  }
+}
+
+/** Zeroes the subkeys of a vault (best effort, see wipeBytes). */
+export function wipeSubkeys(s: Subkeys): void {
+  wipeBytes(s.vmk, s.pathEnc, s.pathKey);
 }
 
 export { aesKey };

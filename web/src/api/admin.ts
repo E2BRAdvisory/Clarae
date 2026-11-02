@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { ApiError, unwrap, type MemobrainClient, type Schemas } from '@memobrain/api-client';
 import { useApi } from './context';
+import { invalidateOwnViews, keys } from './queries';
 
 export type AdminUser = Schemas['AdminUser'];
 export type AdminVault = Schemas['AdminVault'];
@@ -70,8 +71,9 @@ export const adminKeys = {
 /**
  * Refreshes every resolved configuration after a change that can alter it (a profile, its versions,
  * the profiles of a group, group membership or priority): each user's "effective configuration" in
- * the admin console and the signed-in user's own (['config', 'effective'], which also gates the
- * web workbench). Without it they keep the old resolution for their stale time.
+ * the admin console and the signed-in user's own, both the full one (keys.effectiveConfig) and its
+ * feature flags as @memobrain/cloud-features caches them (cloudKeys.features: `sharing` and
+ * `web_workbench` gate pages and links). Without it they keep the old resolution for their stale time.
  */
 export function invalidateConfigResolution(qc: QueryClient): Promise<void> {
   return Promise.all([
@@ -82,7 +84,11 @@ export function invalidateConfigResolution(qc: QueryClient): Promise<void> {
         q.queryKey[2] === 'one' &&
         q.queryKey[4] === 'config',
     }),
-    qc.invalidateQueries({ queryKey: ['config', 'effective'] }),
+    qc.invalidateQueries({ queryKey: keys.effectiveConfig }),
+    // cloudKeys.features(port), whatever the port.
+    qc.invalidateQueries({
+      predicate: (q) => q.queryKey[0] === 'cloud-features' && q.queryKey[2] === 'features',
+    }),
   ]).then(() => undefined);
 }
 
@@ -202,6 +208,8 @@ function invalidateUser(qc: QueryClient, id: string) {
     qc.invalidateQueries({ queryKey: adminKeys.user(id) }),
     qc.invalidateQueries({ queryKey: adminKeys.users }),
     qc.invalidateQueries({ queryKey: adminKeys.overview }),
+    // The user may be the administrator: their role (the admin area), quota, devices.
+    invalidateOwnViews(qc),
   ]);
 }
 

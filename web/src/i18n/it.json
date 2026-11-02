@@ -343,7 +343,10 @@
       "restoreAria": "Ripristina la versione {{version}}",
       "restoreTitle": "Ripristinare la versione {{version}}?",
       "restoreBody": "Viene creata una nuova versione con il contenuto della versione {{version}}. Non si perde nulla: la versione attuale resta nello storico.",
-      "restoredToast": "Ripristinata come versione {{version}}."
+      "restoredToast": "Ripristinata come versione {{version}}.",
+      "conflict": "Un altro amministratore ha salvato questo profilo mentre lo modificavi: le tue modifiche non sono state salvate.",
+      "newerVersion": "La versione corrente è la {{version}}. Caricala per continuare (le modifiche non salvate si perdono: copiale prima se ti servono).",
+      "reload": "Carica la versione corrente"
     },
     "audit": {
       "filters": "Filtri del registro",
@@ -406,6 +409,7 @@
     "secretRequired": "Inserisci la passphrase o la chiave di recupero.",
     "unlock": "Sblocca",
     "unlocking": "Sblocco del vault… può richiedere qualche secondo.",
+    "expired": "Il vault è stato bloccato di nuovo dopo un periodo di inattività. Sbloccalo per scaricare lo ZIP.",
     "failure_wrongSecret": "Passphrase o chiave di recupero errata.",
     "failure_badRecoveryKey": "Non è una chiave di recupero valida. Controlla di non aver sbagliato a digitarla.",
     "failure_weakKdf": "I parametri di derivazione della chiave memorizzati per questo vault non sono accettabili: il vault non è stato sbloccato.",
@@ -433,7 +437,11 @@
     "reason_duplicate_path": "Percorso duplicato",
     "reason_blob_missing": "Contenuto non disponibile sul server",
     "reason_blob_corrupt": "Contenuto corrotto",
-    "reason_decrypt_failed": "Il contenuto non si è potuto decifrare"
+    "reason_decrypt_failed": "Il contenuto non si è potuto decifrare",
+    "interrupted": "L'esportazione si è interrotta: non è stato possibile scaricare {{path}} ({{reason}}). Nessuno ZIP incompleto è stato conservato: riprova.",
+    "jobReadySave": "L'esportazione è pronta ({{size}}). Salva lo ZIP per scaricarlo.",
+    "downloadProgress": "{{done}} di {{total}} scaricati",
+    "saved": "{{name}} salvato."
   },
   "account": {
     "title": "Account",
@@ -453,9 +461,16 @@
     "confirmLabel": "Scrivi il tuo nome utente ({{username}}) per confermare",
     "dialogConfirm": "Elimina definitivamente",
     "forgetTitle": "Questo browser",
-    "forgetBody": "I vault che apri nel browser restano su questo computer mentre lavori. Rimuovi quelle copie e i dati che le indicizzano: si scaricano di nuovo alla prossima apertura. Anche l'uscita dall'account lo fa.",
+    "forgetBody": "I vault che apri nel browser restano su questo computer mentre lavori. Rimuovi le tue copie e i dati che le indicizzano: si scaricano di nuovo alla prossima apertura. Anche l'uscita dall'account lo fa. Le copie di altri account di questo browser non vengono toccate: ogni account rimuove le proprie.",
     "forgetButton": "Dimentica questo browser",
-    "forgetDone": "Questo browser non conserva più nessun vault."
+    "forgetDone": "Questo browser non conserva più nessuno dei tuoi vault.",
+    "legacyTitle": "Copie di una versione precedente",
+    "legacyBody": "Una versione precedente conservava i vault aperti in questo browser senza registrare a quale account appartengono. Non si può dimostrare che siano tuoi, quindi non vengono mai aperti. Se a nessuno di chi usa questo browser servono, eliminali.",
+    "legacyButton": "Elimina queste copie",
+    "legacyConfirmTitle": "Eliminare le copie della versione precedente?",
+    "legacyConfirmBody": "Potrebbero appartenere a un altro account di questo browser e contenere modifiche mai caricate: una volta eliminate, quelle modifiche non si possono recuperare.",
+    "legacyDone": "Le copie della versione precedente sono state eliminate.",
+    "legacyBusy": "Una scheda della versione precedente le tiene aperte. Chiudila e riprova."
   },
   "forget": {
     "confirmTitle": "Modifiche non caricate",

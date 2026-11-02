@@ -1,14 +1,23 @@
 /**
  * What this browser remembers about the vault copies the workbench keeps in OPFS: one marker per cloud
  * vault (or received share), in localStorage so the console can read it too. The workbench writes it when
- * it opens a vault and keeps it current from the core's sync events; it is removed with the copy.
+ * it opens a vault and keeps it current from the core's sync events; it is removed with the copy. Each
+ * account has its own set (markersKey), like its own folders (storage.ts): an account never sees or
+ * acts on another account's markers.
  *
  * It exists so nothing that was not uploaded yet is deleted silently (D-04): signing out and "forget this
  * browser" ask first when a marker says a copy holds changes, and the start-up sweep that removes the
  * clear text of private vaults left behind by a closed tab (ADR-0029 §6) skips those copies.
  */
 
+/**
+ * The localStorage key of the markers of versions up to 1.3, which had no account (storage.ts): read
+ * only to adopt or delete the copies they describe.
+ */
 export const MARKERS_KEY = 'memobrain.workbench.vaults';
+
+/** The localStorage key of an account's markers (`account` is storage.ts accountKey). */
+export const markersKey = (account: string): string => `${MARKERS_KEY}@${account}`;
 
 export interface VaultMarker {
   /** Display name, for the confirmation lists. */
@@ -40,8 +49,8 @@ function storage(): Storage | null {
   }
 }
 
-export function readMarkers(): Markers {
-  const raw = storage()?.getItem(MARKERS_KEY);
+function read(key: string): Markers {
+  const raw = storage()?.getItem(key);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -53,24 +62,30 @@ export function readMarkers(): Markers {
   }
 }
 
-function writeMarkers(m: Markers): void {
+function write(key: string, m: Markers): void {
   const s = storage();
   if (!s) return;
   try {
-    if (Object.keys(m).length === 0) s.removeItem(MARKERS_KEY);
-    else s.setItem(MARKERS_KEY, JSON.stringify(m));
+    if (Object.keys(m).length === 0) s.removeItem(key);
+    else s.setItem(key, JSON.stringify(m));
   } catch {
     // quota exceeded or storage blocked: the marker is a safety net, the copy itself is intact
   }
 }
 
+/** The markers of an account. */
+export function readMarkers(account: string): Markers {
+  return read(markersKey(account));
+}
+
 /** Creates or updates the marker of a vault; fields not given keep their value (or a clean default). */
 export function updateMarker(
+  account: string,
   id: string,
   patch: Partial<VaultMarker>,
   now: number = Date.now(),
 ): VaultMarker {
-  const all = readMarkers();
+  const all = readMarkers(account);
   const prev = all[id];
   const next: VaultMarker = {
     name: '',
@@ -84,43 +99,63 @@ export function updateMarker(
     updatedAt: now,
   };
   all[id] = next;
-  writeMarkers(all);
+  write(markersKey(account), all);
   return next;
 }
 
-export function removeMarker(id: string): void {
-  const all = readMarkers();
+export function removeMarker(account: string, id: string): void {
+  const all = readMarkers(account);
   if (!(id in all)) return;
   delete all[id];
-  writeMarkers(all);
+  write(markersKey(account), all);
 }
 
-export function clearMarkers(): void {
-  writeMarkers({});
+export function clearMarkers(account: string): void {
+  write(markersKey(account), {});
+}
+
+/** The markers of versions up to 1.3 (no account). */
+export function readLegacyMarkers(): Markers {
+  return read(MARKERS_KEY);
+}
+
+export function clearLegacyMarkers(): void {
+  write(MARKERS_KEY, {});
+}
+
+/** The account adopted the copies of an earlier version (storage.ts): their markers become its own. */
+export function adoptLegacyMarkers(account: string): void {
+  const legacy = readLegacyMarkers();
+  if (Object.keys(legacy).length > 0)
+    write(markersKey(account), { ...legacy, ...readMarkers(account) });
+  clearLegacyMarkers();
 }
 
 /** True when the copy may hold something the cloud does not have. */
 export const unsynced = (m: VaultMarker): boolean => m.pending > 0 || m.conflicts > 0 || m.dirty;
 
-/** The copies that hold changes not uploaded yet, for the confirmations of the console. */
-export function unsyncedVaults(): (VaultMarker & { id: string })[] {
-  return Object.entries(readMarkers())
+/** The copies of an account that hold changes not uploaded yet, for the confirmations of the console. */
+export function unsyncedVaults(account: string): (VaultMarker & { id: string })[] {
+  return Object.entries(readMarkers(account))
     .filter(([, m]) => unsynced(m))
     .map(([id, m]) => ({ id, ...m }));
 }
 
 /**
- * The start-up sweep: removes the clear-text copy of every private vault whose marker says it holds
- * nothing that was not uploaded, and its marker. Copies with changes are kept (the caller decides what to
- * show for the one being opened). Resolves to the ids it removed.
+ * The start-up sweep: removes the clear-text copy of every private vault of the account whose marker
+ * says it holds nothing that was not uploaded, and its marker. Copies with changes are kept (the caller
+ * decides what to show for the one being opened). Resolves to the ids it removed.
  */
-export async function sweepPrivateCopies(wipe: (path: string) => Promise<void>): Promise<string[]> {
+export async function sweepPrivateCopies(
+  account: string,
+  wipe: (path: string) => Promise<void>,
+): Promise<string[]> {
   const removed: string[] = [];
-  for (const [id, m] of Object.entries(readMarkers())) {
+  for (const [id, m] of Object.entries(readMarkers(account))) {
     if (m.kind !== 'private' || unsynced(m) || !m.localPath) continue;
     try {
       await wipe(m.localPath);
-      removeMarker(id);
+      removeMarker(account, id);
       removed.push(id);
     } catch (e) {
       console.warn(`memobrain: could not remove the copy of vault ${id}:`, e);

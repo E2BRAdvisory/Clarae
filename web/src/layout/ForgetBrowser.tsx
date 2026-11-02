@@ -3,17 +3,23 @@ import { useTranslation } from 'react-i18next';
 import { Button, Dialog } from '@memobrain/ui';
 import { forgetAfterLeave, forgetThisBrowser, type ForgetResult } from '../workbench/forget';
 import { unsyncedVaults, type VaultMarker } from '../workbench/markers';
+import { accountKey } from '../workbench/storage';
 
 type Pending = VaultMarker & { id: string };
 
 type Step =
   | { kind: 'idle' }
-  | { kind: 'confirm'; vaults: Pending[] }
+  | { kind: 'confirm'; account: string; vaults: Pending[] }
   | { kind: 'working' }
-  | { kind: 'busy'; stillOpen: boolean }
-  | { kind: 'waiting' };
+  | { kind: 'busy'; account: string; stillOpen: boolean }
+  | { kind: 'waiting'; account: string };
 
 export interface ForgetBrowserOptions {
+  /**
+   * The identity provider's subject of the signed-in account: only its copies are removed (storage.ts).
+   * Other accounts' copies in the same browser stay until those accounts sign out or forget it.
+   */
+  subject: string | undefined;
   /** Label of the button that confirms deleting copies with changes not uploaded. */
   confirmLabel: string;
   /** The copies are gone (or there were none). */
@@ -35,8 +41,8 @@ export function useForgetBrowser(o: ForgetBrowserOptions): {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>({ kind: 'idle' });
 
-  const finish = (r: ForgetResult, afterLeave: boolean): void => {
-    if (r.busy) return setStep({ kind: 'busy', stillOpen: afterLeave });
+  const finish = (account: string, r: ForgetResult, afterLeave: boolean): void => {
+    if (r.busy) return setStep({ kind: 'busy', account, stillOpen: afterLeave });
     setStep({ kind: 'idle' });
     o.onDone();
   };
@@ -44,18 +50,23 @@ export function useForgetBrowser(o: ForgetBrowserOptions): {
     setStep({ kind: 'idle' });
     o.onError(e);
   };
-  const run = (): void => {
+  const run = (account: string): void => {
     setStep({ kind: 'working' });
-    forgetThisBrowser().then((r) => finish(r, false), fail);
+    forgetThisBrowser(account).then((r) => finish(account, r, false), fail);
   };
-  const closeTabAndRetry = (): void => {
-    setStep({ kind: 'waiting' });
-    forgetAfterLeave().then((r) => finish(r, true), fail);
+  const closeTabAndRetry = (account: string): void => {
+    setStep({ kind: 'waiting', account });
+    forgetAfterLeave(account).then((r) => finish(account, r, true), fail);
   };
   const start = (): void => {
-    const vaults = unsyncedVaults();
-    if (vaults.length > 0) setStep({ kind: 'confirm', vaults });
-    else run();
+    const subject = o.subject;
+    if (!subject) return o.onDone(); // nobody signed in: nothing of theirs to remove
+    setStep({ kind: 'working' });
+    accountKey({ server: location.origin, subject }).then((account) => {
+      const vaults = unsyncedVaults(account);
+      if (vaults.length > 0) setStep({ kind: 'confirm', account, vaults });
+      else run(account);
+    }, fail);
   };
   const cancel = (): void => setStep({ kind: 'idle' });
 
@@ -76,7 +87,7 @@ export function useForgetBrowser(o: ForgetBrowserOptions): {
         actions={
           <>
             <Button onClick={cancel}>{t('common.cancel')}</Button>
-            <Button variant="danger" onClick={run}>
+            <Button variant="danger" onClick={() => run(step.account)}>
               {o.confirmLabel}
             </Button>
           </>
@@ -108,10 +119,14 @@ export function useForgetBrowser(o: ForgetBrowserOptions): {
         actions={
           <>
             <Button onClick={cancel}>{t('common.cancel')}</Button>
-            <Button onClick={run} disabled={step.kind === 'waiting'}>
+            <Button onClick={() => run(step.account)} disabled={step.kind === 'waiting'}>
               {t('common.retry')}
             </Button>
-            <Button variant="primary" onClick={closeTabAndRetry} disabled={step.kind === 'waiting'}>
+            <Button
+              variant="primary"
+              onClick={() => closeTabAndRetry(step.account)}
+              disabled={step.kind === 'waiting'}
+            >
               {t('forget.closeTab')}
             </Button>
           </>

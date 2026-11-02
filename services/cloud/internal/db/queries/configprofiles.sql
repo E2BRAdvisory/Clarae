@@ -17,6 +17,11 @@ SELECT * FROM config_profiles ORDER BY is_global DESC, lower(name);
 -- name: GetConfigProfile :one
 SELECT * FROM config_profiles WHERE id = $1;
 
+-- name: LockConfigProfile :one
+-- The profile about to be replaced, locked until the end of the transaction, so the version an
+-- update checks (expected_version) is still the one it replaces.
+SELECT * FROM config_profiles WHERE id = $1 FOR UPDATE;
+
 -- name: CreateConfigProfile :one
 INSERT INTO config_profiles (id, name, description, is_global, config, locked_keys, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;

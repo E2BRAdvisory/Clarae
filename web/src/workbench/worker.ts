@@ -32,6 +32,8 @@ const scope = globalThis as unknown as {
 const post = (m: FromWorker, transfer: Transferable[] = []): void => scope.postMessage(m, transfer);
 
 let opfs: OpfsFs;
+/** The signed-in account's subject (CoreConfig.account): the key of its device registration. */
+let account = '';
 interface SahPool {
   unlink(name: string): boolean;
   getFileNames(): string[];
@@ -93,9 +95,9 @@ function installHost(): void {
       }
     },
     /** The browser's device registration, kept in IndexedDB outside the wiped data folder (P6). */
-    loadDevice: (server: string) => loadDevice(server).catch(() => null),
+    loadDevice: (server: string) => loadDevice(server, account).catch(() => null),
     saveDevice: (server: string, deviceId: string, userId: string) =>
-      saveDevice(server, deviceId, userId),
+      saveDevice(server, deviceId, userId, account),
     /** The page shows its file picker; the chosen file is copied into the scratch area and its path returned. */
     pickFile: async (title: string, patterns: string[]) => {
       const { file } = await ask({ op: 'pickFile', title, patterns });
@@ -161,7 +163,7 @@ function writeFile(path: string, data: Uint8Array): Promise<void> {
 
 // ---- SQLite -----------------------------------------------------------------------------------------
 
-async function installSqlite(assets: CoreAssets): Promise<void> {
+async function installSqlite(assets: CoreAssets, directory: string): Promise<void> {
   const wasm = await (await fetchChecked(assets.sqlite)).arrayBuffer();
   // The module's types declare no options; Emscripten's `wasmBinary` is what spares it a second fetch.
   const init = sqlite3InitModule as unknown as (options: object) => Promise<unknown>;
@@ -187,7 +189,7 @@ async function installSqlite(assets: CoreAssets): Promise<void> {
     }
   ).installOpfsSAHPoolVfs({
     name: 'memobrain',
-    directory: '/memobrain-sqlite',
+    directory,
     initialCapacity: POOL_MIN,
     clearOnInit: false,
   });
@@ -320,10 +322,14 @@ async function startGo(assets: CoreAssets, config: CoreConfig): Promise<void> {
 const SCRATCH = ['/tmp/memobrain-downloads', '/tmp/memobrain-uploads', UNLINKED_DIR];
 
 async function init(assets: CoreAssets, config: CoreConfig): Promise<void> {
-  opfs = await installOpfsFs(
-    globalThis,
-    config.fsTrace ? { trace: (l) => console.debug('[fs]', l) } : {},
-  );
+  // Only the signed-in account's storage is opened (storage.ts): never a default shared by accounts.
+  if (!config.storage?.fs || !config.storage.sqlite || !config.account)
+    throw new Error('the core needs the storage of the signed-in account');
+  account = config.account;
+  opfs = await installOpfsFs(globalThis, {
+    rootName: config.storage.fs,
+    ...(config.fsTrace ? { trace: (l: string) => console.debug('[fs]', l) } : {}),
+  });
   // Leftovers of a page that was closed mid-way: downloads and uploads (possibly a private vault's
   // clear text) and files removed while open. Nothing uses them before the core starts.
   for (const dir of SCRATCH) await opfs.removeTree(dir).catch(() => undefined);
@@ -331,7 +337,7 @@ async function init(assets: CoreAssets, config: CoreConfig): Promise<void> {
   for (const dir of ['/tmp', config.dataDir])
     await new Promise<void>((resolve, reject) => mkdirAll(dir, (e) => (e ? reject(e) : resolve())));
   installHost();
-  await installSqlite(assets);
+  await installSqlite(assets, config.storage.sqlite);
   await startGo(assets, config);
   post({
     type: 'ready',

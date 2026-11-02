@@ -13,8 +13,8 @@ import { ApiError, createClient, type MemobrainClient } from '@memobrain/api-cli
 import { EmptyState, ToastProvider } from '@memobrain/ui';
 import { ApiProvider } from './api/context';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
-import { RequireAuth, RequireRole } from './auth/guards';
-import { ADMIN_ROLE, type AuthService } from './auth/types';
+import { RequireAdmin, RequireAuth } from './auth/guards';
+import type { AuthService } from './auth/types';
 import { Shell } from './layout/Shell';
 import { AdminLayout } from './pages/Admin';
 import { AuditPage } from './pages/admin/AuditPage';
@@ -48,7 +48,7 @@ export function AppRoutes() {
           <Route path="devices" element={<DevicesPage />} />
           <Route path="shares" element={<SharesPage />} />
           <Route path="account" element={<AccountPage />} />
-          <Route element={<RequireRole role={ADMIN_ROLE} />}>
+          <Route element={<RequireAdmin />}>
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="storage" replace />} />
               <Route path="storage" element={<StoragePage />} />
@@ -79,10 +79,9 @@ export function DataLayer({
   children: React.ReactNode;
 }) {
   const { getAccessToken, signIn } = useAuth();
-  const api = useMemo(
-    () => client ?? createClient({ getAccessToken: () => getAccessToken() }),
-    [client, getAccessToken],
-  );
+  // One client for the session: it asks for the token at each request (renewed when it is about to
+  // expire), so a request made late by a long export still carries a valid one.
+  const api = useMemo(() => client ?? createClient({ getAccessToken }), [client, getAccessToken]);
   const queryClient = useMemo(() => {
     // An expired or revoked session answers 401: restart the login instead of showing an error.
     const onError = (err: unknown) => {
