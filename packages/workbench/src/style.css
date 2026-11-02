@@ -3,6 +3,8 @@
 @import '@memobrain/ui/tokens.css';
 @import './styles/tokens.css';
 @import './query/query.css';
+/* The graph tab is a lazy chunk, whose own CSS would not be loaded: its rules ship here. */
+@import './graph/graph.css';
 
 * {
   box-sizing: border-box;
@@ -648,6 +650,36 @@ button.icon[aria-pressed='true'] {
 }
 .note-error {
   color: var(--danger);
+}
+/* A view that failed to render (ui/ErrorBoundary.tsx). */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px;
+  overflow: auto;
+  user-select: text;
+}
+.error-boundary.shell {
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.error-boundary.inline {
+  padding: 8px 12px;
+}
+.error-boundary-title {
+  margin: 0;
+  font-weight: 600;
+}
+.error-boundary .nd-inline-error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.error-boundary-actions {
+  display: flex;
+  gap: 8px;
 }
 .note-view.readable .cm-content,
 .note-view.readable .reading {

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { FileExplorer } from '../sidebar/FileExplorer';
 import { OutlinePanel } from '../sidebar/OutlinePanel';
 import { SearchPanel } from '../search/SearchPanel';
@@ -20,9 +21,11 @@ export function LeftSidebar({ vaultId }: { vaultId: string }) {
         onChange={(tab) => setLeft({ tab })}
         label={(tab) => t(`sidebar.${tab}`)}
       />
-      {left.tab === 'files' && <FileExplorer vaultId={vaultId} />}
-      {left.tab === 'outline' && <OutlinePanel vaultId={vaultId} />}
-      {left.tab === 'search' && <SearchPanel vaultId={vaultId} />}
+      <ErrorBoundary scope="view" resetKey={left.tab}>
+        {left.tab === 'files' && <FileExplorer vaultId={vaultId} />}
+        {left.tab === 'outline' && <OutlinePanel vaultId={vaultId} />}
+        {left.tab === 'search' && <SearchPanel vaultId={vaultId} />}
+      </ErrorBoundary>
       <footer className="sidebar-footer">
         <VaultSwitcher vaultId={vaultId} />
       </footer>

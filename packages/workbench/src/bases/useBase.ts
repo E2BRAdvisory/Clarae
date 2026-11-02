@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../app/api';
-import { Events, type FileChangedPayload } from '../app/events';
+import { onVaultChanges, type VaultChangeBatch } from '../app/fileChanges';
 import { dialog } from '../ui/dialogs';
 import { viewIndexByName } from './model';
 import type { BaseInfo, BaseResult, ViewPatch } from './types';
@@ -32,6 +32,25 @@ export interface BaseState {
 
 const message = (e: unknown): string => errorMessage(e);
 
+/** Quiet time after the last vault change before the base runs again. */
+export const REFRESH_MS = 300;
+
+const isConfig = (path: string): boolean => path === '.memobrain' || path.startsWith('.memobrain/');
+
+/**
+ * Whether a batch of file changes can change a base's result. Any file of the vault can be a row
+ * (file.* properties, attachments included) and any note's properties can match its filters,
+ * the containing note's own ("this") among them; only the app's settings under .memobrain/ cannot.
+ */
+export function baseNeedsRefresh(batch: VaultChangeBatch): boolean {
+  return batch.unknown || batch.changes.some((c) => !isConfig(c.path));
+}
+
+/** The previous value when the new one has the same content: the table is not redrawn. */
+function same<T>(prev: T | null, next: T): T {
+  return prev !== null && JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
 /** Loads a .base file and the result of one of its views; refreshes when the vault changes. */
 export function useBase(o: Options): BaseState {
   const { vaultId, path, thisPath, viewName, isAlive, onDetached } = o;
@@ -48,7 +67,7 @@ export function useBase(o: Options): BaseState {
     try {
       const bi = await api.bases.load(vaultId, path);
       if (my !== seq.current) return;
-      setInfo(bi);
+      setInfo((prev) => same(prev, bi));
       if (bi.parseError) {
         setResult(null);
         setError(bi.parseError);
@@ -67,7 +86,7 @@ export function useBase(o: Options): BaseState {
       if (my !== seq.current) return;
       viewRef.current = idx;
       setViewIndex(idx);
-      setResult(res);
+      setResult((prev) => same(prev, res));
       setError('');
     } catch (e) {
       if (my === seq.current) setError(message(e));
@@ -82,22 +101,56 @@ export function useBase(o: Options): BaseState {
     return () => clearTimeout(timer);
   }, [load]);
 
+  // Results of a load that started before the hook unmounted are dropped.
+  useEffect(
+    () => () => {
+      seq.current++;
+    },
+    [],
+  );
+
+  // Refreshes after vault changes: bursts are coalesced, and while a run is in flight (it may take
+  // seconds on a large vault) the next one waits for it instead of piling up on the core.
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
-      if (p.vaultId !== vaultId) return;
+    let running = false;
+    let again = false;
+    let stopped = false;
+    const refresh = async (): Promise<void> => {
+      if (running) {
+        again = true;
+        return;
+      }
+      running = true;
+      try {
+        await loadRef.current();
+      } finally {
+        running = false;
+      }
+      if (again && !stopped) {
+        again = false;
+        void refresh();
+      }
+    };
+    const off = onVaultChanges((batch) => {
+      if (batch.vaultId !== vaultId || !baseNeedsRefresh(batch)) return;
       if (isAlive && !isAlive()) {
         onDetached?.();
         return;
       }
       clearTimeout(timer);
-      timer = setTimeout(() => void load(), 200);
+      timer = setTimeout(() => void refresh(), REFRESH_MS);
     });
     return () => {
+      stopped = true;
       clearTimeout(timer);
       off();
     };
-  }, [vaultId, load, isAlive, onDetached]);
+  }, [vaultId, isAlive, onDetached]);
 
   const selectView = useCallback(
     (i: number) => {

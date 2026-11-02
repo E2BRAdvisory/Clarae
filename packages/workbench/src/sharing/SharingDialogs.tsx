@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { Events, type MountRevokedPayload } from '../app/events';
@@ -7,10 +7,14 @@ import { useManaged, fromState } from '../state/managed';
 import { useAppStore } from '../state/store';
 import { useSharing } from '../state/sharing';
 import { dialog } from '../ui/dialogs';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
+import { lazyView } from '../ui/lazyView';
 import { sharingKeys } from './queries';
 // Loaded on demand: the dialog (and the share editor of @memobrain/cloud-features) is not needed to
 // open a vault.
-const ShareDialog = lazy(async () => ({ default: (await import('./ShareDialog')).ShareDialog }));
+const ShareDialog = lazyView(async () => ({
+  default: (await import('./ShareDialog')).ShareDialog,
+}));
 import { useSync } from '../state/sync';
 
 /** Mounted once: the share dialog, the "share ended" prompt, and the events behind both. */
@@ -66,9 +70,15 @@ export function SharingDialogs() {
   return (
     <>
       {vault && target && (
-        <Suspense fallback={null}>
-          <ShareDialog key={target.path} vaultId={vault.id} target={target} />
-        </Suspense>
+        <ErrorBoundary
+          scope="dialog"
+          resetKey={target.path}
+          onClose={() => useSharing.getState().closeShare()}
+        >
+          <Suspense fallback={null}>
+            <ShareDialog key={target.path} vaultId={vault.id} target={target} />
+          </Suspense>
+        </ErrorBoundary>
       )}
       {revoked && (
         <div className="modal-backdrop" role="presentation">

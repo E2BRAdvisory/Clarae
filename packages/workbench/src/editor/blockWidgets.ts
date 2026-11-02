@@ -4,10 +4,21 @@
 // document changes; decorations follow the selection (a block being edited
 // shows its source). The frontmatter is the exception: it never shows in Live
 // Preview (the Properties sidebar edits it); only Source mode displays it.
-import { EditorState, RangeSet, StateField, Transaction, type Range } from '@codemirror/state';
+//
+// A change rescans only around itself: from the start of the construct it touches up to the
+// first line after it where the scan is back in step with the previous one; the blocks before
+// and after are kept (the latter moved by the length of the change). See updateScan.
+import {
+  EditorState,
+  RangeSet,
+  StateField,
+  Transaction,
+  type Range,
+  type Text,
+} from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
-import { splitFrontmatter } from '@memobrain/markdown';
 import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
+import { changedSpan, frontmatterOf, FRONTMATTER_END } from './blockState';
 import { QueryWidget } from '../query/widget';
 import { MathWidget, MermaidWidget } from './widgets';
 
@@ -23,65 +34,84 @@ export interface Block {
   titlePos: number;
 }
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([\w-]*)/;
+/**
+ * Lines the scanner took as one unit (a fence, a $$ pair, a run of > lines), from the start of
+ * the first line to the end of the last. `dep`: the end of the last line it read to decide (a run
+ * of > lines ends because of the line after it), so a change up to there rescans the unit.
+ */
+interface Unit {
+  from: number;
+  to: number;
+  dep: number;
+}
 
-/** Scans the document for blocks (pure). */
-export function scanBlocks(state: EditorState): Block[] {
-  const doc = state.doc;
-  const blocks: Block[] = [];
-  const fm = splitFrontmatter(doc.toString());
-  let n = 1;
-  if (fm.lines > 0) {
-    blocks.push({
-      kind: 'frontmatter',
-      from: 0,
-      to: doc.line(Math.min(fm.lines, doc.lines)).to,
-      data: '',
-      titlePos: 0,
-    });
-    n = fm.lines + 1;
-  }
-  let fence: { char: string; len: number; lang: string; startLine: number } | null = null;
+/** What blocksField keeps: the blocks, and what an incremental rescan needs. */
+export interface BlockScan {
+  blocks: Block[];
+  units: Unit[];
+  fmLines: number;
+  /** The first line is `---` and nothing closes it: any later `---` line may. */
+  fmOpen: boolean;
+  /** Start of a `$$` line that found no closing `$$` (at most one: it is the last `$$` line). */
+  openMath: number | null;
+}
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([\w-]*)/;
+const QUOTE = /^\s*>/;
+
+/** Lines read by the scanner, for the performance tests. */
+export const scanStats = { lines: 0 };
+
+/**
+ * Scans from line n (a line start outside any construct) to the end, or until `stop` accepts a
+ * line. Returns the line it stopped at (doc.lines + 1 at the end) and the unclosed `$$` line.
+ */
+function scanLines(
+  doc: Text,
+  n: number,
+  blocks: Block[],
+  units: Unit[],
+  stop?: (n: number) => boolean,
+): { at: number; openMath: number | null } {
+  let openMath: number | null = null;
   while (n <= doc.lines) {
+    if (stop?.(n)) return { at: n, openMath };
     const line = doc.line(n);
     const text = line.text;
+    scanStats.lines++;
     const f = FENCE.exec(text);
-    if (fence) {
-      if (
-        f &&
-        (f[1] ?? '').startsWith(fence.char) &&
-        (f[1] ?? '').length >= fence.len &&
-        !(f[2] ?? '')
-      ) {
-        if (fence.lang === 'mermaid' || fence.lang === 'query') {
-          const start = doc.line(fence.startLine);
-          const code = doc.sliceString(
-            doc.line(fence.startLine + 1).from <= line.from - 1
-              ? doc.line(fence.startLine + 1).from
-              : start.to,
-            Math.max(line.from - 1, start.to),
-          );
-          blocks.push({
-            kind: fence.lang === 'query' ? 'query' : 'mermaid',
-            from: start.from,
-            to: line.to,
-            data: n - fence.startLine > 1 ? code : '',
-            titlePos: 0,
-          });
-        }
-        fence = null;
-      }
-      n++;
-      continue;
-    }
     if (f) {
-      fence = {
-        char: (f[1] ?? '`').charAt(0),
-        len: (f[1] ?? '').length,
-        lang: (f[2] ?? '').toLowerCase(),
-        startLine: n,
-      };
-      n++;
+      const char = (f[1] ?? '`').charAt(0);
+      const len = (f[1] ?? '').length;
+      const lang = (f[2] ?? '').toLowerCase();
+      let m = n + 1;
+      for (; m <= doc.lines; m++) {
+        scanStats.lines++;
+        const c = FENCE.exec(doc.line(m).text);
+        if (c && (c[1] ?? '').startsWith(char) && (c[1] ?? '').length >= len && !(c[2] ?? ''))
+          break;
+      }
+      if (m > doc.lines) {
+        // An unclosed fence takes the rest of the document.
+        units.push({ from: line.from, to: doc.length, dep: doc.length });
+        return { at: doc.lines + 1, openMath };
+      }
+      const close = doc.line(m);
+      if (lang === 'mermaid' || lang === 'query') {
+        const code = doc.sliceString(
+          doc.line(n + 1).from <= close.from - 1 ? doc.line(n + 1).from : line.to,
+          Math.max(close.from - 1, line.to),
+        );
+        blocks.push({
+          kind: lang === 'query' ? 'query' : 'mermaid',
+          from: line.from,
+          to: close.to,
+          data: m - n > 1 ? code : '',
+          titlePos: 0,
+        });
+      }
+      units.push({ from: line.from, to: close.to, dep: close.to });
+      n = m + 1;
       continue;
     }
     const t = text.trim();
@@ -97,8 +127,13 @@ export function scanBlocks(state: EditorState): Block[] {
           titlePos: 0,
         });
       } else if (count === 1) {
+        // The search stops at the next line holding `$$`, which this one pairs with: searched
+        // ranges never overlap, so even many unclosed `$$` lines keep the scan linear.
         let m = n + 1;
-        while (m <= doc.lines && !doc.line(m).text.includes('$$')) m++;
+        while (m <= doc.lines && !doc.line(m).text.includes('$$')) {
+          scanStats.lines++;
+          m++;
+        }
         if (m <= doc.lines) {
           const end = doc.line(m);
           const body = doc.sliceString(
@@ -112,32 +147,132 @@ export function scanBlocks(state: EditorState): Block[] {
             data: body.trim(),
             titlePos: 0,
           });
+          units.push({ from: line.from, to: end.to, dep: end.to });
           n = m + 1;
           continue;
         }
+        openMath = line.from;
       }
       n++;
       continue;
     }
-    if (/^\s*>/.test(text)) {
+    if (QUOTE.test(text)) {
       const head = parseCalloutHead(text);
       let m = n;
-      while (m + 1 <= doc.lines && /^\s*>/.test(doc.line(m + 1).text)) m++;
+      while (m + 1 <= doc.lines && QUOTE.test(doc.line(m + 1).text)) {
+        scanStats.lines++;
+        m++;
+      }
+      const last = doc.line(m);
       if (head && head.marker !== '' && m > n) {
         blocks.push({
           kind: 'callout',
           from: line.to,
-          to: doc.line(m).to,
+          to: last.to,
           data: head.marker,
           titlePos: line.from,
         });
       }
+      // The run ended because of the next line: a > added to it extends the run.
+      const dep = m < doc.lines ? doc.line(m + 1).to : last.to;
+      units.push({ from: line.from, to: last.to, dep });
       n = m + 1;
       continue;
     }
     n++;
   }
-  return blocks;
+  return { at: doc.lines + 1, openMath };
+}
+
+/** Scans the whole document. */
+function scan(doc: Text): BlockScan {
+  const fm = frontmatterOf(doc);
+  const blocks: Block[] = [];
+  if (fm.lines > 0)
+    blocks.push({
+      kind: 'frontmatter',
+      from: 0,
+      to: doc.line(Math.min(fm.lines, doc.lines)).to,
+      data: '',
+      titlePos: 0,
+    });
+  const units: Unit[] = [];
+  const { openMath } = scanLines(doc, fm.lines + 1, blocks, units);
+  return { blocks, units, fmLines: fm.lines, fmOpen: fm.open, openMath };
+}
+
+/** Where a block's construct starts (a callout's block begins after its title line). */
+const startOf = (b: Block): number => (b.kind === 'callout' ? b.titlePos : b.from);
+
+const shiftBlock = (b: Block, d: number): Block => ({
+  ...b,
+  from: b.from + d,
+  to: b.to + d,
+  titlePos: b.kind === 'callout' ? b.titlePos + d : b.titlePos,
+});
+
+/**
+ * The scan after a transaction, reusing the previous one. The rescan starts at the changed line,
+ * or earlier at the start of a unit that read it (or at the unclosed `$$` line when the change
+ * brings a `$$` that may close it); it stops at the first line past the change that the previous
+ * scan also reached outside any unit, since from there both scans read the same lines in the same
+ * state. A change to the frontmatter (or one that may close an open one) rescans everything.
+ */
+export function updateScan(prev: BlockScan, tr: Transaction): BlockScan {
+  if (!tr.docChanged) return prev;
+  const oldDoc = tr.startState.doc;
+  const doc = tr.newDoc;
+  const { fromA, toA, fromB, toB } = changedSpan(tr);
+  const firstLine = oldDoc.lineAt(fromA);
+  if (firstLine.number === 1 || firstLine.number <= prev.fmLines) return scan(doc);
+  const changed = doc.sliceString(doc.lineAt(fromB).from, doc.lineAt(toB).to);
+  if (prev.fmOpen && FRONTMATTER_END.test(changed)) return scan(doc);
+
+  let start = firstLine.from;
+  for (const u of prev.units) {
+    if (u.from > toA) break;
+    if (u.dep >= firstLine.from && u.from < start) start = u.from;
+  }
+  if (prev.openMath !== null && prev.openMath < start && changed.includes('$$'))
+    start = prev.openMath;
+
+  const delta = doc.length - oldDoc.length;
+  const blocks = prev.blocks.filter((b) => startOf(b) < start);
+  const units = prev.units.filter((u) => u.from < start);
+  // In step again at a line start past the change that the old scan reached outside any unit.
+  let k = 0;
+  const inStep = (n: number): boolean => {
+    const pos = doc.line(n).from;
+    if (pos <= toB) return false;
+    const old = pos - delta;
+    while (k < prev.units.length && (prev.units[k] as Unit).to < old) k++;
+    const u = prev.units[k];
+    return !(u && u.from < old && old <= u.to);
+  };
+  const scanned = scanLines(doc, doc.lineAt(start).number, blocks, units, inStep);
+  let openMath = scanned.openMath;
+  if (openMath === null && prev.openMath !== null && prev.openMath < start)
+    openMath = prev.openMath;
+  if (scanned.at <= doc.lines) {
+    const resume = doc.line(scanned.at).from - delta;
+    for (const b of prev.blocks) if (startOf(b) >= resume) blocks.push(shiftBlock(b, delta));
+    for (const u of prev.units)
+      if (u.from >= resume)
+        units.push({ from: u.from + delta, to: u.to + delta, dep: u.dep + delta });
+    if (openMath === null && prev.openMath !== null && prev.openMath >= resume)
+      openMath = prev.openMath + delta;
+  }
+  return { blocks, units, fmLines: prev.fmLines, fmOpen: prev.fmOpen, openMath };
+}
+
+/** Scans the document for blocks (pure). */
+export function scanBlocks(state: EditorState): Block[] {
+  return scan(state.doc).blocks;
+}
+
+/** The scan of a whole document, as blocksField computes it from scratch. */
+export function scanDocument(doc: Text): BlockScan {
+  return scan(doc);
 }
 
 /**
@@ -145,14 +280,14 @@ export function scanBlocks(state: EditorState): Block[] {
  * line. Null when there is no frontmatter, or nothing follows it (it would trap the cursor).
  */
 export function hiddenFrontmatter(state: EditorState): { from: number; to: number } | null {
-  const fm = state.field(blocksField).find((b) => b.kind === 'frontmatter');
-  if (!fm || fm.to + 1 > state.doc.length) return null;
+  const fm = state.field(blocksField).blocks[0];
+  if (fm?.kind !== 'frontmatter' || fm.to + 1 > state.doc.length) return null;
   return { from: 0, to: fm.to + 1 };
 }
 
-export const blocksField = StateField.define<Block[]>({
-  create: (state) => scanBlocks(state),
-  update: (value, tr) => (tr.docChanged ? scanBlocks(tr.state) : value),
+export const blocksField = StateField.define<BlockScan>({
+  create: (state) => scan(state.doc),
+  update: (value, tr) => updateScan(value, tr),
 });
 
 /** Decorations for the blocks, given the current selection and fold state (pure). */
@@ -161,7 +296,7 @@ export function blockDecorations(state: EditorState): DecorationSet {
   const sel = state.selection.ranges;
   const editing = (from: number, to: number): boolean =>
     sel.some((r) => r.from <= to && r.to >= from);
-  for (const b of state.field(blocksField)) {
+  for (const b of state.field(blocksField).blocks) {
     switch (b.kind) {
       case 'frontmatter': {
         const hidden = hiddenFrontmatter(state);

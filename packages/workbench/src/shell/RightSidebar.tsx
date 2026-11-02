@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { LinksPanel } from '../sidebar/LinksPanel';
 import { PropertiesPanel } from '../sidebar/PropertiesPanel';
 import { SlidesPanel } from '../sidebar/SlidesPanel';
@@ -23,11 +24,13 @@ export function RightSidebar({ vaultId }: { vaultId: string }) {
         label={(tab) => t(`sidebar.${tab}`)}
         icon={(tab) => RIGHT_TAB_ICONS[tab]}
       />
-      {right.tab === 'properties' && <PropertiesPanel vaultId={vaultId} />}
-      {right.tab === 'tags' && <TagsPanel vaultId={vaultId} />}
-      {right.tab === 'links' && <LinksPanel vaultId={vaultId} />}
-      {right.tab === 'slides' && <SlidesPanel vaultId={vaultId} />}
-      {right.tab === 'stats' && <StatsPanel vaultId={vaultId} />}
+      <ErrorBoundary scope="view" resetKey={right.tab}>
+        {right.tab === 'properties' && <PropertiesPanel vaultId={vaultId} />}
+        {right.tab === 'tags' && <TagsPanel vaultId={vaultId} />}
+        {right.tab === 'links' && <LinksPanel vaultId={vaultId} />}
+        {right.tab === 'slides' && <SlidesPanel vaultId={vaultId} />}
+        {right.tab === 'stats' && <StatsPanel vaultId={vaultId} />}
+      </ErrorBoundary>
       <footer className="sidebar-footer">
         <VaultStatus />
       </footer>

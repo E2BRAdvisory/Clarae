@@ -16,6 +16,16 @@ import type { Forces } from './types';
 type SimNode = SimulationNodeDatum & { index: number };
 type SimLink = SimulationLinkDatum<SimNode>;
 
+/** Positions to start from, instead of the initial spiral of d3. */
+export interface WarmStart {
+  positions: Float32Array;
+  /** Starting heat (d3 starts cold layouts at 1). */
+  alpha: number;
+}
+
+/** The heat a warm start begins with: enough for new nodes to find their place. */
+export const WARM_ALPHA = 0.15;
+
 /** Beyond this many nodes repulsion is approximated more coarsely: the cost per tick stays flat. */
 const LARGE = 3000;
 
@@ -28,11 +38,21 @@ export class LayoutEngine {
   private forces: Forces;
   private ticks = 0;
 
-  /** edges holds source,target index pairs (length 2 * edge count). */
-  constructor(n: number, edges: Int32Array, forces: Forces) {
+  /**
+   * edges holds source,target index pairs (length 2 * edge count). A warm start passes the
+   * starting positions (x0,y0,…; NaN where unknown, those nodes are placed by d3) and a lower alpha,
+   * so a layout that was already settled only adjusts instead of starting over.
+   */
+  constructor(n: number, edges: Int32Array, forces: Forces, warm?: WarmStart) {
     this.n = n;
     this.forces = forces;
-    this.nodes = Array.from({ length: n }, (_, index) => ({ index }));
+    this.nodes = Array.from({ length: n }, (_, index) => {
+      const x = warm?.positions[2 * index];
+      const y = warm?.positions[2 * index + 1];
+      return x !== undefined && y !== undefined && Number.isFinite(x) && Number.isFinite(y)
+        ? { index, x, y }
+        : { index };
+    });
     this.links = [];
     this.degree = new Int32Array(n);
     for (let i = 0; i + 1 < edges.length; i += 2) {
@@ -54,6 +74,7 @@ export class LayoutEngine {
     this.sim.force('x', forceX<SimNode>(0));
     this.sim.force('y', forceY<SimNode>(0));
     this.sim.alphaDecay(n > LARGE ? 0.035 : 0.0228);
+    if (warm) this.sim.alpha(warm.alpha);
     this.apply();
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
@@ -21,7 +21,6 @@ import { useSettings, type NoteMode } from '../state/settings';
 import { CanvasView } from '../canvas/CanvasView';
 import { BaseView } from '../bases/BaseView';
 import { DrawingView } from '../drawing/DrawingView';
-import { GraphView } from '../graph/GraphView';
 import { isGraphPath } from '../graph/paths';
 import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
@@ -30,6 +29,13 @@ import { isSafeExternalUrl } from '../util/sanitize';
 import { openExternal } from '../util/external';
 import { safeDecodeURI } from '../util/uri';
 import type { Pane, Tab } from './layout';
+import { lazyView } from '../ui/lazyView';
+
+// The graph (its renderer and the d3 layout) is fetched when a graph tab first opens, which keeps
+// it out of the bundle loaded at startup (ADR-0020).
+const GraphView = lazyView(async () => ({
+  default: (await import('../graph/GraphView')).GraphView,
+}));
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
 
@@ -120,7 +126,12 @@ interface Props {
 
 export function NoteView({ vaultId, pane, tab, visible }: Props) {
   const { t } = useTranslation();
-  if (isGraphPath(tab.path)) return <GraphView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (isGraphPath(tab.path))
+    return (
+      <Suspense fallback={<div className="note-loading muted">{t('graph.loading')}</div>}>
+        <GraphView key={tab.path} vaultId={vaultId} path={tab.path} />
+      </Suspense>
+    );
   const kind = classify(tab.path);
   if (kind === 'drawing') return <DrawingView key={tab.path} vaultId={vaultId} path={tab.path} />;
   if (kind === 'canvas') return <CanvasView key={tab.path} vaultId={vaultId} path={tab.path} />;

@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import type { LayoutNode, Pane } from './layout';
 import { NoteView } from './NoteView';
 import { TabBar } from './TabBar';
@@ -19,7 +20,16 @@ function PaneView({ vaultId, pane }: { vaultId: string; pane: Pane }) {
       {pane.tabs.length > 0 && <TabBar pane={pane} />}
       <div className="pane-body">
         {tab ? (
-          <NoteView key={`${pane.id}:${tab.id}`} vaultId={vaultId} pane={pane} tab={tab} visible />
+          // A view that fails stays inside its pane; another file in the tab starts over.
+          <ErrorBoundary scope="view" resetKey={`${tab.id}:${tab.path}`}>
+            <NoteView
+              key={`${pane.id}:${tab.id}`}
+              vaultId={vaultId}
+              pane={pane}
+              tab={tab}
+              visible
+            />
+          </ErrorBoundary>
         ) : (
           <div className="editor-empty">{t('editor.empty')}</div>
         )}

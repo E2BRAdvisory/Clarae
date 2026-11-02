@@ -4,6 +4,12 @@
 // keeps the rest of the app in StrictMode while the editor mounts exactly once.
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
+
+// A root of its own is outside the boundaries of the app: it gets one too.
+const guarded = (children: ReactNode): ReactNode => (
+  <ErrorBoundary scope="view">{children}</ErrorBoundary>
+);
 
 export function ExcalidrawIsland({ children }: { children: ReactNode }) {
   const host = useRef<HTMLDivElement>(null);
@@ -17,7 +23,7 @@ export function ExcalidrawIsland({ children }: { children: ReactNode }) {
     (host.current as HTMLDivElement).append(el);
     const r = createRoot(el);
     root.current = r;
-    r.render(children);
+    r.render(guarded(children));
     return () => {
       root.current = null;
       // Not while React is committing: unmounting a root synchronously from a cleanup warns.
@@ -31,7 +37,7 @@ export function ExcalidrawIsland({ children }: { children: ReactNode }) {
   }, []);
 
   useLayoutEffect(() => {
-    root.current?.render(children);
+    root.current?.render(guarded(children));
   });
 
   return <div ref={host} className="drawing-island" />;

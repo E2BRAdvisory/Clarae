@@ -1,7 +1,8 @@
 // The panels of @memobrain/cloud-features loaded on demand: Settings > Cloud and Sharing are not
-// needed to open a vault, so they stay out of the initial bundle (ADR-0020). The style sheet
+// needed to open a vault, so they stay out of the initial bundle (ADR-0020). A failed download is
+// retried once; then the error boundary of the settings section offers a retry. The style sheet
 // (workbench.css) is imported by the hosts, statically: a lazy chunk's CSS would not be loaded.
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
 import type {
   CloudVaultsTableProps,
   DevicesPanelProps,
@@ -9,14 +10,15 @@ import type {
   SharesManagerProps,
   UsagePanelProps,
 } from '@memobrain/cloud-features';
+import { lazyView } from '../ui/lazyView';
 
 const load = () => import('@memobrain/cloud-features/panels');
 
-const LazyVaults = lazy(async () => ({ default: (await load()).CloudVaultsTable }));
-const LazyDevices = lazy(async () => ({ default: (await load()).DevicesPanel }));
-const LazyUsage = lazy(async () => ({ default: (await load()).UsagePanel }));
-const LazyShares = lazy(async () => ({ default: (await load()).SharesManager }));
-const LazyInvitations = lazy(async () => ({ default: (await load()).InvitationsList }));
+const LazyVaults = lazyView(async () => ({ default: (await load()).CloudVaultsTable }));
+const LazyDevices = lazyView(async () => ({ default: (await load()).DevicesPanel }));
+const LazyUsage = lazyView(async () => ({ default: (await load()).UsagePanel }));
+const LazyShares = lazyView(async () => ({ default: (await load()).SharesManager }));
+const LazyInvitations = lazyView(async () => ({ default: (await load()).InvitationsList }));
 
 export function CloudVaultsTable(props: CloudVaultsTableProps) {
   return (

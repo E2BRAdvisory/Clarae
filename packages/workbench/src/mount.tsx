@@ -11,6 +11,7 @@ import { initI18n } from './i18n';
 import { configurePlatform, type PlatformOptions } from './platform';
 import { queryClient } from './state/queryClient';
 import { installLinkGuard } from './util/links';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import './style.css';
 
 export type WorkbenchOptions = PlatformOptions;
@@ -51,9 +52,11 @@ export async function mountWorkbench(
   installLinkGuard();
   createRoot(root).render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
+      <ErrorBoundary scope="shell">
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </ErrorBoundary>
     </StrictMode>,
   );
   return { flush: () => flushWorkbench() };
@@ -87,16 +90,18 @@ export async function mountCreateCloudVault(
   const r = createRoot(root);
   r.render(
     <StrictMode>
-      <ConnectWizard
-        vaultId={options.vaultId}
-        vaultName={options.name}
-        preset={{
-          kind: options.kind,
-          name: options.name,
-          onLinked: options.onCreated,
-          onCancel: options.onCancel,
-        }}
-      />
+      <ErrorBoundary scope="shell">
+        <ConnectWizard
+          vaultId={options.vaultId}
+          vaultName={options.name}
+          preset={{
+            kind: options.kind,
+            name: options.name,
+            onLinked: options.onCreated,
+            onCancel: options.onCancel,
+          }}
+        />
+      </ErrorBoundary>
     </StrictMode>,
   );
   return () => r.unmount();

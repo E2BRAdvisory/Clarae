@@ -45,7 +45,7 @@ scope.onmessage = (e) => {
     case 'init':
       generation++;
       running = false;
-      engine = new LayoutEngine(m.n, m.edges, m.forces);
+      engine = new LayoutEngine(m.n, m.edges, m.forces, m.warm);
       post(false);
       run();
       break;

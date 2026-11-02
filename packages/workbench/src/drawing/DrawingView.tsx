@@ -1,9 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { configureExcalidrawAssets } from './excalidraw';
+import { lazyView } from '../ui/lazyView';
 
-// Excalidraw is large: it is fetched when the first drawing is opened, never at startup.
-const DrawingEditor = lazy(() => {
+// Excalidraw is large: it is fetched when the first drawing is opened, never at startup (a failed
+// download is retried; the pane's error boundary offers a retry after that).
+const DrawingEditor = lazyView(() => {
   configureExcalidrawAssets();
   return import('./DrawingEditor');
 });

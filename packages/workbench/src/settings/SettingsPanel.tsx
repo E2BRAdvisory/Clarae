@@ -24,6 +24,7 @@ import { DrawingSection } from './DrawingSection';
 import { UpdateSettings } from '../updater/UpdateSettings';
 import { can } from '../platform';
 import { Icon } from '../shell/icons';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 const SECTIONS: SettingsSection[] = [
   'general',
@@ -413,7 +414,9 @@ export function SettingsPanel() {
         </nav>
         <div className="settings-body">
           <h3>{t(`settings.section_${section}`)}</h3>
-          {body()}
+          <ErrorBoundary scope="view" resetKey={section}>
+            {body()}
+          </ErrorBoundary>
           <div className="actions">
             <button onClick={close}>{t('common.close')}</button>
           </div>
