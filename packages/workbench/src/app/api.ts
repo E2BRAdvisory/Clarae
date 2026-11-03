@@ -23,6 +23,8 @@ import * as TemplatesAPI from '../../wailsjs/go/app/TemplatesAPI';
 import * as ComposerAPI from '../../wailsjs/go/app/ComposerAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import type { EventName, EventPayload } from './events.gen';
+import type { Capabilities } from '../platform';
+import type { Schemas } from '@memobrain/api-client';
 import type { app, auth, composer, links, search, sync, vault } from '../../wailsjs/go/models';
 import * as HistoryAPI from '../../wailsjs/go/app/HistoryAPI';
 import type { history as localHistory } from '../../wailsjs/go/models';
@@ -85,29 +87,9 @@ export function linkInfo(over: Partial<SyncLinkInfo> = {}): SyncLinkInfo {
   };
 }
 export type PermissionLevel = 'viewer' | 'editor' | 'manager';
-export type ShareGrant = Omit<Plain<app.GrantInfo>, 'principalType' | 'permission' | 'status'> & {
-  principalType: 'user' | 'group';
-  permission: PermissionLevel;
-  status: 'pending' | 'accepted' | 'declined';
-};
-export type ShareInfo = Omit<
-  Plain<app.ShareInfo>,
-  'resourceType' | 'myPermission' | 'myStatus' | 'grants'
-> & {
-  resourceType: 'vault' | 'folder' | 'file';
-  myPermission: PermissionLevel | '';
-  myStatus: 'pending' | 'accepted' | 'declined' | '';
-  grants: ShareGrant[];
-};
 export type MountState = Omit<Plain<sync.MountState>, 'permission' | 'resourceType'> & {
   permission: PermissionLevel;
   resourceType: 'vault' | 'folder' | 'file';
-};
-export type DirectoryEntry = Omit<Plain<app.DirectoryEntry>, 'type'> & { type: 'user' | 'group' };
-export type GrantInput = {
-  principalType: 'user' | 'group';
-  principalId: string;
-  permission: PermissionLevel;
 };
 export type ConfigState = Plain<app.ConfigState>;
 export type TemplateInfo = Omit<Plain<app.TemplateInfo>, 'source'> & {
@@ -131,11 +113,18 @@ export type RevisionInfo = Omit<Plain<sync.RevisionInfo>, 'time'> & { time: stri
 export type HistorySnapshot = Omit<Plain<localHistory.Snapshot>, 'time'> & { time: string };
 export type HistoryDeleted = Omit<Plain<localHistory.Deleted>, 'time'> & { time: string };
 export type HistorySettings = Plain<localHistory.Settings>;
-export type CloudVault = Omit<Plain<app.CloudVault>, 'createdAt'> & { createdAt: string };
-export type DeviceInfo = Omit<Plain<app.DeviceInfo>, 'lastSeenAt'> & {
-  lastSeenAt: string | Date | null;
-};
-export type UsageInfo = Plain<app.UsageInfo>;
+// The cloud-management bindings speak the OpenAPI types (ADR-0045 §6): their models (package
+// cloudapi of the core) equal these Schemas, which cloud/bindingTypes.test.ts asserts.
+export type CloudVault = Schemas['Vault'];
+/** A device of the account; `current` marks the device the core runs on. */
+export type CloudDevice = Schemas['Device'] & { current: boolean };
+export type CloudUsage = Schemas['Usage'];
+export type Share = Schemas['Share'];
+export type ShareGrant = Schemas['Grant'];
+export type NewGrant = Schemas['NewGrant'];
+export type ShareUpdate = Schemas['UpdateShare'];
+export type DirectoryUser = Schemas['DirectoryUser'];
+export type DirectoryGroup = Schemas['DirectoryGroup'];
 export type ConflictTexts = Plain<app.ConflictTexts>;
 export type ConflictAction = 'keep-remote' | 'keep-local' | 'keep-both' | 'merged';
 export type VaultKind = 'private' | 'shared';
@@ -221,6 +210,8 @@ export const api = {
     get: (): Promise<AppSettings> => SettingsAPI.Get(),
     set: (s: AppSettings): Promise<void> => SettingsAPI.Set(s),
     info: (): Promise<Record<string, string>> => SettingsAPI.Info(),
+    /** What this host offers (ADR-0045 §1); typed against the platform layer, so the two cannot drift. */
+    capabilities: (): Promise<Capabilities> => SettingsAPI.Capabilities(),
   },
   tags: {
     list: (vaultId: string): Promise<TagCount[]> => TagsAPI.List(vaultId),
@@ -300,7 +291,7 @@ export const api = {
       passphrase: string,
     ): Promise<SyncLinkResult> => SyncAPI.LinkNew(vaultId, name, kind, passphrase),
     listCloudVaults: (): Promise<CloudVault[]> => SyncAPI.ListCloudVaults(),
-    /** Soft-deleted vaults of the account that can still be restored (deletedAt set). */
+    /** Soft-deleted vaults of the account that can still be restored (deleted_at set). */
     listDeletedCloudVaults: (): Promise<CloudVault[]> => SyncAPI.ListDeletedCloudVaults(),
     renameCloudVault: (cloudVaultId: string, name: string): Promise<CloudVault> =>
       SyncAPI.RenameCloudVault(cloudVaultId, name),
@@ -332,9 +323,9 @@ export const api = {
       SyncAPI.RevisionText(vaultId, path, rev),
     restoreRevision: (vaultId: string, path: string, rev: number): Promise<void> =>
       SyncAPI.RestoreRevision(vaultId, path, rev),
-    devices: (): Promise<DeviceInfo[]> => SyncAPI.Devices() as Promise<DeviceInfo[]>,
+    devices: (): Promise<CloudDevice[]> => SyncAPI.Devices(),
     revokeDevice: (id: string): Promise<void> => SyncAPI.RevokeDevice(id),
-    usage: (): Promise<UsageInfo> => SyncAPI.Usage(),
+    usage: (): Promise<CloudUsage> => SyncAPI.Usage(),
   },
   history: {
     list: (vaultId: string, path: string): Promise<HistorySnapshot[]> =>
@@ -352,7 +343,7 @@ export const api = {
       HistoryAPI.SetSettings(vaultId, s),
   },
   sharing: {
-    invitations: (): Promise<ShareInfo[]> => SharingAPI.Invitations() as Promise<ShareInfo[]>,
+    invitations: (): Promise<Share[]> => SharingAPI.Invitations(),
     mounts: (): Promise<MountState[]> => SharingAPI.Mounts() as Promise<MountState[]>,
     accept: (shareId: string): Promise<MountState> =>
       SharingAPI.AcceptShare(shareId) as Promise<MountState>,
@@ -360,60 +351,48 @@ export const api = {
     openMount: (shareId: string): Promise<VaultInfo> => SharingAPI.OpenMount(shareId),
     removeMount: (shareId: string, keepCopy: boolean): Promise<VaultInfo> =>
       SharingAPI.RemoveMount(shareId, keepCopy),
-    vaultShares: (vaultId: string): Promise<ShareInfo[]> =>
-      SharingAPI.VaultShares(vaultId) as Promise<ShareInfo[]>,
+    vaultShares: (vaultId: string): Promise<Share[]> => SharingAPI.VaultShares(vaultId),
     create: (
       vaultId: string,
       path: string,
       isDir: boolean,
       name: string,
-      grants: GrantInput[],
+      grants: NewGrant[],
       expiresAt = '',
-    ): Promise<ShareInfo> =>
-      SharingAPI.CreateShare(vaultId, path, isDir, name, grants, expiresAt) as Promise<ShareInfo>,
+    ): Promise<Share> => SharingAPI.CreateShare(vaultId, path, isDir, name, grants, expiresAt),
     /** Shares of the account: created or managed by the user ("owned"), or received. */
-    list: (scope: 'owned' | 'received'): Promise<ShareInfo[]> =>
-      SharingAPI.ListShares(scope) as Promise<ShareInfo[]>,
+    list: (scope: 'owned' | 'received'): Promise<Share[]> => SharingAPI.ListShares(scope),
     /** Shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud vault id. */
     createCloud: (
       cloudVaultId: string,
       pathPrefix: string,
       name: string,
-      grants: GrantInput[],
+      grants: NewGrant[],
       expiresAt = '',
-    ): Promise<ShareInfo> =>
-      SharingAPI.CreateCloudShare(
-        cloudVaultId,
-        pathPrefix,
-        name,
-        grants,
-        expiresAt,
-      ) as Promise<ShareInfo>,
-    /** Rename ("" keeps the name) and expiry (RFC 3339, "" keeps it; clearExpiry removes it). */
-    update: (
-      shareId: string,
-      name: string,
-      expiresAt: string,
-      clearExpiry: boolean,
-    ): Promise<ShareInfo> =>
-      SharingAPI.UpdateShare(shareId, name, expiresAt, clearExpiry) as Promise<ShareInfo>,
-    share: (shareId: string): Promise<ShareInfo> => SharingAPI.Share(shareId) as Promise<ShareInfo>,
+    ): Promise<Share> =>
+      SharingAPI.CreateCloudShare(cloudVaultId, pathPrefix, name, grants, expiresAt),
+    /** The body of PATCH /shares/{id}: a new name, a new expiry, or `clear_expiry`. */
+    update: (shareId: string, change: ShareUpdate): Promise<Share> =>
+      SharingAPI.UpdateShare(shareId, change),
+    share: (shareId: string): Promise<Share> => SharingAPI.Share(shareId),
     revoke: (shareId: string): Promise<void> => SharingAPI.RevokeShare(shareId),
     setGrant: (
       shareId: string,
       principalType: 'user' | 'group',
       principalId: string,
       permission: PermissionLevel,
-    ): Promise<ShareGrant> =>
-      SharingAPI.SetGrant(shareId, principalType, principalId, permission) as Promise<ShareGrant>,
+    ): Promise<ShareGrant> => SharingAPI.SetGrant(shareId, principalType, principalId, permission),
     removeGrant: (
       shareId: string,
       principalType: 'user' | 'group',
       principalId: string,
     ): Promise<void> => SharingAPI.RemoveGrant(shareId, principalType, principalId),
-    /** Users or groups to share with: one directory request, with the API's fields. */
-    searchDirectory: (type: 'user' | 'group', query: string): Promise<DirectoryEntry[]> =>
-      SharingAPI.SearchDirectory(type, query) as Promise<DirectoryEntry[]>,
+    /** Users to share with (GET /directory/users). */
+    searchUsers: (query: string): Promise<DirectoryUser[]> =>
+      SharingAPI.SearchDirectoryUsers(query),
+    /** Groups to share with (GET /directory/groups). */
+    searchGroups: (query: string): Promise<DirectoryGroup[]> =>
+      SharingAPI.SearchDirectoryGroups(query),
   },
   config: {
     effective: (): Promise<ConfigState> => ConfigAPI.Effective(),

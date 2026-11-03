@@ -51,9 +51,10 @@ interface MockWindow {
     };
     sharing: {
       invitations: Record<string, unknown>[];
-      owned: Record<string, unknown>[];
+      owned: CloudShare[];
       received: Record<string, unknown>[];
-      directory: Record<string, unknown>[];
+      users: Record<string, unknown>[];
+      groups: Record<string, unknown>[];
       mountFiles: Map<string, Record<string, string>>;
     };
     emit(name: string, payload: unknown): void;
@@ -61,85 +62,30 @@ interface MockWindow {
   go: { app: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> };
 }
 
-/** The seed in the shapes of the Wails mock (the binding DTOs). */
+/**
+ * The seed in the state of the Wails mock. The bindings speak the API's types (ADR-0045 §6), so it
+ * is the seed itself, sorted as the core lists it: the shares the user owns or manages, the
+ * invitations and the answered ones; the owner of a share has no `my_permission`.
+ */
 function mockSeed(seed: CloudSeed) {
-  const share = (s: CloudShare) => ({
-    id: s.id,
-    vaultId: s.vault_id,
-    vaultName: s.vault_name,
-    resourceType: s.resource_type,
-    pathPrefix: s.path_prefix ?? '',
-    displayName: s.display_name,
-    ownerId: s.owner_id,
-    ownerName: s.owner_name,
-    createdAt: s.created_at,
-    expiresAt: s.expires_at ?? '',
-    myPermission: s.owner_id === ME ? '' : (s.my_permission ?? ''),
-    myStatus: s.my_status ?? '',
-    grants: (s.grants ?? []).map((g) => ({
-      principalType: g.principal_type,
-      principalId: g.principal_id,
-      principalName: g.principal_name,
-      permission: g.permission,
-      status: g.status,
-    })),
+  const shares = (seed.shares ?? []).map((s) => {
+    if (s.owner_id !== ME) return s;
+    const own = { ...s };
+    delete own.my_permission;
+    return own;
   });
-  const shares = seed.shares ?? [];
   const received = shares.filter((s) => s.owner_id !== ME && s.my_status);
   return {
-    vaults: (seed.vaults ?? []).map((v) => ({
-      id: v.id,
-      ownerId: v.owner_id,
-      name: v.name,
-      kind: v.kind,
-      totalBytes: v.total_bytes,
-      fileCount: v.file_count,
-      lastSeq: v.last_seq,
-      createdAt: v.created_at,
-      ...(v.deleted_at ? { deletedAt: v.deleted_at } : {}),
-    })),
-    devices: (seed.devices ?? []).map((d) => ({
-      id: d.id,
-      name: d.name,
-      platform: d.platform,
-      appVersion: d.app_version ?? '',
-      lastSeenAt: d.last_seen_at ?? '',
-      createdAt: d.created_at,
-      revokedAt: d.revoked_at ?? '',
-      current: false,
-    })),
-    usage: seed.usage
-      ? {
-          usedBytes: seed.usage.used_bytes,
-          quotaBytes: seed.usage.quota_bytes,
-          level: seed.usage.level,
-        }
-      : null,
-    directory: [
-      ...(seed.directory?.users ?? []).map((u) => ({
-        type: 'user',
-        id: u.id,
-        name: u.username,
-        label: u.display_name ? `${u.display_name} (${u.username})` : u.username,
-        displayName: u.display_name ?? '',
-        description: '',
-      })),
-      ...(seed.directory?.groups ?? []).map((g) => ({
-        type: 'group',
-        id: g.id,
-        name: g.name,
-        label: g.name,
-        displayName: '',
-        description: g.description ?? '',
-      })),
-    ],
-    owned: shares
-      .filter(
-        (s) => s.owner_id === ME || (s.my_permission === 'manager' && s.my_status === 'accepted'),
-      )
-      .map(share),
-    invitations: received.filter((s) => s.my_status === 'pending').map(share),
-    received: received.filter((s) => s.my_status !== 'pending').map(share),
+    vaults: seed.vaults ?? [],
+    devices: (seed.devices ?? []).map((d) => ({ ...d, current: false })),
+    usage: seed.usage ?? null,
+    users: seed.directory?.users ?? [],
+    groups: seed.directory?.groups ?? [],
+    owned: shares.filter(
+      (s) => s.owner_id === ME || (s.my_permission === 'manager' && s.my_status === 'accepted'),
+    ),
+    invitations: received.filter((s) => s.my_status === 'pending'),
+    received: received.filter((s) => s.my_status !== 'pending'),
     mountFiles: Object.entries(seed.files ?? {}).filter(([id]) => shares.some((s) => s.id === id)),
   };
 }
@@ -163,7 +109,8 @@ async function openOnDesktop(
       w.__mock.sync.cloudVaults.push(...s.vaults);
       w.__mock.sync.devices.push(...s.devices);
       if (s.usage) w.__mock.sync.usage = s.usage;
-      w.__mock.sharing.directory.push(...s.directory);
+      w.__mock.sharing.users.push(...s.users);
+      w.__mock.sharing.groups.push(...s.groups);
       w.__mock.sharing.owned.push(...s.owned);
       w.__mock.sharing.invitations.push(...s.invitations);
       w.__mock.sharing.received.push(...s.received);
@@ -218,32 +165,7 @@ export const test = base.extend<{ cloud: Cloud }>({
             (s) =>
               s.owner_id === ME || (s.my_permission === 'manager' && s.my_status === 'accepted'),
           );
-        return page.evaluate(() =>
-          (window as unknown as MockWindow).__mock.sharing.owned.map(
-            (s) =>
-              ({
-                id: s['id'],
-                vault_id: s['vaultId'],
-                vault_name: s['vaultName'],
-                resource_type: s['resourceType'],
-                path_prefix: s['pathPrefix'],
-                display_name: s['displayName'],
-                owner_id: s['ownerId'],
-                owner_name: s['ownerName'],
-                created_at: s['createdAt'],
-                ...(s['expiresAt'] ? { expires_at: s['expiresAt'] } : {}),
-                ...(s['myPermission'] ? { my_permission: s['myPermission'] } : {}),
-                grants: ((s['grants'] as Record<string, unknown>[]) ?? []).map((g) => ({
-                  principal_type: g['principalType'],
-                  principal_id: g['principalId'],
-                  principal_name: g['principalName'],
-                  permission: g['permission'],
-                  status: g['status'],
-                  created_at: '',
-                })),
-              }) as CloudShare,
-          ),
-        );
+        return page.evaluate(() => (window as unknown as MockWindow).__mock.sharing.owned);
       },
     };
     await provide(cloud);

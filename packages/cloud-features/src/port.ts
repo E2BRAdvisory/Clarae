@@ -33,6 +33,21 @@ export interface DirectoryEntry {
   detail?: string | undefined;
 }
 
+/** Users of the directory (GET /directory/users) as the list shows them, by both adapters. */
+export function userEntries(users: Schemas['DirectoryUser'][]): DirectoryEntry[] {
+  return users.map((u) => ({
+    type: 'user',
+    id: u.id,
+    name: u.display_name || u.username,
+    detail: u.username,
+  }));
+}
+
+/** Groups of the directory (GET /directory/groups) as the list shows them, by both adapters. */
+export function groupEntries(groups: Schemas['DirectoryGroup'][]): DirectoryEntry[] {
+  return groups.map((g) => ({ type: 'group', id: g.id, name: g.name, detail: g.description }));
+}
+
 /** A new share of a whole cloud vault (no `path_prefix`) or of one of its folders. */
 export interface NewShare {
   vault_id: string;

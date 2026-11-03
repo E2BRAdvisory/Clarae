@@ -1,7 +1,7 @@
 // Figures shown in the Statistics tab. The calculations are pure; the panel supplies the data
 // (note text, file entry, local snapshots, cloud revisions, shares).
 import { extract, parseProperties, splitFrontmatter } from '@memobrain/markdown';
-import type { RevisionInfo, ShareGrant, ShareInfo } from '../app/api';
+import type { RevisionInfo, Share, ShareGrant } from '../app/api';
 
 const countWords = (s: string): number => (s.match(/[\p{L}\p{N}]+/gu) ?? []).length;
 
@@ -47,17 +47,18 @@ export function createdOf(
 }
 
 /** The grants of the shares of a vault that cover `path` (the whole vault, a folder, the file). */
-export function grantsCovering(shares: ShareInfo[], path: string): ShareGrant[] {
-  const covers = (s: ShareInfo): boolean =>
-    s.resourceType === 'vault' ||
-    (s.resourceType === 'folder' &&
-      (path === s.pathPrefix || path.startsWith(`${s.pathPrefix}/`))) ||
-    (s.resourceType === 'file' && path === s.pathPrefix);
+export function grantsCovering(shares: Share[], path: string): ShareGrant[] {
+  const covers = (s: Share): boolean =>
+    s.resource_type === 'vault' ||
+    (s.resource_type === 'folder' &&
+      s.path_prefix !== undefined &&
+      (path === s.path_prefix || path.startsWith(`${s.path_prefix}/`))) ||
+    (s.resource_type === 'file' && path === s.path_prefix);
   const seen = new Set<string>();
   const out: ShareGrant[] = [];
   for (const s of shares.filter(covers))
-    for (const g of s.grants) {
-      const key = `${g.principalType}:${g.principalId}`;
+    for (const g of s.grants ?? []) {
+      const key = `${g.principal_type}:${g.principal_id}`;
       if (g.status === 'declined' || seen.has(key)) continue;
       seen.add(key);
       out.push(g);
@@ -73,8 +74,8 @@ export function lastEditor(
   const newest = revisions[0];
   if (!newest) return null;
   if (newest.mine) return { kind: 'me' };
-  const g = grants.find((x) => x.principalType === 'user' && x.principalId === newest.authorId);
-  return g ? { kind: 'user', name: g.principalName } : { kind: 'unknown' };
+  const g = grants.find((x) => x.principal_type === 'user' && x.principal_id === newest.authorId);
+  return g ? { kind: 'user', name: g.principal_name } : { kind: 'unknown' };
 }
 
 export function formatSize(bytes: number): string {

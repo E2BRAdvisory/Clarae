@@ -2,65 +2,11 @@ package app
 
 import (
 	"context"
-	"time"
 
+	"memobrain/apps/desktop/internal/app/cloudapi"
 	"memobrain/apps/desktop/internal/crypto"
 	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
 )
-
-// CloudVault is a cloud vault of the account (the OpenAPI Vault, in the
-// bindings' naming). DeletedAt (RFC 3339) is set on a soft-deleted vault.
-type CloudVault struct {
-	ID         string    `json:"id"`
-	OwnerID    string    `json:"ownerId"`
-	Name       string    `json:"name"`
-	Kind       string    `json:"kind"`
-	TotalBytes int64     `json:"totalBytes"`
-	FileCount  int       `json:"fileCount"`
-	LastSeq    int64     `json:"lastSeq"`
-	CreatedAt  time.Time `json:"createdAt"`
-	DeletedAt  string    `json:"deletedAt,omitempty"`
-}
-
-func cloudVault(v transport.Vault) CloudVault {
-	out := CloudVault{
-		ID: v.Id.String(), OwnerID: v.OwnerId.String(), Name: v.Name, Kind: string(v.Kind),
-		TotalBytes: v.TotalBytes, FileCount: v.FileCount, LastSeq: v.LastSeq, CreatedAt: v.CreatedAt,
-	}
-	if v.DeletedAt != nil {
-		out.DeletedAt = v.DeletedAt.UTC().Format(time.RFC3339)
-	}
-	return out
-}
-
-func cloudVaults(vs []transport.Vault) []CloudVault {
-	out := make([]CloudVault, 0, len(vs))
-	for _, v := range vs {
-		out = append(out, cloudVault(v))
-	}
-	return out
-}
-
-// DeviceInfo is a registered device of the account.
-type DeviceInfo struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	Platform   string     `json:"platform"`
-	AppVersion string     `json:"appVersion"`
-	LastSeenAt *time.Time `json:"lastSeenAt"`
-	// CreatedAt is when the device registered; RevokedAt is set on a revoked one (RFC 3339, "" if not).
-	CreatedAt string `json:"createdAt"`
-	RevokedAt string `json:"revokedAt"`
-	Current   bool   `json:"current"`
-}
-
-// UsageInfo is the storage usage of the account.
-type UsageInfo struct {
-	UsedBytes  int64  `json:"usedBytes"`
-	QuotaBytes int64  `json:"quotaBytes"`
-	Level      string `json:"level"`
-}
 
 // ConflictTexts are the two versions shown side by side.
 type ConflictTexts struct {
@@ -96,33 +42,34 @@ func (s *SyncAPI) LinkNew(vaultID, name, kind, passphrase string) (syncpkg.LinkR
 	return r, bindingError(err)
 }
 
-// ListCloudVaults lists the account's vaults.
-func (s *SyncAPI) ListCloudVaults() ([]CloudVault, error) {
+// ListCloudVaults lists the account's vaults (the cloud-management bindings return the types of
+// the OpenAPI, ADR-0045 §6).
+func (s *SyncAPI) ListCloudVaults() ([]cloudapi.Vault, error) {
 	vs, err := s.app.sync.CloudVaults(context.Background())
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	return cloudVaults(vs), nil
+	return cloudapi.VaultsOf(vs), nil
 }
 
 // ListDeletedCloudVaults lists the account's soft-deleted vaults that can still
 // be restored (deleted within the server's retention period).
-func (s *SyncAPI) ListDeletedCloudVaults() ([]CloudVault, error) {
+func (s *SyncAPI) ListDeletedCloudVaults() ([]cloudapi.Vault, error) {
 	vs, err := s.app.sync.DeletedCloudVaults(context.Background())
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	return cloudVaults(vs), nil
+	return cloudapi.VaultsOf(vs), nil
 }
 
 // RenameCloudVault renames a cloud vault of the account. A vault of this
 // device linked to it shows the new name in its link; folders keep theirs.
-func (s *SyncAPI) RenameCloudVault(cloudVaultID, name string) (CloudVault, error) {
+func (s *SyncAPI) RenameCloudVault(cloudVaultID, name string) (cloudapi.Vault, error) {
 	v, err := s.app.sync.RenameCloudVault(context.Background(), cloudVaultID, name)
 	if err != nil {
-		return CloudVault{}, bindingError(err)
+		return cloudapi.Vault{}, bindingError(err)
 	}
-	return cloudVault(v), nil
+	return cloudapi.VaultOf(v), nil
 }
 
 // DeleteCloudVault soft-deletes a cloud vault of the account (restorable within
@@ -134,12 +81,12 @@ func (s *SyncAPI) DeleteCloudVault(cloudVaultID string) error {
 }
 
 // RestoreCloudVault restores a soft-deleted cloud vault within the retention period.
-func (s *SyncAPI) RestoreCloudVault(cloudVaultID string) (CloudVault, error) {
+func (s *SyncAPI) RestoreCloudVault(cloudVaultID string) (cloudapi.Vault, error) {
 	v, err := s.app.sync.RestoreCloudVault(context.Background(), cloudVaultID)
 	if err != nil {
-		return CloudVault{}, bindingError(err)
+		return cloudapi.Vault{}, bindingError(err)
 	}
-	return cloudVault(v), nil
+	return cloudapi.VaultOf(v), nil
 }
 
 // LinkExisting connects the open vault to an existing cloud vault (a new device).
@@ -209,30 +156,13 @@ func (s *SyncAPI) RestoreRevision(vaultID, relPath string, rev int) error {
 	return bindingError(s.app.sync.RestoreRevision(context.Background(), vaultID, relPath, rev))
 }
 
-// Devices lists the devices of the account.
-func (s *SyncAPI) Devices() ([]DeviceInfo, error) {
+// Devices lists the devices of the account; `current` marks the device the core runs on.
+func (s *SyncAPI) Devices() ([]cloudapi.AccountDevice, error) {
 	ds, err := s.app.sync.Devices(context.Background())
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	current := s.app.auth.State().DeviceID
-	out := make([]DeviceInfo, 0, len(ds))
-	for _, d := range ds {
-		v := ""
-		if d.AppVersion != nil {
-			v = *d.AppVersion
-		}
-		id := d.Id.String()
-		info := DeviceInfo{ID: id, Name: d.Name, Platform: d.Platform, AppVersion: v, LastSeenAt: d.LastSeenAt, Current: id == current}
-		if !d.CreatedAt.IsZero() {
-			info.CreatedAt = d.CreatedAt.UTC().Format(time.RFC3339)
-		}
-		if d.RevokedAt != nil {
-			info.RevokedAt = d.RevokedAt.UTC().Format(time.RFC3339)
-		}
-		out = append(out, info)
-	}
-	return out, nil
+	return cloudapi.DevicesOf(ds, s.app.auth.State().DeviceID), nil
 }
 
 // RevokeDevice revokes a device of the account.
@@ -241,9 +171,12 @@ func (s *SyncAPI) RevokeDevice(id string) error {
 }
 
 // Usage returns the storage usage of the account.
-func (s *SyncAPI) Usage() (UsageInfo, error) {
+func (s *SyncAPI) Usage() (cloudapi.Usage, error) {
 	u, err := s.app.sync.Usage(context.Background())
-	return UsageInfo{UsedBytes: u.UsedBytes, QuotaBytes: u.QuotaBytes, Level: string(u.Level)}, bindingError(err)
+	if err != nil {
+		return cloudapi.Usage{}, bindingError(err)
+	}
+	return cloudapi.UsageOf(u), nil
 }
 
 // VaultCryptoAPI exposes end-to-end encryption of private vaults (§2.5).

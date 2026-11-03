@@ -1,10 +1,15 @@
 // The CloudPort of the desktop and of the web workbench (ADR-0037 §2): cloud vaults, devices, usage
 // and sharing through the Go core's bindings. It lives here, not in @memobrain/cloud-features,
 // because it calls the workbench's binding facade (app/api.ts); the package only defines the
-// interface, so the dependency goes one way (workbench -> cloud-features). The bindings speak
-// camelCase DTOs; this adapter turns them into the OpenAPI types the components use.
+// interface, so the dependency goes one way (workbench -> cloud-features). The bindings return the
+// OpenAPI types the components use (ADR-0045 §6, asserted by bindingTypes.test.ts), so this adapter
+// passes them through: what is left is what only the core does (a vault is created by connecting a
+// folder, a delete keeps the local copy, accepting prepares the mount, the flags of the cached
+// configuration).
 import {
   CloudError,
+  groupEntries,
+  userEntries,
   type CloudCapabilities,
   type CloudDevice,
   type CloudPort,
@@ -18,89 +23,7 @@ import {
   type SharePermission,
   type ShareUpdate,
 } from '@memobrain/cloud-features/port';
-import {
-  api,
-  type CloudVault as BindingVault,
-  type DeviceInfo,
-  type DirectoryEntry as BindingDirectoryEntry,
-  type ShareInfo,
-  type UsageInfo,
-} from '../app/api';
-
-/** A binding DTO (camelCase, the core's CloudVault) as the API type the components use. */
-export function toApiVault(v: BindingVault): CloudVault {
-  return {
-    id: v.id,
-    owner_id: v.ownerId,
-    name: v.name,
-    kind: v.kind === 'private' ? 'private' : 'shared',
-    last_seq: v.lastSeq,
-    total_bytes: v.totalBytes,
-    file_count: v.fileCount,
-    created_at: v.createdAt,
-    ...(v.deletedAt ? { deleted_at: v.deletedAt } : {}),
-  };
-}
-
-const iso = (t: string | Date | null | undefined): string | undefined =>
-  !t ? undefined : t instanceof Date ? t.toISOString() : t;
-
-/** A device of the core (`current`: the device the core runs on). */
-export function toApiDevice(d: DeviceInfo): CloudDevice {
-  const seen = iso(d.lastSeenAt);
-  return {
-    id: d.id,
-    name: d.name,
-    platform: d.platform,
-    created_at: d.createdAt,
-    current: d.current,
-    ...(d.appVersion ? { app_version: d.appVersion } : {}),
-    ...(seen ? { last_seen_at: seen } : {}),
-    ...(d.revokedAt ? { revoked_at: d.revokedAt } : {}),
-  };
-}
-
-export function toApiUsage(u: UsageInfo): CloudUsage {
-  const level = (['ok', 'warning', 'critical', 'full'] as const).find((l) => l === u.level);
-  return { used_bytes: u.usedBytes, quota_bytes: u.quotaBytes, level: level ?? 'ok' };
-}
-
-/** A share of the core as the API describes it (empty strings are absent fields). */
-export function toApiShare(s: ShareInfo): Share {
-  return {
-    id: s.id,
-    vault_id: s.vaultId,
-    vault_name: s.vaultName,
-    resource_type: s.resourceType,
-    display_name: s.displayName,
-    owner_id: s.ownerId,
-    owner_name: s.ownerName,
-    created_at: s.createdAt,
-    ...(s.pathPrefix ? { path_prefix: s.pathPrefix } : {}),
-    ...(s.expiresAt ? { expires_at: s.expiresAt } : {}),
-    ...(s.myPermission ? { my_permission: s.myPermission } : {}),
-    ...(s.myStatus ? { my_status: s.myStatus } : {}),
-    // The core sends the grants to whoever may see them (owner, managers), an empty list otherwise.
-    grants: s.grants.map((g) => ({
-      principal_type: g.principalType,
-      principal_id: g.principalId,
-      principal_name: g.principalName,
-      permission: g.permission,
-      status: g.status,
-      created_at: s.createdAt,
-    })),
-  };
-}
-
-/**
- * A directory entry of the core as the console shows it (RestCloudPort): a user by display name
- * (or username) with the username below, a group by name with its description.
- */
-export function toDirectoryEntry(d: BindingDirectoryEntry): DirectoryEntry {
-  if (d.type === 'user')
-    return { type: 'user', id: d.id, name: d.displayName || d.name, detail: d.name };
-  return { type: 'group', id: d.id, name: d.name, detail: d.description || undefined };
-}
+import { api } from '../app/api';
 
 export class CoreCloudPort implements CloudPort {
   readonly id = 'core';
@@ -122,12 +45,12 @@ export class CoreCloudPort implements CloudPort {
     private readonly config = api.config,
   ) {}
 
-  async listVaults(): Promise<CloudVault[]> {
-    return (await this.sync.listCloudVaults()).map(toApiVault);
+  listVaults(): Promise<CloudVault[]> {
+    return this.sync.listCloudVaults();
   }
 
-  async listDeletedVaults(): Promise<CloudVault[]> {
-    return (await this.sync.listDeletedCloudVaults()).map(toApiVault);
+  listDeletedVaults(): Promise<CloudVault[]> {
+    return this.sync.listDeletedCloudVaults();
   }
 
   createVault(): Promise<CloudVault> {
@@ -136,60 +59,47 @@ export class CoreCloudPort implements CloudPort {
     );
   }
 
-  async renameVault(id: string, name: string): Promise<CloudVault> {
-    return toApiVault(await this.sync.renameCloudVault(id, name));
+  renameVault(id: string, name: string): Promise<CloudVault> {
+    return this.sync.renameCloudVault(id, name);
   }
 
   deleteVault(id: string): Promise<void> {
     return this.sync.deleteCloudVault(id);
   }
 
-  async restoreVault(id: string): Promise<CloudVault> {
-    return toApiVault(await this.sync.restoreCloudVault(id));
+  restoreVault(id: string): Promise<CloudVault> {
+    return this.sync.restoreCloudVault(id);
   }
 
-  async listDevices(): Promise<CloudDevice[]> {
-    return (await this.sync.devices()).map(toApiDevice);
+  listDevices(): Promise<CloudDevice[]> {
+    return this.sync.devices();
   }
 
   revokeDevice(id: string): Promise<void> {
     return this.sync.revokeDevice(id);
   }
 
-  async getUsage(): Promise<CloudUsage> {
-    return toApiUsage(await this.sync.usage());
+  getUsage(): Promise<CloudUsage> {
+    return this.sync.usage();
   }
 
-  async listShares(scope: 'owned' | 'received'): Promise<Share[]> {
-    return (await this.sharing.list(scope)).map(toApiShare);
+  listShares(scope: 'owned' | 'received'): Promise<Share[]> {
+    return this.sharing.list(scope);
   }
 
-  async createShare(input: NewShare): Promise<Share> {
-    const grants = (input.grants ?? []).map((g) => ({
-      principalType: g.principal_type,
-      principalId: g.principal_id,
-      permission: g.permission,
-    }));
-    return toApiShare(
-      await this.sharing.createCloud(
-        input.vault_id,
-        input.path_prefix ?? '',
-        input.display_name,
-        grants,
-        input.expires_at ?? '',
-      ),
+  /** A share of a cloud vault or of one of its folders, without a local copy (CreateCloudShare). */
+  createShare(input: NewShare): Promise<Share> {
+    return this.sharing.createCloud(
+      input.vault_id,
+      input.path_prefix ?? '',
+      input.display_name,
+      input.grants ?? [],
+      input.expires_at ?? '',
     );
   }
 
-  async updateShare(id: string, change: ShareUpdate): Promise<Share> {
-    return toApiShare(
-      await this.sharing.update(
-        id,
-        change.display_name ?? '',
-        change.expires_at ?? '',
-        change.clear_expiry ?? false,
-      ),
-    );
+  updateShare(id: string, change: ShareUpdate): Promise<Share> {
+    return this.sharing.update(id, change);
   }
 
   revokeShare(id: string): Promise<void> {
@@ -219,7 +129,8 @@ export class CoreCloudPort implements CloudPort {
   }
 
   async searchDirectory(type: PrincipalType, query: string): Promise<DirectoryEntry[]> {
-    return (await this.sharing.searchDirectory(type, query)).map(toDirectoryEntry);
+    if (type === 'user') return userEntries(await this.sharing.searchUsers(query));
+    return groupEntries(await this.sharing.searchGroups(query));
   }
 
   listMyGroups(): Promise<GroupMembership[]> {

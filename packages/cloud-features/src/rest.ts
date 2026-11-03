@@ -1,19 +1,21 @@
 // The console's CloudPort: the REST API through the generated client (ADR-0037 §2).
 import { unwrap, type MemobrainClient } from '@memobrain/api-client';
 import { featuresOf } from './featureFlags';
-import type {
-  CloudCapabilities,
-  CloudDevice,
-  CloudPort,
-  CloudUsage,
-  CloudVault,
-  DirectoryEntry,
-  GroupMembership,
-  NewShare,
-  PrincipalType,
-  Share,
-  SharePermission,
-  ShareUpdate,
+import {
+  groupEntries,
+  userEntries,
+  type CloudCapabilities,
+  type CloudDevice,
+  type CloudPort,
+  type CloudUsage,
+  type CloudVault,
+  type DirectoryEntry,
+  type GroupMembership,
+  type NewShare,
+  type PrincipalType,
+  type Share,
+  type SharePermission,
+  type ShareUpdate,
 } from './port';
 
 export interface RestCloudPortOptions {
@@ -154,17 +156,13 @@ export class RestCloudPort implements CloudPort {
   }
 
   async searchDirectory(type: PrincipalType, q: string): Promise<DirectoryEntry[]> {
-    if (type === 'user') {
-      const users = await unwrap(this.api.GET('/directory/users', { params: { query: { q } } }));
-      return users.map((u) => ({
-        type,
-        id: u.id,
-        name: u.display_name || u.username,
-        detail: u.username,
-      }));
-    }
-    const groups = await unwrap(this.api.GET('/directory/groups', { params: { query: { q } } }));
-    return groups.map((g) => ({ type, id: g.id, name: g.name, detail: g.description }));
+    if (type === 'user')
+      return userEntries(
+        await unwrap(this.api.GET('/directory/users', { params: { query: { q } } })),
+      );
+    return groupEntries(
+      await unwrap(this.api.GET('/directory/groups', { params: { query: { q } } })),
+    );
   }
 
   listMyGroups(): Promise<GroupMembership[]> {

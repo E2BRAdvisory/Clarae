@@ -139,11 +139,11 @@ export function StatsPanel({ vaultId }: { vaultId: string }) {
         )}
         {sharing === null &&
           grants.map((g) => (
-            <div key={`${g.principalType}:${g.principalId}`} className="item">
-              {g.principalName}
+            <div key={`${g.principal_type}:${g.principal_id}`} className="item">
+              {g.principal_name}
               <span className="muted">
                 {' '}
-                · {g.principalType === 'group' ? `${t('stats.group')} · ` : ''}
+                · {g.principal_type === 'group' ? `${t('stats.group')} · ` : ''}
                 {t(`sharing.level_${g.permission}`)}
               </span>
             </div>

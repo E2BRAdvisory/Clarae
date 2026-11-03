@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { api, linkInfo, type MountState, type ShareInfo } from '../app/api';
+import { api, linkInfo, type MountState, type Share } from '../app/api';
 import { initI18n } from '../i18n';
 import { configurePlatform } from '../platform';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
@@ -28,20 +28,17 @@ const wrap = (ui: ReactNode) => (
 let mock: WailsMock;
 let vaultId: string;
 
-const invitation = (over: Partial<ShareInfo> = {}): ShareInfo => ({
+const invitation = (over: Partial<Share> = {}): Share => ({
   id: 'sh-1',
-  vaultId: 'cloud-1',
-  vaultName: 'Company',
-  resourceType: 'folder',
-  pathPrefix: '',
-  displayName: 'Team docs',
-  ownerId: 'u-ada',
-  ownerName: 'ada',
-  createdAt: new Date().toISOString(),
-  expiresAt: '',
-  myPermission: 'editor',
-  myStatus: 'pending',
-  grants: [],
+  vault_id: 'cloud-1',
+  vault_name: 'Company',
+  resource_type: 'folder',
+  display_name: 'Team docs',
+  owner_id: 'u-ada',
+  owner_name: 'ada',
+  created_at: new Date().toISOString(),
+  my_permission: 'editor',
+  my_status: 'pending',
   ...over,
 });
 
@@ -56,24 +53,12 @@ beforeEach(async () => {
   useManaged.setState({ ...unmanaged });
   useSharing.setState({ shareTarget: null, revoked: null });
   useSync.setState({ info: {}, status: {}, conflicts: {} });
-  mock.sharing.directory.push(
-    {
-      type: 'user',
-      id: 'u-bob',
-      name: 'bob',
-      label: 'Bob Smith (bob)',
-      displayName: 'Bob Smith',
-      description: '',
-    },
-    {
-      type: 'group',
-      id: 'g-team',
-      name: 'engineers',
-      label: 'engineers',
-      displayName: '',
-      description: 'The engineering team',
-    },
-  );
+  mock.sharing.users.push({ id: 'u-bob', username: 'bob', display_name: 'Bob Smith' });
+  mock.sharing.groups.push({
+    id: 'g-team',
+    name: 'engineers',
+    description: 'The engineering team',
+  });
 });
 
 describe('invitations and mounts', () => {
@@ -112,7 +97,7 @@ describe('invitations and mounts', () => {
   });
 
   it('opens a mount as a vault named after the share, read-only for a viewer', async () => {
-    mock.sharing.invitations.push(invitation({ myPermission: 'viewer' }));
+    mock.sharing.invitations.push(invitation({ my_permission: 'viewer' }));
     mock.sharing.mountFiles.set('sh-1', { 'Plan.md': '# plan' });
     render(wrap(<SharingPanel />));
     fireEvent.click(await screen.findByRole('button', { name: 'Accept Team docs' }));
@@ -132,23 +117,23 @@ describe('invitations and mounts', () => {
     mock.sync.cloudVaults.push(
       {
         id: 'cloud-team',
-        ownerId: 'u-me',
+        owner_id: 'u-me',
         name: 'Team',
         kind: 'shared',
-        totalBytes: 0,
-        fileCount: 0,
-        lastSeq: 1,
-        createdAt: '2026-10-01T10:00:00Z',
+        total_bytes: 0,
+        file_count: 0,
+        last_seq: 1,
+        created_at: '2026-10-01T10:00:00Z',
       },
       {
         id: 'cloud-diary',
-        ownerId: 'u-me',
+        owner_id: 'u-me',
         name: 'Diary',
         kind: 'private',
-        totalBytes: 0,
-        fileCount: 0,
-        lastSeq: 1,
-        createdAt: '2026-10-01T10:00:00Z',
+        total_bytes: 0,
+        file_count: 0,
+        last_seq: 1,
+        created_at: '2026-10-01T10:00:00Z',
       },
     );
     render(wrap(<SharingPanel />));
@@ -165,8 +150,9 @@ describe('invitations and mounts', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
     expect(await screen.findByRole('region', { name: 'Team' })).toBeInTheDocument();
     expect(mock.sharing.owned).toMatchObject([
-      { vaultId: 'cloud-team', resourceType: 'vault', displayName: 'Team', myPermission: '' },
+      { vault_id: 'cloud-team', resource_type: 'vault', display_name: 'Team' },
     ]);
+    expect(mock.sharing.owned[0]).not.toHaveProperty('my_permission'); // the owner's share
   });
 
   it('honours the sharing flag of the configuration', async () => {
@@ -289,11 +275,11 @@ describe('Share dialog', () => {
     await waitFor(() => expect(mock.sharing.owned).toHaveLength(1));
     const created = mock.sharing.owned[0];
     expect(created).toMatchObject({
-      resourceType: 'folder',
-      pathPrefix: 'Projects/Alfa',
-      displayName: 'Alfa',
+      resource_type: 'folder',
+      path_prefix: 'Projects/Alfa',
+      display_name: 'Alfa',
     });
-    expect(created?.grants.map((g) => [g.principalType, g.permission])).toEqual([
+    expect(created?.grants?.map((g) => [g.principal_type, g.permission])).toEqual([
       ['user', 'editor'],
       ['group', 'viewer'],
     ]);
@@ -304,8 +290,8 @@ describe('Share dialog', () => {
   it('changes a level, removes a recipient, renames and revokes a share', async () => {
     await connectedVault();
     await api.sharing.create(vaultId, 'Docs', true, 'Docs share', [
-      { principalType: 'user', principalId: 'u-bob', permission: 'viewer' },
-      { principalType: 'group', principalId: 'g-team', permission: 'editor' },
+      { principal_type: 'user', principal_id: 'u-bob', permission: 'viewer' },
+      { principal_type: 'group', principal_id: 'g-team', permission: 'editor' },
     ]);
     render(wrap(<ShareDialog vaultId={vaultId} target={{ path: 'Docs', isDir: true }} />));
     fireEvent.click(await screen.findByRole('button', { name: 'Access to Docs share' }));
@@ -313,7 +299,7 @@ describe('Share dialog', () => {
     fireEvent.change(within(region).getByLabelText('Permission of bob'), {
       target: { value: 'manager' },
     });
-    await waitFor(() => expect(mock.sharing.owned[0]?.grants[0]?.permission).toBe('manager'));
+    await waitFor(() => expect(mock.sharing.owned[0]?.grants?.[0]?.permission).toBe('manager'));
     fireEvent.click(within(region).getByRole('button', { name: 'Remove engineers' }));
     await waitFor(() => expect(mock.sharing.owned[0]?.grants).toHaveLength(1));
 
@@ -321,7 +307,7 @@ describe('Share dialog', () => {
     const edit = screen.getByRole('dialog', { name: 'Edit “Docs share”' });
     fireEvent.change(within(edit).getByLabelText('Name'), { target: { value: 'Handbook' } });
     fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(mock.sharing.owned[0]?.displayName).toBe('Handbook'));
+    await waitFor(() => expect(mock.sharing.owned[0]?.display_name).toBe('Handbook'));
 
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke Handbook' }));
     const confirm = screen.getByRole('dialog', { name: 'Revoke “Handbook”?' });

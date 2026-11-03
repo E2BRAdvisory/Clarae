@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"memobrain/apps/desktop/internal/app/cloudapi"
 	"memobrain/apps/desktop/internal/config"
 	"memobrain/apps/desktop/internal/features"
 	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/apiclient"
 )
 
 // ErrReadOnly is the error of a write on a vault the user may only read.
@@ -56,103 +56,24 @@ func canonicalShareID(shareID string) (string, error) {
 	return id.String(), nil
 }
 
-// GrantInfo is one recipient of a share.
-type GrantInfo struct {
-	PrincipalType string `json:"principalType"` // user | group
-	PrincipalID   string `json:"principalId"`
-	PrincipalName string `json:"principalName"`
-	Permission    string `json:"permission"`
-	Status        string `json:"status"`
-}
-
-// ShareInfo is a share as the UI lists it.
-type ShareInfo struct {
-	ID           string      `json:"id"`
-	VaultID      string      `json:"vaultId"`
-	VaultName    string      `json:"vaultName"`
-	ResourceType string      `json:"resourceType"`
-	PathPrefix   string      `json:"pathPrefix"`
-	DisplayName  string      `json:"displayName"`
-	OwnerID      string      `json:"ownerId"`
-	OwnerName    string      `json:"ownerName"`
-	CreatedAt    string      `json:"createdAt"`
-	ExpiresAt    string      `json:"expiresAt"`
-	MyPermission string      `json:"myPermission"`
-	MyStatus     string      `json:"myStatus"`
-	Grants       []GrantInfo `json:"grants"`
-}
-
-// GrantInput is a recipient given while creating a share.
-type GrantInput struct {
-	PrincipalType string `json:"principalType"`
-	PrincipalID   string `json:"principalId"`
-	Permission    string `json:"permission"`
-}
-
-// DirectoryEntry is a user or group found by the directory search, with the fields of the API.
-type DirectoryEntry struct {
-	Type string `json:"type"` // user | group
-	ID   string `json:"id"`
-	// Name is a user's username, a group's name.
-	Name string `json:"name"`
-	// Label is what a list shows: "Display name (username)" or the username, a group's name.
-	Label string `json:"label"`
-	// DisplayName is a user's display name ("" when none is set).
-	DisplayName string `json:"displayName"`
-	// Description is a group's description ("" when none is set).
-	Description string `json:"description"`
-}
-
-func toShareInfo(s transport.Share) ShareInfo {
-	out := ShareInfo{
-		ID: s.Id.String(), VaultID: s.VaultId.String(), VaultName: s.VaultName, ResourceType: string(s.ResourceType), PathPrefix: deref(s.PathPrefix),
-		DisplayName: s.DisplayName, OwnerID: s.OwnerId.String(), OwnerName: s.OwnerName, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339),
-		MyPermission: string(deref(s.MyPermission)), MyStatus: string(deref(s.MyStatus)), Grants: []GrantInfo{},
-	}
-	if s.Id == (uuid.UUID{}) {
-		out.ID, out.VaultID, out.OwnerID = "", "", "" // the zero Share of a failed call
-	}
-	if s.ExpiresAt != nil {
-		out.ExpiresAt = s.ExpiresAt.UTC().Format(time.RFC3339)
-	}
-	for _, g := range deref(s.Grants) {
-		out.Grants = append(out.Grants, toGrantInfo(g))
-	}
-	return out
-}
-
-func toGrantInfo(g transport.Grant) GrantInfo {
-	return GrantInfo{PrincipalType: string(g.PrincipalType), PrincipalID: g.PrincipalId.String(), PrincipalName: g.PrincipalName, Permission: string(g.Permission), Status: string(g.Status)}
-}
-
-func deref[T any](p *T) T {
-	var zero T
-	if p == nil {
-		return zero
-	}
-	return *p
-}
-
 // SharingAPI exposes shares and mounts to the frontend (§2.6.4). Changes also arrive as
-// shares:changed, mount:revoked and vault events.
+// shares:changed, mount:revoked and vault events. Shares, grants and directory entries are the
+// OpenAPI types of package cloudapi (ADR-0045 §6): the UI gets the JSON of the REST API, as the
+// console does; mounts are a state of this device (sync.MountState).
 type SharingAPI struct{ app *App }
 
 // NewSharingAPI binds the API.
 func NewSharingAPI(a *App) *SharingAPI { return &SharingAPI{app: a} }
 
 // Invitations lists the shares waiting for the user's answer.
-func (s *SharingAPI) Invitations() ([]ShareInfo, error) {
+func (s *SharingAPI) Invitations() ([]cloudapi.Share, error) {
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
 	shares, err := s.app.sync.Invitations(ctx)
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	out := make([]ShareInfo, 0, len(shares))
-	for _, sh := range shares {
-		out = append(out, toShareInfo(sh))
-	}
-	return out, nil
+	return cloudapi.SharesOf(shares), nil
 }
 
 // Mounts lists the accepted shares with the state of their folders on this device.
@@ -271,14 +192,14 @@ func uniqueDir(parent, name string) string {
 }
 
 // VaultShares lists the shares of the open vault's cloud copy that the user owns.
-func (s *SharingAPI) VaultShares(vaultID string) ([]ShareInfo, error) {
+func (s *SharingAPI) VaultShares(vaultID string) ([]cloudapi.Share, error) {
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
 	shares, err := s.app.sync.VaultShares(ctx, vaultID)
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	return toShareInfos(shares), nil
+	return cloudapi.SharesOf(shares), nil
 }
 
 // parseExpiry reads an RFC 3339 expiry ("" for none).
@@ -294,85 +215,72 @@ func parseExpiry(expiresAt string) (*time.Time, error) {
 }
 
 // newGrants converts the recipients given by the UI.
-func newGrants(grants []GrantInput) ([]transport.NewGrant, error) {
+func newGrants(grants []cloudapi.NewGrant) []transport.NewGrant {
 	gs := make([]transport.NewGrant, 0, len(grants))
 	for _, g := range grants {
-		pid, err := uuid.Parse(g.PrincipalID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid: principal id %q", g.PrincipalID)
-		}
-		gs = append(gs, transport.NewGrant{PrincipalType: apiclient.NewGrantPrincipalType(g.PrincipalType), PrincipalId: pid, Permission: apiclient.SharePermission(g.Permission)})
+		gs = append(gs, g.API())
 	}
-	return gs, nil
+	return gs
 }
 
-func toShareInfos(shares []transport.Share) []ShareInfo {
-	out := make([]ShareInfo, 0, len(shares))
-	for _, sh := range shares {
-		out = append(out, toShareInfo(sh))
+// shareResult is the result of a binding that returns one share: the error alone on failure.
+func shareResult(sh transport.Share, err error) (cloudapi.Share, error) {
+	if err != nil {
+		return cloudapi.Share{}, bindingError(err)
 	}
-	return out
+	return cloudapi.ShareOf(sh), nil
 }
 
 // CreateShare shares a folder or a document (isDir false) of the open, connected vault; an empty
 // path with isDir shares the whole vault. expiresAt is RFC 3339 or "".
-func (s *SharingAPI) CreateShare(vaultID, path string, isDir bool, name string, grants []GrantInput, expiresAt string) (ShareInfo, error) {
+func (s *SharingAPI) CreateShare(vaultID, path string, isDir bool, name string, grants []cloudapi.NewGrant, expiresAt string) (cloudapi.Share, error) {
 	exp, err := parseExpiry(expiresAt)
 	if err != nil {
-		return ShareInfo{}, err
-	}
-	gs, err := newGrants(grants)
-	if err != nil {
-		return ShareInfo{}, err
+		return cloudapi.Share{}, err
 	}
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
-	sh, err := s.app.sync.CreateShare(ctx, vaultID, path, isDir, name, gs, exp)
-	return toShareInfo(sh), bindingError(err)
+	return shareResult(s.app.sync.CreateShare(ctx, vaultID, path, isDir, name, newGrants(grants), exp))
 }
 
 // ListShares lists the shares of the account: "owned" (created or managed by the user, on any of
 // their vaults) or "received" (invitations, accepted and declined ones).
-func (s *SharingAPI) ListShares(scope string) ([]ShareInfo, error) {
+func (s *SharingAPI) ListShares(scope string) ([]cloudapi.Share, error) {
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
 	shares, err := s.app.sync.ListShares(ctx, scope)
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	return toShareInfos(shares), nil
+	return cloudapi.SharesOf(shares), nil
 }
 
 // CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud
 // vault id and without a local copy (Settings > Sharing, like the console). The caller owns the
 // vault or manages a share of it and shares inside that share (ADR-0041 §8): the server decides.
 // A private vault cannot be shared (D-02). expiresAt is RFC 3339 or "".
-func (s *SharingAPI) CreateCloudShare(cloudVaultID, pathPrefix, name string, grants []GrantInput, expiresAt string) (ShareInfo, error) {
+func (s *SharingAPI) CreateCloudShare(cloudVaultID, pathPrefix, name string, grants []cloudapi.NewGrant, expiresAt string) (cloudapi.Share, error) {
 	exp, err := parseExpiry(expiresAt)
 	if err != nil {
-		return ShareInfo{}, err
-	}
-	gs, err := newGrants(grants)
-	if err != nil {
-		return ShareInfo{}, err
+		return cloudapi.Share{}, err
 	}
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
-	sh, err := s.app.sync.CreateCloudShare(ctx, cloudVaultID, pathPrefix, name, gs, exp)
-	return toShareInfo(sh), bindingError(err)
+	return shareResult(s.app.sync.CreateCloudShare(ctx, cloudVaultID, pathPrefix, name, newGrants(grants), exp))
 }
 
-// UpdateShare renames a share and sets (RFC 3339) or, with clearExpiry, removes its expiry (owner
-// or manager). An empty name keeps the current one, an empty expiresAt the current expiry.
-func (s *SharingAPI) UpdateShare(shareID, name, expiresAt string, clearExpiry bool) (ShareInfo, error) {
-	exp, err := parseExpiry(expiresAt)
-	if err != nil {
-		return ShareInfo{}, err
+// UpdateShare renames a share and sets or, with clear_expiry, removes its expiry (owner or
+// manager): the body of PATCH /shares/{id}. An absent or empty name keeps the current one, an
+// absent expiry the current expiry.
+func (s *SharingAPI) UpdateShare(shareID string, change cloudapi.UpdateShare) (cloudapi.Share, error) {
+	name := ""
+	if change.DisplayName != nil {
+		name = *change.DisplayName
 	}
+	clear := change.ClearExpiry != nil && *change.ClearExpiry
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
-	sh, err := s.app.sync.UpdateShare(ctx, shareID, name, exp, clearExpiry)
-	return toShareInfo(sh), bindingError(err)
+	return shareResult(s.app.sync.UpdateShare(ctx, shareID, name, change.ExpiresAt, clear))
 }
 
 func (s *SharingAPI) client() (*transport.Client, error) {
@@ -384,15 +292,14 @@ func (s *SharingAPI) client() (*transport.Client, error) {
 }
 
 // Share returns one share with its grants (owner and managers).
-func (s *SharingAPI) Share(shareID string) (ShareInfo, error) {
+func (s *SharingAPI) Share(shareID string) (cloudapi.Share, error) {
 	c, err := s.client()
 	if err != nil {
-		return ShareInfo{}, err
+		return cloudapi.Share{}, err
 	}
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
-	sh, err := c.GetShare(ctx, shareID)
-	return toShareInfo(sh), bindingError(err)
+	return shareResult(c.GetShare(ctx, shareID))
 }
 
 // RevokeShare ends a share (owner).
@@ -407,18 +314,18 @@ func (s *SharingAPI) RevokeShare(shareID string) error {
 }
 
 // SetGrant adds a recipient or changes their level.
-func (s *SharingAPI) SetGrant(shareID, principalType, principalID, permission string) (GrantInfo, error) {
+func (s *SharingAPI) SetGrant(shareID, principalType, principalID, permission string) (cloudapi.Grant, error) {
 	c, err := s.client()
 	if err != nil {
-		return GrantInfo{}, err
+		return cloudapi.Grant{}, err
 	}
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
 	g, err := c.PutGrant(ctx, shareID, principalType, principalID, permission)
 	if err != nil {
-		return GrantInfo{}, bindingError(err)
+		return cloudapi.Grant{}, bindingError(err)
 	}
-	return toGrantInfo(g), nil
+	return cloudapi.GrantOf(g), nil
 }
 
 // RemoveGrant takes a recipient out of a share.
@@ -432,52 +339,35 @@ func (s *SharingAPI) RemoveGrant(shareID, principalType, principalID string) err
 	return bindingError(c.DeleteGrant(ctx, shareID, principalType, principalID))
 }
 
-// SearchDirectory searches the users (principalType "user") or the groups ("group") to share
-// with: one request to the directory of that kind, as the console does, so a failure of one kind
-// does not hide the other.
-func (s *SharingAPI) SearchDirectory(principalType, query string) ([]DirectoryEntry, error) {
-	if principalType != "user" && principalType != "group" {
-		return nil, fmt.Errorf("invalid: principal type %q", principalType)
-	}
+// SearchDirectoryUsers finds users to share with (GET /directory/users): one request to the
+// directory of users, as the console makes, so a failure of the groups does not hide them.
+func (s *SharingAPI) SearchDirectoryUsers(query string) ([]cloudapi.DirectoryUser, error) {
 	c, err := s.client()
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
-	if principalType == "group" {
-		groups, err := c.SearchGroups(ctx, query)
-		if err != nil {
-			return nil, bindingError(err)
-		}
-		return groupEntries(groups), nil
-	}
 	users, err := c.SearchUsers(ctx, query)
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	return userEntries(users), nil
+	return cloudapi.DirectoryUsersOf(users), nil
 }
 
-func userEntries(users []transport.DirectoryUser) []DirectoryEntry {
-	out := make([]DirectoryEntry, 0, len(users))
-	for _, u := range users {
-		dn := deref(u.DisplayName)
-		label := u.Username
-		if dn != "" {
-			label = dn + " (" + u.Username + ")"
-		}
-		out = append(out, DirectoryEntry{Type: "user", ID: u.Id.String(), Name: u.Username, Label: label, DisplayName: dn})
+// SearchDirectoryGroups finds groups to share with (GET /directory/groups).
+func (s *SharingAPI) SearchDirectoryGroups(query string) ([]cloudapi.DirectoryGroup, error) {
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	return out
-}
-
-func groupEntries(groups []transport.DirectoryGroup) []DirectoryEntry {
-	out := make([]DirectoryEntry, 0, len(groups))
-	for _, g := range groups {
-		out = append(out, DirectoryEntry{Type: "group", ID: g.Id.String(), Name: g.Name, Label: g.Name, Description: deref(g.Description)})
+	ctx, cancel := s.app.uiCtx()
+	defer cancel()
+	groups, err := c.SearchGroups(ctx, query)
+	if err != nil {
+		return nil, bindingError(err)
 	}
-	return out
+	return cloudapi.DirectoryGroupsOf(groups), nil
 }
 
 // ConfigAPI exposes the configuration distributed by the cloud (§2.6.6).

@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import type { RevisionInfo, ShareGrant, ShareInfo } from '../app/api';
+import type { RevisionInfo, Share, ShareGrant } from '../app/api';
 import { createdOf, formatSize, grantsCovering, lastEditor, textFigures } from './noteStats';
 
 const grant = (id: string, name: string, over: Partial<ShareGrant> = {}): ShareGrant => ({
-  principalType: 'user',
-  principalId: id,
-  principalName: name,
+  principal_type: 'user',
+  principal_id: id,
+  principal_name: name,
   permission: 'editor',
   status: 'accepted',
+  created_at: '2026-01-01T00:00:00Z',
   ...over,
 });
-const share = (over: Partial<ShareInfo>): ShareInfo =>
+const share = (over: Partial<Share>): Share =>
   ({
     id: 's',
-    vaultId: 'v',
-    resourceType: 'vault',
-    pathPrefix: '',
+    vault_id: 'v',
+    resource_type: 'vault',
     grants: [],
     ...over,
-  }) as ShareInfo;
+  }) as Share;
 const rev = (over: Partial<RevisionInfo>): RevisionInfo =>
   ({ rev: 1, authorId: 'u1', mine: false, time: '2026-01-01T00:00:00Z', ...over }) as RevisionInfo;
 
@@ -61,28 +61,28 @@ describe('sharing', () => {
   it('collects the grants of the shares that cover the note, once per recipient', () => {
     const shares = [
       share({
-        resourceType: 'vault',
-        grants: [grant('u1', 'Ada'), grant('g1', 'Team', { principalType: 'group' })],
+        resource_type: 'vault',
+        grants: [grant('u1', 'Ada'), grant('g1', 'Team', { principal_type: 'group' })],
       }),
       share({
-        resourceType: 'folder',
-        pathPrefix: 'Docs',
+        resource_type: 'folder',
+        path_prefix: 'Docs',
         grants: [grant('u1', 'Ada'), grant('u2', 'Bob')],
       }),
-      share({ resourceType: 'file', pathPrefix: 'Other/x.md', grants: [grant('u3', 'Cy')] }),
-      share({ resourceType: 'folder', pathPrefix: 'Doc', grants: [grant('u4', 'Di')] }), // not a parent of Docs/
+      share({ resource_type: 'file', path_prefix: 'Other/x.md', grants: [grant('u3', 'Cy')] }),
+      share({ resource_type: 'folder', path_prefix: 'Doc', grants: [grant('u4', 'Di')] }), // not a parent of Docs/
       share({
-        resourceType: 'folder',
-        pathPrefix: 'Docs',
+        resource_type: 'folder',
+        path_prefix: 'Docs',
         grants: [grant('u5', 'Ed', { status: 'declined' })],
       }),
     ];
-    expect(grantsCovering(shares, 'Docs/a.md').map((g) => g.principalName)).toEqual([
+    expect(grantsCovering(shares, 'Docs/a.md').map((g) => g.principal_name)).toEqual([
       'Ada',
       'Team',
       'Bob',
     ]);
-    expect(grantsCovering(shares, 'Other/x.md').map((g) => g.principalName)).toEqual([
+    expect(grantsCovering(shares, 'Other/x.md').map((g) => g.principal_name)).toEqual([
       'Ada',
       'Team',
       'Cy',

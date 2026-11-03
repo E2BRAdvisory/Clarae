@@ -13,7 +13,7 @@ import {
   type DirectoryEntry,
 } from '@memobrain/cloud-features';
 import '@memobrain/cloud-features/workbench.css';
-import { api, type GrantInput, type PermissionLevel } from '../app/api';
+import { api, type NewGrant, type PermissionLevel } from '../app/api';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { useSharing, type ShareTarget } from '../state/sharing';
 import { infoOf, useSync } from '../state/sync';
@@ -76,9 +76,9 @@ function NewShare({
     setBusy(true);
     setError('');
     try {
-      const grants: GrantInput[] = picked.map((p) => ({
-        principalType: p.entry.type,
-        principalId: p.entry.id,
+      const grants: NewGrant[] = picked.map((p) => ({
+        principal_type: p.entry.type,
+        principal_id: p.entry.id,
         permission: p.permission,
       }));
       await api.sharing.create(vaultId, target.path, target.isDir, name.trim(), grants);

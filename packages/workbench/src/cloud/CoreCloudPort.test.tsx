@@ -7,8 +7,7 @@ import {
   seedVaults,
   type CloudSeed,
 } from '@memobrain/cloud-features/testing';
-import type { Share } from '@memobrain/cloud-features';
-import { api, type ShareInfo } from '../app/api';
+import { api } from '../app/api';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { CloudSection } from '../settings/CloudSection';
@@ -17,21 +16,14 @@ import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import { CoreCloudPort } from './CoreCloudPort';
 
-/** A Wails mock signed in to a cloud holding these vaults (the API seed, as binding DTOs). */
+/**
+ * A Wails mock signed in to a cloud holding these vaults. The bindings speak the API's types
+ * (ADR-0045 §6), so the seed of the shared suites goes into the mock as it is.
+ */
 async function signedInMock(seed: Parameters<typeof seedVaults>[0]): Promise<WailsMock> {
   const mock = installWailsMock();
   await api.auth.login('https://memobrain.test');
-  mock.sync.cloudVaults = seedVaults(seed).map((v) => ({
-    id: v.id,
-    ownerId: v.owner_id,
-    name: v.name,
-    kind: v.kind,
-    totalBytes: v.total_bytes,
-    fileCount: v.file_count,
-    lastSeq: v.last_seq,
-    createdAt: v.created_at,
-    ...(v.deleted_at ? { deletedAt: v.deleted_at } : {}),
-  }));
+  mock.sync.cloudVaults = seedVaults(seed);
   return mock;
 }
 
@@ -44,72 +36,17 @@ cloudVaultsTableSuite({
   },
 });
 
-/** An API share as the core's DTO. */
-function shareInfo(s: Share): ShareInfo {
-  return {
-    id: s.id,
-    vaultId: s.vault_id,
-    vaultName: s.vault_name,
-    resourceType: s.resource_type,
-    pathPrefix: s.path_prefix ?? '',
-    displayName: s.display_name,
-    ownerId: s.owner_id,
-    ownerName: s.owner_name,
-    createdAt: s.created_at,
-    expiresAt: s.expires_at ?? '',
-    myPermission: s.my_permission ?? '',
-    myStatus: s.my_status ?? '',
-    grants: (s.grants ?? []).map((g) => ({
-      principalType: g.principal_type,
-      principalId: g.principal_id,
-      principalName: g.principal_name,
-      permission: g.permission,
-      status: g.status,
-    })),
-  };
-}
-
 /** The account seed of the shared suite behind the Wails mock. */
 async function accountMock(seed: CloudSeed): Promise<WailsMock> {
   const mock = await signedInMock(seed.vaults ?? []);
-  mock.sync.devices = (seed.devices ?? []).map((d) => ({
-    id: d.id,
-    name: d.name,
-    platform: d.platform,
-    appVersion: d.app_version ?? '',
-    lastSeenAt: d.last_seen_at ?? null,
-    createdAt: d.created_at,
-    revokedAt: d.revoked_at ?? '',
-    current: Boolean(d.current),
-  }));
-  if (seed.usage)
-    mock.sync.usage = {
-      usedBytes: seed.usage.used_bytes,
-      quotaBytes: seed.usage.quota_bytes,
-      level: seed.usage.level,
-    };
-  mock.sharing.owned = (seed.owned ?? []).map(shareInfo);
-  const received = (seed.received ?? []).map(shareInfo);
-  mock.sharing.invitations = received.filter((s) => s.myStatus === 'pending');
-  mock.sharing.received = received.filter((s) => s.myStatus !== 'pending');
-  mock.sharing.directory = [
-    ...(seed.users ?? []).map((u) => ({
-      type: 'user' as const,
-      id: u.id,
-      name: u.username,
-      label: u.display_name ? `${u.display_name} (${u.username})` : u.username,
-      displayName: u.display_name ?? '',
-      description: '',
-    })),
-    ...(seed.groups ?? []).map((g) => ({
-      type: 'group' as const,
-      id: g.id,
-      name: g.name,
-      label: g.name,
-      displayName: '',
-      description: g.description ?? '',
-    })),
-  ];
+  mock.sync.devices = (seed.devices ?? []).map((d) => ({ ...d, current: Boolean(d.current) }));
+  if (seed.usage) mock.sync.usage = seed.usage;
+  mock.sharing.owned = structuredClone(seed.owned ?? []);
+  const received = structuredClone(seed.received ?? []);
+  mock.sharing.invitations = received.filter((s) => s.my_status === 'pending');
+  mock.sharing.received = received.filter((s) => s.my_status !== 'pending');
+  mock.sharing.users = [...(seed.users ?? [])];
+  mock.sharing.groups = [...(seed.groups ?? [])];
   if (seed.features) mock.config = { ...mock.config, features: seed.features };
   return mock;
 }
