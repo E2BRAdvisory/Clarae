@@ -713,6 +713,24 @@ Punti lasciati aperti, con la motivazione:
 - **Liste paginate:** il cambio di forma di `/shares` e `/shared-with-me` richiede di aggiornare i desktop prima del cloud (CHANGELOG, «Compatibilità»).
 - **Specifica:** ADR-0046 devia da `Specifications.md` §3.4.4 e introduce `since_id`; ADR-0045 e ADR-0046 vanno recepiti dal proprietario.
 
+## 13-sexies. M13 — Apertura dei file per tipo e presentazioni Marp
+
+Due richieste del 2026-11-03. I file che l'app non mostra devono aprirsi con l'applicazione del sistema sul desktop e scaricarsi nel browser. Servono inoltre le presentazioni [Marp](https://marp.app/) in file `.marp`, con editor e anteprima affiancati ed export. La decisione è [ADR-0047](adr/0047-apertura-file-per-tipo-e-presentazioni-marp.md), accettato il 2026-11-03: devia da `Specifications.md` (§2.2.1, §3.4.5, §3.4.6) e supera in parte l'alternativa «file di slide dedicati» di ADR-0027. Ogni onda si chiude con `task ci` verde e i commit `[M13-Wn.m]`.
+
+| Onda                              | Contenuto                                                                                                                                                                                                                                                                                                                                                           | Stato              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| W1.1 — decisione                  | ADR-0047: routing di apertura per tipo, `.marp` come Markdown per il core, Marp entro V-02 (solo temi integrati, niente CSS dell'autore, Shadow DOM), offline, export HTML/PDF e PPTX rinviato                                                                                                                                                                      | fatta (2026-11-03) |
+| W1.2 — Fase 1, apertura per tipo  | capability `openWithSystemApp`, `Host.OpenPath`/`RevealPath`, binding `OpenWithSystemApp`, `RevealInFolder` e `DownloadFile`; eseguibili mai aperti (`pathrules.IsExecutable`); router `openFile` agganciato a `openNote`; dialog «Apertura File» nel browser; icone per tipo e menu dell'explorer; e2e sul mock e sul core WASM                                    | fatta (2026-11-03) |
+| W1.3 — Fase 2, presentazioni Marp | `KindOf(".marp") = md` (unione a 3 vie, indice, link); `@marp-team/marp-core` 5.0.2 in un chunk lazy; sanitizzazione dedicata; vista divisa con anteprima live in Shadow DOM, slide del cursore, presentazione; comandi `marp:*`, export HTML e PDF, PPTX non ancora disponibile; flag `presentations` del Config Profile; e2e sul mock e sul core WASM, senza rete | fatta (2026-11-03) |
+
+**Punti lasciati aperti:**
+
+- **Export PPTX:** non disponibile. Marp CLI lo produce con un Chromium headless, che non c'è né in Wails né nel browser.
+- **Da verificare su un'app reale:** l'apertura con l'app del sistema, la stampa in PDF con `@page` della dimensione della slide nella webview di macOS e il tutto schermo in Wails. I test usano un host finto.
+- **Embed `![[deck.marp]]` in una nota:** mostra il segnaposto, non la prima slide.
+- **Bundle iniziale del desktop:** 1979 kB su 2000. Marp ne è fuori, ma il margine è stretto.
+- **Specifica:** ADR-0047 va recepito dal proprietario.
+
 ---
 
 ## 14. Trasversale: test e verifica

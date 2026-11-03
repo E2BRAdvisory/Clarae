@@ -4,7 +4,28 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.3.3] - 2026-11-03
+
+L'apertura dei file per tipo e le presentazioni Marp (milestone M13, [roadmap](docs/roadmap.md) §13-sexies). La decisione è in ADR-0047, accettato; devia da `Specifications.md` (§2.2.1, §3.4.5, §3.4.6) e va recepita dal proprietario. Nessuna modifica al cloud né al protocollo di sync.
+
+### Compatibilità
+
+- **File `.marp`:** per la sync sono Markdown. Un client fino alla 1.3.2 li tratta come file generici: in caso di conflitto crea una copia di conflitto invece dell'unione a 3 vie, e nessuna modifica si perde. Per unire le presentazioni modificate su più dispositivi aggiornare tutti i client.
+
+### Client desktop e workbench
+
+- **Apertura dei file per tipo (ADR-0047):** note, lavagne, basi, disegni, presentazioni, immagini, PDF, audio e video si aprono in una scheda. Ogni altro file (`.zip`, `.docx`, `.pptx`, …) si apre con l'applicazione predefinita del sistema sul desktop. Nel browser compare la conferma «Apertura File» e il file si scarica. Un programma (`.exe`, `.sh`, `.command`, …) non viene mai aperto: si mostra nella cartella. L'explorer ha un'icona per tipo di file e le voci «Apri con l'app predefinita», «Mostra nella cartella» e «Download».
+- **Presentazioni Marp (`.marp`, ADR-0047):** «Nuova presentazione» crea un file Marp. A sinistra c'è l'editor della sorgente, a destra l'anteprima delle slide aggiornata mentre si scrive, con la slide del cursore evidenziata. Si presenta a tutto schermo e si esporta in HTML o in PDF; l'export PPTX non è ancora disponibile. Si usano solo i temi integrati di Marp, senza CSS dell'autore, e nessuna risorsa arriva dalla rete. Per la sync un `.marp` è Markdown: unione a 3 vie, ricerca e link. Un client precedente lo tratta come file generico, quindi in caso di conflitto crea una copia di conflitto. Il flag `presentations` del Config Profile spegne la funzione.
+
+### Contratti
+
+- `info.version` del contratto OpenAPI passa a 1.3.3, come la versione del prodotto; nessuna operazione cambia. Il Config Profile ha la nuova chiave `features.presentations` (default `true`).
+
+### Documentazione
+
+- ADR-0047 (apertura dei file per tipo e presentazioni Marp), roadmap M13, tabella delle chiavi del Config Profile nella guida admin, capability `openWithSystemApp` in `desktop-web-sync.md`, pagina di parità.
+
+## [1.3.2] - 2026-11-03
 
 Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/roadmap.md) §13-quinquies). Le decisioni sono in ADR-0045 (parità per costruzione) e ADR-0046 (bootstrap dopo un ripristino del cloud), accettati.
 
