@@ -75,7 +75,12 @@ interface Props {
   readOnly?: boolean;
   /** Gets every key event first; return true when it ran an application command. */
   hotkey?: (event: KeyboardEvent) => boolean;
-  onChange(text: string): void;
+  /**
+   * After every edit by the user, with a getter of the new text: the document is turned into a
+   * string only when the getter is called (a debounced save), not on every keystroke, which in a
+   * large note would copy megabytes per key. The getter keeps returning the text of that edit.
+   */
+  onChange(text: () => string): void;
   onStats(stats: EditorStats): void;
 }
 
@@ -178,8 +183,11 @@ export function Editor(props: Props) {
           pagePreviewHover(),
           EditorView.updateListener.of((u) => {
             const cur = latest.current;
-            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External)))
-              cur.onChange(u.state.doc.toString());
+            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External))) {
+              const changed = u.state.doc; // immutable: the text of this edit, whenever it is read
+              let text: string | undefined;
+              cur.onChange(() => (text ??= changed.toString()));
+            }
             if (u.docChanged || u.selectionSet) stats.update(u.state, u.docChanged);
           }),
           EditorView.domEventHandlers({ focus: () => (setActiveEditor(latest.current.id), false) }),

@@ -146,7 +146,7 @@ describe('unlock gate', () => {
       'The passphrase needs at least 12 characters.',
     );
     expect(gateErrorText('weak-passphrase: guessable: too easy')).toMatch(/too easy to guess/);
-    expect(gateErrorText(new Error('wrong passphrase or recovery key'))).toBe(
+    expect(gateErrorText(new Error('wrong-secret: wrong passphrase or recovery key'))).toBe(
       'Wrong passphrase or recovery key.',
     );
     expect(gateErrorText(new Error('the vault engine stopped'))).toBe('the vault engine stopped');

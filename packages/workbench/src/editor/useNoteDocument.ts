@@ -19,8 +19,12 @@ export interface NoteDocument {
   current: () => string;
   /** Hash of the file version the editor text is based on (the last load or successful write). */
   savedHash: () => string;
-  /** Call on every edit. */
-  edit: (text: string) => void;
+  /**
+   * Call on every edit, with the text or a getter of it: the editor passes a getter, so a keystroke
+   * in a large note does not copy the whole document; the text is built when a save, a flush or
+   * `current` needs it.
+   */
+  edit: (text: string | (() => string)) => void;
   /**
    * Saves now, after any write in flight; resolves true when the file holds the editor's text,
    * false when the edits are still only in memory (conflict, write error).
@@ -75,7 +79,15 @@ export function useNoteDocument(
   const [save, setSave] = useState<SaveState>('saved');
   const [hash, setHash] = useState('');
   const hashRef = useRef('');
-  const latest = useRef('');
+  /** The latest text, or a getter of it not called yet (see edit). */
+  const latest = useRef<string | (() => string)>('');
+  const textNow = useCallback((): string => {
+    const v = latest.current;
+    if (typeof v === 'string') return v;
+    const text = v();
+    if (latest.current === v) latest.current = text;
+    return text;
+  }, []);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const conflict = useRef(false);
@@ -92,18 +104,21 @@ export function useNoteDocument(
   }, []);
 
   // A write of `text` landed with `newHash`.
-  const accepted = useCallback((newHash: string, text: string) => {
-    hashRef.current = newHash;
-    generation.current++;
-    conflict.current = false;
-    setHash(newHash);
-    if (latest.current === text) {
-      dirty.current = false;
-      setSave('saved');
-    } else {
-      setSave('dirty'); // edited again while saving
-    }
-  }, []);
+  const accepted = useCallback(
+    (newHash: string, text: string) => {
+      hashRef.current = newHash;
+      generation.current++;
+      conflict.current = false;
+      setHash(newHash);
+      if (textNow() === text) {
+        dirty.current = false;
+        setSave('saved');
+      } else {
+        setSave('dirty'); // edited again while saving
+      }
+    },
+    [textNow],
+  );
 
   const rejected = useCallback((e: unknown) => {
     const code = errorCode(e);
@@ -154,7 +169,7 @@ export function useNoteDocument(
         if (!dirty.current) return 'saved';
         // A conflict waits for the user; a document that never loaded has no base to write over.
         if (conflict.current || hashRef.current === '') return 'failed';
-        const text = latest.current;
+        const text = textNow();
         setSave('saving');
         try {
           const res = await api.vault.writeNote(vaultId, path, text, hashRef.current);
@@ -165,11 +180,11 @@ export function useNoteDocument(
           return 'failed';
         }
       }),
-    [vaultId, path, enqueue, accepted, rejected],
+    [vaultId, path, enqueue, accepted, rejected, textNow],
   );
 
   const edit = useCallback(
-    (text: string) => {
+    (text: string | (() => string)) => {
       latest.current = text;
       dirty.current = true;
       setSave((s) => (s === 'conflict' ? s : 'dirty'));
@@ -194,7 +209,7 @@ export function useNoteDocument(
     (): Promise<boolean> =>
       enqueue(async (): Promise<boolean> => {
         clearTimeout(timer.current);
-        const text = latest.current;
+        const text = textNow();
         setSave('saving');
         for (let attempt = 0; attempt < OVERWRITE_ATTEMPTS; attempt++) {
           let base = '';
@@ -222,7 +237,7 @@ export function useNoteDocument(
         setSave('conflict');
         return false;
       }),
-    [vaultId, path, enqueue, accepted, rejected],
+    [vaultId, path, enqueue, accepted, rejected, textNow],
   );
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -261,12 +276,12 @@ export function useNoteDocument(
     (): Promise<string | null> =>
       enqueue(async () => {
         if (!dirty.current) return null;
-        const text = latest.current;
+        const text = textNow();
         const copy = await writeRescueCopy(vaultId, path, text);
-        if (latest.current === text) dirty.current = false;
+        if (textNow() === text) dirty.current = false;
         return copy;
       }),
-    [vaultId, path, enqueue],
+    [vaultId, path, enqueue, textNow],
   );
 
   // Lets "load workspace", closing the vault, renaming and quitting write every pending edit first.
@@ -321,7 +336,7 @@ export function useNoteDocument(
     hash,
     save,
     error: state.error,
-    current: () => latest.current,
+    current: textNow,
     savedHash: () => hashRef.current,
     edit,
     flush,

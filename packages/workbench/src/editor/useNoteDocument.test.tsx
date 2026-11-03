@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { EditorState } from '@codemirror/state';
 import { api, type WriteResult } from '../app/api';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
@@ -254,5 +255,40 @@ describe('useNoteDocument', () => {
     act(() => void window.dispatchEvent(new Event('focus')));
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.content).toBe('back');
+  });
+
+  it('reads the text of an edit only when a save needs it (a 2 MB note is not copied per key)', async () => {
+    const big = `# Big note\n\n${'lorem ipsum dolor sit amet,\n'.repeat(75_000)}`; // ~2 MB, 75k lines
+    await setup({ 'Big.md': big });
+    const { result } = await ready('Big.md', 300);
+    vi.useFakeTimers();
+
+    // What the editor does on each keystroke: a getter over the immutable document of that edit.
+    let state = EditorState.create({ doc: big });
+    let reads = 0;
+    const started = performance.now();
+    for (let i = 0; i < 200; i++) {
+      state = state.update({ changes: { from: state.doc.length, insert: 'x' } }).state;
+      const doc = state.doc;
+      act(() =>
+        result.current.edit(() => {
+          reads++;
+          return doc.toString();
+        }),
+      );
+    }
+    const typing = performance.now() - started;
+    expect(reads).toBe(0); // nothing stringified while typing
+    expect(result.current.save).toBe('dirty');
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(300))); // the debounced save
+    await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+    expect(reads).toBe(1); // only the last edit, once, cached for the comparison after the write
+    expect(disk('Big.md')).toBe(`${big}${'x'.repeat(200)}`);
+    expect(result.current.current()).toBe(disk('Big.md'));
+    expect(reads).toBe(1);
+    // Generous bound against a regression to a copy per key (about 1.2 ms per key on 2 MB in Node,
+    // against 0.005 ms for the getter); the exact figure depends on the machine.
+    expect(typing).toBeLessThan(5_000);
   });
 });

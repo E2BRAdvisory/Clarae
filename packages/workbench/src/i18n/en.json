@@ -1349,7 +1349,7 @@
     "weak-passphrase": "The passphrase is too weak: {{detail}}",
     "weak-passphrase_too-short": "The passphrase needs at least 12 characters.",
     "weak-passphrase_guessable": "This passphrase is too easy to guess: add words or make it longer.",
-    "wrongSecret": "Wrong passphrase or recovery key."
+    "wrong-secret": "Wrong passphrase or recovery key."
   },
   "embeds": {
     "depthLimit": "{{label}} (embed depth limit)",

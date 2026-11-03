@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreTimeoutError, type CoreHandle } from './bridge';
-import { sweepWithin } from './launch';
+import { cloudVaultGone, sweepWithin } from './launch';
 import { readMarkers, updateMarker } from './markers';
 
 beforeEach(() => localStorage.clear());
@@ -40,5 +40,29 @@ describe('sweepWithin', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe('cloudVaultGone', () => {
+  const answering = (status: number | Error) =>
+    vi.fn((_url: string | URL | Request, _init?: RequestInit) =>
+      status instanceof Error
+        ? Promise.reject(status)
+        : Promise.resolve(new Response(null, { status })),
+    );
+
+  it('is true only when the cloud answers that the vault does not exist (404)', async () => {
+    const f = answering(404);
+    expect(await cloudVaultGone('tok', 'v 1', f as unknown as typeof fetch)).toBe(true);
+    expect(f).toHaveBeenCalledWith('/api/v1/vaults/v%201', {
+      headers: { Authorization: 'Bearer tok' },
+    });
+  });
+
+  it('is false for a live vault, another failure or no answer (the start-up goes on as usual)', async () => {
+    for (const status of [200, 401, 403, 500, 503, new TypeError('Failed to fetch')])
+      expect(await cloudVaultGone('tok', 'v1', answering(status) as unknown as typeof fetch)).toBe(
+        false,
+      );
   });
 });

@@ -64,6 +64,7 @@ func TestBindingErrorContract(t *testing.T) {
 		code string
 	}{
 		{vault.ErrHashMismatch, ErrCodeConflict},
+		{fmt.Errorf("unlock: %w", crypto.ErrWrongSecret), ErrCodeWrongSecret},
 		{fmt.Errorf("%w: a.md", links.ErrStalePlan), ErrCodeConflict},
 		{vault.ErrExists, ErrCodeExists},
 		{statErr, ErrCodeNotFound},
@@ -92,6 +93,7 @@ func TestBindingErrorContract(t *testing.T) {
 		vault.ErrHashMismatch: "conflict: file changed on disk",
 		vault.ErrExists:       "exists: destination already exists",
 		statErr:               "not-found: no such file",
+		crypto.ErrWrongSecret: "wrong-secret: wrong passphrase or recovery key",
 	} {
 		if got := bindingError(err).Error(); got != want {
 			t.Errorf("%q, want %q", got, want)

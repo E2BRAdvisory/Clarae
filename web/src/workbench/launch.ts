@@ -25,7 +25,7 @@ import { VAULTS_DIR, folderOf, runCreation, type Creation, type MountCreate } fr
 import { legacyDeviceUser } from './device';
 import { onLeaveRequest } from './forget';
 import { createVaultGuard, needsGate, type VaultGuard } from './guard';
-import { removeMarker, sweepPrivateCopies } from './markers';
+import { readMarkers, removeMarker, sweepPrivateCopies } from './markers';
 import { workbenchHref } from '../shared/routes';
 import { LOCAL_SUBJECT, accountKey, adoptLegacyCopies, storageOf, type CloudView } from './storage';
 import { showFatal, showUnlockGate } from './overlay';
@@ -219,6 +219,28 @@ async function allReceived(
   throw new Error('GET /shares: the list has no last page');
 }
 
+/**
+ * Whether the cloud vault of a copy this browser keeps is gone: deleted from the console or from
+ * another device while no tab of it was open. The core finds out at its first sync and disconnects
+ * the folder (`vault:cloud-deleted`), but at start-up that event may come before anyone listens, and
+ * a folder disconnected that way can no longer be linked again: the page asks first. Only a 404 says
+ * so; any other answer, or none, is "not known" and the start-up goes on as usual.
+ */
+export async function cloudVaultGone(
+  token: string,
+  vaultId: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<boolean> {
+  try {
+    const res = await fetchFn(`/api/v1/vaults/${encodeURIComponent(vaultId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.status === 404;
+  } catch {
+    return false;
+  }
+}
+
 /** Waits until the core has a cloud session (it asks the page for a token and loads the profile). */
 async function waitForSession(core: CoreHandle, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -404,6 +426,8 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   }
 
   let info: VaultInfo;
+  // The cloud vault of the copy kept here was deleted while no tab of it was open (cloudVaultGone).
+  let gone = false;
   if (o.share) {
     o.progress('session');
     await waitForSession(core);
@@ -419,10 +443,22 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     // `new-…` folder, see create.ts), or the folder named by the cloud id.
     const path = folderOf(account, vaultId);
     if (stuck === path) throw new Error(STILL_REMOVING);
+    if (!o.localOnly && !o.create && readMarkers(account)[vaultId])
+      gone = await getToken().then(
+        (token) => cloudVaultGone(token, vaultId),
+        () => false,
+      );
     info = await within(core, LIMITS.open).VaultAPI.OpenVault(path);
     if (!o.localOnly) {
       const link: LinkInfo = await within(core, LIMITS.info).SyncAPI.Info(info.id);
-      if (!link.linked) {
+      if (gone) {
+        // What the core does at its first sync, done before the workbench shows the copy: the
+        // folder is disconnected and keeps its files (a core that got there first refuses).
+        if (link.linked)
+          await within(core, LIMITS.close)
+            .SyncAPI.Unlink(info.id)
+            .catch(() => undefined);
+      } else if (!link.linked) {
         await within(core, LIMITS.link).SyncAPI.LinkExisting(info.id, vaultId);
         // The folder is named by cloud id; reopening it shows the name the user gave the vault.
         await within(core, LIMITS.close).VaultAPI.CloseVault(info.id);
@@ -433,16 +469,18 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   const link: LinkInfo = await within(core, LIMITS.info)
     .SyncAPI.Info(info.id)
     .catch((): LinkInfo => ({ linked: false }));
-  const kind = link.kind ?? '';
+  const markerId = o.share ? `share:${o.share}` : vaultId;
+  // A copy whose cloud vault is gone keeps the kind its marker recorded (the folder is unlinked).
+  const kind = link.kind || (gone ? (readMarkers(account)[markerId]?.kind ?? '') : '');
 
-  if (!o.localOnly && link.linked) {
-    const markerId = o.share ? `share:${o.share}` : vaultId;
+  if (!o.localOnly && (link.linked || gone)) {
     const g = createVaultGuard({
       core,
       account,
       markerId,
       info,
       kind,
+      cloudDeleted: gone,
       flush: flushWorkbench,
       goToConsole,
       reload: () => window.location.reload(),
@@ -451,8 +489,9 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     watchUnlock(info.id, g);
 
     // A private copy with changes that were not uploaded survived a closed tab: it is clear text, so it
-    // is unlocked before the workbench shows it.
-    const kept = needsGate(account, markerId, kind, Boolean(link.locked));
+    // is unlocked before the workbench shows it. One whose cloud vault is gone cannot be unlocked any
+    // more (its keys went with it): it shows what it holds, so it can be exported.
+    const kept = !gone && needsGate(account, markerId, kind, Boolean(link.locked));
     if (kept)
       await showUnlockGate({
         counts: kept,
@@ -493,6 +532,8 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       // The copy of a mount closed in this page (the open one goes through the guard).
       onMountRemoved: (shareId) => removeMarker(account, `share:${shareId}`),
     })) ?? null;
+  // Over the workbench, so staying leaves the copy open to export what it holds.
+  if (gone) vaultGuard?.offerRemoval();
   if (import.meta.env.MEMOBRAIN_E2E) {
     // Playwright drives the core, the worker (to simulate its failure) and the leave path directly.
     Object.assign(window, {

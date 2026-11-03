@@ -101,18 +101,18 @@ describe('codes of the desktop bindings', () => {
     expect(reasons.filter((r) => !(`weak-passphrase_${r}` in en.errors))).toEqual([]);
   });
 
-  it('translate the known messages of the core that have no code', async () => {
-    expect(errorMessage(new Error('wrong passphrase or recovery key'))).toBe(
+  it('translate a wrong passphrase or recovery key by its code', async () => {
+    expect(errorMessage(new Error('wrong-secret: wrong passphrase or recovery key'))).toBe(
       'Wrong passphrase or recovery key.',
     );
     await i18next.changeLanguage('it');
-    expect(errorMessage('wrong passphrase or recovery key')).toBe(
+    expect(errorMessage('wrong-secret: wrong passphrase or recovery key')).toBe(
       'Passphrase o chiave di recupero errata.',
     );
     await i18next.changeLanguage('en');
-    // Only the whole message: a longer one stays as written.
-    expect(errorMessage('unlock: wrong passphrase or recovery key x')).toBe(
-      'unlock: wrong passphrase or recovery key x',
+    // Without the code the text is only text: it stays as written.
+    expect(errorMessage('wrong passphrase or recovery key')).toBe(
+      'wrong passphrase or recovery key',
     );
   });
 });

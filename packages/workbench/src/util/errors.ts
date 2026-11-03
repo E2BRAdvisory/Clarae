@@ -7,15 +7,6 @@ import { i18next } from '../i18n';
 
 const CODE = /^([A-Za-z][A-Za-z0-9_-]*)(?::|\s\(\d{3}\)$)/;
 
-/**
- * Messages of the core that carry no code but are common enough to deserve a translation: the
- * whole message (as the core writes it) -> i18n key.
- */
-const KNOWN_TEXT = new Map<string, string>([
-  // crypto.ErrWrongSecret: unlock, change of passphrase, new recovery key.
-  ['wrong passphrase or recovery key', 'errors.wrongSecret'],
-]);
-
 const rawOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** The stable code of an error message, or '' when it has none. */
@@ -43,7 +34,5 @@ export function errorMessage(e: unknown): string {
     });
   const key = `errors.${code}`;
   if (code && i18next.exists(key)) return i18next.t(key, { detail });
-  const known = KNOWN_TEXT.get(raw.trim());
-  if (known) return i18next.t(known);
   return raw;
 }

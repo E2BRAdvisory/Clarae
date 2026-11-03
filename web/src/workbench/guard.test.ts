@@ -423,6 +423,58 @@ describe('vault guard: cloud vault deleted elsewhere', () => {
     await vi.waitFor(() => expect(g.wipe).toHaveBeenCalledWith('/vaults/cloud-1'));
   });
 
+  it('starts detached when the launcher found the cloud vault gone, and offers the removal', async () => {
+    // A copy with an edit the cloud never got, its vault deleted while no tab was open.
+    updateMarker(A, 'cloud-1', { name: 'Diary', kind: 'shared', localPath: info.path, pending: 2 });
+    const g = guardWith({}, { kind: 'shared', cloudDeleted: true });
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 2, cloudDeleted: true });
+    // The zero counts of the unlinked folder say nothing about what it holds.
+    g.emit('sync:status', {
+      vaultId: 'local-1',
+      phase: 'idle',
+      pending: 0,
+      conflicts: 0,
+      kind: '',
+    });
+    expect(readMarkers(A)['cloud-1']?.pending).toBe(2);
+
+    g.guard.offerRemoval();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('deleted from the console');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('2 changes not uploaded yet');
+    await userEvent.click(screen.getByRole('button', { name: 'Stay in the vault' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(g.wipe).not.toHaveBeenCalled();
+
+    // Removing asks again for what would be lost, without trying to upload.
+    g.guard.offerRemoval();
+    await userEvent.click(screen.getByRole('button', { name: 'Remove from this browser' }));
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alertdialog')).toHaveTextContent('cloud vault was deleted'),
+    );
+    expect(g.calls).not.toContain('SyncAPI.SyncNow');
+    expect(g.wipe).not.toHaveBeenCalled();
+  });
+
+  it('removes a clean copy whose cloud vault the launcher found gone', async () => {
+    const g = guardWith({}, { kind: 'shared', cloudDeleted: true });
+    g.guard.offerRemoval();
+    await userEvent.click(screen.getByRole('button', { name: 'Remove from this browser' }));
+    await vi.waitFor(() => expect(g.wipe).toHaveBeenCalledWith('/vaults/cloud-1'));
+    expect(readMarkers(A)['cloud-1']).toBeUndefined();
+    expect(g.opts.goToConsole).toHaveBeenCalledOnce();
+  });
+
+  it('a restored vault opened again clears the flag', () => {
+    updateMarker(A, 'cloud-1', {
+      name: 'Diary',
+      kind: 'shared',
+      localPath: info.path,
+      cloudDeleted: true,
+    });
+    guardWith({}, { kind: 'shared' });
+    expect(readMarkers(A)['cloud-1']?.cloudDeleted).toBe(false);
+  });
+
   it('a removal under way after the deletion decides by the marker, not by the zero counts', async () => {
     const g = guardWith(
       {

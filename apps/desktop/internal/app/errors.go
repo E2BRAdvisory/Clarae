@@ -35,6 +35,9 @@ const (
 	// text starts with the reason, crypto.WeakTooShort or crypto.WeakGuessable:
 	// "weak-passphrase: too-short: the passphrase must have at least 12 characters".
 	ErrCodeWeakPassphrase = "weak-passphrase"
+	// The passphrase or recovery key does not open the vault key
+	// (crypto.ErrWrongSecret): unlock, change of passphrase, new recovery key.
+	ErrCodeWrongSecret = "wrong-secret"
 )
 
 // codedError is a binding error with a stable code; Unwrap keeps the cause
@@ -72,6 +75,8 @@ func bindingError(err error) error {
 		return err
 	case errors.As(err, &wp):
 		return coded(ErrCodeWeakPassphrase, wp.Reason+": "+wp.Error(), err)
+	case errors.Is(err, crypto.ErrWrongSecret):
+		return coded(ErrCodeWrongSecret, crypto.ErrWrongSecret.Error(), err)
 	case errors.Is(err, syncpkg.ErrConflictChanged):
 		return coded(ErrCodeConflict, err.Error(), err)
 	case errors.Is(err, vault.ErrHashMismatch):

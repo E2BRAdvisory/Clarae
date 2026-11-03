@@ -1522,7 +1522,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const ok = isRecovery
         ? secret.replace(/[-\s]/g, '').toUpperCase() === (keys?.recoveryKey ?? '').replace(/-/g, '')
         : secret === keys?.passphrase;
-      if (!ok) return reject('wrong passphrase or recovery key');
+      if (!ok) return reject('wrong-secret: wrong passphrase or recovery key');
       sy.links.set(id, { ...l, locked: false });
       setStatus(id, { phase: 'idle', kind: 'private' });
       return Promise.resolve(isRecovery);
@@ -1551,7 +1551,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (weak) return reject(weak);
       const l = linkOf(id);
       const keys = sy.secrets.get(l.cloudVaultId);
-      if (!keys || keys.passphrase !== oldPass) return reject('wrong passphrase or recovery key');
+      if (!keys || keys.passphrase !== oldPass)
+        return reject('wrong-secret: wrong passphrase or recovery key');
       sy.secrets.set(l.cloudVaultId, { ...keys, passphrase: newPass });
       return Promise.resolve();
     },
@@ -1559,7 +1560,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const l = linkOf(id);
       const keys = sy.secrets.get(l.cloudVaultId);
       if (!keys || keys.passphrase !== passphrase)
-        return reject('wrong passphrase or recovery key');
+        return reject('wrong-secret: wrong passphrase or recovery key');
       const recoveryKey = 'ZZZZZ-YYYYY-XXXXX-WWWWW-VVVVV-UUUUU-TTTTT-SSSSS-RRRRR-QQQQQ-PPP';
       sy.secrets.set(l.cloudVaultId, { ...keys, recoveryKey });
       return Promise.resolve(recoveryKey);

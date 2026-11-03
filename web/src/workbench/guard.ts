@@ -70,6 +70,12 @@ export interface GuardOptions {
   /** Reloads the page (unlocking a locked copy goes through the start-up gate, see launch.ts). */
   reload: () => void;
   now?: () => number;
+  /**
+   * The launcher found the cloud vault deleted (from the console or another device while no tab of
+   * it was open, launch.ts): the copy is no longer linked, so the guard starts as it is after
+   * `vault:cloud-deleted` and flags the marker.
+   */
+  cloudDeleted?: boolean;
   /** How long leaving waits for the outbox to drain before locking (default 15 s). */
   drainMs?: number;
   pollMs?: number;
@@ -94,6 +100,11 @@ export interface VaultGuard {
    * lost it keeps the copy and asks. A private vault is locked first (lockAndForget).
    */
   removeCopy(): Promise<void>;
+  /**
+   * Tells that the cloud vault was deleted and offers to remove the copy (removeCopy, which lists
+   * what was never uploaded first) or to stay and export it.
+   */
+  offerRemoval(): void;
   dispose(): void;
 }
 
@@ -111,7 +122,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   let running: Promise<void> | null = null;
   let deciding = false;
   // The cloud vault was deleted elsewhere: the core disconnected the folder, nothing uploads any more.
-  let detached = false;
+  let detached = o.cloudDeleted === true;
   // Where leaving goes once the copy is dealt with (the console unless leave() was given a page).
   let destination: (() => void) | null = null;
   const go = (): void => (destination ?? o.goToConsole)();
@@ -133,11 +144,12 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     updateMarker(o.account, o.markerId, p, now());
   };
   // Linked (again: a vault restored after its deletion and opened anew): the marker follows it.
+  // A copy whose cloud vault the launcher found deleted is flagged instead.
   patch({
     name: info.name,
     kind: o.kind,
     localPath: info.path,
-    ...(marker()?.cloudDeleted ? { cloudDeleted: false } : {}),
+    ...(detached ? { cloudDeleted: true } : marker()?.cloudDeleted ? { cloudDeleted: false } : {}),
   });
 
   const offStatus = core.on(Events.syncStatus, (raw) => {
@@ -426,6 +438,29 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     lockAndForget,
     deleteCopy: wipeAndLeave,
     removeCopy,
+    offerRemoval() {
+      const m = marker();
+      showOverlay({
+        title: message('workbench.cloudDeletedTitle'),
+        lines: [
+          message('workbench.cloudDeletedOpened'),
+          ...(m && unsynced(m)
+            ? unsyncedLines(Math.max(m.pending, 0), Math.max(m.conflicts, 0), m.dirty)
+            : []),
+        ],
+        actions: [
+          { label: message('workbench.stay'), kind: 'primary', onClick: closeOverlay },
+          {
+            label: message('workbench.removeFromBrowser'),
+            kind: 'danger',
+            onClick: () => {
+              closeOverlay();
+              void removeCopy();
+            },
+          },
+        ],
+      });
+    },
     dispose() {
       offStatus();
       offChanged();

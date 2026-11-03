@@ -159,8 +159,8 @@ const errorText = (e: unknown): string =>
 
 /**
  * The text of a failure of the core in the gate. The typed errors of the passphrase are translated:
- * `weak-passphrase: <reason>: …` (the core's policy, ADR-0045 point 8) and a wrong secret; anything
- * else is shown as written.
+ * `weak-passphrase: <reason>: …` (the core's policy, ADR-0045 point 8) and `wrong-secret: …` (the
+ * passphrase or recovery key does not open the vault); anything else is shown as written.
  */
 export function gateErrorText(e: unknown): string {
   const raw = errorText(e).trim();
@@ -169,7 +169,7 @@ export function gateErrorText(e: unknown): string {
     return message(
       weak[1] === 'too-short' ? 'workbench.newPassphraseShort' : 'workbench.newPassphraseWeak',
     );
-  if (raw === 'wrong passphrase or recovery key') return message('workbench.wrongSecret');
+  if (/^wrong-secret:/.test(raw)) return message('workbench.wrongSecret');
   return raw;
 }
 
