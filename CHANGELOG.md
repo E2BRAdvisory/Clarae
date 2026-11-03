@@ -33,6 +33,8 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Import:** gli allegati vengono copiati senza caricarli in memoria e i nomi con segmenti `.` vengono normalizzati. L'import di `.excalidraw.md` ha limiti di memoria a ogni passo.
 - **Tipi delle proprietà:** due modifiche contemporanee a `types.json` non si sovrascrivono più.
 - **Core WebAssembly:** i timeout delle chiamate all'host del browser vengono rispettati.
+- **Sincronizzazione più veloce:** download e upload dei blob avvengono fino a 4 alla volta, con le modifiche applicate sempre in ordine. In una prima sincronizzazione con un server a 20 ms il tempo scende di circa tre volte.
+- **Workbench nel browser più leggero:** il core WebAssembly non include più l'accesso OIDC del desktop, il portachiavi, l'updater e il cestino di sistema (−9 % di dimensione). Impostazioni, recupero dei file, procedura di collegamento, conflitti, cronologia e lavagne si caricano al primo uso.
 
 ### Workbench (desktop e web)
 
@@ -56,6 +58,10 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Console:** l'area di amministrazione segue il ruolo restituito da `/me`. Le cache di vault, condivisioni e flag sono uniche.
 - **Profili di configurazione:** due amministratori che salvano insieme non si sovrascrivono più. Il secondo riceve un conflitto e può ricaricare la versione corrente (`expected_version`).
 - **Avvio del workbench web:** l'avvio del core ha limiti di tempo e offre «Riprova». Un indirizzo malformato mostra «non trovato».
+- **Condivisioni montate nel browser:** «Apri» passa dalla pagina del vault con le stesse protezioni dell'apertura dalla console. Al posto di «Mantieni una copia», che nel browser creava una cartella irraggiungibile, si offre «Scarica una copia».
+- **Uscita e «Dimentica questo browser»:** prima di cancellare le copie si caricano le ultime modifiche dei vault condivisi. Una copia con modifiche non caricate non viene cancellata senza conferma.
+- **Sblocco nel browser:** la nuova passphrase scelta dopo la chiave di recupero rispetta la stessa regola di robustezza del desktop.
+- **Ricerca di utenti e gruppi** dal workbench: una sola richiesta, con la descrizione dei gruppi come nella console.
 
 ### Cloud
 
@@ -70,12 +76,18 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Export GDPR:** `/me/export` include tutto il registro di audit dell'utente, non più solo le 10.000 voci più vecchie.
 - **Log delle richieste:** registra l'IP del client risolto attraverso i proxy fidati.
 - **Avvio e arresto:** l'API apre la porta prima delle migrazioni, così le probe non riavviano un pod in attesa del lock. All'arresto gli stream gRPC restano aperti per tutto il drain, come HTTP.
+- **Quota degli upload:** il controllo della quota a ogni upload non rilegge più tutti i blob caricati nella finestra; durante una prima sincronizzazione grande passa da decine di migliaia di righe lette a qualche centinaio.
 
 ### Deploy
 
 - **Realm Keycloak di produzione:** l'indirizzo di ritorno dopo il logout del client `memobrain-web` usa `${WEB_UI_ORIGIN}`. Prima era fisso su `localhost`, e il logout dalla Web UI non chiudeva la sessione SSO. Nelle installazioni con un realm configurato a mano va aggiunto `<origine della Web UI>/*` ai _Valid post logout redirect URIs_ (guida admin, Keycloak).
 - **Helm:** `progressDeadlineSeconds` 900 per API e worker. I commenti su probe e tempi di arresto ora corrispondono al budget reale: `preStopSleepSeconds` + `SHUTDOWN_DRAIN` + `SHUTDOWN_TIMEOUT` deve stare sotto `terminationGracePeriodSeconds`.
 - **Compose on-premise:** header HSTS quando il servizio è in https. Lo stack di sviluppo e `run-cloud-k3d.sh` pubblicano le porte solo su `127.0.0.1`.
+
+### Sviluppo
+
+- **Parità per costruzione (ADR-0045):** il registro delle funzioni distingue le prove per superficie (desktop, workbench, console, cloud). Uno stato «sì» sul workbench richiede una prova sul core WebAssembly. Un mock REST validato sull'OpenAPI fa girare i pannelli cloud sul core reale.
+- **Eventi e binding tipizzati:** gli eventi Go → TypeScript si dichiarano una volta in Go e sono generati per il frontend (`task gen-events`). L'host web usa un client tipizzato generato dai binding. ESLint vieta nomi di eventi e binding scritti a mano.
 
 ## [1.3.1] - 2026-11-02
 
