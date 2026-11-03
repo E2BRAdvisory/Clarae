@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./build": "./build/esbuild.mjs"
+    "./build": "./build/esbuild.mjs",
+    "./strength": "./src/sync/strength.ts"
   },
   "scripts": {
     "gen:icons": "node scripts/gen-icons.mjs",

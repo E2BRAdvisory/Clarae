@@ -253,13 +253,182 @@ describe('vault guard: lock and forget', () => {
     expect(g.wipe).not.toHaveBeenCalled();
   });
 
-  it('leaves a shared vault after writing the edits, without locking or removing it', async () => {
-    const g = guardWith({}, { kind: 'shared' });
+  it('leaves a shared vault after writing and uploading the edits, without locking or removing it', async () => {
+    const g = guardWith(
+      { 'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }) },
+      { kind: 'shared' },
+    );
     await g.guard.leave();
     expect(g.opts.flush).toHaveBeenCalledOnce();
+    expect(g.calls).toContain('SyncAPI.SyncNow');
+    expect(g.calls).not.toContain('VaultCryptoAPI.Lock');
     expect(g.opts.goToConsole).toHaveBeenCalledOnce();
-    expect(g.calls).toEqual([]);
     expect(g.wipe).not.toHaveBeenCalled();
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 0, conflicts: 0 });
+  });
+
+  it('leaving a shared vault records what could not be uploaded, for the console to ask', async () => {
+    const g = guardWith(
+      {
+        'SyncAPI.Status': () => ({
+          vaultId: 'local-1',
+          phase: 'offline',
+          pending: 2,
+          conflicts: 0,
+        }),
+      },
+      { kind: 'shared' },
+    );
+    // Written by the flush, not scanned by a sync yet.
+    g.emit('vault:file-changed', { vaultId: 'local-1', paths: ['new.md'] });
+    await g.guard.leave();
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 2, dirty: true });
+    expect(g.wipe).not.toHaveBeenCalled();
+    expect(g.opts.goToConsole).toHaveBeenCalledOnce();
+  });
+
+  it('leaving with an unknown status keeps the copy flagged', async () => {
+    const g = guardWith(
+      { 'SyncAPI.Status': () => Promise.reject(new Error('engine stopped')) },
+      { kind: 'shared' },
+    );
+    await g.guard.leave();
+    expect(readMarkers(A)['cloud-1']?.dirty).toBe(true);
+    expect(g.opts.goToConsole).toHaveBeenCalledOnce();
+  });
+
+  it('leaves for another page of the workbench (a mount) instead of the console', async () => {
+    const to = vi.fn();
+    const g = guardWith(
+      { 'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }) },
+      { kind: 'shared' },
+    );
+    await g.guard.leave(to);
+    expect(to).toHaveBeenCalledOnce();
+    expect(g.opts.goToConsole).not.toHaveBeenCalled();
+  });
+
+  it('a private vault left for another page is locked and removed first', async () => {
+    const to = vi.fn();
+    const g = guardWith({
+      'SyncAPI.Info': () => ({ locked: false }),
+      'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }),
+    });
+    g.guard.noteUnlocked();
+    await g.guard.leave(to);
+    expect(g.calls).toContain('VaultCryptoAPI.Lock');
+    expect(g.wipe).toHaveBeenCalledWith('/vaults/cloud-1');
+    expect(to).toHaveBeenCalledOnce();
+    expect(g.opts.goToConsole).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting for the outbox once the sync is offline', async () => {
+    let polls = 0;
+    const g = guardWith(
+      {
+        'SyncAPI.Status': () => {
+          polls++;
+          return { vaultId: 'local-1', phase: 'offline', pending: 1, conflicts: 0 };
+        },
+      },
+      { kind: 'shared', drainMs: 60_000, pollMs: 0 },
+    );
+    await g.guard.leave();
+    expect(polls).toBeLessThanOrEqual(2); // the drain's poll and the final count
+    expect(readMarkers(A)['cloud-1']?.pending).toBe(1);
+  });
+});
+
+describe('vault guard: cloud vault deleted elsewhere', () => {
+  const deleted = (g: ReturnType<typeof guardWith>) => {
+    // As the core does: the unlinked folder's status (kind "", zero counts) comes first.
+    g.emit('sync:status', {
+      vaultId: 'local-1',
+      phase: 'idle',
+      pending: 0,
+      conflicts: 0,
+      kind: '',
+    });
+    g.emit('vault:cloud-deleted', { vaultId: 'local-1', cloudVaultId: 'cloud-1', name: 'Diary' });
+    g.emit('sync:status', {
+      vaultId: 'local-1',
+      phase: 'idle',
+      pending: 0,
+      conflicts: 0,
+      kind: '',
+    });
+  };
+
+  it('flags the marker and keeps what it records (the zero counts of an unlinked folder mean nothing)', () => {
+    const g = guardWith({}, { kind: 'shared' });
+    g.emit('sync:status', { vaultId: 'local-1', phase: 'offline', pending: 3, conflicts: 0 });
+    deleted(g);
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 3, cloudDeleted: true });
+  });
+
+  it('removes a copy that holds nothing without trying to upload', async () => {
+    const g = guardWith({}, { kind: 'shared' });
+    deleted(g);
+    await g.guard.removeCopy();
+    expect(g.calls).not.toContain('SyncAPI.SyncNow');
+    expect(g.wipe).toHaveBeenCalledWith('/vaults/cloud-1');
+    expect(readMarkers(A)['cloud-1']).toBeUndefined();
+    expect(g.opts.goToConsole).toHaveBeenCalledOnce();
+  });
+
+  it('asks before removing a copy that holds changes the cloud never got', async () => {
+    const g = guardWith({}, { kind: 'shared' });
+    g.emit('sync:status', { vaultId: 'local-1', phase: 'offline', pending: 2, conflicts: 0 });
+    deleted(g);
+    await g.guard.removeCopy();
+    expect(g.wipe).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('2 changes not uploaded yet');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('cloud vault was deleted');
+    await userEvent.click(screen.getByRole('button', { name: 'Delete anyway' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(g.wipe).toHaveBeenCalledWith('/vaults/cloud-1'));
+  });
+
+  it('a removal under way after the deletion decides by the marker, not by the zero counts', async () => {
+    const g = guardWith(
+      {
+        'SyncAPI.Status': () => ({
+          vaultId: 'local-1',
+          phase: 'idle',
+          pending: 0,
+          conflicts: 0,
+          kind: '',
+        }),
+      },
+      { kind: 'shared', drainMs: 0 },
+    );
+    updateMarker(A, 'cloud-1', { pending: 1 });
+    await g.guard.removeCopy();
+    expect(g.wipe).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('1 change not uploaded yet');
+  });
+
+  it('leaving removes the clear text of a clean private copy, and keeps one with changes', async () => {
+    const clean = guardWith();
+    deleted(clean);
+    await clean.guard.leave();
+    expect(clean.wipe).toHaveBeenCalledWith('/vaults/cloud-1');
+    expect(clean.calls).not.toContain('VaultCryptoAPI.Lock');
+
+    localStorage.clear();
+    const kept = guardWith();
+    kept.emit('vault:file-changed', { vaultId: 'local-1', paths: ['a.md'] });
+    deleted(kept);
+    await kept.guard.leave();
+    expect(kept.wipe).not.toHaveBeenCalled();
+    expect(kept.opts.goToConsole).toHaveBeenCalledOnce();
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ dirty: true, cloudDeleted: true });
+  });
+
+  it('a vault opened again after its restoration is followed as before', () => {
+    updateMarker(A, 'cloud-1', { cloudDeleted: true });
+    guardWith({}, { kind: 'shared' });
+    expect(readMarkers(A)['cloud-1']?.cloudDeleted).toBe(false);
   });
 });
 
@@ -310,6 +479,19 @@ describe('vault guard: remove from this browser', () => {
     await flushAsync();
     expect(wipe).toHaveBeenCalledWith('/vaults/cloud-1');
     expect(opts.goToConsole).toHaveBeenCalled();
+  });
+
+  it('keeps a copy with a change no completed sync has scanned, even when the counts are zero', async () => {
+    const { guard, emit, wipe } = guardWith(
+      {
+        'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'error', pending: 0, conflicts: 0 }),
+      },
+      { kind: 'shared', drainMs: 0 },
+    );
+    emit('vault:file-changed', { vaultId: 'local-1', paths: ['late.md'] });
+    await guard.removeCopy();
+    expect(wipe).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('may not have been uploaded yet');
   });
 
   it('stays in the vault when asked', async () => {

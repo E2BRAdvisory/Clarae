@@ -640,6 +640,8 @@
     "cloudDeletedTitle": "Vault cloud eliminato",
     "cloudDeletedText": "Il vault cloud «{{name}}» è stato eliminato dalla console o da un altro dispositivo. Questa cartella è stata scollegata dal cloud e conserva tutti i suoi file. Per sincronizzarla di nuovo, ripristina il vault da «Vault eliminati» e collega la cartella.",
     "cloudDeletedTextWeb": "Il vault cloud «{{name}}» è stato eliminato dalla console o da un altro dispositivo. La copia in questo browser non è più sincronizzata e conserva i suoi file: torna alla console per ripristinare il vault.",
+    "cloudDeletedAskWeb": "Il vault cloud «{{name}}» è stato eliminato dalla console o da un altro dispositivo, quindi la copia in questo browser non si può più sincronizzare. Rimuoverla ora da questo browser? Le modifiche mai caricate vengono elencate prima di cancellare qualcosa. Annulla conserva la copia: puoi esportarla e rimuoverla più tardi da Impostazioni › Sincronizzazione; per sincronizzarla di nuovo ripristina il vault dalla console e riaprilo da lì.",
+    "removeDeletedCopyText": "Rimuovere la copia di questo vault da questo browser? Il suo vault cloud è stato eliminato, quindi non si può più caricare nulla: le modifiche mai caricate vengono elencate prima di cancellare qualcosa.",
     "cloudDeletedNote": "Scollegato perché il vault cloud «{{name}}» è stato eliminato altrove. I file qui sono stati conservati.",
     "quarantinedN_one": "{{count}} file nel cloud non è leggibile su questo dispositivo",
     "quarantinedN_other": "{{count}} file nel cloud non sono leggibili su questo dispositivo",
@@ -907,7 +909,8 @@
     "hint": "Doppio clic sulla lavagna per aggiungere una scheda",
     "invalid": "Questo file non è una lavagna valida: {{error}}",
     "fullscreen": "Schermo intero",
-    "exitFullscreen": "Esci da schermo intero"
+    "exitFullscreen": "Esci da schermo intero",
+    "loading": "Caricamento della lavagna…"
   },
   "sharing": {
     "invitations": "Inviti",
@@ -942,6 +945,7 @@
     "revokedText": "Il proprietario ha smesso di condividere «{{name}}». Cosa fare della tua copia dei file?",
     "deleteCopy": "Elimina la copia",
     "keepCopy": "Conserva una copia",
+    "downloadCopy": "Scarica una copia",
     "later": "Decidi dopo",
     "keptTitle": "Copia conservata",
     "keptAt": "I file sono in {{path}}. Apri quella cartella come vault per usarli.",

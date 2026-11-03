@@ -6,15 +6,19 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"memobrain/apps/desktop/internal/auth"
 	syncpkg "memobrain/apps/desktop/internal/sync"
+	"memobrain/apps/desktop/internal/sync/transport"
 )
 
 const testShareID = "0198f1c2-aaaa-7bbb-8ccc-000000000041"
@@ -82,6 +86,9 @@ func TestRemoveMountClosesTheOpenVault(t *testing.T) {
 
 // Keeping a copy closes the vault too and moves the folder out of the mounts directory.
 func TestRemoveMountKeepsACopy(t *testing.T) {
+	if runtime.GOOS == "js" {
+		t.Skip("the browser has no detached copies (capability detachedCopies)")
+	}
 	a, _, _ := newTestApp(t)
 	s := NewSharingAPI(a)
 	dir := filepath.Join(a.mountsDir(), testShareID)
@@ -201,7 +208,7 @@ func TestSharingBindingsHaveADeadline(t *testing.T) {
 	s := NewSharingAPI(a)
 	done := make(chan error, 1)
 	start := time.Now()
-	go func() { _, err := s.Directory("ada"); done <- err }()
+	go func() { _, err := s.SearchDirectory("user", "ada"); done <- err }()
 	select {
 	case err := <-done:
 		if err == nil {
@@ -212,5 +219,41 @@ func TestSharingBindingsHaveADeadline(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("a sharing call hangs on a black-holed network")
+	}
+}
+
+func TestSearchDirectoryKeepsTheFieldsOfTheAPI(t *testing.T) {
+	uid := uuid.MustParse("0198f1c2-aaaa-7bbb-8ccc-000000000051")
+	gid := uuid.MustParse("0198f1c2-aaaa-7bbb-8ccc-000000000052")
+	display, desc := "Bob Smith", "Platform team"
+	users := userEntries([]transport.DirectoryUser{
+		{Id: uid, Username: "bob", DisplayName: &display},
+		{Id: uid, Username: "eve"},
+	})
+	wantUsers := []DirectoryEntry{
+		{Type: "user", ID: uid.String(), Name: "bob", Label: "Bob Smith (bob)", DisplayName: "Bob Smith"},
+		{Type: "user", ID: uid.String(), Name: "eve", Label: "eve"},
+	}
+	if !reflect.DeepEqual(users, wantUsers) {
+		t.Fatalf("users = %+v, want %+v", users, wantUsers)
+	}
+	groups := groupEntries([]transport.DirectoryGroup{
+		{Id: gid, Name: "engineers", Description: &desc},
+		{Id: gid, Name: "ops"},
+	})
+	wantGroups := []DirectoryEntry{
+		{Type: "group", ID: gid.String(), Name: "engineers", Label: "engineers", Description: "Platform team"},
+		{Type: "group", ID: gid.String(), Name: "ops", Label: "ops"},
+	}
+	if !reflect.DeepEqual(groups, wantGroups) {
+		t.Fatalf("groups = %+v, want %+v", groups, wantGroups)
+	}
+}
+
+func TestSearchDirectoryRefusesAnUnknownKind(t *testing.T) {
+	a := New(Options{DataDir: t.TempDir(), Logger: zerolog.Nop(), Version: "test"})
+	_, err := NewSharingAPI(a).SearchDirectory("robot", "ada")
+	if err == nil || !strings.HasPrefix(err.Error(), "invalid:") {
+		t.Fatalf("err = %v, want an invalid principal type", err)
 	}
 }

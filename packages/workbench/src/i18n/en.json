@@ -640,6 +640,8 @@
     "cloudDeletedTitle": "Cloud vault deleted",
     "cloudDeletedText": "The cloud vault “{{name}}” was deleted from the console or from another device. This folder was disconnected from the cloud and keeps all its files. To sync it again, restore the vault from “Deleted vaults” and connect the folder to it.",
     "cloudDeletedTextWeb": "The cloud vault “{{name}}” was deleted from the console or from another device. The copy in this browser is no longer synchronized and keeps its files: go back to the console to restore the vault.",
+    "cloudDeletedAskWeb": "The cloud vault “{{name}}” was deleted from the console or from another device, so the copy in this browser can no longer be synchronized. Remove it from this browser now? Changes that were never uploaded are listed before anything is deleted. Cancel keeps the copy: you can export it and remove it later from Settings › Sync; to sync it again, restore the vault from the console and open it from there.",
+    "removeDeletedCopyText": "Remove the copy of this vault from this browser? Its cloud vault was deleted, so nothing can be uploaded any more: changes that were never uploaded are listed before anything is deleted.",
     "cloudDeletedNote": "Disconnected because the cloud vault “{{name}}” was deleted elsewhere. The files here were kept.",
     "quarantinedN_one": "{{count}} file in the cloud cannot be read on this device",
     "quarantinedN_other": "{{count}} files in the cloud cannot be read on this device",
@@ -907,7 +909,8 @@
     "hint": "Double-click the board to add a card",
     "invalid": "This file is not a valid canvas: {{error}}",
     "fullscreen": "Full screen",
-    "exitFullscreen": "Exit full screen"
+    "exitFullscreen": "Exit full screen",
+    "loading": "Loading the canvas…"
   },
   "sharing": {
     "invitations": "Invitations",
@@ -942,6 +945,7 @@
     "revokedText": "The owner stopped sharing “{{name}}”. What should happen to your copy of the files?",
     "deleteCopy": "Delete the copy",
     "keepCopy": "Keep a copy",
+    "downloadCopy": "Download a copy",
     "later": "Decide later",
     "keptTitle": "Copy kept",
     "keptAt": "The files are in {{path}}. Open that folder as a vault to use them.",

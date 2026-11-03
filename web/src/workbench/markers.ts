@@ -35,6 +35,12 @@ export interface VaultMarker {
    * as pending only once a sync scanned it, so a tab closed right after an edit would otherwise look clean.
    */
   dirty: boolean;
+  /**
+   * Set when the cloud vault was deleted elsewhere (the core's `vault:cloud-deleted`): the copy is no
+   * longer linked, so what it holds cannot be uploaded, and the workbench of that vault no longer
+   * opens. Cleared when a restored vault is opened again.
+   */
+  cloudDeleted?: boolean;
   /** Epoch milliseconds of the last update. */
   updatedAt: number;
 }

@@ -5,5 +5,5 @@ export {
   type WorkbenchHandle,
   type WorkbenchOptions,
 } from './mount';
-export { type Capabilities, type PlatformKind } from './platform';
+export { type Capabilities, type MountRef, type PlatformKind } from './platform';
 export { type VaultLockedPayload, type VaultLockReason } from './app/events';

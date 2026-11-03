@@ -98,12 +98,16 @@ async function accountMock(seed: CloudSeed): Promise<WailsMock> {
       id: u.id,
       name: u.username,
       label: u.display_name ? `${u.display_name} (${u.username})` : u.username,
+      displayName: u.display_name ?? '',
+      description: '',
     })),
     ...(seed.groups ?? []).map((g) => ({
       type: 'group' as const,
       id: g.id,
       name: g.name,
       label: g.name,
+      displayName: '',
+      description: g.description ?? '',
     })),
   ];
   if (seed.features) mock.config = { ...mock.config, features: seed.features };

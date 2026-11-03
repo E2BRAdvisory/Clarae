@@ -44,10 +44,11 @@ export interface Capabilities {
    */
   ephemeralPlaintext: boolean;
   /**
-   * A folder of the computer can be picked: the native dialog on the desktop, the File System Access
-   * API in a browser that has it (detected at run time). Core-backed pickers also need localFolders.
+   * A copy that leaves the cloud can stay on this device as a folder of its own: the desktop keeps
+   * the mount of a revoked share as an ordinary vault. The browser has no place where such a folder
+   * could be opened again: it offers to download the copy as a ZIP instead.
    */
-  directoryPicker: boolean;
+  detachedCopies: boolean;
 }
 
 const DESKTOP: Capabilities = {
@@ -60,7 +61,7 @@ const DESKTOP: Capabilities = {
   unlinkVault: true,
   ownsSession: true,
   ephemeralPlaintext: false,
-  directoryPicker: true,
+  detachedCopies: true,
 };
 
 const WEB: Capabilities = {
@@ -73,16 +74,17 @@ const WEB: Capabilities = {
   unlinkVault: false,
   ownsSession: false,
   ephemeralPlaintext: true,
-  directoryPicker: false,
+  detachedCopies: false,
 };
 
-/** The browser's folder picker (File System Access API), where it exists. */
-const browserHasDirectoryPicker = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof (window as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function';
-
 export const capabilitiesFor = (kind: PlatformKind): Capabilities =>
-  kind === 'web' ? { ...WEB, directoryPicker: browserHasDirectoryPicker() } : { ...DESKTOP };
+  kind === 'web' ? { ...WEB } : { ...DESKTOP };
+
+/** A received share, as the host needs it to open its mount (MountState). */
+export interface MountRef {
+  shareId: string;
+  cloudVaultId: string;
+}
 
 export interface PlatformOptions {
   kind?: PlatformKind;
@@ -95,6 +97,18 @@ export interface PlatformOptions {
    * goes back to the console. The sync settings offer it where the desktop offers Disconnect.
    */
   onRemoveFromBrowser?: () => void;
+  /**
+   * Web only: opens the mount of a received share. The browser opens one vault per page, so the
+   * host leaves this one (uploading what is pending, as going back to the console does) and loads
+   * the mount's own page, where its guard and marker follow it. Without it the mount opens in
+   * place (the desktop).
+   */
+  onOpenMount?: (mount: MountRef) => void;
+  /**
+   * Web only: the copy of a share's mount was removed from this browser (Settings › Sharing), so
+   * the host forgets what it remembers of it (its marker).
+   */
+  onMountRemoved?: (shareId: string) => void;
   /** Overrides of the kind's capabilities, for what the host detects itself. */
   capabilities?: Partial<Capabilities>;
 }
@@ -106,6 +120,10 @@ interface PlatformState {
   backToConsole: (() => void) | null;
   /** Set when the host can remove the vault's copy from the browser (see PlatformOptions). */
   removeFromBrowser: (() => void) | null;
+  /** Set when the host opens a mount itself (see PlatformOptions.onOpenMount). */
+  openMount: ((mount: MountRef) => void) | null;
+  /** Set when the host must hear of a removed mount (see PlatformOptions.onMountRemoved). */
+  mountRemoved: ((shareId: string) => void) | null;
   /** Opened by the app once its listeners are attached. */
   initialVault: string | null;
 }
@@ -115,6 +133,8 @@ export const usePlatform = create<PlatformState>(() => ({
   capabilities: capabilitiesFor('desktop'),
   backToConsole: null,
   removeFromBrowser: null,
+  openMount: null,
+  mountRemoved: null,
   initialVault: null,
 }));
 
@@ -126,6 +146,8 @@ export function configurePlatform(options: PlatformOptions = {}): void {
     capabilities: { ...capabilitiesFor(kind), ...options.capabilities },
     backToConsole: options.onBackToConsole ?? null,
     removeFromBrowser: options.onRemoveFromBrowser ?? null,
+    openMount: options.onOpenMount ?? null,
+    mountRemoved: options.onMountRemoved ?? null,
     initialVault: options.vaultPath ?? null,
   });
 }

@@ -5,7 +5,10 @@
  * - for a private vault, a lock (manual or the core's idle timer, ADR-0029 §6) removes the clear-text copy
  *   from the browser and goes back to the console, unless that would lose changes (D-04): then a blocking
  *   overlay says what is kept and lets the user unlock, delete anyway or leave the copy for later;
- * - leaving (back to the console, signing out, a request from the console) uploads what it can first.
+ * - leaving (back to the console, another page of the workbench, signing out, a request from the
+ *   console) uploads what it can first, and records in the marker what could not be uploaded;
+ * - when the cloud vault is deleted elsewhere (`vault:cloud-deleted`) the copy can no longer upload: the
+ *   marker says so and the copy is removed only by what the marker records (the UI offers it).
  */
 import type { CoreHandle } from './bridge';
 import { readMarkers, removeMarker, unsynced, updateMarker, type VaultMarker } from './markers';
@@ -29,7 +32,18 @@ interface SyncStatus {
   phase: string;
   pending: number;
   conflicts: number;
+  /** "private" or "shared" while linked; "" for a folder no longer linked to the cloud. */
+  kind?: string;
 }
+
+/**
+ * A status of a folder that is not linked to the cloud (any more): it says nothing about uploads
+ * (its zero counts are not "everything uploaded"), so it never updates the marker.
+ */
+const unlinkedStatus = (s: SyncStatus | null | undefined): boolean => s?.kind === '';
+
+/** Phases after which waiting longer uploads nothing soon: offline, paused, failed. */
+const STALLED = new Set(['offline', 'paused', 'error']);
 
 export interface GuardOptions {
   core: CoreHandle;
@@ -54,8 +68,12 @@ export interface GuardOptions {
 export interface VaultGuard {
   /** The vault was unlocked in this page: a later `vault:locked` is a real lock. */
   noteUnlocked(): void;
-  /** Leaves for the console: uploads, then for a private vault locks and removes the copy. */
-  leave(): Promise<void>;
+  /**
+   * Leaves for the console, or for `to` (another page of the workbench): writes the edits and
+   * uploads what is pending (bounded), recording in the marker what is left; a private vault is
+   * locked and its copy removed (lockAndForget).
+   */
+  leave(to?: () => void): Promise<void>;
   /** Flushes, uploads (bounded), locks and removes the copy, or keeps it and says why. */
   lockAndForget(): Promise<void>;
   /** Removes the copy and its marker whatever it holds (the user confirmed), then leaves. */
@@ -80,6 +98,11 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   let lockPayload: VaultLockedPayload | null = null;
   let running: Promise<void> | null = null;
   let deciding = false;
+  // The cloud vault was deleted elsewhere: the core disconnected the folder, nothing uploads any more.
+  let detached = false;
+  // Where leaving goes once the copy is dealt with (the console unless leave() was given a page).
+  let destination: (() => void) | null = null;
+  const go = (): void => (destination ?? o.goToConsole)();
 
   // A change the core may not have scanned yet: cleared by a sync that started after it and ended clean.
   let dirtyAt = readMarkers(o.account)[o.markerId]?.dirty ? now() : 0;
@@ -91,11 +114,17 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     if (m && Object.entries(p).every(([k, v]) => m[k as keyof VaultMarker] === v)) return;
     updateMarker(o.account, o.markerId, p, now());
   };
-  patch({ name: info.name, kind: o.kind, localPath: info.path });
+  // Linked (again: a vault restored after its deletion and opened anew): the marker follows it.
+  patch({
+    name: info.name,
+    kind: o.kind,
+    localPath: info.path,
+    ...(marker()?.cloudDeleted ? { cloudDeleted: false } : {}),
+  });
 
   const offStatus = core.on('sync:status', (raw) => {
     const s = raw as SyncStatus;
-    if (!s || s.vaultId !== info.id) return;
+    if (!s || s.vaultId !== info.id || detached || unlinkedStatus(s)) return;
     if (s.phase === 'syncing') runStartedAt = Math.max(runStartedAt, now());
     const counts = {
       pending: typeof s.pending === 'number' ? s.pending : (marker()?.pending ?? 0),
@@ -117,7 +146,17 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     patch({ dirty: true });
   });
 
-  /** Removes the copy (files and databases) and its marker, then goes to the console. */
+  // Deleted from the console or another device: the core disconnected the folder, which keeps its
+  // files. What the marker records can no longer be uploaded; the workbench offers to remove the copy
+  // (onRemoveFromBrowser), and a restored vault opened again links it anew.
+  const offDeleted = core.on('vault:cloud-deleted', (raw) => {
+    const p = raw as { vaultId?: string } | undefined;
+    if (p?.vaultId !== info.id) return;
+    detached = true;
+    patch({ cloudDeleted: true });
+  });
+
+  /** Removes the copy (files and databases) and its marker, then leaves (console or `to`). */
   const wipeAndLeave = async (): Promise<void> => {
     showOverlay({ busy: true, lines: [message('workbench.locking')] });
     await core.callWithin(60_000, 'VaultAPI', 'CloseVault', info.id).catch(() => undefined);
@@ -128,7 +167,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       // The marker stays: the next start-up sweep removes the copy.
       console.error('memobrain: could not remove the copy of the vault:', e);
     }
-    o.goToConsole();
+    go();
   };
 
   const keep = (counts: { pending: number; conflicts: number; dirty?: boolean }): void => {
@@ -148,7 +187,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       const s = await core
         .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
         .catch(() => null);
-      if (!s) {
+      if (!s || unlinkedStatus(s)) {
         // Not knowing is not the same as nothing pending: keep the copy.
         const m = marker();
         return keep({ pending: m?.pending ?? 0, conflicts: m?.conflicts ?? 0, dirty: true });
@@ -195,8 +234,11 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       const s = await core
         .callWithin<SyncStatus>(5_000, 'SyncAPI', 'Status', info.id)
         .catch(() => null);
-      if (!s || core.dead) return;
+      if (!s || core.dead || unlinkedStatus(s)) return;
       if (s.pending === 0 && s.phase !== 'syncing') return;
+      // The cycle asked for (SyncNow) ended without uploading everything and the next one waits for
+      // the network or a back-off: what is left is decided now, never deleted unasked.
+      if (STALLED.has(s.phase)) return;
       await sleep(o.pollMs ?? 500);
     }
   };
@@ -217,9 +259,10 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
         // locked is not counted by the core until a sync scans it, hence the marker's flag.
         const m = marker();
         if (m?.dirty) {
-          const s = await core
+          const status = await core
             .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
             .catch(() => null);
+          const s = unlinkedStatus(status) ? null : status;
           deciding = true;
           return keep({
             pending: s?.pending ?? m.pending,
@@ -249,9 +292,56 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     return running;
   };
 
+  /** Keeps a copy that holds what the cloud does not have and lets the user stay or delete it. */
+  const askBeforeRemoving = (
+    counts: { pending: number; conflicts: number },
+    unknown: boolean,
+  ): void => {
+    const ask = (): void =>
+      void showOverlay({
+        title: message('workbench.removeKeptTitle'),
+        lines: [
+          ...unsyncedLines(counts.pending, counts.conflicts, unknown),
+          message(detached ? 'workbench.removeDeletedHint' : 'workbench.removeKeptHint'),
+        ],
+        actions: [
+          { label: message('workbench.stay'), kind: 'primary', onClick: closeOverlay },
+          {
+            label: message('workbench.deleteAnyway'),
+            kind: 'danger',
+            onClick: () => confirmDelete(() => void wipeAndLeave(), ask),
+          },
+        ],
+      });
+    ask();
+  };
+
+  /**
+   * A copy that can no longer upload (its cloud vault was deleted, or the folder is not linked): the
+   * marker is all that says what it holds. Removed when it records nothing, otherwise kept and asked.
+   */
+  const removeByMarker = (): void => {
+    const m = marker();
+    if (!m || !unsynced(m)) return void wipeAndLeave();
+    askBeforeRemoving(
+      { pending: Math.max(m.pending, 0), conflicts: Math.max(m.conflicts, 0) },
+      m.dirty,
+    );
+  };
+
   const removeCopy = async (): Promise<void> => {
-    if (isPrivate) return lockAndForget();
+    destination = null; // removing always ends in the console
     if (running) return running;
+    if (detached) {
+      running = (async () => {
+        await o.flush();
+        removeByMarker();
+      })().finally(() => {
+        running = null;
+      });
+      return running;
+    }
+    if (isPrivate) return lockAndForget();
     running = (async () => {
       showOverlay({ busy: true, lines: [message('workbench.removing')] });
       await o.flush();
@@ -260,30 +350,50 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       const s = await core
         .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
         .catch(() => null);
-      if (s && s.pending === 0 && s.conflicts === 0) return wipeAndLeave();
+      // Disconnected meanwhile (deleted elsewhere): its zero counts mean nothing.
+      if (detached || unlinkedStatus(s)) return removeByMarker();
+      // A change no completed sync has scanned (the marker's flag) is not "nothing pending" either.
+      const dirty = Boolean(marker()?.dirty);
+      if (s && s.pending === 0 && s.conflicts === 0 && !dirty) return wipeAndLeave();
       const counts = {
         pending: Math.max(s?.pending ?? marker()?.pending ?? 0, 0),
         conflicts: Math.max(s?.conflicts ?? marker()?.conflicts ?? 0, 0),
       };
       if (s) patch(counts);
       // Unknown counts are kept like changes (D-04): the user decides.
-      const ask = (): void =>
-        void showOverlay({
-          title: message('workbench.removeKeptTitle'),
-          lines: [
-            ...unsyncedLines(counts.pending, counts.conflicts, !s),
-            message('workbench.removeKeptHint'),
-          ],
-          actions: [
-            { label: message('workbench.stay'), kind: 'primary', onClick: closeOverlay },
-            {
-              label: message('workbench.deleteAnyway'),
-              kind: 'danger',
-              onClick: () => confirmDelete(() => void wipeAndLeave(), ask),
-            },
-          ],
-        });
-      ask();
+      askBeforeRemoving(counts, !s || dirty);
+    })().finally(() => {
+      running = null;
+    });
+    return running;
+  };
+
+  /**
+   * Leaving a vault that is not private: the edits are written and uploaded (bounded), and the
+   * marker records what is left, so the console asks before deleting it (signing out, "forget this
+   * browser") instead of finding a clean marker and a copy holding the last edits (D-04).
+   */
+  const leaveShared = (): Promise<void> => {
+    if (running) return running;
+    running = (async () => {
+      showOverlay({ busy: true, lines: [message('workbench.leaving')] });
+      await o.flush();
+      if (!detached) {
+        await core.callWithin(15_000, 'SyncAPI', 'SyncNow', info.id).catch(() => undefined);
+        await drain();
+        const s = await core
+          .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
+          .catch(() => null);
+        if (!s)
+          patch({ dirty: true }); // not knowing is kept like changes
+        else if (!detached && !unlinkedStatus(s))
+          patch({
+            pending: Math.max(s.pending, 0),
+            conflicts: Math.max(s.conflicts, 0),
+            ...(s.pending < 0 || s.conflicts < 0 ? { dirty: true } : {}),
+          });
+      }
+      go();
     })().finally(() => {
       running = null;
     });
@@ -295,10 +405,17 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       unlocked = true;
       deciding = false;
     },
-    async leave() {
+    async leave(to) {
+      destination = to ?? null;
+      if (detached) {
+        // Nothing uploads any more. A private copy is clear text: it goes unless it holds changes.
+        await o.flush();
+        const m = marker();
+        if (isPrivate && (!m || !unsynced(m))) return wipeAndLeave();
+        return go();
+      }
       if (isPrivate) return lockAndForget();
-      await o.flush();
-      o.goToConsole();
+      return leaveShared();
     },
     lockAndForget,
     deleteCopy: wipeAndLeave,
@@ -307,6 +424,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       offStatus();
       offChanged();
       offLocked();
+      offDeleted();
     },
   };
 }

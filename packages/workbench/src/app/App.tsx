@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, type AuthState, type SyncStatus } from './api';
 import {
@@ -14,7 +14,6 @@ import { i18next, initI18n } from '../i18n';
 import { useAppStore } from '../state/store';
 import { applyAppearance, useSettings } from '../state/settings';
 import { useInvalidate } from '../state/queries';
-import { SettingsPanel } from '../settings/SettingsPanel';
 import { CommandPalette } from '../commands/CommandPalette';
 import { QuickSwitcher } from '../commands/QuickSwitcher';
 import { commandForEvent } from '../commands/registry';
@@ -24,9 +23,10 @@ import { openVaultAt } from './actions';
 import { installModalFocus } from '@memobrain/ui';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
-import { RecoveryDialogs } from '../recovery/RecoveryDialog';
+import { useRecovery } from '../recovery/store';
 import { SharingDialogs } from '../sharing/SharingDialogs';
 import { useImporter } from '../importer/store';
+import { LazyDialog } from '../ui/LazyDialog';
 import { lazyView } from '../ui/lazyView';
 import { UpdateDialog } from '../updater/UpdateDialog';
 import { SlideShow } from '../slides/SlideShow';
@@ -38,27 +38,54 @@ import { can, useCan, usePlatform } from '../platform';
 import { followLinkPath } from './open';
 import { applyVaultChanges, onVaultChanges } from './fileChanges';
 
-// The import wizard is fetched the first time it opens: it stays out of the startup bundle (ADR-0020).
+// The import wizard, the settings and the file recovery are fetched the first time they open: they
+// stay out of the startup bundle (ADR-0020).
 const ImportWizardDialog = lazyView(async () => ({
   default: (await import('../importer/ImportWizard')).ImportWizardDialog,
+}));
+const SettingsPanel = lazyView(async () => ({
+  default: (await import('../settings/SettingsPanel')).SettingsPanel,
+}));
+const RecoveryDialogs = lazyView(async () => ({
+  default: (await import('../recovery/RecoveryDialog')).RecoveryDialogs,
 }));
 
 function ImportWizardGate() {
   const open = useImporter((s) => s.open);
   if (!open) return null;
   return (
-    <Suspense fallback={null}>
+    <LazyDialog onClose={() => useImporter.getState().hide()}>
       <ImportWizardDialog />
-    </Suspense>
+    </LazyDialog>
   );
 }
+
+function SettingsGate() {
+  const open = useAppStore((s) => s.settingsOpen);
+  if (!open) return null;
+  return (
+    <LazyDialog onClose={() => useAppStore.getState().closeSettings()}>
+      <SettingsPanel />
+    </LazyDialog>
+  );
+}
+
+function RecoveryGate() {
+  const open = useRecovery((s) => s.target !== null);
+  if (!open) return null;
+  return (
+    <LazyDialog onClose={() => useRecovery.getState().close()}>
+      <RecoveryDialogs />
+    </LazyDialog>
+  );
+}
+
 export function App() {
   const vault = useAppStore((s) => s.vault);
   const updater = useCan('updater');
   const setSettings = useAppStore((s) => s.setSettings);
   const setAuth = useAppStore((s) => s.setAuth);
   const setIndexProgress = useAppStore((s) => s.setIndexProgress);
-  const settingsOpen = useAppStore((s) => s.settingsOpen);
   const appearance = useSettings((s) => s.appearance);
   const invalidate = useInvalidate();
   const queryClient = useQueryClient();
@@ -128,9 +155,18 @@ export function App() {
     const offDeleted = api.on<VaultCloudDeletedPayload>(Events.vaultCloudDeleted, (p) => {
       useSync.getState().cloudVaultDeleted(p);
       const name = useSync.getState().cloudDeleted[p.vaultId] ?? p.name;
-      // The desktop connects the folder again; in the browser the copy belongs to the console.
+      const title = i18next.t('sync.cloudDeletedTitle');
+      // The desktop connects the folder again. In the browser the copy belongs to the deleted cloud
+      // vault: its host offers to remove it (and forgets its marker), or it stays until restored.
+      const remove = usePlatform.getState().removeFromBrowser;
+      if (!can('unlinkVault') && remove && p.vaultId === useAppStore.getState().vault?.id) {
+        void dialog
+          .confirm(title, i18next.t('sync.cloudDeletedAskWeb', { name }), true)
+          .then((yes) => yes && remove());
+        return;
+      }
       const text = can('unlinkVault') ? 'sync.cloudDeletedText' : 'sync.cloudDeletedTextWeb';
-      void dialog.alert(i18next.t('sync.cloudDeletedTitle'), i18next.t(text, { name }));
+      void dialog.alert(title, i18next.t(text, { name }));
     });
     return () => {
       offStatus();
@@ -181,9 +217,9 @@ export function App() {
       <ErrorBoundary scope="view" resetKey={vault?.id}>
         {vault ? <VaultView key={vault.id} vaultId={vault.id} /> : <Welcome onOpen={openVault} />}
       </ErrorBoundary>
-      {settingsOpen && <SettingsPanel />}
+      <SettingsGate />
       <SyncDialogs />
-      <RecoveryDialogs />
+      <RecoveryGate />
       <SharingDialogs />
       <ImportWizardGate />
       {updater && <UpdateDialog />}

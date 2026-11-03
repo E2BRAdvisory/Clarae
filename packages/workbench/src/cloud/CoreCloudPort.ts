@@ -93,19 +93,13 @@ export function toApiShare(s: ShareInfo): Share {
 }
 
 /**
- * A directory entry of the core: a user's label is "Display name (username)" or the username, a
- * group's is its name.
+ * A directory entry of the core as the console shows it (RestCloudPort): a user by display name
+ * (or username) with the username below, a group by name with its description.
  */
 export function toDirectoryEntry(d: BindingDirectoryEntry): DirectoryEntry {
-  const suffix = ` (${d.name})`;
-  if (d.type === 'user' && d.label.endsWith(suffix))
-    return { type: 'user', id: d.id, name: d.label.slice(0, -suffix.length), detail: d.name };
-  return {
-    type: d.type,
-    id: d.id,
-    name: d.label || d.name,
-    ...(d.type === 'user' ? { detail: d.name } : {}),
-  };
+  if (d.type === 'user')
+    return { type: 'user', id: d.id, name: d.displayName || d.name, detail: d.name };
+  return { type: 'group', id: d.id, name: d.name, detail: d.description || undefined };
 }
 
 export class CoreCloudPort implements CloudPort {
@@ -225,9 +219,7 @@ export class CoreCloudPort implements CloudPort {
   }
 
   async searchDirectory(type: PrincipalType, query: string): Promise<DirectoryEntry[]> {
-    return (await this.sharing.directory(query))
-      .filter((d) => d.type === type)
-      .map(toDirectoryEntry);
+    return (await this.sharing.searchDirectory(type, query)).map(toDirectoryEntry);
   }
 
   listMyGroups(): Promise<GroupMembership[]> {

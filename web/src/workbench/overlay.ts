@@ -3,6 +3,7 @@
  * built here with the DOM (no inline styles: the CSP forbids them; the look is in shell.css). One at a
  * time: showing an overlay replaces the previous one.
  */
+import { checkPassphrase } from '@memobrain/workbench/strength';
 import { message, plural } from './strings';
 
 export interface OverlayAction {
@@ -144,6 +145,11 @@ export interface UnlockGateOptions {
   unlock: (secret: string, recovery: boolean) => Promise<boolean>;
   /** VaultCryptoAPI.SetPassphrase. */
   setPassphrase: (passphrase: string) => Promise<void>;
+  /**
+   * The strength policy of a new passphrase (§3.8.2): the workbench's own check (zxcvbn), so the
+   * gate accepts exactly what the unlock dialog does. Replaceable in tests.
+   */
+  check?: (passphrase: string) => Promise<{ longEnough: boolean; ok: boolean }>;
   deleteCopy: () => void;
   backToConsole: () => void;
 }
@@ -253,13 +259,20 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
       };
       form.addEventListener('submit', (ev) => {
         ev.preventDefault();
-        if (pass.value.length < 12) return fail(message('workbench.newPassphraseShort'));
-        if (pass.value !== again.value) return fail(message('workbench.newPassphraseMismatch'));
+        const value = pass.value;
         submit.disabled = true;
-        o.setPassphrase(pass.value).then(finish, (e: unknown) => {
-          submit.disabled = false;
-          fail(errorText(e));
-        });
+        error.hidden = true;
+        void (o.check ?? checkPassphrase)(value)
+          .then((strength) => {
+            if (!strength.longEnough) throw new Error(message('workbench.newPassphraseShort'));
+            if (!strength.ok) throw new Error(message('workbench.newPassphraseWeak'));
+            if (value !== again.value) throw new Error(message('workbench.newPassphraseMismatch'));
+            return o.setPassphrase(value);
+          })
+          .then(finish, (e: unknown) => {
+            submit.disabled = false;
+            fail(errorText(e));
+          });
       });
       showOverlay({
         title: message('workbench.gateTitle'),

@@ -24,7 +24,8 @@ import { VAULTS_DIR, folderOf, runCreation, type Creation, type MountCreate } fr
 import { legacyDeviceUser } from './device';
 import { onLeaveRequest } from './forget';
 import { createVaultGuard, needsGate, type VaultGuard } from './guard';
-import { sweepPrivateCopies } from './markers';
+import { removeMarker, sweepPrivateCopies } from './markers';
+import { workbenchHref } from '../shared/routes';
 import { LOCAL_SUBJECT, accountKey, adoptLegacyCopies, storageOf, type CloudView } from './storage';
 import { showFatal, showUnlockGate } from './overlay';
 import type { CoreAssets } from './protocol';
@@ -55,6 +56,10 @@ export interface LaunchOptions {
     onBackToConsole: () => void;
     /** "Remove from this browser" in the sync settings (only for a copy linked to the cloud). */
     onRemoveFromBrowser?: () => void;
+    /** "Open" of a mount in Settings › Sharing: its own page (openMountPage). */
+    onOpenMount: (mount: { shareId: string; cloudVaultId: string }) => void;
+    /** A mount's copy removed from Settings › Sharing: its marker goes too. */
+    onMountRemoved: (shareId: string) => void;
   }): Promise<WorkbenchHandle | void>;
   /** Progress for the loading screen. */
   progress(step: 'core' | 'session' | 'vault' | 'ui'): void;
@@ -126,6 +131,23 @@ export async function backToConsole(): Promise<void> {
   if (guard) return guard.leave();
   await flushWorkbench();
   goToConsole();
+}
+
+/**
+ * Opens the mount of a received share (Settings › Sharing): the browser holds one vault per page, so
+ * this page leaves as it does for the console (edits written and uploaded, a private copy locked and
+ * removed) and loads the mount's own page, the address the console opens too. Its launch creates the
+ * guard and the marker of the mount; switching vault inside this page would bypass both.
+ */
+export async function openMountPage(mount: {
+  shareId: string;
+  cloudVaultId: string;
+}): Promise<void> {
+  const href = workbenchHref(mount.cloudVaultId, { share: mount.shareId });
+  const go = (): void => window.location.assign(href);
+  if (guard) return guard.leave(go);
+  await flushWorkbench();
+  go();
 }
 
 interface VaultInfo {
@@ -452,6 +474,9 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       vaultPath: info.path,
       onBackToConsole: () => void backToConsole(),
       ...(vaultGuard ? { onRemoveFromBrowser: () => void vaultGuard.removeCopy() } : {}),
+      onOpenMount: (mount) => void openMountPage(mount),
+      // The copy of a mount closed in this page (the open one goes through the guard).
+      onMountRemoved: (shareId) => removeMarker(account, `share:${shareId}`),
     })) ?? null;
   if (import.meta.env.MEMOBRAIN_E2E) {
     // Playwright drives the core, the worker (to simulate its failure) and the leave path directly.

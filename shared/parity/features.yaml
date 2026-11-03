@@ -162,7 +162,7 @@ features:
       operationIds: [deleteVault]
     workbench:
       status: yes
-      note: il vault aperto nella pagina non si elimina da lì (si torna alla console)
+      note: il vault aperto nella pagina non si elimina da lì (si torna alla console); se è eliminato altrove la copia nel browser è segnata nel marcatore e l'avviso offre di rimuoverla (le modifiche mai caricate si elencano prima)
     console:
       status: yes
       routes: [/vaults]
@@ -179,6 +179,7 @@ features:
       web:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Vaults.test.tsx
+        - web/src/workbench/guard.test.ts
         - web/e2e/vaults.spec.ts
       cloud:
         - services/cloud/internal/vaults/service_test.go
@@ -275,12 +276,14 @@ features:
       capability: unlinkVault
     workbench:
       status: exception
-      reason: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia (web/src/workbench/guard.ts)
+      reason: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia (web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare
     tests:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
       web:
         - web/src/workbench/guard.test.ts
+        - web/src/workbench/forget.test.ts
+        - web/src/layout/ForgetBrowser.test.tsx
 
   - id: sync.engine
     title: Sincronizzazione del vault (stato, pausa, sincronizza ora)
@@ -301,6 +304,7 @@ features:
         - apps/desktop/internal/sync/scan_test.go
       web:
         - web/e2e-cloud/web-sync.spec.ts
+        - web/e2e-mixed/mixed.spec.ts
       cloud:
         - services/cloud/test/integration/sync_test.go
         - services/cloud/test/integration/tus_test.go
@@ -391,14 +395,18 @@ features:
       operationIds: [getKeyEnvelopes]
     workbench:
       status: yes
-      note: al blocco la copia in chiaro nel browser viene cancellata (ADR-0029)
+      note: al blocco la copia in chiaro nel browser viene cancellata (ADR-0029); lo sblocco di una copia conservata (gate della pagina) chiede dopo la chiave di recupero una passphrase nuova con la stessa politica dei dialoghi (zxcvbn, §3.8.2)
     tests:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
+        - packages/workbench/src/sync/strength.test.ts
         - apps/desktop/internal/crypto/crypto_test.go
         - apps/desktop/internal/sync/lock_test.go
       web:
+        - web/src/workbench/overlay.test.ts
         - web/e2e-cloud/web-private.spec.ts
+        - web/e2e-cloud/web-create-private.spec.ts
+        - web/e2e-mixed/mixed.spec.ts
         - web/e2e/workbench.spec.ts
 
   - id: crypto.change-passphrase
@@ -530,8 +538,8 @@ features:
     title: Permessi di utenti e gruppi su una condivisione
     desktop:
       status: yes
-      note: GrantEditor e ricerca nella directory di @memobrain/cloud-features, gli stessi della console
-      bindings: [SharingAPI.SetGrant, SharingAPI.RemoveGrant, SharingAPI.Directory]
+      note: GrantEditor e ricerca nella directory di @memobrain/cloud-features, gli stessi della console; una richiesta per tipo (utenti o gruppi) con i campi dell'API, descrizione dei gruppi compresa
+      bindings: [SharingAPI.SetGrant, SharingAPI.RemoveGrant, SharingAPI.SearchDirectory]
       operationIds: [putGrant, deleteGrant, searchDirectoryUsers, searchDirectoryGroups]
     workbench:
       status: yes
@@ -543,6 +551,7 @@ features:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
+        - apps/desktop/internal/app/bindings_sharing_test.go
       web:
         - packages/cloud-features/src/rest.test.tsx
         - web/e2e/shares.spec.ts
@@ -579,11 +588,12 @@ features:
     title: Mount delle condivisioni ricevute
     desktop:
       status: yes
+      note: alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies)
       bindings: [SharingAPI.Mounts, SharingAPI.OpenMount, SharingAPI.RemoveMount]
       operationIds: [listSharedWithMe]
     workbench:
-      status: yes
-      note: un mount si apre con /vaults/:id/open?share=; non ancora provato contro un cloud vero
+      status: partial
+      reason: un mount si apre nella sua pagina (/vaults/:id/open?share=, anche da Impostazioni › Condivisione, attraverso il guard e i marcatori dell'host); la copia di un mount revocato non si conserva come cartella (nel browser nessuno potrebbe riaprirla) ma si scarica come ZIP (capability detachedCopies)
     console:
       status: yes
       note: «Apri» di una condivisione accettata (InvitationsList) apre il workbench sul mount
@@ -593,8 +603,11 @@ features:
         - packages/workbench/src/sharing/sharing.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
         - apps/desktop/internal/sync/e2e_sharing_test.go
+        - apps/desktop/internal/app/bindings_sharing_test.go
       web:
         - web/src/pages/Shares.test.tsx
+        - web/src/workbench/guard.test.ts
+        - web/e2e-mixed/mixed.spec.ts
 
   # ---- account e dispositivi ---------------------------------------------------------------------
   - id: account.login
@@ -1566,7 +1579,7 @@ features:
         ]
     workbench:
       status: partial
-      reason: solo le sorgenti da file; l'importer da cartella richiede una cartella locale (riattivabile con `showDirectoryPicker`)
+      reason: solo le sorgenti da file; l'importer da cartella richiede una cartella locale (capability localFolders)
     tests:
       desktop:
         - packages/workbench/src/importer/ImportWizard.test.tsx

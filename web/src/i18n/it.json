@@ -481,6 +481,7 @@
     "conflictCount_one": "{{count}} conflitto da risolvere",
     "conflictCount_other": "{{count}} conflitti da risolvere",
     "maybePending": "le modifiche potrebbero non essere ancora caricate",
+    "cloudDeleted": "il suo vault cloud è stato eliminato",
     "confirmSignOut": "Elimina ed esci",
     "confirmForget": "Eliminale",
     "busyTitle": "Un vault è aperto in un'altra scheda",
@@ -506,8 +507,10 @@
     "reload": "Ricarica",
     "locking": "Caricamento delle modifiche e blocco del vault…",
     "removing": "Caricamento delle modifiche e rimozione del vault da questo browser…",
+    "leaving": "Caricamento delle modifiche…",
     "removeKeptTitle": "Modifiche non caricate",
     "removeKeptHint": "La copia in questo browser è stata conservata per non perderle. Resta per far finire la sincronizzazione, oppure elimina comunque la copia.",
+    "removeDeletedHint": "Il suo vault cloud è stato eliminato, quindi non si possono più caricare. Resta per esportarle, oppure elimina comunque la copia.",
     "stay": "Resta nel vault",
     "lockedTitle": "Vault bloccato",
     "lockedPending_one": "{{count}} modifica non ancora caricata resta in questo browser come testo in chiaro.",
@@ -528,6 +531,7 @@
     "newPassphrase": "Nuova passphrase",
     "newPassphraseAgain": "Ripeti la nuova passphrase",
     "newPassphraseShort": "La passphrase deve avere almeno 12 caratteri.",
+    "newPassphraseWeak": "Questa passphrase è troppo facile da indovinare: aggiungi altre parole o caratteri.",
     "newPassphraseMismatch": "Le due passphrase sono diverse.",
     "save": "Salva"
   }

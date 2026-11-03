@@ -1,9 +1,18 @@
 // Public signature of @memobrain/workbench as the Web UI uses it (tsconfig.app.json maps the package to
 // this file, so the workbench sources are not compiled twice; they are type-checked by their own project).
+export interface MountRef {
+  shareId: string;
+  cloudVaultId: string;
+}
 export interface WorkbenchOptions {
   kind?: 'desktop' | 'web';
   onBackToConsole?: () => void;
   vaultPath?: string;
+  onRemoveFromBrowser?: () => void;
+  /** Opens a mount of Settings › Sharing in its own page. */
+  onOpenMount?: (mount: MountRef) => void;
+  /** A mount's copy was removed from this browser (Settings › Sharing). */
+  onMountRemoved?: (shareId: string) => void;
 }
 export interface WorkbenchHandle {
   /** Writes the pending edits (bounded wait, never rejects); call before tearing the page down. */

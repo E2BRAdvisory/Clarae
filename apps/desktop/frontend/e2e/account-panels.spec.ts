@@ -72,6 +72,8 @@ async function seed(page: Page): Promise<void> {
       id: 'u-bob',
       name: 'bob',
       label: 'Bob Smith (bob)',
+      displayName: 'Bob Smith',
+      description: '',
     });
   });
 }

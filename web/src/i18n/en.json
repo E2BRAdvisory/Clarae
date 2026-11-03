@@ -481,6 +481,7 @@
     "conflictCount_one": "{{count}} conflict to resolve",
     "conflictCount_other": "{{count}} conflicts to resolve",
     "maybePending": "changes may not be uploaded yet",
+    "cloudDeleted": "its cloud vault was deleted",
     "confirmSignOut": "Delete and sign out",
     "confirmForget": "Delete them",
     "busyTitle": "A vault is open in another tab",
@@ -506,8 +507,10 @@
     "reload": "Reload",
     "locking": "Uploading your changes and locking the vault…",
     "removing": "Uploading your changes and removing the vault from this browser…",
+    "leaving": "Uploading your changes…",
     "removeKeptTitle": "Changes not uploaded",
     "removeKeptHint": "The copy in this browser was kept so they are not lost. Stay to let the sync finish, or delete the copy anyway.",
+    "removeDeletedHint": "Its cloud vault was deleted, so they cannot be uploaded any more. Stay to export them, or delete the copy anyway.",
     "stay": "Stay in the vault",
     "lockedTitle": "Vault locked",
     "lockedPending_one": "{{count}} change not uploaded yet is kept in this browser as clear text.",
@@ -528,6 +531,7 @@
     "newPassphrase": "New passphrase",
     "newPassphraseAgain": "Repeat the new passphrase",
     "newPassphraseShort": "The passphrase needs at least 12 characters.",
+    "newPassphraseWeak": "This passphrase is too easy to guess: add more words or characters.",
     "newPassphraseMismatch": "The two passphrases differ.",
     "save": "Save"
   }

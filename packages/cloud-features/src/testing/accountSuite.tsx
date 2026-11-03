@@ -323,6 +323,10 @@ export function cloudAccountSuite(h: AccountHarness): void {
         target: { value: 'eng' },
       });
       fireEvent.click(within(search).getByRole('button', { name: 'Search' }));
+      // A group is told apart by its description, on every adapter.
+      expect(await within(search).findByRole('list', { name: 'Search results' })).toHaveTextContent(
+        'engineers (The engineers)',
+      );
       fireEvent.click(await within(search).findByRole('button', { name: 'Add engineers' }));
       await waitFor(() => expect(row(access, /engineers/)).toBeInTheDocument());
       expect(within(row(access, /engineers/)).getByText('Group')).toBeInTheDocument();

@@ -12,6 +12,7 @@
   "include": [
     "src",
     "../packages/vaultcrypto-web/src/zipreader.testutil.ts",
-    "../packages/ui/src/i18nCheck.ts"
+    "../packages/ui/src/i18nCheck.ts",
+    "../packages/workbench/src/sync/strength.ts"
   ]
 }

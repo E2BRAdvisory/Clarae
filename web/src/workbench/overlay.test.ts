@@ -70,21 +70,33 @@ describe('unlock gate', () => {
     await user.click(screen.getByLabelText('Use the recovery key'));
     await user.type(screen.getByLabelText('Recovery key'), 'AAAA-BBBB{Enter}');
     expect(unlock).toHaveBeenCalledWith('AAAA-BBBB', true);
+    const strong = 'violet tram juggles 41 quiet anchors';
+    const alert = () => screen.getByRole('alert');
     await user.type(await screen.findByLabelText('New passphrase'), 'short');
     await user.type(screen.getByLabelText('Repeat the new passphrase'), 'short{Enter}');
-    expect(screen.getByRole('alert')).toHaveTextContent('at least 12 characters');
+    await vi.waitFor(() => expect(alert()).toHaveTextContent('at least 12 characters'));
+    // Long enough but guessable: the same policy as the workbench's dialogs (zxcvbn, §3.8.2).
     await user.clear(screen.getByLabelText('New passphrase'));
     await user.clear(screen.getByLabelText('Repeat the new passphrase'));
-    await user.type(screen.getByLabelText('New passphrase'), 'a long new passphrase');
-    await user.type(screen.getByLabelText('Repeat the new passphrase'), 'a long new passphrasf');
+    await user.type(screen.getByLabelText('New passphrase'), 'aaaaaaaaaaaa');
+    await user.type(screen.getByLabelText('Repeat the new passphrase'), 'aaaaaaaaaaaa');
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('differ');
+    await vi.waitFor(() => expect(alert()).toHaveTextContent('too easy to guess'), {
+      timeout: 10_000,
+    });
+    expect(setPassphrase).not.toHaveBeenCalled();
+    await user.clear(screen.getByLabelText('New passphrase'));
     await user.clear(screen.getByLabelText('Repeat the new passphrase'));
-    await user.type(screen.getByLabelText('Repeat the new passphrase'), 'a long new passphrase');
+    await user.type(screen.getByLabelText('New passphrase'), strong);
+    await user.type(screen.getByLabelText('Repeat the new passphrase'), `${strong}x`);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(alert()).toHaveTextContent('differ'));
+    await user.clear(screen.getByLabelText('Repeat the new passphrase'));
+    await user.type(screen.getByLabelText('Repeat the new passphrase'), strong);
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(done).toHaveBeenCalledOnce());
-    expect(setPassphrase).toHaveBeenCalledWith('a long new passphrase');
-  });
+    expect(setPassphrase).toHaveBeenCalledWith(strong);
+  }, 20_000);
 
   it('deletes the copy only after a confirmation', async () => {
     const deleteCopy = vi.fn();

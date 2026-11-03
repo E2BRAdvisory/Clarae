@@ -1442,8 +1442,12 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         );
       return Promise.resolve();
     },
-    Directory: (q: string): Promise<DirectoryEntry[]> =>
-      Promise.resolve(sh.directory.filter((d) => d.label.toLowerCase().includes(q.toLowerCase()))),
+    SearchDirectory: (type: string, q: string): Promise<DirectoryEntry[]> =>
+      Promise.resolve(
+        sh.directory.filter(
+          (d) => d.type === type && d.label.toLowerCase().includes(q.toLowerCase()),
+        ),
+      ),
   };
   const ConfigAPI = {
     Effective: (): Promise<ConfigState> => Promise.resolve(mock.config),

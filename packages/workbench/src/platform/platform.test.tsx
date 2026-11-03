@@ -35,7 +35,7 @@ describe('platform capabilities', () => {
       unlinkVault: true,
       ownsSession: true,
       ephemeralPlaintext: false,
-      directoryPicker: true,
+      detachedCopies: true,
     });
     expect(capabilitiesFor('web')).toEqual({
       localFolders: false,
@@ -47,18 +47,11 @@ describe('platform capabilities', () => {
       unlinkVault: false,
       ownsSession: false,
       ephemeralPlaintext: true,
-      directoryPicker: false,
+      detachedCopies: false,
     });
   });
 
-  it('detects the browser folder picker at run time and takes the host overrides', () => {
-    const w = window as { showDirectoryPicker?: unknown };
-    w.showDirectoryPicker = () => Promise.resolve();
-    try {
-      expect(capabilitiesFor('web').directoryPicker).toBe(true);
-    } finally {
-      delete w.showDirectoryPicker;
-    }
+  it('takes the host overrides', () => {
     configurePlatform({ kind: 'web', capabilities: { osTrash: true } });
     expect(can('osTrash')).toBe(true);
     expect(can('multiVault')).toBe(false);
@@ -71,6 +64,19 @@ describe('platform capabilities', () => {
     expect(remove).toHaveBeenCalledOnce();
     configurePlatform();
     expect(usePlatform.getState().removeFromBrowser).toBeNull();
+  });
+
+  it('keeps the ways to open and forget a mount that the host gives', () => {
+    const open = vi.fn();
+    const removed = vi.fn();
+    configurePlatform({ kind: 'web', onOpenMount: open, onMountRemoved: removed });
+    usePlatform.getState().openMount?.({ shareId: 's1', cloudVaultId: 'c1' });
+    usePlatform.getState().mountRemoved?.('s1');
+    expect(open).toHaveBeenCalledWith({ shareId: 's1', cloudVaultId: 'c1' });
+    expect(removed).toHaveBeenCalledWith('s1');
+    configurePlatform();
+    expect(usePlatform.getState().openMount).toBeNull();
+    expect(usePlatform.getState().mountRemoved).toBeNull();
   });
 
   it('defaults to the desktop and follows what the host configures', () => {

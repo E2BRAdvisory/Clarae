@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { api, linkInfo, type ShareInfo } from '../app/api';
+import { api, linkInfo, type MountState, type ShareInfo } from '../app/api';
 import { initI18n } from '../i18n';
+import { configurePlatform } from '../platform';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { unmanaged, useManaged } from '../state/managed';
 import { useAppStore } from '../state/store';
@@ -46,6 +47,7 @@ const invitation = (over: Partial<ShareInfo> = {}): ShareInfo => ({
 
 beforeEach(async () => {
   initI18n('en');
+  configurePlatform();
   mock = installWailsMock();
   const info = await api.vault.open('/vaults/Docs');
   vaultId = info.id;
@@ -55,8 +57,22 @@ beforeEach(async () => {
   useSharing.setState({ shareTarget: null, revoked: null });
   useSync.setState({ info: {}, status: {}, conflicts: {} });
   mock.sharing.directory.push(
-    { type: 'user', id: 'u-bob', name: 'bob', label: 'Bob Smith (bob)' },
-    { type: 'group', id: 'g-team', name: 'engineers', label: 'engineers' },
+    {
+      type: 'user',
+      id: 'u-bob',
+      name: 'bob',
+      label: 'Bob Smith (bob)',
+      displayName: 'Bob Smith',
+      description: '',
+    },
+    {
+      type: 'group',
+      id: 'g-team',
+      name: 'engineers',
+      label: 'engineers',
+      displayName: '',
+      description: 'The engineering team',
+    },
   );
 });
 
@@ -356,6 +372,92 @@ describe('a share that ends', () => {
     await waitFor(() => expect(mock.sharing.mounts).toHaveLength(0));
     expect(await screen.findByText('Copy kept')).toBeInTheDocument();
     expect(useAppStore.getState().vault).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' })); // the dialogs' queue is shared
+    await waitFor(() => expect(screen.queryByText('Copy kept')).toBeNull());
+  });
+
+  it('in the browser, offers a download instead of a kept folder and removes the copy through the host', async () => {
+    const remove = vi.fn();
+    configurePlatform({ kind: 'web', onRemoveFromBrowser: remove });
+    mock.sharing.mounts.push(revokedMount(vaultId));
+    render(wrap(<SharingDialogs />));
+    await act(async () => {
+      mock.emit('mount:revoked', { vaultId, shareId: 'sh-3', name: 'Team docs' });
+      await Promise.resolve();
+    });
+    const dlg = await screen.findByRole('alertdialog', { name: 'Sharing ended' });
+    expect(within(dlg).queryByRole('button', { name: 'Keep a copy' })).toBeNull();
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Download a copy' }));
+    const done = await screen.findByRole('dialog', { name: 'Export finished' });
+    expect(mock.exports).toEqual([vaultId]);
+    fireEvent.click(within(done).getByRole('button', { name: 'OK' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Export finished' })).toBeNull(),
+    );
+    // The prompt stays until the copy is dealt with; deleting it goes through the host's guard.
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Delete the copy' }));
+    expect(remove).toHaveBeenCalledOnce();
+    expect(mock.sharing.mounts).toHaveLength(1); // not removed behind the guard's back
+    expect(useSharing.getState().revoked).toBeNull();
+  });
+});
+
+const revokedMount = (localId: string): MountState => ({
+  shareId: 'sh-3',
+  cloudVaultId: 'c',
+  name: 'Team docs',
+  ownerName: 'ada',
+  resourceType: 'folder',
+  permission: 'editor',
+  path: '/m/sh-3',
+  mounted: true,
+  revoked: true,
+  vaultId: localId,
+});
+
+describe('mounts in the browser', () => {
+  beforeEach(async () => {
+    await api.auth.login('https://memobrain.test');
+    useAppStore.getState().setAuth(await api.auth.status());
+  });
+  afterEach(() => configurePlatform());
+
+  it('opens a mount in its own page through the host, not inside this one', async () => {
+    const openMount = vi.fn();
+    configurePlatform({ kind: 'web', onOpenMount: openMount });
+    mock.sharing.invitations.push(invitation());
+    render(wrap(<SharingPanel />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept Team docs' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    await waitFor(() =>
+      expect(openMount).toHaveBeenCalledWith({ shareId: 'sh-1', cloudVaultId: 'cloud-1' }),
+    );
+    expect(useAppStore.getState().vault?.id).toBe(vaultId); // the page keeps its own vault
+    expect(mock.sharing.mounts[0]?.vaultId).toBeFalsy(); // OpenMount was not called here
+  });
+
+  it('removes a closed mount without offering to keep a folder, and tells the host', async () => {
+    const removed = vi.fn();
+    configurePlatform({ kind: 'web', onMountRemoved: removed });
+    mock.sharing.mounts.push({ ...revokedMount(''), vaultId: '' });
+    render(wrap(<SharingPanel />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove from this device' }));
+    expect(await screen.findByText(/Remove “Team docs” from this device\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/Keep a copy of the files/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(removed).toHaveBeenCalledWith('sh-3'));
+    expect(mock.sharing.mounts).toHaveLength(0);
+  });
+
+  it('removes the open mount through the host (upload first, its marker, the console)', async () => {
+    const remove = vi.fn();
+    configurePlatform({ kind: 'web', onRemoveFromBrowser: remove });
+    mock.sharing.mounts.push({ ...revokedMount(vaultId), revoked: false });
+    render(wrap(<SharingPanel />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove from this device' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(remove).toHaveBeenCalledOnce());
+    expect(mock.sharing.mounts).toHaveLength(1);
   });
 });
 

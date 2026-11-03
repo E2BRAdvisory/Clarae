@@ -158,12 +158,38 @@ export function SyncSection() {
             {t('sync.cloudDeletedNote', { name: deletedName })}
           </div>
         )}
-        <p className="muted">{t('sync.notConnectedText')}</p>
-        <div className="actions">
-          <button className="primary" onClick={() => useSync.getState().setWizardOpen(true)}>
-            {t('sync.connectTitle')}
-          </button>
-        </div>
+        {canUnlink || !removeFromBrowser ? (
+          <>
+            <p className="muted">{t('sync.notConnectedText')}</p>
+            <div className="actions">
+              <button className="primary" onClick={() => useSync.getState().setWizardOpen(true)}>
+                {t('sync.connectTitle')}
+              </button>
+            </div>
+          </>
+        ) : (
+          // In the browser a copy that lost its cloud vault (deleted elsewhere) is not connected to
+          // another one: it is removed, or kept until the vault is restored from the console.
+          <div className="actions">
+            <button
+              className="danger"
+              onClick={() =>
+                void (async () => {
+                  if (
+                    await dialog.confirm(
+                      t('sync.removeFromBrowser'),
+                      t('sync.removeDeletedCopyText'),
+                      true,
+                    )
+                  )
+                    removeFromBrowser();
+                })()
+              }
+            >
+              {t('sync.removeFromBrowser')}
+            </button>
+          </div>
+        )}
       </>
     );
   }

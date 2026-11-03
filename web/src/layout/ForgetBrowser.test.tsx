@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@memobrain/ui';
-import type { ForgetResult } from '../workbench/forget';
+import type { LeaveResult as ForgetResult } from '../workbench/forget';
 import { updateMarker } from '../workbench/markers';
 import { accountKey } from '../workbench/storage';
 import { useForgetBrowser } from './ForgetBrowser';
@@ -130,5 +130,48 @@ describe('forgetting this browser from the console', () => {
     // Closed by hand: retrying succeeds.
     await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+  });
+
+  it('asks again when the tab left with changes it could not upload', async () => {
+    forget.results = [{ removed: false, busy: true }];
+    const { onDone, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    const busy = await screen.findByRole('dialog', { name: 'A vault is open in another tab' });
+    // The tab wrote its last edits, could not upload them and went away: its marker says so.
+    const marker = updateMarker(account, 'v1', { name: 'Team', kind: 'shared', pending: 1 });
+    forget.afterLeave = [{ removed: false, busy: false, unsynced: [{ id: 'v1', ...marker }] }];
+    await user.click(within(busy).getByRole('button', { name: 'Close that tab and retry' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Changes not uploaded' });
+    expect(dialog).toHaveTextContent('Team — 1 change not uploaded');
+    expect(forget.calls).toBe(1); // the first attempt only, which removed nothing (busy)
+    expect(onDone).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Delete and sign out' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(forget.calls).toBe(2);
+  });
+
+  it('asks before retrying when a copy got changes after the first answer', async () => {
+    forget.results = [{ removed: false, busy: true }];
+    const { onDone, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    const busy = await screen.findByRole('dialog', { name: 'A vault is open in another tab' });
+    // The tab was closed by hand right after an edit.
+    updateMarker(account, 'v2', { name: 'Notes', kind: 'shared', dirty: true });
+    await user.click(within(busy).getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('dialog', { name: 'Changes not uploaded' })).toHaveTextContent(
+      'Notes',
+    );
+    expect(forget.calls).toBe(1);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('names a copy whose cloud vault was deleted without a link to it', async () => {
+    updateMarker(account, 'v9', { name: 'Gone', kind: 'shared', pending: 1, cloudDeleted: true });
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    const dialog = screen.getByRole('dialog', { name: 'Changes not uploaded' });
+    expect(within(dialog).queryByRole('link', { name: 'Gone' })).toBeNull();
+    expect(dialog).toHaveTextContent('Gone — 1 change not uploaded, its cloud vault was deleted');
   });
 });

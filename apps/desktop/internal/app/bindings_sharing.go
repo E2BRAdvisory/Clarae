@@ -89,12 +89,18 @@ type GrantInput struct {
 	Permission    string `json:"permission"`
 }
 
-// DirectoryEntry is a user or group found by the directory search.
+// DirectoryEntry is a user or group found by the directory search, with the fields of the API.
 type DirectoryEntry struct {
-	Type  string `json:"type"` // user | group
-	ID    string `json:"id"`
-	Name  string `json:"name"`
+	Type string `json:"type"` // user | group
+	ID   string `json:"id"`
+	// Name is a user's username, a group's name.
+	Name string `json:"name"`
+	// Label is what a list shows: "Display name (username)" or the username, a group's name.
 	Label string `json:"label"`
+	// DisplayName is a user's display name ("" when none is set).
+	DisplayName string `json:"displayName"`
+	// Description is a group's description ("" when none is set).
+	Description string `json:"description"`
 }
 
 func toShareInfo(s transport.Share) ShareInfo {
@@ -187,14 +193,21 @@ func (s *SharingAPI) OpenMount(shareID string) (VaultInfo, error) {
 }
 
 // RemoveMount ends a mount: the folder is deleted, or, with keepCopy, kept as an ordinary
-// vault disconnected from the share (the choice offered after a revocation). It returns the
-// vault of the kept copy (not opened) or an empty one. The vault of the mount, when open, is
-// closed first: nothing may index, watch or synchronize a folder that is deleted or moved.
+// vault disconnected from the share (the choice offered after a revocation; not in the browser,
+// where nothing could open that folder again). It returns the vault of the kept copy (not
+// opened) or an empty one. The vault of the mount, when open, is closed first: nothing may
+// index, watch or synchronize a folder that is deleted or moved.
 func (s *SharingAPI) RemoveMount(shareID string, keepCopy bool) (VaultInfo, error) {
 	a := s.app
 	shareID, err := canonicalShareID(shareID)
 	if err != nil {
 		return VaultInfo{}, err
+	}
+	if keepCopy && isWeb {
+		// The browser has no place where a kept folder could be opened again: the UI offers to
+		// download the copy as a ZIP instead (capability detachedCopies). Refused before anything
+		// is closed or moved.
+		return VaultInfo{}, errors.New("unsupported: a copy cannot be kept as a folder in the browser; download it as a ZIP instead")
 	}
 	ctx, cancel := a.uiCtx()
 	defer cancel()
@@ -419,34 +432,52 @@ func (s *SharingAPI) RemoveGrant(shareID, principalType, principalID string) err
 	return bindingError(c.DeleteGrant(ctx, shareID, principalType, principalID))
 }
 
-// Directory searches users and groups to share with.
-func (s *SharingAPI) Directory(query string) ([]DirectoryEntry, error) {
+// SearchDirectory searches the users (principalType "user") or the groups ("group") to share
+// with: one request to the directory of that kind, as the console does, so a failure of one kind
+// does not hide the other.
+func (s *SharingAPI) SearchDirectory(principalType, query string) ([]DirectoryEntry, error) {
+	if principalType != "user" && principalType != "group" {
+		return nil, fmt.Errorf("invalid: principal type %q", principalType)
+	}
 	c, err := s.client()
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := s.app.uiCtx() // one deadline for both searches
+	ctx, cancel := s.app.uiCtx()
 	defer cancel()
+	if principalType == "group" {
+		groups, err := c.SearchGroups(ctx, query)
+		if err != nil {
+			return nil, bindingError(err)
+		}
+		return groupEntries(groups), nil
+	}
 	users, err := c.SearchUsers(ctx, query)
 	if err != nil {
 		return nil, bindingError(err)
 	}
-	groups, err := c.SearchGroups(ctx, query)
-	if err != nil {
-		return nil, bindingError(err)
-	}
-	out := make([]DirectoryEntry, 0, len(users)+len(groups))
+	return userEntries(users), nil
+}
+
+func userEntries(users []transport.DirectoryUser) []DirectoryEntry {
+	out := make([]DirectoryEntry, 0, len(users))
 	for _, u := range users {
+		dn := deref(u.DisplayName)
 		label := u.Username
-		if dn := deref(u.DisplayName); dn != "" {
+		if dn != "" {
 			label = dn + " (" + u.Username + ")"
 		}
-		out = append(out, DirectoryEntry{Type: "user", ID: u.Id.String(), Name: u.Username, Label: label})
+		out = append(out, DirectoryEntry{Type: "user", ID: u.Id.String(), Name: u.Username, Label: label, DisplayName: dn})
 	}
+	return out
+}
+
+func groupEntries(groups []transport.DirectoryGroup) []DirectoryEntry {
+	out := make([]DirectoryEntry, 0, len(groups))
 	for _, g := range groups {
-		out = append(out, DirectoryEntry{Type: "group", ID: g.Id.String(), Name: g.Name, Label: g.Name})
+		out = append(out, DirectoryEntry{Type: "group", ID: g.Id.String(), Name: g.Name, Label: g.Name, Description: deref(g.Description)})
 	}
-	return out, nil
+	return out
 }
 
 // ConfigAPI exposes the configuration distributed by the cloud (§2.6.6).

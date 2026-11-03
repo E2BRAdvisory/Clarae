@@ -5,6 +5,7 @@ import { createOidcAuth } from '../auth/oidc';
 import { workbenchVaultId } from '../shared/routes';
 import type { AuthService } from '../auth/types';
 import { parseCreation } from './create';
+import { WORKBENCH_LOCK } from './forget';
 import { CANCELLED, DISABLED, launchWorkbench } from './launch';
 import type { CoreAssets } from './protocol';
 import { message, STEP_MESSAGE } from './strings';
@@ -36,15 +37,23 @@ function show(text: string, opts: { error?: boolean; back?: boolean; retry?: boo
 }
 
 /** One workbench per browser: its files and databases are held exclusively (OPFS synchronous handles). */
-function takeLock(): Promise<boolean> {
-  if (!navigator.locks) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    void navigator.locks.request('memobrain-workbench', { ifAvailable: true }, (lock) => {
-      resolve(lock !== null);
-      // Holding the lock means never settling: it is released when the page goes away.
-      return lock ? new Promise<void>(() => undefined) : undefined;
+async function takeLock(): Promise<boolean> {
+  if (!navigator.locks) return true;
+  const attempt = (): Promise<boolean> =>
+    new Promise((resolve) => {
+      void navigator.locks.request(WORKBENCH_LOCK, { ifAvailable: true }, (lock) => {
+        resolve(lock !== null);
+        // Holding the lock means never settling: it is released when the page goes away.
+        return lock ? new Promise<void>(() => undefined) : undefined;
+      });
     });
-  });
+  // The workbench page this one replaces (opening a mount from Settings › Sharing, a reload) may
+  // still be releasing it for a moment; another tab keeps it.
+  for (let i = 0; i < 8; i++) {
+    if (await attempt()) return true;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return false;
 }
 
 async function start(): Promise<void> {
@@ -104,12 +113,20 @@ async function start(): Promise<void> {
       assets,
       version: typeof __MEMOBRAIN_VERSION__ === 'undefined' ? 'dev' : __MEMOBRAIN_VERSION__,
       progress: (step) => show(message(STEP_MESSAGE[step])),
-      mount: async ({ vaultPath, onBackToConsole, onRemoveFromBrowser }) => {
+      mount: async ({
+        vaultPath,
+        onBackToConsole,
+        onRemoveFromBrowser,
+        onOpenMount,
+        onMountRemoved,
+      }) => {
         status.hidden = true;
         return mountWorkbench(root, {
           kind: 'web',
           onBackToConsole,
           vaultPath,
+          onOpenMount,
+          onMountRemoved,
           ...(onRemoveFromBrowser ? { onRemoveFromBrowser } : {}),
         });
       },

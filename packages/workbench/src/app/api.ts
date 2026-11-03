@@ -410,8 +410,9 @@ export const api = {
       principalType: 'user' | 'group',
       principalId: string,
     ): Promise<void> => SharingAPI.RemoveGrant(shareId, principalType, principalId),
-    directory: (query: string): Promise<DirectoryEntry[]> =>
-      SharingAPI.Directory(query) as Promise<DirectoryEntry[]>,
+    /** Users or groups to share with: one directory request, with the API's fields. */
+    searchDirectory: (type: 'user' | 'group', query: string): Promise<DirectoryEntry[]> =>
+      SharingAPI.SearchDirectory(type, query) as Promise<DirectoryEntry[]>,
   },
   config: {
     effective: (): Promise<ConfigState> => ConfigAPI.Effective(),
