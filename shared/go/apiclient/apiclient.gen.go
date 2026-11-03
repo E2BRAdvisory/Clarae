@@ -1075,6 +1075,9 @@ type Conflict = Problem
 // Forbidden RFC 9457 problem details with the MemoBrain Notes application code
 type Forbidden = Problem
 
+// IdentityConflict RFC 9457 problem details with the MemoBrain Notes application code
+type IdentityConflict = Problem
+
 // InternalError RFC 9457 problem details with the MemoBrain Notes application code
 type InternalError = Problem
 
@@ -1587,7 +1590,7 @@ type ClientInterface interface {
 
 	// CommitWithBody Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1596,7 +1599,7 @@ type ClientInterface interface {
 
 	// Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2349,7 +2352,7 @@ func (c *Client) GetChanges(ctx context.Context, vaultId VaultId, params *GetCha
 
 // CommitWithBody Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2368,7 +2371,7 @@ func (c *Client) CommitWithBody(ctx context.Context, vaultId VaultId, params *Co
 
 // Commit Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5122,7 +5125,7 @@ type ClientWithResponsesInterface interface {
 
 	// CommitWithBodyWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -5131,7 +5134,7 @@ type ClientWithResponsesInterface interface {
 
 	// CommitWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 	//
-	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+	// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -5314,6 +5317,8 @@ type GetEffectiveConfigReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -5337,6 +5342,11 @@ func (r GetEffectiveConfigReply) GetApplicationproblemJSON401() *Unauthenticated
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r GetEffectiveConfigReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetEffectiveConfigReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -5392,6 +5402,10 @@ type SearchDirectoryGroupsReply struct {
 	JSON200 *[]DirectoryGroup
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -5408,6 +5422,16 @@ func (r SearchDirectoryGroupsReply) GetJSON200() *[]DirectoryGroup {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r SearchDirectoryGroupsReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SearchDirectoryGroupsReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SearchDirectoryGroupsReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -5463,6 +5487,10 @@ type SearchDirectoryUsersReply struct {
 	JSON200 *[]DirectoryUser
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -5479,6 +5507,16 @@ func (r SearchDirectoryUsersReply) GetJSON200() *[]DirectoryUser {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r SearchDirectoryUsersReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SearchDirectoryUsersReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SearchDirectoryUsersReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -5692,6 +5730,8 @@ type GetMeReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -5713,6 +5753,11 @@ func (r GetMeReply) GetApplicationproblemJSON401() *Unauthenticated {
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r GetMeReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetMeReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -5772,6 +5817,8 @@ type ListMyDevicesReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -5795,6 +5842,11 @@ func (r ListMyDevicesReply) GetApplicationproblemJSON401() *Unauthenticated {
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r ListMyDevicesReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListMyDevicesReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -5854,6 +5906,8 @@ type RegisterDeviceReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
 	ApplicationproblemJSON413 *PayloadTooLarge
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -5882,6 +5936,11 @@ func (r RegisterDeviceReply) GetApplicationproblemJSON401() *Unauthenticated {
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r RegisterDeviceReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RegisterDeviceReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
@@ -5944,6 +6003,8 @@ type RevokeDeviceReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -5965,6 +6026,11 @@ func (r RevokeDeviceReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r RevokeDeviceReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RevokeDeviceReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6027,6 +6093,8 @@ type ExportMyDataReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6050,6 +6118,11 @@ func (r ExportMyDataReply) GetApplicationproblemJSON401() *Unauthenticated {
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r ExportMyDataReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ExportMyDataReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6105,6 +6178,10 @@ type ListMyGroupsReply struct {
 	JSON200 *[]GroupMembership
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6121,6 +6198,16 @@ func (r ListMyGroupsReply) GetJSON200() *[]GroupMembership {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r ListMyGroupsReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListMyGroupsReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListMyGroupsReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6178,6 +6265,8 @@ type GetMyUsageReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6199,6 +6288,11 @@ func (r GetMyUsageReply) GetApplicationproblemJSON401() *Unauthenticated {
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r GetMyUsageReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetMyUsageReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6327,6 +6421,10 @@ type ListSharedWithMeReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6348,6 +6446,16 @@ func (r ListSharedWithMeReply) GetApplicationproblemJSON400() *ValidationFailed 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r ListSharedWithMeReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListSharedWithMeReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListSharedWithMeReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6405,6 +6513,10 @@ type ListSharesReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6426,6 +6538,16 @@ func (r ListSharesReply) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r ListSharesReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListSharesReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListSharesReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6589,6 +6711,8 @@ type RevokeShareReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6610,6 +6734,11 @@ func (r RevokeShareReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r RevokeShareReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RevokeShareReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6665,8 +6794,12 @@ type GetShareReply struct {
 	JSON200 *Share
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6685,9 +6818,19 @@ func (r GetShareReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetShareReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetShareReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetShareReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6749,6 +6892,8 @@ type UpdateShareReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
 	ApplicationproblemJSON413 *PayloadTooLarge
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -6782,6 +6927,11 @@ func (r UpdateShareReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r UpdateShareReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r UpdateShareReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
@@ -6844,6 +6994,8 @@ type DeleteGrantReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -6865,6 +7017,11 @@ func (r DeleteGrantReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r DeleteGrantReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DeleteGrantReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -6926,6 +7083,8 @@ type PutGrantReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
 	ApplicationproblemJSON413 *PayloadTooLarge
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -6959,6 +7118,11 @@ func (r PutGrantReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PutGrantReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PutGrantReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
@@ -7019,8 +7183,12 @@ type AcceptShareReply struct {
 	JSON200 *Share
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -7039,9 +7207,19 @@ func (r AcceptShareReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AcceptShareReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r AcceptShareReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AcceptShareReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -7097,6 +7275,8 @@ type DeclineShareReply struct {
 	JSON200 *Share
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -7117,6 +7297,11 @@ func (r DeclineShareReply) GetJSON200() *Share {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r DeclineShareReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeclineShareReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -7184,6 +7369,8 @@ type ListVaultsReply struct {
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -7205,6 +7392,11 @@ func (r ListVaultsReply) GetApplicationproblemJSON401() *Unauthenticated {
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r ListVaultsReply) GetApplicationproblemJSON403() *Forbidden {
 	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListVaultsReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -7357,8 +7549,12 @@ type DeleteVaultReply struct {
 	HTTPResponse *http.Response
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -7372,9 +7568,19 @@ func (r DeleteVaultReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteVaultReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r DeleteVaultReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DeleteVaultReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -7430,8 +7636,12 @@ type GetVaultReply struct {
 	JSON200 *Vault
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -7450,9 +7660,19 @@ func (r GetVaultReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetVaultReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetVaultReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetVaultReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -7510,6 +7730,8 @@ type UpdateVaultReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -7537,6 +7759,11 @@ func (r UpdateVaultReply) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r UpdateVaultReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r UpdateVaultReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -7621,6 +7848,8 @@ type GetBlobReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON416 the response for an HTTP 416 `application/problem+json` response
 	ApplicationproblemJSON416 *Problem
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -7648,6 +7877,11 @@ func (r GetBlobReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetBlobReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetBlobReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON416 returns the response for an HTTP 416 `application/problem+json` response
@@ -7712,6 +7946,8 @@ type PutBlobReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
 	ApplicationproblemJSON413 *Problem
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -7740,6 +7976,11 @@ func (r PutBlobReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PutBlobReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PutBlobReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
@@ -7806,6 +8047,8 @@ type CheckBlobsReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
 	ApplicationproblemJSON413 *PayloadTooLarge
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -7839,6 +8082,11 @@ func (r CheckBlobsReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r CheckBlobsReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CheckBlobsReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
@@ -7905,6 +8153,8 @@ type GetChangesReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON410 the response for an HTTP 410 `application/problem+json` response
 	ApplicationproblemJSON410 *Problem
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -7938,6 +8188,11 @@ func (r GetChangesReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetChangesReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetChangesReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON410 returns the response for an HTTP 410 `application/problem+json` response
@@ -8004,6 +8259,8 @@ type CommitReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Conflict
 	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
 	ApplicationproblemJSON413 *PayloadTooLarge
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -8037,6 +8294,11 @@ func (r CommitReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r CommitReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CommitReply) GetApplicationproblemJSON409() *Conflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
@@ -8102,6 +8364,8 @@ type ExportVaultZipReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -8124,6 +8388,11 @@ func (r ExportVaultZipReply) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r ExportVaultZipReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ExportVaultZipReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -8189,6 +8458,8 @@ type CreateExportReply struct {
 	JSON202 *ExportJob
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -8209,6 +8480,11 @@ func (r CreateExportReply) GetJSON202() *ExportJob {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r CreateExportReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateExportReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -8274,8 +8550,12 @@ type GetExportReply struct {
 	JSON200 *ExportJob
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -8294,9 +8574,19 @@ func (r GetExportReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetExportReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetExportReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetExportReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -8355,8 +8645,12 @@ type DownloadExportReply struct {
 	HTTPResponse *http.Response
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -8372,9 +8666,19 @@ func (r DownloadExportReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DownloadExportReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r DownloadExportReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DownloadExportReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -8434,6 +8738,8 @@ type ListRevisionsReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -8460,6 +8766,11 @@ func (r ListRevisionsReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r ListRevisionsReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ListRevisionsReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -8522,6 +8833,8 @@ type GetRevisionContentReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -8545,6 +8858,11 @@ func (r GetRevisionContentReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetRevisionContentReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetRevisionContentReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -8701,8 +9019,12 @@ type GetKeyEnvelopesReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -8726,9 +9048,19 @@ func (r GetKeyEnvelopesReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetKeyEnvelopesReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetKeyEnvelopesReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetKeyEnvelopesReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -8786,6 +9118,8 @@ type PutKeyEnvelopeReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -8813,6 +9147,11 @@ func (r PutKeyEnvelopeReply) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r PutKeyEnvelopeReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PutKeyEnvelopeReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -8887,6 +9226,8 @@ type GetVaultTreeReply struct {
 	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *IdentityConflict
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -8913,6 +9254,11 @@ func (r GetVaultTreeReply) GetApplicationproblemJSON403() *Forbidden {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r GetVaultTreeReply) GetApplicationproblemJSON404() *NotFound {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetVaultTreeReply) GetApplicationproblemJSON409() *IdentityConflict {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -8970,6 +9316,8 @@ type RestoreVaultReply struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -8995,6 +9343,11 @@ func (r RestoreVaultReply) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r RestoreVaultReply) GetApplicationproblemJSON401() *Unauthenticated {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RestoreVaultReply) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -9605,7 +9958,7 @@ func (c *ClientWithResponses) GetChangesWithResponse(ctx context.Context, vaultI
 
 // CommitWithBodyWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9620,7 +9973,7 @@ func (c *ClientWithResponses) CommitWithBodyWithResponse(ctx context.Context, va
 
 // CommitWithResponse Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
 //
-// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+// Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9900,6 +10253,13 @@ func ParseGetEffectiveConfigReply(rsp *http.Response) (*GetEffectiveConfigReply,
 		}
 		response.ApplicationproblemJSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -9984,6 +10344,20 @@ func ParseSearchDirectoryGroupsReply(rsp *http.Response) (*SearchDirectoryGroups
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -10057,6 +10431,20 @@ func ParseSearchDirectoryUsersReply(rsp *http.Response) (*SearchDirectoryUsersRe
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -10304,6 +10692,13 @@ func ParseGetMeReply(rsp *http.Response) (*GetMeReply, error) {
 		}
 		response.ApplicationproblemJSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -10386,6 +10781,13 @@ func ParseListMyDevicesReply(rsp *http.Response) (*ListMyDevicesReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -10474,6 +10876,13 @@ func ParseRegisterDeviceReply(rsp *http.Response) (*RegisterDeviceReply, error) 
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest PayloadTooLarge
@@ -10566,6 +10975,13 @@ func ParseRevokeDeviceReply(rsp *http.Response) (*RevokeDeviceReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -10646,6 +11062,13 @@ func ParseExportMyDataReply(rsp *http.Response) (*ExportMyDataReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -10731,6 +11154,20 @@ func ParseListMyGroupsReply(rsp *http.Response) (*ListMyGroupsReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -10811,6 +11248,13 @@ func ParseGetMyUsageReply(rsp *http.Response) (*GetMyUsageReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -10967,6 +11411,20 @@ func ParseListSharedWithMeReply(rsp *http.Response) (*ListSharedWithMeReply, err
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -11047,6 +11505,20 @@ func ParseListSharesReply(rsp *http.Response) (*ListSharesReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -11241,6 +11713,13 @@ func ParseRevokeShareReply(rsp *http.Response) (*RevokeShareReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -11315,12 +11794,26 @@ func ParseGetShareReply(rsp *http.Response) (*GetShareReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -11417,6 +11910,13 @@ func ParseUpdateShareReply(rsp *http.Response) (*UpdateShareReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest PayloadTooLarge
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -11507,6 +12007,13 @@ func ParseDeleteGrantReply(rsp *http.Response) (*DeleteGrantReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -11603,6 +12110,13 @@ func ParsePutGrantReply(rsp *http.Response) (*PutGrantReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest PayloadTooLarge
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -11684,12 +12198,26 @@ func ParseAcceptShareReply(rsp *http.Response) (*AcceptShareReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -11764,6 +12292,13 @@ func ParseDeclineShareReply(rsp *http.Response) (*DeclineShareReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
@@ -11859,6 +12394,13 @@ func ParseListVaultsReply(rsp *http.Response) (*ListVaultsReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -12032,12 +12574,26 @@ func ParseDeleteVaultReply(rsp *http.Response) (*DeleteVaultReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -12113,12 +12669,26 @@ func ParseGetVaultReply(rsp *http.Response) (*GetVaultReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -12200,6 +12770,13 @@ func ParseUpdateVaultReply(rsp *http.Response) (*UpdateVaultReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
@@ -12302,6 +12879,13 @@ func ParseGetBlobReply(rsp *http.Response) (*GetBlobReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 416:
 		var dest Problem
@@ -12435,6 +13019,13 @@ func ParsePutBlobReply(rsp *http.Response) (*PutBlobReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -12536,6 +13127,13 @@ func ParseCheckBlobsReply(rsp *http.Response) (*CheckBlobsReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest PayloadTooLarge
@@ -12639,6 +13237,13 @@ func ParseGetChangesReply(rsp *http.Response) (*GetChangesReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -12741,6 +13346,13 @@ func ParseCommitReply(rsp *http.Response) (*CommitReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest PayloadTooLarge
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -12821,6 +13433,13 @@ func ParseExportVaultZipReply(rsp *http.Response) (*ExportVaultZipReply, error) 
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
@@ -12920,6 +13539,13 @@ func ParseCreateExportReply(rsp *http.Response) (*CreateExportReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -13008,12 +13634,26 @@ func ParseGetExportReply(rsp *http.Response) (*GetExportReply, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -13082,12 +13722,26 @@ func ParseDownloadExportReply(rsp *http.Response) (*DownloadExportReply, error) 
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -13187,6 +13841,13 @@ func ParseListRevisionsReply(rsp *http.Response) (*ListRevisionsReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -13267,6 +13928,13 @@ func ParseGetRevisionContentReply(rsp *http.Response) (*GetRevisionContentReply,
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -13461,12 +14129,26 @@ func ParseGetKeyEnvelopesReply(rsp *http.Response) (*GetKeyEnvelopesReply, error
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -13548,6 +14230,13 @@ func ParsePutKeyEnvelopeReply(rsp *http.Response) (*PutKeyEnvelopeReply, error) 
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
@@ -13658,6 +14347,13 @@ func ParseGetVaultTreeReply(rsp *http.Response) (*GetVaultTreeReply, error) {
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest IdentityConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -13738,6 +14434,13 @@ func ParseRestoreVaultReply(rsp *http.Response) (*RestoreVaultReply, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound

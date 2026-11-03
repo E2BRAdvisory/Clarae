@@ -63,7 +63,8 @@ git clone git@github.com:E2BR/MemoBrain.git && cd MemoBrain
 corepack enable
 # Installa TASK da https://taskfile.dev/docs/installation
 task tools   # tool Go pinnati (golangci-lint, buf, sqlc, oapi-codegen, …) + yarn install
-task gen     # codice generato: OpenAPI → Go/TS, proto, sqlc, binding Wails
+task gen     # codice generato: OpenAPI → Go/TS, proto, sqlc, flag del Config Profile, binding Wails,
+             # eventi, capability e FeatureId (elenco in CONTRIBUTING.md, «File generati»)
 ```
 
 Il repository è un monorepo: `go.work` unisce i moduli Go (`shared/go`, `services/cloud`, `apps/desktop`),
@@ -100,9 +101,10 @@ task --list             # elenco completo dei task
 
 Il progetto **non ha un servizio di CI** ([ADR-0036](docs/adr/0036-verifiche-locali-senza-ci.md)):
 `task ci` è il controllo ufficiale e va eseguito, verde, prima di un merge su `main` e prima di creare un
-tag di rilascio. Oltre a lint e test comprende typecheck, govulncheck, test del core in WebAssembly,
-controllo di parità desktop/web e del codice generato. Le suite lente (integrazione, e2e Playwright,
-cloud vero) sono elencate in [docs/dev-setup.md](docs/dev-setup.md#verifiche) e si eseguono quando si
+tag di rilascio. Oltre a lint e test comprende typecheck, govulncheck, test del core in WebAssembly
+(`task test-wasm`), i pannelli cloud sul core WebAssembly contro un cloud finto validato sull'OpenAPI
+(`task test-core`), controllo di parità desktop/web e del codice generato. Le suite lente (integrazione,
+sync a due dispositivi e contract test, e2e Playwright, client misti, cloud vero) sono elencate in [docs/dev-setup.md](docs/dev-setup.md#verifiche) e si eseguono quando si
 tocca l'area relativa e prima di un rilascio. L'unico workflow GitHub, `release.yml`, parte da un tag e
 costruisce e pubblica immagine, chart e installer senza eseguire controlli.
 
@@ -111,56 +113,58 @@ piano di sviluppo in [docs/roadmap.md](docs/roadmap.md).
 
 ## Struttura del repository
 
-| Percorso                          | Contenuto                                                                                                                                    |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/desktop`                    | client desktop Wails v2: core Go (`internal/`: vault, indice, link, sync, crittografia, binding), entry del frontend ed e2e                  |
-| `apps/desktop/cmd/memobrain-core` | lo stesso core Go compilato in WebAssembly per il workbench nel browser                                                                      |
-| `services/cloud`                  | Cloud Service: binario `memobrain-cloud`, moduli in `internal/<modulo>`, migrazioni, test d'integrazione, Web UI incorporata                 |
-| `web`                             | Web UI: console utente e amministrazione (`src/pages`) e host del workbench nel browser (`src/workbench`)                                    |
-| `packages/workbench`              | `@memobrain/workbench`: l'interfaccia del vault (editor, pannelli, comandi), condivisa da desktop e Web UI                                   |
-| `packages/cloud-features`         | `@memobrain/cloud-features`: gestione dei vault cloud scritta una volta per console, desktop e workbench (ADR-0037)                          |
-| `packages/ui`                     | `@memobrain/ui`: componenti e stili comuni della console                                                                                     |
-| `packages/api-client`             | `@memobrain/api-client`: client TypeScript generato da `api/openapi.yaml`                                                                    |
-| `packages/markdown`               | `@memobrain/markdown`: estrattore Markdown TypeScript, verificato con le stesse fixture del parser Go                                        |
-| `packages/vaultcrypto-web`        | `@memobrain/vaultcrypto-web`: crittografia dei vault privati nel browser (stessi formati e vettori del Go)                                   |
-| `packages/sqlite-bridge`          | `@memobrain/sqlite-bridge`: ponte sincrono tra il driver Go del core WASM e sqlite-wasm                                                      |
-| `shared/go`                       | Go condiviso da client e server: `merge`, `vaultcrypto`, `syncproto`, `pathrules`, `hashing`, `apiclient` (client REST generato), `notifyv1` |
-| `shared/conformance`              | fixture Markdown, merge e crittografia eseguite sia in Go sia in TypeScript                                                                  |
-| `shared/parity`                   | registro delle funzioni (`features.yaml`) per la parità desktop/web/console                                                                  |
-| `api`                             | contratti: `openapi.yaml` (fonte unica della REST), `proto/` (notifiche gRPC), schema dei Config Profile                                     |
-| `deploy`                          | chart Helm, Docker Compose, stack di sviluppo, realm Keycloak, osservabilità                                                                 |
-| `docs`                            | documentazione (in italiano), ADR, guide utente e di amministrazione                                                                         |
-| `scripts`                         | script di sviluppo, rilascio, parità e inventari                                                                                             |
-| `tools`                           | modulo Go con i tool pinnati (generatori, linter, Task), fuori da `go.work`                                                                  |
+| Percorso                          | Contenuto                                                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/desktop`                    | client desktop Wails v2: core Go (`internal/`: vault, indice, link, sync, crittografia, binding), entry del frontend ed e2e                                                          |
+| `apps/desktop/cmd/memobrain-core` | lo stesso core Go compilato in WebAssembly per il workbench nel browser                                                                                                              |
+| `services/cloud`                  | Cloud Service: binario `memobrain-cloud`, moduli in `internal/<modulo>`, migrazioni, test d'integrazione, Web UI incorporata                                                         |
+| `web`                             | Web UI: console utente e amministrazione (`src/pages`) e host del workbench nel browser (`src/workbench`)                                                                            |
+| `packages/workbench`              | `@memobrain/workbench`: l'interfaccia del vault (editor, pannelli, comandi), condivisa da desktop e Web UI                                                                           |
+| `packages/cloud-features`         | `@memobrain/cloud-features`: gestione dei vault cloud scritta una volta per console, desktop e workbench (ADR-0037)                                                                  |
+| `packages/ui`                     | `@memobrain/ui`: primitive UI e stili condivisi da console e workbench (ADR-0043)                                                                                                    |
+| `packages/api-client`             | `@memobrain/api-client`: client TypeScript generato da `api/openapi.yaml`                                                                                                            |
+| `packages/markdown`               | `@memobrain/markdown`: estrattore Markdown TypeScript, verificato con le stesse fixture del parser Go                                                                                |
+| `packages/vaultcrypto-web`        | `@memobrain/vaultcrypto-web`: crittografia dei vault privati nel browser (stessi formati e vettori del Go)                                                                           |
+| `packages/sqlite-bridge`          | `@memobrain/sqlite-bridge`: ponte sincrono tra il driver Go del core WASM e sqlite-wasm                                                                                              |
+| `shared/go`                       | Go condiviso da client e server: `merge`, `vaultcrypto`, `syncproto`, `pathrules`, `hashing`, `apiclient` (client REST generato), `notifyv1`, `features`, `parity`, `updatemanifest` |
+| `shared/conformance`              | fixture Markdown, merge e crittografia eseguite sia in Go sia in TypeScript                                                                                                          |
+| `shared/parity`                   | registro delle funzioni (`features.yaml`) per la parità desktop/web/console, con le capability generate dal core                                                                     |
+| `api`                             | contratti: `openapi.yaml` (fonte unica della REST), `proto/` (notifiche gRPC), schema dei Config Profile                                                                             |
+| `deploy`                          | chart Helm, Docker Compose, stack di sviluppo, realm Keycloak, osservabilità                                                                                                         |
+| `docs`                            | documentazione (in italiano), ADR, guide utente e di amministrazione                                                                                                                 |
+| `scripts`                         | script di sviluppo, rilascio, parità e inventari                                                                                                                                     |
+| `tools`                           | modulo Go con i tool pinnati (generatori, linter, Task), fuori da `go.work`                                                                                                          |
 
 ## Architettura in breve
 
 - Il **client desktop** lavora offline su un vault che è una cartella di file ordinari; la UI (`@memobrain/workbench`) chiama il core Go attraverso i binding di Wails.
 - Il **workbench web** è la stessa UI sullo stesso core Go, compilato in WebAssembly e avviato in un Web Worker, con i file in OPFS e gli indici in sqlite-wasm.
 - Il **Cloud Service** è un modular monolith Go (`--role=api|worker|all`) con PostgreSQL, storage S3 e Keycloak come provider OIDC; notifica i client via gRPC o SSE.
-- **Il merge è sempre sul client:** il server ordina le modifiche (changelog con `seq` monotono, revisioni immutabili, `base_rev`) e archivia blob content-addressed senza interpretarli.
+- **Il merge è sempre sul client:** il server ordina le modifiche (changelog con `seq` monotono, revisioni immutabili, `base_rev`) e archivia blob content-addressed senza interpretarli. Dopo un ripristino del database cloud a un punto precedente i client ripubblicano ciò che il server ha perso invece di cancellarlo ([ADR-0046](docs/adr/0046-bootstrap-server-indietro.md)).
 - **Vault privati** cifrati end-to-end e non condivisibili, **vault condivisi** in chiaro e collaborativi; ogni funzione resta dentro il proprio vault.
-- `api/openapi.yaml` genera stub del server, client Go e client TypeScript.
+- **Parità per costruzione** ([ADR-0045](docs/adr/0045-parita-per-costruzione.md)): desktop, workbench web e console usano gli stessi componenti; le capability dell'host le dichiara il core Go, eventi, client dell'host e id delle funzioni sono generati, e il registro `shared/parity/features.yaml` elenca per ogni funzione lo stato e le prove su ciascuna superficie (un «sì» del workbench vuole un test sul core WebAssembly).
+- `api/openapi.yaml` genera stub del server, client Go e client TypeScript; i binding di gestione cloud del core usano gli stessi tipi.
 
 Dettagli in [docs/architecture.md](docs/architecture.md); vincoli e decisioni in [Specifications.md](Specifications.md).
 
 ## Documentazione
 
-| Documento                                                    | Contenuto                                                             |
-| ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)                 | componenti, flusso di sync, vault privati e condivisi, contratti      |
-| [docs/desktop-web-sync.md](docs/desktop-web-sync.md)         | come desktop e workbench web restano allineati (guida sviluppatori)   |
-| [docs/web-ui.md](docs/web-ui.md)                             | Web UI: console, amministrazione e workbench                          |
-| [docs/web-workbench-parity.md](docs/web-workbench-parity.md) | parità desktop/web: eccezioni, verifiche, tabelle generate            |
-| [docs/dev-setup.md](docs/dev-setup.md)                       | ambiente di sviluppo, comandi, suite di test, registro delle funzioni |
-| [docs/adr/README.md](docs/adr/README.md)                     | indice delle decisioni architetturali (ADR)                           |
-| [docs/admin-guide/README.md](docs/admin-guide/README.md)     | installazione e gestione del Cloud Service                            |
-| [docs/user-guide/README.md](docs/user-guide/README.md)       | guida utente                                                          |
-| [docs/perf/README.md](docs/perf/README.md)                   | obiettivi di prestazione, misure e come ripeterle                     |
-| [docs/security/](docs/security/)                             | design crittografico, perimetro del pen test, conservazione dei dati  |
-| [docs/release/README.md](docs/release/README.md)             | processo di rilascio                                                  |
-| [CHANGELOG.md](CHANGELOG.md)                                 | note di rilascio                                                      |
-| [docs/roadmap.md](docs/roadmap.md)                           | piano di sviluppo per milestone                                       |
+| Documento                                                        | Contenuto                                                                                                                                                |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [docs/architecture.md](docs/architecture.md)                     | componenti, flusso di sync, vault privati e condivisi, contratti                                                                                         |
+| [docs/desktop-web-sync.md](docs/desktop-web-sync.md)             | come desktop e workbench web restano allineati (guida sviluppatori): capability, eventi, `@memobrain/cloud-features`, una funzione nuova passo per passo |
+| [docs/web-ui.md](docs/web-ui.md)                                 | Web UI: console, amministrazione e workbench                                                                                                             |
+| [docs/web-workbench-parity.md](docs/web-workbench-parity.md)     | parità desktop/web: eccezioni, verifiche, tabelle generate                                                                                               |
+| [docs/dev-setup.md](docs/dev-setup.md)                           | ambiente di sviluppo, comandi, suite di test, registro delle funzioni                                                                                    |
+| [docs/adr/README.md](docs/adr/README.md)                         | indice delle decisioni architetturali (ADR)                                                                                                              |
+| [docs/admin-guide/README.md](docs/admin-guide/README.md)         | installazione e gestione del Cloud Service                                                                                                               |
+| [docs/runbook/backup-restore.md](docs/runbook/backup-restore.md) | backup e ripristino del cloud (PITR), provati con un ripristino reale                                                                                    |
+| [docs/user-guide/README.md](docs/user-guide/README.md)           | guida utente                                                                                                                                             |
+| [docs/perf/README.md](docs/perf/README.md)                       | obiettivi di prestazione, misure e come ripeterle                                                                                                        |
+| [docs/security/](docs/security/)                                 | design crittografico, perimetro del pen test, conservazione dei dati                                                                                     |
+| [docs/release/README.md](docs/release/README.md)                 | processo di rilascio                                                                                                                                     |
+| [CHANGELOG.md](CHANGELOG.md)                                     | note di rilascio                                                                                                                                         |
+| [docs/roadmap.md](docs/roadmap.md)                               | piano di sviluppo per milestone                                                                                                                          |
 
 ## Contribuire
 

@@ -35,15 +35,23 @@ info:
     token (`bearerAuth`; the cloud is an OIDC resource server and validates `iss`,
     `aud=memobrain-api` and the signature against the realm's JWKS). The
     `openIdConnect` scheme `oidc` only documents where clients obtain such a token;
-    the issuer of a running instance is returned by `GET /client-config`. Besides a
-    valid token, the account must not be suspended (`USER_SUSPENDED`). Operations
+    the issuer of a running instance is returned by `GET /client-config`. Authentication
+    runs before every authenticated operation (and the routes outside this contract) and
+    can refuse the request on its own, whatever the operation declares for its business
+    errors: a missing or invalid token is `401 UNAUTHENTICATED`; a suspended or deleted
+    account is `403 USER_SUSPENDED` (response `Forbidden`); an identity that cannot be
+    linked to an account, because another account already uses its e-mail address, is
+    `409 INVALID_STATE` (response `IdentityConflict`, ADR-0041) until an administrator
+    resolves it; an exhausted per-user bucket is `429 RATE_LIMITED`. Every authenticated
+    operation therefore declares 401, 403, 409 and 429. Operations
     marked `x-required-role: memobrain-admin` (the `admin` tag) also require that
     Keycloak realm role in the token (`realm_access.roles`); without it they answer
     `403 FORBIDDEN`. Groups never come from the token (D-05).
 
     **Limits.** Every route, including those outside this contract, is rate limited
     per client address (token bucket; the address is resolved through
-    `TRUSTED_PROXIES`): responses carry `RateLimit-Limit` and `RateLimit-Remaining`,
+    `TRUSTED_PROXIES`) and, once the token is accepted, per user with a second, smaller
+    bucket: responses carry `RateLimit-Limit` and `RateLimit-Remaining`,
     and an exhausted bucket answers `429 RATE_LIMITED` with `Retry-After` (seconds).
     Health probes from direct internal callers are exempt. JSON operations have a
     60 s deadline and a request body of at most 8 MiB (`413 FILE_TOO_LARGE`); the
@@ -85,7 +93,10 @@ x-memobrain-external-routes:
     Routes served under the same base path, with the same bearer authentication and the same
     per-client rate limit, but outside the generated contract (ADR-0037 §3). The request
     validator, the 60 s deadline and the 8 MiB JSON body limit do not apply to them. Errors are
-    `application/problem+json` with the codes of `ErrorCode`. Server:
+    `application/problem+json` with the codes of `ErrorCode`. Besides the answers listed for each
+    route, authentication can refuse any of them as it does for the operations of the contract:
+    401 UNAUTHENTICATED, 403 USER_SUSPENDED, 409 INVALID_STATE (identity conflict, ADR-0041) and
+    429 RATE_LIMITED. Server:
     services/cloud/internal/blobs/tus.go and services/cloud/internal/notify/sse.go; client:
     apps/desktop/internal/sync/transport (tus.go, notify.go).
   tus:
@@ -180,6 +191,14 @@ x-memobrain-external-routes:
         responses:
           '200': text/event-stream
           '401': UNAUTHENTICATED
+          '403': USER_SUSPENDED (the account is suspended or deleted; do not reconnect)
+          '409': >-
+            INVALID_STATE: the identity of the token conflicts with an existing account (ADR-0041);
+            reconnecting does not help until an administrator resolves it
+          '429': >-
+            RATE_LIMITED: the client address or the user exhausted its bucket, or the user already
+            holds the maximum number of streams on this replica (32); reconnect after `Retry-After`
+            when present, otherwise with the usual backoff
     eventTypes:
       vault_changed: '`{"vault_id": "<uuid>", "seq": <int>}`: new commits up to seq (pull `changes?since`)'
       config_changed: '`{"version": <int>}`: the effective configuration changed (`GET /config/effective`)'
@@ -270,6 +289,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -334,6 +355,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -365,6 +388,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -390,6 +415,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -425,6 +452,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -448,6 +477,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -480,6 +511,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -514,6 +547,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -572,8 +607,12 @@ paths:
                 $ref: '#/components/schemas/Vault'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -601,6 +640,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -622,8 +663,12 @@ paths:
           description: Deleted
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -649,6 +694,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -685,6 +732,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -710,8 +759,12 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -748,6 +801,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -817,6 +872,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '410':
           description: >-
             The cursor is not in the changelog the server serves (code CURSOR_EXPIRED): bootstrap from /tree.
@@ -864,6 +921,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -908,6 +967,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           description: 'Blob larger than 32 MB (code FILE_TOO_LARGE) or quota exceeded (QUOTA_EXCEEDED)'
           content:
@@ -968,6 +1029,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '416':
           description: Unsatisfiable range
           content:
@@ -995,7 +1058,10 @@ paths:
         `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the
         request as a whole (validation, access, body size). A `device_id` revoked from the device
         list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops
-        synchronizing, keeps its pending changes and offers to register the device again.
+        synchronizing, keeps its pending changes and offers to register the device again. A
+        commit through a share whose root moved while the request waited is a 409
+        `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and
+        tries again.
       parameters:
         - $ref: '#/components/parameters/Scope'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1020,6 +1086,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -1065,6 +1133,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1102,6 +1172,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1161,6 +1233,10 @@ paths:
                   $ref: '#/components/schemas/GroupMembership'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1190,6 +1266,10 @@ paths:
                   $ref: '#/components/schemas/DirectoryUser'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1215,6 +1295,10 @@ paths:
                   $ref: '#/components/schemas/DirectoryGroup'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1251,6 +1335,10 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1321,8 +1409,12 @@ paths:
                 $ref: '#/components/schemas/Share'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1354,6 +1446,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -1375,6 +1469,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1412,6 +1508,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -1433,6 +1531,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1456,8 +1556,12 @@ paths:
                 $ref: '#/components/schemas/Share'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1481,6 +1585,8 @@ paths:
                 $ref: '#/components/schemas/Share'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1515,6 +1621,10 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1583,6 +1693,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1645,6 +1757,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1869,6 +1983,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -1901,6 +2017,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1931,6 +2049,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1946,6 +2066,9 @@ paths:
       security:
         - bearerAuth: []
       summary: Open Keycloak sessions of a user
+      description: >-
+        Read through the Keycloak admin API: without it (`KC_ADMIN_*` settings) the answer is
+        409 `INVALID_STATE`.
       responses:
         '200':
           description: Sessions
@@ -1961,6 +2084,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -1989,6 +2114,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2019,6 +2146,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2081,6 +2210,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2137,6 +2268,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2171,6 +2304,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2204,6 +2339,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -2226,6 +2363,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2256,6 +2395,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2284,6 +2425,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -2312,6 +2455,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2374,6 +2519,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2433,6 +2580,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2476,6 +2625,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2505,6 +2656,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2534,6 +2687,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2558,6 +2713,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2588,6 +2745,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -2614,6 +2773,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2646,6 +2807,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -2716,6 +2879,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2771,6 +2936,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2805,6 +2972,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2840,6 +3009,8 @@ paths:
                 $ref: '#/components/schemas/ExportJob'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2868,8 +3039,12 @@ paths:
                 $ref: '#/components/schemas/ExportJob'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -2899,8 +3074,12 @@ paths:
                 format: binary
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdentityConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         default:
@@ -3072,7 +3251,10 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
-      description: Not allowed (code FORBIDDEN or USER_SUSPENDED)
+      description: >-
+        Not allowed: the caller lacks the permission or role the operation checks (code FORBIDDEN),
+        or the account is suspended or deleted (code USER_SUSPENDED, possible on every authenticated
+        operation)
       content:
         application/problem+json:
           schema:
@@ -3090,7 +3272,22 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Conflict:
-      description: 'State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION, NAME_IN_USE or REV_CONFLICT)'
+      description: >-
+        Conflict with the current state. Depending on the operation: VAULT_KIND_IMMUTABLE,
+        VAULT_ENCRYPTED, PATH_COLLISION, NAME_IN_USE, REV_CONFLICT (an `expected_version` that is
+        no longer current), SHARE_ROOT_MOVE or INVALID_STATE (the operation is not allowed in the
+        current state; the problem's `detail` says why). Like every authenticated operation, also
+        INVALID_STATE when the identity of the token conflicts with an existing account (see
+        `IdentityConflict`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    IdentityConflict:
+      description: >-
+        The identity of the token cannot be linked to a MemoBrain account (code INVALID_STATE,
+        ADR-0041): another account already uses the same e-mail address. Possible on every
+        authenticated operation; an administrator has to resolve it, so retrying does not help
       content:
         application/problem+json:
           schema:

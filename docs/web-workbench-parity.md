@@ -1,13 +1,14 @@
-# Parità tra il workbench web e il client desktop (M9-WP7)
+# Parità tra il workbench web e il client desktop
 
 Obiettivo (ADR-0029): dal browser si fa tutto ciò che si fa dal client desktop, con la stessa interfaccia e lo stesso comportamento. Qui sta ciò che è **verificato**, ciò che **non lo è** e le **eccezioni**.
 
-Dal 2026-11-01 la parità si misura per **funzione**, non solo per comando o binding (ADR-0037 §1). La fonte è il registro [`shared/parity/features.yaml`](../shared/parity/features.yaml): una voce per funzione utente, con lo stato su tre superfici (desktop, workbench web, console web), la motivazione di ciò che non è `yes` e i test che la coprono, divisi per superficie. Dal 2026-11-03 (ADR-0045 §4) un `yes` del workbench non si eredita dal desktop: vuole una prova sul core WebAssembly, altrimenti la funzione è `partial` con la motivazione «non verificata sul web». Le tabelle in fondo a questa pagina sono generate da quel registro.
+Dal 2026-11-01 la parità si misura per **funzione**, non solo per comando o binding (ADR-0037 §1). La fonte è il registro [`shared/parity/features.yaml`](../shared/parity/features.yaml): una voce per funzione utente, con lo stato su tre superfici (desktop, workbench web, console web), la motivazione di ciò che non è `yes` e i test che la coprono, divisi per superficie. Dal 2026-11-03 (ADR-0045 §4) un `yes` del workbench non si eredita dal desktop: vuole una prova sul core WebAssembly, altrimenti la funzione è `partial` con la motivazione «non verificata sul web». Le tabelle in fondo a questa pagina sono generate da quel registro. La pagina è nata con M9 (M9-WP7) ed è aggiornata a M12 (ADR-0045).
 
 ## Perché la parità è per costruzione, e dove no
 
 - **Stessa UI:** il frontend desktop è il pacchetto `@memobrain/workbench`, montato così com'è dal desktop e dalla Web UI. Un comando o un pannello non esiste in due versioni.
 - **Stessa logica:** i binding sono gli struct Go del desktop compilati in WebAssembly (`apps/desktop/cmd/memobrain-core`), esposti da un dispatcher che segue la semantica di Wails. L'elenco dei servizi è uno solo (`App.Services()`).
+- **Stesse dichiarazioni** (ADR-0045): le capability dell'host le dichiara il core Go e `task gen` le porta nella UI; eventi, client dell'host del browser e `FeatureId` sono generati; comandi e azioni dei pannelli nominano la loro funzione e le capability che richiedono; i binding di gestione cloud usano i tipi dell'OpenAPI. Dettagli in [desktop-web-sync.md](desktop-web-sync.md).
 - **Cosa cambia davvero:** il file system (OPFS dietro lo shim `fs`), SQLite (sqlite-wasm), la sessione (il token lo dà la pagina), la notifica delle modifiche (niente fsnotify) e le finestre di dialogo (download, selettore di file del browser). È lì che possono nascondersi le differenze: i bug veri trovati finora stanno tutti in quel livello (un `open` concorrente dello stesso file dava EBUSY; il mock di Wails copriva il bridge).
 
 ## Eccezioni dichiarate
@@ -25,20 +26,21 @@ Dal 2026-11-01 la parità si misura per **funzione**, non solo per comando o bin
 
 Nel registro queste eccezioni sono le voci con stato `exception` sul workbench (`vault.local-folder`, `app.updater`, `crypto.disk-check`, `deeplink`, `window.native`, `vault.system-trash`, `vault.multi-open`); l'importer da cartella è la voce `import`, con stato `partial`.
 
-## Cosa è verificato (2026-10-29)
+## Cosa è verificato (2026-11-03)
 
 | Livello                                 | Cosa                                                                                                                                                        | Dove                                                              |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Core Go sotto WASM                      | tutti i pacchetti di `apps/desktop/internal` e `cmd`                                                                                                        | `task test-wasm` (29 pacchetti)                                   |
-| Shim `fs` su OPFS                       | 11 test in un worker vero, tra cui rename atomico, cartelle, handle condivisi                                                                               | `web/e2e/opfs-fs.spec.ts`                                         |
-| Workbench sul core vero                 | 11 test: scrittura, ricerca FTS5, link, rinomina, storia, ZIP, grafo, persistenza, blocco e cancellazione, «Dimentica questo browser»                       | `web/e2e/workbench.spec.ts`                                       |
+| Core Go sotto WASM                      | tutti i pacchetti di `apps/desktop/internal` e `cmd` con test, compreso il confronto tra i metodi dell'host del browser e le capability (`capabilities_web_test.go`) | `task test-wasm` (32 pacchetti)                                   |
+| Pannelli cloud sul core in Node         | le suite dei componenti di `@memobrain/cloud-features` (vault, dispositivi, utilizzo, condivisioni, inviti, mount) su `CoreCloudPort` sopra il core WebAssembly, con un cloud finto validato su `api/openapi.yaml` | `task test-core` (`CoreCloudPort.core.test.tsx`)                  |
+| Shim `fs` su OPFS                       | 13 test in un worker vero, tra cui rename atomico, cartelle, handle condivisi, file aperti rinominati e cancellati                                           | `web/e2e/opfs-fs.spec.ts`                                         |
+| Workbench sul core vero                 | 13 test: scrittura, ricerca FTS5, link, rinomina, storia, ZIP, grafo, persistenza, blocco e cancellazione, «Dimentica questo browser», motore fermo, seconda scheda, indirizzo non valido | `web/e2e/workbench.spec.ts`                                       |
 | **Gli stessi spec del desktop sul web** | matrice e2e: ogni spec di `apps/desktop/frontend/e2e` gira sui progetti `desktop-mock` e `web-core`; le esclusioni sul web sono dichiarate con `skipOnWeb` (tabella «Spec e2e per target» sotto) | `task e2e-matrix` (`yarn workspace @memobrain/web e2e:workbench-ui`) |
 | Cloud vero                              | login Keycloak, dispositivo `web`, due browser: una nota arriva dall'uno all'altro e due modifiche concorrenti alla stessa nota `.md` si fondono sul client; vault privato creato e sbloccato nel browser | `web/e2e-cloud/web-sync.spec.ts`, `web-private.spec.ts`, `web-create-private.spec.ts` (`e2e:cloud`, richiede lo stack) |
 | Pannelli cloud sul core                 | vault cloud (rinomina, eliminazione, ripristino, vault eliminato altrove), spazio e dispositivi, condivisioni (creazione, modifica, permessi, revoca, condivisione dentro una cartella gestita), invito accettato e mount aperto nella sua pagina, Config Profile con una chiave bloccata: gli spec del desktop sul core WebAssembly contro il mock REST, che valida richieste e risposte su `api/openapi.yaml` | `account-panels`, `cloud-vaults`, `sharing` della matrice e2e, con `web/e2e/cloudMock.ts` |
 | Desktop e browser sullo stesso cloud    | dispositivo desktop headless (`apps/desktop/cmd/e2e-device`) e workbench: fusione di una nota `.md`, copia di conflitto di un `.canvas` e fusione per elemento di un disegno, vault privato creato sul desktop e sbloccato nel browser, condivisione accettata, aperta come mount e revocata, flag `web_workbench` spento da un Config Profile, dispositivo revocato | `web/e2e-mixed/mixed.spec.ts` (`task e2e-mixed`, richiede lo stack) |
 | Sicurezza                               | build minificata con l'handler Go e la CSP di produzione, nessuna violazione né richiesta esterna, WASM in gzip                                             | `web/e2e-security/workbench-csp.spec.ts`                          |
 
-Non c'è un servizio di CI (ADR-0036): `task test-wasm` e il controllo del registro (`task parity`) sono in `task ci`; gli e2e web (`e2e:workbench-ui`, `e2e:cloud`, `e2e:security`) sono suite lente da eseguire a mano quando si tocca l'area e prima di un rilascio, con i prerequisiti elencati in [dev-setup](dev-setup.md#verifiche). Le cifre della tabella sono quelle del 2026-10-29.
+Non c'è un servizio di CI (ADR-0036): `task test-wasm`, `task test-core` e il controllo del registro (`task parity`) sono in `task ci`; gli e2e web (`e2e:workbench-ui`, `e2e-mixed`, `e2e:cloud`, `e2e:security`) sono suite lente da eseguire a mano quando si tocca l'area e prima di un rilascio, con i prerequisiti elencati in [dev-setup](dev-setup.md#verifiche). Le cifre della tabella sono quelle del 2026-11-03; quale funzione è provata da quale test lo dicono le tabelle generate.
 
 ## Cosa NON è verificato
 
@@ -62,7 +64,8 @@ Una **prova sul core WebAssembly**, che un `yes` del workbench richiede in `test
 
 - uno spec del browser che apre il workbench (`page.goto` di `/vaults/<id>/open`, in `web/e2e` o `web/e2e-security`);
 - uno spec di `web/e2e-cloud` o `web/e2e-mixed` (core vero contro un cloud vero);
-- uno spec della matrice e2e che sul progetto `web-core` gira per quella funzione: non escluso per intero, non un benchmark opt-in e senza un `skipOnWeb` che nomini la funzione (uno spec con un test escluso per la funzione non conta per essa, anche se gli altri test girano).
+- uno spec della matrice e2e che sul progetto `web-core` gira per quella funzione: non escluso per intero, non un benchmark opt-in e senza un `skipOnWeb` che nomini la funzione (uno spec con un test escluso per la funzione non conta per essa, anche se gli altri test girano);
+- un test della UI sul core in Node (`*.core.test.tsx` di `packages/workbench`, `task test-core`).
 
 Un test unitario dell'host web o della UI non è una prova: gira su un mock, non sul core.
 

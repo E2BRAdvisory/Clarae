@@ -9,9 +9,11 @@
 //
 //	EventStatus.Send(m.emit, st)
 //
-// Every declaration is listed in the registry of apps/desktop/internal/app/events.go, from which
-// `task gen` writes the TypeScript names and payload types (packages/workbench/src/app/events.gen.ts).
-// A test of package app fails when an event is declared or sent outside that path.
+// Every declaration is listed in the registry of apps/desktop/internal/app/events_registry.go, from
+// which `task gen` writes the TypeScript names and payload types (packages/workbench/src/app/events.gen.ts).
+// A test of package app fails when an event is declared or sent outside that path. The browser host
+// forwards the same names unchanged, so one declaration serves both hosts. The contract, the checks
+// and how to add an event: docs/desktop-web-sync.md, "Contratto degli eventi".
 package events
 
 import "reflect"

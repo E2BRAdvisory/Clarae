@@ -1,11 +1,12 @@
 # ADR-NNNN — Titolo breve della decisione
 
-|                       |                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| **Stato**             | proposta · accettata · superata da ADR-XXXX                                             |
-| **Data**              | AAAA-MM-GG                                                                              |
-| **Riferimenti spec**  | §… di `Specifications.md`; decisioni D-…; vincoli V-…                                   |
-| **Devia dallo spec?** | no · sì (sezione …) → richiede aggiornamento di `Specifications.md` da parte dell'owner |
+|                       |                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| **Stato**             | proposta · accettata · superata da ADR-XXXX                                                    |
+| **Data**              | AAAA-MM-GG                                                                                     |
+| **Riferimenti spec**  | §… di `Specifications.md`; decisioni D-…; vincoli V-…                                          |
+| **Devia dallo spec?** | no · sì (sezione …) → richiede aggiornamento di `Specifications.md` da parte dell'owner        |
+| **Superfici**         | desktop · workbench web · console · cloud: dove vale la decisione e con quali prove (ADR-0045) |
 
 ## Contesto
 

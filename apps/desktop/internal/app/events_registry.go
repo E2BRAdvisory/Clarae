@@ -13,6 +13,7 @@ import (
 // generator of packages/workbench/src/app/events.gen.ts (`task gen`, internal/app/gen/events). It is
 // built for the desktop, the superset (the browser build has no updater). TestEventRegistry fails when
 // an event is declared but not listed here, or sent by name instead of through its declaration.
+// The contract and how to add an event: docs/desktop-web-sync.md, "Contratto degli eventi".
 var Events = []events.Spec{
 	EventVaultFileChanged.Spec(),
 	EventIndexProgress.Spec(),

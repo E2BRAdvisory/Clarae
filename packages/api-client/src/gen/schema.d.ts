@@ -370,7 +370,7 @@ export interface paths {
         put?: never;
         /**
          * Apply a batch of operations; each one is evaluated independently (§3.4.4 C)
-         * @description Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again.
+         * @description Business outcomes are per operation and travel in a 200 response (`accepted`, `conflict` or `rejected` with a code): a blob that was never uploaded to the vault is a `rejected` operation with code `BLOB_MISSING`, quota and size limits are `QUOTA_EXCEEDED` and `FILE_TOO_LARGE`, never an HTTP error of the whole request. The HTTP errors below concern the request as a whole (validation, access, body size). A `device_id` revoked from the device list is a 403 `FORBIDDEN` with `extra.reason = "device_revoked"`: the client stops synchronizing, keeps its pending changes and offers to register the device again. A commit through a share whose root moved while the request waited is a 409 `INVALID_STATE`: its paths were resolved against the old root, so the client pulls and tries again.
          */
         post: operations["commit"];
         delete?: never;
@@ -801,7 +801,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Open Keycloak sessions of a user */
+        /**
+         * Open Keycloak sessions of a user
+         * @description Read through the Keycloak admin API: without it (`KC_ADMIN_*` settings) the answer is 409 `INVALID_STATE`.
+         */
         get: operations["adminListUserSessions"];
         put?: never;
         post?: never;
@@ -1952,7 +1955,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Not allowed (code FORBIDDEN or USER_SUSPENDED) */
+        /** @description Not allowed: the caller lacks the permission or role the operation checks (code FORBIDDEN), or the account is suspended or deleted (code USER_SUSPENDED, possible on every authenticated operation) */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -1979,8 +1982,17 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description State conflict (code VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION, NAME_IN_USE or REV_CONFLICT) */
+        /** @description Conflict with the current state. Depending on the operation: VAULT_KIND_IMMUTABLE, VAULT_ENCRYPTED, PATH_COLLISION, NAME_IN_USE, REV_CONFLICT (an `expected_version` that is no longer current), SHARE_ROOT_MOVE or INVALID_STATE (the operation is not allowed in the current state; the problem's `detail` says why). Like every authenticated operation, also INVALID_STATE when the identity of the token conflicts with an existing account (see `IdentityConflict`) */
         Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The identity of the token cannot be linked to a MemoBrain account (code INVALID_STATE, ADR-0041): another account already uses the same e-mail address. Possible on every authenticated operation; an administrator has to resolve it, so retrying does not help */
+        IdentityConflict: {
             headers: {
                 [name: string]: unknown;
             };
@@ -2147,6 +2159,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2202,6 +2215,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2234,6 +2248,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -2260,6 +2275,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2294,6 +2310,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2318,6 +2335,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2343,6 +2361,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2370,6 +2389,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2429,7 +2449,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2453,7 +2475,9 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2484,6 +2508,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
@@ -2513,6 +2538,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
@@ -2545,6 +2571,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2571,7 +2598,9 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2603,6 +2632,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
@@ -2641,6 +2671,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             /** @description The cursor is not in the changelog the server serves (code CURSOR_EXPIRED): bootstrap from /tree. The extension member compaction_seq marks a cursor older than the changelog window (or whose change was pruned); last_seq marks a server that is behind the client, i.e. restored to an earlier point in time, with the cursor beyond its end or at a seq now held by another change (ADR-0022, ADR-0046) */
             410: {
                 headers: {
@@ -2685,6 +2716,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -2732,6 +2764,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             /** @description Unsatisfiable range */
             416: {
                 headers: {
@@ -2775,6 +2808,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             /** @description Blob larger than 32 MB (code FILE_TOO_LARGE) or quota exceeded (QUOTA_EXCEEDED) */
             413: {
                 headers: {
@@ -2822,6 +2856,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -2856,6 +2891,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2889,6 +2925,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2949,6 +2986,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2974,6 +3013,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -2999,6 +3040,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3029,6 +3072,8 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3086,7 +3131,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3112,6 +3159,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3144,6 +3192,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -3179,6 +3228,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -3207,6 +3257,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3232,7 +3283,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3258,6 +3311,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
@@ -3289,6 +3343,8 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3322,6 +3378,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3380,6 +3437,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3590,6 +3648,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -3618,6 +3677,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3645,6 +3705,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3672,6 +3733,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3699,6 +3761,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3729,6 +3792,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3787,6 +3851,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3812,6 +3877,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3879,6 +3945,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3910,6 +3977,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -3937,6 +4005,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3964,6 +4033,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -3994,6 +4064,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -4019,6 +4090,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4077,6 +4149,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4136,6 +4209,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4168,6 +4242,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4196,6 +4271,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4224,6 +4300,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4248,6 +4325,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4277,6 +4355,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -4302,6 +4381,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4331,6 +4411,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -4365,6 +4446,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4396,6 +4478,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4423,6 +4506,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
@@ -4450,6 +4534,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
@@ -4478,7 +4563,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };
@@ -4506,7 +4593,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["IdentityConflict"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
         };

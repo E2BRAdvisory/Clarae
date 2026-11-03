@@ -21,7 +21,7 @@ I **vault privati** sono cifrati dal client: un backup del server contiene solo 
 1. Fermare le repliche (`kubectl scale deploy/memobrain-api deploy/memobrain-worker --replicas=0`).
 2. Ripristinare il database (dump o PITR) e verificare che il bucket dei blob contenga almeno gli oggetti fino a quel momento.
 3. Riavviare: le migrazioni mancanti si applicano da sole; la riconciliazione notturna corregge contatori di utilizzo e riferimenti blob.
-4. I client con un cursore di sync **più avanti** del `last_seq` ripristinato non possono proseguire sullo stesso vault: dopo un ripristino che perde modifiche i client ripartono dal manifesto e creano **copie di conflitto** invece di perdere dati locali (nessuna perdita silenziosa).
+4. I client che avevano sincronizzato modifiche successive al punto di ripristino se ne accorgono (cursore oltre il `last_seq` ripristinato, o numero di sequenza riusato da un altro cambiamento) e ripartono dal manifesto ripubblicando ciò che il server ha perso: le revisioni più recenti tornano sul server come nuove revisioni e i file che il server non conosce più vengono ricaricati, invece di essere sovrascritti o cestinati (ADR-0046, nessuna perdita silenziosa). Prima di ogni sovrascrittura il client salva la versione locale in _File recovery_. Un file cancellato dopo il punto di ripristino può ricomparire. Serve il desktop della versione successiva alla 1.3.1 (e il workbench web dello stesso cloud): le versioni precedenti spostano nel cestino locale `.trash/` i file che il server ha perso. Procedura completa nel [runbook](../runbook/backup-restore.md).
 
 ## Upgrade
 

@@ -21,6 +21,15 @@ func defaultHost() Host { return wailsHost{} }
 // systemTrash moves a file or folder (absolute path) to the OS trash.
 func systemTrash(path string) error { return wastebasket.Trash(path) }
 
+// wailsHost implements Host on the desktop with the Wails runtime: events, native dialogs, the
+// system browser, printing and quitting the window. Its twin for the browser is webHost
+// (host_web.go, built with GOOS=js).
+//
+// Every Host method is implemented by both hosts and classified by capability in
+// HostMethodCapability (host.go): "" when every host supports it, otherwise the capability
+// that is false where it fails. TestHostCapabilities fails on a method left unclassified, and in
+// `task test-wasm` capabilities_web_test.go calls every webHost method and fails when one that
+// errors is not gated by a false capability. See docs/desktop-web-sync.md, "Il confine nel core Go".
 type wailsHost struct{}
 
 func (wailsHost) Emit(ctx context.Context, name string, payload any) {

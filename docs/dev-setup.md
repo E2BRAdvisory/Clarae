@@ -50,7 +50,7 @@ Accesso nel cloud: `user1` / `memobrain-dev-password` (anche `user2`, e `admin` 
 ## Comandi quotidiani
 
 ```sh
-task gen             # rigenera OpenAPI (stub Go, client Go, client TS), proto, sqlc, binding Wails
+task gen             # rigenera tutto il codice generato (sotto)
 task lint            # golangci-lint + eslint + prettier
 task typecheck       # tsc in tutti i pacchetti TypeScript (genera i binding Wails se mancano)
 task test            # go test -race, vitest, conformance
@@ -58,6 +58,21 @@ task e2e             # Playwright (Chromium): UI desktop sul mock, bundle di pro
 task ci              # verifica completa prima di merge e tag (vedi «Verifiche»)
 task --list
 ```
+
+`task gen` esegue, nell'ordine, i generatori `task gen-*` (l'elenco dei file con le sorgenti è in [CONTRIBUTING.md, «File generati»](../CONTRIBUTING.md#file-generati-mai-a-mano)):
+
+| Generatore            | Da                                             | A                                                                                                               |
+| --------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `gen-features`        | `api/config-profile.schema.json`               | flag e default del Config Profile in Go (`shared/go/features`) e TypeScript (`@memobrain/api-client/features`)  |
+| `gen-openapi`         | `api/openapi.yaml`                             | stub del server, client Go (`shared/go/apiclient`), client TypeScript (`packages/api-client`)                   |
+| `gen-proto`           | `api/proto`                                    | `shared/go/notifyv1`                                                                                            |
+| `gen-sqlc`            | `services/cloud/internal/db/queries`           | `services/cloud/internal/<modulo>/<modulo>db`                                                                   |
+| `gen-wails`           | i binding Go di `App.Services()`               | `packages/workbench/wailsjs` (non versionato) e il client dell'host del browser `web/src/workbench/core.gen.ts` |
+| `gen-events`          | `apps/desktop/internal/app/events_registry.go` | `packages/workbench/src/app/events.gen.ts`                                                                      |
+| `gen-capabilities`    | `apps/desktop/internal/app/capabilities.go`    | `packages/workbench/src/platform/capabilities.gen.ts`, `shared/parity/capabilities.gen.json`                    |
+| `gen-parity-features` | `shared/parity/features.yaml`                  | `FeatureId` (`packages/workbench/src/parity/features.gen.ts`) e `shared/go/parity/features_gen.go`              |
+
+Fuori da `task gen`: le tabelle di [web-workbench-parity.md](web-workbench-parity.md) (`node scripts/parity.mjs`) e l'inventario degli endpoint di `docs/security/pentest-scope.md` (`node scripts/pentest-inventory.mjs`, `--check` per verificarlo).
 
 Per un singolo test Go: `cd services/cloud && go test -race -run 'TestNome' ./internal/sync/...`.
 Per un singolo test TS: `yarn workspace @memobrain/workbench exec vitest run src/editor/foo.test.ts` (la UI sta in `packages/workbench`; `apps/desktop/frontend` contiene solo l'entry e gli e2e).
@@ -77,6 +92,7 @@ Non c'è un servizio di CI ([ADR-0036](adr/0036-verifiche-locali-senza-ci.md)). 
 | `test-ts`     | Vitest in ogni pacchetto                                                                                                                   |
 | `conformance` | fixture Markdown, merge e crittografia in Go e TypeScript                                                                                  |
 | `test-wasm`   | test del core Go compilato in WebAssembly, sotto Node con sqlite-wasm                                                                      |
+| `test-core`   | le suite dei pannelli cloud su `CoreCloudPort` sopra il core WebAssembly, in Node, con un cloud finto validato su `api/openapi.yaml`       |
 | `parity`      | test di `scripts/parity/` e `node scripts/parity.mjs --check` (registro delle funzioni)                                                    |
 | `check-gen`   | fallisce se `task gen` cambia l'albero                                                                                                     |
 
@@ -102,6 +118,7 @@ Il workbench nel browser esegue il core Go del desktop compilato in WebAssembly 
 ```sh
 task wasm-core       # build/wasm/memobrain-core.wasm + wasm_exec.js (GOOS=js GOARCH=wasm)
 task test-wasm       # test di apps/desktop/internal/... e cmd/... sotto Node, con scripts/go-js-exec.sh e @memobrain/sqlite-bridge
+task test-core       # pannelli cloud su CoreCloudPort sopra il core WASM in Node (*.core.test.tsx), cloud finto validato sull'OpenAPI
 task web-build       # core WASM + Web UI di produzione, copiati in services/cloud/web-embed/dist (poi task build-cloud)
 task web-clean       # rimuove la build incorporata e ripristina il segnaposto
 ```
@@ -137,6 +154,8 @@ cd apps/desktop && go test -race -count=1 -tags integration -run TestTransportHo
 
 Il test `shared/go/syncproto/codes_contract_test.go` allinea l'enum `ErrorCode` di OpenAPI alle costanti Go (gira con `task test`).
 
+Lo stesso contratto valida i finti cloud lato TypeScript: `contractFetch` di `@memobrain/cloud-features/testing/contract` riconduce ogni richiesta a un'operazione di `api/openapi.yaml` e valida corpi e risposte JSON. Lo usano le suite sul core (`task test-core`) e il mock REST di Playwright (`web/e2e/cloudMock.ts`, negli spec del workbench e della matrice). Uno stato che l'operazione non dichiara viene confrontato con la sua risposta `default` (l'errore interno): per questo ogni operazione autenticata dichiara anche i rifiuti dell'autenticazione (401, `403 USER_SUSPENDED`, `409 INVALID_STATE` per il conflitto d'identità, 429), così i client generati e i test li trattano come risposte previste.
+
 ## Prestazioni
 
 ```sh
@@ -158,8 +177,8 @@ Ogni funzione utente ha una voce in `shared/parity/features.yaml` (ADR-0037 §1)
    - `workbench`: basta `status` se usa gli stessi elenchi del desktop (li eredita); altrimenti li elenca.
    - `console`: `status`, `routes` di `web/src/App.tsx`, `operationIds` e `actions` (le azioni della console che non chiamano la REST, marcate con `data-action="<id>"` in `web/src`). Si omette se la funzione riguarda il contenuto di un vault aperto. Ogni rotta, ogni operazione chiamata dalla console e ogni `data-action` va citata da una voce.
 3. **Motiva ciò che non è `yes`.** `partial`, `exception`, `console-only` e `missing` vogliono un `reason`, per esempio «ADR-0037, fase B».
-4. **Elenca i test per superficie** (`tests.desktop`, `tests.workbench`, `tests.console`, `tests.cloud`; ADR-0045 §4): percorsi di file dalla radice del repository, ciascuno nel posto della sua superficie. Un `yes` del workbench vuole in `tests.workbench` almeno una prova sul core WebAssembly: uno spec del browser che apre il workbench (`web/e2e`, `web/e2e-security`), `web/e2e-cloud` o `web/e2e-mixed`, oppure uno spec della matrice (`apps/desktop/frontend/e2e`) che sul web gira per quella funzione. Senza prova lo stato è `partial` con la motivazione «non verificata sul web: …». I pannelli cloud girano sul core con il mock REST `web/e2e/cloudMock.ts` (fixture `cloud` di `apps/desktop/frontend/e2e/cloud.ts`): dettagli in [desktop-web-sync.md](desktop-web-sync.md#prove-per-superficie).
-5. **Comandi e azioni che dipendono dalla piattaforma.** Se il comando esiste solo dove c'è una capability (`packages/workbench/src/platform`), dichiaralo con `requires: ['updater']` nel `Command` invece di un controllo in `enabled`; un'azione dichiara allo stesso modo `requires`, oppure `excludes` se fa le veci di una capability dove manca, e si mostra con `<ActionButton>`. Il controllo legge `requires` ed `excludes` e rifiuta un `yes` su una superficie la cui piattaforma non offre il comando o l'azione (il workbench elenca allora i suoi `commands`/`actions`).
+4. **Elenca i test per superficie** (`tests.desktop`, `tests.workbench`, `tests.console`, `tests.cloud`; ADR-0045 §4): percorsi di file dalla radice del repository, ciascuno nel posto della sua superficie. Un `yes` del workbench vuole in `tests.workbench` almeno una prova sul core WebAssembly: uno spec del browser che apre il workbench (`web/e2e`, `web/e2e-security`), `web/e2e-cloud` o `web/e2e-mixed`, uno spec della matrice (`apps/desktop/frontend/e2e`) che sul web gira per quella funzione, oppure un test della UI sul core in Node (`*.core.test.tsx` di `packages/workbench`, `task test-core`). Senza prova lo stato è `partial` con la motivazione «non verificata sul web: …». I pannelli cloud girano sul core con il mock REST `web/e2e/cloudMock.ts` (fixture `cloud` di `apps/desktop/frontend/e2e/cloud.ts`): dettagli in [desktop-web-sync.md](desktop-web-sync.md#prove-per-superficie).
+5. **Comandi e azioni che dipendono dalla piattaforma.** Se il comando esiste solo dove c'è una capability (dichiarata dal core in `apps/desktop/internal/app/capabilities.go`, letta dalla UI con `packages/workbench/src/platform`), dichiaralo con `requires: ['updater']` nel `Command` invece di un controllo in `enabled`; un'azione dichiara allo stesso modo `requires`, oppure `excludes` se fa le veci di una capability dove manca, e si mostra con `<ActionButton>`. Il controllo legge `requires` ed `excludes` e rifiuta un `yes` su una superficie la cui piattaforma non offre il comando o l'azione (il workbench elenca allora i suoi `commands`/`actions`).
 6. **Un'operazione che non è una funzione utente** (sonda, bootstrap pubblico) va in `server_only`, con il motivo.
 7. **Rigenera e verifica:** `node scripts/parity.mjs` aggiorna le tabelle di `docs/web-workbench-parity.md`; `task parity` esegue i test del controllo e `node scripts/parity.mjs --check`.
 

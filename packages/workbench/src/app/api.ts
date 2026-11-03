@@ -2,6 +2,26 @@
 // so the rest of the frontend imports one module and tests can mock it.
 // Model types are exposed as plain data shapes (without the generated
 // `convertValues` helper) so literals and mocks type-check structurally.
+//
+// One facade, two hosts (ADR-0029, ADR-0030). On the desktop the wailsjs modules
+// call window.go, installed by Wails. In the browser the very same modules run
+// unchanged: web/src/workbench/bridge.ts installs window.go (and window.runtime)
+// and forwards every call to the Go core compiled to WebAssembly, which serves
+// the same App.Services(). So a binding added here exists on both hosts by
+// construction; what can still differ is the host (Go `Host`, capabilities).
+//
+// A new binding (docs/desktop-web-sync.md, "Una funzione nuova, passo per passo"):
+//   - the Go method in a service of App.Services(), then `task gen` (wailsjs and
+//     the browser host's typed client, web/src/workbench/core.gen.ts);
+//   - an entry in shared/parity/features.yaml (`bindings` of its feature), or
+//     `task parity` fails;
+//   - if it depends on the host, a capability declared by the core
+//     (apps/desktop/internal/app/capabilities.go) and named by the command or
+//     action that uses it (`requires`), never a check of the platform here;
+//   - for cloud management, the OpenAPI types (internal/app/cloudapi) and a
+//     CloudPort method (packages/cloud-features/src/port.ts) implemented by both
+//     adapters, RestCloudPort and CoreCloudPort: settings and sharing panels go
+//     through the port, not through this facade (ESLint).
 import * as VaultAPI from '../../wailsjs/go/app/VaultAPI';
 import * as SearchAPI from '../../wailsjs/go/app/SearchAPI';
 import * as ExportAPI from '../../wailsjs/go/app/ExportAPI';

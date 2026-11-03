@@ -42,7 +42,7 @@ flowchart LR
 
 Il **merge è sempre sul client**: il server ordina e conserva, non interpreta mai il contenuto. Per questo il protocollo è identico per vault privati e condivisi (Specifications.md §3.4, ADR-0009).
 
-1. **Pull:** `GET /vaults/{id}/changes?since=<cursore>` restituisce il changelog del vault, ordinato da un `seq` monotono. Un cursore troppo vecchio (prima di `compaction_seq`) riceve `410 CURSOR_EXPIRED` e il client riparte dall'albero del vault (bootstrap).
+1. **Pull:** `GET /vaults/{id}/changes?since=<cursore>&since_id=<id>` restituisce il changelog del vault, ordinato da un `seq` monotono. Il cursore è una posizione (`next_seq`) più l'identità del cambiamento a quella posizione (`next_id`, oppure `as_of_id` dell'albero): dopo un ripristino del database a un punto precedente i nuovi commit riusano numeri di sequenza già visti, e solo l'identità li distingue (ADR-0046). Un cursore che il server non può proseguire riceve `410 CURSOR_EXPIRED` e il client riparte dall'albero del vault (bootstrap): con `compaction_seq` il cursore è più vecchio della finestra del changelog e l'albero è autorevole; con `last_seq` il server è tornato indietro e il bootstrap _reconcile-upload_ ripubblica le revisioni e i file che il server ha perso invece di sovrascriverli o cestinarli. Prima di riscrivere un file durante un bootstrap il client ne salva una versione in _File recovery_.
 2. **Risoluzione sul client:** il core applica le modifiche remote; se un file ha anche modifiche locali fa il merge a tre vie per `.md` e per id per i JSON di canvas ed Excalidraw (`shared/go/merge`). Gli altri tipi producono una copia di conflitto (D-04). I candidati al merge e i path non decifrabili sono persistiti in `sync.db` (`pending_remote`, `quarantine`, ADR-0039), così un crash o un blocco del vault non perdono nulla.
 3. **Push:** `POST /vaults/{id}/blobs:check` dice quali blob (content-addressed, SHA-256) mancano; si caricano con `PUT /vaults/{id}/blobs/{sha256}` fino a 32 MB, oltre con tus (`POST /vaults/{id}/uploads`, `PATCH /uploads/{id}`).
 4. **Commit:** `POST /vaults/{id}/commit` con `ops[]`; ogni operazione porta la `base_rev` (concorrenza ottimistica) e ha un esito proprio: `accepted`, `conflict` (con la revisione corrente, da fondere) o `rejected` con un codice (`BLOB_MISSING`, `QUOTA_EXCEEDED`, ...). Le revisioni sono immutabili (`rev_no`); nessuna versione viene persa in silenzio, le scartate restano nello storico.
@@ -71,12 +71,25 @@ Nel browser gli stessi file stanno in OPFS e i database nel pool `opfs-sahpool` 
 
 ## Contratti
 
-- **REST:** [`api/openapi.yaml`](../api/openapi.yaml) è la fonte unica. `task gen-openapi` genera gli stub del server (oapi-codegen, strict server e validatore delle richieste, `services/cloud/internal/api/api.gen.go`), il client Go (`shared/go/apiclient`, usato da `apps/desktop/internal/sync/transport`) e il client TypeScript (`packages/api-client`). Gli errori sono `application/problem+json` con un `code` allineato a `shared/go/syncproto`. tus e SSE sono fuori dal generatore e documentati nell'estensione `x-memobrain-external-routes` (ADR-0037 §3).
+- **REST:** [`api/openapi.yaml`](../api/openapi.yaml) è la fonte unica. `task gen-openapi` genera gli stub del server (oapi-codegen, strict server e validatore delle richieste, `services/cloud/internal/api/api.gen.go`), il client Go (`shared/go/apiclient`, usato da `apps/desktop/internal/sync/transport`) e il client TypeScript (`packages/api-client`). Gli errori sono `application/problem+json` con un `code` allineato a `shared/go/syncproto`; ogni operazione autenticata dichiara anche i rifiuti dell'autenticazione (401, `403 USER_SUSPENDED`, `409 INVALID_STATE` per il conflitto d'identità di ADR-0041, 429). tus e SSE sono fuori dal generatore e documentati nell'estensione `x-memobrain-external-routes` (ADR-0037 §3).
+- **Config Profile:** [`api/config-profile.schema.json`](../api/config-profile.schema.json) → costanti e default dei flag in Go (`shared/go/features`) e TypeScript (`@memobrain/api-client/features`), `task gen-features`.
 - **Notifiche gRPC:** [`api/proto/memobrain/v1/notify.proto`](../api/proto/memobrain/v1/notify.proto) → `shared/go/notifyv1` (buf).
 - **Database del cloud:** query per modulo in `services/cloud/internal/db/queries/<modulo>.sql` → `internal/<modulo>/<modulo>db` (sqlc); migrazioni SQL versionate in `internal/db/migrations`.
-- **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati) e, da questi, il client tipizzato dell'host del browser `web/src/workbench/core.gen.ts` (versionato).
+- **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati) e, da questi, il client tipizzato dell'host del browser `web/src/workbench/core.gen.ts` (versionato). I binding di gestione cloud ricevono e restituiscono i tipi dell'OpenAPI (`apps/desktop/internal/app/cloudapi`, ADR-0045 §6), quindi i modelli generati da Wails coincidono con gli schemi di `@memobrain/api-client`.
 - **Eventi Go → TypeScript:** il registro `apps/desktop/internal/app/events_registry.go` → `packages/workbench/src/app/events.gen.ts` (nomi e payload, `task gen-events`). Regole e controlli: [desktop-web-sync.md](desktop-web-sync.md#contratto-degli-eventi) (ADR-0045 §5).
-- **Verifiche:** contract test del client contro il server reale (`apps/desktop/internal/sync/transport/contract_test.go`), fixture di conformance Go/TS per Markdown, merge e crittografia (`shared/conformance`), registro di parità (`shared/parity/features.yaml`, con le prove per superficie di ADR-0045). Conformance e registro girano in `task ci` (ADR-0036); il contract test ha il tag `integration` e gira con le altre suite lente in `task test-desktop-e2e`, da eseguire quando si toccano il client della sync o le API.
+- **Capability e funzioni:** le capability dell'host le dichiara il core (`apps/desktop/internal/app/capabilities.go`) → `packages/workbench/src/platform/capabilities.gen.ts` e `shared/parity/capabilities.gen.json` (`task gen-capabilities`); il registro `shared/parity/features.yaml` → il tipo `FeatureId` e le costanti Go `shared/go/parity` (`task gen-parity-features`).
+- **Verifiche:** contract test del client contro il server reale (`apps/desktop/internal/sync/transport/contract_test.go`), fixture di conformance Go/TS per Markdown, merge e crittografia (`shared/conformance`), registro di parità (`shared/parity/features.yaml`, con le prove per superficie di ADR-0045), le suite dei pannelli cloud sul core WebAssembly contro un cloud finto validato sull'OpenAPI (`task test-core`). Conformance, `test-core`, registro e codice generato (`task check-gen`) girano in `task ci` (ADR-0036); il contract test ha il tag `integration` e gira con le altre suite lente in `task test-desktop-e2e`, da eseguire quando si toccano il client della sync o le API.
+
+## Parità tra desktop, workbench web e console
+
+La parità è **per costruzione** (ADR-0045): una sola UI (`@memobrain/workbench`) montata da entrambi gli host, una sola logica (`App.Services()`, servita da Wails sul desktop e dal dispatcher RPC del core WebAssembly nel browser) e un solo modulo per la gestione dei vault cloud (`@memobrain/cloud-features`, dietro `CloudPort` con un adattatore REST per la console e uno sui binding per desktop e workbench). Le differenze ammesse passano da punti dichiarati e controllati:
+
+- il confine `Host` nel core Go, implementato da entrambi gli host e classificato per capability (`TestHostCapabilities`);
+- le capability, dichiarate dal core e generate per la UI; comandi e azioni dei pannelli le nominano in `requires`/`excludes` e dichiarano la loro funzione (`FeatureId`);
+- eventi e client dell'host generati, e regole ESLint contro nomi di binding e di eventi scritti a mano e controlli sulla piattaforma fuori da `platform/`;
+- il registro delle funzioni con le prove per superficie: un `yes` del workbench vuole un test sul core WebAssembly (`task parity`).
+
+Guida per gli sviluppatori e procedura per una funzione nuova: [desktop-web-sync.md](desktop-web-sync.md); stato misurato: [web-workbench-parity.md](web-workbench-parity.md).
 
 ## Il cloud come modular monolith
 
@@ -90,18 +103,18 @@ Ogni modulo è un pacchetto `services/cloud/internal/<modulo>` con interfacce es
 
 ## Dove sta cosa
 
-| Area                          | Percorso                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| Entry del desktop (Wails)     | `apps/desktop/main.go`, `apps/desktop/frontend` (solo entry e e2e)             |
-| Core Go (desktop e WASM)      | `apps/desktop/internal/{app,vault,indexer,links,search,sync,crypto,…}`         |
-| Core in WebAssembly           | `apps/desktop/cmd/memobrain-core`                                              |
-| UI condivisa                  | `packages/workbench`                                                           |
-| Gestione dei vault cloud (UI) | `packages/cloud-features` (ADR-0037)                                           |
-| Console e host del browser    | `web/src/pages`, `web/src/workbench`                                           |
-| Cloud                         | `services/cloud/cmd/memobrain-cloud`, `services/cloud/internal/<modulo>`       |
-| Codice Go condiviso           | `shared/go` (`merge`, `vaultcrypto`, `syncproto`, `pathrules`, `apiclient`, …) |
-| Fixture condivise             | `shared/conformance`, registro di parità `shared/parity`                       |
-| Contratti                     | `api/openapi.yaml`, `api/proto`, `api/config-profile.schema.json`              |
-| Distribuzione                 | `deploy/{helm,compose,docker,keycloak,observability}`, `.github/workflows`     |
+| Area                          | Percorso                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Entry del desktop (Wails)     | `apps/desktop/main.go`, `apps/desktop/frontend` (solo entry e e2e)                                                     |
+| Core Go (desktop e WASM)      | `apps/desktop/internal/{app,vault,indexer,links,search,sync,crypto,…}`                                                 |
+| Core in WebAssembly           | `apps/desktop/cmd/memobrain-core`                                                                                      |
+| UI condivisa                  | `packages/workbench`                                                                                                   |
+| Gestione dei vault cloud (UI) | `packages/cloud-features` (ADR-0037)                                                                                   |
+| Console e host del browser    | `web/src/pages`, `web/src/workbench`                                                                                   |
+| Cloud                         | `services/cloud/cmd/memobrain-cloud`, `services/cloud/internal/<modulo>`                                               |
+| Codice Go condiviso           | `shared/go` (`merge`, `vaultcrypto`, `syncproto`, `pathrules`, `apiclient`, `features`, `parity`, `updatemanifest`, …) |
+| Fixture condivise             | `shared/conformance`, registro di parità `shared/parity`                                                               |
+| Contratti                     | `api/openapi.yaml`, `api/proto`, `api/config-profile.schema.json`                                                      |
+| Distribuzione                 | `deploy/{helm,compose,docker,keycloak,observability}`, `.github/workflows`                                             |
 
-ADR principali: [0002](adr/0002-sqlite-fts5-trigram.md) (FTS5), [0009](adr/0009-sync-protocol-details.md) (sync), [0029](adr/0029-web-workbench.md) e [0030](adr/0030-desktop-core-wasm.md) (workbench web), [0033](adr/0033-sqlc-per-module.md) (moduli e tabelle), [0036](adr/0036-verifiche-locali-senza-ci.md) (verifiche locali), [0037](adr/0037-registro-funzioni-e-cloud-features.md) (parità e contratti), [0038](adr/0038-retention-e-finestra-changelog.md) (retention), [0039](adr/0039-sync-db-candidati-e-quarantena.md) (sync.db).
+ADR principali: [0002](adr/0002-sqlite-fts5-trigram.md) (FTS5), [0009](adr/0009-sync-protocol-details.md) (sync), [0029](adr/0029-web-workbench.md) e [0030](adr/0030-desktop-core-wasm.md) (workbench web), [0033](adr/0033-sqlc-per-module.md) (moduli e tabelle), [0036](adr/0036-verifiche-locali-senza-ci.md) (verifiche locali), [0037](adr/0037-registro-funzioni-e-cloud-features.md) (parità e contratti), [0038](adr/0038-retention-e-finestra-changelog.md) (retention), [0039](adr/0039-sync-db-candidati-e-quarantena.md) (sync.db), [0045](adr/0045-parita-per-costruzione.md) (parità per costruzione), [0046](adr/0046-bootstrap-server-indietro.md) (bootstrap dopo un ripristino del cloud).

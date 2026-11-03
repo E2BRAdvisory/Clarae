@@ -1,7 +1,9 @@
 // Events of the Go backend (Go → TypeScript). Names and payload types are generated from the Go
 // registry (events.gen.ts, `task gen`, ADR-0045 §5): this module re-exports them under the names the
 // UI uses and adds what only the UI knows (local `rename` changes). Never write an event name by hand:
-// use `Events.<key>` (ESLint refuses the literals).
+// use `Events.<key>` (ESLint refuses the literals). In the browser the bridge (web/src/workbench/
+// bridge.ts) delivers the same names. Contract and checks: docs/desktop-web-sync.md, "Contratto degli
+// eventi".
 import type { Entry } from './api';
 import type {
   ChangeType,

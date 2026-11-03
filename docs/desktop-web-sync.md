@@ -1,6 +1,6 @@
 # Desktop e web allineati: guida per gli sviluppatori
 
-Come resta uguale ciò che l'utente vede sul client desktop, nel workbench web e, per la gestione dei vault cloud, nella console. Le decisioni stanno in ADR-0029 (workbench web), ADR-0030 (core in WebAssembly) e ADR-0037 (registro delle funzioni, `@memobrain/cloud-features`, client Go generato); lo stato misurato della parità sta in [web-workbench-parity.md](web-workbench-parity.md). Panoramica dell'architettura: [architecture.md](architecture.md).
+Come resta uguale ciò che l'utente vede sul client desktop, nel workbench web e, per la gestione dei vault cloud, nella console. Le decisioni stanno in ADR-0029 (workbench web), ADR-0030 (core in WebAssembly), ADR-0037 (registro delle funzioni, `@memobrain/cloud-features`, client Go generato) e ADR-0045 (parità per costruzione: capability dal core, azioni dichiarative, `FeatureId`, eventi e client generati, prove per superficie); lo stato misurato della parità sta in [web-workbench-parity.md](web-workbench-parity.md). Panoramica dell'architettura: [architecture.md](architecture.md).
 
 ## Il principio: una UI, una logica
 
@@ -114,11 +114,11 @@ Un cambiamento di payload va fatto in modo compatibile (campi nuovi opzionali): 
 
 **Aggiungere un evento.** Dichiararlo accanto al codice che lo invia (`events.New[Payload]("area:cosa-accade", "doc")`, payload con tag `json`; un tipo stringa con valori fissi va in `EventEnums`), inviarlo con `.Send(emitter, payload)`, aggiungerlo a `Events` in `events_registry.go`, eseguire `task gen` e usarlo come `Events.<chiave>`.
 
-**Aggiungere un binding.** Aggiungere il metodo al servizio Go (o un servizio a `App.Services()`), eseguire `task gen` (rigenera `wailsjs` e `core.gen.ts`), poi usarlo dalla UI tramite la facciata di `packages/workbench/src/app/api.ts` e, se serve all'host del browser, con `coreClient`. Il binding va anche nel registro delle funzioni (`task parity`, sotto).
+**Aggiungere un binding.** Aggiungere il metodo al servizio Go (o un servizio a `App.Services()`), eseguire `task gen` (rigenera `wailsjs` e `core.gen.ts`), poi usarlo dalla UI tramite la facciata di `packages/workbench/src/app/api.ts` e, se serve all'host del browser, con `coreClient`. Il binding va anche nel registro delle funzioni (`task parity`, sotto). Se nel browser non può funzionare, la sua capability si dichiara nel core (sezione «Capability») e il comando o l'azione che lo usa la nomina in `requires`; un binding di gestione cloud segue la ricetta B qui sotto.
 
 ## Gestione dei vault cloud: `@memobrain/cloud-features`
 
-La gestione dei vault cloud (elenco, creazione, rinomina, eliminazione e ripristino; poi dispositivi, utilizzo, condivisioni) è scritta una volta sola in `packages/cloud-features` (ADR-0037 §2, in corso). I componenti, come `CloudVaultsTable`, dipendono solo dall'interfaccia `CloudPort` (`src/port.ts`), con i tipi generati da OpenAPI. Gli adattatori sono due:
+La gestione dei vault cloud (elenco, creazione, rinomina, eliminazione e ripristino, dispositivi, utilizzo, condivisioni, inviti, mount, gruppi) è scritta una volta sola in `packages/cloud-features` (ADR-0037 §2, ADR-0045 §7). I componenti (`CloudVaultsTable`, `NewVaultDialog`, `DevicesPanel`, `UsagePanel`, `MyGroups`, `SharesManager`, `GrantEditor`, `InvitationsList`, `MountsList`) dipendono solo dall'interfaccia `CloudPort` (`src/port.ts`), con i tipi generati da OpenAPI. Gli adattatori sono due:
 
 - `RestCloudPort` (`packages/cloud-features/src/rest.ts`) per la console, sulla REST attraverso `@memobrain/api-client`;
 - `CoreCloudPort` (`packages/workbench/src/cloud/CoreCloudPort.ts`) per desktop e workbench, sui binding Go. Sta nel workbench perché chiama i suoi binding: la dipendenza va solo da workbench a cloud-features.
@@ -146,6 +146,18 @@ La checklist di ADR-0045 §9, nell'ordine in cui conviene seguirla:
 4. **Binding.** Il metodo Go nel servizio (sezione «Aggiungere un binding» sopra); un binding di gestione cloud riceve e restituisce i tipi dell'OpenAPI (`cloudapi`, sezione su `@memobrain/cloud-features`). Il binding va nella voce (`bindings`), il comando o l'azione in `commands` o `actions` della superficie.
 5. **Prove per superficie.** Test sotto `tests.desktop`, `tests.workbench` (almeno una prova sul core WebAssembly per un `yes`), `tests.console`, `tests.cloud` (sezione «Prove per superficie» sotto). Uno spec della matrice che non può girare sul web lo dice con `skipOnWeb(<FeatureId>, <motivo>)`.
 6. **`task parity`.** `node scripts/parity.mjs` rigenera le tabelle di [web-workbench-parity.md](web-workbench-parity.md); `task parity` le verifica con tutte le regole sotto.
+
+I passi valgono per ogni funzione; il lavoro attorno al binding (punto 4) dipende da dove sta la logica:
+
+- **A. Funzione sul contenuto del vault** (editor, indice, file): binding nel servizio Go che la riguarda, UI in `packages/workbench`. Se il binding manca nel registro fallisce `task parity`; se i binding generati non coincidono con quelli che il dispatcher del core serve nel browser fallisce `TestDispatcherMatchesTheGeneratedBindings` (`task test-go` in `task ci`, con i binding obbligatori).
+- **B. Funzione di gestione cloud con un'operazione REST nuova**, nell'ordine:
+  1. l'operazione in `api/openapi.yaml`, poi `task gen` (stub del server, `shared/go/apiclient`, `@memobrain/api-client`): finché l'handler non la implementa il cloud non compila (strict server);
+  2. l'handler nel modulo del cloud (`services/cloud/internal/<modulo>/http.go`) con le sue query sqlc, e i test del modulo;
+  3. il metodo del client di sync (`apps/desktop/internal/sync/transport`, sul client generato); il contract test (`task test-desktop-e2e`) valida richieste e risposte sull'OpenAPI;
+  4. il binding in un servizio di `App.Services()` con i tipi di `internal/app/cloudapi` (la coppia in `TestTypesMatchTheAPI`, la riga in `bindingTypes.test.ts`), poi `task gen`;
+  5. il metodo in `CloudPort` (`packages/cloud-features/src/port.ts`), implementato da `RestCloudPort` e da `CoreCloudPort`: senza uno dei due il typecheck fallisce;
+  6. il componente in `@memobrain/cloud-features` e il suo caso nella suite condivisa (`src/testing/suite.tsx` o `accountSuite.tsx`), che gira su REST, sul mock di Wails e sul core WebAssembly (`task test-core`, in `task ci`); il finto cloud (`fakeCloudApi`) va esteso con l'operazione, altrimenti risponde 404, e `contractFetch` segnala una richiesta o una risposta che non rispetta l'OpenAPI;
+  7. la voce nel registro con l'operazione (`operationIds`), il binding e le prove per superficie, poi `task parity`; se la console chiama l'operazione, anche il mock REST di Playwright (`web/e2e/cloudMock.ts`) deve servirla.
 
 ## Registro delle funzioni e controllo di parità
 
