@@ -11,7 +11,7 @@ import {
   type ImportReport,
   type ImportSource,
 } from './api';
-import { ImporterEvents, type ImportDonePayload, type ImportProgressPayload } from './events';
+import { ImporterEvents } from './events';
 import { useImporter } from './store';
 import { errorMessage } from '../util/errors';
 
@@ -81,11 +81,11 @@ export function ImportWizardDialog() {
   // Progress and completion arrive as events; one import runs per vault at a time.
   useEffect(() => {
     const offs = [
-      api.on<ImportProgressPayload>(ImporterEvents.progress, (p) => {
+      api.on(ImporterEvents.progress, (p) => {
         if (p.vaultId !== vaultId) return;
         setProgress({ done: p.done, total: p.total, current: p.current });
       }),
-      api.on<ImportDonePayload>(ImporterEvents.done, (p) => {
+      api.on(ImporterEvents.done, (p) => {
         if (p.vaultId !== vaultId) return;
         setBusy(false);
         if (p.ok && p.report) {

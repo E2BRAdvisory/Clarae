@@ -503,15 +503,18 @@ func (m *Manager) LockVault(ctx context.Context, localID string) error {
 	})
 }
 
+// LockReason says why EventLocked was sent.
+type LockReason string
+
 // Reasons carried by EventLocked.
 const (
 	// LockReasonManual: the user locked the vault.
-	LockReasonManual = "manual"
+	LockReasonManual LockReason = "manual"
 	// LockReasonIdle: the idle timeout expired.
-	LockReasonIdle = "idle"
+	LockReasonIdle LockReason = "idle"
 	// LockReasonSync: a synchronization cycle found the vault without its key
 	// (no key in the keychain at startup, or locked since the last cycle).
-	LockReasonSync = "sync"
+	LockReasonSync LockReason = "sync"
 )
 
 // LockedEvent is the payload of EventLocked, computed after the key is gone.
@@ -519,10 +522,10 @@ const (
 // the outbox and leave at the next unlock); -1 means unknown (the local
 // changes could not be scanned), so the clear-text copy must be kept.
 type LockedEvent struct {
-	VaultID   string `json:"vaultId"`
-	Reason    string `json:"reason"`
-	Pending   int    `json:"pending"`
-	Conflicts int    `json:"conflicts"`
+	VaultID   string     `json:"vaultId"`
+	Reason    LockReason `json:"reason"`
+	Pending   int        `json:"pending"`
+	Conflicts int        `json:"conflicts"`
 }
 
 // drainTimeout bounds the cycle that pushes pending changes before a lock.
@@ -561,7 +564,7 @@ func (m *Manager) drain(ctx context.Context, v linkView) {
 // uses the key, records the local changes no cycle has seen (a scan needs no
 // key) and calls lock. When lock removed the key the UI is told, with what
 // is left to push. lock reports whether the key left memory.
-func (m *Manager) drainAndLock(ctx context.Context, cloud, reason string, lock func() (bool, error)) error {
+func (m *Manager) drainAndLock(ctx context.Context, cloud string, reason LockReason, lock func() (bool, error)) error {
 	views := m.lockedViews(cloud)
 	for _, v := range views {
 		m.drain(ctx, v)
@@ -594,14 +597,14 @@ func (m *Manager) drainAndLock(ctx context.Context, cloud, reason string, lock f
 		if errors.Is(scanErrs[i], ErrUnlinked) {
 			continue
 		}
-		m.emit(EventLocked, m.lockedEvent(ctx, v.localID, v.engine, v.db, reason, scanErrs[i]))
+		EventLocked.Send(m.emit, m.lockedEvent(ctx, v.localID, v.engine, v.db, reason, scanErrs[i]))
 	}
 	return lockErr
 }
 
 // lockedEvent counts what a locked vault still has to push and its open
 // conflicts (sync.db alone, no key needed) and puts the engine in PhaseLocked.
-func (m *Manager) lockedEvent(ctx context.Context, localID string, eng *Engine, db *DB, reason string, scanErr error) LockedEvent {
+func (m *Manager) lockedEvent(ctx context.Context, localID string, eng *Engine, db *DB, reason LockReason, scanErr error) LockedEvent {
 	ev := LockedEvent{VaultID: localID, Reason: reason}
 	var err error
 	if ev.Pending, err = db.PendingCount(ctx); err != nil || scanErr != nil {

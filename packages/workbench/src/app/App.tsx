@@ -1,14 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, type AuthState, type SyncStatus } from './api';
-import {
-  Events,
-  type IndexProgressPayload,
-  type OpenRequestPayload,
-  type SyncConflictPayload,
-  type VaultCloudDeletedPayload,
-  type VaultLockedPayload,
-} from './events';
+import { api } from './api';
+import { Events } from './events';
 import { applyTheme, type Theme } from './theme';
 import { i18next, initI18n } from '../i18n';
 import { useAppStore } from '../state/store';
@@ -108,7 +101,7 @@ export function App() {
   // Cloud session: initial state, then pushed updates.
   useEffect(() => {
     void api.auth.status().then(setAuth);
-    return api.on<AuthState>(Events.authState, setAuth);
+    return api.on(Events.authState, setAuth);
   }, [setAuth]);
 
   // The Web UI opens one vault per page: the host names it, the app opens it once it can listen.
@@ -121,7 +114,7 @@ export function App() {
   useEffect(() => {
     // File changes are coalesced and patched into the caches (see fileChanges.ts).
     const offFile = onVaultChanges((batch) => applyVaultChanges(queryClient, batch));
-    const offIndex = api.on<IndexProgressPayload>(Events.indexProgress, (p) => {
+    const offIndex = api.on(Events.indexProgress, (p) => {
       setIndexProgress(p.finished ? null : p);
       if (p.finished) {
         void invalidate.search(p.vaultId);
@@ -142,17 +135,17 @@ export function App() {
 
   // Cloud synchronization: status and conflicts are pushed by the backend.
   useEffect(() => {
-    const offStatus = api.on<SyncStatus>(Events.syncStatus, (s) => useSync.getState().setStatus(s));
-    const offConflict = api.on<SyncConflictPayload>(
+    const offStatus = api.on(Events.syncStatus, (s) => useSync.getState().setStatus(s));
+    const offConflict = api.on(
       Events.syncConflict,
       (p) => void useSync.getState().refreshConflicts(p.vaultId),
     );
-    const offLocked = api.on<VaultLockedPayload>(Events.vaultLocked, (p) => {
+    const offLocked = api.on(Events.vaultLocked, (p) => {
       if (p.vaultId === useAppStore.getState().vault?.id) useSync.getState().setUnlockOpen(true);
     });
     // The cloud vault was deleted from the console or another device: the core disconnected the
     // folder (its files stay). Said once, then Settings > Sync keeps a note of it.
-    const offDeleted = api.on<VaultCloudDeletedPayload>(Events.vaultCloudDeleted, (p) => {
+    const offDeleted = api.on(Events.vaultCloudDeleted, (p) => {
       useSync.getState().cloudVaultDeleted(p);
       const name = useSync.getState().cloudDeleted[p.vaultId] ?? p.name;
       const title = i18next.t('sync.cloudDeletedTitle');
@@ -189,7 +182,7 @@ export function App() {
   // memobrain://open?vault=…&file=… (from the OS or another instance).
   useEffect(
     () =>
-      api.on<OpenRequestPayload>(Events.openRequest, (p) => {
+      api.on(Events.appOpenRequest, (p) => {
         void followLinkPath(p, openVault);
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

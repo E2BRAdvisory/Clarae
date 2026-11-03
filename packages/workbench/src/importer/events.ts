@@ -1,23 +1,10 @@
-// Events of the importer (mirror of internal/app/bindings_importer.go).
-import type { ImportReport } from './api';
+// Events of the importer (internal/app/bindings_importer.go): names and payloads come from the Go
+// registry (app/events.gen.ts).
+import { Events } from '../app/events';
+
+export type { ImportDonePayload, ImportProgressPayload } from '../app/events';
 
 export const ImporterEvents = {
-  progress: 'importer:progress',
-  done: 'importer:done',
+  progress: Events.importerProgress,
+  done: Events.importerDone,
 } as const;
-
-export interface ImportProgressPayload {
-  jobId: string;
-  vaultId: string;
-  done: number;
-  total: number;
-  current: string;
-}
-
-export interface ImportDonePayload {
-  jobId: string;
-  vaultId: string;
-  ok: boolean;
-  error: string;
-  report: ImportReport | null;
-}

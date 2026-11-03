@@ -613,7 +613,7 @@ func TestSessionChangedSkipsVaultUnlinkedMeanwhile(t *testing.T) {
 	var armed atomic.Bool
 	emit := func(name string, payload any) {
 		st, ok := payload.(Status)
-		if name != EventStatus || !ok || !armed.CompareAndSwap(true, false) {
+		if name != EventStatus.Name() || !ok || !armed.CompareAndSwap(true, false) {
 			return
 		}
 		other := "a"

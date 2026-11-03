@@ -37,7 +37,7 @@ func TestClassifyChangesUsesTheIndexAsThePreviousState(t *testing.T) {
 	}
 
 	got := classifyChanges(context.Background(), ov, []string{"Known.md", "New.md", "Gone.md", "Folder"})
-	want := map[string]string{"Known.md": ChangeModify, "New.md": ChangeCreate, "Gone.md": ChangeDelete, "Folder": ChangeCreate}
+	want := map[string]ChangeType{"Known.md": ChangeModify, "New.md": ChangeCreate, "Gone.md": ChangeDelete, "Folder": ChangeCreate}
 	if len(got) != len(want) {
 		t.Fatalf("changes = %+v", got)
 	}
@@ -103,7 +103,7 @@ func TestReconcileEmitsFileChangesAndFeedsTheHistory(t *testing.T) {
 	var mu sync.Mutex
 	var events []FileChangedPayload
 	a.setEmitter(func(name string, p any) {
-		if name == EventVaultFileChanged {
+		if name == EventVaultFileChanged.Name() {
 			mu.Lock()
 			events = append(events, p.(FileChangedPayload))
 			mu.Unlock()
@@ -121,7 +121,7 @@ func TestReconcileEmitsFileChangesAndFeedsTheHistory(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("events = %+v", got)
 	}
-	want := map[string]string{"Edit.md": ChangeModify, "New.md": ChangeCreate, "Dir/Sub/Gone.md": ChangeDelete, "Dir": ChangeDelete}
+	want := map[string]ChangeType{"Edit.md": ChangeModify, "New.md": ChangeCreate, "Dir/Sub/Gone.md": ChangeDelete, "Dir": ChangeDelete}
 	if p := got[0]; p.VaultID != info.ID || len(p.Changes) != len(want) || len(p.Paths) != len(want) {
 		t.Fatalf("payload = %+v", p)
 	}

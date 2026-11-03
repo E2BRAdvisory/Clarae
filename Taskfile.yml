@@ -55,6 +55,7 @@ tasks:
       - task: gen-proto
       - task: gen-sqlc
       - task: gen-wails
+      - task: gen-events
 
   gen-features:
     desc: Config Profile schema -> Go flags and defaults (shared/go/features), TS flags (@memobrain/api-client/features)
@@ -91,8 +92,10 @@ tasks:
     cmds:
       - sqlc generate
 
+  # The bindings themselves are not committed (packages/workbench/wailsjs); the typed client of the browser
+  # host derived from them is (web/src/workbench/core.gen.ts, ADR-0045 §5), so `task check-gen` sees it drift.
   gen-wails:
-    desc: Wails Go bindings -> packages/workbench/wailsjs
+    desc: Wails Go bindings -> packages/workbench/wailsjs, and the browser host's typed client (web/src/workbench/core.gen.ts)
     preconditions: &wails-version
       - sh: '{{.ROOT_DIR}}/scripts/install-wails.sh --check'
         msg: The Wails CLI must match the library version in apps/desktop/go.mod (run `task wails-cli`)
@@ -103,6 +106,13 @@ tasks:
       - cmd: '[ -e {{.DESKTOP}}/frontend/dist/index.html ] || touch {{.DESKTOP}}/frontend/dist/index.html'
         silent: true
       - cd {{.DESKTOP}} && {{.WAILS}} generate module
+      - node scripts/gen-core-client.mjs
+
+  gen-events:
+    desc: Go event registry (apps/desktop/internal/app/events_registry.go) -> packages/workbench/src/app/events.gen.ts
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - go run ./internal/app/gen/events
 
   # The UI is typed against the generated bindings, which the repository does not hold: build them when they are
   # missing (a stale copy is refreshed by `task gen-wails`, or `task gen`).

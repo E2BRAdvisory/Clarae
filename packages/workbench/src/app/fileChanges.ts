@@ -92,7 +92,7 @@ function flush(): void {
  */
 export function onVaultChanges(listener: Listener): () => void {
   listeners.add(listener);
-  offRaw ??= api.on<FileChangedPayload>(Events.vaultFileChanged, receive);
+  offRaw ??= api.on(Events.vaultFileChanged, receive);
   return () => {
     listeners.delete(listener);
     if (listeners.size > 0) return;

@@ -1,5 +1,6 @@
 // In-memory ImporterAPI for Vitest and browser-only runs (installed by test/wails-mock).
 import type { ImportDonePayload, ImportProgressPayload } from './events';
+import { Events } from '../app/events';
 import type { ImportOptions, ImportPreview, ImportReport, ImportSource } from './api';
 
 export interface ImporterMockCall {
@@ -110,7 +111,7 @@ export function createImporterMock(emit: (name: string, payload: unknown) => voi
           error: '',
           report: { ...importerMock.report, cancelled },
         };
-    emit('importer:done', payload);
+    emit(Events.importerDone, payload);
   };
   return {
     ListSources: (): Promise<ImportSource[]> => Promise.resolve(importerMock.sources),
@@ -147,7 +148,7 @@ export function createImporterMock(emit: (name: string, payload: unknown) => voi
         current: 'Shopping.md',
       };
       setTimeout(() => {
-        emit('importer:progress', progress);
+        emit(Events.importerProgress, progress);
         if (importerMock.hold) importerMock.finish = () => done(vaultId);
         else done(vaultId);
       }, 0);

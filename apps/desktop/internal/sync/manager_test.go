@@ -33,7 +33,7 @@ type slowCycle struct {
 
 func (s *slowCycle) emit(name string, payload any) {
 	st, ok := payload.(Status)
-	if name != EventStatus || !ok || st.Phase != PhaseSyncing {
+	if name != EventStatus.Name() || !ok || st.Phase != PhaseSyncing {
 		return
 	}
 	first := false

@@ -7,7 +7,7 @@ import { api } from './app/api';
 import { useAppStore } from './state/store';
 import { flushWorkbench, installLifecycle } from './app/lifecycle';
 import { initI18n } from './i18n';
-import { configurePlatform, type PlatformOptions } from './platform';
+import { configurePlatform, usesWailsBindings, type PlatformOptions } from './platform';
 import { queryClient } from './state/queryClient';
 import { installLinkGuard } from './util/links';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -43,11 +43,11 @@ export async function mountWorkbench(
   initI18n();
   // Playwright runs the desktop UI in a plain browser: swap the Wails bindings for the in-memory mock.
   // A web host brings its own backend (the Go core), which must never be replaced.
-  if (import.meta.env.MEMOBRAIN_E2E && options.kind !== 'web') {
+  if (import.meta.env.MEMOBRAIN_E2E && usesWailsBindings()) {
     const { installWailsMock } = await import('./test/wails-mock');
     (window as unknown as { __mock: unknown }).__mock = installWailsMock();
   }
-  installLifecycle(options.kind ?? 'desktop');
+  installLifecycle();
   // No rendered link may navigate the window away from the app (each view routes its own links).
   installLinkGuard();
   createRoot(root).render(

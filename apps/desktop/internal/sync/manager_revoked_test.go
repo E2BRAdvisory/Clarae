@@ -94,7 +94,7 @@ func TestManagerDeviceRevokedStopsAndResumes(t *testing.T) {
 	var hooked []string
 	var events []Status
 	m := NewManager(sess, nil, zerolog.Nop(), func(name string, payload any) {
-		if st, ok := payload.(Status); ok && name == EventStatus {
+		if st, ok := payload.(Status); ok && name == EventStatus.Name() {
 			mu.Lock()
 			events = append(events, st)
 			mu.Unlock()

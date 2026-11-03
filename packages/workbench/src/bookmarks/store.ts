@@ -5,7 +5,7 @@
 // reloads the list.
 import { create } from 'zustand';
 import { api } from '../app/api';
-import { Events, type FileChangedPayload } from '../app/events';
+import { Events } from '../app/events';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 import { registerNoteFlusher } from '../workspaces/flush';
@@ -68,7 +68,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => {
 
     async load(vaultId) {
       off?.();
-      off = api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
+      off = api.on(Events.vaultFileChanged, (p) => {
         if (p.vaultId !== get().vaultId || !p.paths.includes(FILE_PATH) || pending) return;
         void api.vault
           .readConfig(p.vaultId, BOOKMARKS_FILE)

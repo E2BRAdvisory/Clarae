@@ -20,6 +20,7 @@ import {
   startCore,
   type CoreHandle,
 } from './bridge';
+import { coreClient, type BindingHooks } from './core.gen';
 import { VAULTS_DIR, folderOf, runCreation, type Creation, type MountCreate } from './create';
 import { legacyDeviceUser } from './device';
 import { onLeaveRequest } from './forget';
@@ -165,6 +166,9 @@ interface AuthState {
   error?: string;
 }
 
+/** The core's bindings with a time limit (the typed client generated in core.gen.ts). */
+const within = (core: CoreHandle, ms: number) => coreClient(core, ms);
+
 /**
  * What the cloud says the account can reach, for adopting the copies of an earlier version
  * (storage.ts ownsLegacy). Read with the page's own token, before the core starts.
@@ -200,24 +204,25 @@ async function waitForSession(core: CoreHandle, timeoutMs = 30_000): Promise<voi
   const deadline = Date.now() + timeoutMs;
   let last: AuthState = { status: 'unknown' };
   while (Date.now() < deadline) {
-    last = await core.callWithin<AuthState>(LIMITS.status, 'AuthAPI', 'Status');
+    last = await within(core, LIMITS.status).AuthAPI.Status();
     if (last.status === 'ready') return;
     await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error(`no cloud session (${last.status}${last.error ? `: ${last.error}` : ''})`);
 }
 
-type Bindings = Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>;
+/**
+ * Observers of the UI's own calls of the bindings (installWailsGlobals reads them at each call, so the
+ * guard's is added once it exists).
+ */
+const bindingHooks: BindingHooks = {};
 
 /** Tells the guard when the workbench's own unlock dialog unlocked the vault (window.go is what it calls). */
 function watchUnlock(localId: string, g: VaultGuard): void {
-  const crypto = (window as unknown as { go?: { app?: Bindings } }).go?.app?.['VaultCryptoAPI'];
-  const unlock = crypto?.['Unlock'];
-  if (!crypto || !unlock) return;
-  crypto['Unlock'] = async (...args: unknown[]) => {
-    const result = await unlock(...args);
-    if (args[0] === localId) g.noteUnlocked();
-    return result;
+  bindingHooks.VaultCryptoAPI = {
+    Unlock: ([vaultId]) => {
+      if (vaultId === localId) g.noteUnlocked();
+    },
   };
 }
 
@@ -331,7 +336,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     core.terminate();
     throw e;
   }
-  installWailsGlobals(core);
+  installWailsGlobals(core, window, bindingHooks);
   core.domReady();
   // Leaving the page: let the core close its databases (best effort, the page may already be going away).
   window.addEventListener('pagehide', () => void core.shutdown().catch(() => undefined));
@@ -346,11 +351,10 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   if (!o.localOnly) {
     // The administrator may have switched the workbench off (feature `web_workbench`): a typed address does not bypass it.
     await waitForSession(core);
-    const state = await core.callWithin<{ features?: Record<string, boolean> }>(
+    const state: { features?: Record<string, boolean> } = await within(
+      core,
       LIMITS.config,
-      'ConfigAPI',
-      'Effective',
-    );
+    ).ConfigAPI.Effective();
     if (!featureEnabled(state.features, Feature.WebWorkbench)) {
       core.terminate();
       throw new Error(DISABLED);
@@ -384,7 +388,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     o.progress('session');
     await waitForSession(core);
     o.progress('vault');
-    info = await core.callWithin<VaultInfo>(LIMITS.open, 'SharingAPI', 'OpenMount', o.share);
+    info = await within(core, LIMITS.open).SharingAPI.OpenMount(o.share);
   } else {
     if (!o.localOnly) {
       o.progress('session');
@@ -395,19 +399,19 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     // `new-…` folder, see create.ts), or the folder named by the cloud id.
     const path = folderOf(account, vaultId);
     if (stuck === path) throw new Error(STILL_REMOVING);
-    info = await core.callWithin<VaultInfo>(LIMITS.open, 'VaultAPI', 'OpenVault', path);
+    info = await within(core, LIMITS.open).VaultAPI.OpenVault(path);
     if (!o.localOnly) {
-      const link = await core.callWithin<LinkInfo>(LIMITS.info, 'SyncAPI', 'Info', info.id);
+      const link: LinkInfo = await within(core, LIMITS.info).SyncAPI.Info(info.id);
       if (!link.linked) {
-        await core.callWithin(LIMITS.link, 'SyncAPI', 'LinkExisting', info.id, vaultId);
+        await within(core, LIMITS.link).SyncAPI.LinkExisting(info.id, vaultId);
         // The folder is named by cloud id; reopening it shows the name the user gave the vault.
-        await core.callWithin(LIMITS.close, 'VaultAPI', 'CloseVault', info.id);
-        info = await core.callWithin<VaultInfo>(LIMITS.open, 'VaultAPI', 'OpenVault', path);
+        await within(core, LIMITS.close).VaultAPI.CloseVault(info.id);
+        info = await within(core, LIMITS.open).VaultAPI.OpenVault(path);
       }
     }
   }
-  const link = await core
-    .callWithin<LinkInfo>(LIMITS.info, 'SyncAPI', 'Info', info.id)
+  const link: LinkInfo = await within(core, LIMITS.info)
+    .SyncAPI.Info(info.id)
     .catch((): LinkInfo => ({ linked: false }));
   const kind = link.kind ?? '';
 
@@ -433,10 +437,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       await showUnlockGate({
         counts: kept,
         unlock: async (secret, recovery) => {
-          const mustChange = await core.callWithin<boolean>(
-            LIMITS.unlock,
-            'VaultCryptoAPI',
-            'Unlock',
+          const mustChange = await within(core, LIMITS.unlock).VaultCryptoAPI.Unlock(
             info.id,
             secret,
             recovery,
@@ -445,13 +446,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
           return Boolean(mustChange);
         },
         setPassphrase: (passphrase) =>
-          core.callWithin<void>(
-            LIMITS.unlock,
-            'VaultCryptoAPI',
-            'SetPassphrase',
-            info.id,
-            passphrase,
-          ),
+          within(core, LIMITS.unlock).VaultCryptoAPI.SetPassphrase(info.id, passphrase),
         deleteCopy: () => void g.deleteCopy(),
         backToConsole: goToConsole,
       });

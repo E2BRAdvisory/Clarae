@@ -22,6 +22,7 @@ import type { BaseInfo, BaseResult, ViewPatch } from '../bases/types';
 import * as TemplatesAPI from '../../wailsjs/go/app/TemplatesAPI';
 import * as ComposerAPI from '../../wailsjs/go/app/ComposerAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
+import type { EventName, EventPayload } from './events.gen';
 import type { app, auth, composer, links, search, sync, vault } from '../../wailsjs/go/models';
 import * as HistoryAPI from '../../wailsjs/go/app/HistoryAPI';
 import type { history as localHistory } from '../../wailsjs/go/models';
@@ -490,8 +491,11 @@ export const api = {
     build: (vaultId: string, options: GraphOptions): Promise<GraphData> =>
       GraphAPI.Build(vaultId, options),
   },
-  /** Subscribes to a backend event; returns the unsubscribe function. */
-  on<T>(name: string, handler: (payload: T) => void): () => void {
+  /**
+   * Subscribes to a backend event (`Events.<key>`; names and payload types are generated from the Go
+   * registry, app/events.gen.ts); returns the unsubscribe function.
+   */
+  on<N extends EventName>(name: N, handler: (payload: EventPayload<N>) => void): () => void {
     return EventsOn(name, handler as (...data: unknown[]) => void);
   },
 };

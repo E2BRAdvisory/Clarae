@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"memobrain/apps/desktop/internal/crypto"
+	"memobrain/apps/desktop/internal/events"
 	"memobrain/apps/desktop/internal/store"
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/apps/desktop/internal/vault"
@@ -41,20 +42,56 @@ type Session interface {
 	Info() (SessionInfo, bool)
 }
 
-// Event names pushed to the UI.
-const (
-	EventStatus   = "sync:status"
-	EventConflict = "sync:conflict"
-	EventLocked   = "vault:locked"
+// Events pushed to the UI (listed in the registry of internal/app/events.go, ADR-0045 §5).
+var (
+	// EventStatus carries the state of a vault's synchronization.
+	EventStatus = events.New[Status]("sync:status",
+		"The sync state of a vault changed (phase, counts, error). `kind` is \"\" for a folder no longer linked.")
+	// EventConflict says that a cycle recorded a conflict.
+	EventConflict = events.New[ConflictEvent]("sync:conflict",
+		"A sync cycle recorded a conflict.")
+	// EventLocked is sent once the key of a private vault left memory.
+	EventLocked = events.New[LockedEvent]("vault:locked",
+		"The key of a private vault left memory (reason manual or idle), or a sync cycle found it missing\n"+
+			"(reason sync). `pending` counts the files that still differ from the server, -1 when unknown.")
 	// EventShares says that shares changed (invitation, revocation, new level): refresh the lists.
-	EventShares = "shares:changed"
+	EventShares = events.New[SharesChanged]("shares:changed",
+		"Shares changed on the server (granted, revoked, new level): refresh the lists.")
 	// EventConfig says that the distributed configuration has a new revision.
-	EventConfig = "config:changed"
+	EventConfig = events.New[ConfigChanged]("config:changed",
+		"The server announced a new revision of the distributed configuration (config:updated follows once applied).")
 	// EventCloudVaultDeleted says that the cloud vault of a folder was deleted elsewhere (the
 	// console, another device): the folder was disconnected and keeps its files, as after a
 	// delete made from this device.
-	EventCloudVaultDeleted = "vault:cloud-deleted"
+	EventCloudVaultDeleted = events.New[CloudVaultDeleted]("vault:cloud-deleted",
+		"The cloud vault of a linked folder was deleted elsewhere: the folder was disconnected and keeps its files.")
 )
+
+// ConflictEvent is the payload of EventConflict.
+type ConflictEvent struct {
+	VaultID  string   `json:"vaultId"`
+	Conflict Conflict `json:"conflict"`
+}
+
+// SharesChanged is the payload of EventShares.
+type SharesChanged struct {
+	ShareID string `json:"shareId"`
+	// Kind is granted, revoked or updated.
+	Kind string `json:"kind"`
+}
+
+// ConfigChanged is the payload of EventConfig.
+type ConfigChanged struct {
+	Version int `json:"version"`
+}
+
+// CloudVaultDeleted is the payload of EventCloudVaultDeleted.
+type CloudVaultDeleted struct {
+	VaultID      string `json:"vaultId"`
+	CloudVaultID string `json:"cloudVaultId"`
+	// Name is the name the cloud vault had.
+	Name string `json:"name"`
+}
 
 // CloudVaultDeletedMessage is the Status.Error of a folder disconnected because its cloud vault
 // was deleted elsewhere.
@@ -146,7 +183,7 @@ type Manager struct {
 	session Session
 	crypto  *crypto.Manager
 	log     zerolog.Logger
-	emit    func(name string, payload any)
+	emit    events.Emitter
 
 	mu       stdsync.Mutex
 	vaults   map[string]*managed // keyed by local vault id
@@ -216,7 +253,7 @@ func waitLoop(done <-chan struct{}) {
 }
 
 // NewManager creates the manager; emit publishes UI events (may be a no-op).
-func NewManager(session Session, cm *crypto.Manager, log zerolog.Logger, emit func(string, any)) *Manager {
+func NewManager(session Session, cm *crypto.Manager, log zerolog.Logger, emit events.Emitter) *Manager {
 	if emit == nil {
 		emit = func(string, any) {}
 	}
@@ -399,8 +436,8 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: m.remote(transport.Ref(cloud, mount.Scope)),
 		ReadOnly: isMount && mount.Permission == PermViewer,
 		DeviceID: deviceID, DeviceName: name, UserID: userID, Logger: m.log.With().Str("vault", mv.localID).Logger(),
-		OnStatus:     func(s Status) { m.emit(EventStatus, m.view(s)) },
-		OnConflict:   func(c Conflict) { m.emit(EventConflict, map[string]any{"vaultId": mv.localID, "conflict": c}) },
+		OnStatus:     func(s Status) { EventStatus.Send(m.emit, m.view(s)) },
+		OnConflict:   func(c Conflict) { EventConflict.Send(m.emit, ConflictEvent{VaultID: mv.localID, Conflict: c}) },
 		MaxFileBytes: m.maxFileBytes,
 		BeforeOverwrite: func(path string) {
 			m.mu.Lock()
@@ -491,7 +528,7 @@ func (m *Manager) deviceRevoked(id string) {
 	m.mu.Unlock()
 	m.log.Warn().Str("device", id).Int("vaults", len(stopped)).Msg("sync: the cloud refuses this device as revoked; synchronization stopped")
 	for _, eng := range stopped {
-		m.emit(EventStatus, revokedView(eng.Status())) // the session may not say "revoked" yet: the hook below does
+		EventStatus.Send(m.emit, revokedView(eng.Status())) // the session may not say "revoked" yet: the hook below does
 	}
 	if hook != nil {
 		hook(id)
@@ -500,10 +537,10 @@ func (m *Manager) deviceRevoked(id string) {
 
 func (m *Manager) publish(mv *managed) {
 	if eng := m.engineOf(mv); eng != nil {
-		m.emit(EventStatus, m.view(eng.Status()))
+		EventStatus.Send(m.emit, m.view(eng.Status()))
 		return
 	}
-	m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseIdle, Kind: ""})
+	EventStatus.Send(m.emit, Status{VaultID: mv.localID, Phase: PhaseIdle, Kind: ""})
 }
 
 // Detach stops synchronizing a vault and closes its state (vault closed). It
@@ -603,10 +640,10 @@ func (m *Manager) SessionChanged() {
 				continue // unlinked meanwhile: Unlink has published its status
 			}
 			if info.DeviceRevoked {
-				m.emit(EventStatus, revokedView(eng.Status()))
+				EventStatus.Send(m.emit, revokedView(eng.Status()))
 				continue
 			}
-			m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseOffline, Kind: kind, Error: "signed out of the cloud"})
+			EventStatus.Send(m.emit, Status{VaultID: mv.localID, Phase: PhaseOffline, Kind: kind, Error: "signed out of the cloud"})
 		}
 	}
 	m.restartNotifier(ctx, info, ok)
@@ -656,13 +693,13 @@ func (m *Manager) restartNotifier(ctx context.Context, info SessionInfo, signedI
 			}
 		},
 		OnShare: func(ev transport.ShareEvent) {
-			m.emit(EventShares, map[string]any{"shareId": ev.ShareID, "kind": ev.Kind})
+			EventShares.Send(m.emit, SharesChanged{ShareID: ev.ShareID, Kind: ev.Kind})
 			if h := m.hooksSnapshot().Shares; h != nil {
 				h(ev)
 			}
 		},
 		OnConfig: func(version int) {
-			m.emit(EventConfig, map[string]any{"version": version})
+			EventConfig.Send(m.emit, ConfigChanged{Version: version})
 			if h := m.hooksSnapshot().Config; h != nil {
 				h(version)
 			}
@@ -854,7 +891,7 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 			// count of what waits for the next unlock is right.
 			var scanErr error
 			_ = eng.Exclusive(func() error { scanErr = eng.scan(ctx); return nil })
-			m.emit(EventLocked, m.lockedEvent(ctx, mv.localID, eng, mv.db, LockReasonSync, scanErr))
+			EventLocked.Send(m.emit, m.lockedEvent(ctx, mv.localID, eng, mv.db, LockReasonSync, scanErr))
 			wait = maxPoll // an unlock kicks the loop
 		case errors.Is(err, ErrPaused):
 			wait = maxPoll // resume kicks the loop
@@ -928,8 +965,8 @@ func (m *Manager) cloudVaultDeleted(ctx context.Context, mv *managed) {
 			return
 		}
 		m.log.Warn().Str("vault", mv.localID).Str("cloud_vault", cloud).Msg("sync: the cloud vault was deleted elsewhere; the folder was disconnected and keeps its files")
-		m.emit(EventCloudVaultDeleted, map[string]any{"vaultId": mv.localID, "cloudVaultId": cloud, "name": name})
-		m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseIdle, Error: CloudVaultDeletedMessage})
+		EventCloudVaultDeleted.Send(m.emit, CloudVaultDeleted{VaultID: mv.localID, CloudVaultID: cloud, Name: name})
+		EventStatus.Send(m.emit, Status{VaultID: mv.localID, Phase: PhaseIdle, Error: CloudVaultDeletedMessage})
 	}()
 }
 

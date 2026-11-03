@@ -4,7 +4,7 @@ import { Quit } from '../../wailsjs/runtime/runtime';
 import { installActivityFeed } from './activity';
 import { api } from './api';
 import { Events } from './events';
-import type { PlatformKind } from '../platform';
+import { usePlatform, type Capabilities } from '../platform';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
 import { useAppStore } from '../state/store';
 import { flushAllNotes, hasUnsavedNotes, withTimeout } from '../workspaces/flush';
@@ -30,19 +30,23 @@ export async function flushWorkbench(timeoutMs = EXIT_FLUSH_MS): Promise<void> {
 }
 
 /**
- * Hooks the workbench to the host's teardown; returns the function that unhooks it.
- * - desktop: the Go host holds the first close request and emits `app:before-close`; the
- *   workbench flushes and asks to quit again (the host quits anyway if it never hears back);
- * - web: leaving the page with unsaved edits asks the browser to confirm;
+ * Hooks the workbench to the host's teardown; returns the function that unhooks it. It follows the
+ * capabilities of the host (by default those mountWorkbench configured):
+ * - a native window (the desktop): the Go host holds the first close request and emits
+ *   `app:before-close`; the workbench flushes and asks to quit again (the host quits anyway if it
+ *   never hears back);
+ * - a page (the browser): leaving it with unsaved edits asks the browser to confirm;
  * - both: a hidden window (minimized, tab switched or being closed) starts writing at once, and user
  *   input restarts the idle lock timer of private vaults (app/activity).
  */
-export function installLifecycle(kind: PlatformKind): () => void {
+export function installLifecycle(
+  caps: Pick<Capabilities, 'nativeWindow'> = usePlatform.getState().capabilities,
+): () => void {
   const offs: (() => void)[] = [];
-  if (kind === 'desktop') {
+  if (caps.nativeWindow) {
     let closing = false;
     offs.push(
-      api.on(Events.beforeClose, () => {
+      api.on(Events.appBeforeClose, () => {
         if (closing) return;
         closing = true;
         void flushWorkbench().finally(() => Quit());

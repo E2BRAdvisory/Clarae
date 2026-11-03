@@ -7,10 +7,12 @@ import { create } from 'zustand';
 export type PlatformKind = 'desktop' | 'web';
 
 /**
- * What the host offers, or how it behaves. `true` = the UI shows the control (every flag except
- * `ephemeralPlaintext`, which describes a policy of the host). A control that only one host can
- * honour is gated here, never on scattered checks of the environment; a command declares it in
+ * What the host offers. `true` = the UI shows the control. A control that only one host can honour
+ * is gated here, never on scattered checks of the environment; a command declares it in
  * `Command.requires`, and the feature registry (shared/parity/features.yaml) names it per surface.
+ * Every capability has a consumer (`can`, `useCan` or `Command.requires`): `parity --check` refuses
+ * one that gates nothing. Policies of a host that no control reads (the browser wipes the clear
+ * text of a private vault at its lock, ADR-0029 §6) live in the host, not here.
  */
 export interface Capabilities {
   /** Open a folder of the computer as a vault, pick a folder to import. The browser has cloud vaults only. */
@@ -39,11 +41,6 @@ export interface Capabilities {
    */
   ownsSession: boolean;
   /**
-   * Policy, not a control: the clear text of a private vault must not outlive its lock (ADR-0029 §6).
-   * True in the browser, where the copy is wiped on lock; the desktop keeps the folder.
-   */
-  ephemeralPlaintext: boolean;
-  /**
    * A copy that leaves the cloud can stay on this device as a folder of its own: the desktop keeps
    * the mount of a revoked share as an ordinary vault. The browser has no place where such a folder
    * could be opened again: it offers to download the copy as a ZIP instead.
@@ -60,7 +57,6 @@ const DESKTOP: Capabilities = {
   multiVault: true,
   unlinkVault: true,
   ownsSession: true,
-  ephemeralPlaintext: false,
   detachedCopies: true,
 };
 
@@ -73,7 +69,6 @@ const WEB: Capabilities = {
   multiVault: false,
   unlinkVault: false,
   ownsSession: false,
-  ephemeralPlaintext: true,
   detachedCopies: false,
 };
 
@@ -151,6 +146,12 @@ export function configurePlatform(options: PlatformOptions = {}): void {
     initialVault: options.vaultPath ?? null,
   });
 }
+
+/**
+ * Whether the UI talks to the Wails bindings of a desktop host. A web host brings its own backend
+ * (the Go core in the browser), which the E2E builds must never replace with the in-memory mock.
+ */
+export const usesWailsBindings = (): boolean => usePlatform.getState().kind === 'desktop';
 
 /** Reads a capability outside React (commands, util modules). */
 export const can = (name: keyof Capabilities): boolean => usePlatform.getState().capabilities[name];

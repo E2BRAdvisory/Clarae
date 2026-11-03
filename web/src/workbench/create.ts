@@ -11,6 +11,7 @@
  * kept with changes that were not uploaded (D-04) is never left behind for a fresh one.
  */
 import type { CoreHandle } from './bridge';
+import { coreClient } from './core.gen';
 import { readMarkers, removeMarker, updateMarker } from './markers';
 
 /** The vault id of the creation route. */
@@ -85,7 +86,7 @@ export async function runCreation(
   const path = `${VAULTS_DIR}/${tempId}`;
   // A tab closed before the vault exists leaves an empty private copy: the start-up sweep removes it.
   updateMarker(d.account, tempId, { name: d.creation.name, kind: 'private', localPath: path });
-  const info = await d.core.callWithin<VaultInfo>(limits.open, 'VaultAPI', 'OpenVault', path);
+  const info: VaultInfo = await coreClient(d.core, limits.open).VaultAPI.OpenVault(path);
 
   let unmount: () => void = () => undefined;
   const cloudId = await new Promise<string | null>((resolve) => {
@@ -101,7 +102,9 @@ export async function runCreation(
   });
   unmount();
   // Closed either way: a cancelled folder is removed, a created one is reopened under its new name.
-  await d.core.callWithin(limits.close, 'VaultAPI', 'CloseVault', info.id).catch(() => undefined);
+  await coreClient(d.core, limits.close)
+    .VaultAPI.CloseVault(info.id)
+    .catch(() => undefined);
 
   if (!cloudId) {
     try {

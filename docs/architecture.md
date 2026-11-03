@@ -74,7 +74,8 @@ Nel browser gli stessi file stanno in OPFS e i database nel pool `opfs-sahpool` 
 - **REST:** [`api/openapi.yaml`](../api/openapi.yaml) è la fonte unica. `task gen-openapi` genera gli stub del server (oapi-codegen, strict server e validatore delle richieste, `services/cloud/internal/api/api.gen.go`), il client Go (`shared/go/apiclient`, usato da `apps/desktop/internal/sync/transport`) e il client TypeScript (`packages/api-client`). Gli errori sono `application/problem+json` con un `code` allineato a `shared/go/syncproto`. tus e SSE sono fuori dal generatore e documentati nell'estensione `x-memobrain-external-routes` (ADR-0037 §3).
 - **Notifiche gRPC:** [`api/proto/memobrain/v1/notify.proto`](../api/proto/memobrain/v1/notify.proto) → `shared/go/notifyv1` (buf).
 - **Database del cloud:** query per modulo in `services/cloud/internal/db/queries/<modulo>.sql` → `internal/<modulo>/<modulo>db` (sqlc); migrazioni SQL versionate in `internal/db/migrations`.
-- **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati).
+- **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati) e, da questi, il client tipizzato dell'host del browser `web/src/workbench/core.gen.ts` (versionato).
+- **Eventi Go → TypeScript:** il registro `apps/desktop/internal/app/events_registry.go` → `packages/workbench/src/app/events.gen.ts` (nomi e payload, `task gen-events`). Regole e controlli: [desktop-web-sync.md](desktop-web-sync.md#contratto-degli-eventi) (ADR-0045 §5).
 - **Verifiche:** contract test del client contro il server reale (`apps/desktop/internal/sync/transport/contract_test.go`), fixture di conformance Go/TS per Markdown, merge e crittografia (`shared/conformance`), registro di parità (`shared/parity/features.yaml`). Tutto gira in `task ci` (ADR-0036).
 
 ## Il cloud come modular monolith

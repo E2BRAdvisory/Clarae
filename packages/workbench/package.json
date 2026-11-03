@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./build": "./build/esbuild.mjs",
-    "./strength": "./src/sync/strength.ts"
+    "./strength": "./src/sync/strength.ts",
+    "./events": "./src/app/events.gen.ts",
+    "./wailsjs/models": "./wailsjs/go/models.ts"
   },
   "scripts": {
     "gen:icons": "node scripts/gen-icons.mjs",

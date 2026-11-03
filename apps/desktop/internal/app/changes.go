@@ -14,11 +14,14 @@ import (
 	"memobrain/shared/syncproto"
 )
 
+// ChangeType says what happened to the path of a FileChange.
+type ChangeType string
+
 // Change types of FileChange.
 const (
-	ChangeCreate = "create"
-	ChangeModify = "modify"
-	ChangeDelete = "delete"
+	ChangeCreate ChangeType = "create"
+	ChangeModify ChangeType = "modify"
+	ChangeDelete ChangeType = "delete"
 )
 
 // FileChange tells the frontend what happened to one path of a vault:file-changed batch, so it
@@ -26,8 +29,8 @@ const (
 // does not classify events; the type comes from a stat of the path and from the index as it was
 // before the batch was applied: a file the index did not know is a creation.
 type FileChange struct {
-	Type string `json:"type"`
-	Path string `json:"path"`
+	Type ChangeType `json:"type"`
+	Path string     `json:"path"`
 	// Entry is the file or folder as it is now; absent for a deletion (and when the path could
 	// not be read).
 	Entry *vault.Entry `json:"entry,omitempty"`

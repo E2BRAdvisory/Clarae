@@ -11,11 +11,14 @@ import (
 	"os"
 	"sync"
 
+	"memobrain/apps/desktop/internal/events"
 	"memobrain/apps/desktop/internal/updater"
 )
 
-// EventUpdaterStatus carries an updater.Status to the frontend.
-const EventUpdaterStatus = "updater:status"
+// EventUpdaterStatus carries an updater.Status to the frontend (desktop only: the browser build has
+// no updater, so the event and its registry entry exist only in the native build).
+var EventUpdaterStatus = events.New[updater.Status]("updater:status",
+	"Desktop: the state of the application update changed (check, download, ready to install).")
 
 // updaterState is the updater of the app, built on first use.
 type updaterState struct {
@@ -38,7 +41,7 @@ func (a *App) updaterService() (*updater.Service, error) {
 		DataDir:        a.opts.DataDir,
 		CurrentVersion: a.opts.Version,
 		DisabledReason: reason,
-		OnStatus:       func(st updater.Status) { a.emit(EventUpdaterStatus, st) },
+		OnStatus:       func(st updater.Status) { EventUpdaterStatus.Send(a.emit, st) },
 	})
 	if err != nil {
 		return nil, err

@@ -432,7 +432,7 @@ func TestManagerSharingFlow(t *testing.T) {
 	if err := bob.m.SyncNow("bob-team"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the revocation to be noticed", func() bool { return bob.emitted(syncpkg.EventMountRevoked) > 0 })
+	eventually(t, "the revocation to be noticed", func() bool { return bob.emitted(syncpkg.EventMountRevoked.Name()) > 0 })
 	info, _ = bob.m.Info(ctx, "bob-team")
 	if !info.Revoked || !info.ReadOnly {
 		t.Fatalf("revoked mount info: %+v", info)

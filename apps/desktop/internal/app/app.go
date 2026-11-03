@@ -123,7 +123,7 @@ func New(opts Options) *App {
 			return nil
 		},
 		OnState: func(st auth.State) {
-			a.emit(EventAuthState, st)
+			EventAuthState.Send(a.emit, st)
 			a.sync.SessionChanged()
 			if st.Status == auth.StatusReady {
 				go a.onSignedIn()
@@ -232,7 +232,7 @@ func (a *App) HandleURL(raw string) {
 	}
 	switch u.Kind {
 	case platform.URLOpen:
-		a.emit(EventOpenRequest, OpenRequestPayload{Vault: u.Params.Get("vault"), File: u.Params.Get("file")})
+		EventOpenRequest.Send(a.emit, OpenRequestPayload{Vault: u.Params.Get("vault"), File: u.Params.Get("file")})
 	case platform.URLAuthCallback:
 		if !a.auth.HandleCallback(u.Params) {
 			a.logger.Warn().Msg("auth callback received with no login in progress")
@@ -362,7 +362,7 @@ func (a *App) doOpenVault(abs, id string) (VaultInfo, error) {
 	}
 	log := a.logger.With().Str("vault", info.Name).Logger()
 	ix := indexer.New(fsys, indexDB, log, func(p indexer.Progress) {
-		a.emit(EventIndexProgress, map[string]any{"vaultId": id, "done": p.Done, "total": p.Total, "path": p.Path, "finished": p.Finished})
+		EventIndexProgress.Send(a.emit, IndexProgressPayload{VaultID: id, Done: p.Done, Total: p.Total, Path: p.Path, Finished: p.Finished})
 	})
 	ctx, cancel := context.WithCancel(a.ctx)
 	w, err := watcher.New(ctx, fsys.Root(), watcher.Options{Logger: log})
@@ -421,7 +421,7 @@ func (a *App) watchLoop(ctx context.Context, v *openVault) {
 				a.logger.Warn().Err(err).Msg("index update")
 			}
 			v.History.Observe(ch.Paths)
-			a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: ch.Paths, Changes: changes})
+			EventVaultFileChanged.Send(a.emit, FileChangedPayload{VaultID: v.Info.ID, Paths: ch.Paths, Changes: changes})
 			a.sync.Kick(v.Info.ID)
 		}
 	}
@@ -439,7 +439,7 @@ func (a *App) reconcile(ctx context.Context, v *openVault) {
 	if !r.Empty() { // after an error too: what the pass wrote before it is in the index
 		paths, changes := reconciledChanges(v, r)
 		v.History.Observe(paths)
-		a.emit(EventVaultFileChanged, FileChangedPayload{VaultID: v.Info.ID, Paths: paths, Changes: changes})
+		EventVaultFileChanged.Send(a.emit, FileChangedPayload{VaultID: v.Info.ID, Paths: paths, Changes: changes})
 	}
 	a.sync.Kick(v.Info.ID)
 }

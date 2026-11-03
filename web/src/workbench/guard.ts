@@ -10,31 +10,26 @@
  * - when the cloud vault is deleted elsewhere (`vault:cloud-deleted`) the copy can no longer upload: the
  *   marker says so and the copy is removed only by what the marker records (the UI offers it).
  */
+import { Events, type EventPayloads } from '@memobrain/workbench/events';
 import type { CoreHandle } from './bridge';
+import { coreClient } from './core.gen';
 import { readMarkers, removeMarker, unsynced, updateMarker, type VaultMarker } from './markers';
 import { closeOverlay, confirmDelete, showLocked, showOverlay, unsyncedLines } from './overlay';
 import { message } from './strings';
 
 /**
- * Payload of the core's `vault:locked` event (sync.LockedEvent; older cores send only `vaultId`). It is
- * emitted once the key left memory; `pending` is -1 when the core could not count the changes. Reason
- * "sync" is not a lock: the sync loop repeats it while the vault waits for its passphrase.
+ * Payload of the core's `vault:locked` event (sync.LockedEvent, generated; older cores send only
+ * `vaultId`). It is emitted once the key left memory; `pending` is -1 when the core could not count the
+ * changes. Reason "sync" is not a lock: the sync loop repeats it while the vault waits for its passphrase.
  */
-export interface VaultLockedPayload {
-  vaultId: string;
-  reason?: 'manual' | 'idle' | 'sync';
-  pending?: number;
-  conflicts?: number;
-}
+export type VaultLockedPayload = Pick<EventPayloads['vault:locked'], 'vaultId'> &
+  Partial<EventPayloads['vault:locked']>;
 
-interface SyncStatus {
-  vaultId: string;
+/** `sync:status` (sync.Status); `kind` is "private" or "shared" while linked, "" once unlinked. */
+type SyncStatus = Pick<EventPayloads['sync:status'], 'vaultId' | 'pending' | 'conflicts'> & {
   phase: string;
-  pending: number;
-  conflicts: number;
-  /** "private" or "shared" while linked; "" for a folder no longer linked to the cloud. */
   kind?: string;
-}
+};
 
 /**
  * A status of a folder that is not linked to the cloud (any more): it says nothing about uploads
@@ -91,6 +86,8 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 export function createVaultGuard(o: GuardOptions): VaultGuard {
   const { core, info } = o;
+  /** The core's bindings with a time limit (core.gen.ts). */
+  const within = (ms: number) => coreClient(core, ms);
   const now = o.now ?? Date.now;
   const isPrivate = o.kind === 'private';
   let unlocked = false;
@@ -122,7 +119,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     ...(marker()?.cloudDeleted ? { cloudDeleted: false } : {}),
   });
 
-  const offStatus = core.on('sync:status', (raw) => {
+  const offStatus = core.on(Events.syncStatus, (raw) => {
     const s = raw as SyncStatus;
     if (!s || s.vaultId !== info.id || detached || unlinkedStatus(s)) return;
     if (s.phase === 'syncing') runStartedAt = Math.max(runStartedAt, now());
@@ -139,7 +136,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     patch({ ...counts, ...(clean ? { dirty: false } : {}) });
   });
 
-  const offChanged = core.on('vault:file-changed', (raw) => {
+  const offChanged = core.on(Events.vaultFileChanged, (raw) => {
     const p = raw as { vaultId?: string } | undefined;
     if (p?.vaultId !== info.id) return;
     dirtyAt = now();
@@ -149,7 +146,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   // Deleted from the console or another device: the core disconnected the folder, which keeps its
   // files. What the marker records can no longer be uploaded; the workbench offers to remove the copy
   // (onRemoveFromBrowser), and a restored vault opened again links it anew.
-  const offDeleted = core.on('vault:cloud-deleted', (raw) => {
+  const offDeleted = core.on(Events.vaultCloudDeleted, (raw) => {
     const p = raw as { vaultId?: string } | undefined;
     if (p?.vaultId !== info.id) return;
     detached = true;
@@ -159,7 +156,9 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   /** Removes the copy (files and databases) and its marker, then leaves (console or `to`). */
   const wipeAndLeave = async (): Promise<void> => {
     showOverlay({ busy: true, lines: [message('workbench.locking')] });
-    await core.callWithin(60_000, 'VaultAPI', 'CloseVault', info.id).catch(() => undefined);
+    await within(60_000)
+      .VaultAPI.CloseVault(info.id)
+      .catch(() => undefined);
     try {
       await core.wipe(info.path);
       removeMarker(o.account, o.markerId);
@@ -184,8 +183,8 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     deciding = true;
     let { pending, conflicts } = p;
     if (typeof pending !== 'number' || typeof conflicts !== 'number') {
-      const s = await core
-        .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
+      const s: SyncStatus | null = await within(15_000)
+        .SyncAPI.Status(info.id)
         .catch(() => null);
       if (!s || unlinkedStatus(s)) {
         // Not knowing is not the same as nothing pending: keep the copy.
@@ -210,7 +209,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   };
 
   const offLocked = isPrivate
-    ? core.on('vault:locked', (raw) => {
+    ? core.on(Events.vaultLocked, (raw) => {
         const p = raw as VaultLockedPayload | undefined;
         if (!p || p.vaultId !== info.id) return;
         // The sync loop also sends this event (reason "sync") while the vault waits for its
@@ -231,8 +230,8 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   const drain = async (): Promise<void> => {
     const deadline = now() + (o.drainMs ?? 15_000);
     while (now() < deadline) {
-      const s = await core
-        .callWithin<SyncStatus>(5_000, 'SyncAPI', 'Status', info.id)
+      const s: SyncStatus | null = await within(5_000)
+        .SyncAPI.Status(info.id)
         .catch(() => null);
       if (!s || core.dead || unlinkedStatus(s)) return;
       if (s.pending === 0 && s.phase !== 'syncing') return;
@@ -250,17 +249,17 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       showOverlay({ busy: true, lines: [message('workbench.locking')] });
       await o.flush();
       // The core knows whether the key is in memory; the page's own record is the fallback.
-      const isUnlocked = await core
-        .callWithin<{ locked?: boolean } | null>(10_000, 'SyncAPI', 'Info', info.id)
-        .then((i) => (i ? !i.locked : unlocked))
+      const isUnlocked = await within(10_000)
+        .SyncAPI.Info(info.id)
+        .then((i: { locked?: boolean } | null) => (i ? !i.locked : unlocked))
         .catch(() => unlocked);
       if (!isUnlocked) {
         // Never unlocked in this page: nothing could be uploaded. A change made here while it was
         // locked is not counted by the core until a sync scans it, hence the marker's flag.
         const m = marker();
         if (m?.dirty) {
-          const status = await core
-            .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
+          const status: SyncStatus | null = await within(15_000)
+            .SyncAPI.Status(info.id)
             .catch(() => null);
           const s = unlinkedStatus(status) ? null : status;
           deciding = true;
@@ -272,13 +271,15 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
         }
         return decide({});
       }
-      await core.callWithin(15_000, 'SyncAPI', 'SyncNow', info.id).catch(() => undefined);
+      await within(15_000)
+        .SyncAPI.SyncNow(info.id)
+        .catch(() => undefined);
       await drain();
       selfLock = true;
       lockPayload = null;
       try {
         // The core uploads what is pending (bounded) before it forgets the key.
-        await core.callWithin(60_000, 'VaultCryptoAPI', 'Lock', info.id);
+        await within(60_000).VaultCryptoAPI.Lock(info.id);
       } catch {
         // decide() asks the core for the counts; when it cannot answer, the copy is kept
       } finally {
@@ -345,10 +346,12 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     running = (async () => {
       showOverlay({ busy: true, lines: [message('workbench.removing')] });
       await o.flush();
-      await core.callWithin(15_000, 'SyncAPI', 'SyncNow', info.id).catch(() => undefined);
+      await within(15_000)
+        .SyncAPI.SyncNow(info.id)
+        .catch(() => undefined);
       await drain();
-      const s = await core
-        .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
+      const s: SyncStatus | null = await within(15_000)
+        .SyncAPI.Status(info.id)
         .catch(() => null);
       // Disconnected meanwhile (deleted elsewhere): its zero counts mean nothing.
       if (detached || unlinkedStatus(s)) return removeByMarker();
@@ -379,10 +382,12 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       showOverlay({ busy: true, lines: [message('workbench.leaving')] });
       await o.flush();
       if (!detached) {
-        await core.callWithin(15_000, 'SyncAPI', 'SyncNow', info.id).catch(() => undefined);
+        await within(15_000)
+          .SyncAPI.SyncNow(info.id)
+          .catch(() => undefined);
         await drain();
-        const s = await core
-          .callWithin<SyncStatus>(15_000, 'SyncAPI', 'Status', info.id)
+        const s: SyncStatus | null = await within(15_000)
+          .SyncAPI.Status(info.id)
           .catch(() => null);
         if (!s)
           patch({ dirty: true }); // not knowing is kept like changes

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorCode } from '../app/api';
-import { Events, type FileChangedPayload } from '../app/events';
+import { Events } from '../app/events';
 import { registerNoteFlusher, reportFlush, writeRescueCopy } from '../workspaces/flush';
 import { errorMessage } from '../util/errors';
 
@@ -298,7 +298,7 @@ export function useNoteDocument(
 
   // External change of this file.
   useEffect(() => {
-    return api.on<FileChangedPayload>(Events.vaultFileChanged, (p) => {
+    return api.on(Events.vaultFileChanged, (p) => {
       if (p.vaultId !== vaultId || !p.paths.includes(path)) return;
       void refresh();
     });

@@ -72,11 +72,11 @@ type lockEvents struct {
 
 func (l *lockEvents) emit(name string, payload any) {
 	switch name {
-	case EventLocked:
+	case EventLocked.Name():
 		l.mu.Lock()
 		l.locked = append(l.locked, payload.(LockedEvent))
 		l.mu.Unlock()
-	case EventStatus:
+	case EventStatus.Name():
 		if st, ok := payload.(Status); ok && st.Phase == PhaseIdle && !st.LastSync.IsZero() {
 			l.once.Do(func() { close(l.synced) })
 		}

@@ -11,7 +11,9 @@ import type {
   HostRequest,
   ToWorker,
 } from './protocol';
+import type { EventName } from '@memobrain/workbench/events';
 import { downloadBlob } from '../shared/download';
+import type { BindingHooks } from './core.gen';
 
 export interface CoreOptions {
   assets: CoreAssets;
@@ -55,10 +57,11 @@ export interface CoreHandle {
   readonly dead: boolean;
   /**
    * Calls a binding: JSON arguments in, parsed result out. Rejects with the binding's error message
-   * (text, like Wails), or with a CoreDeadError when the core stopped.
+   * (text, like Wails), or with a CoreDeadError when the core stopped. The host calls the bindings
+   * through the typed client of core.gen.ts (`coreClient(core, ms)`), never by name.
    */
   call<T = unknown>(service: string, method: string, ...args: unknown[]): Promise<T>;
-  /** Like `call`, but rejects with a CoreTimeoutError when no answer arrives within `timeoutMs`. */
+  /** Like `call`, but rejects with a CoreTimeoutError when no answer arrives within `timeoutMs` (0: no limit). */
   callWithin<T = unknown>(
     timeoutMs: number,
     service: string,
@@ -77,10 +80,13 @@ export interface CoreHandle {
    * CoreTimeoutError when it takes longer than `timeoutMs` (the removal may still go on in the core).
    */
   wipe(prefix: string, timeoutMs?: number): Promise<void>;
-  /** Subscribes to a Go → TypeScript event; returns the unsubscribe function. */
-  on(name: string, cb: (payload: unknown) => void): () => void;
+  /**
+   * Subscribes to a Go → TypeScript event (`Events.<key>` of @memobrain/workbench/events, generated
+   * from the Go registry); returns the unsubscribe function. The payload is the parsed JSON.
+   */
+  on(name: EventName, cb: (payload: unknown) => void): () => void;
   /** Drops every subscription to an event (Wails' EventsOff). */
-  off(name: string): void;
+  off(name: EventName): void;
   terminate(): void;
 }
 
@@ -445,29 +451,42 @@ export function saveDownload(name: string, bytes: ArrayBuffer): void {
   downloadBlob(new Blob([bytes]), name);
 }
 
+type AnyHook = (args: unknown[], result: unknown) => void;
+
 /**
  * Installs what the generated Wails modules (wailsjs/go/app/*, wailsjs/runtime) call: `window.go.app`
  * with one function per method the core reports, and the parts of `window.runtime` the UI uses.
+ * `hooks` observe the UI's calls (read at each call, so the host may add one later): a hook runs
+ * with the arguments and the result once the binding answered.
  */
-export function installWailsGlobals(core: CoreHandle, target: Window = window): void {
+export function installWailsGlobals(
+  core: CoreHandle,
+  target: Window = window,
+  hooks: BindingHooks = {},
+): void {
+  const observers = hooks as Partial<Record<string, Partial<Record<string, AnyHook>>>>;
   const app: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> = {};
   for (const [service, names] of Object.entries(core.methods)) {
     app[service] = {};
     for (const method of names)
-      app[service][method] = (...args) => core.call(service, method, ...args);
+      app[service][method] = async (...args) => {
+        const result = await core.call(service, method, ...args);
+        observers[service]?.[method]?.(args, result);
+        return result;
+      };
   }
   const w = target as unknown as Record<string, unknown>;
   w['go'] = { app };
   w['runtime'] = {
     EventsOnMultiple: (name: string, cb: (...data: unknown[]) => void, max: number) => {
       let left = max > 0 ? max : Infinity;
-      const off = core.on(name, (payload) => {
+      const off = core.on(name as EventName, (payload) => {
         if (--left <= 0) off();
         cb(payload);
       });
       return off;
     },
-    EventsOff: (...names: string[]) => names.forEach((n) => core.off(n)),
+    EventsOff: (...names: string[]) => names.forEach((n) => core.off(n as EventName)),
     EventsEmit: () => undefined,
     BrowserOpenURL: (url: string) => void window.open(url, '_blank', 'noopener,noreferrer'),
     WindowShow: () => undefined,

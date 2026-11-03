@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../app/api';
-import { Events, type VaultCloudDeletedPayload } from '../app/events';
+import { Events } from '../app/events';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { useAppStore } from '../state/store';
@@ -712,9 +712,7 @@ describe('SyncSection (settings)', () => {
     render(wrap(<SyncSection />));
     await screen.findByRole('button', { name: 'Sync now' });
     // What App does on vault:cloud-deleted (App.test.tsx covers the listener).
-    const off = api.on(Events.vaultCloudDeleted, (p) =>
-      useSync.getState().cloudVaultDeleted(p as VaultCloudDeletedPayload),
-    );
+    const off = api.on(Events.vaultCloudDeleted, (p) => useSync.getState().cloudVaultDeleted(p));
     act(() => mock.deleteCloudVaultElsewhere('cloud-1'));
     off();
     expect(

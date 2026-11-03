@@ -8,6 +8,7 @@ import { api } from './api';
 import { Events } from './events';
 import { renameEntry } from './actions';
 import { installLifecycle } from './lifecycle';
+import { capabilitiesFor } from '../platform';
 import { runCommand } from '../commands/registry';
 import { getEditor } from '../editor/registry';
 import { useNoteDocument } from '../editor/useNoteDocument';
@@ -150,12 +151,12 @@ describe('teardown flush', () => {
 
   it('desktop: the window closing flushes the notes, then quits', async () => {
     await openVault({ 'A.md': 'one' });
-    const off = installLifecycle('desktop');
+    const off = installLifecycle(capabilitiesFor('desktop'));
     try {
       const { result } = renderHook(() => useNoteDocument(vaultId, 'A.md'));
       await waitFor(() => expect(result.current.status).toBe('ready'));
       act(() => result.current.edit('closing words'));
-      act(() => mock.emit(Events.beforeClose, undefined));
+      act(() => mock.emit(Events.appBeforeClose, undefined));
       await waitFor(() => expect(mock.quits).toBe(1));
       expect(disk('A.md')).toBe('closing words');
     } finally {
@@ -167,11 +168,11 @@ describe('teardown flush', () => {
     await openVault({ 'A.md': 'one' });
     await useSettings.getState().load(vaultId);
     await useBookmarks.getState().load(vaultId);
-    const off = installLifecycle('desktop');
+    const off = installLifecycle(capabilitiesFor('desktop'));
     try {
       useSettings.getState().setEditor({ lineNumbers: true });
       useBookmarks.getState().update((items) => [...items, fileItem('A.md', '', 1)]);
-      act(() => mock.emit(Events.beforeClose, undefined));
+      act(() => mock.emit(Events.appBeforeClose, undefined));
       await waitFor(() => expect(mock.quits).toBe(1));
       expect(JSON.parse(disk('.memobrain/editor.json') ?? '{}')).toMatchObject({
         lineNumbers: true,
@@ -185,7 +186,7 @@ describe('teardown flush', () => {
   it('web: hiding the page writes the settings still waiting', async () => {
     await openVault({ 'A.md': 'one' });
     await useSettings.getState().load(vaultId);
-    const off = installLifecycle('web');
+    const off = installLifecycle(capabilitiesFor('web'));
     try {
       useSettings.getState().setEditor({ wrap: false });
       const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
@@ -201,7 +202,7 @@ describe('teardown flush', () => {
 
   it('web: leaving the page with unsaved edits asks the browser to confirm', async () => {
     await openVault({ 'A.md': 'one' });
-    const off = installLifecycle('web');
+    const off = installLifecycle(capabilitiesFor('web'));
     try {
       const { result } = renderHook(() => useNoteDocument(vaultId, 'A.md'));
       await waitFor(() => expect(result.current.status).toBe('ready'));

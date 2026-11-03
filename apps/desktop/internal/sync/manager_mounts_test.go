@@ -178,7 +178,7 @@ func (r *recorder) emit(name string, payload any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.names = append(r.names, name)
-	if st, ok := payload.(Status); ok && name == EventStatus {
+	if st, ok := payload.(Status); ok && name == EventStatus.Name() {
 		r.statuses = append(r.statuses, st)
 	}
 }
@@ -269,7 +269,7 @@ func TestMountBlobNotFoundIsNotARevocation(t *testing.T) {
 		return rec.status(func(s Status) bool { return s.VaultID == "mount" && s.Phase == PhaseError })
 	})
 	time.Sleep(200 * time.Millisecond) // the loop has decided by now
-	if n := rec.count(EventMountRevoked); n != 0 {
+	if n := rec.count(EventMountRevoked.Name()); n != 0 {
 		t.Fatalf("a blob NOT_FOUND revoked the mount (%d events)", n)
 	}
 	if revoked(t, dir) || m.ReadOnly(context.Background(), "mount") {
@@ -295,7 +295,7 @@ func TestMountRevokedOnlyWhenTheShareIsGone(t *testing.T) {
 
 	waitTill(t, "the share to be checked", func() bool { return cloud.called("GET /shared-with-me") > 0 })
 	time.Sleep(200 * time.Millisecond)
-	if rec.count(EventMountRevoked) != 0 || revoked(t, dir) {
+	if rec.count(EventMountRevoked.Name()) != 0 || revoked(t, dir) {
 		t.Fatal("a share still listed by the server was marked revoked")
 	}
 
@@ -303,7 +303,7 @@ func TestMountRevokedOnlyWhenTheShareIsGone(t *testing.T) {
 	if err := m.SyncNow("mount"); err != nil {
 		t.Fatal(err)
 	}
-	waitTill(t, "the revocation", func() bool { return rec.count(EventMountRevoked) == 1 })
+	waitTill(t, "the revocation", func() bool { return rec.count(EventMountRevoked.Name()) == 1 })
 	if !revoked(t, dir) || !m.ReadOnly(context.Background(), "mount") {
 		t.Fatal("a share gone from the server must leave the mount revoked and read-only")
 	}
@@ -325,7 +325,7 @@ func TestMountOfAnotherAccountIsNotRevokedByTheLoop(t *testing.T) {
 		return rec.status(func(s Status) bool { return s.VaultID == "mount" && s.Phase == PhaseError })
 	})
 	time.Sleep(200 * time.Millisecond)
-	if rec.count(EventMountRevoked) != 0 || revoked(t, dir) {
+	if rec.count(EventMountRevoked.Name()) != 0 || revoked(t, dir) {
 		t.Fatal("the mount of another account was marked revoked")
 	}
 	if n := cloud.called("GET /shared-with-me"); n != 0 {
@@ -450,7 +450,7 @@ func TestCloudVaultDeletedElsewhereUnlinksTheFolder(t *testing.T) {
 	fs := ownLinked(t, lifeOwner)
 	attach(t, m, "own", fs)
 
-	waitTill(t, "the folder to be disconnected", func() bool { return rec.count(EventCloudVaultDeleted) == 1 })
+	waitTill(t, "the folder to be disconnected", func() bool { return rec.count(EventCloudVaultDeleted.Name()) == 1 })
 	if info, err := m.Info(ctx, "own"); err != nil || info.Linked {
 		t.Fatalf("still linked after the cloud vault was deleted: %+v, %v", info, err)
 	}
@@ -498,7 +498,7 @@ func TestCloudVaultNotFoundIsNotADeleteUnlessConfirmed(t *testing.T) {
 				waitTill(t, "the server to be asked", func() bool { return cloud.called("GET /vaults/"+lifeVault) > 0 })
 			}
 			time.Sleep(200 * time.Millisecond)
-			if info, _ := m.Info(ctx, "own"); !info.Linked || rec.count(EventCloudVaultDeleted) != 0 {
+			if info, _ := m.Info(ctx, "own"); !info.Linked || rec.count(EventCloudVaultDeleted.Name()) != 0 {
 				t.Fatalf("disconnected without a confirmed delete: %+v", info)
 			}
 			if !tc.asked && cloud.called("GET /vaults/"+lifeVault) != 0 {

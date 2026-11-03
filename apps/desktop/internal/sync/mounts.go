@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"memobrain/apps/desktop/internal/events"
 	"memobrain/apps/desktop/internal/store"
 	"memobrain/apps/desktop/internal/sync/transport"
 	"memobrain/shared/pathrules"
@@ -29,7 +30,16 @@ const (
 )
 
 // EventMountRevoked tells the UI that the owner ended a share: the mount stopped syncing.
-const EventMountRevoked = "mount:revoked"
+var EventMountRevoked = events.New[MountRevoked]("mount:revoked",
+	"The share of a mount was revoked: the mount stopped syncing (a sync:status with the error follows).")
+
+// MountRevoked is the payload of EventMountRevoked.
+type MountRevoked struct {
+	VaultID string `json:"vaultId"`
+	ShareID string `json:"shareId"`
+	// Name is the name of the mount.
+	Name string `json:"name"`
+}
 
 // Permissions as the server names them; a vault of one's own has no share level.
 const (
@@ -222,8 +232,8 @@ func (m *Manager) markRevoked(ctx context.Context, mv *managed) {
 	m.mu.Unlock()
 	name, _ := mv.db.Meta(context.WithoutCancel(ctx), MetaMountName)
 	share, _ := mv.db.Meta(context.WithoutCancel(ctx), MetaShareID)
-	m.emit(EventMountRevoked, map[string]any{"vaultId": mv.localID, "shareId": share, "name": name})
-	m.emit(EventStatus, Status{VaultID: mv.localID, Phase: PhaseError, Kind: "shared", Error: "this share was revoked"})
+	EventMountRevoked.Send(m.emit, MountRevoked{VaultID: mv.localID, ShareID: share, Name: name})
+	EventStatus.Send(m.emit, Status{VaultID: mv.localID, Phase: PhaseError, Kind: "shared", Error: "this share was revoked"})
 }
 
 // shareGone confirms that the share of a mount is gone after a cycle failed with a NOT_FOUND

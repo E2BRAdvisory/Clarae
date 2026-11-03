@@ -23,9 +23,9 @@ func TestImporterRunEmitsEventsAndTheWatcherIndexesTheNotes(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch name {
-		case EventImportProgress:
+		case EventImportProgress.Name():
 			progress = append(progress, p)
-		case EventImportDone:
+		case EventImportDone.Name():
 			done = append(done, p)
 		}
 	})

@@ -14,12 +14,6 @@ import (
 	"memobrain/apps/desktop/internal/importer"
 )
 
-// Events of the importer (mirrored in frontend/src/importer/events.ts).
-const (
-	EventImportProgress = "importer:progress"
-	EventImportDone     = "importer:done"
-)
-
 // ImportProgressPayload accompanies EventImportProgress.
 type ImportProgressPayload struct {
 	JobID   string `json:"jobId"`
@@ -179,7 +173,7 @@ func (i *ImporterAPI) Run(vaultID, sourceID, path string, opts importer.Options)
 		progress := func(done, total int, current string) {
 			if now := time.Now(); now.Sub(last) >= 100*time.Millisecond || done >= total {
 				last = now
-				i.app.emit(EventImportProgress, ImportProgressPayload{JobID: id, VaultID: vaultID, Done: done, Total: total, Current: current})
+				EventImportProgress.Send(i.app.emit, ImportProgressPayload{JobID: id, VaultID: vaultID, Done: done, Total: total, Current: current})
 			}
 		}
 		rep, err := imp.Run(ctx, path, opts, progress)
@@ -197,7 +191,7 @@ func (i *ImporterAPI) Run(vaultID, sourceID, path string, opts importer.Options)
 		}
 		i.pruneLocked(job.finished)
 		i.mu.Unlock()
-		i.app.emit(EventImportDone, payload)
+		EventImportDone.Send(i.app.emit, payload)
 	}()
 	return id, nil
 }

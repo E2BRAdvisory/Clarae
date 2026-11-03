@@ -1,6 +1,7 @@
 // Typed facade over the UpdaterAPI bindings (wailsjs is generated, never edited).
 import * as UpdaterAPI from '../../wailsjs/go/app/UpdaterAPI';
 import type { updater } from '../../wailsjs/go/models';
+import { Events } from '../app/events';
 
 type Plain<T> = Omit<T, 'convertValues'>;
 
@@ -8,7 +9,8 @@ export type UpdateSettings = Plain<updater.Settings>;
 export type UpdateStatus = Plain<updater.Status>;
 export type UpdateResult = Plain<updater.Result>;
 
-export const UpdaterEvents = { status: 'updater:status' } as const;
+/** The updater's event (generated from the Go registry, app/events.gen.ts). */
+export const UpdaterEvents = { status: Events.updaterStatus } as const;
 
 export const updaterApi = {
   getSettings: (): Promise<UpdateSettings> => UpdaterAPI.GetSettings(),

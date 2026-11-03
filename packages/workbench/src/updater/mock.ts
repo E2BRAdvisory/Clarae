@@ -1,5 +1,6 @@
 // In-memory UpdaterAPI for Vitest and browser-only runs (installed by test/wails-mock).
 import type { UpdateResult, UpdateSettings, UpdateStatus } from './api';
+import { Events } from '../app/events';
 
 export interface UpdaterMockState {
   settings: UpdateSettings;
@@ -77,13 +78,13 @@ export function createUpdaterMock(emit: (name: string, payload: unknown) => void
       updaterMock.checks++;
       if (updaterMock.checkError) return Promise.reject(new Error(updaterMock.checkError));
       updaterMock.status = updaterMock.next;
-      emit('updater:status', updaterMock.status);
+      emit(Events.updaterStatus, updaterMock.status);
       return Promise.resolve(updaterMock.status);
     },
     Skip: (v: string): Promise<void> => {
       updaterMock.skipped.push(v);
       updaterMock.status = { ...updaterMock.status, skipped: true };
-      emit('updater:status', updaterMock.status);
+      emit(Events.updaterStatus, updaterMock.status);
       return Promise.resolve();
     },
     Install: (): Promise<UpdateResult> => {

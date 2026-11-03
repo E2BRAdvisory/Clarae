@@ -63,7 +63,7 @@ export function connectUpdater(): () => void {
     .status()
     .then((s) => useUpdater.getState().set(s))
     .catch(() => undefined);
-  return api.on<UpdateStatus>(UpdaterEvents.status, (s) => useUpdater.getState().set(s));
+  return api.on(UpdaterEvents.status, (s) => useUpdater.getState().set(s));
 }
 
 /** True when an update should be announced in the status bar. */

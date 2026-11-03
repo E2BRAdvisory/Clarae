@@ -8,6 +8,7 @@ import { parseDocument } from 'yaml';
 import { extract, splitFrontmatter } from '@memobrain/markdown';
 import { linkInfo } from '../../app/api';
 import type { FileChange } from '../../app/events';
+import { Events } from '../../app/events';
 import { buildMockGraph } from '../../graph/mockBuild';
 import { syntheticGraph } from '../../graph/synthetic';
 import type { GraphData, GraphOptions } from '../../graph/types';
@@ -363,7 +364,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const changed = (id: string, paths: string[], created: readonly string[] = []): void => {
     const v = mock.vaults.get(id);
     const changes = v ? paths.map((p) => changeOf(v, p, created.includes(p))) : undefined;
-    mock.emit('vault:file-changed', { vaultId: id, paths, ...(changes ? { changes } : {}) });
+    mock.emit(Events.vaultFileChanged, { vaultId: id, paths, ...(changes ? { changes } : {}) });
   };
 
   const outgoing = (v: MockVault, path: string): NoteLink[] => {
@@ -890,7 +891,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
           role: 'user',
         },
       };
-      mock.emit('auth:state', mock.auth);
+      mock.emit(Events.authState, mock.auth);
       return Promise.resolve(mock.auth);
     },
     Logout: (): Promise<AuthState> => {
@@ -900,7 +901,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         profile: { userId: '', username: '', email: '', displayName: '', role: '' },
         deviceId: '',
       };
-      mock.emit('auth:state', mock.auth);
+      mock.emit(Events.authState, mock.auth);
       return Promise.resolve(mock.auth);
     },
     // A new device id for the same account; a server URL containing "fail" refuses it.
@@ -913,7 +914,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         deviceId: `${mock.auth.deviceId}-new`,
         error: '',
       };
-      mock.emit('auth:state', mock.auth);
+      mock.emit(Events.authState, mock.auth);
       return Promise.resolve(mock.auth);
     },
   };
@@ -937,7 +938,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     };
     const next = { ...cur, ...patch, vaultId: id } as SyncStatus;
     sy.status.set(id, next);
-    mock.emit('sync:status', next);
+    mock.emit(Events.syncStatus, next);
   };
   const signedIn = (): boolean =>
     mock.auth.status === 'ready' || mock.auth.status === 'disconnected';
@@ -962,7 +963,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const unlink = (id: string): void => {
     sy.links.delete(id);
     sy.status.delete(id);
-    mock.emit('sync:status', {
+    mock.emit(Events.syncStatus, {
       vaultId: id,
       phase: 'idle',
       lastSync: '',
@@ -985,8 +986,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       sy.links.delete(id);
       sy.status.delete(id);
       sy.conflicts.delete(id);
-      mock.emit('vault:cloud-deleted', { vaultId: id, cloudVaultId, name: l.name });
-      mock.emit('sync:status', {
+      mock.emit(Events.vaultCloudDeleted, { vaultId: id, cloudVaultId, name: l.name });
+      mock.emit(Events.syncStatus, {
         vaultId: id,
         phase: 'idle',
         lastSync: '',
@@ -1227,7 +1228,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         vaultId: '',
       };
       sh.mounts.push(m);
-      mock.emit('shares:changed', { shareId, kind: 'granted' });
+      mock.emit(Events.sharesChanged, { shareId, kind: 'granted' });
       return Promise.resolve(m);
     },
     DeclineShare: (shareId: string): Promise<void> => {
@@ -1505,7 +1506,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const l = linkOf(id);
       sy.links.set(id, { ...l, locked: true });
       setStatus(id, { phase: 'locked' });
-      mock.emit('vault:locked', { vaultId: id, reason: 'manual', pending: 0, conflicts: 0 });
+      mock.emit(Events.vaultLocked, { vaultId: id, reason: 'manual', pending: 0, conflicts: 0 });
       return Promise.resolve();
     },
     Activity: (): Promise<void> => {

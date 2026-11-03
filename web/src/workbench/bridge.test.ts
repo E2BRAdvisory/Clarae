@@ -9,6 +9,7 @@ import {
   type CoreHandle,
   type VerifiedWorkerDeps,
 } from './bridge';
+import type { BindingHooks } from './core.gen';
 import type { CoreAssets, FromWorker, HostRequest, ToWorker } from './protocol';
 
 const assets: CoreAssets = {
@@ -355,6 +356,24 @@ describe('installWailsGlobals', () => {
       m: 'ReadNote',
       a: ['v', 'a.md'],
     });
+  });
+
+  it('tells the hooks about the calls that answered, read at each call', async () => {
+    const target = {} as Window;
+    const hooks: BindingHooks = {};
+    installWailsGlobals(fake(), target, hooks);
+    const app = (
+      target as unknown as {
+        go: { app: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
+      }
+    ).go.app;
+    const seen: unknown[] = [];
+    // Added after the globals were installed, as launch.ts does once the guard exists.
+    hooks.VaultAPI = { OpenVault: (args, result) => seen.push(args, result) };
+    await app['VaultAPI']!['ReadNote']!('v', 'a.md');
+    expect(seen).toEqual([]);
+    await app['VaultAPI']!['OpenVault']!('/vaults/x');
+    expect(seen).toEqual([['/vaults/x'], { s: 'VaultAPI', m: 'OpenVault', a: ['/vaults/x'] }]);
   });
 
   it('provides the runtime events the generated Wails modules call', () => {

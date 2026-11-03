@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
-import { Events, type MountRevokedPayload } from '../app/events';
+import { Events } from '../app/events';
 import { useCan, usePlatform } from '../platform';
 import { useManaged, fromState } from '../state/managed';
 import { useAppStore } from '../state/store';
@@ -42,14 +42,12 @@ export function SharingDialogs() {
         const id = useAppStore.getState().vault?.id;
         if (id) void useSync.getState().refresh(id); // a new level changes what the open mount allows
       }),
-      api.on<MountRevokedPayload>(Events.mountRevoked, (p) => {
+      api.on(Events.mountRevoked, (p) => {
         refreshLists();
         void useSync.getState().refresh(p.vaultId);
         useSharing.getState().setRevoked(p);
       }),
-      api.on<Parameters<typeof fromState>[0]>(Events.configUpdated, (s) =>
-        useManaged.getState().set(fromState(s)),
-      ),
+      api.on(Events.configUpdated, (s) => useManaged.getState().set(fromState(s))),
     ];
     return () => offs.forEach((f) => f());
   }, [qc]);

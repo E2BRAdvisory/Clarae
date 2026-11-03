@@ -8,13 +8,6 @@ import (
 	"memobrain/apps/desktop/internal/auth"
 )
 
-// Event the sharing flow adds to the application's set (config:updated, with the new
-// ConfigState, is declared in events.go).
-const (
-	// EventMountsChanged says that mount levels or availability changed on this device.
-	EventMountsChanged = "mounts:changed"
-)
-
 // onSignedIn runs after a login: configuration first, then the mounts.
 func (a *App) onSignedIn() {
 	a.refreshConfigQuietly()
@@ -77,7 +70,7 @@ func (a *App) refreshConfig(ctx context.Context) error {
 	changed, err := a.config.Refresh(ctx, st.ServerURL, c.GetEffectiveConfig)
 	if err == nil && changed {
 		a.applyConfig()
-		a.emit(EventConfigUpdated, a.configState())
+		EventConfigUpdated.Send(a.emit, a.configState())
 	}
 	return err
 }
@@ -100,7 +93,7 @@ func (a *App) reconcileMounts() {
 		a.logger.Warn().Err(err).Int("changed", n).Msg("mount reconcile failed")
 	}
 	if n > 0 {
-		a.emit(EventMountsChanged, map[string]any{"changed": n})
+		EventMountsChanged.Send(a.emit, MountsChangedPayload{Changed: n})
 	}
 }
 

@@ -1,94 +1,64 @@
-// Event names emitted by the Go backend (mirror of internal/app/events.go).
+// Events of the Go backend (Go → TypeScript). Names and payload types are generated from the Go
+// registry (events.gen.ts, `task gen`, ADR-0045 §5): this module re-exports them under the names the
+// UI uses and adds what only the UI knows (local `rename` changes). Never write an event name by hand:
+// use `Events.<key>` (ESLint refuses the literals).
 import type { Entry } from './api';
+import type {
+  ChangeType,
+  EventPayloads,
+  FileChange as CoreFileChange,
+  FileChangedPayload as CoreFileChangedPayload,
+} from './events.gen';
 
-export const Events = {
-  vaultFileChanged: 'vault:file-changed',
-  indexProgress: 'index:progress',
-  syncStatus: 'sync:status',
-  syncConflict: 'sync:conflict',
-  vaultLocked: 'vault:locked',
-  authState: 'auth:state',
-  configUpdated: 'config:updated',
-  sharesChanged: 'shares:changed',
-  mountsChanged: 'mounts:changed',
-  mountRevoked: 'mount:revoked',
-  /** The cloud vault of a linked folder was deleted elsewhere: the folder was disconnected. */
-  vaultCloudDeleted: 'vault:cloud-deleted',
-  openRequest: 'app:open-request',
-  /** Desktop: the window is closing; flush, then call runtime Quit (emitted by apps/desktop/main.go). */
-  beforeClose: 'app:before-close',
-} as const;
+export { Events } from './events.gen';
+export type {
+  EventName,
+  EventPayload,
+  EventPayloads,
+  IndexProgressPayload,
+  OpenRequestPayload,
+  ImportProgressPayload,
+  ImportDonePayload,
+} from './events.gen';
 
 /**
  * What happened to one path (internal/app/changes.go). The core classifies against the index as it
  * was before the batch, so `create` means "a file the vault did not have". `rename` is never sent
  * by the core (the watcher sees a deletion and a creation) but may be used by local producers.
  */
-export type FileChangeType = 'create' | 'modify' | 'delete' | 'rename';
+export type FileChangeType = ChangeType | 'rename';
 
-export interface FileChange {
+export interface FileChange extends Omit<CoreFileChange, 'type' | 'entry'> {
   type: FileChangeType;
-  path: string;
   /** The previous path of a `rename`. */
   from?: string;
   /** The file or folder as it is now (absent for `delete`, and when it could not be read). */
   entry?: Entry;
 }
 
-export interface FileChangedPayload {
-  vaultId: string;
-  /** Every path of the batch. */
-  paths: string[];
+/** `vault:file-changed`, with the UI's own change types. */
+export interface FileChangedPayload extends Omit<CoreFileChangedPayload, 'changes'> {
   /** The same paths, classified. Older cores omit it: consumers must then assume anything changed. */
   changes?: FileChange[];
 }
 
-export interface IndexProgressPayload {
-  vaultId: string;
-  done: number;
-  total: number;
-  path: string;
-  finished: boolean;
-}
-
-export interface SyncConflictPayload {
-  vaultId: string;
-}
+export type SyncConflictPayload = EventPayloads['sync:conflict'];
 
 /** Why a private vault was locked: by the user, by the idle timeout, or found without its key by a sync cycle. */
-export type VaultLockReason = 'manual' | 'idle' | 'sync';
+export type VaultLockReason = EventPayloads['vault:locked']['reason'];
 
 /**
  * `vault:locked`, sent once the key is gone (the core pushes pending changes first). `pending`
  * counts the files that still differ from the server (they leave at the next unlock), -1 when
  * unknown; a host may drop a clear-text copy only when it is 0.
  */
-export interface VaultLockedPayload {
-  vaultId: string;
-  reason: VaultLockReason;
-  pending: number;
-  conflicts: number;
-}
+export type VaultLockedPayload = EventPayloads['vault:locked'];
 
-export interface OpenRequestPayload {
-  vault: string;
-  file: string;
-}
-
-export interface MountRevokedPayload {
-  vaultId: string;
-  shareId: string;
-  name: string;
-}
+export type MountRevokedPayload = EventPayloads['mount:revoked'];
 
 /**
  * `vault:cloud-deleted`: the cloud vault of a linked folder was deleted from the console or from
  * another device. The core disconnected the folder, which keeps its files, as after a delete made
  * here (internal/sync, cloudVaultDeleted); a `sync:status` with the reason follows.
  */
-export interface VaultCloudDeletedPayload {
-  vaultId: string;
-  cloudVaultId: string;
-  /** The name the cloud vault had. */
-  name: string;
-}
+export type VaultCloudDeletedPayload = EventPayloads['vault:cloud-deleted'];

@@ -19,6 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"memobrain/apps/desktop/internal/app"
+	"memobrain/apps/desktop/internal/events"
 	"memobrain/apps/desktop/internal/platform"
 	"memobrain/apps/desktop/internal/telemetry"
 )
@@ -98,9 +99,17 @@ func run() int {
 	return 0
 }
 
-// eventBeforeClose asks the frontend to write its pending edits before the app quits; it answers
-// by calling the runtime Quit again (packages/workbench/src/app/lifecycle.ts).
-const eventBeforeClose = "app:before-close"
+// emitTo sends an event of the registry (app.EventBeforeClose) through the Wails runtime: this hook
+// runs outside the App, whose emitter the bindings use.
+func emitTo(ctx context.Context) events.Emitter {
+	return func(name string, payload any) {
+		if payload == nil {
+			runtime.EventsEmit(ctx, name)
+			return
+		}
+		runtime.EventsEmit(ctx, name, payload)
+	}
+}
 
 // closeFlushTimeout bounds the wait for the frontend: a frontend that never answers (still loading,
 // hung) does not keep the app open. The frontend gives up on its own writes a few seconds earlier.
@@ -132,7 +141,8 @@ func (g *closeGuard) beforeClose(ctx context.Context) bool {
 	g.pending = true
 	g.answered = make(chan struct{})
 	answered := g.answered
-	go runtime.EventsEmit(ctx, eventBeforeClose)
+	// app:before-close: the frontend writes its pending edits and calls the runtime Quit again.
+	go app.EventBeforeClose.Send(emitTo(ctx))
 	go func() {
 		select {
 		case <-answered:

@@ -56,8 +56,8 @@ func TestManagerCloudVaultDeletedElsewhere(t *testing.T) {
 		info, _ := ada.m.Info(ctx, "v1")
 		return !info.Linked
 	})
-	if ada.emitted(syncpkg.EventCloudVaultDeleted) != 1 {
-		t.Fatalf("%s emitted %d times", syncpkg.EventCloudVaultDeleted, ada.emitted(syncpkg.EventCloudVaultDeleted))
+	if ada.emitted(syncpkg.EventCloudVaultDeleted.Name()) != 1 {
+		t.Fatalf("%s emitted %d times", syncpkg.EventCloudVaultDeleted.Name(), ada.emitted(syncpkg.EventCloudVaultDeleted.Name()))
 	}
 	if b, err := os.ReadFile(note); err != nil || string(b) != "the plan" {
 		t.Fatalf("local file after the delete: %q, %v", b, err)
