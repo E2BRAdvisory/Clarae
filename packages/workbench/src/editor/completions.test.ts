@@ -26,6 +26,11 @@ describe('link text', () => {
       linkTextFor(sug({ path: 'Notes/B.md', label: 'B' }), 'Notes/A.md', 'relative', false),
     ).toBe('B');
   });
+  it('names a presentation in full: only a .md note resolves by its title', () => {
+    const deck = sug({ label: 'Review', path: 'Talks/Review.marp' });
+    expect(linkTextFor(deck, 'Notes/A.md', 'shortest', false)).toBe('Review.marp');
+    expect(linkTextFor(deck, 'Notes/A.md', 'path', false)).toBe('Talks/Review.marp');
+  });
 });
 
 describe('completion sources', () => {

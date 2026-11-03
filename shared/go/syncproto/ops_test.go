@@ -73,6 +73,7 @@ func TestKindOf(t *testing.T) {
 	tests := map[string]FileKind{
 		"a.md":                          KindMarkdown,
 		"Notes/A.MD":                    KindMarkdown,
+		"Talks/Deck.marp":               KindMarkdown,
 		"map.canvas":                    KindCanvas,
 		"db.base":                       KindBase,
 		"d.excalidraw":                  KindExcalidraw,

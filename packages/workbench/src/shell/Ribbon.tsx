@@ -13,6 +13,7 @@ const ITEMS: { command: string; icon: IconName; gap?: boolean }[] = [
   { command: 'canvas:new', icon: 'canvas' },
   { command: 'drawing:new', icon: 'pencil' },
   { command: 'bases:new', icon: 'table' },
+  { command: 'marp:new', icon: 'slides' },
   { command: 'separator:insert', icon: 'separator', gap: true },
   { command: 'note:export-pdf', icon: 'pdf' },
   { command: 'note:export-image', icon: 'image' },

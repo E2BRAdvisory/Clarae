@@ -77,6 +77,7 @@ export type FeatureId =
   | 'templates' // Modelli e note con identificativo unico
   | 'composer' // Unione ed estrazione di note
   | 'canvas' // Canvas
+  | 'presentations' // Presentazioni Marp (.marp)
   | 'bases' // Basi (viste tabellari delle note)
   | 'drawing.edit' // Disegni Excalidraw
   | 'drawing.scene-actions' // Azioni sulla scena di un disegno (script Excalidraw)
@@ -168,6 +169,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'templates',
   'composer',
   'canvas',
+  'presentations',
   'bases',
   'drawing.edit',
   'drawing.scene-actions',

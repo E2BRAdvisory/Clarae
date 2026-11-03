@@ -43,6 +43,11 @@
           "default": true,
           "description": "Canvas (.canvas): creating and opening canvases."
         },
+        "presentations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Marp presentations (.marp): creating them, the split view with the live slide preview, presenting and exporting (ADR-0047)."
+        },
         "sharing": {
           "type": "boolean",
           "default": true,

@@ -19,6 +19,7 @@
     "pickTitle": "Choose the vault folder"
   },
   "sidebar": {
+    "newPresentation": "New presentation",
     "files": "Files",
     "search": "Search",
     "newNote": "New note",
@@ -83,6 +84,7 @@
     "rescueName": "{{name}} (unsaved {{time}})"
   },
   "status": {
+    "kindPresentation": "Presentation",
     "indexing": "Indexing {{done}}/{{total}}",
     "indexed": "Index up to date",
     "position": "Ln {{line}}, Col {{col}}",
@@ -326,6 +328,11 @@
     "done_other": "{{count}} files saved to {{path}}"
   },
   "commands": {
+    "marp_new": "New presentation",
+    "marp_present": "Present the slides",
+    "marp_export_html": "Export the presentation to HTML",
+    "marp_export_pdf": "Export the presentation to PDF",
+    "marp_export_pptx": "Export the presentation to PowerPoint (PPTX)",
     "note_new": "New note",
     "note_new_tab": "New note in a new tab",
     "note_rename": "Rename current note",
@@ -1177,6 +1184,21 @@
     "reveal": "Show in folder",
     "openWithApp": "Open with default app",
     "notShown": "This file cannot be shown in MemoBrain Notes."
+  },
+  "marp": {
+    "title": "Presentation",
+    "loading": "Loading the preview…",
+    "toolbar": "Presentation",
+    "preview": "Slide preview",
+    "present": "Present",
+    "exportHtml": "HTML",
+    "exportPdf": "PDF",
+    "exportPptx": "PPTX",
+    "pptxLater": "Exporting to PowerPoint (PPTX) is not available yet: export to PDF or HTML instead.",
+    "notADeck": "Open a presentation (.marp) to use this command.",
+    "htmlDone": "The presentation was saved to {{path}}.",
+    "secondSlide": "Second slide",
+    "resize": "Resize editor and preview"
   },
   "exportNote": {
     "title": "Export note",

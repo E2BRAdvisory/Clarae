@@ -82,18 +82,22 @@ export function endPrint(): void {
 
 /**
  * Builds the print layer: the document in a light, paper-oriented layout; the stylesheet shows only
- * this layer when the page is printed and hides it on screen.
+ * this layer when the page is printed and hides it on screen. A presentation brings its own
+ * stylesheet (its theme and one slide per page) and class.
  */
-export function beginPrint(bodyHtml: string): void {
+export function beginPrint(
+  bodyHtml: string,
+  opts: { css?: string; className?: string } = {},
+): void {
   endPrint();
   const style = document.createElement('style');
   style.id = PRINT_STYLE_ID;
-  style.textContent = printCss();
+  style.textContent = opts.css ?? printCss();
   const layer = document.createElement('div');
   layer.id = PRINT_ID;
   const doc = document.createElement('article');
-  doc.className = 'export-doc';
-  doc.innerHTML = bodyHtml; // sanitized by renderExportBody
+  doc.className = opts.className ?? 'export-doc';
+  doc.innerHTML = bodyHtml; // sanitized by renderExportBody or renderDeck
   layer.append(doc);
   document.head.append(style);
   document.body.append(layer);

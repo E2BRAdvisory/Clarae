@@ -19,6 +19,7 @@
     "pickTitle": "Scegli la cartella del vault"
   },
   "sidebar": {
+    "newPresentation": "Nuova presentazione",
     "files": "File",
     "search": "Cerca",
     "newNote": "Nuova nota",
@@ -83,6 +84,7 @@
     "rescueName": "{{name}} (non salvato {{time}})"
   },
   "status": {
+    "kindPresentation": "Presentazione",
     "indexing": "Indicizzazione {{done}}/{{total}}",
     "indexed": "Indice aggiornato",
     "position": "Rg {{line}}, Col {{col}}",
@@ -326,6 +328,11 @@
     "done_other": "{{count}} file salvati in {{path}}"
   },
   "commands": {
+    "marp_new": "Nuova presentazione",
+    "marp_present": "Presenta le slide",
+    "marp_export_html": "Esporta la presentazione in HTML",
+    "marp_export_pdf": "Esporta la presentazione in PDF",
+    "marp_export_pptx": "Esporta la presentazione in PowerPoint (PPTX)",
     "note_new": "Nuova nota",
     "note_new_tab": "Nuova nota in una nuova scheda",
     "note_rename": "Rinomina nota corrente",
@@ -1177,6 +1184,21 @@
     "reveal": "Mostra nella cartella",
     "openWithApp": "Apri con l'app predefinita",
     "notShown": "Questo file non può essere visualizzato in MemoBrain Notes."
+  },
+  "marp": {
+    "title": "Presentazione",
+    "loading": "Caricamento dell’anteprima…",
+    "toolbar": "Presentazione",
+    "preview": "Anteprima delle slide",
+    "present": "Presenta",
+    "exportHtml": "HTML",
+    "exportPdf": "PDF",
+    "exportPptx": "PPTX",
+    "pptxLater": "L’export in PowerPoint (PPTX) non è ancora disponibile: esporta in PDF o in HTML.",
+    "notADeck": "Apri una presentazione (.marp) per usare questo comando.",
+    "htmlDone": "La presentazione è stata salvata in {{path}}.",
+    "secondSlide": "Seconda slide",
+    "resize": "Ridimensiona editor e anteprima"
   },
   "exportNote": {
     "title": "Esporta nota",

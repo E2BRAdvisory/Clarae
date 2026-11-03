@@ -9,6 +9,7 @@ import { infoOf, useSync } from '../state/sync';
 import { useRecovery } from '../recovery/store';
 import { newCanvas } from '../canvas/commands';
 import { newBase } from '../bases/commands';
+import { newPresentation } from '../marp/commands';
 import { newDrawing } from '../drawing/commands';
 import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
 import { selectActivePath, useAppStore } from '../state/store';
@@ -95,6 +96,7 @@ const KIND_ICON: Record<EmbedKind, IconName> = {
   drawing: 'pencil',
   canvas: 'canvas',
   base: 'table',
+  presentation: 'slides',
   other: 'attach',
 };
 
@@ -137,6 +139,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const readOnly = info.readOnly;
   const drawingsOn = useManaged((m) => featureOn(m.features, 'drawings'));
   const canvasOn = useManaged((m) => featureOn(m.features, 'canvas'));
+  const presentationsOn = useManaged((m) => featureOn(m.features, 'presentations'));
   const canShare = sharingOn && info.linked && info.kind === 'shared' && !info.mount;
   const tree = useMemo(
     () =>
@@ -173,6 +176,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   };
   const newCanvasIn = async (dir: string) => {
     await guard(newCanvas({ dir }));
+  };
+  const newPresentationIn = async (dir: string) => {
+    await guard(newPresentation({ dir }));
   };
   const newBaseIn = async (dir: string) => {
     await guard(newBase({ dir }));
@@ -282,6 +288,14 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                 {
                   label: t('sidebar.newCanvas'),
                   onSelect: () => void newCanvasIn(dirForNew(entry)),
+                },
+              ]
+            : []),
+          ...(presentationsOn
+            ? [
+                {
+                  label: t('sidebar.newPresentation'),
+                  onSelect: () => void newPresentationIn(dirForNew(entry)),
                 },
               ]
             : []),
@@ -481,6 +495,14 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                 : []),
               ...(canvasOn
                 ? [{ label: t('sidebar.newCanvas'), onSelect: () => void newCanvasIn('') }]
+                : []),
+              ...(presentationsOn
+                ? [
+                    {
+                      label: t('sidebar.newPresentation'),
+                      onSelect: () => void newPresentationIn(''),
+                    },
+                  ]
                 : []),
               { label: t('bases.new'), onSelect: () => void newBaseIn('') },
               { label: t('sidebar.newFolder'), onSelect: () => void newFolder('') },

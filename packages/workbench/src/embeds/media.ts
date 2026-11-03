@@ -1,7 +1,16 @@
 import type { BinaryContent } from '../app/api';
 
 export type EmbedKind =
-  'note' | 'image' | 'audio' | 'video' | 'pdf' | 'drawing' | 'canvas' | 'base' | 'other';
+  | 'note'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'pdf'
+  | 'drawing'
+  | 'canvas'
+  | 'base'
+  | 'presentation'
+  | 'other';
 
 const EXT: Record<string, EmbedKind> = {
   md: 'note',
@@ -28,6 +37,7 @@ const EXT: Record<string, EmbedKind> = {
   excalidraw: 'drawing',
   canvas: 'canvas',
   base: 'base',
+  marp: 'presentation',
 };
 
 export function classify(path: string): EmbedKind {
@@ -46,6 +56,7 @@ const IN_APP: ReadonlySet<EmbedKind> = new Set<EmbedKind>([
   'drawing',
   'canvas',
   'base',
+  'presentation',
 ]);
 
 /**

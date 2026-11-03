@@ -41,6 +41,7 @@ describe('openTarget', () => {
       'b.canvas',
       'c.base',
       'd.excalidraw',
+      'Talks/Deck.marp',
       'Media/photo.PNG',
       'x.jpg',
       'x.jpeg',

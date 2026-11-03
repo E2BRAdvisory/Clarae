@@ -217,6 +217,9 @@ const (
 	// Canvas: Canvas
 	Canvas FeatureID = "canvas"
 
+	// Presentations: Presentazioni Marp (.marp)
+	Presentations FeatureID = "presentations"
+
 	// Bases: Basi (viste tabellari delle note)
 	Bases FeatureID = "bases"
 
@@ -342,6 +345,7 @@ var Features = []FeatureID{
 	Templates,
 	Composer,
 	Canvas,
+	Presentations,
 	Bases,
 	DrawingEdit,
 	DrawingSceneActions,

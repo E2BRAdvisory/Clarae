@@ -180,6 +180,7 @@ func TestDecide(t *testing.T) {
 	}{
 		{"md same author", syncproto.KindMarkdown, true, merge.ChangeModify, merge.ChangeModify, merge.StrategyMarkdown3Way},
 		{"md other author", syncproto.KindMarkdown, false, merge.ChangeModify, merge.ChangeModify, merge.StrategyMarkdown3Way},
+		{"marp other author", syncproto.KindOf("Talks/Deck.marp"), false, merge.ChangeModify, merge.ChangeModify, merge.StrategyMarkdown3Way},
 		{"base same", syncproto.KindBase, true, merge.ChangeModify, merge.ChangeModify, merge.StrategyMarkdown3Way},
 		{"base other", syncproto.KindBase, false, merge.ChangeModify, merge.ChangeModify, merge.StrategyConflictCopy},
 		{"excalidraw same", syncproto.KindExcalidraw, true, merge.ChangeModify, merge.ChangeModify, merge.StrategyExcalidrawID},

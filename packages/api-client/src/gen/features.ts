@@ -17,6 +17,9 @@ export const Feature = {
   Drawings: 'drawings',
   // Canvas (.canvas): creating and opening canvases.
   Canvas: 'canvas',
+  // Marp presentations (.marp): creating them, the split view with the live slide preview,
+  // presenting and exporting (ADR-0047).
+  Presentations: 'presentations',
   // Sharing a vault with users and groups, and the received shares: settings section, status bar and
   // file menu of the workbench; Sharing page, mounts and invitations of the console.
   Sharing: 'sharing',
@@ -53,6 +56,7 @@ export const FEATURES: readonly Feature[] = [
   Feature.WebWorkbench,
   Feature.Drawings,
   Feature.Canvas,
+  Feature.Presentations,
   Feature.Sharing,
   Feature.DrawingLatex,
   Feature.DrawingMermaid,
@@ -70,6 +74,7 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.WebWorkbench]: true,
   [Feature.Drawings]: true,
   [Feature.Canvas]: true,
+  [Feature.Presentations]: true,
   [Feature.Sharing]: true,
   [Feature.DrawingLatex]: true,
   [Feature.DrawingMermaid]: true,

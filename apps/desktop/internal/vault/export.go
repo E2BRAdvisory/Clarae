@@ -21,7 +21,7 @@ type ExportStats struct {
 // textual lists the formats worth deflating; everything else (images, audio, archives) is
 // stored as is.
 var textual = map[string]bool{
-	".md": true, ".canvas": true, ".base": true, ".excalidraw": true, ".json": true, ".txt": true,
+	".md": true, ".marp": true, ".canvas": true, ".base": true, ".excalidraw": true, ".json": true, ".txt": true,
 	".csv": true, ".svg": true, ".html": true, ".css": true, ".js": true, ".xml": true, ".yaml": true, ".yml": true,
 }
 

@@ -28,6 +28,14 @@ import { workspaceCommands } from '../workspaces/commands';
 import { previewCommands } from '../preview/commands';
 import { exportNoteHtml, exportNoteImage, exportNotePdf } from '../export/commands';
 import { startSlideshow } from '../slides/actions';
+import {
+  exportDeckHtml,
+  exportDeckPdf,
+  exportDeckPptx,
+  isDeck,
+  newPresentation,
+  presentDeck,
+} from '../marp/commands';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import type { EditorView } from '@codemirror/view';
@@ -72,6 +80,8 @@ const canWrite = (): boolean => hasVault() && !readOnlyVault();
 const flagOn = (name: Feature): boolean => featureOn(useManaged.getState().features, name);
 const activePath = (): string | null => activeTab(store().layout)?.path ?? null;
 const hasNote = (): boolean => activePath() !== null;
+/** A Marp presentation is in focus and presentations are on (ADR-0047). */
+const hasDeck = (): boolean => isDeck(activePath() ?? '') && flagOn(Feature.Presentations);
 const syncInfo = () => infoOf(useSync.getState(), store().vault?.id);
 const isLinked = (): boolean => hasVault() && syncInfo().linked;
 const editorMode = (): boolean => {
@@ -190,6 +200,47 @@ export const commands: Command[] = [
     defaults: [],
     enabled: () => canWrite() && flagOn(Feature.Canvas),
     run: () => guard(newCanvas()),
+  },
+  {
+    id: 'marp:new',
+    group: 'file',
+    feature: 'presentations',
+    defaults: [],
+    enabled: () => canWrite() && flagOn(Feature.Presentations),
+    run: () => guard(newPresentation()),
+  },
+  {
+    id: 'marp:present',
+    group: 'view',
+    feature: 'presentations',
+    defaults: [],
+    enabled: hasDeck,
+    run: presentDeck,
+  },
+  {
+    id: 'marp:export-html',
+    group: 'file',
+    feature: 'presentations',
+    defaults: [],
+    enabled: hasDeck,
+    run: exportDeckHtml,
+  },
+  {
+    id: 'marp:export-pdf',
+    group: 'file',
+    feature: 'presentations',
+    defaults: [],
+    enabled: hasDeck,
+    run: exportDeckPdf,
+  },
+  {
+    // Not available yet (ADR-0047): it explains why instead of exporting.
+    id: 'marp:export-pptx',
+    group: 'file',
+    feature: 'presentations',
+    defaults: [],
+    enabled: hasDeck,
+    run: exportDeckPptx,
   },
   {
     id: 'bases:new',

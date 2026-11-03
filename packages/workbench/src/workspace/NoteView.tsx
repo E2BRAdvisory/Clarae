@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
@@ -40,6 +40,8 @@ const GraphView = lazyView(async () => ({
 const CanvasView = lazyView(async () => ({
   default: (await import('../canvas/CanvasView')).CanvasView,
 }));
+// The slide preview of a presentation brings Marp along (ADR-0047).
+const MarpPane = lazyView(() => import('../marp/MarpPane'));
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
 
@@ -166,16 +168,67 @@ export function NoteView({ vaultId, pane, tab, visible }: Props) {
     );
   if (kind === 'base') return <BaseView key={tab.path} vaultId={vaultId} path={tab.path} />;
   if (kind === 'other') return <ExternalFileView path={tab.path} />;
-  if (kind !== 'note') return <AttachmentView vaultId={vaultId} path={tab.path} />;
+  if (kind !== 'note' && kind !== 'presentation')
+    return <AttachmentView vaultId={vaultId} path={tab.path} />;
   return (
-    <MarkdownNote key={tab.path} vaultId={vaultId} pane={pane} tab={tab} visible={visible} t={t} />
+    <MarkdownNote
+      key={tab.path}
+      vaultId={vaultId}
+      pane={pane}
+      tab={tab}
+      visible={visible}
+      t={t}
+      presentation={kind === 'presentation'}
+    />
   );
 }
 
 /** Pause in typing before the sidebars see the new text. */
 const PUBLISH_DELAY_MS = 300;
+/** Pause in typing before a presentation's preview gets the new text (it renders after its own). */
+const PREVIEW_DELAY_MS = 100;
 
-function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: string) => string }) {
+/** The bar between the editor and the slides of a presentation: dragging it moves the split. */
+function SplitHandle({ onResize }: { onResize: (share: number) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="marp-split-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t('marp.resize')}
+      onPointerDown={(e) => {
+        const box = e.currentTarget.parentElement?.getBoundingClientRect();
+        if (!box) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        const move = (ev: PointerEvent): void =>
+          onResize(Math.min(0.8, Math.max(0.2, (ev.clientX - box.left) / box.width)));
+        const up = (): void => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      }}
+    />
+  );
+}
+
+/** Share of the width the editor takes in the split view of a presentation. */
+const SPLIT_DEFAULT = 0.5;
+
+/**
+ * A Markdown file in its editor: a note (live preview, source or reading view), or a Marp
+ * presentation (ADR-0047), whose source editor sits next to the preview of its slides.
+ */
+function MarkdownNote({
+  vaultId,
+  pane,
+  tab,
+  visible,
+  t,
+  presentation = false,
+}: Props & { t: (k: string) => string; presentation?: boolean }) {
   const path = tab.path;
   const doc = useNoteDocument(vaultId, path);
   const editorSettings = useSettings((s) => s.editor);
@@ -190,6 +243,24 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
   const publishTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const publishRef = useRef<() => void>(() => undefined);
   useEffect(() => () => clearTimeout(publishTimer.current), []);
+  // A presentation's preview follows the text after a short pause, and the slide of the cursor.
+  // The text typed for the preview, for the version of the document it was typed in: a reload
+  // from disk (a new version) makes the preview show the file again.
+  const [typed, setTyped] = useState<{ version: number; text: string } | null>(null);
+  const [cursorLine, setCursorLine] = useState(0);
+  const [split, setSplit] = useState(SPLIT_DEFAULT);
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(previewTimer.current), []);
+  const pickSlide = useCallback(
+    (line: number) => {
+      const view = getEditor(pane.id);
+      if (!view) return;
+      const at = view.state.doc.line(Math.min(view.state.doc.lines, line + 1)).from;
+      view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+      view.focus();
+    },
+    [pane.id],
+  );
   const settingsRef = useRef(editorSettings);
   useEffect(() => {
     settingsRef.current = editorSettings;
@@ -331,7 +402,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
 
   return (
     <div
-      className={`note-view ${editorSettings.readableWidth ? 'readable' : ''}`}
+      className={`note-view ${editorSettings.readableWidth && !presentation ? 'readable' : ''}`}
       data-mode={tab.mode}
     >
       <div className="note-header">
@@ -341,7 +412,12 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
         <span className={`save-state ${doc.save}`} aria-live="polite">
           {saveLabel}
         </span>
-        <div className="mode-toggle" role="group" aria-label={t('editor.mode')}>
+        <div
+          className="mode-toggle"
+          role="group"
+          aria-label={t('editor.mode')}
+          hidden={presentation}
+        >
           {MODES.map((m) => (
             <button
               key={m}
@@ -362,7 +438,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
           <button onClick={() => void doc.overwrite()}>{t('editor.overwrite')}</button>
         </div>
       )}
-      {tab.mode === 'reading' ? (
+      {tab.mode === 'reading' && !presentation ? (
         <div className="reading-scroll">
           <ReadingView
             vaultId={vaultId}
@@ -372,6 +448,70 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
             onOpenLink={open}
             onSearchTag={(tag) => search(`tag:#${tag.replace(/^#/, '')}`)}
           />
+        </div>
+      ) : presentation ? (
+        <div
+          className="marp-split"
+          style={{ gridTemplateColumns: `${split}fr 6px ${1 - split}fr` }}
+        >
+          <div className="marp-source">
+            <EditorToolbar
+              vaultId={vaultId}
+              paneId={pane.id}
+              disabled={readOnly}
+              attachmentDir={attachmentDir(editorSettings, path)}
+            />
+            <Editor
+              id={pane.id}
+              doc={text}
+              version={doc.version}
+              mode={presentation || tab.mode === 'reading' ? 'source' : tab.mode}
+              settings={editorSettings}
+              context={context}
+              completion={completion}
+              paste={paste}
+              resolver={link.resolver}
+              hotkey={(e) => {
+                const c = commandForEvent(e, useSettings.getState().hotkeys);
+                if (!c) return false;
+                e.preventDefault();
+                void c.run();
+                return true;
+              }}
+              reveal={revealHere}
+              readOnly={readOnly}
+              onChange={(v) => {
+                doc.edit(v); // the save state re-renders this view when it changes, not every key
+                clearTimeout(publishTimer.current);
+                publishTimer.current = setTimeout(() => publishRef.current(), PUBLISH_DELAY_MS);
+                if (presentation) {
+                  clearTimeout(previewTimer.current);
+                  const version = doc.version;
+                  previewTimer.current = setTimeout(
+                    () => setTyped({ version, text: v() }),
+                    PREVIEW_DELAY_MS,
+                  );
+                }
+              }}
+              onStats={(s) => {
+                if (isActive) setStats(s);
+                if (!presentation) return;
+                const view = getEditor(pane.id);
+                if (view)
+                  setCursorLine(view.state.doc.lineAt(view.state.selection.main.head).number - 1);
+              }}
+            />
+          </div>
+          <SplitHandle onResize={setSplit} />
+          <Suspense fallback={<div className="note-loading muted">{t('marp.loading')}</div>}>
+            <MarpPane
+              vaultId={vaultId}
+              path={path}
+              source={typed?.version === doc.version ? typed.text : text}
+              cursorLine={cursorLine}
+              onPickSlide={pickSlide}
+            />
+          </Suspense>
         </div>
       ) : (
         <>
@@ -385,7 +525,7 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
             id={pane.id}
             doc={text}
             version={doc.version}
-            mode={tab.mode}
+            mode={presentation || tab.mode === 'reading' ? 'source' : tab.mode}
             settings={editorSettings}
             context={context}
             completion={completion}
@@ -404,8 +544,22 @@ function MarkdownNote({ vaultId, pane, tab, visible, t }: Props & { t: (k: strin
               doc.edit(v); // the save state re-renders this view when it changes, not every key
               clearTimeout(publishTimer.current);
               publishTimer.current = setTimeout(() => publishRef.current(), PUBLISH_DELAY_MS);
+              if (presentation) {
+                clearTimeout(previewTimer.current);
+                const version = doc.version;
+                previewTimer.current = setTimeout(
+                  () => setTyped({ version, text: v() }),
+                  PREVIEW_DELAY_MS,
+                );
+              }
             }}
-            onStats={(s) => isActive && setStats(s)}
+            onStats={(s) => {
+              if (isActive) setStats(s);
+              if (!presentation) return;
+              const view = getEditor(pane.id);
+              if (view)
+                setCursorLine(view.state.doc.lineAt(view.state.selection.main.head).number - 1);
+            }}
           />
         </>
       )}

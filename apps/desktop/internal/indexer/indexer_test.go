@@ -171,3 +171,42 @@ func TestDrawingsAndCanvasesAreIndexed(t *testing.T) {
 		t.Fatalf("stale links: %d", n)
 	}
 }
+
+// A Marp presentation is Markdown for the index (ADR-0047): its text is searchable, its links and
+// tags count, and its title is the name without .marp.
+func TestMarpPresentationIsIndexedAsMarkdown(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	fsys, err := vault.NewFS(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	deck := "---\nmarp: true\ntheme: gaia\n---\n\n# Quarterly review\n\nSee [[Plan]] #talks\n\n---\n\n## Roadmap\n"
+	if _, err := fsys.WriteFile("Talks/Review.marp", []byte(deck), "", false); err != nil {
+		t.Fatal(err)
+	}
+	ix := New(fsys, db, zerolog.Nop(), nil)
+	if err := ix.Full(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var kind, title string
+	if err := db.QueryRowContext(ctx, `SELECT kind, title FROM files WHERE path='Talks/Review.marp'`).Scan(&kind, &title); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "md" || title != "Review" {
+		t.Fatalf("kind %q, title %q", kind, title)
+	}
+	var links int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM links WHERE path='Talks/Review.marp' AND target_raw='Plan'`).Scan(&links); err != nil || links != 1 {
+		t.Fatalf("links %d (%v)", links, err)
+	}
+	hits, err := ix.Search(ctx, "roadmap", 10)
+	if err != nil || len(hits) != 1 || hits[0].Path != "Talks/Review.marp" {
+		t.Fatalf("search: %v %v", hits, err)
+	}
+}

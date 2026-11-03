@@ -41,7 +41,9 @@ export function linkTextFor(
     while (i < fromDir.length && i < target.length - 1 && fromDir[i] === target[i]) i++;
     return [...fromDir.slice(i).map(() => '..'), ...target.slice(i)].join('/');
   }
-  return ambiguous ? path : stripMd(s.label);
+  if (ambiguous) return path;
+  // Only a .md note resolves by its bare title; a presentation (.marp) needs its full name.
+  return /\.md$/i.test(s.path) ? stripMd(s.label) : s.path.slice(s.path.lastIndexOf('/') + 1);
 }
 
 function closing(context: CompletionContext, to: number): string {

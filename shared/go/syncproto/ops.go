@@ -47,7 +47,7 @@ func KindOf(path string) FileKind {
 		return KindConfig
 	}
 	switch pathrules.Ext(path) {
-	case ".md":
+	case ".md", ".marp": // a Marp presentation is Markdown: 3-way merge, index, links (ADR-0047)
 		return KindMarkdown
 	case ".canvas":
 		return KindCanvas

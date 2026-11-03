@@ -603,6 +603,52 @@ button.icon[aria-pressed='true'] {
   display: flex;
   flex-direction: column;
 }
+/* A presentation (ADR-0047): the source editor and the slide preview side by side. */
+.marp-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+}
+.marp-source {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.marp-split-handle {
+  cursor: col-resize;
+  background: var(--border);
+}
+.marp-split-handle:hover {
+  background: var(--accent);
+}
+.marp-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.marp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.marp-toolbar .spacer {
+  flex: 1;
+}
+.marp-toolbar .unavailable {
+  opacity: 0.55;
+}
+.marp-error {
+  padding: 8px 12px;
+  color: var(--danger);
+}
+.marp-slides {
+  flex: 1;
+  min-height: 0;
+}
 .note-header {
   display: flex;
   align-items: center;

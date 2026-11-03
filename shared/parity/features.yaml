@@ -1510,6 +1510,24 @@ features:
       workbench:
         - apps/desktop/frontend/e2e/canvas.spec.ts
 
+  - id: presentations
+    title: Presentazioni Marp (.marp)
+    desktop:
+      status: yes
+      note: vista divisa con l'editor della sorgente e l'anteprima delle slide, presentazione a tutto schermo, export HTML e PDF; PPTX non ancora disponibile (ADR-0047)
+      commands: [marp:new, marp:present, marp:export-html, marp:export-pdf, marp:export-pptx]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/marp/engine.test.ts
+        - packages/workbench/src/marp/MarpPane.test.tsx
+        - apps/desktop/internal/indexer/indexer_test.go
+        - shared/go/merge/merge_test.go
+        - apps/desktop/frontend/e2e/marp.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/marp.spec.ts
+
   - id: bases
     title: Basi (viste tabellari delle note)
     desktop:

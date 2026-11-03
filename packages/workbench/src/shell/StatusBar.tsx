@@ -26,6 +26,8 @@ function kindLabel(path: string): string {
       return 'status.kindCanvas';
     case 'base':
       return 'status.kindBase';
+    case 'presentation':
+      return 'status.kindPresentation';
     default:
       return 'status.kindFile';
   }
