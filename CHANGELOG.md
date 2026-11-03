@@ -38,6 +38,9 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Workbench nel browser più leggero:** il core WebAssembly non include più l'accesso OIDC del desktop, il portachiavi, l'updater e il cestino di sistema (−9 % di dimensione). Impostazioni, recupero dei file, procedura di collegamento, conflitti, cronologia e lavagne si caricano al primo uso.
 - **Excalidraw:** «Scomponi in un nuovo disegno» e «Aggiorna le schede delle note» erano attivi anche senza diritti di modifica.
 - **Passphrase nuove:** la regola di robustezza (12 caratteri e stima zxcvbn) è applicata dal core del desktop e del browser, non solo dall'interfaccia; le passphrase esistenti continuano a funzionare.
+- **Modifica remota e spostamento:** una modifica arrivata da un altro dispositivo non va più persa quando lo stesso file viene anche spostato prima che questo dispositivo la applichi.
+- **Upload ripresi:** un upload tus interrotto a metà riprende dal punto in cui il server è arrivato, invece di fallire per una posizione non coincidente.
+- **Log:** gli avvisi dei componenti che usano `slog` finiscono nel log dell'app.
 
 ### Workbench (desktop e web)
 
@@ -49,6 +52,8 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Stato della sync:** un avviso quando il vault cloud è stato eliminato altrove; il numero di file illeggibili in quarantena; il confronto dei conflitti si ricarica se il file è cambiato. I codici d'errore sono tradotti, compreso `insecure-url`.
 - **Impostazioni, segnalibri e libreria di Excalidraw:** le modifiche in attesa vengono scritte alla chiusura e al cambio di vault, non si perdono.
 - **Avvio più leggero:** la vista grafo e la procedura di import si caricano al primo uso.
+- **Passphrase errata:** l'errore ha un codice proprio ed è tradotto ovunque, anche nel blocco di sblocco del browser.
+- **Note lunghe:** l'editor non copia più l'intero testo della nota a ogni tasto.
 
 ### Web UI
 
@@ -67,6 +72,7 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Ricerca di utenti e gruppi** dal workbench: una sola richiesta, con la descrizione dei gruppi come nella console.
 - **Liste lunghe:** condivisioni, inviti, gruppi, membri e storico dei profili si caricano a pagine con «Carica altri». La lista dei vault condivisi con l'utente è una sola tra console e workbench.
 - **Pulsante account nel browser:** non offre più accesso e uscita, che nel browser appartengono alla console.
+- **Copie di vault eliminati:** aprendo nel browser la copia di un vault eliminato mentre nessuna pagina era aperta, il workbench lo riconosce: la copia si apre per esportarla e si può rimuovere dal browser.
 
 ### Cloud
 
@@ -88,6 +94,12 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Realm Keycloak di produzione:** l'indirizzo di ritorno dopo il logout del client `memobrain-web` usa `${WEB_UI_ORIGIN}`. Prima era fisso su `localhost`, e il logout dalla Web UI non chiudeva la sessione SSO. Nelle installazioni con un realm configurato a mano va aggiunto `<origine della Web UI>/*` ai _Valid post logout redirect URIs_ (guida admin, Keycloak).
 - **Helm:** `progressDeadlineSeconds` 900 per API e worker. I commenti su probe e tempi di arresto ora corrispondono al budget reale: `preStopSleepSeconds` + `SHUTDOWN_DRAIN` + `SHUTDOWN_TIMEOUT` deve stare sotto `terminationGracePeriodSeconds`.
 - **Compose on-premise:** header HSTS quando il servizio è in https. Lo stack di sviluppo e `run-cloud-k3d.sh` pubblicano le porte solo su `127.0.0.1`.
+
+### Documentazione
+
+- **OpenAPI:** ogni operazione autenticata dichiara le risposte del middleware di autenticazione (403 `USER_SUSPENDED`, 409 per il conflitto d'identità); `Conflict` elenca tutti i codici.
+- **Guide per chi sviluppa:** `CONTRIBUTING.md` segue il processo di parità di ADR-0045, con la tabella completa dei file generati; `docs/desktop-web-sync.md` ha le ricette passo per passo per una funzione nuova; README, architettura, Web UI, pagina di parità e `dev-setup` sono allineati al codice.
+- **Ripristino del database:** il runbook e la guida admin descrivono il comportamento dei dispositivi dopo un ripristino point-in-time (ADR-0046).
 
 ### Sviluppo
 
