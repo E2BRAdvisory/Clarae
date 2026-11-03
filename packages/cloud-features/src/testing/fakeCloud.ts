@@ -50,6 +50,18 @@ const json = (status: number, body: unknown): Response =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+/**
+ * A page of a paginated list as the server answers it (api/openapi.yaml, Pagination): `limit` items
+ * (100 by default) after the `cursor`, here simply the index of the first one, and `next_cursor`
+ * unless it is the last page.
+ */
+export function page<T>(all: T[], url: URL): { items: T[]; next_cursor?: string } {
+  const limit = Number(url.searchParams.get('limit') ?? 100);
+  const from = Number(url.searchParams.get('cursor') ?? 0);
+  const items = all.slice(from, from + limit);
+  return from + limit < all.length ? { items, next_cursor: String(from + limit) } : { items };
+}
+
 const problem = (status: number, code: string, detail: string): Response =>
   new Response(JSON.stringify({ type: 'about:blank', title: code, status, code, detail }), {
     status,
@@ -112,7 +124,7 @@ export function fakeCloudApi(seed: CloudSeed, basePath = '/api/v1'): FakeCloudAp
       );
 
     if (req.method === 'GET' && path === '/shares')
-      return json(200, url.searchParams.get('scope') === 'received' ? received : owned);
+      return json(200, page(url.searchParams.get('scope') === 'received' ? received : owned, url));
     if (req.method === 'POST' && path === '/shares') {
       const v = vaultApi.vaults.find((x) => x.id === body['vault_id'] && !x.deleted_at);
       // Somebody else's vault: a manager shares inside a share they manage (ADR-0041 §8).

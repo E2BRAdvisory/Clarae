@@ -80,6 +80,7 @@ const en = {
   'create.continue': 'Continue',
 
   'common.loading': 'Loading…',
+  'common.loadMore': 'Load more',
   'common.loadFailed': 'Could not load the data: {{message}}',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
@@ -325,6 +326,7 @@ const it: Messages = {
   'create.continue': 'Continua',
 
   'common.loading': 'Caricamento…',
+  'common.loadMore': 'Carica altri',
   'common.loadFailed': 'Impossibile caricare i dati: {{message}}',
   'common.cancel': 'Annulla',
   'common.save': 'Salva',

@@ -35,6 +35,20 @@ func decode[T any](t *testing.T, resp *http.Response) T {
 	return v
 }
 
+// pageItems decodes a page of a paginated list ({items, next_cursor}) and returns
+// its items; the lists of these tests fit in one page, so a next page fails.
+func pageItems[T any](t *testing.T, resp *http.Response) []T {
+	t.Helper()
+	p := decode[struct {
+		Items      []T     `json:"items"`
+		NextCursor *string `json:"next_cursor"`
+	}](t, resp)
+	if p.Items == nil || p.NextCursor != nil {
+		t.Fatalf("page: items %v, next_cursor %v", p.Items, p.NextCursor)
+	}
+	return p.Items
+}
+
 func (e *env) request(method, path, token string, body any) *http.Response {
 	e.t.Helper()
 	var r io.Reader

@@ -27,7 +27,8 @@
     "never": "Never",
     "unlimited": "unlimited",
     "errorGeneric": "Something went wrong.",
-    "errorWithCode": "{{message}} ({{code}})"
+    "errorWithCode": "{{message}} ({{code}})",
+    "loadMore": "Load more"
   },
   "errors": {
     "loadFailed": "Could not load the data."
@@ -165,6 +166,7 @@
       "status": "Status",
       "group": "Group",
       "any": "Any",
+      "moreGroups": "More groups",
       "sort": "Sort by",
       "sortName": "Name",
       "sortUsed": "Space used",

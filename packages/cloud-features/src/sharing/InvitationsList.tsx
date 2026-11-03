@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, InlineError } from '@memobrain/ui';
 import { cloudKeys, describeError } from '../CloudVaultsTable';
 import { useFeatureFlag } from '../featureFlags';
@@ -8,6 +8,7 @@ import { createT, type TFunction } from '../i18n';
 import type { CloudPort, Share } from '../port';
 import { permissionLabel, statusTone } from './GrantEditor';
 import { shareType } from './SharesManager';
+import { useSharePages } from './useSharePages';
 
 export type InvitationSection = 'pending' | 'accepted' | 'declined';
 
@@ -114,11 +115,8 @@ export function InvitationsList({
   const qc = useQueryClient();
   const flag = useFeatureFlag(port, 'sharing');
   const sharingOn = flag.on && flag.ready;
-  const received = useQuery({
-    queryKey: cloudKeys.sharesOf(port, 'received'),
-    queryFn: () => port.listShares('received'),
-    enabled: sharingOn,
-  });
+  const pages = useSharePages(port, 'received', { enabled: sharingOn });
+  const received = pages.query;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -151,7 +149,7 @@ export function InvitationsList({
     }
   };
 
-  const all = received.data ?? [];
+  const all = pages.shares;
   const by = (st: InvitationSection) => all.filter((s) => (s.my_status ?? 'pending') === st);
   const titles: Record<InvitationSection, string> = {
     pending: t('invitations.title'),
@@ -177,7 +175,7 @@ export function InvitationsList({
           return (
             <section key={st} className="mbcf-group" aria-label={titles[st]}>
               <h3>{titles[st]}</h3>
-              {items.length === 0 ? (
+              {items.length === 0 && !pages.hasMore ? (
                 <p className="mbcf-muted">{t('invitations.none')}</p>
               ) : (
                 <ul className="mbcf-cards">
@@ -197,6 +195,13 @@ export function InvitationsList({
             </section>
           );
         })
+      )}
+      {pages.hasMore && !received.isError && (
+        <div className="mbcf-actions mbcf-actions--start">
+          <Button disabled={pages.loadingMore} onClick={pages.loadMore}>
+            {t('common.loadMore')}
+          </Button>
+        </div>
       )}
     </div>
   );

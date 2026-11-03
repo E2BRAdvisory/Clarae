@@ -56,7 +56,7 @@ func TestAdminConfigProfileUpdateChecksTheExpectedVersion(t *testing.T) {
 	}
 	resp = root.json(http.MethodGet, "/admin/config-profiles/"+pid+"/versions", nil)
 	expect(t, resp, http.StatusOK)
-	if vs := decode[[]map[string]any](t, resp); len(vs) != 2 {
+	if vs := pageItems[map[string]any](t, resp); len(vs) != 2 {
 		t.Fatalf("history after the refused update: %v", vs)
 	}
 	// Not a version: a validation error, not a conflict.

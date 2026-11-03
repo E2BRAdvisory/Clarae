@@ -48,20 +48,22 @@ test('accepting an invitation moves it to the accepted shares', async ({ page })
   let status: 'pending' | 'accepted' = 'pending';
   const calls = await mockApi(page, {
     'GET /me': { id: ME },
-    'GET /shares': (route: Route) =>
-      new URL(route.request().url()).searchParams.get('scope') === 'owned'
-        ? []
-        : [
-            {
-              ...common,
-              id: 's1',
-              display_name: 'Budget',
-              owner_id: BOB,
-              owner_name: 'Bob',
-              my_permission: 'editor',
-              my_status: status,
-            },
-          ],
+    'GET /shares': (route: Route) => ({
+      items:
+        new URL(route.request().url()).searchParams.get('scope') === 'owned'
+          ? []
+          : [
+              {
+                ...common,
+                id: 's1',
+                display_name: 'Budget',
+                owner_id: BOB,
+                owner_name: 'Bob',
+                my_permission: 'editor',
+                my_status: status,
+              },
+            ],
+    }),
     'POST /shares/s1:accept': () => {
       status = 'accepted';
       return {
@@ -97,8 +99,9 @@ test('revoking a share asks for confirmation and removes it', async ({ page }) =
   ];
   const calls = await mockApi(page, {
     'GET /me': { id: ME },
-    'GET /shares': (route: Route) =>
-      new URL(route.request().url()).searchParams.get('scope') === 'owned' ? owned : [],
+    'GET /shares': (route: Route) => ({
+      items: new URL(route.request().url()).searchParams.get('scope') === 'owned' ? owned : [],
+    }),
     'DELETE /shares/s2': () => {
       owned = [];
       return undefined;

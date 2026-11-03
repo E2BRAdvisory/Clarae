@@ -24,6 +24,7 @@ import {
   useRemoveMember,
   useSaveGroup,
   useSetMemberRole,
+  pageItems,
   type AdminGroup,
   type GroupMember,
   type ProfileAssignment,
@@ -115,36 +116,47 @@ export function GroupsPage() {
       </div>
       <p className="nd-muted">{t('admin.groups.note')}</p>
       <QueryState query={groups}>
-        {(list) =>
-          list.length === 0 ? (
+        {(data) => {
+          const list = pageItems(data, (g) => g.id);
+          return list.length === 0 && !groups.hasNextPage ? (
             <p className="nd-muted">{t('admin.groups.empty')}</p>
           ) : (
-            <Table caption={t('admin.sections.groups')}>
-              <thead>
-                <tr>
-                  <th scope="col">{t('admin.groups.name')}</th>
-                  <th scope="col">{t('admin.groups.description')}</th>
-                  <th scope="col" className="nd-num">
-                    {t('admin.groups.members')}
-                  </th>
-                  <th scope="col">{t('vaults.colCreated')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((g) => (
-                  <tr key={g.id}>
-                    <th scope="row">
-                      <Link to={`/admin/groups/${g.id}`}>{g.name}</Link>
+            <div className="nd-stack">
+              <Table caption={t('admin.sections.groups')}>
+                <thead>
+                  <tr>
+                    <th scope="col">{t('admin.groups.name')}</th>
+                    <th scope="col">{t('admin.groups.description')}</th>
+                    <th scope="col" className="nd-num">
+                      {t('admin.groups.members')}
                     </th>
-                    <td>{g.description}</td>
-                    <td className="nd-num">{g.member_count.toLocaleString(i18n.language)}</td>
-                    <td>{formatDay(g.created_at, i18n.language)}</td>
+                    <th scope="col">{t('vaults.colCreated')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          )
-        }
+                </thead>
+                <tbody>
+                  {list.map((g) => (
+                    <tr key={g.id}>
+                      <th scope="row">
+                        <Link to={`/admin/groups/${g.id}`}>{g.name}</Link>
+                      </th>
+                      <td>{g.description}</td>
+                      <td className="nd-num">{g.member_count.toLocaleString(i18n.language)}</td>
+                      <td>{formatDay(g.created_at, i18n.language)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              {groups.hasNextPage && (
+                <Button
+                  disabled={groups.isFetchingNextPage}
+                  onClick={() => void groups.fetchNextPage()}
+                >
+                  {t('common.loadMore')}
+                </Button>
+              )}
+            </div>
+          );
+        }}
       </QueryState>
       {creating && <GroupDialog onClose={() => setCreating(false)} />}
     </section>
@@ -244,71 +256,83 @@ function MembersPanel({ groupId }: { groupId: string }) {
       <h3 id="gd-members">{t('admin.groups.members')}</h3>
       {error && <InlineError>{error}</InlineError>}
       <QueryState query={members}>
-        {(list) => (
-          <div className="nd-stack">
-            {list.length === 0 ? (
-              <p className="nd-muted">{t('admin.groups.membersEmpty')}</p>
-            ) : (
-              <Table caption={t('admin.groups.members')}>
-                <thead>
-                  <tr>
-                    <th scope="col">{t('admin.users.colUser')}</th>
-                    <th scope="col">{t('admin.groups.memberRole')}</th>
-                    <th scope="col">
-                      <span className="nd-visually-hidden">{t('admin.groups.removeMember')}</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((m) => {
-                    const name = m.display_name || m.username;
-                    return (
-                      <tr key={m.user_id}>
-                        <th scope="row">
-                          {name}
-                          <div className="nd-muted">{m.email ?? m.username}</div>
-                        </th>
-                        <td>
-                          <select
-                            className="nd-select"
-                            aria-label={t('admin.groups.roleFor', { name })}
-                            value={m.member_role}
-                            disabled={setRole.isPending}
-                            onChange={(e) => {
-                              setError(null);
-                              setRole.mutate(
-                                { userId: m.user_id, role: e.target.value as Role },
-                                {
-                                  onSuccess: () => toast.push(t('admin.groups.roleSavedToast')),
-                                  onError: (err) => setError(adminError(err, t)),
-                                },
-                              );
-                            }}
-                          >
-                            <option value="member">{t('admin.groups.role_member')}</option>
-                            <option value="manager">{t('admin.groups.role_manager')}</option>
-                          </select>
-                        </td>
-                        <td>
-                          <Button
-                            small
-                            variant="danger"
-                            aria-label={t('admin.groups.removeAria', { name })}
-                            onClick={() => setRemoving(m)}
-                          >
-                            {t('admin.groups.removeMember')}
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            )}
-            <p className="nd-muted">{t('admin.groups.roleReservedNote')}</p>
-            <AddMember groupId={groupId} existing={new Set(list.map((m) => m.user_id))} />
-          </div>
-        )}
+        {(data) => {
+          const list = pageItems(data, (m) => m.user_id);
+          return (
+            <div className="nd-stack">
+              {list.length === 0 && !members.hasNextPage ? (
+                <p className="nd-muted">{t('admin.groups.membersEmpty')}</p>
+              ) : (
+                <Table caption={t('admin.groups.members')}>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('admin.users.colUser')}</th>
+                      <th scope="col">{t('admin.groups.memberRole')}</th>
+                      <th scope="col">
+                        <span className="nd-visually-hidden">{t('admin.groups.removeMember')}</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((m) => {
+                      const name = m.display_name || m.username;
+                      return (
+                        <tr key={m.user_id}>
+                          <th scope="row">
+                            {name}
+                            <div className="nd-muted">{m.email ?? m.username}</div>
+                          </th>
+                          <td>
+                            <select
+                              className="nd-select"
+                              aria-label={t('admin.groups.roleFor', { name })}
+                              value={m.member_role}
+                              disabled={setRole.isPending}
+                              onChange={(e) => {
+                                setError(null);
+                                setRole.mutate(
+                                  { userId: m.user_id, role: e.target.value as Role },
+                                  {
+                                    onSuccess: () => toast.push(t('admin.groups.roleSavedToast')),
+                                    onError: (err) => setError(adminError(err, t)),
+                                  },
+                                );
+                              }}
+                            >
+                              <option value="member">{t('admin.groups.role_member')}</option>
+                              <option value="manager">{t('admin.groups.role_manager')}</option>
+                            </select>
+                          </td>
+                          <td>
+                            <Button
+                              small
+                              variant="danger"
+                              aria-label={t('admin.groups.removeAria', { name })}
+                              onClick={() => setRemoving(m)}
+                            >
+                              {t('admin.groups.removeMember')}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              )}
+              {members.hasNextPage && (
+                <Button
+                  disabled={members.isFetchingNextPage}
+                  onClick={() => void members.fetchNextPage()}
+                >
+                  {t('common.loadMore')}
+                </Button>
+              )}
+              <p className="nd-muted">{t('admin.groups.roleReservedNote')}</p>
+              {/* Only the members read so far are known: adding one again just sets their role. */}
+              <AddMember groupId={groupId} existing={new Set(list.map((m) => m.user_id))} />
+            </div>
+          );
+        }}
       </QueryState>
       {removing && (
         <Dialog

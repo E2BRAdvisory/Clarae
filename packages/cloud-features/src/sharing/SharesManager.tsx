@@ -8,6 +8,7 @@ import { createT, type TFunction } from '../i18n';
 import type { CloudPort, NewShare, Share, ShareUpdate } from '../port';
 import { GrantEditor } from './GrantEditor';
 import { EditShareDialog, NewShareDialog, NewShareInsideDialog } from './ShareDialogs';
+import { useSharePages } from './useSharePages';
 
 export interface SharesManagerProps {
   port: CloudPort;
@@ -62,11 +63,9 @@ export function SharesManager({
   const qc = useQueryClient();
   const flag = useFeatureFlag(port, 'sharing');
   const sharingOn = flag.on && flag.ready;
-  const owned = useQuery({
-    queryKey: cloudKeys.sharesOf(port, 'owned'),
-    queryFn: () => port.listShares('owned'),
-    enabled: sharingOn,
-  });
+  // The shares of one vault can be on any page: that view reads them all.
+  const pages = useSharePages(port, 'owned', { enabled: sharingOn, all: !!vaultId });
+  const owned = pages.query;
   const vaults = useQuery({
     queryKey: cloudKeys.vaults(port),
     queryFn: () => port.listVaults(),
@@ -132,7 +131,7 @@ export function SharesManager({
       return t('shares.revoked', { name: share.display_name });
     });
 
-  const list = (owned.data ?? []).filter((s) => !vaultId || s.vault_id === vaultId);
+  const list = pages.shares.filter((s) => !vaultId || s.vault_id === vaultId);
   return (
     <div className="mbcf mbcf-shares">
       {canCreate && (
@@ -155,7 +154,7 @@ export function SharesManager({
         <p className="mbcf-muted">{t('common.loading')}</p>
       ) : owned.isError ? (
         <InlineError>{describeError(t, owned.error, 'share')}</InlineError>
-      ) : list.length === 0 ? (
+      ) : list.length === 0 && !pages.hasMore ? (
         <EmptyState title={t('shares.ownedEmpty')}>
           {canCreate ? t('shares.ownedEmptyHint') : null}
         </EmptyState>
@@ -228,6 +227,13 @@ export function SharesManager({
             );
           })}
         </ul>
+      )}
+      {pages.hasMore && !vaultId && !owned.isError && (
+        <div className="mbcf-actions mbcf-actions--start">
+          <Button disabled={pages.loadingMore} onClick={pages.loadMore}>
+            {t('common.loadMore')}
+          </Button>
+        </div>
       )}
 
       {pending.kind === 'new' && (

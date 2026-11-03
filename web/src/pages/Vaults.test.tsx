@@ -72,7 +72,7 @@ describe('vaults page', () => {
   it('lists the vaults with type, size, files and the ZIP download', async () => {
     renderApp({
       path: '/vaults',
-      routes: { ...vaultRoutes([notes, diary]).routes, 'GET /shares': [] },
+      routes: { ...vaultRoutes([notes, diary]).routes, 'GET /shares': { items: [] } },
     });
     const row = (await screen.findByRole('rowheader', { name: 'Notes' })).closest(
       'tr',
@@ -92,10 +92,12 @@ describe('vaults page', () => {
       routes: {
         ...vaultRoutes([]).routes,
         'GET /config/effective': workbenchOn,
-        'GET /shares': [
-          { ...received, id: 'sh1', display_name: 'Team', my_status: 'accepted' },
-          { ...received, id: 'sh2', display_name: 'Invited', my_status: 'pending' },
-        ],
+        'GET /shares': {
+          items: [
+            { ...received, id: 'sh1', display_name: 'Team', my_status: 'accepted' },
+            { ...received, id: 'sh2', display_name: 'Invited', my_status: 'pending' },
+          ],
+        },
       },
     });
     const table = await screen.findByRole('table', { name: 'Shared with me' });
@@ -109,7 +111,10 @@ describe('vaults page', () => {
   });
 
   it('shows an empty state without vaults', async () => {
-    renderApp({ path: '/vaults', routes: { ...vaultRoutes([]).routes, 'GET /shares': [] } });
+    renderApp({
+      path: '/vaults',
+      routes: { ...vaultRoutes([]).routes, 'GET /shares': { items: [] } },
+    });
     expect(await screen.findByText('You have no cloud vaults yet')).toBeInTheDocument();
   });
 

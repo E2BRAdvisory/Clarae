@@ -385,17 +385,18 @@ func IsNotFound(err error) bool { return transport.IsCode(err, syncproto.CodeNot
 
 // --- account-wide share management (@memobrain/cloud-features, ADR-0037 §2) -----
 
-// ListShares returns the shares the caller owns or manages ("owned") or was invited to
-// ("received"), across every vault of the account.
-func (m *Manager) ListShares(ctx context.Context, scope string) ([]transport.Share, error) {
+// ListSharesPage returns a page of the shares the caller owns or manages ("owned") or was invited
+// to ("received"), across every vault of the account, newest first: the first page with cursor
+// "", the next one with the NextCursor of the page before (absent on the last).
+func (m *Manager) ListSharesPage(ctx context.Context, scope, cursor string) (transport.SharePage, error) {
 	if scope != "owned" && scope != "received" {
-		return nil, fmt.Errorf("invalid: share scope %q (owned or received)", scope)
+		return transport.SharePage{}, fmt.Errorf("invalid: share scope %q (owned or received)", scope)
 	}
 	c, _, err := m.client()
 	if err != nil {
-		return nil, err
+		return transport.SharePage{}, err
 	}
-	return c.ListShares(ctx, scope)
+	return c.ListSharesPage(ctx, scope, cursor, 0)
 }
 
 // CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud

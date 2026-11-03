@@ -17,6 +17,7 @@ export type GroupMember = Schemas['GroupMember'];
 export type ConfigProfile = Schemas['ConfigProfile'];
 export type ConfigProfileInput = Schemas['ConfigProfileInput'];
 export type ProfileVersion = Schemas['ProfileVersion'];
+export type ProfileVersionSummary = Schemas['ProfileVersionSummary'];
 export type ProfileAssignment = Schemas['ProfileAssignment'];
 export type StorageSettings = Schemas['StorageSettings'];
 export type AuditEntry = Schemas['AuditEntry'];
@@ -65,6 +66,8 @@ export const adminKeys = {
   profiles: ['admin', 'profiles'] as const,
   profile: (id: string) => ['admin', 'profiles', 'one', id] as const,
   versions: (id: string) => ['admin', 'profiles', 'one', id, 'versions'] as const,
+  version: (id: string, version: number) =>
+    ['admin', 'profiles', 'one', id, 'versions', 'one', version] as const,
   audit: (f: AuditFilters) => ['admin', 'audit', f] as const,
 };
 
@@ -301,13 +304,47 @@ export function useDeleteUser() {
   });
 }
 
+/* ---- Paginated lists ------------------------------------------------------------ */
+
+/** The page size of the console's paginated lists (groups, members, profile history). */
+export const ADMIN_PAGE_SIZE = 100;
+
+/**
+ * The items of the pages read so far, in order and without duplicates: an item created or renamed
+ * between two pages can be on both (api/openapi.yaml, Pagination).
+ */
+export function pageItems<T>(
+  data: { pages: { items: T[] }[] } | undefined,
+  key: (item: T) => string | number,
+): T[] {
+  const seen = new Set<string | number>();
+  const out: T[] = [];
+  for (const page of data?.pages ?? []) {
+    for (const item of page.items) {
+      const k = key(item);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
 /* ---- Groups -------------------------------------------------------------------- */
 
+/** Groups by name, a page at a time (`fetchNextPage` while `hasNextPage`). */
 export function useAdminGroups() {
   const api = useApi();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: adminKeys.groups,
-    queryFn: () => unwrap(api.GET('/admin/groups')),
+    initialPageParam: '',
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET('/admin/groups', {
+          params: { query: compact({ limit: ADMIN_PAGE_SIZE, cursor: pageParam }) },
+        }),
+      ),
+    getNextPageParam: (last) => last.next_cursor || undefined,
   });
 }
 
@@ -351,12 +388,22 @@ export function useDeleteGroup() {
   });
 }
 
+/** Members of a group by username, a page at a time. */
 export function useGroupMembers(id: string) {
   const api = useApi();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: adminKeys.groupMembers(id),
-    queryFn: () =>
-      unwrap(api.GET('/admin/groups/{groupId}/members', { params: { path: { groupId: id } } })),
+    initialPageParam: '',
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET('/admin/groups/{groupId}/members', {
+          params: {
+            path: { groupId: id },
+            query: compact({ limit: ADMIN_PAGE_SIZE, cursor: pageParam }),
+          },
+        }),
+      ),
+    getNextPageParam: (last) => last.next_cursor || undefined,
   });
 }
 
@@ -454,14 +501,35 @@ export function useProfile(id: string) {
   });
 }
 
+/** The history of a profile, newest first, a page at a time: the metadata of each version. */
 export function useProfileVersions(id: string) {
   const api = useApi();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: adminKeys.versions(id),
-    queryFn: () =>
+    initialPageParam: '',
+    queryFn: ({ pageParam }) =>
       unwrap(
         api.GET('/admin/config-profiles/{profileId}/versions', {
-          params: { path: { profileId: id } },
+          params: {
+            path: { profileId: id },
+            query: compact({ limit: ADMIN_PAGE_SIZE, cursor: pageParam }),
+          },
+        }),
+      ),
+    getNextPageParam: (last) => last.next_cursor || undefined,
+  });
+}
+
+/** One version of a profile with its configuration, read when it is shown (null: none). */
+export function useProfileVersion(id: string, version: number | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: adminKeys.version(id, version ?? 0),
+    enabled: version !== null,
+    queryFn: () =>
+      unwrap(
+        api.GET('/admin/config-profiles/{profileId}/versions/{version}', {
+          params: { path: { profileId: id, version: version ?? 0 } },
         }),
       ),
   });

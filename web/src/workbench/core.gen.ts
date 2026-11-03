@@ -116,7 +116,7 @@ export interface CoreClient {
     CreateShare(arg1: string, arg2: string, arg3: boolean, arg4: string, arg5: Data<Array<cloudapi.NewGrant>>, arg6: string): Promise<Data<cloudapi.Share>>;
     DeclineShare(arg1: string): Promise<void>;
     Invitations(): Promise<Data<Array<cloudapi.Share>>>;
-    ListShares(arg1: string): Promise<Data<Array<cloudapi.Share>>>;
+    ListShares(arg1: string, arg2: string): Promise<Data<cloudapi.SharePage>>;
     Mounts(): Promise<Data<Array<sync.MountState>>>;
     OpenMount(arg1: string): Promise<Data<app.VaultInfo>>;
     RemoveGrant(arg1: string, arg2: string, arg3: string): Promise<void>;
@@ -353,7 +353,7 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         CreateShare: (arg1: string, arg2: string, arg3: boolean, arg4: string, arg5: Data<Array<cloudapi.NewGrant>>, arg6: string) => call('SharingAPI', 'CreateShare', [arg1, arg2, arg3, arg4, arg5, arg6]),
         DeclineShare: (arg1: string) => call('SharingAPI', 'DeclineShare', [arg1]),
         Invitations: () => call('SharingAPI', 'Invitations', []),
-        ListShares: (arg1: string) => call('SharingAPI', 'ListShares', [arg1]),
+        ListShares: (arg1: string, arg2: string) => call('SharingAPI', 'ListShares', [arg1, arg2]),
         Mounts: () => call('SharingAPI', 'Mounts', []),
         OpenMount: (arg1: string) => call('SharingAPI', 'OpenMount', [arg1]),
         RemoveGrant: (arg1: string, arg2: string, arg3: string) => call('SharingAPI', 'RemoveGrant', [arg1, arg2, arg3]),

@@ -6,7 +6,14 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (profile_id, version) DO NOTHING;
 
 -- name: ListProfileVersions :many
-SELECT * FROM config_profile_versions WHERE profile_id = $1 ORDER BY version DESC;
+-- A page of the history of a profile, newest first, before the version ending
+-- the previous page: the metadata only, the configuration is GetProfileVersion.
+SELECT profile_id, version, name, description, is_global, updated_by, updated_at
+FROM config_profile_versions
+WHERE profile_id = sqlc.arg(profile_id)
+  AND (sqlc.narg(before_version)::int IS NULL OR version < sqlc.narg(before_version)::int)
+ORDER BY version DESC
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: GetProfileVersion :one
 SELECT * FROM config_profile_versions WHERE profile_id = $1 AND version = $2;

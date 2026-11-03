@@ -189,14 +189,34 @@ async function fetchCloudView(
   const vaults = need.vaults
     ? (((await get('/vaults?include_deleted=true')) as { items?: { id: string }[] }).items ?? [])
     : [];
-  const shares = need.shares
-    ? ((await get('/shares?scope=received', true)) as { id: string }[])
-    : [];
+  const shares = need.shares ? await allReceived(get) : [];
   return {
     userId: me.id,
     vaultIds: new Set(vaults.map((v) => v.id)),
-    shareIds: new Set(Array.isArray(shares) ? shares.map((s) => s.id) : []),
+    shareIds: new Set(shares.map((s) => s.id)),
   };
+}
+
+/**
+ * Every share the account received, page after page: GET /shares is paginated, and a share on a
+ * page left unread would make its copy look like someone else's.
+ */
+async function allReceived(
+  get: (path: string, optional?: boolean) => Promise<unknown>,
+): Promise<{ id: string }[]> {
+  const out: { id: string }[] = [];
+  let cursor = '';
+  for (let i = 0; i < 10_000; i++) {
+    const after = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+    const page = (await get(`/shares?scope=received&limit=500${after}`, true)) as
+      { items?: { id: string }[]; next_cursor?: string } | unknown[];
+    if (Array.isArray(page)) return out; // sharing turned off for the account
+    out.push(...(page.items ?? []));
+    if (!page.next_cursor) return out;
+    if (page.next_cursor === cursor) break;
+    cursor = page.next_cursor;
+  }
+  throw new Error('GET /shares: the list has no last page');
 }
 
 /** Waits until the core has a cloud session (it asks the page for a token and loads the profile). */

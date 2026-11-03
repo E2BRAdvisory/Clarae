@@ -17,7 +17,9 @@ import (
 type (
 	ConfigProfile        = configprofilesdb.ConfigProfile
 	ConfigProfileVersion = configprofilesdb.ConfigProfileVersion
-	ConfigAssignment     = configprofilesdb.ConfigAssignment
+	// ProfileVersionSummary is a version without its configuration (Versions).
+	ProfileVersionSummary = configprofilesdb.ListProfileVersionsRow
+	ConfigAssignment      = configprofilesdb.ConfigAssignment
 )
 
 // ListGroupAssignments runs the ListGroupAssignments query on tx.

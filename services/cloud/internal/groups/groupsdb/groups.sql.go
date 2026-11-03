@@ -90,11 +90,21 @@ func (q *Queries) ListGroupMemberIDs(ctx context.Context, groupID uuid.UUID) ([]
 }
 
 const listGroupMembers = `-- name: ListGroupMembers :many
-SELECT u.id, u.username, u.email, u.display_name, m.member_role
+SELECT u.id, u.username, u.email, u.display_name, m.member_role, lower(u.username)::text AS sort_key
 FROM group_members m JOIN users u ON u.id = m.user_id
 WHERE m.group_id = $1 AND u.status <> 'deleted'
-ORDER BY lower(u.username)
+  AND ($2::text IS NULL
+       OR (lower(u.username), u.id) > ($2::text, $3::uuid))
+ORDER BY lower(u.username), u.id
+LIMIT $4::int
 `
+
+type ListGroupMembersParams struct {
+	GroupID  uuid.UUID
+	AfterKey *string
+	AfterID  *uuid.UUID
+	MaxRows  int32
+}
 
 type ListGroupMembersRow struct {
 	ID          uuid.UUID
@@ -102,10 +112,18 @@ type ListGroupMembersRow struct {
 	Email       string
 	DisplayName *string
 	MemberRole  string
+	SortKey     string
 }
 
-func (q *Queries) ListGroupMembers(ctx context.Context, groupID uuid.UUID) ([]ListGroupMembersRow, error) {
-	rows, err := q.db.Query(ctx, listGroupMembers, groupID)
+// A page of the members of a group by username, after the position (lower
+// username, user id) ending the previous page; sort_key is that position.
+func (q *Queries) ListGroupMembers(ctx context.Context, arg ListGroupMembersParams) ([]ListGroupMembersRow, error) {
+	rows, err := q.db.Query(ctx, listGroupMembers,
+		arg.GroupID,
+		arg.AfterKey,
+		arg.AfterID,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -119,35 +137,7 @@ func (q *Queries) ListGroupMembers(ctx context.Context, groupID uuid.UUID) ([]Li
 			&i.Email,
 			&i.DisplayName,
 			&i.MemberRole,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listGroups = `-- name: ListGroups :many
-SELECT id, name, description, created_at FROM groups ORDER BY lower(name)
-`
-
-func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
-	rows, err := q.db.Query(ctx, listGroups)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Group{}
-	for rows.Next() {
-		var i Group
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Description,
-			&i.CreatedAt,
+			&i.SortKey,
 		); err != nil {
 			return nil, err
 		}

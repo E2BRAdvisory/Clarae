@@ -91,7 +91,7 @@ describe('config profile editor', () => {
       routes: {
         'GET /admin/config-profiles': [profile()],
         [`GET /admin/config-profiles/${P}`]: profile(),
-        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`GET /admin/config-profiles/${P}/versions`]: { items: versions },
         [`PUT /admin/config-profiles/${P}`]: profile({ version: 4 }),
       },
     });
@@ -140,7 +140,7 @@ describe('config profile editor', () => {
       routes: {
         'GET /admin/config-profiles': () => [current],
         [`GET /admin/config-profiles/${P}`]: () => current,
-        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`GET /admin/config-profiles/${P}/versions`]: { items: versions },
         [`PUT /admin/config-profiles/${P}`]: (c: RecordedCall) =>
           (c.body as { expected_version?: number }).expected_version === current.version
             ? (current = profile({ ...(c.body as object), version: current.version + 1 }))
@@ -181,7 +181,7 @@ describe('config profile editor', () => {
       routes: {
         'GET /admin/config-profiles': [profile()],
         [`GET /admin/config-profiles/${P}`]: profile(),
-        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`GET /admin/config-profiles/${P}/versions`]: { items: versions },
         [`PUT /admin/config-profiles/${P}`]: problem(
           400,
           'VALIDATION_FAILED',
@@ -205,7 +205,7 @@ describe('config profile editor', () => {
           name: (c.body as { name: string }).name,
         }),
         'GET /admin/config-profiles/n': profile({ id: 'n', is_global: true }),
-        'GET /admin/config-profiles/n/versions': [],
+        'GET /admin/config-profiles/n/versions': { items: [] },
       },
     });
     await user.type(await screen.findByLabelText('Name'), 'New global');
@@ -233,7 +233,8 @@ describe('config profile editor', () => {
       routes: {
         'GET /admin/config-profiles': [profile()],
         [`GET /admin/config-profiles/${P}`]: profile(),
-        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`GET /admin/config-profiles/${P}/versions`]: { items: versions },
+        [`GET /admin/config-profiles/${P}/versions/1`]: versions[0],
       },
     });
     const history = await screen.findByRole('list', { name: 'History' });
@@ -248,7 +249,8 @@ describe('config profile editor', () => {
     await user.click(
       screen.getByRole('button', { name: 'Compare version 1 with the current one' }),
     );
-    const diff = screen.getByRole('group', { name: 'Comparison' });
+    // The list has no configuration: the compared version is read on demand.
+    const diff = await screen.findByRole('group', { name: 'Comparison' });
     expect(within(diff).getByText(/"fontSize": 12/)).toBeInTheDocument();
     expect(within(diff).getByText(/"fontSize": 16/)).toBeInTheDocument();
   });
@@ -262,7 +264,7 @@ describe('config profile editor', () => {
       routes: {
         'GET /admin/config-profiles': () => [current],
         [`GET /admin/config-profiles/${P}`]: () => current,
-        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`GET /admin/config-profiles/${P}/versions`]: { items: versions },
         [`POST /admin/config-profiles/${P}/versions/1:restore`]: () => {
           current = profile({ version: 4, config: { editor: { fontSize: 12 } }, locked_keys: [] });
           return current;
@@ -292,7 +294,7 @@ describe('config profile editor', () => {
       routes: {
         'GET /admin/config-profiles': [profile()],
         [`GET /admin/config-profiles/${P}`]: profile(),
-        [`GET /admin/config-profiles/${P}/versions`]: versions,
+        [`GET /admin/config-profiles/${P}/versions`]: { items: versions },
         [`DELETE /admin/config-profiles/${P}`]: () => undefined,
       },
     });

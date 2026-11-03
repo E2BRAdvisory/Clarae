@@ -120,6 +120,8 @@ export type CloudVault = Schemas['Vault'];
 export type CloudDevice = Schemas['Device'] & { current: boolean };
 export type CloudUsage = Schemas['Usage'];
 export type Share = Schemas['Share'];
+/** A page of shares (GET /shares): `next_cursor` is absent on the last page. */
+export type SharePage = Schemas['SharePage'];
 export type ShareGrant = Schemas['Grant'];
 export type NewGrant = Schemas['NewGrant'];
 export type ShareUpdate = Schemas['UpdateShare'];
@@ -360,8 +362,12 @@ export const api = {
       grants: NewGrant[],
       expiresAt = '',
     ): Promise<Share> => SharingAPI.CreateShare(vaultId, path, isDir, name, grants, expiresAt),
-    /** Shares of the account: created or managed by the user ("owned"), or received. */
-    list: (scope: 'owned' | 'received'): Promise<Share[]> => SharingAPI.ListShares(scope),
+    /**
+     * A page of the shares of the account: created or managed by the user ("owned"), or received.
+     * cursor is "" for the first page, then the `next_cursor` of the page before.
+     */
+    list: (scope: 'owned' | 'received', cursor = ''): Promise<SharePage> =>
+      SharingAPI.ListShares(scope, cursor),
     /** Shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud vault id. */
     createCloud: (
       cloudVaultId: string,

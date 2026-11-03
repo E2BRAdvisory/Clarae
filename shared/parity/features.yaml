@@ -1852,6 +1852,7 @@ features:
           adminUpdateConfigProfile,
           adminDeleteConfigProfile,
           adminListProfileVersions,
+          adminGetProfileVersion,
           adminRestoreProfileVersion,
           adminGetGroupProfiles,
           adminSetGroupProfiles,

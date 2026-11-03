@@ -251,26 +251,47 @@ func (q *Queries) ListGroupAssignments(ctx context.Context, groupID uuid.UUID) (
 }
 
 const listProfileVersions = `-- name: ListProfileVersions :many
-SELECT profile_id, version, name, description, is_global, config, locked_keys, updated_by, updated_at FROM config_profile_versions WHERE profile_id = $1 ORDER BY version DESC
+SELECT profile_id, version, name, description, is_global, updated_by, updated_at
+FROM config_profile_versions
+WHERE profile_id = $1
+  AND ($2::int IS NULL OR version < $2::int)
+ORDER BY version DESC
+LIMIT $3::int
 `
 
-func (q *Queries) ListProfileVersions(ctx context.Context, profileID uuid.UUID) ([]ConfigProfileVersion, error) {
-	rows, err := q.db.Query(ctx, listProfileVersions, profileID)
+type ListProfileVersionsParams struct {
+	ProfileID     uuid.UUID
+	BeforeVersion *int32
+	MaxRows       int32
+}
+
+type ListProfileVersionsRow struct {
+	ProfileID   uuid.UUID
+	Version     int32
+	Name        string
+	Description *string
+	IsGlobal    bool
+	UpdatedBy   *uuid.UUID
+	UpdatedAt   time.Time
+}
+
+// A page of the history of a profile, newest first, before the version ending
+// the previous page: the metadata only, the configuration is GetProfileVersion.
+func (q *Queries) ListProfileVersions(ctx context.Context, arg ListProfileVersionsParams) ([]ListProfileVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listProfileVersions, arg.ProfileID, arg.BeforeVersion, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ConfigProfileVersion{}
+	items := []ListProfileVersionsRow{}
 	for rows.Next() {
-		var i ConfigProfileVersion
+		var i ListProfileVersionsRow
 		if err := rows.Scan(
 			&i.ProfileID,
 			&i.Version,
 			&i.Name,
 			&i.Description,
 			&i.IsGlobal,
-			&i.Config,
-			&i.LockedKeys,
 			&i.UpdatedBy,
 			&i.UpdatedAt,
 		); err != nil {

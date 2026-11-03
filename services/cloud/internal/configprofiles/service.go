@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/pagination"
 	"memobrain/services/cloud/internal/settings"
 	"memobrain/shared/features"
 	"memobrain/shared/syncproto"
@@ -427,12 +429,46 @@ func (s *Service) SetGroupAssignments(ctx context.Context, actor, groupID uuid.U
 	})
 }
 
-// Versions returns the history of a profile, newest first.
-func (s *Service) Versions(ctx context.Context, id uuid.UUID) ([]configprofilesdb.ConfigProfileVersion, error) {
-	if _, err := s.Get(ctx, id); err != nil {
-		return nil, err
+// versionsList tags the cursors of Versions.
+const versionsList = "profile-versions"
+
+// Versions returns a page of at most limit versions of a profile, newest
+// first, after cursor ("" for the first page), without their configuration
+// (Version has it), and the cursor of the next page (nil on the last).
+func (s *Service) Versions(ctx context.Context, id uuid.UUID, limit int, cursor string) ([]configprofilesdb.ListProfileVersionsRow, *string, error) {
+	after, err := pagination.Decode(versionsList, cursor)
+	if err != nil {
+		return nil, nil, err
 	}
-	return configprofilesdb.New(s.db.Pool).ListProfileVersions(ctx, id)
+	if _, err := s.Get(ctx, id); err != nil {
+		return nil, nil, err
+	}
+	p := configprofilesdb.ListProfileVersionsParams{ProfileID: id, MaxRows: pagination.FetchLimit(limit)}
+	if after != nil {
+		if after.N < 1 || after.N > math.MaxInt32 {
+			return nil, nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "invalid cursor")
+		}
+		v := int32(after.N)
+		p.BeforeVersion = &v
+	}
+	rows, err := configprofilesdb.New(s.db.Pool).ListProfileVersions(ctx, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, more := pagination.Trim(rows, limit)
+	if !more {
+		return rows, nil, nil
+	}
+	return rows, pagination.Cursor(pagination.Key{List: versionsList, N: int64(rows[len(rows)-1].Version)}), nil
+}
+
+// Version returns one version of a profile, with its configuration.
+func (s *Service) Version(ctx context.Context, id uuid.UUID, version int32) (configprofilesdb.ConfigProfileVersion, error) {
+	v, err := configprofilesdb.New(s.db.Pool).GetProfileVersion(ctx, configprofilesdb.GetProfileVersionParams{ProfileID: id, Version: version})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return configprofilesdb.ConfigProfileVersion{}, httpproblem.NotFound("version")
+	}
+	return v, err
 }
 
 // Restore makes an old version the new current one (a rollback adds a version, it never rewrites history).

@@ -16,6 +16,7 @@ import (
 	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/pagination"
 	"memobrain/services/cloud/internal/sharing/sharingdb"
 	"memobrain/services/cloud/internal/users"
 	"memobrain/services/cloud/internal/vaults"
@@ -659,56 +660,92 @@ func (s *Service) views(ctx context.Context, tx db.DBTX, rows []shareRow, viewer
 	return out, nil
 }
 
-// ListOwned returns the shares of the vaults the caller owns plus those they
-// manage, by grant or as the manager who created them (ADR-0041 §8).
-func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID) ([]View, error) {
-	conn := s.db.Pool
-	rows, err := sharingdb.New(conn).ListSharesOfVaultOwner(ctx, userID)
-	if err != nil {
+// The lists of shares, which tag their cursors (pagination.Key.List).
+const (
+	ownedList    = "shares-owned"
+	receivedList = "shares-received"
+	mountsList   = "shares-mounts"
+)
+
+// beforeID reads the cursor of a list of shares: the id of the last share of
+// the previous page (nil for the first page).
+func beforeID(list, cursor string) (*uuid.UUID, error) {
+	after, err := pagination.Decode(list, cursor)
+	if err != nil || after == nil {
 		return nil, err
 	}
+	return &after.ID, nil
+}
+
+// nextAfter is the cursor of the page after the share last, or nil on the
+// last page. It is the last share the query returned, not the last one
+// listed: views leaves some out, and the next page starts after them.
+func nextAfter(list string, more bool, last uuid.UUID) *string {
+	if !more {
+		return nil
+	}
+	return pagination.Cursor(pagination.Key{List: list, ID: last})
+}
+
+// ListOwned returns a page of at most limit shares, newest first, after
+// cursor ("" for the first page), of the vaults the caller owns plus those
+// they manage, by grant or as the manager who created them (ADR-0041 §8), and
+// the cursor of the next page (nil on the last). A page can list fewer shares
+// than limit, even none, and still have a next one.
+func (s *Service) ListOwned(ctx context.Context, userID uuid.UUID, limit int, cursor string) ([]View, *string, error) {
+	before, err := beforeID(ownedList, cursor)
+	if err != nil {
+		return nil, nil, err
+	}
+	conn := s.db.Pool
+	rows, err := sharingdb.New(conn).ListSharesOfVaultOwner(ctx, sharingdb.ListSharesOfVaultOwnerParams{
+		UserID: userID, BeforeID: before, MaxRows: pagination.FetchLimit(limit),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, more := pagination.Trim(rows, limit)
 	list := make([]shareRow, 0, len(rows))
 	for _, r := range rows {
 		list = append(list, shareRow{share: r.Share, vaultName: r.VaultName, ownerID: r.OwnerID, ownerName: r.OwnerName})
 	}
-	return s.views(ctx, conn, list, userID, true)
+	vs, err := s.views(ctx, conn, list, userID, true)
+	if err != nil || len(rows) == 0 {
+		return vs, nil, err
+	}
+	return vs, nextAfter(ownedList, more, rows[len(rows)-1].Share.ID), nil
 }
 
-// ListReceived returns the shares that reach the caller, pending invitations included.
-func (s *Service) ListReceived(ctx context.Context, userID uuid.UUID) ([]View, error) {
+// ListReceived returns a page of the shares that reach the caller, pending
+// invitations included, as ListOwned pages its shares.
+func (s *Service) ListReceived(ctx context.Context, userID uuid.UUID, limit int, cursor string) ([]View, *string, error) {
+	before, err := beforeID(receivedList, cursor)
+	if err != nil {
+		return nil, nil, err
+	}
 	conn := s.db.Pool
-	q := sharingdb.New(conn)
-	grants, err := q.ListGrantsOfUser(ctx, userID)
+	rows, err := s.receivedPage(ctx, conn, userID, false, before, limit)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	seen := map[uuid.UUID]bool{}
-	var ids []uuid.UUID
-	for _, g := range grants {
-		if seen[g.ShareID] || g.OwnerID == userID {
-			continue
-		}
-		seen[g.ShareID] = true
-		ids = append(ids, g.ShareID)
-	}
-	if len(ids) == 0 {
-		return []View{}, nil
-	}
-	rows, err := q.ListSharesByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[uuid.UUID]sharingdb.ListSharesByIDsRow, len(rows))
+	rows, more := pagination.Trim(rows, limit)
+	list := make([]shareRow, 0, len(rows))
 	for _, r := range rows {
-		byID[r.Share.ID] = r
+		list = append(list, shareRow{share: r.Share, vaultName: r.VaultName, ownerID: r.OwnerID, ownerName: r.OwnerName})
 	}
-	list := make([]shareRow, 0, len(ids))
-	for _, id := range ids { // keep the order of ListGrantsOfUser (newest share first)
-		if r, ok := byID[id]; ok {
-			list = append(list, shareRow{share: r.Share, vaultName: r.VaultName, ownerID: r.OwnerID, ownerName: r.OwnerName})
-		}
+	vs, err := s.views(ctx, conn, list, userID, false)
+	if err != nil || len(rows) == 0 {
+		return vs, nil, err
 	}
-	return s.views(ctx, conn, list, userID, false)
+	return vs, nextAfter(receivedList, more, rows[len(rows)-1].Share.ID), nil
+}
+
+// receivedPage runs ListReceivedShares: limit+1 shares that reach userID
+// (only the accepted ones with acceptedOnly), newest first, before before.
+func (s *Service) receivedPage(ctx context.Context, conn db.DBTX, userID uuid.UUID, acceptedOnly bool, before *uuid.UUID, limit int) ([]sharingdb.ListReceivedSharesRow, error) {
+	return sharingdb.New(conn).ListReceivedShares(ctx, sharingdb.ListReceivedSharesParams{
+		UserID: userID, AcceptedOnly: acceptedOnly, BeforeID: before, MaxRows: pagination.FetchLimit(limit),
+	})
 }
 
 // Mount is an accepted share ready to be synced.
@@ -725,41 +762,49 @@ type Mount struct {
 // Scope is the value of the scope parameter that syncs the mount.
 func (m Mount) Scope() string { return access.ScopePrefix + m.ShareID.String() }
 
-// SharedWithMe lists the accepted shares of the caller, with the strongest level they hold.
-func (s *Service) SharedWithMe(ctx context.Context, userID uuid.UUID) ([]Mount, error) {
-	rows, err := sharingdb.New(s.db.Pool).ListGrantsOfUser(ctx, userID)
+// SharedWithMe returns a page of at most limit accepted shares of the caller,
+// newest first, after cursor ("" for the first page), each with the strongest
+// level the caller holds on it, and the cursor of the next page (nil on the
+// last), as ListOwned pages its shares.
+func (s *Service) SharedWithMe(ctx context.Context, userID uuid.UUID, limit int, cursor string) ([]Mount, *string, error) {
+	before, err := beforeID(mountsList, cursor)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	byShare := map[uuid.UUID]*Mount{}
-	var order []uuid.UUID
-	for _, g := range rows {
-		if g.Status != "accepted" || g.OwnerID == userID {
+	conn := s.db.Pool
+	rows, err := s.receivedPage(ctx, conn, userID, true, before, limit)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, more := pagination.Trim(rows, limit)
+	if len(rows) == 0 {
+		return []Mount{}, nil, nil
+	}
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.Share.ID)
+	}
+	grants, err := sharingdb.New(conn).ListUserGrantsOnShares(ctx, sharingdb.ListUserGrantsOnSharesParams{ShareIds: ids, UserID: userID})
+	if err != nil {
+		return nil, nil, err
+	}
+	level := make(map[uuid.UUID]access.Permission, len(rows))
+	for _, g := range grants {
+		if g.Status == "accepted" {
+			level[g.ShareID] = max(level[g.ShareID], access.ParsePermission(g.Permission))
+		}
+	}
+	out := make([]Mount, 0, len(rows))
+	for _, r := range rows {
+		p, ok := level[r.Share.ID]
+		if !ok { // declined or removed since the page was read
 			continue
 		}
-		m, ok := byShare[g.ShareID]
-		if !ok {
-			m = &Mount{ShareID: g.ShareID, VaultID: g.VaultID, DisplayName: g.DisplayName, ResourceType: g.ResourceType, OwnerName: derefStr(g.OwnerName), ExpiresAt: g.ExpiresAt}
-			byShare[g.ShareID] = m
-			order = append(order, g.ShareID)
-		}
-		m.Permission = max(m.Permission, access.ParsePermission(g.Permission))
+		sh := r.Share
+		out = append(out, Mount{
+			ShareID: sh.ID, VaultID: sh.VaultID, DisplayName: sh.DisplayName, ResourceType: sh.ResourceType,
+			Permission: p, OwnerName: r.OwnerName, ExpiresAt: sh.ExpiresAt,
+		})
 	}
-	out := make([]Mount, 0, len(order))
-	for _, id := range order {
-		out = append(out, *byShare[id])
-	}
-	return out, nil
-}
-
-func derefStr(p any) string {
-	switch v := p.(type) {
-	case string:
-		return v
-	case *string:
-		if v != nil {
-			return *v
-		}
-	}
-	return ""
+	return out, nextAfter(mountsList, more, rows[len(rows)-1].Share.ID), nil
 }

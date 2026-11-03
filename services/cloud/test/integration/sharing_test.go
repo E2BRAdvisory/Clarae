@@ -156,24 +156,24 @@ func TestGroupFolderShareEndToEnd(t *testing.T) {
 	if _, _, _, code := bob.scopedChanges(vault, sh.id(), 0); code != http.StatusNotFound {
 		t.Fatalf("before accepting: %d", code)
 	}
-	received := decode[[]shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil))
+	received := pageItems[shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil))
 	if len(received) != 1 || received[0]["my_status"] != "pending" || received[0]["my_permission"] != "editor" {
 		t.Fatalf("invitation: %v", received)
 	}
 	if received[0]["grants"] != nil || received[0]["path_prefix"] != nil {
 		t.Fatalf("a recipient must not see grants or the folder path: %v", received[0])
 	}
-	if mounts := decode[[]map[string]any](t, bob.json(http.MethodGet, "/shared-with-me", nil)); len(mounts) != 0 {
+	if mounts := pageItems[map[string]any](t, bob.json(http.MethodGet, "/shared-with-me", nil)); len(mounts) != 0 {
 		t.Fatalf("a pending invitation is not a mount: %v", mounts)
 	}
 
 	bob.accept(sh.id())
-	mounts := decode[[]map[string]any](t, bob.json(http.MethodGet, "/shared-with-me", nil))
+	mounts := pageItems[map[string]any](t, bob.json(http.MethodGet, "/shared-with-me", nil))
 	if len(mounts) != 1 || mounts[0]["scope"] != "share:"+sh.id() || mounts[0]["permission"] != "editor" || mounts[0]["vault_id"] != vault {
 		t.Fatalf("mounts: %v", mounts)
 	}
 	// One member accepted for the group: carol sees it as a mount too (§: a group grant is accepted once).
-	if m := decode[[]map[string]any](t, carol.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 1 {
+	if m := pageItems[map[string]any](t, carol.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 1 {
 		t.Fatalf("group mate: %v", m)
 	}
 
@@ -275,7 +275,7 @@ func TestGroupFolderShareEndToEnd(t *testing.T) {
 		if _, _, _, code := u.scopedChanges(vault, sh.id(), 0); code != http.StatusNotFound {
 			t.Errorf("%s after revocation: %d", u.userID, code)
 		}
-		if m := decode[[]map[string]any](t, u.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 0 {
+		if m := pageItems[map[string]any](t, u.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 0 {
 			t.Errorf("mounts after revocation: %v", m)
 		}
 	}
@@ -515,7 +515,7 @@ func TestInvitationWorkflow(t *testing.T) {
 	stranger := e.user("eve")
 	expect(t, stranger.json(http.MethodGet, "/shares/"+sh.id(), nil), http.StatusNotFound)
 	expect(t, stranger.json(http.MethodPost, "/shares/"+sh.id()+":accept", nil), http.StatusNotFound)
-	if r := decode[[]shareView](t, stranger.json(http.MethodGet, "/shares?scope=received", nil)); len(r) != 0 {
+	if r := pageItems[shareView](t, stranger.json(http.MethodGet, "/shares?scope=received", nil)); len(r) != 0 {
 		t.Fatalf("eve: %v", r)
 	}
 }
@@ -554,7 +554,7 @@ func TestShareManagementRights(t *testing.T) {
 	expect(t, ada.json(http.MethodPut, "/shares/"+sh.id()+"/grants/user/"+uuid.NewString(), map[string]any{"permission": "viewer"}), http.StatusNotFound)
 	// The share lists: the owner and the manager see it as theirs.
 	for _, u := range []*client{ada, bob} {
-		if l := decode[[]shareView](t, u.json(http.MethodGet, "/shares?scope=owned", nil)); len(l) != 1 {
+		if l := pageItems[shareView](t, u.json(http.MethodGet, "/shares?scope=owned", nil)); len(l) != 1 {
 			t.Errorf("owned list: %v", l)
 		}
 	}
@@ -578,7 +578,7 @@ func TestExpiredShareGivesNothing(t *testing.T) {
 	if _, _, _, code := bob.scopedChanges(vault, sh.id(), 0); code != http.StatusNotFound {
 		t.Fatalf("after expiry: %d", code)
 	}
-	if m := decode[[]map[string]any](t, bob.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 0 {
+	if m := pageItems[map[string]any](t, bob.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 0 {
 		t.Fatalf("mounts: %v", m)
 	}
 }

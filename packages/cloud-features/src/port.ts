@@ -17,6 +17,11 @@ export type CloudUsage = Schemas['Usage'];
 export type UsageLevel = CloudUsage['level'];
 /** A share; `my_permission` is unset for the owner of the vault, set for a manager or a recipient. */
 export type Share = Schemas['Share'];
+/**
+ * A page of shares (GET /shares): `next_cursor`, absent on the last page, asks for the next one. A
+ * page may hold fewer shares than the page size, even none, and still have a next one.
+ */
+export type SharePage = Schemas['SharePage'];
 export type Grant = Schemas['Grant'];
 export type SharePermission = Schemas['SharePermission'];
 export type GrantStatus = Schemas['GrantStatus'];
@@ -107,8 +112,12 @@ export interface CloudPort {
   getUsage(): Promise<CloudUsage>;
 
   // ---- sharing (§2.6.4); never on a private vault (D-02) ----
-  /** "owned": created or managed by the user; "received": invitations, accepted and declined. */
-  listShares(scope: 'owned' | 'received'): Promise<Share[]>;
+  /**
+   * A page of shares, newest first: "owned", created or managed by the user; "received",
+   * invitations and accepted shares. No cursor for the first page, then the `next_cursor` of the
+   * page before (useSharePages reads them).
+   */
+  listShares(scope: 'owned' | 'received', cursor?: string): Promise<SharePage>;
   createShare(input: NewShare): Promise<Share>;
   updateShare(id: string, change: ShareUpdate): Promise<Share>;
   /** Owner only. */

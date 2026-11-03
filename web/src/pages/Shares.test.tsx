@@ -61,7 +61,9 @@ const vaults = {
 };
 
 function sharesRoute(own: () => unknown, received: () => unknown) {
-  return (call: RecordedCall) => (call.query.get('scope') === 'owned' ? own() : received());
+  return (call: RecordedCall) => ({
+    items: call.query.get('scope') === 'owned' ? own() : received(),
+  });
 }
 
 describe('shares page', () => {
@@ -187,7 +189,7 @@ describe('shares page', () => {
           config: { features: { sharing: false } },
           locked_keys: [],
         },
-        'GET /shares': [invitation],
+        'GET /shares': { items: [invitation] },
       },
     });
     expect(

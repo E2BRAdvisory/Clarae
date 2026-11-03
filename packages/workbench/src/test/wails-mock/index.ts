@@ -28,6 +28,7 @@ import type {
   NewGrant,
   Share,
   ShareGrant,
+  SharePage,
   ShareUpdate,
   AuthState,
   BinaryContent,
@@ -151,6 +152,9 @@ export interface WailsMock {
  */
 export const CLOUD_VAULT_DELETED_MESSAGE =
   'the cloud vault was deleted: this folder was disconnected and keeps its files (restore the vault from the console, then connect the folder again)';
+
+/** The page size of the mock's ListShares: the server's default for GET /shares. */
+const SHARE_PAGE = 100;
 
 export function hashOf(s: string): string {
   let h = 2166136261;
@@ -1339,13 +1343,20 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       sh.owned.push(share);
       return Promise.resolve(share);
     },
-    ListShares: (scope: string): Promise<Share[]> => {
+    // A page of 100 shares at most, as the server's default (GET /shares is paginated); the
+    // cursor is the index of the first share of the page.
+    ListShares: (scope: string, cursor = ''): Promise<SharePage> => {
       if (scope !== 'owned' && scope !== 'received')
         return reject(`invalid: share scope "${scope}" (owned or received)`);
+      const all = scope === 'owned' ? sh.owned : [...sh.invitations, ...sh.received];
+      const from = Number(cursor || 0);
+      const items = structuredClone(all.slice(from, from + SHARE_PAGE));
       return (
         requireSignIn() ??
         Promise.resolve(
-          structuredClone(scope === 'owned' ? sh.owned : [...sh.invitations, ...sh.received]),
+          from + SHARE_PAGE < all.length
+            ? { items, next_cursor: String(from + SHARE_PAGE) }
+            : { items },
         )
       );
     },

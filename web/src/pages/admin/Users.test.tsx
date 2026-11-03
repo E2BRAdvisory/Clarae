@@ -33,9 +33,9 @@ describe('admin users list', () => {
       path: '/admin/users',
       user: ADMIN,
       routes: {
-        'GET /admin/groups': [
-          { id: G1, name: 'Team', member_count: 2, created_at: '2026-01-01T00:00:00Z' },
-        ],
+        'GET /admin/groups': {
+          items: [{ id: G1, name: 'Team', member_count: 2, created_at: '2026-01-01T00:00:00Z' }],
+        },
         'GET /admin/users': (c: RecordedCall) =>
           list(
             [
@@ -92,7 +92,7 @@ describe('admin users list', () => {
       path: '/admin/users',
       user: ADMIN,
       routes: {
-        'GET /admin/groups': [],
+        'GET /admin/groups': { items: [] },
         'GET /admin/users': list([user()]),
         'POST /admin/users': (c: RecordedCall) =>
           new Response(
@@ -131,7 +131,7 @@ describe('admin users list', () => {
       path: '/admin/users',
       user: ADMIN,
       routes: {
-        'GET /admin/groups': [],
+        'GET /admin/groups': { items: [] },
         'GET /admin/users': list([]),
         'POST /admin/users': problem(409, 'NAME_IN_USE'),
       },
@@ -152,7 +152,7 @@ describe('admin users list', () => {
       path: '/admin/users',
       user: ADMIN,
       routes: {
-        'GET /admin/groups': [],
+        'GET /admin/groups': { items: [] },
         'GET /admin/users': list([user(), user({ id: U2, username: 'bob', display_name: 'Bob' })]),
         'POST /admin/storage/bulk-quota': (c: RecordedCall) => ({
           updated: (c.body as { user_ids: string[] }).user_ids.length,
@@ -380,7 +380,7 @@ describe('admin user detail', () => {
       routes: {
         ...detailRoutes(() => user()),
         [`DELETE /admin/users/${U1}`]: () => undefined,
-        'GET /admin/groups': [],
+        'GET /admin/groups': { items: [] },
         'GET /admin/users': list([]),
       },
     });

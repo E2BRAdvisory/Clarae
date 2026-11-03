@@ -30,13 +30,13 @@ func TestDeclinedInvitationIsReported(t *testing.T) {
 	if got := decode[shareView](t, bob.json(http.MethodGet, "/shares/"+sh.id(), nil)); got["my_status"] != "declined" || got["my_permission"] != nil && got["my_permission"] != "none" {
 		t.Fatalf("declined share: %v", got)
 	}
-	if l := decode[[]shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil)); len(l) != 0 {
+	if l := pageItems[shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil)); len(l) != 0 {
 		t.Fatalf("a declined invitation is not an open one: %v", l)
 	}
-	if l := decode[[]shareView](t, carol.json(http.MethodGet, "/shares?scope=received", nil)); len(l) != 1 || l[0]["my_status"] != "pending" || l[0]["my_permission"] != "viewer" {
+	if l := pageItems[shareView](t, carol.json(http.MethodGet, "/shares?scope=received", nil)); len(l) != 1 || l[0]["my_status"] != "pending" || l[0]["my_permission"] != "viewer" {
 		t.Fatalf("carol's pending invitation: %v", l)
 	}
-	owned := decode[[]shareView](t, ada.json(http.MethodGet, "/shares?scope=owned", nil))
+	owned := pageItems[shareView](t, ada.json(http.MethodGet, "/shares?scope=owned", nil))
 	if len(owned) != 1 {
 		t.Fatalf("owned: %v", owned)
 	}
@@ -50,7 +50,7 @@ func TestDeclinedInvitationIsReported(t *testing.T) {
 	}
 	// Accepting later is still possible.
 	bob.accept(sh.id())
-	if l := decode[[]shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil)); len(l) != 1 || l[0]["my_status"] != "accepted" {
+	if l := pageItems[shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil)); len(l) != 1 || l[0]["my_status"] != "accepted" {
 		t.Fatalf("after accepting: %v", l)
 	}
 }
@@ -71,7 +71,7 @@ func TestShareListsMatchSingleViews(t *testing.T) {
 
 	check := func(c *client, scope string, want int) {
 		t.Helper()
-		list := decode[[]shareView](t, c.json(http.MethodGet, "/shares?scope="+scope, nil))
+		list := pageItems[shareView](t, c.json(http.MethodGet, "/shares?scope="+scope, nil))
 		if len(list) != want {
 			t.Fatalf("%s %s: %d shares, want %d", c.userID, scope, len(list), want)
 		}

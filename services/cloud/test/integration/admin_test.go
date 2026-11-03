@@ -398,7 +398,7 @@ func TestAdminGroupsAndConfigProfiles(t *testing.T) {
 	expect(t, root.json(http.MethodPut, "/admin/groups/"+gid+"/members/"+bob.userID, map[string]any{"member_role": "manager"}), http.StatusNoContent)
 	resp = root.json(http.MethodGet, "/admin/groups/"+gid+"/members", nil)
 	expect(t, resp, http.StatusOK)
-	if m := decode[[]map[string]any](t, resp); len(m) != 1 || m[0]["member_role"] != "manager" {
+	if m := pageItems[map[string]any](t, resp); len(m) != 1 || m[0]["member_role"] != "manager" {
 		t.Fatalf("members: %v", m)
 	}
 	resp = root.json(http.MethodGet, "/admin/groups/"+gid, nil)
@@ -443,8 +443,8 @@ func TestAdminGroupsAndConfigProfiles(t *testing.T) {
 	}
 	resp = root.json(http.MethodGet, "/admin/config-profiles/"+pid+"/versions", nil)
 	expect(t, resp, http.StatusOK)
-	vs := decode[[]map[string]any](t, resp)
-	if len(vs) != 2 || vs[0]["version"] != float64(2) || vs[1]["version"] != float64(1) {
+	vs := pageItems[map[string]any](t, resp)
+	if len(vs) != 2 || vs[0]["version"] != float64(2) || vs[1]["version"] != float64(1) || vs[0]["config"] != nil {
 		t.Fatalf("history: %v", vs)
 	}
 	resp = root.json(http.MethodPost, "/admin/config-profiles/"+pid+"/versions/1:restore", nil)

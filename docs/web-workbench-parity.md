@@ -547,9 +547,9 @@ Il dispatcher del core espone tutti i 134 metodi (verificato da `TestDispatcherM
 | `VaultCryptoAPI.SetPassphrase` | `crypto.unlock` | — |  |
 | `VaultCryptoAPI.Unlock` | `crypto.unlock` | — |  |
 
-### Operazioni REST (82)
+### Operazioni REST (83)
 
-Da `api/openapi.yaml`. **66 su 82** sono chiamate dalla console (`web/src`); le altre le usa il core (sincronizzazione, condivisione) oppure nessun client.
+Da `api/openapi.yaml`. **67 su 83** sono chiamate dalla console (`web/src`); le altre le usa il core (sincronizzazione, condivisione) oppure nessun client.
 
 | Operazione | Metodo e percorso | Funzione | Chiamata dalla console |
 | --- | --- | --- | --- |
@@ -624,6 +624,7 @@ Da `api/openapi.yaml`. **66 su 82** sono chiamate dalla console (`web/src`); le 
 | `adminUpdateConfigProfile` | PUT `/admin/config-profiles/{profileId}` | `admin.config` | yes |
 | `adminDeleteConfigProfile` | DELETE `/admin/config-profiles/{profileId}` | `admin.config` | yes |
 | `adminListProfileVersions` | GET `/admin/config-profiles/{profileId}/versions` | `admin.config` | yes |
+| `adminGetProfileVersion` | GET `/admin/config-profiles/{profileId}/versions/{version}` | `admin.config` | yes |
 | `adminRestoreProfileVersion` | POST `/admin/config-profiles/{profileId}/versions/{version}:restore` | `admin.config` | yes |
 | `adminGetStorageSettings` | GET `/admin/settings/storage` | `admin.storage` | yes |
 | `adminPutStorageSettings` | PUT `/admin/settings/storage` | `admin.storage` | yes |

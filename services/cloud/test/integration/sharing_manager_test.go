@@ -24,7 +24,7 @@ func (c *client) createShare(body map[string]any) *http.Response {
 func ownedIDs(t *testing.T, c *client) map[string]shareView {
 	t.Helper()
 	out := map[string]shareView{}
-	for _, s := range decode[[]shareView](t, c.json(http.MethodGet, "/shares?scope=owned", nil)) {
+	for _, s := range pageItems[shareView](t, c.json(http.MethodGet, "/shares?scope=owned", nil)) {
 		out[s.id()] = s
 	}
 	return out

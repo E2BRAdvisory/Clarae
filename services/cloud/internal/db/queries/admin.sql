@@ -61,10 +61,16 @@ ORDER BY a.id DESC
 LIMIT sqlc.arg(max_rows)::int;
 
 -- name: ListGroupsWithCounts :many
+-- A page of groups by name, after the name ending the previous page: the
+-- name is citext and unique, so it alone is the keyset position (and the
+-- unique index serves the order).
 SELECT g.id, g.name, g.description, g.created_at,
        (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
          WHERE m.group_id = g.id AND u.status <> 'deleted')::int AS member_count
-FROM groups g ORDER BY lower(g.name);
+FROM groups g
+WHERE sqlc.narg(after_name)::text IS NULL OR g.name > sqlc.narg(after_name)::text::citext
+ORDER BY g.name
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: GetGroupWithCount :one
 SELECT g.id, g.name, g.description, g.created_at,

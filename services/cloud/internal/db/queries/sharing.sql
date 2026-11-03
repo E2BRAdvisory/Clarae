@@ -50,16 +50,41 @@ FROM share_grants g WHERE g.share_id = $1 ORDER BY g.created_at;
 -- a manager (ADR-0041 §8: the service keeps a created one only while the
 -- creator still manages a share around it), with what a list shows of their
 -- vault and owner (one query per list, not per share).
+-- A page of them, newest first (by id: UUID v7, immutable and unique, so a
+-- stable keyset position), before the id ending the previous page. The three
+-- ways in are separate index lookups (vaults_owner_ix, shares_created_by_ix,
+-- share_grants_principal_ix) rather than a filter over every share.
 SELECT sqlc.embed(s), v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
 FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
 WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
-  AND (v.owner_id = sqlc.arg(user_id)
-       OR s.created_by = sqlc.arg(user_id)
-       OR EXISTS (SELECT 1 FROM share_grants g
-                  WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
-                    AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
-                      OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id))))))
-ORDER BY s.created_at DESC;
+  AND s.id IN (SELECT so.id FROM shares so JOIN vaults vo ON vo.id = so.vault_id WHERE vo.owner_id = sqlc.arg(user_id)
+               UNION ALL
+               SELECT sc.id FROM shares sc WHERE sc.created_by = sqlc.arg(user_id) AND sc.revoked_at IS NULL
+               UNION ALL
+               SELECT g.share_id FROM share_grants g
+               WHERE g.status = 'accepted' AND g.permission = 'manager'
+                 AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
+                   OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id)))))
+  AND (sqlc.narg(before_id)::uuid IS NULL OR s.id < sqlc.narg(before_id)::uuid)
+ORDER BY s.id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: ListReceivedShares :many
+-- A page of the live, unexpired shares that reach a user directly or through a
+-- group, on vaults someone else owns, newest first (by id, as
+-- ListSharesOfVaultOwner), before the id ending the previous page: every
+-- invitation, or with accepted_only the shares the user accepted (the mounts).
+SELECT sqlc.embed(s), v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
+FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
+WHERE s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now()) AND v.deleted_at IS NULL
+  AND v.owner_id <> sqlc.arg(user_id)
+  AND s.id IN (SELECT g.share_id FROM share_grants g
+               WHERE (NOT sqlc.arg(accepted_only)::bool OR g.status = 'accepted')
+                 AND ((g.principal_type = 'user' AND g.principal_id = sqlc.arg(user_id))
+                   OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = sqlc.arg(user_id)))))
+  AND (sqlc.narg(before_id)::uuid IS NULL OR s.id < sqlc.narg(before_id)::uuid)
+ORDER BY s.id DESC
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: ListGrantsOfUser :many
 -- Every grant that reaches a user, directly or through a group, on live shares.
@@ -104,12 +129,6 @@ UPDATE shares SET path_prefix = $2 WHERE id = $1;
 
 -- name: DeleteGrantsOfPrincipal :execrows
 DELETE FROM share_grants WHERE principal_type = $1 AND principal_id = $2;
-
--- name: ListSharesByIDs :many
--- The shares of a list with their vault and owner (ListReceived).
-SELECT sqlc.embed(s), v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
-FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
-WHERE s.id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: ListUserGrantsOnShares :many
 -- ListUserGrantsOnShare for many shares at once.

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { unwrap, type Schemas } from '@memobrain/api-client';
 import { Feature } from '@memobrain/api-client/features';
-import { cloudKeys, RestCloudPort, useFeature } from '@memobrain/cloud-features';
+import { cloudKeys, RestCloudPort, useFeature, useSharePages } from '@memobrain/cloud-features';
 import { useAuth } from '../auth/AuthProvider';
 import { ADMIN_ROLE } from '../auth/types';
 import { useApi } from './context';
@@ -55,12 +55,9 @@ export function useVaults() {
   return useQuery({ queryKey: cloudKeys.vaults(port), queryFn: () => port.listVaults() });
 }
 
+/** The shares of a scope a page at a time (the cache of @memobrain/cloud-features' components). */
 export function useShares(scope: 'owned' | 'received') {
-  const port = useReadPort();
-  return useQuery({
-    queryKey: cloudKeys.sharesOf(port, scope),
-    queryFn: () => port.listShares(scope),
-  });
+  return useSharePages(useReadPort(), scope);
 }
 
 /**

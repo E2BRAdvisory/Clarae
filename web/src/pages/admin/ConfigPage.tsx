@@ -7,11 +7,13 @@ import {
   useDeleteProfile,
   useProfile,
   useProfiles,
+  pageItems,
+  useProfileVersion,
   useProfileVersions,
   useRestoreVersion,
   useSaveProfile,
   type ConfigProfile,
-  type ProfileVersion,
+  type ProfileVersionSummary,
 } from '../../api/admin';
 import { formatDate } from '../../format';
 import { QueryState } from '../QueryState';
@@ -423,7 +425,9 @@ function History({ profile }: { profile: ConfigProfile }) {
   const versions = useProfileVersions(profile.id);
   const restore = useRestoreVersion(profile.id);
   const [selected, setSelected] = useState<number | null>(null);
-  const [confirm, setConfirm] = useState<ProfileVersion | null>(null);
+  // The list has the metadata only: the configuration of a version is read when it is compared.
+  const shown = useProfileVersion(profile.id, selected);
+  const [confirm, setConfirm] = useState<ProfileVersionSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -431,9 +435,9 @@ function History({ profile }: { profile: ConfigProfile }) {
       <h3 id="cfg-history">{t('admin.config.history')}</h3>
       {error && <InlineError>{error}</InlineError>}
       <QueryState query={versions}>
-        {(list) => {
-          const sorted = [...list].sort((a, b) => b.version - a.version);
-          const sel = sorted.find((v) => v.version === selected);
+        {(data) => {
+          const sorted = pageItems(data, (v) => v.version).sort((a, b) => b.version - a.version);
+          const sel = shown.data?.version === selected ? shown.data : undefined;
           return (
             <div className="nd-stack">
               <ul className="admin-list" aria-label={t('admin.config.history')}>
@@ -475,6 +479,15 @@ function History({ profile }: { profile: ConfigProfile }) {
                   </li>
                 ))}
               </ul>
+              {versions.hasNextPage && (
+                <Button
+                  disabled={versions.isFetchingNextPage}
+                  onClick={() => void versions.fetchNextPage()}
+                >
+                  {t('common.loadMore')}
+                </Button>
+              )}
+              {selected !== null && !sel && <QueryState query={shown}>{() => null}</QueryState>}
               {sel && (
                 <div className="admin-diff" role="group" aria-label={t('admin.config.diff')}>
                   <div>

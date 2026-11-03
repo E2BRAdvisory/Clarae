@@ -171,8 +171,16 @@ const listGroupsWithCounts = `-- name: ListGroupsWithCounts :many
 SELECT g.id, g.name, g.description, g.created_at,
        (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
          WHERE m.group_id = g.id AND u.status <> 'deleted')::int AS member_count
-FROM groups g ORDER BY lower(g.name)
+FROM groups g
+WHERE $1::text IS NULL OR g.name > $1::text::citext
+ORDER BY g.name
+LIMIT $2::int
 `
+
+type ListGroupsWithCountsParams struct {
+	AfterName *string
+	MaxRows   int32
+}
 
 type ListGroupsWithCountsRow struct {
 	ID          uuid.UUID
@@ -182,8 +190,11 @@ type ListGroupsWithCountsRow struct {
 	MemberCount int32
 }
 
-func (q *Queries) ListGroupsWithCounts(ctx context.Context) ([]ListGroupsWithCountsRow, error) {
-	rows, err := q.db.Query(ctx, listGroupsWithCounts)
+// A page of groups by name, after the name ending the previous page: the
+// name is citext and unique, so it alone is the keyset position (and the
+// unique index serves the order).
+func (q *Queries) ListGroupsWithCounts(ctx context.Context, arg ListGroupsWithCountsParams) ([]ListGroupsWithCountsRow, error) {
+	rows, err := q.db.Query(ctx, listGroupsWithCounts, arg.AfterName, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}

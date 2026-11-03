@@ -13,6 +13,7 @@ import {
 } from '@memobrain/ui';
 import {
   useAdminGroups,
+  pageItems,
   useAdminUsers,
   useBulkQuota,
   useCreateUser,
@@ -242,12 +243,21 @@ export function UsersPage() {
           onChange={(e) => update({ group: e.target.value })}
         >
           <option value="">{t('admin.users.any')}</option>
-          {(groups.data ?? []).map((g) => (
+          {pageItems(groups.data, (g) => g.id).map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
             </option>
           ))}
         </SelectField>
+        {groups.hasNextPage && (
+          <Button
+            small
+            disabled={groups.isFetchingNextPage}
+            onClick={() => void groups.fetchNextPage()}
+          >
+            {t('admin.users.moreGroups')}
+          </Button>
+        )}
         <SelectField
           label={t('admin.users.sort')}
           value={filters.sort}

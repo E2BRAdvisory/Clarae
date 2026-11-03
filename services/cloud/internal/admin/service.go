@@ -27,6 +27,7 @@ import (
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/keycloak"
 	"memobrain/services/cloud/internal/notify"
+	"memobrain/services/cloud/internal/pagination"
 	"memobrain/services/cloud/internal/privacy"
 	"memobrain/services/cloud/internal/settings"
 	"memobrain/services/cloud/internal/users"
@@ -793,9 +794,31 @@ func csvSafe(v string) string {
 	return v
 }
 
-// Groups returns every group with its member count.
-func (s *Service) Groups(ctx context.Context) ([]admindb.ListGroupsWithCountsRow, error) {
-	return admindb.New(s.db.Pool).ListGroupsWithCounts(ctx)
+// groupsList tags the cursors of Groups.
+const groupsList = "groups"
+
+// Groups returns a page of at most limit groups by name, with their member
+// counts, after cursor ("" for the first page), and the cursor of the next
+// page (nil on the last). The cursor is the name of the last group (unique):
+// a group created or renamed meanwhile lands where its name sorts.
+func (s *Service) Groups(ctx context.Context, limit int, cursor string) ([]admindb.ListGroupsWithCountsRow, *string, error) {
+	after, err := pagination.Decode(groupsList, cursor)
+	if err != nil {
+		return nil, nil, err
+	}
+	p := admindb.ListGroupsWithCountsParams{MaxRows: pagination.FetchLimit(limit)}
+	if after != nil {
+		p.AfterName = &after.K
+	}
+	rows, err := admindb.New(s.db.Pool).ListGroupsWithCounts(ctx, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, more := pagination.Trim(rows, limit)
+	if !more {
+		return rows, nil, nil
+	}
+	return rows, pagination.Cursor(pagination.Key{List: groupsList, K: rows[len(rows)-1].Name}), nil
 }
 
 // Group returns one group with its member count.

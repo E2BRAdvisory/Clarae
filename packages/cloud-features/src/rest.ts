@@ -14,6 +14,7 @@ import {
   type NewShare,
   type PrincipalType,
   type Share,
+  type SharePage,
   type SharePermission,
   type ShareUpdate,
 } from './port';
@@ -92,8 +93,10 @@ export class RestCloudPort implements CloudPort {
     return unwrap(this.api.GET('/me/usage'));
   }
 
-  listShares(scope: 'owned' | 'received'): Promise<Share[]> {
-    return unwrap(this.api.GET('/shares', { params: { query: { scope } } }));
+  listShares(scope: 'owned' | 'received', cursor?: string): Promise<SharePage> {
+    return unwrap(
+      this.api.GET('/shares', { params: { query: { scope, ...(cursor ? { cursor } : {}) } } }),
+    );
   }
 
   createShare(input: NewShare): Promise<Share> {

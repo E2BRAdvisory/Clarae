@@ -502,7 +502,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Shares the caller owns or manages (`owned`) or was invited to (`received`) */
+        /**
+         * Shares the caller owns or manages (`owned`) or was invited to (`received`)
+         * @description Newest share first, keyset paginated (see Pagination). `owned` lists the shares of the caller's vaults and those they manage; `received` the shares that reach them: pending invitations and accepted shares.
+         */
         get: operations["listShares"];
         put?: never;
         /**
@@ -604,7 +607,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Accepted shares to mount, with the scope to sync them */
+        /**
+         * Accepted shares to mount, with the scope to sync them
+         * @description Newest share first, keyset paginated (see Pagination). A client that reconciles its mounts with this list reads every page first: a share missing from a page it did not load is not a revoked share.
+         */
         get: operations["listSharedWithMe"];
         put?: never;
         post?: never;
@@ -831,7 +837,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Groups */
+        /**
+         * Groups, by name
+         * @description Keyset paginated by name (see Pagination).
+         */
         get: operations["adminListGroups"];
         put?: never;
         /** Create a group */
@@ -872,7 +881,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Members of a group */
+        /**
+         * Members of a group, by username
+         * @description Keyset paginated by username (see Pagination).
+         */
         get: operations["adminListGroupMembers"];
         put?: never;
         post?: never;
@@ -974,8 +986,31 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** History of a profile, newest first */
+        /**
+         * History of a profile, newest first
+         * @description The metadata of each version, keyset paginated (see Pagination; default 50, at most 200); the configuration of one version is `adminGetProfileVersion`.
+         */
         get: operations["adminListProfileVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/config-profiles/{profileId}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileId: components["parameters"]["ProfilePathId"];
+                version: components["parameters"]["VersionPathId"];
+            };
+            cookie?: never;
+        };
+        /** One version of a profile, with its configuration */
+        get: operations["adminGetProfileVersion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1619,6 +1654,16 @@ export interface components {
             /** @description Remove the expiry (instead of setting expires_at) */
             clear_expiry?: boolean;
         };
+        SharePage: {
+            items: components["schemas"]["Share"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
+        };
+        MountPage: {
+            items: components["schemas"]["Mount"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
+        };
         Mount: {
             /** Format: uuid */
             share_id: string;
@@ -1721,6 +1766,11 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        AdminGroupPage: {
+            items: components["schemas"]["AdminGroup"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
+        };
         GroupInput: {
             name: string;
             description?: string;
@@ -1733,6 +1783,11 @@ export interface components {
             display_name?: string;
             /** @enum {string} */
             member_role: "member" | "manager";
+        };
+        GroupMemberPage: {
+            items: components["schemas"]["GroupMember"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
         };
         SetMemberRole: {
             /** @enum {string} */
@@ -1787,6 +1842,22 @@ export interface components {
             updated_by?: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /** @description A version of a profile without its configuration (adminGetProfileVersion has it) */
+        ProfileVersionSummary: {
+            version: number;
+            name: string;
+            description?: string;
+            is_global: boolean;
+            /** Format: uuid */
+            updated_by?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProfileVersionPage: {
+            items: components["schemas"]["ProfileVersionSummary"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
         };
         StorageSettings: {
             /** Format: int64 */
@@ -1967,6 +2038,10 @@ export interface components {
         SharePathId: string;
         PrincipalType: "user" | "group";
         PrincipalId: string;
+        /** @description Page size (see Pagination) */
+        PageLimit: number;
+        /** @description The `next_cursor` of the previous page; omitted for the first page (see Pagination) */
+        PageCursor: string;
         DirectoryQuery: string;
         /** @description Client-chosen key that makes a mutating POST safe to retry: send a new random key per logical operation and the same key on every retry of it. A retry of an attempt that succeeded gets that attempt's outcome; on `POST /vaults` and `POST /me/devices` it is the resource created then, as it is now, with `201` again. Reusing a key for a vault of the other kind, or a device of another platform, is `400 VALIDATION_FAILED`. */
         IdempotencyKey: string;
@@ -2932,6 +3007,10 @@ export interface operations {
         parameters: {
             query: {
                 scope: "owned" | "received";
+                /** @description Page size (see Pagination) */
+                limit?: components["parameters"]["PageLimit"];
+                /** @description The `next_cursor` of the previous page; omitted for the first page (see Pagination) */
+                cursor?: components["parameters"]["PageCursor"];
             };
             header?: never;
             path?: never;
@@ -2939,13 +3018,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Shares */
+            /** @description A page of shares */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Share"][];
+                    "application/json": components["schemas"]["SharePage"];
                 };
             };
             400: components["responses"]["ValidationFailed"];
@@ -3187,22 +3266,28 @@ export interface operations {
     };
     listSharedWithMe: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size (see Pagination) */
+                limit?: components["parameters"]["PageLimit"];
+                /** @description The `next_cursor` of the previous page; omitted for the first page (see Pagination) */
+                cursor?: components["parameters"]["PageCursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Mounts */
+            /** @description A page of mounts */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Mount"][];
+                    "application/json": components["schemas"]["MountPage"];
                 };
             };
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["InternalError"];
@@ -3620,22 +3705,28 @@ export interface operations {
     };
     adminListGroups: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size (see Pagination) */
+                limit?: components["parameters"]["PageLimit"];
+                /** @description The `next_cursor` of the previous page; omitted for the first page (see Pagination) */
+                cursor?: components["parameters"]["PageCursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Groups */
+            /** @description A page of groups */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminGroup"][];
+                    "application/json": components["schemas"]["AdminGroupPage"];
                 };
             };
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             429: components["responses"]["RateLimited"];
@@ -3761,7 +3852,12 @@ export interface operations {
     };
     adminListGroupMembers: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size (see Pagination) */
+                limit?: components["parameters"]["PageLimit"];
+                /** @description The `next_cursor` of the previous page; omitted for the first page (see Pagination) */
+                cursor?: components["parameters"]["PageCursor"];
+            };
             header?: never;
             path: {
                 groupId: components["parameters"]["GroupPathId"];
@@ -3770,15 +3866,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Members */
+            /** @description A page of members */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GroupMember"][];
+                    "application/json": components["schemas"]["GroupMemberPage"];
                 };
             };
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -4045,7 +4142,11 @@ export interface operations {
     };
     adminListProfileVersions: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description The `next_cursor` of the previous page; omitted for the first page (see Pagination) */
+                cursor?: components["parameters"]["PageCursor"];
+            };
             header?: never;
             path: {
                 profileId: components["parameters"]["ProfilePathId"];
@@ -4054,13 +4155,42 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Versions */
+            /** @description A page of versions */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProfileVersion"][];
+                    "application/json": components["schemas"]["ProfileVersionPage"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["InternalError"];
+        };
+    };
+    adminGetProfileVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileId: components["parameters"]["ProfilePathId"];
+                version: components["parameters"]["VersionPathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileVersion"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

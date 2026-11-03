@@ -46,7 +46,7 @@ test('create a shared vault, rename it, delete it and restore it', async ({ page
   const idOf = (i: number) => `0198f1c2-aaaa-7bbb-8ccc-${String(i).padStart(12, '0')}`;
   const routes: Record<string, unknown> = {
     'GET /config/effective': { version: 1, config: {}, locked_keys: [] },
-    'GET /shares': [],
+    'GET /shares': { items: [] },
     'GET /vaults': (route: Route) => ({
       items: srv.vaults.filter(
         (v) =>
@@ -119,7 +119,7 @@ test('a private vault is created in the browser workbench', async ({ page }) => 
   await signedIn(page);
   await mockApi(page, {
     'GET /config/effective': { version: 1, config: {}, locked_keys: [] },
-    'GET /shares': [],
+    'GET /shares': { items: [] },
     'GET /vaults': { items: [], mounts: [] },
   });
   // The workbench page itself is not under test here: only where the console sends the browser.

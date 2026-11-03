@@ -84,37 +84,39 @@ export const allRoutes: Record<string, unknown> = {
     items: [vault(V_SHARED, 'shared', 'Notes'), vault(V_PRIVATE, 'private', 'Secrets')],
     mounts: [],
   },
-  'GET /shares': (route: Route) =>
-    new URL(route.request().url()).searchParams.get('scope') === 'owned'
-      ? [
-          {
-            ...shareCommon,
-            id: 's-own',
-            display_name: 'Project X',
-            owner_id: ME,
-            owner_name: 'Alice',
-            grants: [
-              {
-                grantee_type: 'user',
-                grantee_id: BOB,
-                grantee_name: 'Bob',
-                permission: 'editor',
-                status: 'accepted',
-              },
-            ],
-          },
-        ]
-      : [
-          {
-            ...shareCommon,
-            id: 's-inv',
-            display_name: 'Budget',
-            owner_id: BOB,
-            owner_name: 'Bob',
-            my_permission: 'editor',
-            my_status: 'pending',
-          },
-        ],
+  'GET /shares': (route: Route) => ({
+    items:
+      new URL(route.request().url()).searchParams.get('scope') === 'owned'
+        ? [
+            {
+              ...shareCommon,
+              id: 's-own',
+              display_name: 'Project X',
+              owner_id: ME,
+              owner_name: 'Alice',
+              grants: [
+                {
+                  grantee_type: 'user',
+                  grantee_id: BOB,
+                  grantee_name: 'Bob',
+                  permission: 'editor',
+                  status: 'accepted',
+                },
+              ],
+            },
+          ]
+        : [
+            {
+              ...shareCommon,
+              id: 's-inv',
+              display_name: 'Budget',
+              owner_id: BOB,
+              owner_name: 'Bob',
+              my_permission: 'editor',
+              my_status: 'pending',
+            },
+          ],
+  }),
   'GET /directory/users': { items: [] },
   'GET /directory/groups': { items: [] },
   'GET /admin/storage/overview': {
@@ -169,30 +171,33 @@ export const allRoutes: Record<string, unknown> = {
     config: { editor: { fontSize: 14 } },
     locked_keys: ['editor.fontSize'],
   },
-  'GET /admin/groups': [group],
+  'GET /admin/groups': { items: [group] },
   [`GET /admin/groups/${G}`]: group,
-  [`GET /admin/groups/${G}/members`]: [
-    {
-      user_id: U1,
-      username: 'alice',
-      email: 'alice@example.com',
-      display_name: 'Alice',
-      member_role: 'member',
-    },
-  ],
+  [`GET /admin/groups/${G}/members`]: {
+    items: [
+      {
+        user_id: U1,
+        username: 'alice',
+        email: 'alice@example.com',
+        display_name: 'Alice',
+        member_role: 'member',
+      },
+    ],
+  },
   [`GET /admin/groups/${G}/config-profiles`]: [],
   'GET /admin/config-profiles': [{ ...profile, is_global: true, id: 'g', name: 'Global' }, profile],
   [`GET /admin/config-profiles/${P}`]: profile,
-  [`GET /admin/config-profiles/${P}/versions`]: [
-    {
-      version: 1,
-      name: 'Base',
-      is_global: false,
-      config: {},
-      locked_keys: [],
-      updated_at: '2026-01-01T10:00:00Z',
-    },
-  ],
+  [`GET /admin/config-profiles/${P}/versions`]: {
+    items: [{ version: 1, name: 'Base', is_global: false, updated_at: '2026-01-01T10:00:00Z' }],
+  },
+  [`GET /admin/config-profiles/${P}/versions/1`]: {
+    version: 1,
+    name: 'Base',
+    is_global: false,
+    config: {},
+    locked_keys: [],
+    updated_at: '2026-01-01T10:00:00Z',
+  },
   'GET /admin/audit-log': {
     items: [
       {

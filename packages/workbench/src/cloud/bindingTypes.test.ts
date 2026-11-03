@@ -43,7 +43,16 @@ describe('the cloud-management bindings return the OpenAPI types', () => {
 
   it('shares and grants', () => {
     expectTypeOf<Result<typeof SharingAPI.Invitations>>().toEqualTypeOf<Schemas['Share']>();
-    expectTypeOf<Result<typeof SharingAPI.ListShares>>().toEqualTypeOf<Schemas['Share']>();
+    // A page: its items are the Share model, as the other bindings' (Plain of the class).
+    expectTypeOf<Plain<Result<typeof SharingAPI.ListShares>['items'][number]>>().toEqualTypeOf<
+      Schemas['Share']
+    >();
+    expectTypeOf<Result<typeof SharingAPI.ListShares>['next_cursor']>().toEqualTypeOf<
+      Schemas['SharePage']['next_cursor']
+    >();
+    expectTypeOf<keyof Result<typeof SharingAPI.ListShares>>().toEqualTypeOf<
+      keyof Schemas['SharePage']
+    >();
     expectTypeOf<Result<typeof SharingAPI.VaultShares>>().toEqualTypeOf<Schemas['Share']>();
     expectTypeOf<Result<typeof SharingAPI.Share>>().toEqualTypeOf<Schemas['Share']>();
     expectTypeOf<Result<typeof SharingAPI.CreateShare>>().toEqualTypeOf<Schemas['Share']>();

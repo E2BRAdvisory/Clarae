@@ -9,11 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	stdsync "sync"
 	"sync/atomic"
@@ -113,14 +115,32 @@ func (ac *accountCloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && path == "/shared-with-me":
-		out := []any{}
-		for id := range ac.shares {
-			out = append(out, map[string]any{
+		// An empty first page, then one mount per page by share id after the cursor (the last
+		// id): the core must read every page, or a mount on a later one would look revoked.
+		ids := slices.Sorted(maps.Keys(ac.shares))
+		after := r.URL.Query().Get("cursor")
+		page := map[string]any{"items": []any{}}
+		if after == "" {
+			if len(ids) > 0 {
+				page["next_cursor"] = "0"
+			}
+			reply(page)
+			break
+		}
+		for i, id := range ids {
+			if id <= after {
+				continue
+			}
+			page["items"] = []any{map[string]any{
 				"share_id": id, "vault_id": mountCloud, "scope": "share:" + id, "permission": PermEditor,
 				"display_name": "Team", "owner_name": "ada", "resource_type": "folder",
-			})
+			}}
+			if i < len(ids)-1 {
+				page["next_cursor"] = id
+			}
+			break
 		}
-		reply(out)
+		reply(page)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "/vaults/") && ac.vaults[strings.TrimPrefix(path, "/vaults/")]:
 		id := strings.TrimPrefix(path, "/vaults/")
 		reply(map[string]any{

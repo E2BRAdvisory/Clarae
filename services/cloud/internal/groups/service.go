@@ -17,6 +17,7 @@ import (
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/groups/groupsdb"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/pagination"
 	"memobrain/services/cloud/internal/users"
 	"memobrain/shared/syncproto"
 )
@@ -113,11 +114,6 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (groupsdb.Group, error)
 		return groupsdb.Group{}, httpproblem.NotFound("group")
 	}
 	return g, err
-}
-
-// List returns every group.
-func (s *Service) List(ctx context.Context) ([]groupsdb.Group, error) {
-	return groupsdb.New(s.db.Pool).ListGroups(ctx)
 }
 
 // Update renames a group or changes its description.
@@ -243,9 +239,32 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.
 	})
 }
 
-// Members lists the members of a group.
-func (s *Service) Members(ctx context.Context, groupID uuid.UUID) ([]groupsdb.ListGroupMembersRow, error) {
-	return groupsdb.New(s.db.Pool).ListGroupMembers(ctx, groupID)
+// membersList tags the cursors of Members.
+const membersList = "group-members"
+
+// Members returns a page of at most limit members of a group, by username,
+// after cursor ("" for the first page), and the cursor of the next page (nil
+// on the last). The cursor is the lower-case username and id of the last
+// member: members added or renamed meanwhile land where their name sorts.
+func (s *Service) Members(ctx context.Context, groupID uuid.UUID, limit int, cursor string) ([]groupsdb.ListGroupMembersRow, *string, error) {
+	after, err := pagination.Decode(membersList, cursor)
+	if err != nil {
+		return nil, nil, err
+	}
+	p := groupsdb.ListGroupMembersParams{GroupID: groupID, MaxRows: pagination.FetchLimit(limit)}
+	if after != nil {
+		p.AfterKey, p.AfterID = &after.K, &after.ID
+	}
+	rows, err := groupsdb.New(s.db.Pool).ListGroupMembers(ctx, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, more := pagination.Trim(rows, limit)
+	if !more {
+		return rows, nil, nil
+	}
+	last := rows[len(rows)-1]
+	return rows, pagination.Cursor(pagination.Key{List: membersList, K: last.SortKey, ID: last.ID}), nil
 }
 
 // OfUser lists the groups a user belongs to.

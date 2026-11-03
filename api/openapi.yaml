@@ -17,6 +17,20 @@ info:
     `code` (enum `ErrorCode`). Every operation may also answer `default`
     (code `INTERNAL`, HTTP 500) on an unexpected failure.
 
+    **Pagination.** Lists that can grow without bound are keyset paginated: `limit`
+    (the page size; default and maximum in each operation, 100 and 500 unless stated)
+    and `cursor`, the opaque `next_cursor` of the previous page. The answer is
+    `{items, next_cursor}`. Without `limit` and `cursor` an operation answers its first
+    page with the default size, so a client that sends neither still gets a bounded
+    answer and the cursor of what follows. `next_cursor` is absent on the last page and
+    only its absence ends the list: a page may hold fewer than `limit` items, even none,
+    when the server leaves out rows the caller must not see. Every page is authorized
+    on its own. A cursor is a position, not a snapshot: an item created, renamed or
+    removed between two pages may be missed or appear twice, so clients deduplicate by
+    id. A cursor is valid only for the operation (and path) that returned it; a cursor
+    the server cannot read is `400 VALIDATION_FAILED`. `GET /admin/users` pages by
+    `offset` instead.
+
     **Authentication and roles.** Operations take a Keycloak access token as a bearer
     token (`bearerAuth`; the cloud is an OIDC resource server and validates `iss`,
     `aud=memobrain-api` and the signature against the realm's JWKS). The
@@ -1213,6 +1227,10 @@ paths:
       security:
         - bearerAuth: []
       summary: Shares the caller owns or manages (`owned`) or was invited to (`received`)
+      description: >-
+        Newest share first, keyset paginated (see Pagination). `owned` lists the shares of the
+        caller's vaults and those they manage; `received` the shares that reach them: pending
+        invitations and accepted shares.
       parameters:
         - name: scope
           in: query
@@ -1220,15 +1238,15 @@ paths:
           schema:
             type: string
             enum: [owned, received]
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/PageCursor'
       responses:
         '200':
-          description: Shares
+          description: A page of shares
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Share'
+                $ref: '#/components/schemas/SharePage'
         '400':
           $ref: '#/components/responses/ValidationFailed'
         '401':
@@ -1479,15 +1497,22 @@ paths:
       security:
         - bearerAuth: []
       summary: Accepted shares to mount, with the scope to sync them
+      description: >-
+        Newest share first, keyset paginated (see Pagination). A client that reconciles its
+        mounts with this list reads every page first: a share missing from a page it did not
+        load is not a revoked share.
+      parameters:
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/PageCursor'
       responses:
         '200':
-          description: Mounts
+          description: A page of mounts
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Mount'
+                $ref: '#/components/schemas/MountPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '429':
@@ -1976,16 +2001,20 @@ paths:
       x-required-role: memobrain-admin
       security:
         - bearerAuth: []
-      summary: Groups
+      summary: Groups, by name
+      description: Keyset paginated by name (see Pagination).
+      parameters:
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/PageCursor'
       responses:
         '200':
-          description: Groups
+          description: A page of groups
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AdminGroup'
+                $ref: '#/components/schemas/AdminGroupPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -2122,16 +2151,20 @@ paths:
       x-required-role: memobrain-admin
       security:
         - bearerAuth: []
-      summary: Members of a group
+      summary: Members of a group, by username
+      description: Keyset paginated by username (see Pagination).
+      parameters:
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/PageCursor'
       responses:
         '200':
-          description: Members
+          description: A page of members
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/GroupMember'
+                $ref: '#/components/schemas/GroupMemberPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -2415,15 +2448,57 @@ paths:
       security:
         - bearerAuth: []
       summary: History of a profile, newest first
+      description: >-
+        The metadata of each version, keyset paginated (see Pagination; default 50, at most
+        200); the configuration of one version is `adminGetProfileVersion`.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: '#/components/parameters/PageCursor'
       responses:
         '200':
-          description: Versions
+          description: A page of versions
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProfileVersion'
+                $ref: '#/components/schemas/ProfileVersionPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/InternalError'
+
+  /admin/config-profiles/{profileId}/versions/{version}:
+    parameters:
+      - $ref: '#/components/parameters/ProfilePathId'
+      - $ref: '#/components/parameters/VersionPathId'
+    get:
+      tags: [admin]
+      operationId: adminGetProfileVersion
+      x-required-role: memobrain-admin
+      security:
+        - bearerAuth: []
+      summary: One version of a profile, with its configuration
+      responses:
+        '200':
+          description: Version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileVersion'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -2950,6 +3025,24 @@ components:
       schema:
         type: string
         format: uuid
+    PageLimit:
+      name: limit
+      in: query
+      required: false
+      description: Page size (see Pagination)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    PageCursor:
+      name: cursor
+      in: query
+      required: false
+      description: The `next_cursor` of the previous page; omitted for the first page (see Pagination)
+      schema:
+        type: string
+        maxLength: 2048
     DirectoryQuery:
       name: q
       in: query
@@ -3860,6 +3953,22 @@ components:
           type: boolean
           description: Remove the expiry (instead of setting expires_at)
 
+    SharePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Share' }
+        next_cursor: { type: string, description: 'Absent on the last page' }
+    MountPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Mount' }
+        next_cursor: { type: string, description: 'Absent on the last page' }
     Mount:
       type: object
       required: [share_id, vault_id, display_name, resource_type, permission, scope, owner_name]
@@ -3984,6 +4093,14 @@ components:
         description: { type: string }
         member_count: { type: integer }
         created_at: { type: string, format: date-time }
+    AdminGroupPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminGroup' }
+        next_cursor: { type: string, description: 'Absent on the last page' }
     GroupInput:
       type: object
       required: [name]
@@ -3999,6 +4116,14 @@ components:
         email: { type: string }
         display_name: { type: string }
         member_role: { type: string, enum: [member, manager] }
+    GroupMemberPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMember' }
+        next_cursor: { type: string, description: 'Absent on the last page' }
     SetMemberRole:
       type: object
       required: [member_role]
@@ -4065,6 +4190,25 @@ components:
           items: { type: string }
         updated_by: { type: string, format: uuid }
         updated_at: { type: string, format: date-time }
+    ProfileVersionSummary:
+      type: object
+      description: A version of a profile without its configuration (adminGetProfileVersion has it)
+      required: [version, name, is_global, updated_at]
+      properties:
+        version: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        is_global: { type: boolean }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+    ProfileVersionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ProfileVersionSummary' }
+        next_cursor: { type: string, description: 'Absent on the last page' }
     StorageSettings:
       type: object
       required:

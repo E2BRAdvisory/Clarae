@@ -243,16 +243,18 @@ func (s *SharingAPI) CreateShare(vaultID, path string, isDir bool, name string, 
 	return shareResult(s.app.sync.CreateShare(ctx, vaultID, path, isDir, name, newGrants(grants), exp))
 }
 
-// ListShares lists the shares of the account: "owned" (created or managed by the user, on any of
-// their vaults) or "received" (invitations, accepted and declined ones).
-func (s *SharingAPI) ListShares(scope string) ([]cloudapi.Share, error) {
+// ListShares lists a page of the shares of the account, newest first: "owned" (created or managed
+// by the user, on any of their vaults) or "received" (invitations and accepted shares). cursor is
+// "" for the first page, then the next_cursor of the page before, absent on the last one
+// (GET /shares, api/openapi.yaml "Pagination").
+func (s *SharingAPI) ListShares(scope, cursor string) (cloudapi.SharePage, error) {
 	ctx, cancel := s.app.uiCtx()
 	defer cancel()
-	shares, err := s.app.sync.ListShares(ctx, scope)
+	page, err := s.app.sync.ListSharesPage(ctx, scope, cursor)
 	if err != nil {
-		return nil, bindingError(err)
+		return cloudapi.SharePage{}, bindingError(err)
 	}
-	return cloudapi.SharesOf(shares), nil
+	return cloudapi.SharePageOf(page), nil
 }
 
 // CreateCloudShare shares a whole cloud vault (empty pathPrefix) or one of its folders, by cloud

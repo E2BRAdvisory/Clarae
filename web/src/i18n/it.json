@@ -27,7 +27,8 @@
     "never": "Mai",
     "unlimited": "illimitato",
     "errorGeneric": "Qualcosa è andato storto.",
-    "errorWithCode": "{{message}} ({{code}})"
+    "errorWithCode": "{{message}} ({{code}})",
+    "loadMore": "Carica altri"
   },
   "errors": {
     "loadFailed": "Impossibile caricare i dati."
@@ -165,6 +166,7 @@
       "status": "Stato",
       "group": "Gruppo",
       "any": "Qualsiasi",
+      "moreGroups": "Altri gruppi",
       "sort": "Ordina per",
       "sortName": "Nome",
       "sortUsed": "Spazio usato",

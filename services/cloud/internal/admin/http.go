@@ -15,6 +15,7 @@ import (
 	"memobrain/services/cloud/internal/configprofiles"
 	"memobrain/services/cloud/internal/groups"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/pagination"
 	"memobrain/shared/syncproto"
 )
 
@@ -25,7 +26,7 @@ type Groups interface {
 	Delete(ctx context.Context, actor, id uuid.UUID) error
 	SetMember(ctx context.Context, actor, groupID, userID uuid.UUID, role string) error
 	RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error
-	Members(ctx context.Context, groupID uuid.UUID) ([]groups.ListGroupMembersRow, error)
+	Members(ctx context.Context, groupID uuid.UUID, limit int, cursor string) ([]groups.ListGroupMembersRow, *string, error)
 }
 
 // Profiles is what the admin API needs from the configuration module.
@@ -35,7 +36,8 @@ type Profiles interface {
 	Create(ctx context.Context, actor uuid.UUID, in configprofiles.ProfileInput) (configprofiles.ConfigProfile, error)
 	Update(ctx context.Context, actor, id uuid.UUID, in configprofiles.ProfileInput) (configprofiles.ConfigProfile, error)
 	Delete(ctx context.Context, actor, id uuid.UUID) error
-	Versions(ctx context.Context, id uuid.UUID) ([]configprofiles.ConfigProfileVersion, error)
+	Versions(ctx context.Context, id uuid.UUID, limit int, cursor string) ([]configprofiles.ProfileVersionSummary, *string, error)
+	Version(ctx context.Context, id uuid.UUID, version int32) (configprofiles.ConfigProfileVersion, error)
 	Restore(ctx context.Context, actor, id uuid.UUID, version int32) (configprofiles.ConfigProfile, error)
 	SetGroupAssignments(ctx context.Context, actor, groupID uuid.UUID, as []configprofiles.Assignment) error
 	EffectiveFor(ctx context.Context, userID uuid.UUID) (configprofiles.Effective, error)
@@ -326,19 +328,20 @@ func (h *HTTP) AdminUserEffectiveConfig(ctx context.Context, req api.AdminUserEf
 }
 
 // AdminListGroups implements GET /admin/groups.
-func (h *HTTP) AdminListGroups(ctx context.Context, _ api.AdminListGroupsRequestObject) (api.AdminListGroupsResponseObject, error) {
+func (h *HTTP) AdminListGroups(ctx context.Context, req api.AdminListGroupsRequestObject) (api.AdminListGroupsResponseObject, error) {
 	if _, err := admin(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := h.svc.Groups(ctx)
+	limit := pagination.Limit(req.Params.Limit, pagination.DefaultLimit, pagination.MaxLimit)
+	rows, next, err := h.svc.Groups(ctx, limit, deref(req.Params.Cursor))
 	if err != nil {
 		return nil, err
 	}
-	out := make(api.AdminListGroups200JSONResponse, 0, len(rows))
+	items := make([]api.AdminGroup, 0, len(rows))
 	for _, g := range rows {
-		out = append(out, api.AdminGroup{Id: g.ID, Name: g.Name, Description: g.Description, MemberCount: int(g.MemberCount), CreatedAt: g.CreatedAt})
+		items = append(items, api.AdminGroup{Id: g.ID, Name: g.Name, Description: g.Description, MemberCount: int(g.MemberCount), CreatedAt: g.CreatedAt})
 	}
-	return out, nil
+	return api.AdminListGroups200JSONResponse{Items: items, NextCursor: next}, nil
 }
 
 func (h *HTTP) groupView(ctx context.Context, id uuid.UUID) (api.AdminGroup, error) {
@@ -420,19 +423,20 @@ func (h *HTTP) AdminListGroupMembers(ctx context.Context, req api.AdminListGroup
 	if _, err := h.svc.Group(ctx, req.GroupId); err != nil {
 		return nil, err
 	}
-	rows, err := h.groups.Members(ctx, req.GroupId)
+	limit := pagination.Limit(req.Params.Limit, pagination.DefaultLimit, pagination.MaxLimit)
+	rows, next, err := h.groups.Members(ctx, req.GroupId, limit, deref(req.Params.Cursor))
 	if err != nil {
 		return nil, err
 	}
-	out := make(api.AdminListGroupMembers200JSONResponse, 0, len(rows))
+	items := make([]api.GroupMember, 0, len(rows))
 	for _, m := range rows {
 		email := m.Email
-		out = append(out, api.GroupMember{
+		items = append(items, api.GroupMember{
 			UserId: m.ID, Username: m.Username, Email: &email, DisplayName: m.DisplayName,
 			MemberRole: api.GroupMemberMemberRole(m.MemberRole),
 		})
 	}
-	return out, nil
+	return api.AdminListGroupMembers200JSONResponse{Items: items, NextCursor: next}, nil
 }
 
 // AdminSetGroupMember implements PUT /admin/groups/{groupId}/members/{userId}.
@@ -619,22 +623,44 @@ func (h *HTTP) AdminListProfileVersions(ctx context.Context, req api.AdminListPr
 	if _, err := admin(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := h.profiles.Versions(ctx, req.ProfileId)
+	limit := pagination.Limit(req.Params.Limit, VersionsPageLimit, VersionsMaxLimit)
+	rows, next, err := h.profiles.Versions(ctx, req.ProfileId, limit, deref(req.Params.Cursor))
 	if err != nil {
 		return nil, err
 	}
-	out := make(api.AdminListProfileVersions200JSONResponse, 0, len(rows))
+	items := make([]api.ProfileVersionSummary, 0, len(rows))
 	for _, v := range rows {
-		locked := v.LockedKeys
-		if locked == nil {
-			locked = []string{}
-		}
-		out = append(out, api.ProfileVersion{
+		items = append(items, api.ProfileVersionSummary{
 			Version: int(v.Version), Name: v.Name, Description: v.Description, IsGlobal: v.IsGlobal,
-			Config: decodeConfig(v.Config), LockedKeys: locked, UpdatedBy: v.UpdatedBy, UpdatedAt: v.UpdatedAt,
+			UpdatedBy: v.UpdatedBy, UpdatedAt: v.UpdatedAt,
 		})
 	}
-	return out, nil
+	return api.AdminListProfileVersions200JSONResponse{Items: items, NextCursor: next}, nil
+}
+
+// The page size of the history of a profile (api/openapi.yaml, adminListProfileVersions).
+const (
+	VersionsPageLimit = 50
+	VersionsMaxLimit  = 200
+)
+
+// AdminGetProfileVersion implements GET /admin/config-profiles/{profileId}/versions/{version}.
+func (h *HTTP) AdminGetProfileVersion(ctx context.Context, req api.AdminGetProfileVersionRequestObject) (api.AdminGetProfileVersionResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	v, err := h.profiles.Version(ctx, req.ProfileId, clampInt32(req.Version))
+	if err != nil {
+		return nil, err
+	}
+	locked := v.LockedKeys
+	if locked == nil {
+		locked = []string{}
+	}
+	return api.AdminGetProfileVersion200JSONResponse{
+		Version: int(v.Version), Name: v.Name, Description: v.Description, IsGlobal: v.IsGlobal,
+		Config: decodeConfig(v.Config), LockedKeys: locked, UpdatedBy: v.UpdatedBy, UpdatedAt: v.UpdatedAt,
+	}, nil
 }
 
 // AdminRestoreProfileVersion implements POST /admin/config-profiles/{profileId}/versions/{version}:restore.

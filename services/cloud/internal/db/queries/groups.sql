@@ -6,9 +6,6 @@ INSERT INTO groups (id, name, description) VALUES ($1, $2, $3) RETURNING *;
 -- name: GetGroup :one
 SELECT * FROM groups WHERE id = $1;
 
--- name: ListGroups :many
-SELECT * FROM groups ORDER BY lower(name);
-
 -- name: UpdateGroup :one
 UPDATE groups SET name = $2, description = $3 WHERE id = $1 RETURNING *;
 
@@ -23,10 +20,15 @@ ON CONFLICT (group_id, user_id) DO UPDATE SET member_role = EXCLUDED.member_role
 DELETE FROM group_members WHERE group_id = $1 AND user_id = $2;
 
 -- name: ListGroupMembers :many
-SELECT u.id, u.username, u.email, u.display_name, m.member_role
+-- A page of the members of a group by username, after the position (lower
+-- username, user id) ending the previous page; sort_key is that position.
+SELECT u.id, u.username, u.email, u.display_name, m.member_role, lower(u.username)::text AS sort_key
 FROM group_members m JOIN users u ON u.id = m.user_id
-WHERE m.group_id = $1 AND u.status <> 'deleted'
-ORDER BY lower(u.username);
+WHERE m.group_id = sqlc.arg(group_id) AND u.status <> 'deleted'
+  AND (sqlc.narg(after_key)::text IS NULL
+       OR (lower(u.username), u.id) > (sqlc.narg(after_key)::text, sqlc.narg(after_id)::uuid))
+ORDER BY lower(u.username), u.id
+LIMIT sqlc.arg(max_rows)::int;
 
 -- name: ListGroupMemberIDs :many
 -- Every member of a group, whatever the state of their account (the users a

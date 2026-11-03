@@ -61,7 +61,7 @@ test('an administrator creates a user', async ({ page }) => {
   let users = [adminUser('u1', 'alice')];
   let created: unknown;
   await mockApi(page, {
-    'GET /admin/groups': [],
+    'GET /admin/groups': { items: [] },
     'GET /admin/users': () => ({ items: users, total: users.length }),
     'POST /admin/users': (_route: unknown, body: unknown) => {
       created = body;

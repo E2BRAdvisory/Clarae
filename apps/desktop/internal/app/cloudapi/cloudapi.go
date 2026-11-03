@@ -127,6 +127,17 @@ func SharesOf(ss []apiclient.Share) []Share {
 	return out
 }
 
+// SharePage is a page of shares (OpenAPI SharePage); NextCursor is absent on the last page.
+type SharePage struct {
+	Items      []Share `json:"items"`
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// SharePageOf is the DTO of a page of API shares (its items an empty list, never nil).
+func SharePageOf(p apiclient.SharePage) SharePage {
+	return SharePage{Items: SharesOf(p.Items), NextCursor: p.NextCursor}
+}
+
 // Grant is a recipient of a share (OpenAPI Grant).
 type Grant struct {
 	CreatedAt     time.Time                    `json:"created_at" ts_type:"string"`

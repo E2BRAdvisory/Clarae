@@ -624,6 +624,77 @@ func (q *Queries) ListReachOfUsers(ctx context.Context, arg ListReachOfUsersPara
 	return items, nil
 }
 
+const listReceivedShares = `-- name: ListReceivedShares :many
+SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at, v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
+FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
+WHERE s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > now()) AND v.deleted_at IS NULL
+  AND v.owner_id <> $1
+  AND s.id IN (SELECT g.share_id FROM share_grants g
+               WHERE (NOT $2::bool OR g.status = 'accepted')
+                 AND ((g.principal_type = 'user' AND g.principal_id = $1)
+                   OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $1))))
+  AND ($3::uuid IS NULL OR s.id < $3::uuid)
+ORDER BY s.id DESC
+LIMIT $4::int
+`
+
+type ListReceivedSharesParams struct {
+	UserID       uuid.UUID
+	AcceptedOnly bool
+	BeforeID     *uuid.UUID
+	MaxRows      int32
+}
+
+type ListReceivedSharesRow struct {
+	Share     Share
+	VaultName string
+	OwnerID   uuid.UUID
+	OwnerName string
+}
+
+// A page of the live, unexpired shares that reach a user directly or through a
+// group, on vaults someone else owns, newest first (by id, as
+// ListSharesOfVaultOwner), before the id ending the previous page: every
+// invitation, or with accepted_only the shares the user accepted (the mounts).
+func (q *Queries) ListReceivedShares(ctx context.Context, arg ListReceivedSharesParams) ([]ListReceivedSharesRow, error) {
+	rows, err := q.db.Query(ctx, listReceivedShares,
+		arg.UserID,
+		arg.AcceptedOnly,
+		arg.BeforeID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReceivedSharesRow{}
+	for rows.Next() {
+		var i ListReceivedSharesRow
+		if err := rows.Scan(
+			&i.Share.ID,
+			&i.Share.VaultID,
+			&i.Share.ResourceType,
+			&i.Share.PathPrefix,
+			&i.Share.FileID,
+			&i.Share.DisplayName,
+			&i.Share.CreatedBy,
+			&i.Share.CreatedAt,
+			&i.Share.ExpiresAt,
+			&i.Share.RevokedAt,
+			&i.VaultName,
+			&i.OwnerID,
+			&i.OwnerName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listShareRecipients = `-- name: ListShareRecipients :many
 SELECT DISTINCT u FROM (
   SELECT g.principal_id AS u FROM share_grants g WHERE g.share_id = $1 AND g.principal_type = 'user'
@@ -654,66 +725,28 @@ func (q *Queries) ListShareRecipients(ctx context.Context, shareID uuid.UUID) ([
 	return items, nil
 }
 
-const listSharesByIDs = `-- name: ListSharesByIDs :many
-SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at, v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
-FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
-WHERE s.id = ANY($1::uuid[])
-`
-
-type ListSharesByIDsRow struct {
-	Share     Share
-	VaultName string
-	OwnerID   uuid.UUID
-	OwnerName string
-}
-
-// The shares of a list with their vault and owner (ListReceived).
-func (q *Queries) ListSharesByIDs(ctx context.Context, ids []uuid.UUID) ([]ListSharesByIDsRow, error) {
-	rows, err := q.db.Query(ctx, listSharesByIDs, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSharesByIDsRow{}
-	for rows.Next() {
-		var i ListSharesByIDsRow
-		if err := rows.Scan(
-			&i.Share.ID,
-			&i.Share.VaultID,
-			&i.Share.ResourceType,
-			&i.Share.PathPrefix,
-			&i.Share.FileID,
-			&i.Share.DisplayName,
-			&i.Share.CreatedBy,
-			&i.Share.CreatedAt,
-			&i.Share.ExpiresAt,
-			&i.Share.RevokedAt,
-			&i.VaultName,
-			&i.OwnerID,
-			&i.OwnerName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSharesOfVaultOwner = `-- name: ListSharesOfVaultOwner :many
 SELECT s.id, s.vault_id, s.resource_type, s.path_prefix, s.file_id, s.display_name, s.created_by, s.created_at, s.expires_at, s.revoked_at, v.name AS vault_name, v.owner_id, COALESCE(u.username, '')::text AS owner_name
 FROM shares s JOIN vaults v ON v.id = s.vault_id LEFT JOIN users u ON u.id = v.owner_id
 WHERE s.revoked_at IS NULL AND v.deleted_at IS NULL
-  AND (v.owner_id = $1
-       OR s.created_by = $1
-       OR EXISTS (SELECT 1 FROM share_grants g
-                  WHERE g.share_id = s.id AND g.status = 'accepted' AND g.permission = 'manager'
-                    AND ((g.principal_type = 'user' AND g.principal_id = $1)
-                      OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $1)))))
-ORDER BY s.created_at DESC
+  AND s.id IN (SELECT so.id FROM shares so JOIN vaults vo ON vo.id = so.vault_id WHERE vo.owner_id = $1
+               UNION ALL
+               SELECT sc.id FROM shares sc WHERE sc.created_by = $1 AND sc.revoked_at IS NULL
+               UNION ALL
+               SELECT g.share_id FROM share_grants g
+               WHERE g.status = 'accepted' AND g.permission = 'manager'
+                 AND ((g.principal_type = 'user' AND g.principal_id = $1)
+                   OR (g.principal_type = 'group' AND g.principal_id IN (SELECT group_id FROM group_members WHERE user_id = $1))))
+  AND ($2::uuid IS NULL OR s.id < $2::uuid)
+ORDER BY s.id DESC
+LIMIT $3::int
 `
+
+type ListSharesOfVaultOwnerParams struct {
+	UserID   uuid.UUID
+	BeforeID *uuid.UUID
+	MaxRows  int32
+}
 
 type ListSharesOfVaultOwnerRow struct {
 	Share     Share
@@ -726,8 +759,12 @@ type ListSharesOfVaultOwnerRow struct {
 // a manager (ADR-0041 §8: the service keeps a created one only while the
 // creator still manages a share around it), with what a list shows of their
 // vault and owner (one query per list, not per share).
-func (q *Queries) ListSharesOfVaultOwner(ctx context.Context, userID uuid.UUID) ([]ListSharesOfVaultOwnerRow, error) {
-	rows, err := q.db.Query(ctx, listSharesOfVaultOwner, userID)
+// A page of them, newest first (by id: UUID v7, immutable and unique, so a
+// stable keyset position), before the id ending the previous page. The three
+// ways in are separate index lookups (vaults_owner_ix, shares_created_by_ix,
+// share_grants_principal_ix) rather than a filter over every share.
+func (q *Queries) ListSharesOfVaultOwner(ctx context.Context, arg ListSharesOfVaultOwnerParams) ([]ListSharesOfVaultOwnerRow, error) {
+	rows, err := q.db.Query(ctx, listSharesOfVaultOwner, arg.UserID, arg.BeforeID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}

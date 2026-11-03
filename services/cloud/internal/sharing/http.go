@@ -7,6 +7,7 @@ import (
 	"memobrain/services/cloud/internal/api"
 	"memobrain/services/cloud/internal/auth"
 	"memobrain/services/cloud/internal/httpproblem"
+	"memobrain/services/cloud/internal/pagination"
 	"memobrain/services/cloud/internal/sharing/sharingdb"
 	"memobrain/shared/syncproto"
 )
@@ -84,18 +85,24 @@ func (h *HTTP) ListShares(ctx context.Context, req api.ListSharesRequestObject) 
 		vs  []View
 		err error
 	)
+	limit := pagination.Limit(req.Params.Limit, pagination.DefaultLimit, pagination.MaxLimit)
+	cursor := ""
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	var next *string
 	switch req.Params.Scope {
 	case api.Owned:
-		vs, err = h.svc.ListOwned(ctx, user)
+		vs, next, err = h.svc.ListOwned(ctx, user, limit, cursor)
 	case api.Received:
-		vs, err = h.svc.ListReceived(ctx, user)
+		vs, next, err = h.svc.ListReceived(ctx, user, limit, cursor)
 	default:
 		return nil, httpproblem.Errorf(syncproto.CodeValidationFailed, "scope must be owned or received")
 	}
 	if err != nil {
 		return nil, err
 	}
-	return api.ListShares200JSONResponse(toShares(vs)), nil
+	return api.ListShares200JSONResponse{Items: toShares(vs), NextCursor: next}, nil
 }
 
 // CreateShare implements POST /shares.
@@ -191,8 +198,13 @@ func (h *HTTP) DeclineShare(ctx context.Context, req api.DeclineShareRequestObje
 }
 
 // ListSharedWithMe implements GET /shared-with-me.
-func (h *HTTP) ListSharedWithMe(ctx context.Context, _ api.ListSharedWithMeRequestObject) (api.ListSharedWithMeResponseObject, error) {
-	ms, err := h.svc.SharedWithMe(ctx, auth.MustPrincipal(ctx).UserID)
+func (h *HTTP) ListSharedWithMe(ctx context.Context, req api.ListSharedWithMeRequestObject) (api.ListSharedWithMeResponseObject, error) {
+	limit := pagination.Limit(req.Params.Limit, pagination.DefaultLimit, pagination.MaxLimit)
+	cursor := ""
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	ms, next, err := h.svc.SharedWithMe(ctx, auth.MustPrincipal(ctx).UserID, limit, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -203,5 +215,5 @@ func (h *HTTP) ListSharedWithMe(ctx context.Context, _ api.ListSharedWithMeReque
 			Permission: api.SharePermission(m.Permission.String()), Scope: m.Scope(), OwnerName: m.OwnerName, ExpiresAt: m.ExpiresAt,
 		})
 	}
-	return api.ListSharedWithMe200JSONResponse(out), nil
+	return api.ListSharedWithMe200JSONResponse{Items: out, NextCursor: next}, nil
 }

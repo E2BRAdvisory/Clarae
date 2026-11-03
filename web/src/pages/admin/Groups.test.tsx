@@ -52,7 +52,7 @@ describe('admin groups', () => {
       path: '/admin/groups',
       user: ADMIN,
       routes: {
-        'GET /admin/groups': [group],
+        'GET /admin/groups': { items: [group] },
         'POST /admin/groups': { ...group, id: 'new', name: 'Ops' },
       },
     });
@@ -72,6 +72,52 @@ describe('admin groups', () => {
     });
   });
 
+  it('reads the groups and the members a page at a time', async () => {
+    const user = userEvent.setup();
+    const second = { ...group, id: 'g2', name: 'Zeta' };
+    const { api } = renderApp({
+      path: '/admin/groups',
+      user: ADMIN,
+      routes: {
+        'GET /admin/groups': (c: RecordedCall) =>
+          c.query.get('cursor') === 'c1'
+            ? { items: [second] }
+            : { items: [group], next_cursor: 'c1' },
+      },
+    });
+    expect(await screen.findByRole('link', { name: 'Team' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Zeta' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(await screen.findByRole('link', { name: 'Zeta' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    const calls = api.called('GET', '/admin/groups');
+    expect(calls.map((c) => [c.query.get('limit'), c.query.get('cursor')])).toEqual([
+      ['100', null],
+      ['100', 'c1'],
+    ]);
+  });
+
+  it('reads the members of a group a page at a time', async () => {
+    const user = userEvent.setup();
+    renderApp({
+      path: `/admin/groups/${G}`,
+      user: ADMIN,
+      routes: {
+        [`GET /admin/groups/${G}`]: group,
+        [`GET /admin/groups/${G}/members`]: (c: RecordedCall) =>
+          c.query.get('cursor') === 'm1'
+            ? { items: [member(U2, 'bob')] }
+            : { items: [member(U1, 'alice')], next_cursor: 'm1' },
+        [`GET /admin/groups/${G}/config-profiles`]: [],
+        'GET /admin/config-profiles': [],
+      },
+    });
+    const members = await screen.findByRole('table', { name: 'Members' });
+    expect(within(members).getByText('Alice')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(await within(members).findByText('Bob')).toBeInTheDocument();
+  });
+
   it('adds a member found by search and removes another after confirmation', async () => {
     const user = userEvent.setup();
     let members = [member(U1, 'alice')];
@@ -80,7 +126,7 @@ describe('admin groups', () => {
       user: ADMIN,
       routes: {
         [`GET /admin/groups/${G}`]: group,
-        [`GET /admin/groups/${G}/members`]: () => members,
+        [`GET /admin/groups/${G}/members`]: () => ({ items: members }),
         [`GET /admin/groups/${G}/config-profiles`]: [],
         'GET /admin/config-profiles': [],
         'GET /admin/users': (c: RecordedCall) => ({
@@ -132,7 +178,7 @@ describe('admin groups', () => {
       user: ADMIN,
       routes: {
         [`GET /admin/groups/${G}`]: group,
-        [`GET /admin/groups/${G}/members`]: [member(U1, 'alice')],
+        [`GET /admin/groups/${G}/members`]: { items: [member(U1, 'alice')] },
         [`GET /admin/groups/${G}/config-profiles`]: [],
         'GET /admin/config-profiles': [],
         [`PUT /admin/groups/${G}/members/${U1}`]: () => undefined,
@@ -157,7 +203,7 @@ describe('admin groups', () => {
       user: ADMIN,
       routes: {
         [`GET /admin/groups/${G}`]: group,
-        [`GET /admin/groups/${G}/members`]: [],
+        [`GET /admin/groups/${G}/members`]: { items: [] },
         [`GET /admin/groups/${G}/config-profiles`]: [{ profile_id: P1, priority: 5 }],
         'GET /admin/config-profiles': [
           profile(P1, 'Base'),
@@ -206,7 +252,7 @@ describe('admin groups', () => {
       user: ADMIN,
       routes: {
         [`GET /admin/groups/${G}`]: group,
-        [`GET /admin/groups/${G}/members`]: [],
+        [`GET /admin/groups/${G}/members`]: { items: [] },
         [`GET /admin/groups/${G}/config-profiles`]: [{ profile_id: P1, priority: 1 }],
         'GET /admin/config-profiles': [profile(P1, 'Base')],
       },
@@ -226,10 +272,10 @@ describe('admin groups', () => {
       user: ADMIN,
       routes: {
         [`GET /admin/groups/${G}`]: group,
-        [`GET /admin/groups/${G}/members`]: [],
+        [`GET /admin/groups/${G}/members`]: { items: [] },
         [`GET /admin/groups/${G}/config-profiles`]: [],
         'GET /admin/config-profiles': [],
-        'GET /admin/groups': [],
+        'GET /admin/groups': { items: [] },
         [`DELETE /admin/groups/${G}`]: () => undefined,
       },
     });

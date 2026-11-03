@@ -52,6 +52,7 @@ func TestTypesMatchTheAPI(t *testing.T) {
 		{Device{}, apiclient.Device{}},
 		{Usage{}, apiclient.Usage{}},
 		{Share{}, apiclient.Share{}},
+		{SharePage{}, apiclient.SharePage{}},
 		{Grant{}, apiclient.Grant{}},
 		{NewGrant{}, apiclient.NewGrant{}},
 		{UpdateShare{}, apiclient.UpdateShare{}},
@@ -69,7 +70,7 @@ func TestTypesMatchTheAPI(t *testing.T) {
 // Every field Wails cannot type by itself (UUID, time, enum) names its TypeScript type, so that the
 // generated model is the Schema and not `number[]`, `any` or `string`.
 func TestFieldsWithoutATypeScriptTypeAreTagged(t *testing.T) {
-	for _, v := range []any{Vault{}, Device{}, Usage{}, Share{}, Grant{}, NewGrant{}, UpdateShare{}, DirectoryUser{}, DirectoryGroup{}} {
+	for _, v := range []any{Vault{}, Device{}, Usage{}, Share{}, SharePage{}, Grant{}, NewGrant{}, UpdateShare{}, DirectoryUser{}, DirectoryGroup{}} {
 		typ := reflect.TypeOf(v)
 		for i := range typ.NumField() {
 			f := typ.Field(i)

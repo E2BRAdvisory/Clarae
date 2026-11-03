@@ -535,8 +535,16 @@ export async function installCloudMock(
       }
       return ok({ results, last_seq: s.changes.length });
     },
-    listShares: (_p, url) =>
-      ok(url.searchParams.get('scope') === 'owned' ? ownedShares() : receivedShares()),
+    // A page as the server answers it (api/openapi.yaml, Pagination); the cursor is an index.
+    listShares: (_p, url) => {
+      const all = url.searchParams.get('scope') === 'owned' ? ownedShares() : receivedShares();
+      const limit = Number(url.searchParams.get('limit') ?? 100);
+      const from = Number(url.searchParams.get('cursor') ?? 0);
+      const items = all.slice(from, from + limit);
+      return ok(
+        from + limit < all.length ? { items, next_cursor: String(from + limit) } : { items },
+      );
+    },
     getShare: ({ shareId }) => {
       const s = state.shares.find((x) => x.id === shareId);
       return s ? ok(s) : notFound('share');
@@ -628,21 +636,26 @@ export async function installCloudMock(
       s.my_status = 'declined';
       return ok(s);
     },
-    listSharedWithMe: () =>
-      ok(
-        receivedShares()
-          .filter((s) => s.my_status === 'accepted')
-          .map((s) => ({
-            share_id: s.id,
-            vault_id: s.vault_id,
-            display_name: s.display_name,
-            resource_type: s.resource_type,
-            permission: s.my_permission ?? 'viewer',
-            scope: `share:${s.id}`,
-            owner_name: s.owner_name,
-            ...(s.expires_at ? { expires_at: s.expires_at } : {}),
-          })),
-      ),
+    listSharedWithMe: (_p, url) => {
+      const all = receivedShares()
+        .filter((s) => s.my_status === 'accepted')
+        .map((s) => ({
+          share_id: s.id,
+          vault_id: s.vault_id,
+          display_name: s.display_name,
+          resource_type: s.resource_type,
+          permission: s.my_permission ?? 'viewer',
+          scope: `share:${s.id}`,
+          owner_name: s.owner_name,
+          ...(s.expires_at ? { expires_at: s.expires_at } : {}),
+        }));
+      const limit = Number(url.searchParams.get('limit') ?? 100);
+      const from = Number(url.searchParams.get('cursor') ?? 0);
+      const items = all.slice(from, from + limit);
+      return ok(
+        from + limit < all.length ? { items, next_cursor: String(from + limit) } : { items },
+      );
+    },
     searchDirectoryUsers: (_p, url) => {
       const q = (url.searchParams.get('q') ?? '').toLowerCase();
       return ok(

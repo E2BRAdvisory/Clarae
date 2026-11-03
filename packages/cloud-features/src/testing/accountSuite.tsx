@@ -242,7 +242,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
         .then(() => null)
         .catch((e: unknown) => e);
       expect(errorCode(err)).toBe('VAULT_ENCRYPTED');
-      expect(await port.listShares('owned')).toEqual([]);
+      expect(await port.listShares('owned')).toEqual({ items: [] });
     });
 
     it('renames a share, sets its expiry, then removes it', async () => {
@@ -399,7 +399,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
       // The manager who made it manages it, but only the owner of the vault revokes it.
       expect(within(drafts).queryByRole('button', { name: /Revoke/ })).toBeNull();
       expect(drafts).toHaveTextContent('only its owner can revoke it');
-      const made = (await port.listShares('owned')).find((x) => x.display_name === 'Drafts');
+      const made = (await port.listShares('owned')).items.find((x) => x.display_name === 'Drafts');
       expect(made).toMatchObject({ owner_name: 'ada', my_permission: 'manager' });
 
       // The whole managed folder is fine too; outside it the server says no.
@@ -440,6 +440,41 @@ export function cloudAccountSuite(h: AccountHarness): void {
       expect(await card('Plans')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Handbook' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'New share' })).toBeNull();
+    });
+
+    // GET /shares is paginated (100 a page by default): the list grows a page at a time.
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => seedShare({ id: `s-${i}`, display_name: `Share ${i}` }));
+
+    it('reads the shares a page at a time', async () => {
+      await show({ vaults, owned: many(101) });
+      expect(await card('Share 99')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Share 100' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(await card('Share 100')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull());
+    });
+
+    it('reads every page for the shares of one vault', async () => {
+      const last = seedShare({
+        id: 's-last',
+        display_name: 'Plans',
+        vault_id: vaultId(1),
+        vault_name: 'Work',
+      });
+      await mount(
+        {
+          vaults: [
+            { name: 'Team', kind: 'shared' },
+            { name: 'Work', kind: 'shared' },
+          ],
+          owned: [...many(100), last],
+        },
+        (port) => <SharesManager port={port} lang="en" vaultId={vaultId(1)} canCreate={false} />,
+      );
+      expect(await card('Plans')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Share 0' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     });
   });
 
@@ -496,6 +531,21 @@ export function cloudAccountSuite(h: AccountHarness): void {
       );
       expect(await card('Budget')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Roadmap' })).toBeNull();
+    });
+
+    it('reads the received shares a page at a time', async () => {
+      const accepted = Array.from({ length: 101 }, (_, i) =>
+        invitation(`a-${i}`, `Mount ${i}`, { my_status: 'accepted' }),
+      );
+      await mount({ received: accepted }, (port) => <InvitationsList port={port} lang="en" />);
+      expect(await card('Mount 99')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Mount 100' })).toBeNull();
+      // An invitation could be on the next page: "none" would be a guess until it is read.
+      expect(screen.queryByText('No invitations.')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(await card('Mount 100')).toBeInTheDocument();
+      expect(screen.getByText('No invitations.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     });
   });
 

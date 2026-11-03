@@ -20,6 +20,7 @@ import {
   type NewShare,
   type PrincipalType,
   type Share,
+  type SharePage,
   type SharePermission,
   type ShareUpdate,
 } from '@memobrain/cloud-features/port';
@@ -83,8 +84,8 @@ export class CoreCloudPort implements CloudPort {
     return this.sync.usage();
   }
 
-  listShares(scope: 'owned' | 'received'): Promise<Share[]> {
-    return this.sharing.list(scope);
+  listShares(scope: 'owned' | 'received', cursor?: string): Promise<SharePage> {
+    return this.sharing.list(scope, cursor ?? '');
   }
 
   /** A share of a cloud vault or of one of its folders, without a local copy (CreateCloudShare). */

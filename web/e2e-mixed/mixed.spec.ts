@@ -389,7 +389,9 @@ test('a share made on the desktop is accepted, mounted and revoked in the browse
   await expect
     .poll(
       async () =>
-        (await api<{ id: string }[]>(page, 'GET', '/shares?scope=received')).map((s) => s.id),
+        (
+          await api<{ items: { id: string }[] }>(page, 'GET', '/shares?scope=received&limit=500')
+        ).items.map((s) => s.id),
       { timeout: 30_000 },
     )
     .toContain(share.id);

@@ -13,6 +13,7 @@ export { DevicesPanel, type DevicesPanelProps } from './DevicesPanel';
 export { UsagePanel, type UsagePanelProps } from './UsagePanel';
 export { MyGroups, type MyGroupsProps } from './MyGroups';
 export { SharesManager, isOwnerOf, type SharesManagerProps } from './sharing/SharesManager';
+export { useSharePages, type SharePagesOptions } from './sharing/useSharePages';
 export {
   InvitationsList,
   type InvitationsListProps,

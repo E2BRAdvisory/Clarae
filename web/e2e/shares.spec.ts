@@ -44,8 +44,9 @@ function shareServer() {
       items: [vault(V_SHARED, 'Team', 'shared'), vault(V_PRIVATE, 'Diary', 'private')],
       mounts: [],
     },
-    'GET /shares': (route: Route) =>
-      new URL(route.request().url()).searchParams.get('scope') === 'owned' ? owned : [],
+    'GET /shares': (route: Route) => ({
+      items: new URL(route.request().url()).searchParams.get('scope') === 'owned' ? owned : [],
+    }),
     'POST /shares': (_route: Route, body: Record<string, unknown>) => {
       const s: Share = {
         id: `s${owned.length + 1}`,

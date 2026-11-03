@@ -834,6 +834,14 @@ type Mount struct {
 	VaultId openapi_types.UUID `json:"vault_id"`
 }
 
+// MountPage defines model for MountPage.
+type MountPage struct {
+	Items []Mount `json:"items"`
+
+	// NextCursor Absent on the last page
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // NewGrant defines model for NewGrant.
 type NewGrant struct {
 	Permission    SharePermission       `json:"permission"`
@@ -921,6 +929,14 @@ type Share struct {
 	ResourceType ResourceType       `json:"resource_type"`
 	VaultId      openapi_types.UUID `json:"vault_id"`
 	VaultName    string             `json:"vault_name"`
+}
+
+// SharePage defines model for SharePage.
+type SharePage struct {
+	Items []Share `json:"items"`
+
+	// NextCursor Absent on the last page
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 // SharePermission defines model for SharePermission.
@@ -1017,6 +1033,12 @@ type GroupPathId = openapi_types.UUID
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
+// PageCursor defines model for PageCursor.
+type PageCursor = string
+
+// PageLimit defines model for PageLimit.
+type PageLimit = int
+
 // PrincipalId defines model for PrincipalId.
 type PrincipalId = openapi_types.UUID
 
@@ -1092,9 +1114,24 @@ type RegisterDeviceParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListSharedWithMeParams defines parameters for ListSharedWithMe.
+type ListSharedWithMeParams struct {
+	// Limit Page size (see Pagination)
+	Limit *PageLimit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The `next_cursor` of the previous page; omitted for the first page (see Pagination)
+	Cursor *PageCursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListSharesParams defines parameters for ListShares.
 type ListSharesParams struct {
 	Scope ListSharesParamsScope `form:"scope" json:"scope"`
+
+	// Limit Page size (see Pagination)
+	Limit *PageLimit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The `next_cursor` of the previous page; omitted for the first page (see Pagination)
+	Cursor *PageCursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // ListSharesParamsScope defines parameters for ListShares.
@@ -1387,10 +1424,14 @@ type ClientInterface interface {
 
 	// ListSharedWithMe Accepted shares to mount, with the scope to sync them
 	//
+	// Newest share first, keyset paginated (see Pagination). A client that reconciles its mounts with this list reads every page first: a share missing from a page it did not load is not a revoked share.
+	//
 	// Corresponds with GET /shared-with-me (the `ListSharedWithMe` operationId).
-	ListSharedWithMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListSharedWithMe(ctx context.Context, params *ListSharedWithMeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListShares Shares the caller owns or manages (`owned`) or was invited to (`received`)
+	//
+	// Newest share first, keyset paginated (see Pagination). `owned` lists the shares of the caller's vaults and those they manage; `received` the shares that reach them: pending invitations and accepted shares.
 	//
 	// Corresponds with GET /shares (the `ListShares` operationId).
 	ListShares(ctx context.Context, params *ListSharesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1895,9 +1936,11 @@ func (c *Client) Readyz(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 
 // ListSharedWithMe Accepted shares to mount, with the scope to sync them
 //
+// Newest share first, keyset paginated (see Pagination). A client that reconciles its mounts with this list reads every page first: a share missing from a page it did not load is not a revoked share.
+//
 // Corresponds with GET /shared-with-me (the `ListSharedWithMe` operationId).
-func (c *Client) ListSharedWithMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSharedWithMeRequest(c.Server)
+func (c *Client) ListSharedWithMe(ctx context.Context, params *ListSharedWithMeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSharedWithMeRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1909,6 +1952,8 @@ func (c *Client) ListSharedWithMe(ctx context.Context, reqEditors ...RequestEdit
 }
 
 // ListShares Shares the caller owns or manages (`owned`) or was invited to (`received`)
+//
+// Newest share first, keyset paginated (see Pagination). `owned` lists the shares of the caller's vaults and those they manage; `received` the shares that reach them: pending invitations and accepted shares.
 //
 // Corresponds with GET /shares (the `ListShares` operationId).
 func (c *Client) ListShares(ctx context.Context, params *ListSharesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3026,7 +3071,7 @@ func NewReadyzRequest(server string) (*http.Request, error) {
 }
 
 // NewListSharedWithMeRequest constructs an http.Request for the ListSharedWithMe method
-func NewListSharedWithMeRequest(server string) (*http.Request, error) {
+func NewListSharedWithMeRequest(server string, params *ListSharedWithMeParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3042,6 +3087,45 @@ func NewListSharedWithMeRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3086,6 +3170,30 @@ func NewListSharesRequest(server string, params *ListSharesParams) (*http.Reques
 			for _, qp := range strings.Split(queryFrag, "&") {
 				rawQueryFragments = append(rawQueryFragments, qp)
 			}
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
 		}
 
 		if encoded := queryValues.Encode(); encoded != "" {
@@ -4827,12 +4935,16 @@ type ClientWithResponsesInterface interface {
 
 	// ListSharedWithMeWithResponse Accepted shares to mount, with the scope to sync them
 	//
+	// Newest share first, keyset paginated (see Pagination). A client that reconciles its mounts with this list reads every page first: a share missing from a page it did not load is not a revoked share.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /shared-with-me (the `ListSharedWithMe` operationId).
-	ListSharedWithMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSharedWithMeReply, error)
+	ListSharedWithMeWithResponse(ctx context.Context, params *ListSharedWithMeParams, reqEditors ...RequestEditorFn) (*ListSharedWithMeReply, error)
 
 	// ListSharesWithResponse Shares the caller owns or manages (`owned`) or was invited to (`received`)
+	//
+	// Newest share first, keyset paginated (see Pagination). `owned` lists the shares of the caller's vaults and those they manage; `received` the shares that reach them: pending invitations and accepted shares.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6210,7 +6322,9 @@ type ListSharedWithMeReply struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]Mount
+	JSON200 *MountPage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthenticated
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -6222,8 +6336,13 @@ type ListSharedWithMeReply struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListSharedWithMeReply) GetJSON200() *[]Mount {
+func (r ListSharedWithMeReply) GetJSON200() *MountPage {
 	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListSharedWithMeReply) GetApplicationproblemJSON400() *ValidationFailed {
+	return r.ApplicationproblemJSON400
 }
 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -6281,7 +6400,7 @@ type ListSharesReply struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]Share
+	JSON200 *SharePage
 	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
@@ -6295,7 +6414,7 @@ type ListSharesReply struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListSharesReply) GetJSON200() *[]Share {
+func (r ListSharesReply) GetJSON200() *SharePage {
 	return r.JSON200
 }
 
@@ -9149,11 +9268,13 @@ func (c *ClientWithResponses) ReadyzWithResponse(ctx context.Context, reqEditors
 
 // ListSharedWithMeWithResponse Accepted shares to mount, with the scope to sync them
 //
+// Newest share first, keyset paginated (see Pagination). A client that reconciles its mounts with this list reads every page first: a share missing from a page it did not load is not a revoked share.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /shared-with-me (the `ListSharedWithMe` operationId).
-func (c *ClientWithResponses) ListSharedWithMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSharedWithMeReply, error) {
-	rsp, err := c.ListSharedWithMe(ctx, reqEditors...)
+func (c *ClientWithResponses) ListSharedWithMeWithResponse(ctx context.Context, params *ListSharedWithMeParams, reqEditors ...RequestEditorFn) (*ListSharedWithMeReply, error) {
+	rsp, err := c.ListSharedWithMe(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9161,6 +9282,8 @@ func (c *ClientWithResponses) ListSharedWithMeWithResponse(ctx context.Context, 
 }
 
 // ListSharesWithResponse Shares the caller owns or manages (`owned`) or was invited to (`received`)
+//
+// Newest share first, keyset paginated (see Pagination). `owned` lists the shares of the caller's vaults and those they manage; `received` the shares that reach them: pending invitations and accepted shares.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10824,11 +10947,18 @@ func ParseListSharedWithMeReply(rsp *http.Response) (*ListSharedWithMeReply, err
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Mount
+		var dest MountPage
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ValidationFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthenticated
@@ -10898,7 +11028,7 @@ func ParseListSharesReply(rsp *http.Response) (*ListSharesReply, error) {
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Share
+		var dest SharePage
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

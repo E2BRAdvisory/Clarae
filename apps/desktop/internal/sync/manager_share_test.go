@@ -76,10 +76,15 @@ func (ss *shareServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && path == "/shares":
-		if r.URL.Query().Get("scope") == "owned" {
-			reply(http.StatusOK, []any{shareJSON("Team", nil)})
-		} else {
-			reply(http.StatusOK, []any{shareJSON("Budget", map[string]any{"my_status": "pending", "my_permission": "editor"})})
+		switch q := r.URL.Query(); {
+		case q.Get("scope") == "owned" && q.Get("cursor") == "":
+			// The owned shares come in two pages, the first one empty (the server left out
+			// what the caller may not see): only the cursor ends a list.
+			reply(http.StatusOK, map[string]any{"items": []any{}, "next_cursor": "c1"})
+		case q.Get("scope") == "owned" && q.Get("cursor") == "c1":
+			reply(http.StatusOK, map[string]any{"items": []any{shareJSON("Team", nil)}})
+		default:
+			reply(http.StatusOK, map[string]any{"items": []any{shareJSON("Budget", map[string]any{"my_status": "pending", "my_permission": "editor"})}})
 		}
 	case r.Method == http.MethodGet && path == "/vaults/"+shareSharedVault:
 		reply(http.StatusOK, vault(shareSharedVault, "shared"))
@@ -108,18 +113,22 @@ func TestListSharesByScope(t *testing.T) {
 	ss, c := newShareServer(t)
 	m := lifecycleManager(t, c)
 	ctx := context.Background()
-	owned, err := m.ListShares(ctx, "owned")
-	if err != nil || len(owned) != 1 || owned[0].DisplayName != "Team" {
-		t.Fatalf("owned = %+v, %v", owned, err)
+	first, err := m.ListSharesPage(ctx, "owned", "")
+	if err != nil || len(first.Items) != 0 || first.NextCursor == nil || *first.NextCursor != "c1" {
+		t.Fatalf("owned, first page = %+v, %v", first, err)
 	}
-	received, err := m.ListShares(ctx, "received")
-	if err != nil || len(received) != 1 || received[0].DisplayName != "Budget" {
+	owned, err := m.ListSharesPage(ctx, "owned", *first.NextCursor)
+	if err != nil || len(owned.Items) != 1 || owned.Items[0].DisplayName != "Team" || owned.NextCursor != nil {
+		t.Fatalf("owned, last page = %+v, %v", owned, err)
+	}
+	received, err := m.ListSharesPage(ctx, "received", "")
+	if err != nil || len(received.Items) != 1 || received.Items[0].DisplayName != "Budget" {
 		t.Fatalf("received = %+v, %v", received, err)
 	}
-	if _, err := m.ListShares(ctx, "everything"); err == nil {
+	if _, err := m.ListSharesPage(ctx, "everything", ""); err == nil {
 		t.Fatal("an unknown scope must be refused")
 	}
-	if len(ss.calls) != 2 {
+	if len(ss.calls) != 3 {
 		t.Fatalf("an invalid scope must not reach the server: %v", ss.calls)
 	}
 }
@@ -205,7 +214,7 @@ func TestUpdateShareNameAndExpiry(t *testing.T) {
 func TestShareManagementNeedsSignIn(t *testing.T) {
 	m := NewManager(offlineSession{}, nil, zerolog.Nop(), nil)
 	ctx := context.Background()
-	if _, err := m.ListShares(ctx, "owned"); err == nil {
+	if _, err := m.ListSharesPage(ctx, "owned", ""); err == nil {
 		t.Fatal("ListShares signed out")
 	}
 	if _, err := m.CreateCloudShare(ctx, shareSharedVault, "", "x", nil, nil); err == nil {

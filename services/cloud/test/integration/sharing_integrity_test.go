@@ -52,7 +52,7 @@ func TestDeclinedInvitationIsAskedAgain(t *testing.T) {
 	if got := decode[shareView](t, resp); got["my_status"] != "declined" {
 		t.Fatalf("after a second decline: %v", got)
 	}
-	if r := decode[[]shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil)); len(r) != 0 {
+	if r := pageItems[shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil)); len(r) != 0 {
 		t.Fatalf("a declined invitation is not listed: %v", r)
 	}
 
@@ -62,7 +62,7 @@ func TestDeclinedInvitationIsAskedAgain(t *testing.T) {
 	if g := decode[map[string]any](t, resp); g["status"] != "pending" {
 		t.Fatalf("grant given again: %v", g)
 	}
-	r := decode[[]shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil))
+	r := pageItems[shareView](t, bob.json(http.MethodGet, "/shares?scope=received", nil))
 	if len(r) != 1 || r[0]["my_status"] != "pending" {
 		t.Fatalf("the new invitation: %v", r)
 	}
@@ -100,7 +100,7 @@ func TestGroupChangesSendShareEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectEvent(eveSub, notify.ShareGranted)
-	if m := decode[[]map[string]any](t, eve.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 1 {
+	if m := pageItems[map[string]any](t, eve.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 1 {
 		t.Fatalf("a new member mounts the accepted group share: %v", m)
 	}
 	// A change of role gives and takes nothing.
@@ -131,7 +131,7 @@ func TestGroupChangesSendShareEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectEvent(eveSub, notify.ShareRevoked)
-	if m := decode[[]map[string]any](t, eve.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 0 {
+	if m := pageItems[map[string]any](t, eve.json(http.MethodGet, "/shared-with-me", nil)); len(m) != 0 {
 		t.Fatalf("after the group went: %v", m)
 	}
 }
