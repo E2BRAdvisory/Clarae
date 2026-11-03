@@ -95,73 +95,8 @@ func (q *Queries) DeleteVaultRevisionsPage(ctx context.Context, arg DeleteVaultR
 	return items, nil
 }
 
-const getFile = `-- name: GetFile :one
-
-SELECT id, vault_id, path, path_key, kind, current_rev, current_seq, blob_hash, size, is_deleted, updated_at FROM files WHERE id = $1 AND vault_id = $2
-`
-
-type GetFileParams struct {
-	ID      uuid.UUID
-	VaultID uuid.UUID
-}
-
-// Queries of the revisions module (ADR-0033: one sqlc package per module).
-func (q *Queries) GetFile(ctx context.Context, arg GetFileParams) (File, error) {
-	row := q.db.QueryRow(ctx, getFile, arg.ID, arg.VaultID)
-	var i File
-	err := row.Scan(
-		&i.ID,
-		&i.VaultID,
-		&i.Path,
-		&i.PathKey,
-		&i.Kind,
-		&i.CurrentRev,
-		&i.CurrentSeq,
-		&i.BlobHash,
-		&i.Size,
-		&i.IsDeleted,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getRevision = `-- name: GetRevision :one
-SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of, conflict_of_file FROM file_revisions WHERE vault_id = $1 AND file_id = $2 AND rev_no = $3
-`
-
-type GetRevisionParams struct {
-	VaultID uuid.UUID
-	FileID  uuid.UUID
-	RevNo   int32
-}
-
-func (q *Queries) GetRevision(ctx context.Context, arg GetRevisionParams) (FileRevision, error) {
-	row := q.db.QueryRow(ctx, getRevision, arg.VaultID, arg.FileID, arg.RevNo)
-	var i FileRevision
-	err := row.Scan(
-		&i.ID,
-		&i.FileID,
-		&i.VaultID,
-		&i.Seq,
-		&i.RevNo,
-		&i.Op,
-		&i.Path,
-		&i.PrevPath,
-		&i.BlobHash,
-		&i.Size,
-		&i.BaseRev,
-		&i.AuthorID,
-		&i.DeviceID,
-		&i.OpID,
-		&i.ClientMtime,
-		&i.ServerTime,
-		&i.ConflictOf,
-		&i.ConflictOfFile,
-	)
-	return i, err
-}
-
 const listRevisions = `-- name: ListRevisions :many
+
 SELECT id, file_id, vault_id, seq, rev_no, op, path, prev_path, blob_hash, size, base_rev, author_id, device_id, op_id, client_mtime, server_time, conflict_of, conflict_of_file FROM file_revisions
 WHERE vault_id = $1 AND file_id = $2 AND ($3::int = 0 OR rev_no < $3::int)
 ORDER BY rev_no DESC LIMIT $4::int
@@ -174,6 +109,7 @@ type ListRevisionsParams struct {
 	MaxRows   int32
 }
 
+// Queries of the revisions module (ADR-0033: one sqlc package per module).
 func (q *Queries) ListRevisions(ctx context.Context, arg ListRevisionsParams) ([]FileRevision, error) {
 	rows, err := q.db.Query(ctx, listRevisions,
 		arg.VaultID,

@@ -10,20 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type File struct {
-	ID         uuid.UUID
-	VaultID    uuid.UUID
-	Path       string
-	PathKey    string
-	Kind       string
-	CurrentRev int32
-	CurrentSeq int64
-	BlobHash   *string
-	Size       int64
-	IsDeleted  bool
-	UpdatedAt  time.Time
-}
-
 type FileRevision struct {
 	ID             uuid.UUID
 	FileID         uuid.UUID

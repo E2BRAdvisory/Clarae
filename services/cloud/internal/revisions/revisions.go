@@ -22,6 +22,7 @@ import (
 	"memobrain/services/cloud/internal/db"
 	"memobrain/services/cloud/internal/httpproblem"
 	"memobrain/services/cloud/internal/revisions/revisionsdb"
+	syncmod "memobrain/services/cloud/internal/sync"
 	"memobrain/services/cloud/internal/vaults"
 	"memobrain/shared/syncproto"
 )
@@ -59,7 +60,7 @@ func (s *Service) readableFile(ctx context.Context, userID, vaultID uuid.UUID, s
 	if err != nil {
 		return nil, err
 	}
-	f, err := revisionsdb.New(s.db.Pool).GetFile(ctx, revisionsdb.GetFileParams{ID: fileID, VaultID: vaultID})
+	f, err := syncmod.GetFile(ctx, s.db.Pool, vaultID, fileID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && acc.Scope != nil && !acc.Scope.ContainsFile(f.ID, f.Path)) {
 		return nil, httpproblem.NotFound("file")
 	}
@@ -145,14 +146,14 @@ func (s *Service) Content(ctx context.Context, userID, vaultID uuid.UUID, scope 
 	if err != nil {
 		return nil, 0, err
 	}
-	r, err := revisionsdb.New(s.db.Pool).GetRevision(ctx, revisionsdb.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
+	row, err := syncmod.GetRevision(ctx, s.db.Pool, vaultID, fileID, rev)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, 0, httpproblem.NotFound("revision")
 	}
 	if err != nil {
 		return nil, 0, err
 	}
-	r, ok := project(sc, r)
+	r, ok := project(sc, revisionsdb.FileRevision(row))
 	if !ok {
 		return nil, 0, httpproblem.NotFound("revision")
 	}

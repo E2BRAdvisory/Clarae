@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -150,6 +151,90 @@ func TestModulesTouchOnlyTheirTables(t *testing.T) {
 	for mod := range owners {
 		if !seen[mod] {
 			t.Errorf("module %q is in the ownership map but has no queries/%s.sql", mod, mod)
+		}
+	}
+}
+
+// sharedQueries are the queries that more than one module defines, with the
+// modules allowed to hold a copy. A module that may import the owner calls
+// the owner's exported function instead (revisions uses sync.GetFile and
+// sync.GetRevision, privacy uses vaults.ListVaultIDsOfOwner); these copies
+// remain only where that import would be a cycle (ADR-0033): sync depends on
+// sharing, and sharing on notify, so neither sharing nor notify can call the
+// owner of the table.
+var sharedQueries = map[string][]string{
+	"CountFilesUnderPrefix": {"sharing", "sync"},
+	"GetFile":               {"sharing", "sync"},
+	"GetShare":              {"notify", "sharing"},
+	"ListShareRecipients":   {"notify", "sharing"},
+	"PathKeyTaken":          {"sharing", "sync"},
+}
+
+var (
+	queryHeader = regexp.MustCompile(`(?m)^-- name: (\w+) :\w+[ \t]*$`)
+	blankRun    = regexp.MustCompile(`\s+`)
+)
+
+// queryDefs returns, for each query name, the modules defining it and their
+// SQL text without comments and with whitespace collapsed.
+func queryDefs(t *testing.T) map[string]map[string]string {
+	t.Helper()
+	files, err := filepath.Glob("queries/*.sql")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no query files: %v", err)
+	}
+	defs := map[string]map[string]string{}
+	for _, f := range files {
+		mod := strings.TrimSuffix(filepath.Base(f), ".sql")
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(raw)
+		heads := queryHeader.FindAllStringSubmatchIndex(src, -1)
+		for i, h := range heads {
+			end := len(src)
+			if i+1 < len(heads) {
+				end = heads[i+1][0]
+			}
+			name := src[h[2]:h[3]]
+			body := strings.TrimSpace(blankRun.ReplaceAllString(sqlComment.ReplaceAllString(src[h[1]:end], ""), " "))
+			if defs[name] == nil {
+				defs[name] = map[string]string{}
+			}
+			if _, dup := defs[name][mod]; dup {
+				t.Errorf("%s defines query %s twice", f, name)
+			}
+			defs[name][mod] = body
+		}
+	}
+	return defs
+}
+
+// TestQueriesAreNotDuplicatedAcrossModules refuses a query defined in more
+// than one module file unless it is a declared shared copy, and then every
+// copy must be the same SQL: a change made to one copy only (a NOT
+// is_deleted filter, the LIKE escape) fails here.
+func TestQueriesAreNotDuplicatedAcrossModules(t *testing.T) {
+	defs := queryDefs(t)
+	for name, byMod := range defs {
+		if len(byMod) < 2 {
+			continue
+		}
+		mods := slices.Sorted(maps.Keys(byMod))
+		if !slices.Equal(mods, sharedQueries[name]) {
+			t.Errorf("query %s is defined in %v: call the owner's exported function instead (ADR-0033), or declare the copy in sharedQueries", name, mods)
+			continue
+		}
+		for _, m := range mods[1:] {
+			if byMod[m] != byMod[mods[0]] {
+				t.Errorf("query %s differs between queries/%s.sql and queries/%s.sql: keep the copies identical", name, mods[0], m)
+			}
+		}
+	}
+	for name, mods := range sharedQueries {
+		if got := slices.Sorted(maps.Keys(defs[name])); !slices.Equal(got, mods) {
+			t.Errorf("sharedQueries[%s] = %v, but the query is defined in %v: update the list", name, mods, got)
 		}
 	}
 }

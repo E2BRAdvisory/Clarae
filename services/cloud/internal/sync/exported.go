@@ -18,7 +18,20 @@ import (
 // Types of the exported queries.
 type (
 	ListExportFilesRow = syncdb.ListExportFilesRow
+	File               = syncdb.File
+	FileRevision       = syncdb.FileRevision
 )
+
+// GetFile runs the GetFile query on tx: the file row, deleted or not, if it
+// belongs to the vault.
+func GetFile(ctx context.Context, tx db.DBTX, vaultID, fileID uuid.UUID) (File, error) {
+	return syncdb.New(tx).GetFile(ctx, syncdb.GetFileParams{ID: fileID, VaultID: vaultID})
+}
+
+// GetRevision runs the GetRevision query on tx: revision rev of a file.
+func GetRevision(ctx context.Context, tx db.DBTX, vaultID, fileID uuid.UUID, rev int32) (FileRevision, error) {
+	return syncdb.New(tx).GetRevision(ctx, syncdb.GetRevisionParams{VaultID: vaultID, FileID: fileID, RevNo: rev})
+}
 
 // ListExportFiles runs the ListExportFiles query on tx.
 func ListExportFiles(ctx context.Context, tx db.DBTX, vaultID uuid.UUID) ([]ListExportFilesRow, error) {

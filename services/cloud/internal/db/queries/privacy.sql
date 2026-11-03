@@ -1,11 +1,5 @@
 -- Queries of the privacy module (ADR-0033: one sqlc package per module).
 
--- name: ListVaultIDsOfOwner :many
--- Every vault of the account, deleted ones included, in the order their row
--- locks are taken (account deletion locks them before the user row, as a
--- commit does: vault first, then the owner's usage).
-SELECT id FROM vaults WHERE owner_id = $1 ORDER BY id;
-
 -- name: TombstoneUser :one
 -- Replaces every personal field by a tombstone; ids, role and timestamps stay so audit
 -- rows and revisions keep pointing at a valid row. Idempotent.

@@ -31,8 +31,10 @@ SELECT * FROM vaults WHERE id = $1;
 
 -- name: ListVaultIDsOfOwner :many
 -- Every vault of an owner, soft-deleted ones included (their blobs still
--- take space until the purge): the scope of the upload quota check.
-SELECT id FROM vaults WHERE owner_id = $1;
+-- take space until the purge): the scope of the upload quota check, and of
+-- an account deletion, which locks the rows in this order (vault first, then
+-- the owner's usage, as a commit does).
+SELECT id FROM vaults WHERE owner_id = $1 ORDER BY id;
 
 -- name: ListOwnedVaults :many
 SELECT * FROM vaults WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY lower(name), created_at;

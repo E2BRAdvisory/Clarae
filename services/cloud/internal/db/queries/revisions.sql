@@ -1,11 +1,5 @@
 -- Queries of the revisions module (ADR-0033: one sqlc package per module).
 
--- name: GetFile :one
-SELECT * FROM files WHERE id = $1 AND vault_id = $2;
-
--- name: GetRevision :one
-SELECT * FROM file_revisions WHERE vault_id = $1 AND file_id = $2 AND rev_no = $3;
-
 -- name: ListRevisions :many
 SELECT * FROM file_revisions
 WHERE vault_id = $1 AND file_id = $2 AND (sqlc.arg(before_rev)::int = 0 OR rev_no < sqlc.arg(before_rev)::int)

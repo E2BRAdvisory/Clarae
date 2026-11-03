@@ -285,35 +285,6 @@ func (q *Queries) ListSharesOfUserExport(ctx context.Context, createdBy uuid.UUI
 	return items, nil
 }
 
-const listVaultIDsOfOwner = `-- name: ListVaultIDsOfOwner :many
-
-SELECT id FROM vaults WHERE owner_id = $1 ORDER BY id
-`
-
-// Queries of the privacy module (ADR-0033: one sqlc package per module).
-// Every vault of the account, deleted ones included, in the order their row
-// locks are taken (account deletion locks them before the user row, as a
-// commit does: vault first, then the owner's usage).
-func (q *Queries) ListVaultIDsOfOwner(ctx context.Context, ownerID uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listVaultIDsOfOwner, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listVaultsOfOwnerExport = `-- name: ListVaultsOfOwnerExport :many
 SELECT id, name, kind, total_bytes, file_count, created_at, deleted_at
 FROM vaults WHERE owner_id = $1 ORDER BY created_at
@@ -402,6 +373,7 @@ func (q *Queries) RevokeDevicesOfUser(ctx context.Context, userID uuid.UUID) err
 }
 
 const tombstoneUser = `-- name: TombstoneUser :one
+
 UPDATE users SET
   status       = 'deleted',
   deleted_at   = COALESCE(deleted_at, now()),
@@ -413,6 +385,7 @@ WHERE id = $1
 RETURNING id, keycloak_sub, username, email, display_name, role, status, quota_bytes_override, used_bytes, created_at, updated_at, last_login_at, deleted_at, purged_at, role_changed_at
 `
 
+// Queries of the privacy module (ADR-0033: one sqlc package per module).
 // Replaces every personal field by a tombstone; ids, role and timestamps stay so audit
 // rows and revisions keep pointing at a valid row. Idempotent.
 func (q *Queries) TombstoneUser(ctx context.Context, id uuid.UUID) (User, error) {

@@ -288,7 +288,7 @@ type Deletion struct {
 // and publishes nothing else.
 func DeleteAccount(ctx context.Context, tx pgx.Tx, userID uuid.UUID, check func(cur users.User, privateVaults int) error) (Deletion, error) {
 	q := privacydb.New(tx)
-	ids, err := q.ListVaultIDsOfOwner(ctx, userID)
+	ids, err := vaults.ListVaultIDsOfOwner(ctx, tx, userID)
 	if err != nil {
 		return Deletion{}, err
 	}

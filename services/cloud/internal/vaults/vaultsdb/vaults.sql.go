@@ -380,11 +380,13 @@ func (q *Queries) ListTreePage(ctx context.Context, arg ListTreePageParams) ([]L
 }
 
 const listVaultIDsOfOwner = `-- name: ListVaultIDsOfOwner :many
-SELECT id FROM vaults WHERE owner_id = $1
+SELECT id FROM vaults WHERE owner_id = $1 ORDER BY id
 `
 
 // Every vault of an owner, soft-deleted ones included (their blobs still
-// take space until the purge): the scope of the upload quota check.
+// take space until the purge): the scope of the upload quota check, and of
+// an account deletion, which locks the rows in this order (vault first, then
+// the owner's usage, as a commit does).
 func (q *Queries) ListVaultIDsOfOwner(ctx context.Context, ownerID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listVaultIDsOfOwner, ownerID)
 	if err != nil {

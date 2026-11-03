@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -127,8 +126,6 @@ func parseUUID(s string) (openapi_types.UUID, error) {
 	var id openapi_types.UUID
 	return id, id.UnmarshalText([]byte(s))
 }
-
-var _ = time.Time{}
 
 func scopeOf(p *string) string {
 	if p == nil {
