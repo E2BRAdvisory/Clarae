@@ -13,6 +13,7 @@ import (
 
 	"memobrain/apps/desktop/internal/app"
 	"memobrain/apps/desktop/internal/rpc"
+	"memobrain/apps/desktop/internal/telemetry"
 )
 
 const (
@@ -136,6 +137,7 @@ func install(a *app.App, d *rpc.Dispatcher) {
 func main() {
 	cfg := readConfig()
 	logger := zerolog.New(consoleWriter{}).Level(cfg.logLevel).With().Timestamp().Logger()
+	telemetry.RouteSlog(logger)
 	a := app.New(app.Options{DataDir: cfg.dataDir, Logger: logger, Version: cfg.version})
 	d, err := newDispatcher(a)
 	if err != nil {

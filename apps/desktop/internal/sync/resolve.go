@@ -115,15 +115,19 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 		return err
 	}
 
-	// A move that did not touch the content simply receives the new content.
-	if row.State == StateLocalMoved && !row.Dirty {
+	// No local edit (a move that did not touch the content, or a row that a
+	// remote move settled while this change was parked): the file simply
+	// receives the new content, no merge (nor base revision) needed.
+	if local.Hash == row.LocalHash && ((row.State == StateLocalMoved && !row.Dirty) || row.State == StateSynced) {
 		cont, err := e.cfg.FS.WriteFile(row.Path, remote, local.Hash, false)
 		if errors.Is(err, vault.ErrHashMismatch) {
-			row.Dirty = true
-			if err := e.cfg.DB.PutFile(ctx, row); err != nil {
-				return err
+			if row.State == StateLocalMoved {
+				row.Dirty = true
+				if err := e.cfg.DB.PutFile(ctx, row); err != nil {
+					return err
+				}
 			}
-			return errRetryLater // now a modification: merged next round
+			return errRetryLater // now a modification: rescanned and merged next round
 		}
 		if err != nil {
 			return err

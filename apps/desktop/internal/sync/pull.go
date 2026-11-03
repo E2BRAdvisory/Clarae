@@ -621,6 +621,17 @@ func (e *Engine) overwriteFromRemote(ctx context.Context, row File, c transport.
 	return true, e.cfg.DB.PutFile(ctx, row)
 }
 
+// contentParked reports whether a remote change of fileID older than rev is
+// parked as a candidate. A move that settles the row (a local move made
+// elsewhere too, or one the server's overrides) must then leave BaseRev where
+// it is: moving it to the move's revision would make resolveCandidates take
+// the parked content change for applied, and this device would keep its old
+// content.
+func (e *Engine) contentParked(fileID string, rev int) bool {
+	c, ok := e.candidates[fileID]
+	return ok && c.Rev < rev
+}
+
 func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.Change, newPath string) (bool, error) {
 	if !has {
 		return true, e.createFromRemote(ctx, c, newPath)
@@ -634,7 +645,7 @@ func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.
 			settleMoved(&row)
 			row.Attempts, row.LastError = 0, ""
 		}
-		if row.State == StateSynced {
+		if row.State == StateSynced && !e.contentParked(row.FileID, c.Rev) {
 			row.BaseRev = c.Rev
 		}
 		return true, e.cfg.DB.PutFile(ctx, row)
@@ -672,7 +683,7 @@ func (e *Engine) applyMove(ctx context.Context, row File, has bool, c transport.
 		if st, err := os.Stat(e.absPath(row.Path)); err == nil {
 			row.LocalMtime = st.ModTime().UnixNano()
 		}
-		if row.State == StateSynced {
+		if row.State == StateSynced && !e.contentParked(row.FileID, c.Rev) {
 			row.BaseRev = c.Rev // a move leaves the content as the server has it
 		}
 		return true, e.cfg.DB.PutFile(ctx, row)

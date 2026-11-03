@@ -8,6 +8,7 @@ shared/conformance/
 ├── merge/           # <caso>/{base,ours,theirs,expected}.md (+ meta.json)  — da M2
 ├── crypto/          # vectors.json                        — da M2 (§3.8.7)
 ├── passphrase/      # policy.json: politica della passphrase (§3.8.2), core Go e strength.ts
+├── links/           # resolve.json: risoluzione dei link, core Go (links) e mock dei binding del workbench
 └── ts/              # pacchetto @memobrain/conformance: tipi e loader per i test TS
 ```
 

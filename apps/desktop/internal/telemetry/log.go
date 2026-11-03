@@ -1,5 +1,5 @@
-// Package telemetry configures structured logging to a rotating file in the
-// application data directory. Crash reports (opt-in) are added in M7.
+//go:build !js
+
 package telemetry
 
 import (

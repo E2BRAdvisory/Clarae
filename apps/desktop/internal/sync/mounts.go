@@ -224,16 +224,33 @@ func (m *Manager) UpdateMount(ctx context.Context, localID string, mm MountMeta)
 	return m.activate(ctx, mv) // stops the running engine and waits for it first
 }
 
-// markRevoked stops a mount whose share is gone and tells the UI.
+// markRevoked stops a mount whose share is gone and tells the UI. The status keeps the copy's
+// counts: what was not uploaded stays in the folder, and a status with zero counts would read as
+// "nothing pending" (the web workbench's marker follows them, and decides by them whether the copy
+// may be removed without asking).
 func (m *Manager) markRevoked(ctx context.Context, mv *managed) {
-	_ = mv.db.SetMeta(context.WithoutCancel(ctx), MetaRevoked, "1")
+	ctx = context.WithoutCancel(ctx)
+	_ = mv.db.SetMeta(ctx, MetaRevoked, "1")
 	m.mu.Lock()
 	m.stopLocked(mv) // no wait: this may run on the loop itself, which returns right after
+	eng := mv.engine
 	m.mu.Unlock()
-	name, _ := mv.db.Meta(context.WithoutCancel(ctx), MetaMountName)
-	share, _ := mv.db.Meta(context.WithoutCancel(ctx), MetaShareID)
+	name, _ := mv.db.Meta(ctx, MetaMountName)
+	share, _ := mv.db.Meta(ctx, MetaShareID)
+	st := Status{VaultID: mv.localID, Phase: PhaseError, Kind: "shared", Error: "this share was revoked"}
+	if eng != nil {
+		// The last cycle's figures, for what cannot be counted again below.
+		last := eng.Status()
+		st.Pending, st.Conflicts, st.Quarantined, st.LastSync = last.Pending, last.Conflicts, last.Quarantined, last.LastSync
+	}
+	if n, err := mv.db.PendingCount(ctx); err == nil {
+		st.Pending = n
+	}
+	if n, err := mv.db.OpenConflictCount(ctx); err == nil {
+		st.Conflicts = n
+	}
 	EventMountRevoked.Send(m.emit, MountRevoked{VaultID: mv.localID, ShareID: share, Name: name})
-	EventStatus.Send(m.emit, Status{VaultID: mv.localID, Phase: PhaseError, Kind: "shared", Error: "this share was revoked"})
+	EventStatus.Send(m.emit, st)
 }
 
 // shareGone confirms that the share of a mount is gone after a cycle failed with a NOT_FOUND

@@ -329,6 +329,31 @@ func TestMountRevokedOnlyWhenTheShareIsGone(t *testing.T) {
 	}
 }
 
+// The status a revocation sends keeps the copy's counts: a note written in the mount and never
+// uploaded is still pending (zero counts would let the web marker take the copy for clean).
+func TestMountRevokedStatusKeepsThePendingCount(t *testing.T) {
+	cloud, sess := newAccountCloud(t)
+	cloud.set(map[string]bool{}, nil) // the share is already gone
+	rec := &recorder{}
+	m := NewManager(sess, nil, zerolog.Nop(), rec.emit)
+	rem := &pullRemote{}
+	rem.gone.Store(true)
+	m.remoteFor = func(string) Remote { return rem }
+	dir := t.TempDir()
+	fs := mountAt(t, dir, mountShareA, lifeOwner)
+	if err := os.WriteFile(filepath.Join(dir, "draft.md"), []byte("# not uploaded\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	attach(t, m, "mount", fs)
+
+	waitTill(t, "the revocation", func() bool { return rec.count(EventMountRevoked.Name()) == 1 })
+	revokedStatus := func(s Status) bool { return s.VaultID == "mount" && s.Error == "this share was revoked" }
+	waitTill(t, "the status of the revocation", func() bool { return rec.status(revokedStatus) })
+	if rec.status(func(s Status) bool { return revokedStatus(s) && s.Pending != 1 }) {
+		t.Fatalf("revocation statuses %+v: want the draft still pending", rec.statuses)
+	}
+}
+
 // After a switch of account, the open mount of the first account is not revoked by the NOT_FOUND
 // the other account gets for its share.
 func TestMountOfAnotherAccountIsNotRevokedByTheLoop(t *testing.T) {

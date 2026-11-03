@@ -53,6 +53,7 @@ func run() int {
 		return 1
 	}
 	defer func() { _ = closer.Close() }()
+	telemetry.RouteSlog(logger)
 
 	a := app.New(app.Options{DataDir: dataDir, Logger: logger, Version: Version})
 

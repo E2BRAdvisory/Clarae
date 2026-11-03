@@ -1,0 +1,146 @@
+{
+  "description": "Link resolution: the vault (notes with their frontmatter aliases, attachments) and, for each link target written in a note, the file it resolves to (\"\" when unresolved). Run by apps/desktop/internal/links (the core, through the indexer) and by the Wails mock of the workbench (packages/workbench/src/test/wails-mock), which the e2e suites run on.",
+  "files": [
+    { "path": "Index.md" },
+    { "path": "Gamma.md" },
+    { "path": "Notes/Alpha.md" },
+    { "path": "Notes/Sub/Alpha.md" },
+    { "path": "Notes/Sub/Other.md" },
+    { "path": "Archive/Alpha.md" },
+    { "path": "Archive/Note.md" },
+    { "path": "Projects/Beta.md", "aliases": ["B", "Second Brain"] },
+    { "path": "Projects/Deep/Gamma.md" },
+    { "path": "Other/B.md" },
+    { "path": "A/Delta.md" },
+    { "path": "C/Delta.md" },
+    { "path": "X/One.md", "aliases": ["Shared"] },
+    { "path": "Y/Long/Two.md", "aliases": ["Shared"] },
+    { "path": "Y/Long/Note.md" },
+    { "path": "Attachments/diagram.png" },
+    { "path": "Notes/diagram.png" },
+    { "path": "Files/report.pdf" }
+  ],
+  "cases": [
+    {
+      "note": "empty target: the note itself ([[#Heading]])",
+      "from": "Notes/Sub/Other.md",
+      "target": "",
+      "expected": "Notes/Sub/Other.md"
+    },
+    {
+      "note": "exact vault path without .md",
+      "from": "Index.md",
+      "target": "Notes/Alpha",
+      "expected": "Notes/Alpha.md"
+    },
+    {
+      "note": "exact vault path, any case, with .md",
+      "from": "Index.md",
+      "target": "notes/sub/ALPHA.md",
+      "expected": "Notes/Sub/Alpha.md"
+    },
+    {
+      "note": "a leading slash is the vault root",
+      "from": "Projects/Deep/Gamma.md",
+      "target": "/Gamma",
+      "expected": "Gamma.md"
+    },
+    {
+      "note": "the source folder before the shortest path",
+      "from": "Notes/Sub/Other.md",
+      "target": "Alpha",
+      "expected": "Notes/Sub/Alpha.md"
+    },
+    {
+      "note": "the source folder before the shortest path (another folder)",
+      "from": "Archive/Note.md",
+      "target": "Alpha",
+      "expected": "Archive/Alpha.md"
+    },
+    {
+      "note": "shortest path by name",
+      "from": "Index.md",
+      "target": "Alpha",
+      "expected": "Notes/Alpha.md"
+    },
+    {
+      "note": "trailing path segments narrow the name",
+      "from": "Index.md",
+      "target": "Sub/Alpha",
+      "expected": "Notes/Sub/Alpha.md"
+    },
+    {
+      "note": "trailing segments that match no file",
+      "from": "Index.md",
+      "target": "Nowhere/Alpha",
+      "expected": ""
+    },
+    {
+      "note": "equal lengths: alphabetical order",
+      "from": "Index.md",
+      "target": "Delta",
+      "expected": "A/Delta.md"
+    },
+    {
+      "note": "explicitly relative, up one folder",
+      "from": "Notes/Sub/Other.md",
+      "target": "../Alpha",
+      "expected": "Notes/Alpha.md"
+    },
+    {
+      "note": "explicitly relative, same folder",
+      "from": "Notes/Sub/Other.md",
+      "target": "./Alpha.md",
+      "expected": "Notes/Sub/Alpha.md"
+    },
+    {
+      "note": "explicitly relative resolves from the source folder only",
+      "from": "Index.md",
+      "target": "./Alpha",
+      "expected": ""
+    },
+    {
+      "note": "alias, any case",
+      "from": "Index.md",
+      "target": "second brain",
+      "expected": "Projects/Beta.md"
+    },
+    {
+      "note": "a note name wins over an alias",
+      "from": "Index.md",
+      "target": "B",
+      "expected": "Other/B.md"
+    },
+    {
+      "note": "alias shared by two notes: the source folder wins over the shorter path",
+      "from": "Y/Long/Note.md",
+      "target": "Shared",
+      "expected": "Y/Long/Two.md"
+    },
+    {
+      "note": "alias shared by two notes: otherwise the shortest path",
+      "from": "Index.md",
+      "target": "Shared",
+      "expected": "X/One.md"
+    },
+    {
+      "note": "attachment by name, with its extension: shortest path",
+      "from": "Index.md",
+      "target": "diagram.png",
+      "expected": "Notes/diagram.png"
+    },
+    {
+      "note": "attachment by vault path",
+      "from": "Index.md",
+      "target": "Attachments/diagram.png",
+      "expected": "Attachments/diagram.png"
+    },
+    {
+      "note": "attachment without its extension does not resolve",
+      "from": "Index.md",
+      "target": "report",
+      "expected": ""
+    },
+    { "note": "ghost note", "from": "Index.md", "target": "Missing", "expected": "" }
+  ]
+}

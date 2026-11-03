@@ -9,6 +9,7 @@ package sync
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -143,6 +144,37 @@ func TestMovedAndEditedFileDeletedElsewhereIsRevived(t *testing.T) {
 	}
 	if got := diskFiles(t, adir); got["renamed.md"] != "# note\nedited on A\n" || len(got) != 1 {
 		t.Fatalf("A has %v", got)
+	}
+}
+
+// Moved on this device while another edited the file and then moved it too:
+// the edit is parked as a candidate (the row is a local move), and the remote
+// move settles the local one. The parked edit must still reach this device,
+// whether the other device moved the file to the same place or elsewhere.
+func TestRemoteMoveKeepsAParkedEdit(t *testing.T) {
+	for name, there := range map[string]string{"same path": "new.md", "other path": "elsewhere.md"} {
+		t.Run(name, func(t *testing.T) {
+			s := newFolderServer()
+			a, adir, b, bdir := twoDevices(t, s, map[string]string{"note.md": "# note\n"})
+
+			mustRename(t, adir, "note.md", "new.md")
+			scanNow(t, a) // A is offline: the move is not sent yet
+
+			put(t, bdir, "note.md", "# note\nedited on B\n")
+			syncOK(t, b)
+			mustRename(t, bdir, "note.md", there)
+			syncOK(t, b)
+
+			syncOK(t, a)
+			syncOK(t, b)
+			allSynced(t, a)
+			want := map[string]string{there: "# note\nedited on B\n"}
+			for dev, dir := range map[string]string{"A": adir, "B": bdir} {
+				if got := diskFiles(t, dir); !maps.Equal(got, want) {
+					t.Errorf("%s has %v, want %v", dev, got, want)
+				}
+			}
+		})
 	}
 }
 

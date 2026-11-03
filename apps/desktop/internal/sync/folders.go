@@ -610,7 +610,7 @@ func (e *Engine) renameFolder(ctx context.Context, p prefixPair, run []remoteMov
 		for _, m := range run {
 			row := m.row
 			row.Path, row.ServerRev, row.MovedFrom = m.path, m.c.Rev, ""
-			if row.State == StateSynced {
+			if row.State == StateSynced && !e.contentParked(row.FileID, m.c.Rev) {
 				row.BaseRev = m.c.Rev // a move leaves the content as the server has it
 			}
 			if st, err := os.Stat(e.absPath(row.Path)); err == nil {
