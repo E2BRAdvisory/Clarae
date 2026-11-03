@@ -4,7 +4,6 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import 'katex/dist/katex.min.css';
 import { App } from './app/App';
 import { api } from './app/api';
-import { ConnectWizard } from './sync/ConnectWizard';
 import { useAppStore } from './state/store';
 import { flushWorkbench, installLifecycle } from './app/lifecycle';
 import { initI18n } from './i18n';
@@ -12,6 +11,7 @@ import { configurePlatform, type PlatformOptions } from './platform';
 import { queryClient } from './state/queryClient';
 import { installLinkGuard } from './util/links';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { importWithRetry } from './ui/lazyView';
 import './style.css';
 
 export type WorkbenchOptions = PlatformOptions;
@@ -86,7 +86,12 @@ export async function mountCreateCloudVault(
 ): Promise<() => void> {
   configurePlatform({ kind: 'web' });
   initI18n();
-  useAppStore.getState().setAuth(await api.auth.status());
+  // The wizard is not part of the workbench's startup bundle (SyncDialogs loads it on demand too).
+  const [{ ConnectWizard }, auth] = await Promise.all([
+    importWithRetry(() => import('./sync/ConnectWizard')),
+    api.auth.status(),
+  ]);
+  useAppStore.getState().setAuth(auth);
   const r = createRoot(root);
   r.render(
     <StrictMode>

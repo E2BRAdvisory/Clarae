@@ -147,7 +147,7 @@ func flagOr(v *bool, flag string) bool {
 // NewManager creates a manager.
 func NewManager(o Options) *Manager {
 	if o.Store == nil {
-		o.Store = KeychainStore{}
+		o.Store = defaultStore()
 	}
 	if o.Now == nil {
 		o.Now = time.Now

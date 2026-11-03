@@ -28,7 +28,6 @@ import (
 	"memobrain/apps/desktop/internal/store"
 	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/updater"
 	"memobrain/apps/desktop/internal/vault"
 	"memobrain/apps/desktop/internal/watcher"
 	"memobrain/shared/pathrules"
@@ -62,8 +61,7 @@ type App struct {
 	vaults    map[string]*openVault
 	opening   map[string]*vaultOpening // opens in progress, by vault id (guarded by mu)
 	pending   []string                 // memobrain:// URLs received before the frontend was ready
-	updater   *updater.Service
-	updaterMu sync.Mutex
+	updates   updaterState             // the update channel (none in the browser build)
 	// reconciler runs the reconciles of the mounts one at a time (requestReconcile).
 	reconciler coalescer
 }

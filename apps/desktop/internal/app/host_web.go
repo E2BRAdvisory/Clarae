@@ -25,6 +25,9 @@ const isWeb = true
 // defaultHost talks to the page hosting the Go core.
 func defaultHost() Host { return webHost{} }
 
+// systemTrash is not available: a browser has no OS trash (VaultAPI.Trash uses the vault's .trash/).
+func systemTrash(string) error { return errors.New("the system trash is not available in the browser") }
+
 // webHost implements Host in the browser. Every method forwards to a function of the page; the
 // ones that wait for the user (file picker) return a promise, awaited here without blocking the
 // JavaScript event loop (callers run in their own goroutine).

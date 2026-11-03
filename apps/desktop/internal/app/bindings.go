@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Bios-Marcel/wastebasket/v2"
-
 	"memobrain/apps/desktop/internal/links"
 	"memobrain/apps/desktop/internal/search"
 	"memobrain/apps/desktop/internal/vault"
@@ -292,7 +290,7 @@ func (v *VaultAPI) Trash(vaultID, relPath string) (string, error) {
 		if err != nil {
 			return "", bindingError(err)
 		}
-		if err := wastebasket.Trash(abs); err != nil {
+		if err := systemTrash(abs); err != nil {
 			// No usable OS trash (e.g. a headless Linux): fall back to the vault trash.
 			v.app.logger.Warn().Err(err).Msg("system trash unavailable; using .trash")
 			mode = "vault"

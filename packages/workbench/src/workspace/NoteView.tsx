@@ -18,7 +18,6 @@ import { attachmentDir } from '../settings/locations';
 import { backendFor, ReadingView } from '../reading/ReadingView';
 import { commandForEvent } from '../commands/registry';
 import { useSettings, type NoteMode } from '../state/settings';
-import { CanvasView } from '../canvas/CanvasView';
 import { BaseView } from '../bases/BaseView';
 import { DrawingView } from '../drawing/DrawingView';
 import { isGraphPath } from '../graph/paths';
@@ -31,10 +30,13 @@ import { safeDecodeURI } from '../util/uri';
 import type { Pane, Tab } from './layout';
 import { lazyView } from '../ui/lazyView';
 
-// The graph (its renderer and the d3 layout) is fetched when a graph tab first opens, which keeps
-// it out of the bundle loaded at startup (ADR-0020).
+// The graph (its renderer and the d3 layout) and the canvas are fetched when a tab of theirs first
+// opens, which keeps them out of the bundle loaded at startup (ADR-0020).
 const GraphView = lazyView(async () => ({
   default: (await import('../graph/GraphView')).GraphView,
+}));
+const CanvasView = lazyView(async () => ({
+  default: (await import('../canvas/CanvasView')).CanvasView,
 }));
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
@@ -134,7 +136,12 @@ export function NoteView({ vaultId, pane, tab, visible }: Props) {
     );
   const kind = classify(tab.path);
   if (kind === 'drawing') return <DrawingView key={tab.path} vaultId={vaultId} path={tab.path} />;
-  if (kind === 'canvas') return <CanvasView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (kind === 'canvas')
+    return (
+      <Suspense fallback={<div className="note-loading muted">{t('canvas.loading')}</div>}>
+        <CanvasView key={tab.path} vaultId={vaultId} path={tab.path} />
+      </Suspense>
+    );
   if (kind === 'base') return <BaseView key={tab.path} vaultId={vaultId} path={tab.path} />;
   if (kind !== 'note') return <AttachmentView vaultId={vaultId} path={tab.path} />;
   return (

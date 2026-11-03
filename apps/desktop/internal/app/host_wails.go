@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 
+	"github.com/Bios-Marcel/wastebasket/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -16,6 +17,9 @@ const isWeb = false
 
 // defaultHost is the Wails window.
 func defaultHost() Host { return wailsHost{} }
+
+// systemTrash moves a file or folder (absolute path) to the OS trash.
+func systemTrash(path string) error { return wastebasket.Trash(path) }
 
 type wailsHost struct{}
 

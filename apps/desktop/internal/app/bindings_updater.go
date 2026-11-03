@@ -1,9 +1,15 @@
+//go:build !js
+
 package app
+
+// The update channel of the desktop. The browser build has none (bindings_updater_js.go): the
+// cloud serves the web application, and the updater stays out of the WebAssembly core.
 
 import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 
 	"memobrain/apps/desktop/internal/updater"
 )
@@ -11,17 +17,21 @@ import (
 // EventUpdaterStatus carries an updater.Status to the frontend.
 const EventUpdaterStatus = "updater:status"
 
+// updaterState is the updater of the app, built on first use.
+type updaterState struct {
+	mu  sync.Mutex
+	svc *updater.Service
+}
+
 // updaterService lazily builds the updater (it needs the data directory only).
 func (a *App) updaterService() (*updater.Service, error) {
-	a.updaterMu.Lock()
-	defer a.updaterMu.Unlock()
-	if a.updater != nil {
-		return a.updater, nil
+	a.updates.mu.Lock()
+	defer a.updates.mu.Unlock()
+	if a.updates.svc != nil {
+		return a.updates.svc, nil
 	}
 	reason := ""
-	if isWeb {
-		reason = "the web application is always up to date: the cloud serves it"
-	} else if os.Getenv("MEMOBRAIN_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
+	if os.Getenv("MEMOBRAIN_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
 		reason = "updates are disabled by the administrator"
 	}
 	svc, err := updater.New(updater.Options{
@@ -33,7 +43,7 @@ func (a *App) updaterService() (*updater.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.updater = svc
+	a.updates.svc = svc
 	return svc, nil
 }
 

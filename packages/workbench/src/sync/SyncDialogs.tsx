@@ -1,9 +1,21 @@
 import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
-import { ConflictsView } from './ConflictsView';
-import { ConnectWizard } from './ConnectWizard';
-import { HistoryView } from './HistoryView';
+import { LazyDialog } from '../ui/LazyDialog';
+import { lazyView } from '../ui/lazyView';
 import { UnlockDialog } from './UnlockDialog';
+
+// The connect wizard, the conflicts and the history of a note are fetched the first time they open:
+// they stay out of the startup bundle (ADR-0020). The unlock dialog stays in it, since a locked
+// private vault asks for its passphrase as soon as it opens.
+const ConnectWizard = lazyView(async () => ({
+  default: (await import('./ConnectWizard')).ConnectWizard,
+}));
+const ConflictsView = lazyView(async () => ({
+  default: (await import('./ConflictsView')).ConflictsView,
+}));
+const HistoryView = lazyView(async () => ({
+  default: (await import('./HistoryView')).HistoryView,
+}));
 
 /** Hosts the synchronization dialogs of the open vault. */
 export function SyncDialogs() {
@@ -12,10 +24,22 @@ export function SyncDialogs() {
   if (!vault) return null;
   return (
     <>
-      {wizardOpen && <ConnectWizard vaultId={vault.id} vaultName={vault.name} />}
+      {wizardOpen && (
+        <LazyDialog onClose={() => useSync.getState().setWizardOpen(false)}>
+          <ConnectWizard vaultId={vault.id} vaultName={vault.name} />
+        </LazyDialog>
+      )}
       {unlockOpen && <UnlockDialog vaultId={vault.id} />}
-      {conflictsOpen && <ConflictsView vaultId={vault.id} />}
-      {historyPath && <HistoryView vaultId={vault.id} path={historyPath} />}
+      {conflictsOpen && (
+        <LazyDialog onClose={() => useSync.getState().setConflictsOpen(false)}>
+          <ConflictsView vaultId={vault.id} />
+        </LazyDialog>
+      )}
+      {historyPath && (
+        <LazyDialog onClose={() => useSync.getState().openHistory(null)}>
+          <HistoryView vaultId={vault.id} path={historyPath} />
+        </LazyDialog>
+      )}
     </>
   );
 }

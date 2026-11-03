@@ -1,11 +1,6 @@
 package crypto
 
-import (
-	"errors"
-	"sync"
-
-	"github.com/zalando/go-keyring"
-)
+import "sync"
 
 // KeyStore keeps the unwrapped VMK of a vault between runs, so a device that
 // has been unlocked once does not ask for the passphrase again (§3.8.2
@@ -14,35 +9,6 @@ type KeyStore interface {
 	Set(account, secret string) error
 	Get(account string) (string, error) // "" when absent
 	Delete(account string) error
-}
-
-const keychainService = "MemoBrain Notes vault keys"
-
-// KeychainStore uses the OS keychain (macOS Keychain, Windows Credential
-// Manager, freedesktop Secret Service).
-type KeychainStore struct{}
-
-// Set implements KeyStore.
-func (KeychainStore) Set(account, secret string) error {
-	return keyring.Set(keychainService, account, secret)
-}
-
-// Get implements KeyStore.
-func (KeychainStore) Get(account string) (string, error) {
-	v, err := keyring.Get(keychainService, account)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return "", nil
-	}
-	return v, err
-}
-
-// Delete implements KeyStore.
-func (KeychainStore) Delete(account string) error {
-	err := keyring.Delete(keychainService, account)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return nil
-	}
-	return err
 }
 
 // MemoryStore is an in-memory KeyStore for tests and headless systems.
