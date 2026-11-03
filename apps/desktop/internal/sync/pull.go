@@ -3,8 +3,6 @@ package sync
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -116,20 +114,20 @@ func (e *Engine) writePathV2(ctx context.Context) bool {
 
 // fetch downloads a blob, verifies its digest and decrypts it when needed.
 // size is the blob size the changelog or the tree announced (0 = unknown): a
-// download that goes past it fails before it is all in memory.
+// download that goes past it fails before it is all in memory. A blob the
+// loop of ctx downloaded ahead (startPrefetch) is taken from there.
 func (e *Engine) fetch(ctx context.Context, fileID, hash string, size int64) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := e.cfg.Remote.Download(transport.WithExpectedSize(ctx, size), hash, &buf); err != nil {
+	blob, ok, err := prefetched(ctx, fileID, hash)
+	if !ok {
+		blob, err = e.download(ctx, hash, size)
+	}
+	if err != nil {
 		return nil, err
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	if hex.EncodeToString(sum[:]) != hash {
-		return nil, fmt.Errorf("blob %s: content does not match its digest", hash)
-	}
 	if e.cfg.Cipher == nil {
-		return buf.Bytes(), nil
+		return blob, nil
 	}
-	data, err := e.cfg.Cipher.DecryptBlob(fileID, buf.Bytes())
+	data, err := e.cfg.Cipher.DecryptBlob(fileID, blob)
 	return data, e.lockedErr(err)
 }
 
@@ -265,29 +263,10 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 		if err != nil {
 			return applied, err
 		}
-		for i := 0; i < len(ch.Items); {
-			if err := ctx.Err(); err != nil {
-				return applied, err
-			}
-			// A folder renamed elsewhere: one directory rename (folders.go).
-			n, err := e.applyFolderMove(ctx, ch.Items[i:])
-			if err != nil {
-				return applied, fmt.Errorf("folder move at change %d: %w", ch.Items[i].Seq, err)
-			}
-			if n > 0 {
-				i += n
-				applied = true
-				e.progress(i, len(ch.Items))
-				continue
-			}
-			c := ch.Items[i]
-			did, err := e.applyChange(ctx, c)
-			if err != nil {
-				return applied, fmt.Errorf("change %d (%s %s): %w", c.Seq, c.Op, c.FileID, err)
-			}
-			applied = applied || did
-			i++
-			e.progress(i, len(ch.Items))
+		did, err := e.applyPage(ctx, ch.Items)
+		applied = applied || did
+		if err != nil {
+			return applied, err
 		}
 		// The parked candidates of this page are saved with the cursor that
 		// moves past them: the server never sends them again (§3.4.4 B).
@@ -313,6 +292,68 @@ func (e *Engine) pull(ctx context.Context) (applied bool, err error) {
 			return applied || retried, err
 		}
 	}
+}
+
+// applyPage applies a page of the changelog in its order, the blobs it needs
+// downloaded ahead (startPrefetch). It reports whether it changed anything.
+func (e *Engine) applyPage(ctx context.Context, items []transport.Change) (applied bool, err error) {
+	wants, err := e.pageWants(ctx, items)
+	if err != nil {
+		return false, err
+	}
+	ctx, stop := e.startPrefetch(ctx, wants)
+	defer stop()
+	for i := 0; i < len(items); {
+		if err := ctx.Err(); err != nil {
+			return applied, err
+		}
+		advancePrefetch(ctx, i)
+		// A folder renamed elsewhere: one directory rename (folders.go).
+		n, err := e.applyFolderMove(ctx, items[i:])
+		if err != nil {
+			return applied, fmt.Errorf("folder move at change %d: %w", items[i].Seq, err)
+		}
+		if n > 0 {
+			i += n
+			applied = true
+			e.progress(i, len(items))
+			continue
+		}
+		c := items[i]
+		did, err := e.applyChange(ctx, c)
+		if err != nil {
+			return applied, fmt.Errorf("change %d (%s %s): %w", c.Seq, c.Op, c.FileID, err)
+		}
+		applied = applied || did
+		i++
+		e.progress(i, len(items))
+	}
+	return applied, nil
+}
+
+// pageWants guesses, from sync_files as it is before the page is applied,
+// which changes of a page applyChange will download the blob of: a file
+// this device does not have, or a new content of a synced one. A wrong guess
+// costs a download for nothing or one made in turn, never a wrong result.
+func (e *Engine) pageWants(ctx context.Context, items []transport.Change) ([]blobWant, error) {
+	if e.transfers() <= 1 {
+		return nil, nil
+	}
+	var wants []blobWant
+	for i, c := range items {
+		if c.Op == "delete" || c.BlobHash == "" {
+			continue
+		}
+		row, has, err := e.cfg.DB.GetFileByID(ctx, c.FileID)
+		if err != nil {
+			return nil, err
+		}
+		if has && (row.ServerRev >= c.Rev || c.Op == "move" || row.State != StateSynced || row.ServerHash == c.BlobHash) {
+			continue // applied already, a rename, a conflict candidate or the content this device has
+		}
+		wants = append(wants, blobWant{pos: i, fileID: c.FileID, hash: c.BlobHash, size: c.Size})
+	}
+	return wants, nil
 }
 
 // applyChange applies one remote change; it reports whether it changed anything.
@@ -799,14 +840,8 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 	}
 
 	e.progress(0, len(remote))
-	for i, rf := range remote {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		e.progress(i+1, len(remote))
-		if err := e.reconcileEntry(ctx, mode, rf, byID, byPath); err != nil {
-			return err
-		}
+	if err := e.reconcileAll(ctx, mode, remote, byID, byPath); err != nil {
+		return err
 	}
 	// Files we know that the server no longer has were deleted there, or, on
 	// a server that went back in time, created after its restore point.
@@ -850,6 +885,52 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 	}
 	saved()
 	return nil
+}
+
+// reconcileAll reconciles the readable entries of the manifest in their
+// order, the blobs they need downloaded ahead (startPrefetch).
+func (e *Engine) reconcileAll(ctx context.Context, mode bootstrapMode, remote []remoteFile, byID, byPath map[string]File) error {
+	var wants []blobWant
+	if e.transfers() > 1 {
+		for i, rf := range remote {
+			if e.reconcileWants(mode, rf, byID, byPath) {
+				wants = append(wants, blobWant{pos: i, fileID: rf.FileID, hash: rf.Hash, size: rf.Size})
+			}
+		}
+	}
+	ctx, stop := e.startPrefetch(ctx, wants)
+	defer stop()
+	for i, rf := range remote {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		advancePrefetch(ctx, i)
+		e.progress(i+1, len(remote))
+		if err := e.reconcileEntry(ctx, mode, rf, byID, byPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcileWants guesses whether reconcileEntry downloads the blob of an
+// entry (see pageWants): a file this device does not have, unless it adopts
+// a local copy it can compare without downloading, or a new content of a
+// synced file.
+func (e *Engine) reconcileWants(mode bootstrapMode, rf remoteFile, byID, byPath map[string]File) bool {
+	if rf.Hash == "" {
+		return false
+	}
+	row, ok := byID[rf.FileID]
+	if !ok {
+		local, adopt := byPath[rf.path]
+		adopt = adopt && local.State == StateLocalNew && local.ServerRev == 0
+		return !adopt || e.cfg.Cipher != nil || local.LocalHash != rf.Hash
+	}
+	if mode == bootstrapReconcileUpload && row.ServerRev >= rf.Rev {
+		return false // republished, or already there
+	}
+	return row.State == StateSynced && (row.ServerHash != rf.Hash || row.ServerRev < rf.Rev)
 }
 
 // reconcileEntry brings one readable entry of the server manifest into

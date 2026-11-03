@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	stdsync "sync"
 
 	"github.com/google/uuid"
 
@@ -384,10 +384,12 @@ func (e *Engine) park(ctx context.Context, row File, reason string) error {
 	return e.cfg.DB.PutFile(ctx, row)
 }
 
-// upload sends the blobs of a batch the server does not have yet. A blob the
-// server refuses as too large (its limit may be lower than the one this device
-// knows) parks its file and is reported in tooLarge instead of failing the
-// whole batch.
+// upload sends the blobs of a batch the server does not have yet, up to
+// Config.Transfers at once (the batch is in memory already). A blob the
+// server refuses as too large (its limit may be lower than the one this
+// device knows) parks its file and is reported in tooLarge instead of failing
+// the whole batch; any other failure stops the uploads still running and
+// fails the batch.
 func (e *Engine) upload(ctx context.Context, batch []prepared) (tooLarge map[string]bool, err error) {
 	byHash := map[string]*prepared{}
 	var hashes []string
@@ -407,31 +409,57 @@ func (e *Engine) upload(ctx context.Context, batch []prepared) (tooLarge map[str
 	if err != nil {
 		return nil, err
 	}
+	// sync.db is read and written here, in order; only the transfers run at
+	// once (outcome i belongs to sends[i]).
+	type send struct {
+		p   *prepared
+		ob  OutboxEntry
+		url string
+		err error
+	}
+	var sends []send
 	for _, h := range missing {
-		p := byHash[h]
-		if p == nil {
-			continue
+		if p := byHash[h]; p != nil {
+			ob, _, _ := e.cfg.DB.GetOutbox(ctx, p.row.Path)
+			sends = append(sends, send{p: p, ob: ob})
 		}
-		ob, _, _ := e.cfg.DB.GetOutbox(ctx, p.row.Path)
-		url, err := e.cfg.Remote.Upload(ctx, h, p.data, ob.UploadURL)
-		if url != "" && url != ob.UploadURL && ob.OpID != "" {
-			ob.UploadURL = url
-			_ = e.cfg.DB.PutOutbox(ctx, ob, e.cfg.Now())
+	}
+	var failed *send
+	var mu stdsync.Mutex
+	_ = runLimited(ctx, len(sends), e.transfers(), func(ctx context.Context, i int) error {
+		s := &sends[i]
+		s.url, s.err = e.cfg.Remote.Upload(ctx, s.p.blobHash, s.p.data, s.ob.UploadURL)
+		if s.err == nil || transport.IsCode(s.err, syncproto.CodeFileTooLarge) {
+			return nil
 		}
-		var pe *transport.ProblemError
-		if errors.As(err, &pe) && pe.Problem.Code == syncproto.CodeFileTooLarge {
-			if err := e.park(ctx, p.row, err.Error()); err != nil {
+		mu.Lock()
+		if failed == nil {
+			failed = s // the first failure: the others stop because of it
+		}
+		mu.Unlock()
+		return s.err
+	})
+	for i := range sends {
+		s := &sends[i]
+		if s.url != "" && s.url != s.ob.UploadURL && s.ob.OpID != "" {
+			s.ob.UploadURL = s.url
+			_ = e.cfg.DB.PutOutbox(ctx, s.ob, e.cfg.Now())
+		}
+		if transport.IsCode(s.err, syncproto.CodeFileTooLarge) {
+			if err := e.park(ctx, s.p.row, s.err.Error()); err != nil {
 				return tooLarge, err
 			}
 			if tooLarge == nil {
 				tooLarge = map[string]bool{}
 			}
-			tooLarge[h] = true
-			continue
+			tooLarge[s.p.blobHash] = true
 		}
-		if err != nil {
-			return tooLarge, fmt.Errorf("upload %s: %w", p.row.Path, err)
-		}
+	}
+	if failed != nil {
+		return tooLarge, fmt.Errorf("upload %s: %w", failed.p.row.Path, failed.err)
+	}
+	if err := ctx.Err(); err != nil {
+		return tooLarge, err
 	}
 	return tooLarge, nil
 }

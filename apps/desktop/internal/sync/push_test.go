@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	stdsync "sync"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -26,6 +27,7 @@ import (
 // listed in refuse are rejected as too large, as a server with a lower limit
 // than the device's would do.
 type memRemote struct {
+	mu        stdsync.Mutex // uploads run at once
 	refuse    map[string]bool
 	uploaded  []string
 	committed []string // paths
@@ -45,6 +47,8 @@ func (r *memRemote) Upload(_ context.Context, hash string, _ []byte, _ string) (
 	if r.refuse[hash] {
 		return "", &transport.ProblemError{StatusCode: http.StatusRequestEntityTooLarge, Problem: syncproto.Problem{Code: syncproto.CodeFileTooLarge, Detail: "blob larger than the limit"}}
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.uploaded = append(r.uploaded, hash)
 	return "", nil
 }
@@ -64,7 +68,7 @@ func (r *memRemote) Commit(_ context.Context, req syncproto.CommitRequest) (sync
 	return resp, nil
 }
 
-func newTestEngine(t *testing.T, remote Remote, maxFile int64) (*Engine, string) {
+func newTestEngine(t testing.TB, remote Remote, maxFile int64) (*Engine, string) {
 	t.Helper()
 	dir := t.TempDir()
 	fs, err := vault.NewFS(dir)
@@ -170,7 +174,9 @@ type heldRemote struct {
 
 func (r *heldRemote) Upload(ctx context.Context, hash string, data []byte, url string) (string, error) {
 	if r.onUpload != nil {
+		r.mu.Lock()
 		r.onUpload(len(data))
+		r.mu.Unlock()
 	}
 	return r.memRemote.Upload(ctx, hash, data, url)
 }

@@ -219,14 +219,19 @@ func (h *TusHandler) create(w http.ResponseWriter, r *http.Request) {
 		problem(w, r, err)
 		return
 	}
+	ql, check, err := h.svc.quotaLimitOf(r.Context(), acc.Vault, length)
+	if err != nil {
+		problem(w, r, err)
+		return
+	}
 	// The upload row reserves its length against the owner's quota until it
 	// completes or expires: check and reserve atomically per owner.
 	err = h.svc.db.WithTx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-		if h.svc.quota != nil {
+		if check {
 			if err := lockOwner(ctx, tx, acc.Vault.OwnerID); err != nil {
 				return err
 			}
-			if err := h.svc.checkQuota(ctx, tx, acc.Vault, hash, length, noUpload); err != nil {
+			if err := h.svc.checkQuota(ctx, tx, acc.Vault, hash, length, noUpload, ql); err != nil {
 				return err
 			}
 		}
@@ -508,7 +513,11 @@ func (h *TusHandler) finalize(ctx context.Context, u blobsdb.Upload) error {
 	if err != nil {
 		return err
 	}
-	if err := h.svc.ingestFile(ctx, v, u.ExpectedHash, f.Name(), u.Length, u.ID); err != nil {
+	ql, check, err := h.svc.quotaLimitOf(ctx, v, u.Length)
+	if err != nil {
+		return err
+	}
+	if err := h.svc.ingestFile(ctx, v, u.ExpectedHash, f.Name(), u.Length, u.ID, ql, check); err != nil {
 		return err
 	}
 	return h.svc.dropUpload(ctx, u)

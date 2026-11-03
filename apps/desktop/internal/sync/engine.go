@@ -103,6 +103,10 @@ type Config struct {
 	// least time between two batches (0: the defaults).
 	PathMigrationBatch   int
 	PathMigrationSpacing time.Duration
+	// Transfers is how many blobs a cycle downloads or uploads at once
+	// (0: DefaultTransfers, 1: one at a time). The changes are applied in
+	// their order whatever it is (transfers.go).
+	Transfers int
 }
 
 // Engine synchronizes one vault. Sync calls are serialized.

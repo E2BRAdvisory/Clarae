@@ -117,9 +117,19 @@ SELECT pg_advisory_xact_lock(hashtextextended(sqlc.arg(key)::text, 0));
 -- committed files): blobs uploaded within the window that no revision
 -- references, plus the announced length of the resumable uploads in progress
 -- (except_upload: the one being finalized, counted as its blob instead).
+-- The condition on unreferenced_since adds nothing to the result: a blob is
+-- linked with ref_count = 0 only after RenewUnreferencedBlob, in the same
+-- transaction, and unreferenced_since only moves forward while ref_count is
+-- 0, so it is never older than the link (the hour absorbs the length of a
+-- concurrent transaction that dropped the last reference). It lets the
+-- planner start from blobs_gc_ix, the few blobs nobody references, instead of
+-- every blob the owner linked within the window: during a first sync that is
+-- each blob uploaded so far, read again for every upload (M12-W6.1).
 SELECT (
   COALESCE((SELECT sum(b.size) FROM blobs b JOIN vault_blobs vb ON vb.hash = b.hash
-            WHERE b.ref_count = 0 AND vb.vault_id = ANY(sqlc.arg(vault_ids)::uuid[])
+            WHERE b.ref_count = 0
+              AND b.unreferenced_since > sqlc.arg(since)::timestamptz - interval '1 hour'
+              AND vb.vault_id = ANY(sqlc.arg(vault_ids)::uuid[])
               AND vb.created_at > sqlc.arg(since)::timestamptz), 0)
   + COALESCE((SELECT sum(u.length) FROM uploads u
               WHERE u.vault_id = ANY(sqlc.arg(vault_ids)::uuid[]) AND u.expires_at > now()
