@@ -32,12 +32,43 @@ const capabilities = {
   web: { localFolders: false, updater: false },
 };
 const commands = [
-  { id: 'note:new', group: 'file', requires: [], platforms: { desktop: true, web: true } },
+  {
+    id: 'note:new',
+    group: 'file',
+    feature: 'note.create',
+    requires: [],
+    platforms: { desktop: true, web: true },
+  },
   {
     id: 'update:check',
     group: 'file',
+    feature: 'app.updater',
     requires: ['updater'],
     platforms: { desktop: true, web: false },
+  },
+];
+/** Declarative actions: one everywhere, one that needs a capability, one in place of it. */
+const actions = [
+  {
+    id: 'note:archive',
+    feature: 'note.create',
+    requires: [],
+    excludes: [],
+    platforms: { desktop: true, web: true },
+  },
+  {
+    id: 'note:reveal',
+    feature: 'note.create',
+    requires: ['updater'],
+    excludes: [],
+    platforms: { desktop: true, web: false },
+  },
+  {
+    id: 'note:download',
+    feature: 'note.create',
+    requires: [],
+    excludes: ['updater'],
+    platforms: { desktop: false, web: true },
   },
 ];
 const bindings = ['VaultAPI.WriteNote', 'UpdaterAPI.Check'];
@@ -69,8 +100,13 @@ function registry() {
       {
         id: 'note.create',
         title: 'Creazione di note',
-        desktop: { status: 'yes', commands: ['note:new'], bindings: ['VaultAPI.WriteNote'] },
-        workbench: { status: 'yes' },
+        desktop: {
+          status: 'yes',
+          commands: ['note:new'],
+          actions: ['note:archive', 'note:reveal'],
+          bindings: ['VaultAPI.WriteNote'],
+        },
+        workbench: { status: 'yes', actions: ['note:archive', 'note:download'] },
         tests: { desktop: ['a.test.ts'], workbench: [WB] },
       },
       {
@@ -106,6 +142,7 @@ function run(reg, over = {}) {
   return check({
     registry: reg,
     commands,
+    actions,
     capabilities,
     bindings,
     operations,
@@ -148,6 +185,7 @@ describe('check', () => {
   it('fails on references to things that do not exist', () => {
     const reg = registry();
     reg.features[0].desktop.commands.push('note:ghost');
+    reg.features[0].desktop.actions.push('note:phantom');
     reg.features[0].desktop.bindings.push('VaultAPI.Ghost');
     reg.features[2].console.operationIds.push('ghostOp');
     reg.features[2].console.routes.push('/ghost');
@@ -158,6 +196,7 @@ describe('check', () => {
       'feature note.create: desktop command note:ghost does not exist',
       // the workbench inherits the desktop's lists, so the dangling ones show up twice
       'feature note.create: workbench command note:ghost does not exist',
+      'feature note.create: desktop action note:phantom does not exist',
       'feature note.create: desktop binding VaultAPI.Ghost does not exist',
       'feature vault.list: console operation ghostOp is not in api/openapi.yaml',
       'feature vault.list: console route /ghost does not exist',
@@ -222,7 +261,11 @@ describe('check', () => {
       /^feature note\.create: workbench is "yes" without a test on the WebAssembly core/,
     );
     // The same feature, honestly partial, passes.
-    reg.features[0].workbench = { status: 'partial', reason: `${UNVERIFIED}: nessun test` };
+    reg.features[0].workbench = {
+      ...reg.features[0].workbench,
+      status: 'partial',
+      reason: `${UNVERIFIED}: nessun test`,
+    };
     assert.deepEqual(run(reg), []);
   });
 
@@ -247,7 +290,11 @@ describe('check', () => {
 
   it('refuses "not verified on the web" once a proof exists', () => {
     const reg = registry();
-    reg.features[0].workbench = { status: 'partial', reason: `${UNVERIFIED}: nessun test` };
+    reg.features[0].workbench = {
+      ...reg.features[0].workbench,
+      status: 'partial',
+      reason: `${UNVERIFIED}: nessun test`,
+    };
     assert.deepEqual(run(reg), [
       `feature note.create: workbench is "partial" (${UNVERIFIED}) but ${WB} proves it on the WebAssembly core: set it to "yes"`,
     ]);
@@ -288,12 +335,27 @@ describe('check', () => {
 
   it('refuses a capability that nothing reads', () => {
     assert.deepEqual(run(registry(), { capabilityUses: new Set() }), [
-      'capability localFolders has no consumer (can, useCan or Command.requires)',
+      "capability localFolders has no consumer (can, useCan, Command.requires or an action's requires/excludes)",
+    ]);
+  });
+
+  it('counts the requires and excludes of an action as consumers', () => {
+    const reg = registry();
+    reg.features[0].desktop.actions = ['note:archive'];
+    reg.features[0].workbench.actions = ['note:archive'];
+    // Without update:check, updater is read by an action's requires or excludes, or by nothing.
+    const errors = (a) =>
+      run(reg, { commands: [commands[0]], actions: [a] }).filter((e) => /^capability/.test(e));
+    assert.deepEqual(errors({ ...actions[0], requires: ['updater'] }), []);
+    assert.deepEqual(errors({ ...actions[0], excludes: ['updater'] }), []);
+    assert.deepEqual(errors(actions[0]), [
+      "capability updater has no consumer (can, useCan, Command.requires or an action's requires/excludes)",
     ]);
   });
 
   it('needs every input, so that no rule passes on nothing', () => {
     assert.throws(() => run(registry(), { matrix: undefined }), /input matrix is missing/);
+    assert.throws(() => run(registry(), { actions: undefined }), /input actions is missing/);
   });
 
   it('fails when an operation is both server_only and part of a feature', () => {
@@ -305,6 +367,53 @@ describe('check', () => {
   });
 });
 
+describe('actions and the feature a command or an action declares', () => {
+  it('fails on an action no feature references', () => {
+    const reg = registry();
+    reg.features[0].desktop.actions = ['note:reveal'];
+    reg.features[0].workbench.actions = ['note:download'];
+    assert.deepEqual(run(reg), ['action note:archive is not referenced by any feature']);
+  });
+
+  it('fails when a surface says yes but its platform does not offer an action', () => {
+    const reg = registry();
+    reg.features[0].workbench.actions = ['note:archive', 'note:reveal', 'note:download'];
+    reg.features[0].desktop.actions.push('note:download');
+    assert.deepEqual(run(reg), [
+      'feature note.create: desktop is "yes" but action note:download is not offered on desktop (is offered only without updater)',
+      'feature note.create: workbench is "yes" but action note:reveal is not offered on web (needs updater)',
+    ]);
+    // The workbench inherits the desktop's actions when it lists none.
+    const inherited = registry();
+    delete inherited.features[0].workbench.actions;
+    assert.ok(
+      run(inherited).includes(
+        'feature note.create: workbench is "yes" but action note:reveal is not offered on web (needs updater)',
+      ),
+    );
+  });
+
+  it('refuses a command or an action whose declared feature does not list it', () => {
+    const wrong = [{ ...commands[0], feature: 'vault.list' }, commands[1]];
+    assert.deepEqual(run(registry(), { commands: wrong }), [
+      'command note:new declares feature vault.list, but it is listed by note.create',
+    ]);
+    const unknown = [{ ...actions[0], feature: 'note.ghost' }, actions[1], actions[2]];
+    assert.deepEqual(run(registry(), { actions: unknown }), [
+      'action note:archive declares feature note.ghost, which is not in the registry',
+    ]);
+    const none = [{ ...commands[0], feature: undefined }, commands[1]];
+    assert.deepEqual(run(registry(), { commands: none }), ['command note:new declares no feature']);
+  });
+
+  it('refuses an action with the id of a command', () => {
+    const reg = registry();
+    reg.features[0].workbench.actions.push('note:new');
+    const clash = [...actions, { ...actions[0], id: 'note:new' }];
+    assert.ok(run(reg, { actions: clash }).includes('action note:new has the id of a command'));
+  });
+});
+
 describe('effectiveFeatures', () => {
   it('gives the workbench the desktop lists it does not override', () => {
     const [f] = effectiveFeatures({
@@ -312,12 +421,19 @@ describe('effectiveFeatures', () => {
         {
           id: 'x',
           title: 'xxx',
-          desktop: { status: 'yes', commands: ['a:b'], bindings: ['S.M'], capability: 'updater' },
+          desktop: {
+            status: 'yes',
+            commands: ['a:b'],
+            actions: ['c:d'],
+            bindings: ['S.M'],
+            capability: 'updater',
+          },
           workbench: { status: 'yes', bindings: [] },
         },
       ],
     });
     assert.deepEqual(f.workbench.commands, ['a:b']);
+    assert.deepEqual(f.workbench.actions, ['c:d']);
     assert.deepEqual(f.workbench.bindings, []);
     assert.equal(f.workbench.capability, 'updater');
     assert.equal(f.console, null);
@@ -405,6 +521,7 @@ describe('render', () => {
     const block = render({
       registry: registry(),
       commands,
+      actions,
       bindings,
       operations,
       calledByWebTests: (b) => b === 'VaultAPI.WriteNote',
@@ -418,6 +535,12 @@ describe('render', () => {
       /\| `update:check` \| file \| no \(needs `updater`\) \| `app.updater` \| servita dal cloud \|/,
     );
     assert.match(block, /\| `healthz` \| GET `\/healthz` \| server_only: sonda \| — \|/);
+    assert.match(block, /### Azioni dei pannelli \(3\)/);
+    assert.match(block, /\| `note:reveal` \| yes \| no \(needs `updater`\) \| `note.create` \|/);
+    assert.match(
+      block,
+      /\| `note:download` \| no \(only without `updater`\) \| yes \| `note.create` \|/,
+    );
     assert.match(block, /Workbench: yes 2, exception 1\./);
     // Tests by surface, the proofs on the core in bold.
     assert.match(block, /D: `a\.test\.ts` · W: \*\*`workbench\.spec\.ts`\*\*/);

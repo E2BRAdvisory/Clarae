@@ -23,6 +23,7 @@ export const workspaceCommands: Command[] = [
   {
     id: 'workspace:save',
     group: 'view',
+    feature: 'workspaces',
     defaults: [],
     enabled: () => hasVault() && canEditWorkspaces(),
     run: () => guard(saveWorkspace()),
@@ -30,6 +31,7 @@ export const workspaceCommands: Command[] = [
   {
     id: 'workspace:load',
     group: 'view',
+    feature: 'workspaces',
     defaults: [],
     enabled: hasVault,
     run: () => guard(pickAndLoadWorkspace()),
@@ -37,6 +39,7 @@ export const workspaceCommands: Command[] = [
   {
     id: 'workspace:manage',
     group: 'view',
+    feature: 'workspaces',
     defaults: [],
     enabled: hasVault,
     run: () => guard(manageWorkspaces()),

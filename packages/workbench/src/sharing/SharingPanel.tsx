@@ -1,79 +1,23 @@
 // Settings > Sharing (M4-WP4, ADR-0037 §2): the invitations and the shares of the account come from
 // @memobrain/cloud-features, the same components as the console's; the mounts (the shares received
-// as folders on this device, opened and removed here) are the desktop's own. In the browser a mount
-// opens in a page of its own and the copy of the open one is removed by the host (the platform's
-// hooks), so the web host's guard and markers follow every mount.
+// as folders on this device, opened and removed here) are the desktop's own. Opening and removing
+// one are actions (mount:open, mount:remove in commands/actions.ts): in the browser a mount opens in
+// a page of its own and the copy of the open one is removed by the host (the platform's hooks), so
+// the web host's guard and markers follow every mount.
 import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useFeature } from '@memobrain/cloud-features/flags';
 import '@memobrain/cloud-features/workbench.css';
-import { api, type MountState } from '../app/api';
-import { useCan, usePlatform } from '../platform';
+import type { MountState } from '../app/api';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { InvitationsList, SharesManager } from '../cloud/lazyPanels';
 import { useAppStore } from '../state/store';
-import { dialog } from '../ui/dialogs';
-import { settleNotes } from '../workspaces/flush';
+import { ActionButton } from '../ui/ActionButton';
 import { sharingKeys, useMounts } from './queries';
 
 function Mount({ mount }: { mount: MountState }) {
   const { t } = useTranslation();
-  const qc = useQueryClient();
-  const setVault = useAppStore((s) => s.setVault);
-  const keepsCopies = useCan('detachedCopies');
-  const refresh = () => void qc.invalidateQueries({ queryKey: sharingKeys.mounts });
-  const open = async () => {
-    try {
-      // The open vault's pending edits are written before its views go away.
-      if (!(await settleNotes())) return;
-      const openMount = usePlatform.getState().openMount;
-      if (openMount) {
-        // The browser: the host leaves this page for the mount's own.
-        openMount({ shareId: mount.shareId, cloudVaultId: mount.cloudVaultId });
-        return;
-      }
-      const info = await api.sharing.openMount(mount.shareId);
-      setVault(info);
-      useAppStore.getState().closeSettings();
-      refresh();
-    } catch (e) {
-      await dialog.error(e);
-    }
-  };
-  const remove = async () => {
-    // A copy kept after a revocation is a folder of its own: only where one can be opened again.
-    const askKeep = mount.revoked && keepsCopies;
-    const keep = askKeep
-      ? await dialog.confirm(t('sharing.removeMount'), t('sharing.keepCopyQuestion'))
-      : false;
-    if (
-      !askKeep &&
-      !(await dialog.confirm(
-        t('sharing.removeMount'),
-        t('sharing.confirmRemoveMount', { name: mount.name }),
-        true,
-      ))
-    )
-      return;
-    const { removeFromBrowser, mountRemoved } = usePlatform.getState();
-    const isOpen = Boolean(mount.vaultId) && useAppStore.getState().vault?.id === mount.vaultId;
-    if (isOpen && removeFromBrowser) {
-      // The mount open in the browser: the host uploads what it can, removes the copy and its
-      // marker and goes back to the console, or keeps the copy and asks (D-04).
-      useAppStore.getState().closeSettings();
-      removeFromBrowser();
-      return;
-    }
-    try {
-      await api.sharing.removeMount(mount.shareId, keep);
-      mountRemoved?.(mount.shareId);
-      if (isOpen) useAppStore.getState().setVault(null);
-      refresh();
-    } catch (e) {
-      await dialog.error(e);
-    }
-  };
   return (
     <li className={`mount ${mount.revoked ? 'revoked' : ''}`}>
       <div>
@@ -84,8 +28,8 @@ function Mount({ mount }: { mount: MountState }) {
         </div>
       </div>
       <div className="actions">
-        {!mount.revoked && <button onClick={() => void open()}>{t('sharing.open')}</button>}
-        {mount.mounted && <button onClick={() => void remove()}>{t('sharing.removeMount')}</button>}
+        <ActionButton id="mount:open" arg={mount} />
+        <ActionButton id="mount:remove" arg={mount} />
       </div>
     </li>
   );

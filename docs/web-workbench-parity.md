@@ -53,7 +53,7 @@ Non c'è un servizio di CI (ADR-0036): `task test-wasm` e il controllo del regis
 
 Ogni voce di `shared/parity/features.yaml` (schema: `shared/parity/features.schema.json`) dice:
 
-- **desktop e workbench:** stato, comandi (`commands`), binding Go (`bindings`), operazioni REST chiamate dal core (`operationIds`) ed eventuale capability della piattaforma (`capability`). Il workbench eredita gli elenchi del desktop se non li ripete: è la stessa UI sullo stesso core;
+- **desktop e workbench:** stato, comandi (`commands`), azioni dei pannelli (`actions`, dichiarate con `defineAction`, ADR-0045 §2), binding Go (`bindings`), operazioni REST chiamate dal core (`operationIds`) ed eventuale capability della piattaforma (`capability`). Il workbench eredita gli elenchi del desktop se non li ripete: è la stessa UI sullo stesso core. Ogni comando e ogni azione dichiara a sua volta la sua funzione (`feature`, un `FeatureId` generato dal registro con `task gen`), che deve essere una delle voci che lo elencano;
 - **console:** stato, rotte (`routes`, da `web/src/App.tsx` più `/vaults/:id/open`), operazioni OpenAPI (`operationIds`) e azioni senza REST (`actions`, gli attributi `data-action` di `web/src`: «Esci», «Dimentica questo browser», lingua, tema). La sezione manca (n/a) per le funzioni sul contenuto di un vault aperto, che la console affida al workbench;
 - **stato:** `yes`, `partial`, `exception` (eccezione dichiarata), `console-only` (solo desktop e workbench: la funzione sta nella console, per esempio l'amministrazione) o `missing`. Tutto ciò che non è `yes` ha una motivazione (`reason`); `note` aggiunge un'informazione anche a una voce `yes`;
 - **test per superficie** (ADR-0045 §4): `desktop` (UI, e2e sul mock, core Go), `workbench` (host web `web/src/workbench`, spec nel browser `web/e2e*`, spec della matrice `apps/desktop/frontend/e2e`), `console` (`web/src`, `web/e2e`, l'adattatore REST di `packages/cloud-features`) e `cloud` (`services/cloud`). Un file fuori dal posto della sua superficie è un errore.
@@ -72,7 +72,7 @@ Le operazioni che non sono una funzione utente (sonde, configurazione pubblica) 
 
 `node scripts/parity.mjs` legge:
 
-- i **comandi dal registro a runtime**, senza regex sul sorgente: esegue con Vitest `packages/workbench/src/commands/parity.test.ts`, che importa `commands/registry.ts` (comandi di daily, segnalibri, workspace, anteprima e disegno compresi), valuta `Command.requires` con `configurePlatform('desktop')` e `configurePlatform('web')` e scrive l'elenco in JSON. `tsx` non è tra le dipendenze del repository; Vitest sì, e risolve già alias, JSX e mock dei binding;
+- i **comandi e le azioni dei pannelli dal registro a runtime**, senza regex sul sorgente: esegue con Vitest `packages/workbench/src/commands/parity.test.ts`, che importa `commands/registry.ts` (comandi di daily, segnalibri, workspace, anteprima e disegno compresi) e `commands/actions.ts`, valuta `requires` (e `excludes` delle azioni) con `configurePlatform('desktop')` e `configurePlatform('web')` e scrive gli elenchi, con la `feature` di ciascuno, in JSON. `tsx` non è tra le dipendenze del repository; Vitest sì, e risolve già alias, JSX e mock dei binding;
 - i **binding** generati (`packages/workbench/wailsjs/go/app/*.d.ts`, da `task wailsjs`);
 - le **operazioni** di `api/openapi.yaml` e le **rotte** della console;
 - i test web (`web/e2e`, `web/e2e-cloud`) e il codice della console (`web/src`, più l'adattatore REST `RestCloudPort` di `packages/cloud-features`), per dire quali binding e quali operazioni sono davvero chiamati;
@@ -81,18 +81,19 @@ Le operazioni che non sono una funzione utente (sonde, configurazione pubblica) 
 Con `--check` (in `task parity`, quindi in `task ci`) fallisce se:
 
 - il registro non rispetta lo schema;
-- un comando, un binding o un'operazione non compare in nessuna voce (né in `server_only`);
-- una voce rimanda a un comando, binding, operazione, rotta, capability o file di test che non esiste;
+- un comando, un'azione, un binding o un'operazione non compare in nessuna voce (né in `server_only`);
+- un comando o un'azione dichiara una funzione (`feature`) che non lo elenca, o un'azione ha l'id di un comando;
+- una voce rimanda a un comando, azione, binding, operazione, rotta, capability o file di test che non esiste;
 - uno stato diverso da `yes` non ha motivazione;
-- desktop o workbench dicono `yes` ma la piattaforma non ha la capability richiesta (da `capability` o da `Command.requires`);
+- desktop o workbench dicono `yes` ma la piattaforma non ha la capability richiesta (da `capability`), o non offre un loro comando o una loro azione (`requires`, `excludes`);
 - un test sta nella superficie sbagliata (per esempio un test della console sotto `workbench`), o uno spec della matrice è in `tests.workbench` ma non in `tests.desktop` (è lo stesso test sui due target);
 - il workbench dice `yes` senza una prova sul core WebAssembly; se uno spec della matrice è escluso per intero sul web per quella funzione, il messaggio chiede di indicare un test alternativo;
 - il workbench dice `partial` «non verificata sul web» ma una prova esiste (lo stato va riportato a `yes`);
 - una rotta della console, un'operazione chiamata dalla console o un `data-action` non è citato da nessuna voce, o una voce cita un'azione che non esiste;
-- una capability non ha consumatori (`can`, `useCan` o `Command.requires`): non governa nulla;
+- una capability non ha consumatori (`can`, `useCan`, `Command.requires` o `requires`/`excludes` di un'azione): non governa nulla;
 - le tabelle qui sotto non sono aggiornate.
 
-Il controllo riceve tutti gli ingressi obbligatoriamente (spec che girano il core, matrice, operazioni e azioni della console, capability lette dalla UI): una regola senza dati da guardare non può passare a vuoto. Le azioni della console senza REST si trovano solo se marcate con `data-action`; quando ADR-0045 §2 introdurrà `defineAction` diventeranno strutturali.
+Il controllo riceve tutti gli ingressi obbligatoriamente (spec che girano il core, matrice, operazioni e azioni della console, capability lette dalla UI): una regola senza dati da guardare non può passare a vuoto. Le azioni del workbench sono strutturali (`defineAction`, lette dal registro); quelle della console senza REST si trovano ancora solo se marcate con `data-action`, finché la console non adotta le azioni dichiarative.
 
 Le regole stanno in `scripts/parity/lib.mjs`, con i test in `scripts/parity/lib.test.mjs` (`node --test 'scripts/parity/*.test.mjs'`, eseguiti anche da `task parity`). Per aggiungere una voce: [dev-setup](dev-setup.md#registro-delle-funzioni).
 
@@ -135,9 +136,9 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, exception 1, consol
 | `share.update` Rinomina e scadenza di una condivisione | yes | yes | yes | desktop (nota): «Modifica» di una condivisione (nome, scadenza o nessuna scadenza), proprietario o gestore | D: `sharing.test.tsx`, `CoreCloudPort.test.tsx`, `manager_share_test.go`, `account-panels.spec.ts` · W: **`account-panels.spec.ts`** · K: `rest.test.tsx`, `Shares.test.tsx`, `shares.spec.ts` · C: `sharing_test.go` |
 | `share.grants` Permessi di utenti e gruppi su una condivisione | yes | yes | yes | desktop (nota): GrantEditor e ricerca nella directory di @memobrain/cloud-features, gli stessi della console; una richiesta per tipo (utenti o gruppi) con i campi dell'API, descrizione dei gruppi compresa | D: `sharing.test.tsx`, `CoreCloudPort.test.tsx`, `bindings_sharing_test.go`, `account-panels.spec.ts` · W: **`account-panels.spec.ts`** · K: `rest.test.tsx`, `shares.spec.ts` · C: `sharing_test.go`, `access_test.go` |
 | `invitations` Inviti ricevuti (accetta, rifiuta) | yes | yes | yes | desktop (nota): InvitationsList di @memobrain/cloud-features; sul desktop una condivisione accettata diventa un mount, con il suo elenco | D: `sharing.test.tsx`, `CoreCloudPort.test.tsx`, `sharing.spec.ts` · W: **`sharing.spec.ts`** · K: `rest.test.tsx`, `Shares.test.tsx`, `app.spec.ts` · C: `sharing_test.go` |
-| `mounts` Mount delle condivisioni ricevute | yes | partial | yes | desktop (nota): alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies) — workbench: un mount si apre nella sua pagina (/vaults/:id/open?share=, anche da Impostazioni › Condivisione, attraverso il guard e i marcatori dell'host); la copia di un mount revocato non si conserva come cartella (nel browser nessuno potrebbe riaprirla) ma si scarica come ZIP (capability detachedCopies) — console (nota): «Apri» di una condivisione accettata (InvitationsList) apre il workbench sul mount | D: `sharing.test.tsx`, `sharing.spec.ts`, `e2e_sharing_test.go`, `bindings_sharing_test.go` · W: `guard.test.ts`, **`mixed.spec.ts`**, **`sharing.spec.ts`** · K: `Shares.test.tsx` |
+| `mounts` Mount delle condivisioni ricevute | yes | partial | yes | desktop (nota): alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies) — workbench: un mount si apre nella sua pagina (/vaults/:id/open?share=, anche da Impostazioni › Condivisione, attraverso il guard e i marcatori dell'host); la copia di un mount revocato non si conserva come cartella (nel browser nessuno potrebbe riaprirla) ma si scarica come ZIP (capability detachedCopies) — console (nota): «Apri» di una condivisione accettata (InvitationsList) apre il workbench sul mount | D: `sharing.test.tsx`, `ActionButton.test.tsx`, `sharing.spec.ts`, `e2e_sharing_test.go`, `bindings_sharing_test.go` · W: `guard.test.ts`, **`mixed.spec.ts`**, **`sharing.spec.ts`** · K: `Shares.test.tsx` |
 | `account.login` Accesso al cloud e sessione | yes | yes | yes | workbench (nota): sul web la sessione OIDC è quella della pagina, che passa il token al core | D: `CloudSection.test.tsx`, `AccountButton.test.tsx`, `auth_test.go` · W: **`web-sync.spec.ts`** · K: `oidc.test.ts`, `guards.test.tsx`, `app.spec.ts` · C: `verifier_test.go` |
-| `account.session` Accesso dal client e uscita (browser di sistema, scelta del server) | yes | exception | yes | workbench: la sessione è quella OIDC della pagina, gestita dalla console (accesso e «Esci»); il workbench non offre login, logout né server — console (nota): accesso OIDC alla prima rotta protetta; «Esci» nell'intestazione carica e rimuove prima le copie dei vault nel browser e chiede conferma per quelle con modifiche non caricate (D-04) | D: `CloudSection.test.tsx`, `auth_test.go`, `hosted_test.go` · K: `guards.test.tsx`, `ForgetBrowser.test.tsx` |
+| `account.session` Accesso dal client e uscita (browser di sistema, scelta del server) | yes | exception | yes | workbench: la sessione è quella OIDC della pagina, gestita dalla console (accesso e «Esci»); il workbench non offre login, logout né server — console (nota): accesso OIDC alla prima rotta protetta; «Esci» nell'intestazione carica e rimuove prima le copie dei vault nel browser e chiede conferma per quelle con modifiche non caricate (D-04) | D: `CloudSection.test.tsx`, `AccountButton.test.tsx`, `auth_test.go`, `hosted_test.go` · K: `guards.test.tsx`, `ForgetBrowser.test.tsx` |
 | `account.forget-browser` «Dimentica questo browser» (copie dei vault nel browser) | exception | console-only | yes | desktop: il desktop non tiene copie nel browser; le cartelle dei vault restano dell'utente, e un dispositivo si revoca da Impostazioni › Cloud — workbench: azione della pagina Account della console; un workbench aperto in un'altra scheda carica le modifiche ed esce prima che le copie si cancellino — console (nota): le copie con modifiche non caricate si elencano e si cancellano solo con una conferma (marcatori, D-04); la registrazione del dispositivo resta in IndexedDB (ADR-0029) | W: `forget.test.ts`, **`workbench.spec.ts`** · K: `ForgetBrowser.test.tsx`, `Account.test.tsx`, `workbench.spec.ts` |
 | `account.data` Esportazione dei dati personali ed eliminazione dell'account | console-only | console-only | yes | desktop: funzione dell'account, nella console (pagina Account) — workbench: funzione dell'account, nella console (pagina Account) | K: `Account.test.tsx`, `account.spec.ts` · C: `privacy_test.go` |
 | `account.groups` I miei gruppi | console-only | console-only | yes | desktop: informazione dell'account, che spetta alla console (il componente MyGroups non è montato dove la porta non elenca i gruppi) — workbench: informazione dell'account, che spetta alla console — console (nota): pagina Account, sezione «I miei gruppi» (MyGroups di @memobrain/cloud-features); il ruolo `manager` nel gruppo è mostrato come riservato, senza effetti in v1 (ADR-0041 §9) | K: `rest.test.tsx`, `Account.test.tsx`, `account.spec.ts` |
@@ -198,7 +199,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, exception 1, consol
 
 ### Comandi (182)
 
-180 su 182 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente.
+180 su 182 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente; ogni comando dichiara la sua funzione (`Command.feature`, un `FeatureId` generato), che deve essere una di quelle che lo elencano.
 
 | Comando | Gruppo | Sul web | Funzione | Nota |
 | --- | --- | --- | --- | --- |
@@ -384,6 +385,26 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, exception 1, consol
 | `drawing:export-library` | editor | yes | `drawing.library` |  |
 | `drawing:import-legacy` | editor | yes | `drawing.legacy` |  |
 | `drawing:edit-latex` | editor | yes | `drawing.latex-mermaid` |  |
+
+### Azioni dei pannelli (13)
+
+I pulsanti dei pannelli che non sono comandi ma realizzano una funzione (`defineAction` in `packages/workbench/src/commands/actions.ts`, mostrati da `<ActionButton>`, ADR-0045 §2). Come i comandi nominano la loro funzione e le capability che richiedono (`requires`) o di cui fanno le veci dove mancano (`excludes`); l'elenco viene dal registro a runtime.
+
+| Azione | Desktop | Web | Funzione |
+| --- | --- | --- | --- |
+| `vault:open-folder` | yes | no (needs `localFolders`) | `vault.local-folder` |
+| `mount:open` | yes | yes | `mounts` |
+| `mount:remove` | yes | yes | `mounts` |
+| `mount:delete-copy` | yes | yes | `mounts` |
+| `mount:keep-copy` | yes | no (needs `detachedCopies`) | `mounts` |
+| `mount:download-copy` | no (only without `detachedCopies`) | yes | `mounts` |
+| `cloud-vault:new` | yes | no (needs `unlinkVault`) | `vault.create` |
+| `sync:unlink` | yes | no (needs `unlinkVault`) | `sync.unlink` |
+| `sync:remove-from-browser` | no (only without `unlinkVault`) | yes | `sync.unlink` |
+| `sync:pause` | yes | yes | `sync.engine` |
+| `vault:lock` | yes | yes | `crypto.unlock` |
+| `account:sign-in` | yes | no (needs `ownsSession`) | `account.session` |
+| `account:sign-out` | yes | no (needs `ownsSession`) | `account.session` |
 
 ### Binding Go (134 metodi, 20 servizi)
 

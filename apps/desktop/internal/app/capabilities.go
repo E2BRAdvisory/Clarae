@@ -17,8 +17,8 @@ import (
 // Capability names a function of the UI that only some hosts offer. The value is the TypeScript name.
 type Capability string
 
-// The capabilities. Every one has a consumer in the UI (`can`, `useCan` or `Command.requires`):
-// `task parity` refuses one that gates nothing.
+// The capabilities. Every one has a consumer in the UI (`can`, `useCan`, `Command.requires` or the
+// `requires`/`excludes` of an action of a panel): `task parity` refuses one that gates nothing.
 const (
 	CapLocalFolders        Capability = "localFolders"
 	CapUpdater             Capability = "updater"

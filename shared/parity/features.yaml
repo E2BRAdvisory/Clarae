@@ -8,8 +8,11 @@
 # Stati: yes | partial | exception (eccezione dichiarata, ADR-0029) | console-only (solo
 # desktop/workbench: la funzione sta nella console) | missing. `reason` è obbligatoria se lo stato
 # non è `yes`; `note` aggiunge un'informazione anche quando lo stato è `yes`.
-# Il workbench eredita commands, bindings, operationIds e capability del desktop se non li elenca
-# (stessa UI e stesso core, ADR-0029). `console` si omette per le funzioni sul contenuto di un
+# Il workbench eredita commands, actions, bindings, operationIds e capability del desktop se non li
+# elenca (stessa UI e stesso core, ADR-0029). `actions` elenca le azioni dichiarative dei pannelli
+# (defineAction in packages/workbench/src/commands/actions.ts, ADR-0045 §2), controllate come i
+# comandi; ogni comando e ogni azione dichiara la sua funzione (`feature`, tipo FeatureId generato da
+# questo file con `task gen`), che deve essere una delle voci che lo elencano. `console` si omette per le funzioni sul contenuto di un
 # vault aperto, che la console affida al workbench (rotta /vaults/:id/open). `console.actions` cita
 # le azioni della console che non chiamano la REST (attributo data-action in web/src).
 # I test sono file relativi alla radice, divisi per superficie (ADR-0045 §4): desktop = UI
@@ -31,6 +34,7 @@ features:
     desktop:
       status: yes
       capability: localFolders
+      actions: [vault:open-folder]
       bindings: [VaultAPI.PickFolder]
     workbench:
       status: exception
@@ -114,12 +118,14 @@ features:
       status: yes
       note: dalla procedura di collegamento di un vault locale («Collega al cloud»), che anche «Nuovo vault» di Impostazioni → Cloud apre
       commands: [sync:connect]
+      actions: [cloud-vault:new]
       bindings: [SyncAPI.LinkNew]
       operationIds: [createVault, putKeyEnvelope]
     workbench:
       status: yes
       note: solo vault privati, sulla rotta di creazione /vaults/new/open?kind=private&name=… aperta dalla console; la procedura guidata del workbench chiede la passphrase e mostra la chiave di recupero (la crittografia resta nel core Go)
       commands: []
+      actions: []
       bindings: [SyncAPI.LinkNew]
       operationIds: [createVault]
     console:
@@ -296,11 +302,13 @@ features:
     title: Scollegamento di un vault dal cloud
     desktop:
       status: yes
+      actions: [sync:unlink]
       bindings: [SyncAPI.Unlink]
       capability: unlinkVault
     workbench:
       status: exception
       reason: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare
+      actions: [sync:remove-from-browser]
       bindings: [SyncAPI.CopyVerdict]
     tests:
       desktop:
@@ -318,6 +326,7 @@ features:
       status: yes
       note: Impostazioni › Sync mostra quanti file del cloud il dispositivo non riesce a leggere (quarantena, ADR-0039)
       commands: [sync:now, sync:settings]
+      actions: [sync:pause]
       bindings: [SyncAPI.SyncNow, SyncAPI.Status, SyncAPI.SetPaused, SyncAPI.SetPollInterval]
       operationIds: [getChanges, checkBlobs, putBlob, getBlob, commit]
     workbench:
@@ -414,6 +423,7 @@ features:
     desktop:
       status: yes
       commands: [sync:unlock]
+      actions: [vault:lock]
       bindings:
         [
           VaultCryptoAPI.Unlock,
@@ -637,10 +647,12 @@ features:
     desktop:
       status: yes
       note: alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies)
+      actions: [mount:open, mount:remove, mount:delete-copy, mount:keep-copy]
       bindings: [SharingAPI.Mounts, SharingAPI.OpenMount, SharingAPI.RemoveMount]
       operationIds: [listSharedWithMe]
     workbench:
       status: partial
+      actions: [mount:open, mount:remove, mount:delete-copy, mount:download-copy]
       reason: un mount si apre nella sua pagina (/vaults/:id/open?share=, anche da Impostazioni › Condivisione, attraverso il guard e i marcatori dell'host); la copia di un mount revocato non si conserva come cartella (nel browser nessuno potrebbe riaprirla) ma si scarica come ZIP (capability detachedCopies)
     console:
       status: yes
@@ -649,6 +661,7 @@ features:
     tests:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/ui/ActionButton.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
         - apps/desktop/internal/sync/e2e_sharing_test.go
         - apps/desktop/internal/app/bindings_sharing_test.go
@@ -691,11 +704,13 @@ features:
     title: Accesso dal client e uscita (browser di sistema, scelta del server)
     desktop:
       status: yes
+      actions: [account:sign-in, account:sign-out]
       bindings: [AuthAPI.Login, AuthAPI.Logout]
       capability: ownsSession
     workbench:
       status: exception
       reason: la sessione è quella OIDC della pagina, gestita dalla console (accesso e «Esci»); il workbench non offre login, logout né server
+      actions: []
     console:
       status: yes
       note: accesso OIDC alla prima rotta protetta; «Esci» nell'intestazione carica e rimuove prima le copie dei vault nel browser e chiede conferma per quelle con modifiche non caricate (D-04)
@@ -704,6 +719,7 @@ features:
     tests:
       desktop:
         - packages/workbench/src/settings/CloudSection.test.tsx
+        - packages/workbench/src/shell/AccountButton.test.tsx
         - apps/desktop/internal/auth/auth_test.go
         - apps/desktop/internal/auth/hosted_test.go
       console:

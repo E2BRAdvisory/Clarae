@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../app/api';
 import { openVaultAt } from '../app/actions';
 import { runCommand } from '../commands/registry';
 import { useCan } from '../platform';
 import { useRecentVaults, useTree } from '../state/queries';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
+import { useAction } from '../ui/ActionButton';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 
 /**
@@ -20,8 +20,9 @@ export function VaultSwitcher({ vaultId }: { vaultId: string }) {
   const info = useSync((s) => infoOf(s, vaultId));
   const { data: tree = [] } = useTree(vaultId);
   const { data: recent = [] } = useRecentVaults();
-  const localFolders = useCan('localFolders');
   const multiVault = useCan('multiVault');
+  // Where a folder of the computer can be a vault (vault:open-folder).
+  const openFolder = useAction('vault:open-folder', openVaultAt);
   const button = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -42,18 +43,14 @@ export function VaultSwitcher({ vaultId }: { vaultId: string }) {
 
   if (!vault) return null;
 
-  const pick = async (): Promise<void> => {
-    const path = await api.vault.pickFolder(t('welcome.pickTitle'));
-    if (path) await openVaultAt(path);
-  };
   const items: MenuItem[] = [
     { label: `✓ ${vault.name}`, disabled: true, onSelect: () => undefined },
     ...(multiVault ? recent : [])
       .filter((v) => v.path !== vault.path)
       .slice(0, 8)
       .map((v) => ({ label: v.name, onSelect: () => void openVaultAt(v.path) })),
-    ...(localFolders
-      ? [{ label: t('vaultSwitcher.open'), separator: true, onSelect: () => void pick() }]
+    ...(openFolder
+      ? [{ label: t('vaultSwitcher.open'), separator: true, onSelect: () => void openFolder.run() }]
       : []),
     { label: t('sidebar.closeVault'), onSelect: () => void runCommand('vault:close') },
   ];

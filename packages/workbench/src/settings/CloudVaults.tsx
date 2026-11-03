@@ -5,6 +5,7 @@ import '@memobrain/cloud-features/workbench.css';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { CloudVaultsTable } from '../cloud/lazyPanels';
 import { useCan } from '../platform';
+import { useAction } from '../ui/ActionButton';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 
@@ -25,13 +26,9 @@ export function CloudVaults() {
   const info = useSync((s) => infoOf(s, vault?.id));
   const openCloudId = info.linked && !info.mount ? info.cloudVaultId : '';
 
-  const onNew =
-    canUnlink && vault && !info.linked
-      ? () => {
-          useAppStore.getState().closeSettings();
-          useSync.getState().setWizardOpen(true);
-        }
-      : undefined;
+  // Offered where the open folder can be connected to a new cloud vault (cloud-vault:new).
+  const newVault = useAction('cloud-vault:new');
+  const onNew = newVault?.enabled ? () => void newVault.run() : undefined;
 
   return (
     <CloudVaultsTable

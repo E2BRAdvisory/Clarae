@@ -3,14 +3,12 @@ import { Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { Events } from '../app/events';
-import { useCan, usePlatform } from '../platform';
 import { useManaged, fromState } from '../state/managed';
 import { useAppStore } from '../state/store';
 import { useSharing } from '../state/sharing';
-import { dialog } from '../ui/dialogs';
+import { ActionButton } from '../ui/ActionButton';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { lazyView } from '../ui/lazyView';
-import { sharingKeys } from './queries';
 // Loaded on demand: the dialog (and the share editor of @memobrain/cloud-features) is not needed to
 // open a vault.
 const ShareDialog = lazyView(async () => ({
@@ -25,7 +23,6 @@ export function SharingDialogs() {
   const vault = useAppStore((s) => s.vault);
   const target = useSharing((s) => s.shareTarget);
   const revoked = useSharing((s) => s.revoked);
-  const keepsCopies = useCan('detachedCopies');
 
   useEffect(() => {
     // The configuration in force applies from the start (cached when offline).
@@ -52,47 +49,6 @@ export function SharingDialogs() {
     return () => offs.forEach((f) => f());
   }, [qc]);
 
-  const finish = async (keep: boolean) => {
-    const r = revoked;
-    if (!r) return;
-    const isOpen = useAppStore.getState().vault?.id === r.vaultId;
-    const { removeFromBrowser, mountRemoved } = usePlatform.getState();
-    if (!keep && isOpen && removeFromBrowser) {
-      // The browser: its host removes the copy and its marker and goes back to the console; what
-      // was not uploaded is listed before anything is deleted (D-04).
-      useSharing.getState().setRevoked(null);
-      removeFromBrowser();
-      return;
-    }
-    try {
-      const kept = await api.sharing.removeMount(r.shareId, keep);
-      mountRemoved?.(r.shareId);
-      if (isOpen) useAppStore.getState().setVault(null);
-      void qc.invalidateQueries({ queryKey: sharingKeys.mounts });
-      useSharing.getState().setRevoked(null);
-      if (keep && kept.path)
-        await dialog.alert(t('sharing.keptTitle'), t('sharing.keptAt', { path: kept.path }));
-    } catch (e) {
-      await dialog.error(e);
-    }
-  };
-
-  /** Where a kept folder cannot be opened again (the browser): the copy is saved as a ZIP instead. */
-  const download = async () => {
-    const r = revoked;
-    if (!r) return;
-    try {
-      const res = await api.vault.exportZip(r.vaultId);
-      if (res.cancelled) return;
-      await dialog.alert(
-        t('export.doneTitle'),
-        t('export.done', { count: res.files, path: res.path }),
-      );
-    } catch (e) {
-      await dialog.error(e);
-    }
-  };
-
   return (
     <>
       {vault && target && (
@@ -117,18 +73,10 @@ export function SharingDialogs() {
             <h2>{t('sharing.revokedTitle')}</h2>
             <p>{t('sharing.revokedText', { name: revoked.name })}</p>
             <div className="actions">
-              <button onClick={() => void finish(false)}>{t('sharing.deleteCopy')}</button>
-              {keepsCopies ? (
-                <button className="primary" onClick={() => void finish(true)}>
-                  {t('sharing.keepCopy')}
-                </button>
-              ) : (
-                vault?.id === revoked.vaultId && (
-                  <button className="primary" onClick={() => void download()}>
-                    {t('sharing.downloadCopy')}
-                  </button>
-                )
-              )}
+              <ActionButton id="mount:delete-copy" arg={revoked} />
+              {/* One of the two: a kept folder where one can be opened again, a ZIP elsewhere. */}
+              <ActionButton id="mount:keep-copy" arg={revoked} className="primary" />
+              <ActionButton id="mount:download-copy" arg={revoked} className="primary" />
               <button onClick={() => useSharing.getState().setRevoked(null)}>
                 {t('sharing.later')}
               </button>

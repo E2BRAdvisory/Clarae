@@ -32,6 +32,7 @@ import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import type { EditorView } from '@codemirror/view';
 import { can, type Capabilities } from '../platform';
+import type { FeatureId } from '../parity/features.gen';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
 import { settleNotes } from '../workspaces/flush';
 
@@ -40,6 +41,12 @@ export type CommandGroup = 'file' | 'navigate' | 'view' | 'editor' | 'app';
 export interface Command {
   id: string;
   group: CommandGroup;
+  /**
+   * The feature of the registry (shared/parity/features.yaml) the command belongs to (ADR-0045 §3):
+   * the type is generated from the registry, so a feature it lacks does not compile, and
+   * `task parity` refuses a command whose feature does not list it.
+   */
+  feature: FeatureId;
   defaults: readonly string[];
   /** Hidden from the palette (still bindable). */
   hidden?: boolean;
@@ -62,7 +69,7 @@ const readOnlyVault = (): boolean => {
   return v ? infoOf(useSync.getState(), v.id).readOnly : false;
 };
 const canWrite = (): boolean => hasVault() && !readOnlyVault();
-const feature = (name: Feature): boolean => featureOn(useManaged.getState().features, name);
+const flagOn = (name: Feature): boolean => featureOn(useManaged.getState().features, name);
 const activePath = (): string | null => activeTab(store().layout)?.path ?? null;
 const hasNote = (): boolean => activePath() !== null;
 const syncInfo = () => infoOf(useSync.getState(), store().vault?.id);
@@ -146,6 +153,7 @@ export const commands: Command[] = [
   {
     id: 'note:new',
     group: 'file',
+    feature: 'note.create',
     defaults: ['Mod-n'],
     enabled: canWrite,
     run: () => guard(createNote()),
@@ -153,6 +161,7 @@ export const commands: Command[] = [
   {
     id: 'note:new-tab',
     group: 'file',
+    feature: 'note.create',
     defaults: ['Mod-Alt-n'],
     enabled: canWrite,
     run: () => guard(createNote({ newTab: true })),
@@ -160,6 +169,7 @@ export const commands: Command[] = [
   {
     id: 'folder:new',
     group: 'file',
+    feature: 'note.create',
     defaults: [],
     enabled: canWrite,
     run: () =>
@@ -168,20 +178,23 @@ export const commands: Command[] = [
   {
     id: 'drawing:new',
     group: 'file',
+    feature: 'drawing.edit',
     defaults: ['Mod-Alt-d'],
-    enabled: () => canWrite() && feature(Feature.Drawings),
+    enabled: () => canWrite() && flagOn(Feature.Drawings),
     run: () => guard(newDrawing()),
   },
   {
     id: 'canvas:new',
     group: 'file',
+    feature: 'canvas',
     defaults: [],
-    enabled: () => canWrite() && feature(Feature.Canvas),
+    enabled: () => canWrite() && flagOn(Feature.Canvas),
     run: () => guard(newCanvas()),
   },
   {
     id: 'bases:new',
     group: 'file',
+    feature: 'bases',
     defaults: [],
     enabled: () => canWrite(),
     run: () => guard(newBase()),
@@ -189,13 +202,15 @@ export const commands: Command[] = [
   {
     id: 'drawing:insert',
     group: 'editor',
+    feature: 'drawing.edit',
     defaults: [],
-    enabled: () => editorMode() && !readOnlyVault() && feature(Feature.Drawings),
+    enabled: () => editorMode() && !readOnlyVault() && flagOn(Feature.Drawings),
     run: () => guard(insertDrawing()),
   },
   {
     id: 'note:rename',
     group: 'file',
+    feature: 'note.rename',
     defaults: ['F2'],
     enabled: () => hasNote() && !readOnlyVault(),
     run: renameActive,
@@ -203,6 +218,7 @@ export const commands: Command[] = [
   {
     id: 'note:delete',
     group: 'file',
+    feature: 'note.delete',
     defaults: [],
     enabled: () => hasNote() && !readOnlyVault(),
     run: deleteActive,
@@ -210,17 +226,19 @@ export const commands: Command[] = [
   {
     id: 'sharing:open',
     group: 'app',
+    feature: 'share.manage',
     defaults: [],
-    enabled: () => feature(Feature.Sharing),
+    enabled: () => flagOn(Feature.Sharing),
     run: () => store().openSettings('sharing'),
   },
   {
     id: 'sharing:share',
     group: 'file',
+    feature: 'share.create',
     defaults: [],
     enabled: () => {
       const v = store().vault;
-      if (!v || !hasNote() || !feature(Feature.Sharing)) return false;
+      if (!v || !hasNote() || !flagOn(Feature.Sharing)) return false;
       const info = infoOf(useSync.getState(), v.id);
       return info.linked && info.kind === 'shared' && !info.mount;
     },
@@ -232,6 +250,7 @@ export const commands: Command[] = [
   {
     id: 'vault:export-zip',
     group: 'file',
+    feature: 'export.zip',
     defaults: [],
     enabled: hasVault,
     run: exportVaultZip,
@@ -239,6 +258,7 @@ export const commands: Command[] = [
   {
     id: 'note:export-pdf',
     group: 'file',
+    feature: 'export.note',
     defaults: [],
     enabled: hasNote,
     run: exportNotePdf,
@@ -246,6 +266,7 @@ export const commands: Command[] = [
   {
     id: 'note:export-image',
     group: 'file',
+    feature: 'export.note',
     defaults: [],
     enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
     run: exportNoteImage,
@@ -253,6 +274,7 @@ export const commands: Command[] = [
   {
     id: 'note:export-html',
     group: 'file',
+    feature: 'export.note',
     defaults: [],
     enabled: hasNote,
     run: exportNoteHtml,
@@ -260,6 +282,7 @@ export const commands: Command[] = [
   {
     id: 'update:check',
     group: 'file',
+    feature: 'app.updater',
     defaults: [],
     requires: ['updater'],
     run: () => useUpdater.getState().check(),
@@ -267,6 +290,7 @@ export const commands: Command[] = [
   {
     id: 'import:open',
     group: 'file',
+    feature: 'import',
     defaults: [],
     enabled: canWrite,
     run: () => useImporter.getState().show(),
@@ -274,6 +298,7 @@ export const commands: Command[] = [
   {
     id: 'vault:switch',
     group: 'file',
+    feature: 'vault.multi-open',
     defaults: [],
     // The browser opens one vault per page, chosen in the console.
     requires: ['multiVault'],
@@ -286,6 +311,7 @@ export const commands: Command[] = [
   {
     id: 'vault:close',
     group: 'file',
+    feature: 'vault.open',
     defaults: [],
     enabled: hasVault,
     run: async () => {
@@ -301,6 +327,7 @@ export const commands: Command[] = [
   {
     id: 'index:rebuild',
     group: 'app',
+    feature: 'index.rebuild',
     defaults: [],
     enabled: hasVault,
     run: async () => {
@@ -315,6 +342,7 @@ export const commands: Command[] = [
   {
     id: 'switcher:open',
     group: 'navigate',
+    feature: 'note.random',
     defaults: ['Mod-o'],
     enabled: hasVault,
     run: () => store().setSwitcherOpen(true),
@@ -322,12 +350,14 @@ export const commands: Command[] = [
   {
     id: 'palette:open',
     group: 'navigate',
+    feature: 'command-palette',
     defaults: ['Mod-p', 'Mod-Shift-p'],
     run: () => store().setPaletteOpen(true),
   },
   {
     id: 'search:vault',
     group: 'navigate',
+    feature: 'search',
     defaults: ['Mod-Shift-f'],
     enabled: hasVault,
     run: focusSearch,
@@ -335,6 +365,7 @@ export const commands: Command[] = [
   {
     id: 'tab:next',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: ['Mod-Alt-ArrowRight'],
     enabled: hasNote,
     run: () => store().cycleTabs(1),
@@ -342,6 +373,7 @@ export const commands: Command[] = [
   {
     id: 'tab:prev',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: ['Mod-Alt-ArrowLeft'],
     enabled: hasNote,
     run: () => store().cycleTabs(-1),
@@ -349,6 +381,7 @@ export const commands: Command[] = [
   {
     id: 'tab:close',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: ['Mod-w'],
     enabled: hasNote,
     run: () => {
@@ -359,6 +392,7 @@ export const commands: Command[] = [
   {
     id: 'tab:pin',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: [],
     enabled: hasNote,
     run: () => {
@@ -369,6 +403,7 @@ export const commands: Command[] = [
   {
     id: 'tab:close-right',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: [],
     enabled: hasNote,
     run: () => {
@@ -379,6 +414,7 @@ export const commands: Command[] = [
   {
     id: 'tab:close-left',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: [],
     enabled: hasNote,
     run: () => {
@@ -389,6 +425,7 @@ export const commands: Command[] = [
   {
     id: 'tab:close-others',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: [],
     enabled: hasNote,
     run: () => {
@@ -399,6 +436,7 @@ export const commands: Command[] = [
   {
     id: 'tab:close-all',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: [],
     enabled: hasNote,
     run: () => store().closeAllTabsIn(store().layout.activePane),
@@ -406,6 +444,7 @@ export const commands: Command[] = [
   {
     id: 'pane:close',
     group: 'navigate',
+    feature: 'workspace.layout',
     defaults: ['Mod-Shift-w'],
     enabled: hasVault,
     run: () => store().closeActivePane(),
@@ -415,6 +454,7 @@ export const commands: Command[] = [
   {
     id: 'mode:toggle-reading',
     group: 'view',
+    feature: 'editor.modes',
     defaults: ['Mod-e'],
     enabled: hasNote,
     run: () => {
@@ -430,6 +470,7 @@ export const commands: Command[] = [
   {
     id: 'mode:toggle-source',
     group: 'view',
+    feature: 'editor.modes',
     defaults: ['Mod-Shift-e'],
     enabled: hasNote,
     run: () => {
@@ -437,12 +478,34 @@ export const commands: Command[] = [
       if (tab) store().setTabMode(tab.id, tab.mode === 'source' ? 'live' : 'source');
     },
   },
-  { id: 'mode:live', group: 'view', defaults: [], enabled: hasNote, run: setMode('live') },
-  { id: 'mode:source', group: 'view', defaults: [], enabled: hasNote, run: setMode('source') },
-  { id: 'mode:reading', group: 'view', defaults: [], enabled: hasNote, run: setMode('reading') },
+  {
+    id: 'mode:live',
+    group: 'view',
+    feature: 'editor.modes',
+    defaults: [],
+    enabled: hasNote,
+    run: setMode('live'),
+  },
+  {
+    id: 'mode:source',
+    group: 'view',
+    feature: 'editor.modes',
+    defaults: [],
+    enabled: hasNote,
+    run: setMode('source'),
+  },
+  {
+    id: 'mode:reading',
+    group: 'view',
+    feature: 'editor.modes',
+    defaults: [],
+    enabled: hasNote,
+    run: setMode('reading'),
+  },
   {
     id: 'pane:split-right',
     group: 'view',
+    feature: 'workspace.layout',
     defaults: ['Mod-\\'],
     enabled: hasNote,
     run: () => store().split('row'),
@@ -450,6 +513,7 @@ export const commands: Command[] = [
   {
     id: 'pane:split-down',
     group: 'view',
+    feature: 'workspace.layout',
     defaults: ['Mod-Shift-\\'],
     enabled: hasNote,
     run: () => store().split('column'),
@@ -457,6 +521,7 @@ export const commands: Command[] = [
   {
     id: 'pane:link',
     group: 'view',
+    feature: 'workspace.layout',
     defaults: [],
     enabled: hasNote,
     run: () => store().toggleLinkedPane(store().layout.activePane),
@@ -464,24 +529,28 @@ export const commands: Command[] = [
   {
     id: 'sidebar:left',
     group: 'view',
+    feature: 'workspace.layout',
     defaults: ['Mod-Shift-l'],
     run: () => store().setLeft({ open: !store().left.open }),
   },
   {
     id: 'sidebar:right',
     group: 'view',
+    feature: 'workspace.layout',
     defaults: ['Mod-Shift-r'],
     run: () => store().setRight({ open: !store().right.open }),
   },
   {
     id: 'theme:toggle',
     group: 'view',
+    feature: 'appearance',
     defaults: [],
     run: toggleTheme,
   },
   {
     id: 'app:toggle-status-bar',
     group: 'view',
+    feature: 'appearance',
     defaults: [],
     run: () => {
       const s = useSettings.getState();
@@ -491,6 +560,7 @@ export const commands: Command[] = [
   {
     id: 'separator:insert',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: [],
     enabled: () => editorMode() && !readOnlyVault(),
     run: withEditor(fmt.insertSeparator),
@@ -498,6 +568,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:outline',
     group: 'view',
+    feature: 'outline',
     defaults: [],
     enabled: hasNote,
     run: () => store().setLeft({ open: true, tab: 'outline' }),
@@ -505,6 +576,7 @@ export const commands: Command[] = [
   {
     id: 'graph:open',
     group: 'view',
+    feature: 'graph',
     defaults: ['Mod-Shift-g'],
     enabled: hasVault,
     run: () => openGraph(),
@@ -512,6 +584,7 @@ export const commands: Command[] = [
   {
     id: 'graph:open-local',
     group: 'view',
+    feature: 'graph',
     defaults: [],
     enabled: () => hasVault() && /\.md$/i.test(activePath() ?? ''),
     run: () => void openLocalGraph(),
@@ -519,6 +592,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:properties',
     group: 'view',
+    feature: 'properties',
     defaults: [],
     enabled: hasVault,
     run: () => store().setRight({ open: true, tab: 'properties' }),
@@ -526,6 +600,7 @@ export const commands: Command[] = [
   {
     id: 'slides:start',
     group: 'view',
+    feature: 'slides',
     defaults: [],
     enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
     run: () => startSlideshow(false),
@@ -533,6 +608,7 @@ export const commands: Command[] = [
   {
     id: 'slides:start-here',
     group: 'view',
+    feature: 'slides',
     defaults: [],
     enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
     run: () => startSlideshow(true),
@@ -540,6 +616,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:slides',
     group: 'view',
+    feature: 'slides',
     defaults: [],
     enabled: hasNote,
     run: () => store().setRight({ open: true, tab: 'slides' }),
@@ -547,6 +624,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:stats',
     group: 'view',
+    feature: 'note.stats',
     defaults: [],
     enabled: hasNote,
     run: () => store().setRight({ open: true, tab: 'stats' }),
@@ -554,6 +632,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:backlinks',
     group: 'view',
+    feature: 'links.backlinks',
     defaults: [],
     enabled: hasNote,
     run: () => store().setRight({ open: true, tab: 'links' }),
@@ -561,6 +640,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:tags',
     group: 'view',
+    feature: 'tags',
     defaults: [],
     enabled: hasVault,
     run: () => store().setRight({ open: true, tab: 'tags' }),
@@ -568,6 +648,7 @@ export const commands: Command[] = [
   {
     id: 'sidebar:files',
     group: 'view',
+    feature: 'files.explorer',
     defaults: [],
     enabled: hasVault,
     run: () => store().setLeft({ open: true, tab: 'files' }),
@@ -577,6 +658,7 @@ export const commands: Command[] = [
   {
     id: 'editor:bold',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-b'],
     enabled: editorMode,
     run: withEditor(fmt.toggleBold),
@@ -584,6 +666,7 @@ export const commands: Command[] = [
   {
     id: 'editor:italic',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-i'],
     enabled: editorMode,
     run: withEditor(fmt.toggleItalic),
@@ -591,6 +674,7 @@ export const commands: Command[] = [
   {
     id: 'editor:highlight',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-h'],
     enabled: editorMode,
     run: withEditor(fmt.toggleHighlight),
@@ -598,6 +682,7 @@ export const commands: Command[] = [
   {
     id: 'editor:strike',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-x'],
     enabled: editorMode,
     run: withEditor(fmt.toggleStrike),
@@ -605,6 +690,7 @@ export const commands: Command[] = [
   {
     id: 'editor:code',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-c'],
     enabled: editorMode,
     run: withEditor(fmt.toggleInlineCode),
@@ -612,6 +698,7 @@ export const commands: Command[] = [
   {
     id: 'editor:comment',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: [],
     enabled: editorMode,
     run: withEditor(fmt.toggleComment),
@@ -619,6 +706,7 @@ export const commands: Command[] = [
   {
     id: 'editor:link',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-k'],
     enabled: editorMode,
     run: withEditor(fmt.insertLink),
@@ -626,6 +714,7 @@ export const commands: Command[] = [
   {
     id: 'editor:wikilink',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-k'],
     enabled: editorMode,
     run: withEditor(fmt.insertWikilink),
@@ -633,6 +722,7 @@ export const commands: Command[] = [
   ...[1, 2, 3, 4, 5, 6].map<Command>((n) => ({
     id: `editor:heading-${n}`,
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: [`Mod-${n}`],
     enabled: editorMode,
     run: withEditor(fmt.setHeading(n)),
@@ -640,6 +730,7 @@ export const commands: Command[] = [
   {
     id: 'editor:bullet',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-8'],
     enabled: editorMode,
     run: withEditor(fmt.toggleBulletList),
@@ -647,6 +738,7 @@ export const commands: Command[] = [
   {
     id: 'editor:numbered',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-7'],
     enabled: editorMode,
     run: withEditor(fmt.toggleNumberedList),
@@ -654,6 +746,7 @@ export const commands: Command[] = [
   {
     id: 'editor:quote',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Shift-9'],
     enabled: editorMode,
     run: withEditor(fmt.toggleQuote),
@@ -661,6 +754,7 @@ export const commands: Command[] = [
   {
     id: 'editor:task',
     group: 'editor',
+    feature: 'editor.formatting',
     defaults: ['Mod-Enter'],
     enabled: editorMode,
     run: withEditor(fmt.toggleTask),
@@ -670,6 +764,7 @@ export const commands: Command[] = [
   {
     id: 'sync:connect',
     group: 'app',
+    feature: 'sync.link',
     defaults: [],
     enabled: () => hasVault() && !syncInfo().linked,
     run: () => useSync.getState().setWizardOpen(true),
@@ -677,6 +772,7 @@ export const commands: Command[] = [
   {
     id: 'sync:now',
     group: 'app',
+    feature: 'sync.engine',
     defaults: ['Mod-Shift-s'],
     enabled: () => isLinked() && !syncInfo().locked,
     run: () => guard(api.sync.syncNow(store().vault?.id ?? '')),
@@ -684,6 +780,7 @@ export const commands: Command[] = [
   {
     id: 'sync:conflicts',
     group: 'app',
+    feature: 'conflicts',
     defaults: [],
     enabled: isLinked,
     run: () => useSync.getState().setConflictsOpen(true),
@@ -691,6 +788,7 @@ export const commands: Command[] = [
   {
     id: 'sync:history',
     group: 'app',
+    feature: 'revisions',
     defaults: [],
     enabled: () => isLinked() && hasNote(),
     run: () => useSync.getState().openHistory(activePath()),
@@ -698,6 +796,7 @@ export const commands: Command[] = [
   {
     id: 'recovery:open',
     group: 'file',
+    feature: 'history.local',
     defaults: [],
     enabled: hasNote,
     run: () => {
@@ -708,14 +807,22 @@ export const commands: Command[] = [
   {
     id: 'recovery:deleted',
     group: 'file',
+    feature: 'trash',
     defaults: [],
     enabled: hasVault,
     run: () => useRecovery.getState().openDeleted(),
   },
-  { id: 'sync:settings', group: 'app', defaults: [], run: () => store().openSettings('sync') },
+  {
+    id: 'sync:settings',
+    group: 'app',
+    feature: 'sync.engine',
+    defaults: [],
+    run: () => store().openSettings('sync'),
+  },
   {
     id: 'sync:unlock',
     group: 'app',
+    feature: 'crypto.unlock',
     defaults: [],
     enabled: () => isLinked() && syncInfo().locked,
     run: () => useSync.getState().setUnlockOpen(true),
@@ -727,10 +834,17 @@ export const commands: Command[] = [
   ...previewCommands,
 
   // ---- app ----
-  { id: 'settings:open', group: 'app', defaults: ['Mod-,'], run: () => store().openSettings() },
+  {
+    id: 'settings:open',
+    group: 'app',
+    feature: 'settings',
+    defaults: ['Mod-,'],
+    run: () => store().openSettings(),
+  },
   {
     id: 'settings:hotkeys',
     group: 'app',
+    feature: 'hotkeys',
     defaults: [],
     run: () => store().openSettings('hotkeys'),
   },

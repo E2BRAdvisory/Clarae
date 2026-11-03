@@ -2,13 +2,11 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
-import { lockVault } from '../app/actions';
-import { signIn } from '../app/signIn';
-import { useCan, usePlatform } from '../platform';
 import { useAppStore } from '../state/store';
 import { isLocked, useManaged } from '../state/managed';
 import { infoOf, useSync } from '../state/sync';
 import { Icon } from '../shell/icons';
+import { ActionButton, useAction } from '../ui/ActionButton';
 import { dialog } from '../ui/dialogs';
 import { PassphraseFields } from '../sync/PassphraseFields';
 import { RecoveryKeyStep } from '../sync/RecoveryKeyStep';
@@ -130,13 +128,11 @@ export function SyncSection() {
   const [form, setForm] = useState<'none' | 'passphrase' | 'recovery'>('none');
   const [newKey, setNewKey] = useState('');
   const auth = useAppStore((s) => s.auth);
-  const setAuth = useAppStore((s) => s.setAuth);
-  const [signingIn, setSigningIn] = useState(false);
   // The desktop disconnects a vault and signs in itself; in the browser the copy belongs to the
-  // cloud vault (it is removed instead) and the session is the console's.
-  const canUnlink = useCan('unlinkVault');
-  const ownsSession = useCan('ownsSession');
-  const removeFromBrowser = usePlatform((s) => s.removeFromBrowser);
+  // cloud vault (it is removed instead, sync:remove-from-browser) and the session is the
+  // console's (no account:sign-in). The actions say which applies.
+  const removesCopy = useAction('sync:remove-from-browser', 'cloud-deleted') !== null;
+  const signsIn = useAction('account:sign-in', info.serverUrl) !== null;
 
   if (!vault) return <p className="muted">{t('settings.needsVault')}</p>;
   const id = vault.id;
@@ -158,7 +154,7 @@ export function SyncSection() {
             {t('sync.cloudDeletedNote', { name: deletedName })}
           </div>
         )}
-        {canUnlink || !removeFromBrowser ? (
+        {!removesCopy ? (
           <>
             <p className="muted">{t('sync.notConnectedText')}</p>
             <div className="actions">
@@ -171,23 +167,7 @@ export function SyncSection() {
           // In the browser a copy that lost its cloud vault (deleted elsewhere) is not connected to
           // another one: it is removed, or kept until the vault is restored from the console.
           <div className="actions">
-            <button
-              className="danger"
-              onClick={() =>
-                void (async () => {
-                  if (
-                    await dialog.confirm(
-                      t('sync.removeFromBrowser'),
-                      t('sync.removeDeletedCopyText'),
-                      true,
-                    )
-                  )
-                    removeFromBrowser();
-                })()
-              }
-            >
-              {t('sync.removeFromBrowser')}
-            </button>
+            <ActionButton id="sync:remove-from-browser" arg="cloud-deleted" className="danger" />
           </div>
         )}
       </>
@@ -227,29 +207,18 @@ export function SyncSection() {
             : ''}
         </span>
       </div>
-      {(auth?.status ?? 'signed_out') === 'signed_out' && !ownsSession && (
+      {(auth?.status ?? 'signed_out') === 'signed_out' && !signsIn && (
         <div className="row">
           <span className="muted">{t('sync.signedOutHintWeb')}</span>
         </div>
       )}
-      {(auth?.status ?? 'signed_out') === 'signed_out' && ownsSession && (
+      {(auth?.status ?? 'signed_out') === 'signed_out' && signsIn && (
         <div className="row">
           <span className="muted">{t('sync.signedOutHint')}</span>
-          <button
-            className="primary"
-            disabled={signingIn}
-            onClick={() => {
-              setSigningIn(true);
-              void signIn(info.serverUrl)
-                .then(setAuth)
-                .finally(() => setSigningIn(false));
-            }}
-          >
-            {t('cloud.login')}
-          </button>
+          <ActionButton id="account:sign-in" arg={info.serverUrl} className="primary" />
         </div>
       )}
-      {(auth?.status ?? 'signed_out') === 'signed_out' && ownsSession && auth?.error && (
+      {(auth?.status ?? 'signed_out') === 'signed_out' && signsIn && auth?.error && (
         <div className="error small" role="alert">
           {auth.error}
         </div>
@@ -297,41 +266,10 @@ export function SyncSection() {
         <button onClick={() => void guard(() => api.sync.syncNow(id))} disabled={info.locked}>
           {t('sync.syncNow')}
         </button>
-        <button onClick={() => void guard(() => api.sync.setPaused(id, !info.paused))}>
-          {info.paused ? t('sync.resume') : t('sync.pause')}
-        </button>
-        {canUnlink && (
-          <button
-            className="danger"
-            onClick={() =>
-              void (async () => {
-                if (await dialog.confirm(t('sync.disconnect'), t('sync.disconnectText'), true))
-                  await guard(() => api.sync.unlink(id));
-              })()
-            }
-          >
-            {t('sync.disconnect')}
-          </button>
-        )}
-        {!canUnlink && removeFromBrowser && (
-          <button
-            className="danger"
-            onClick={() =>
-              void (async () => {
-                if (
-                  await dialog.confirm(
-                    t('sync.removeFromBrowser'),
-                    t('sync.removeFromBrowserText'),
-                    true,
-                  )
-                )
-                  removeFromBrowser();
-              })()
-            }
-          >
-            {t('sync.removeFromBrowser')}
-          </button>
-        )}
+        <ActionButton id="sync:pause" arg={{ vaultId: id, paused: info.paused }} />
+        {/* Disconnect where a folder lives without its cloud vault, otherwise remove the copy. */}
+        <ActionButton id="sync:unlink" arg={id} className="danger" />
+        <ActionButton id="sync:remove-from-browser" arg="linked" className="danger" />
       </div>
 
       {info.kind === 'private' && (
@@ -352,7 +290,7 @@ export function SyncSection() {
                   {t('sync.unlock')}
                 </button>
               ) : (
-                <button onClick={() => void guard(() => lockVault(id))}>{t('sync.lockNow')}</button>
+                <ActionButton id="vault:lock" arg={id} />
               )}
               <button disabled={info.locked} onClick={() => setForm('passphrase')}>
                 {t('sync.changePassphrase')}

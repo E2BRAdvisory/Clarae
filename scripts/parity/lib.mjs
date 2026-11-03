@@ -75,7 +75,11 @@ export function capabilityUses(sources) {
   return used;
 }
 
-/** The actions of the console marked `data-action="<id>"` in its sources (no duplicates). */
+/**
+ * The actions of the console marked `data-action="<id>"` in its sources (no duplicates). The
+ * workbench declares its actions instead (defineAction, packages/workbench/src/commands/actions.ts),
+ * read at runtime with the commands; the console keeps this marker until it adopts them.
+ */
 export function consoleActions(sources) {
   const out = new Set();
   for (const text of sources)
@@ -165,7 +169,7 @@ const list = (v) => (Array.isArray(v) ? v : []);
 
 /**
  * The registry with the workbench completed: a workbench surface that does not list commands,
- * bindings, operations or a capability has the desktop's (same UI, same core: ADR-0029).
+ * actions, bindings, operations or a capability has the desktop's (same UI, same core: ADR-0029).
  */
 export function effectiveFeatures(registry) {
   return list(registry?.features).map((f) => {
@@ -177,12 +181,14 @@ export function effectiveFeatures(registry) {
       desktop: {
         ...desktop,
         commands: list(desktop.commands),
+        actions: list(desktop.actions),
         bindings: list(desktop.bindings),
         operationIds: list(desktop.operationIds),
       },
       workbench: {
         ...wb,
         commands: list(inherit('commands')),
+        actions: list(inherit('actions')),
         bindings: list(inherit('bindings')),
         operationIds: list(inherit('operationIds')),
         capability: inherit('capability'),
@@ -200,9 +206,10 @@ export function effectiveFeatures(registry) {
   });
 }
 
-/** Which features reference each command, binding and operation. */
+/** Which features reference each command, action, binding and operation. */
 export function references(features) {
   const commands = new Map();
+  const actions = new Map();
   const bindings = new Map();
   const operations = new Map();
   const add = (map, key, id) => {
@@ -212,12 +219,13 @@ export function references(features) {
   for (const f of features) {
     for (const s of ['desktop', 'workbench']) {
       for (const c of f[s].commands) add(commands, c, f.id);
+      for (const a of f[s].actions) add(actions, a, f.id);
       for (const b of f[s].bindings) add(bindings, b, f.id);
       for (const o of f[s].operationIds) add(operations, o, f.id);
     }
     for (const o of f.console?.operationIds ?? []) add(operations, o, f.id);
   }
-  return { commands, bindings, operations };
+  return { commands, actions, bindings, operations };
 }
 
 /** The tests of `tests.workbench` of a feature that prove it on the WebAssembly core. */
@@ -227,7 +235,8 @@ export function proofsOf(f, evidence) {
 
 /**
  * Every rule of `parity --check` except the schema and the freshness of the document.
- * `inputs`: { registry, commands: [{id, platforms, requires}], capabilities: {desktop, web},
+ * `inputs`: { registry, commands: [{id, feature, platforms, requires}], actions: the declarative
+ * actions of the workbench [{id, feature, platforms, requires, excludes}], capabilities: {desktop, web},
  * bindings: [], operations: [{operationId}], routes: [], exists(path),
  * core: Set of browser specs that run the WebAssembly core (coreSpecs), matrix: rows of
  * specCoverage, consoleOperations: Set of the operationIds the console calls (consoleCalls),
@@ -237,12 +246,20 @@ export function proofsOf(f, evidence) {
  */
 export function check(inputs) {
   const { registry, commands, capabilities, bindings, operations, routes, exists } = inputs;
-  for (const k of ['core', 'matrix', 'consoleOperations', 'consoleActions', 'capabilityUses'])
+  for (const k of [
+    'actions',
+    'core',
+    'matrix',
+    'consoleOperations',
+    'consoleActions',
+    'capabilityUses',
+  ])
     if (!inputs[k]) throw new Error(`check: input ${k} is missing`);
   const evidence = { core: inputs.core, matrix: inputs.matrix };
   const errors = [];
   const features = effectiveFeatures(registry);
   const commandById = new Map(commands.map((c) => [c.id, c]));
+  const actionById = new Map(inputs.actions.map((a) => [a.id, a]));
   const bindingSet = new Set(bindings);
   const opSet = new Set(operations.map((o) => o.operationId));
   const routeSet = new Set(routes);
@@ -271,6 +288,9 @@ export function check(inputs) {
     for (const s of ['desktop', 'workbench']) {
       for (const c of f[s].commands) {
         if (!commandById.has(c)) errors.push(`${where}: ${s} command ${c} does not exist`);
+      }
+      for (const a of f[s].actions) {
+        if (!actionById.has(a)) errors.push(`${where}: ${s} action ${a} does not exist`);
       }
       for (const b of f[s].bindings) {
         if (!bindingSet.has(b)) errors.push(`${where}: ${s} binding ${b} does not exist`);
@@ -310,6 +330,18 @@ export function check(inputs) {
         if (cmd && cmd.platforms && cmd.platforms[platform] === false) {
           errors.push(
             `${where}: ${surface} is "yes" but command ${c} requires ${cmd.requires?.join(', ') || 'a capability'} that ${platform} lacks`,
+          );
+        }
+      }
+      for (const a of s.actions) {
+        const act = actionById.get(a);
+        if (act && act.platforms && act.platforms[platform] === false) {
+          const needs = [
+            ...(act.requires ?? []).map((x) => `needs ${x}`),
+            ...(act.excludes ?? []).map((x) => `is offered only without ${x}`),
+          ].join(', ');
+          errors.push(
+            `${where}: ${surface} is "yes" but action ${a} is not offered on ${platform} (${needs || 'capabilities'})`,
           );
         }
       }
@@ -376,14 +408,38 @@ export function check(inputs) {
   // A capability that nothing reads gates nothing (ADR-0045 §1).
   const consumed = new Set(inputs.capabilityUses);
   for (const c of commands) for (const r of c.requires ?? []) consumed.add(r);
+  for (const a of inputs.actions)
+    for (const r of [...(a.requires ?? []), ...(a.excludes ?? [])]) consumed.add(r);
   for (const cap of Object.keys(capabilities.desktop ?? {}))
     if (!consumed.has(cap))
-      errors.push(`capability ${cap} has no consumer (can, useCan or Command.requires)`);
+      errors.push(
+        `capability ${cap} has no consumer (can, useCan, Command.requires or an action's requires/excludes)`,
+      );
 
   // Coverage: everything that exists is part of some feature.
   const refs = references(features);
   for (const c of commands) {
     if (!refs.commands.has(c.id)) errors.push(`command ${c.id} is not referenced by any feature`);
+  }
+  for (const a of inputs.actions) {
+    if (!refs.actions.has(a.id)) errors.push(`action ${a.id} is not referenced by any feature`);
+    if (commandById.has(a.id)) errors.push(`action ${a.id} has the id of a command`);
+  }
+  // The feature a command or an action declares (ADR-0045 §3) is one that lists it: the two
+  // sides of the mapping cannot drift apart.
+  for (const [kind, items, map] of [
+    ['command', commands, refs.commands],
+    ['action', inputs.actions, refs.actions],
+  ]) {
+    for (const x of items) {
+      if (!x.feature) errors.push(`${kind} ${x.id} declares no feature`);
+      else if (!ids.has(x.feature))
+        errors.push(`${kind} ${x.id} declares feature ${x.feature}, which is not in the registry`);
+      else if (map.has(x.id) && !map.get(x.id).includes(x.feature))
+        errors.push(
+          `${kind} ${x.id} declares feature ${x.feature}, but it is listed by ${map.get(x.id).join(', ')}`,
+        );
+    }
   }
   for (const b of bindings) {
     if (!refs.bindings.has(b)) errors.push(`binding ${b} is not referenced by any feature`);
@@ -530,7 +586,7 @@ export function specCoverage(specs, featureIds) {
 
 /**
  * The generated part of docs/web-workbench-parity.md (markers included).
- * `inputs`: { registry, commands, bindings, operations, calledByWebTests(binding) → bool,
+ * `inputs`: { registry, commands, actions, bindings, operations, calledByWebTests(binding) → bool,
  * calledByConsole: Set<operationId>, specs: rows of specCoverage, core: Set of the browser specs
  * that run the core (coreSpecs) }.
  */
@@ -570,6 +626,31 @@ export function render(inputs) {
     (refs.commands.get(c.id) ?? []).map(code).join(', '),
     webNote(refs.commands.get(c.id)),
   ]);
+  const actions = inputs.actions ?? [];
+  const onPlatform = (a, p) => {
+    if (a.platforms?.[p] !== false) return 'yes';
+    const why = [
+      ...(a.requires ?? []).map((x) => `needs ${code(x)}`),
+      ...(a.excludes ?? []).map((x) => `only without ${code(x)}`),
+    ];
+    return `no (${why.join(', ')})`;
+  };
+  const actionRows = actions.map((a) => [
+    code(a.id),
+    onPlatform(a, 'desktop'),
+    onPlatform(a, 'web'),
+    (refs.actions.get(a.id) ?? []).map(code).join(', '),
+  ]);
+  const actionSection = actions.length
+    ? [
+        `### Azioni dei pannelli (${actions.length})`,
+        '',
+        `I pulsanti dei pannelli che non sono comandi ma realizzano una funzione (\`defineAction\` in \`packages/workbench/src/commands/actions.ts\`, mostrati da \`<ActionButton>\`, ADR-0045 §2). Come i comandi nominano la loro funzione e le capability che richiedono (\`requires\`) o di cui fanno le veci dove mancano (\`excludes\`); l'elenco viene dal registro a runtime.`,
+        '',
+        table(actionRows, ['Azione', 'Desktop', 'Web', 'Funzione']),
+        '',
+      ]
+    : [];
   const bindRows = bindings.map((b) => [
     code(b),
     (refs.bindings.get(b) ?? []).map(code).join(', '),
@@ -625,10 +706,11 @@ export function render(inputs) {
     '',
     `### Comandi (${commands.length})`,
     '',
-    `${nWeb} su ${commands.length} sono disponibili sul web; gli altri richiedono (\`Command.requires\`) una capability che il browser non ha. L'elenco viene dal registro a runtime (\`packages/workbench/src/commands/parity.test.ts\`), non dal sorgente.`,
+    `${nWeb} su ${commands.length} sono disponibili sul web; gli altri richiedono (\`Command.requires\`) una capability che il browser non ha. L'elenco viene dal registro a runtime (\`packages/workbench/src/commands/parity.test.ts\`), non dal sorgente; ogni comando dichiara la sua funzione (\`Command.feature\`, un \`FeatureId\` generato), che deve essere una di quelle che lo elencano.`,
     '',
     table(cmdRows, ['Comando', 'Gruppo', 'Sul web', 'Funzione', 'Nota']),
     '',
+    ...actionSection,
     `### Binding Go (${bindings.length} metodi, ${new Set(bindings.map((b) => b.split('.')[0])).size} servizi)`,
     '',
     `Il dispatcher del core espone tutti i ${bindings.length} metodi (verificato da \`TestDispatcherMatchesTheGeneratedBindings\`). **${nCalled} su ${bindings.length}** sono chiamati da un test del workbench web contro il core vero (\`web/e2e\`, \`web/e2e-cloud\`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (\`task test-wasm\`), ma non hanno ancora un test nel browser.`,

@@ -41,6 +41,7 @@ export const notesCommands: Command[] = [
   {
     id: 'daily:open-today',
     group: 'navigate',
+    feature: 'daily',
     defaults: [],
     enabled: canWrite,
     run: () => guard(openDaily()),
@@ -48,6 +49,7 @@ export const notesCommands: Command[] = [
   {
     id: 'daily:previous',
     group: 'navigate',
+    feature: 'daily',
     defaults: [],
     enabled: () => canWrite() && activePath() !== null,
     run: () => guard(openAdjacentDaily(-1)),
@@ -55,6 +57,7 @@ export const notesCommands: Command[] = [
   {
     id: 'daily:next',
     group: 'navigate',
+    feature: 'daily',
     defaults: [],
     enabled: () => canWrite() && activePath() !== null,
     run: () => guard(openAdjacentDaily(1)),
@@ -62,6 +65,7 @@ export const notesCommands: Command[] = [
   {
     id: 'unique:new',
     group: 'file',
+    feature: 'templates',
     defaults: [],
     enabled: canWrite,
     run: () => guard(newUniqueNote()),
@@ -69,6 +73,7 @@ export const notesCommands: Command[] = [
   {
     id: 'template:insert',
     group: 'editor',
+    feature: 'templates',
     defaults: [],
     enabled: () => canWrite() && inNote(),
     run: () => guard(insertTemplate()),
@@ -76,6 +81,7 @@ export const notesCommands: Command[] = [
   {
     id: 'template:new-from',
     group: 'file',
+    feature: 'templates',
     defaults: [],
     enabled: canWrite,
     run: () => guard(newNoteFromTemplate()),
@@ -83,6 +89,7 @@ export const notesCommands: Command[] = [
   {
     id: 'composer:merge',
     group: 'file',
+    feature: 'composer',
     defaults: [],
     enabled: () => canWrite() && !!activePath()?.toLowerCase().endsWith('.md'),
     run: () => guard(mergeActiveNote()),
@@ -90,6 +97,7 @@ export const notesCommands: Command[] = [
   {
     id: 'composer:extract',
     group: 'editor',
+    feature: 'composer',
     defaults: [],
     enabled: () => canWrite() && inNote(),
     run: () => guard(extractSelection()),
@@ -97,6 +105,7 @@ export const notesCommands: Command[] = [
   {
     id: 'note:random',
     group: 'navigate',
+    feature: 'note.random',
     defaults: [],
     enabled: hasVault,
     run: () => guard(openRandomNote()),

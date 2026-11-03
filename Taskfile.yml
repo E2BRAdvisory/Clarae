@@ -57,6 +57,7 @@ tasks:
       - task: gen-wails
       - task: gen-events
       - task: gen-capabilities
+      - task: gen-parity-features
 
   gen-features:
     desc: Config Profile schema -> Go flags and defaults (shared/go/features), TS flags (@memobrain/api-client/features)
@@ -120,6 +121,11 @@ tasks:
     dir: '{{.DESKTOP}}'
     cmds:
       - go run ./internal/app/gen/capabilities
+
+  gen-parity-features:
+    desc: Feature ids of the registry (shared/parity/features.yaml) -> FeatureId (packages/workbench/src/parity/features.gen.ts) and Go constants (shared/go/parity/features_gen.go), ADR-0045 §3
+    cmds:
+      - node scripts/gen-feature-ids.mjs
 
   # The UI is typed against the generated bindings, which the repository does not hold: build them when they are
   # missing (a stale copy is refreshed by `task gen-wails`, or `task gen`).

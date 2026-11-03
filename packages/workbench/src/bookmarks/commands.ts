@@ -36,6 +36,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:note',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: () => hasNote() && canEditBookmarks(),
     run: () => bookmarkNote(),
@@ -43,6 +44,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:heading',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: () => inEditor() && canEditBookmarks() && headingUnderCursor() !== null,
     run: () => bookmarkHeading(),
@@ -50,6 +52,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:block',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: () => inEditor() && canEditBookmarks() && hasBlockUnderCursor(),
     run: () => bookmarkBlock(),
@@ -57,6 +60,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:search',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: () => hasVault() && canEditBookmarks(),
     run: () => guard(bookmarkSearch()),
@@ -64,6 +68,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:graph',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: () => hasVault() && canEditBookmarks() && hasGraphBookmarks(),
     run: () => guard(bookmarkGraph()),
@@ -71,6 +76,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:new-group',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: () => hasVault() && canEditBookmarks(),
     run: () => guard(newBookmarkGroup()),
@@ -78,6 +84,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'bookmark:open',
     group: 'navigate',
+    feature: 'bookmarks',
     defaults: [],
     enabled: hasVault,
     run: () => guard(pickBookmark()),
@@ -85,6 +92,7 @@ export const bookmarkCommands: Command[] = [
   {
     id: 'sidebar:bookmarks',
     group: 'view',
+    feature: 'bookmarks',
     defaults: [],
     enabled: hasVault,
     run: showBookmarks,

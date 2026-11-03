@@ -10,10 +10,12 @@ export type PlatformKind = HostKind;
 /**
  * What the host offers. `true` = the UI shows the control. A control that only one host can honour
  * is gated here, never on scattered checks of the environment; a command declares it in
- * `Command.requires`, and the feature registry (shared/parity/features.yaml) names it per surface.
- * Every capability has a consumer (`can`, `useCan` or `Command.requires`): `parity --check` refuses
- * one that gates nothing. Policies of a host that no control reads (the browser wipes the clear
- * text of a private vault at its lock, ADR-0029 §6) live in the host, not here.
+ * `Command.requires` (an action of a panel in its `requires` or `excludes`, commands/actions.ts),
+ * and the feature registry (shared/parity/features.yaml) names it per surface. Every capability has
+ * a consumer (`can`, `useCan`, `Command.requires` or an action's `requires`/`excludes`):
+ * `parity --check` refuses one that gates nothing. Policies of a host that no control reads (the
+ * browser wipes the clear text of a private vault at its lock, ADR-0029 §6) live in the host, not
+ * here.
  *
  * The Go core declares them (apps/desktop/internal/app/capabilities.go, ADR-0045 §1), next to the
  * Host methods and bindings each one gates: the type and the values per kind of host are generated

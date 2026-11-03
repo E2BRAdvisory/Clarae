@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
-import { signIn } from '../app/signIn';
-import { useCan } from '../platform';
 import { useAppStore } from '../state/store';
+import { ActionButton, useAction } from '../ui/ActionButton';
 import { AccountDevices } from './AccountDevices';
 import { CloudVaults } from './CloudVaults';
 
 export function CloudSection() {
   const { t } = useTranslation();
   const auth = useAppStore((s) => s.auth);
-  const setAuth = useAppStore((s) => s.setAuth);
-  // On the web the session is the page's (the console signs in and out): no login form here.
-  const ownsSession = useCan('ownsSession');
   const [server, setServer] = useState('');
+  // On the web the session is the page's (the console signs in and out): no account:sign-in, so
+  // no login form here.
+  const signsIn = useAction('account:sign-in', server) !== null;
   const [busy, setBusy] = useState(false);
 
   // Development convenience: MEMOBRAIN_DEFAULT_SERVER_URL prefills the address.
@@ -25,16 +24,6 @@ export function CloudSection() {
 
   const status = auth?.status ?? 'signed_out';
   const name = auth?.profile.displayName || auth?.profile.username || '';
-
-  const login = async () => {
-    setBusy(true);
-    try {
-      setAuth(await signIn(server || auth?.serverUrl || '')); // a failure is in the state
-    } finally {
-      setBusy(false);
-    }
-  };
-  const logout = async () => setAuth(await api.auth.logout());
 
   const signedIn = status === 'ready' || status === 'disconnected' || status === 'device_revoked';
   return (
@@ -54,16 +43,14 @@ export function CloudSection() {
                 )
               : t('cloud.signedOut')}
         </span>
-        {signedIn && ownsSession && (
-          <button onClick={() => void logout()}>{t('cloud.logout')}</button>
-        )}
+        {signedIn && <ActionButton id="account:sign-out" />}
       </div>
       {signedIn ? (
         <div className="muted">
           {auth?.serverUrl} · {t('cloud.role')}: {auth?.profile.role}
         </div>
       ) : (
-        ownsSession && (
+        signsIn && (
           <div className="row">
             <input
               aria-label={t('cloud.serverUrl')}
@@ -72,9 +59,13 @@ export function CloudSection() {
               onChange={(e) => setServer(e.target.value)}
               style={{ flex: 1 }}
             />
-            <button className="primary" disabled={busy || !server} onClick={() => void login()}>
-              {t('cloud.login')}
-            </button>
+            <ActionButton
+              id="account:sign-in"
+              arg={server}
+              className="primary"
+              disabled={busy}
+              onPending={setBusy}
+            />
           </div>
         )
       )}

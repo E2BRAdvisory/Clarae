@@ -9,6 +9,7 @@ export const previewCommands: Command[] = [
   {
     id: 'preview:link',
     group: 'editor',
+    feature: 'preview',
     defaults: [],
     // Works even when hover previews are switched off: it is an explicit request.
     enabled: () => useAppStore.getState().vault !== null && linkUnderKeyboard() !== null,
@@ -23,6 +24,7 @@ export const previewCommands: Command[] = [
   {
     id: 'preview:toggle',
     group: 'view',
+    feature: 'preview',
     defaults: [],
     run: () => {
       const s = useSettings.getState();

@@ -40,7 +40,7 @@
       "else": { "required": ["reason"] }
     },
     "client": {
-      "description": "Desktop or workbench. On the workbench, commands, bindings, operationIds and capability default to the desktop's when omitted.",
+      "description": "Desktop or workbench. On the workbench, commands, actions, bindings, operationIds and capability default to the desktop's when omitted.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
@@ -49,6 +49,12 @@
         "reason": { "$ref": "#/definitions/reason" },
         "note": { "type": "string" },
         "commands": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/commandId" }
+        },
+        "actions": {
+          "description": "Declarative actions of the workbench (defineAction, packages/workbench/src/commands/actions.ts, ADR-0045 §2).",
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/definitions/commandId" }

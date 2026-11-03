@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AccountButton, initials } from './AccountButton';
 import type { AuthState } from '../app/api';
 import { initI18n } from '../i18n';
+import { configurePlatform } from '../platform';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { useAppStore } from '../state/store';
 
@@ -91,5 +92,24 @@ describe('account button', () => {
     useAppStore.setState({ auth: auth({ status: 'signing_in' }) });
     render(<AccountButton />);
     expect(screen.getByRole('button', { name: 'Waiting for the browser…' })).toBeDisabled();
+  });
+
+  describe('where the host does not own the session (the browser)', () => {
+    afterEach(() => configurePlatform());
+
+    it('offers neither signing in nor out: the console does', async () => {
+      configurePlatform({ kind: 'web' });
+      useAppStore.setState({ auth: auth({ status: 'signed_out' }) });
+      const { unmount } = render(<AccountButton />);
+      expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument();
+      unmount();
+
+      useAppStore.setState({ auth: auth({ status: 'disconnected' }) });
+      render(<AccountButton />);
+      fireEvent.click(screen.getByRole('button', { name: /Ada Lovelace/ }));
+      expect(await screen.findByRole('menuitem', { name: 'Account and devices…' })).toBeVisible();
+      expect(screen.queryByRole('menuitem', { name: 'Reconnect' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
+    });
   });
 });

@@ -81,6 +81,7 @@ function enabled(action: SceneAction): boolean {
 export const sceneCommands: Command[] = SCENE_ACTIONS.map((a) => ({
   id: `drawing:${a.id}`,
   group: 'editor',
+  feature: 'drawing.scene-actions',
   defaults: [],
   enabled: () => enabled(a),
   run: () => runAction(a),
@@ -108,6 +109,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:insert-latex',
     group: 'editor',
+    feature: 'drawing.latex-mermaid',
     defaults: [],
     enabled: editable('drawing_latex'),
     run: () => getSceneController()?.openTool('latex'),
@@ -115,6 +117,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:insert-mermaid',
     group: 'editor',
+    feature: 'drawing.latex-mermaid',
     defaults: [],
     enabled: editable('drawing_mermaid'),
     run: () => getSceneController()?.openTool('mermaid'),
@@ -122,6 +125,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:insert-image',
     group: 'editor',
+    feature: 'drawing.embeds',
     defaults: [],
     enabled: editable(),
     run: () => insertImageIntoDrawing(),
@@ -129,6 +133,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:insert-drawing',
     group: 'editor',
+    feature: 'drawing.embeds',
     defaults: [],
     enabled: editable(),
     run: () => insertDrawingIntoDrawing(),
@@ -136,6 +141,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:insert-note',
     group: 'editor',
+    feature: 'drawing.embeds',
     defaults: [],
     enabled: editable(),
     run: () => insertNoteIntoDrawing(),
@@ -143,6 +149,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:create-note-and-embed',
     group: 'editor',
+    feature: 'drawing.embeds',
     defaults: [],
     enabled: editable('drawing_actions'),
     run: () => createNoteAndEmbed(),
@@ -150,22 +157,25 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:deconstruct-into-new-drawing',
     group: 'editor',
+    feature: 'drawing.embeds',
     defaults: [],
     enabled: () =>
-      editable('drawing_actions') && (getSceneController()?.context().selected.length ?? 0) > 0,
+      editable('drawing_actions')() && (getSceneController()?.context().selected.length ?? 0) > 0,
     run: () => deconstructIntoNewDrawing(),
   },
   {
     id: 'drawing:refresh-note-cards',
     group: 'editor',
+    feature: 'drawing.embeds',
     defaults: [],
     enabled: () =>
-      editable('drawing_actions') && (getSceneController()?.context().selected.length ?? 0) > 0,
+      editable('drawing_actions')() && (getSceneController()?.context().selected.length ?? 0) > 0,
     run: () => refreshNoteCards(),
   },
   {
     id: 'drawing:set-auto-export',
     group: 'editor',
+    feature: 'drawing.export',
     defaults: [],
     enabled: editable('drawing_auto_export'),
     run: () => setDrawingAutoExport(),
@@ -173,6 +183,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:slideshow',
     group: 'editor',
+    feature: 'drawing.slideshow',
     defaults: [],
     enabled: () => !!getSceneController() && drawingFeature(),
     run: () => getSceneController()?.startSlideshow(),
@@ -180,6 +191,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:set-slide-notes',
     group: 'editor',
+    feature: 'drawing.slideshow',
     defaults: [],
     enabled: editable(),
     run: () => setSlideNotes(),
@@ -187,6 +199,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:describe',
     group: 'editor',
+    feature: 'drawing.edit',
     defaults: [],
     enabled: () => !!getSceneController() && drawingFeature(),
     run: () => getSceneController()?.openTool('describe'),
@@ -194,6 +207,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:tools-panel',
     group: 'editor',
+    feature: 'drawing.edit',
     defaults: [],
     enabled: editable(),
     run: () => getSceneController()?.openTool('tools'),
@@ -201,6 +215,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:import-library',
     group: 'editor',
+    feature: 'drawing.library',
     defaults: [],
     enabled: editable(),
     run: () => importLibrary(),
@@ -208,6 +223,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:export-library',
     group: 'editor',
+    feature: 'drawing.library',
     defaults: [],
     enabled: drawingFeature,
     run: () => exportLibrary(),
@@ -215,6 +231,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:import-legacy',
     group: 'editor',
+    feature: 'drawing.legacy',
     defaults: [],
     enabled: drawingFeature,
     run: () => importLegacyDrawing(),
@@ -222,6 +239,7 @@ export const toolCommands: Command[] = [
   {
     id: 'drawing:edit-latex',
     group: 'editor',
+    feature: 'drawing.latex-mermaid',
     defaults: [],
     enabled: () => editable('drawing_latex') && selectedFormula() !== null,
     run: () => {
