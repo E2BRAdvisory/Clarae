@@ -13,6 +13,7 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Migrazioni 0010–0014** (indici, `purged_subjects`, chiavi di idempotenza e `export_jobs.source_seq`, `uploads.finalizing_until`, rimozione delle autoconcessioni dei creatori di condivisioni). Si applicano all'avvio come sempre. Durante le migrazioni il pod API risponde già: `healthz` 200 e `readyz` 503.
 - **Cursore della sync con identità (ADR-0046):** `GET /vaults/{id}/changes` accetta `since_id` e restituisce `next_id`; `GET /vaults/{id}/tree` restituisce `as_of_id`. I client precedenti, che non inviano `since_id`, funzionano come prima. Per riconoscere i numeri di sequenza riusati dopo un ripristino servono il desktop e il workbench di questa versione.
 - **Server senza TLS:** il desktop non accetta più un server o un issuer `http://` che non sia locale (`localhost`, `127.0.0.0/8`, `::1`). Il token e i contenuti dei vault condivisi viaggerebbero in chiaro. All'accesso compare l'errore `insecure-url`, e una sessione salvata con un indirizzo così non viene ripresa.
+- **Liste paginate:** `GET /shares`, `GET /shared-with-me`, `GET /admin/groups`, `GET /admin/groups/{id}/members` e `GET /admin/config-profiles/{id}/versions` restituiscono `{items, next_cursor}` invece di un array. I desktop fino alla 1.3.1 non leggono più condivisioni, inviti e mount da un cloud aggiornato; nessun dato si perde. Aggiornare i desktop prima del cloud. La console e il workbench web sono già allineati. Lo storico di un profilo elenca solo i metadati; la configurazione di una versione si legge con `GET /admin/config-profiles/{id}/versions/{version}`.
 
 ### Client desktop e sync
 
@@ -35,6 +36,8 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Core WebAssembly:** i timeout delle chiamate all'host del browser vengono rispettati.
 - **Sincronizzazione più veloce:** download e upload dei blob avvengono fino a 4 alla volta, con le modifiche applicate sempre in ordine. In una prima sincronizzazione con un server a 20 ms il tempo scende di circa tre volte.
 - **Workbench nel browser più leggero:** il core WebAssembly non include più l'accesso OIDC del desktop, il portachiavi, l'updater e il cestino di sistema (−9 % di dimensione). Impostazioni, recupero dei file, procedura di collegamento, conflitti, cronologia e lavagne si caricano al primo uso.
+- **Excalidraw:** «Scomponi in un nuovo disegno» e «Aggiorna le schede delle note» erano attivi anche senza diritti di modifica.
+- **Passphrase nuove:** la regola di robustezza (12 caratteri e stima zxcvbn) è applicata dal core del desktop e del browser, non solo dall'interfaccia; le passphrase esistenti continuano a funzionare.
 
 ### Workbench (desktop e web)
 
@@ -62,6 +65,8 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 - **Uscita e «Dimentica questo browser»:** prima di cancellare le copie si caricano le ultime modifiche dei vault condivisi. Una copia con modifiche non caricate non viene cancellata senza conferma.
 - **Sblocco nel browser:** la nuova passphrase scelta dopo la chiave di recupero rispetta la stessa regola di robustezza del desktop.
 - **Ricerca di utenti e gruppi** dal workbench: una sola richiesta, con la descrizione dei gruppi come nella console.
+- **Liste lunghe:** condivisioni, inviti, gruppi, membri e storico dei profili si caricano a pagine con «Carica altri». La lista dei vault condivisi con l'utente è una sola tra console e workbench.
+- **Pulsante account nel browser:** non offre più accesso e uscita, che nel browser appartengono alla console.
 
 ### Cloud
 
@@ -88,6 +93,7 @@ Le correzioni della revisione del 2026-11-02 (milestone M12, [roadmap](docs/road
 
 - **Parità per costruzione (ADR-0045):** il registro delle funzioni distingue le prove per superficie (desktop, workbench, console, cloud). Uno stato «sì» sul workbench richiede una prova sul core WebAssembly. Un mock REST validato sull'OpenAPI fa girare i pannelli cloud sul core reale.
 - **Eventi e binding tipizzati:** gli eventi Go → TypeScript si dichiarano una volta in Go e sono generati per il frontend (`task gen-events`). L'host web usa un client tipizzato generato dai binding. ESLint vieta nomi di eventi e binding scritti a mano.
+- **Capability, azioni e tipi dal core:** le capability del browser sono dichiarate dal core Go e generate per il frontend. I pulsanti dei pannelli sono azioni dichiarative legate a una funzione del registro (`FeatureId` generato). I binding di gestione cloud restituiscono i tipi dell'OpenAPI. Le suite dei componenti cloud girano anche sul core WebAssembly reale (`task test-core`).
 
 ## [1.3.1] - 2026-11-02
 

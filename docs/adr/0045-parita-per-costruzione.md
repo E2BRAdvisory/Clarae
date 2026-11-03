@@ -43,3 +43,13 @@ La revisione del 2026-11-02 ha trovato 13 divergenze, tutte nei punti ancora man
 - Implementazione in M12: punti 4–5 nell'onda W4, punti 1–3 e 6–8 nell'onda W5, punto 9 con la documentazione (W7).
 - Più codice generato (client dell'host, eventi, `FeatureId`) e quindi più controlli in `task check-gen`.
 - La migrazione dei DTO procede un servizio alla volta; finché non è completa `CoreCloudPort` conserva le mappature residue, coperte dal test di tipo.
+
+## Attuazione (M12, 2026-11-03)
+
+- Punto 4 (M12-W4.2): `tests` diviso per superficie; `parity --check` rifiuta un «sì» sul workbench senza prova sul core WASM; mock REST validato sull'OpenAPI (`web/e2e/cloudMock.ts`). 19 funzioni portate a `partial` perché senza prova.
+- Punto 5 (M12-W4.3): eventi dichiarati con `internal/events` e generati in `events.gen.ts`; client tipizzato dell'host in `web/src/workbench/core.gen.ts`; regole ESLint.
+- Punto 1 (M12-W5.1): le capability stanno in un'unica tabella Go (`internal/app/capabilities.go`) con le colonne desktop e web, invece che in file `_web`/`_native`: il generatore è un programma nativo e deve scrivere entrambe le colonne; la build sceglie la colonna con `isWeb`. I test falliscono se un metodo di `Host` non è classificato o se una capability è vera sul web per un metodo che lì fallisce.
+- Punti 2 e 3 (M12-W5.2): `FeatureId` generato da `features.yaml` (TS e Go); `Command.feature` obbligatorio per i 182 comandi; 13 azioni dichiarative (`defineAction`, `<ActionButton>`) al posto dei pulsanti dei pannelli. Oltre a `requires`, un'azione può dichiarare `excludes` (offerta solo dove manca una capability: le alternative del browser come «Scarica una copia»).
+- Punto 7 (M12-W5.4): `MountsList` unico in `@memobrain/cloud-features`; regole ESLint sulle chiamate dirette; le suite condivise girano anche sul core WASM reale in Node (`task test-core`), con un cloud finto validato sull'OpenAPI.
+- Punto 6 (M12-W5.3): pacchetto `internal/app/cloudapi`; `SearchDirectory` diviso in `SearchDirectoryUsers` e `SearchDirectoryGroups`, perché un binding non può restituire l'unione dei due tipi.
+- Punto 8 (M12-W5.5): la politica della passphrase sta nel core (`crypto.ValidatePassphrase`, zxcvbn in Go, +774 kB gzip al core WASM, sotto il budget); `SyncAPI.CopyVerdict` decide se una copia del browser si può rimuovere. Restano nell'host i marcatori in `localStorage` (la console gira senza core) e le decisioni dopo `vault:cloud-deleted`.

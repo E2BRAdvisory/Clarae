@@ -76,7 +76,7 @@ Nel browser gli stessi file stanno in OPFS e i database nel pool `opfs-sahpool` 
 - **Database del cloud:** query per modulo in `services/cloud/internal/db/queries/<modulo>.sql` → `internal/<modulo>/<modulo>db` (sqlc); migrazioni SQL versionate in `internal/db/migrations`.
 - **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati) e, da questi, il client tipizzato dell'host del browser `web/src/workbench/core.gen.ts` (versionato).
 - **Eventi Go → TypeScript:** il registro `apps/desktop/internal/app/events_registry.go` → `packages/workbench/src/app/events.gen.ts` (nomi e payload, `task gen-events`). Regole e controlli: [desktop-web-sync.md](desktop-web-sync.md#contratto-degli-eventi) (ADR-0045 §5).
-- **Verifiche:** contract test del client contro il server reale (`apps/desktop/internal/sync/transport/contract_test.go`), fixture di conformance Go/TS per Markdown, merge e crittografia (`shared/conformance`), registro di parità (`shared/parity/features.yaml`). Tutto gira in `task ci` (ADR-0036).
+- **Verifiche:** contract test del client contro il server reale (`apps/desktop/internal/sync/transport/contract_test.go`), fixture di conformance Go/TS per Markdown, merge e crittografia (`shared/conformance`), registro di parità (`shared/parity/features.yaml`, con le prove per superficie di ADR-0045). Conformance e registro girano in `task ci` (ADR-0036); il contract test ha il tag `integration` e gira con le altre suite lente in `task test-desktop-e2e`, da eseguire quando si toccano il client della sync o le API.
 
 ## Il cloud come modular monolith
 

@@ -90,7 +90,7 @@ Regola per il futuro: ogni funzione di gestione dei vault cloud nasce in `@memob
 - `CoreCloudPort` sta in `packages/workbench/src/cloud`, accanto alla facciata dei binding: il pacchetto definisce solo l'interfaccia e la dipendenza va in un verso (workbench → cloud-features);
 - i componenti usano `@memobrain/ui`; il workbench carica solo le regole dei componenti (`@memobrain/ui/components.css`) con i token mappati sui propri (`workbench.css`), senza stile inline;
 - i testi it/en stanno nel pacchetto, l'host passa la lingua;
-- binding: `SyncAPI.ListDeletedCloudVaults`, `RenameCloudVault`, `DeleteCloudVault`, `RestoreCloudVault`; il DTO `CloudVault` aggiunge `ownerId`, `lastSeq` e `deletedAt`;
+- binding: `SyncAPI.ListDeletedCloudVaults`, `RenameCloudVault`, `DeleteCloudVault`, `RestoreCloudVault`; il DTO `CloudVault` aggiunge `ownerId`, `lastSeq` e `deletedAt` (superato da ADR-0045 §6, M12-W5.3: i binding cloud restituiscono ora i tipi dell'OpenAPI, con i campi in snake_case come la REST, e `CoreCloudPort` non rimappa più);
 - rotta di creazione dei vault privati: `/vaults/new/open?kind=private&name=…`.
 
 ### 3. Un solo contratto per la REST
