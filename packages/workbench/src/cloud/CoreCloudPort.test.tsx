@@ -45,6 +45,21 @@ async function accountMock(seed: CloudSeed): Promise<WailsMock> {
   const received = structuredClone(seed.received ?? []);
   mock.sharing.invitations = received.filter((s) => s.my_status === 'pending');
   mock.sharing.received = received.filter((s) => s.my_status !== 'pending');
+  // The accepted shares are the mounts, with their folder on this device.
+  mock.sharing.mounts = received
+    .filter((s) => s.my_status === 'accepted')
+    .map((s) => ({
+      shareId: s.id,
+      cloudVaultId: s.vault_id,
+      name: s.display_name,
+      ownerName: s.owner_name,
+      resourceType: s.resource_type,
+      permission: s.my_permission ?? 'viewer',
+      path: `/mock/mounts/${s.id}`,
+      mounted: true,
+      revoked: false,
+      vaultId: '',
+    }));
   mock.sharing.users = [...(seed.users ?? [])];
   mock.sharing.groups = [...(seed.groups ?? [])];
   if (seed.features) mock.config = { ...mock.config, features: seed.features };

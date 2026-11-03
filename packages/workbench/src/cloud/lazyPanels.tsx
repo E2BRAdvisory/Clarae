@@ -7,6 +7,7 @@ import type {
   CloudVaultsTableProps,
   DevicesPanelProps,
   InvitationsListProps,
+  MountsListProps,
   SharesManagerProps,
   UsagePanelProps,
 } from '@memobrain/cloud-features';
@@ -19,6 +20,7 @@ const LazyDevices = lazyView(async () => ({ default: (await load()).DevicesPanel
 const LazyUsage = lazyView(async () => ({ default: (await load()).UsagePanel }));
 const LazyShares = lazyView(async () => ({ default: (await load()).SharesManager }));
 const LazyInvitations = lazyView(async () => ({ default: (await load()).InvitationsList }));
+const LazyMounts = lazyView(async () => ({ default: (await load()).MountsList }));
 
 export function CloudVaultsTable(props: CloudVaultsTableProps) {
   return (
@@ -56,6 +58,14 @@ export function InvitationsList(props: InvitationsListProps) {
   return (
     <Suspense fallback={null}>
       <LazyInvitations {...props} />
+    </Suspense>
+  );
+}
+
+export function MountsList(props: MountsListProps) {
+  return (
+    <Suspense fallback={null}>
+      <LazyMounts {...props} />
     </Suspense>
   );
 }

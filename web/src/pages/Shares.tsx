@@ -30,7 +30,7 @@ export function SharesPage() {
             <InvitationsList
               port={port}
               lang={i18n.language}
-              openHref={canOpen ? (s) => mountHref(s.vault_id, s.id) : undefined}
+              openHref={canOpen ? (m) => mountHref(m.vault_id, m.share_id) : undefined}
             />
           </section>
           <section aria-labelledby="shares-owned">

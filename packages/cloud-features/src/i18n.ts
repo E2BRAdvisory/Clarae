@@ -219,10 +219,16 @@ const en = {
   'invitations.acceptAria': 'Accept {{name}}',
   'invitations.decline': 'Decline',
   'invitations.declineAria': 'Decline {{name}}',
-  'invitations.open': 'Open',
-  'invitations.openAria': 'Open {{name}} in the browser',
   'invitations.acceptedStatus': 'Invitation to “{{name}}” accepted.',
   'invitations.declinedStatus': 'Invitation to “{{name}}” declined.',
+
+  'mounts.title': 'Shared with me',
+  'mounts.none': 'Nothing is shared with you yet.',
+  'mounts.open': 'Open',
+  'mounts.openAria': 'Open {{name}} in the browser',
+  'mounts.revoked': 'Share ended',
+  'mounts.revokedHint':
+    'The share is no longer available: the copy on this device stays until you remove it.',
 
   'groups.caption': 'My groups',
   'groups.colName': 'Group',
@@ -466,10 +472,16 @@ const it: Messages = {
   'invitations.acceptAria': 'Accetta {{name}}',
   'invitations.decline': 'Rifiuta',
   'invitations.declineAria': 'Rifiuta {{name}}',
-  'invitations.open': 'Apri',
-  'invitations.openAria': 'Apri {{name}} nel browser',
   'invitations.acceptedStatus': 'Invito a «{{name}}» accettato.',
   'invitations.declinedStatus': 'Invito a «{{name}}» rifiutato.',
+
+  'mounts.title': 'Condivisi con me',
+  'mounts.none': 'Nessuna condivisione ricevuta.',
+  'mounts.open': 'Apri',
+  'mounts.openAria': 'Apri {{name}} nel browser',
+  'mounts.revoked': 'Condivisione terminata',
+  'mounts.revokedHint':
+    'La condivisione non è più disponibile: la copia su questo dispositivo resta finché non la rimuovi.',
 
   'groups.caption': 'I miei gruppi',
   'groups.colName': 'Gruppo',

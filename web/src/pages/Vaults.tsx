@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Table } from '@memobrain/ui';
-import { CloudVaultsTable } from '@memobrain/cloud-features';
-import { useCloudPort, useSharingAllowed } from '../api/cloud';
-import { useShares, useWorkbenchAllowed, type Share } from '../api/queries';
+import { CloudVaultsTable, MountsList } from '@memobrain/cloud-features';
+import { useCloudPort } from '../api/cloud';
+import { useWorkbenchAllowed } from '../api/queries';
 import { mountHref } from './Shares';
 import { VaultExport } from './VaultExport';
 
@@ -14,76 +13,12 @@ export function privateCreationHref(name: string): string {
 /** A full page load to the workbench (a seam for the tests: jsdom cannot navigate). */
 export const navigation = { assign: (href: string) => window.location.assign(href) };
 
-/**
- * Shares received and accepted: each one opens in the workbench as a mount (`?share=`). The received
- * shares come a page at a time: `more` reads the next one.
- */
-function SharedWithMe({
-  shares,
-  more,
-}: {
-  shares: Share[];
-  more?: { loading: boolean; load: () => void } | undefined;
-}) {
-  const { t } = useTranslation();
-  const canOpen = useWorkbenchAllowed();
-  return (
-    <div className="nd-stack">
-      <Table caption={t('vaults.mounts')}>
-        <thead>
-          <tr>
-            <th scope="col">{t('vaults.colName')}</th>
-            <th scope="col">{t('vaults.colOwner')}</th>
-            {canOpen && (
-              <th scope="col">
-                <span className="nd-visually-hidden">{t('vaults.open')}</span>
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {shares.map((s) => (
-            <tr key={s.id}>
-              <th scope="row">{s.display_name}</th>
-              <td>{s.owner_name}</td>
-              {canOpen && (
-                <td>
-                  {/* A full page load: the workbench has its own HTML and style sheet (ADR-0029). */}
-                  <a
-                    className="nd-button nd-button--small"
-                    href={mountHref(s.vault_id, s.id)}
-                    aria-label={t('vaults.openAria', { name: s.display_name })}
-                  >
-                    {t('vaults.open')}
-                  </a>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-      {more && (
-        <Button disabled={more.loading} onClick={more.load}>
-          {t('common.loadMore')}
-        </Button>
-      )}
-    </div>
-  );
-}
-
 export function VaultsPage() {
   const { t, i18n } = useTranslation();
   const canOpen = useWorkbenchAllowed();
   // The cloud vault lifecycle lives in @memobrain/cloud-features (ADR-0037 §2); a private vault is
   // created in the browser workbench, which holds the Go core's cryptography.
   const port = useCloudPort();
-  const sharingOn = useSharingAllowed();
-  const received = useShares('received');
-  const mounts = sharingOn ? received.shares.filter((s) => s.my_status === 'accepted') : [];
-  const more =
-    sharingOn && received.hasMore
-      ? { loading: received.loadingMore, load: received.loadMore }
-      : undefined;
 
   return (
     <>
@@ -100,7 +35,14 @@ export function VaultsPage() {
           }}
           onCreatePrivate={(name) => navigation.assign(privateCreationHref(name))}
         />
-        {(mounts.length > 0 || more) && <SharedWithMe shares={mounts} more={more} />}
+        {/* The shares accepted by the user, each one opened in the workbench as a mount (`?share=`):
+            the same list as the workbench's Settings › Sharing (ADR-0045 §7). */}
+        <MountsList
+          port={port}
+          lang={i18n.language}
+          hideWhenEmpty
+          openHref={canOpen ? (m) => mountHref(m.vault_id, m.share_id) : undefined}
+        />
       </div>
     </>
   );

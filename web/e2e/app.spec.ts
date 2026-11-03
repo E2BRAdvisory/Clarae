@@ -64,6 +64,23 @@ test('accepting an invitation moves it to the accepted shares', async ({ page })
               },
             ],
     }),
+    // The accepted shares are the mounts (MountsList), a page like every list.
+    'GET /shared-with-me': () => ({
+      items:
+        status === 'accepted'
+          ? [
+              {
+                share_id: 's1',
+                vault_id: 'v1',
+                display_name: 'Budget',
+                resource_type: 'folder',
+                permission: 'editor',
+                scope: 'share:s1',
+                owner_name: 'Bob',
+              },
+            ]
+          : [],
+    }),
     'POST /shares/s1:accept': () => {
       status = 'accepted';
       return {
@@ -80,7 +97,8 @@ test('accepting an invitation moves it to the accepted shares', async ({ page })
   await page.goto('/shares');
   await page.getByRole('button', { name: 'Accept Budget' }).click();
   await expect(page.getByText('Invitation to “Budget” accepted.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Accepted shares' })).toBeVisible();
+  const accepted = page.getByRole('region', { name: 'Accepted shares' });
+  await expect(accepted.getByRole('region', { name: 'Budget' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Accept Budget' })).toHaveCount(0);
   expect(calls).toContain('POST /shares/s1:accept');
 });

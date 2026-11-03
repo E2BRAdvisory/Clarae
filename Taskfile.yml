@@ -194,6 +194,12 @@ tasks:
     cmds:
       - GOOS=js GOARCH=wasm go test -count=1 -exec "{{.ROOT_DIR}}/scripts/go-js-exec.sh" ./internal/... ./cmd/...
 
+  test-core:
+    desc: 'The cloud panels on the Go core compiled to WebAssembly, in Node, against a fake cloud checked by api/openapi.yaml (ADR-0045 §7)'
+    deps: [wasm-core, wailsjs]
+    cmds:
+      - yarn workspace @memobrain/workbench run test:core
+
   test-ts:
     desc: Vitest in every workspace package
     cmds:
@@ -302,6 +308,7 @@ tasks:
       - task: test-ts
       - task: conformance
       - task: test-wasm
+      - task: test-core
       - task: parity
       - task: check-gen
 

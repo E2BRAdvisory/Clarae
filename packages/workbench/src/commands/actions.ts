@@ -7,7 +7,8 @@
 // every action belongs to a feature that lists it, and a surface that says `yes` offers it.
 import type { QueryClient } from '@tanstack/react-query';
 import i18next from 'i18next';
-import { api, type MountState } from '../app/api';
+import type { CloudMount } from '@memobrain/cloud-features/port';
+import { api } from '../app/api';
 import type { MountRevokedPayload } from '../app/events';
 import { lockVault } from '../app/actions';
 import { signIn } from '../app/signIn';
@@ -100,24 +101,24 @@ const openFolder = defineAction({
   },
 });
 
-// ---- mounts (Settings › Sharing and the "share ended" prompt) ----------------------------------
+// ---- mounts (Settings › Sharing, in the slot of MountsList, and the "share ended" prompt) -------
 
 const openMount = defineAction({
   id: 'mount:open',
   feature: 'mounts',
   label: 'sharing.open',
-  when: (m: MountState) => !m.revoked,
-  run: async (m: MountState, { queryClient }) => {
+  when: (m: CloudMount) => !m.local?.revoked,
+  run: async (m: CloudMount, { queryClient }) => {
     try {
       // The open vault's pending edits are written before its views go away.
       if (!(await settleNotes())) return;
       const hostOpens = usePlatform.getState().openMount;
       if (hostOpens) {
         // The browser: the host leaves this page for the mount's own.
-        hostOpens({ shareId: m.shareId, cloudVaultId: m.cloudVaultId });
+        hostOpens({ shareId: m.share_id, cloudVaultId: m.vault_id });
         return;
       }
-      const info = await api.sharing.openMount(m.shareId);
+      const info = await api.sharing.openMount(m.share_id);
       useAppStore.getState().setVault(info);
       useAppStore.getState().closeSettings();
       refreshMounts(queryClient);
@@ -131,10 +132,12 @@ const removeMount = defineAction({
   id: 'mount:remove',
   feature: 'mounts',
   label: 'sharing.removeMount',
-  when: (m: MountState) => m.mounted,
-  run: async (m: MountState, { queryClient }) => {
+  when: (m: CloudMount) => Boolean(m.local?.mounted),
+  run: async (m: CloudMount, { queryClient }) => {
+    const revoked = Boolean(m.local?.revoked);
+    const openId = m.local?.open_vault_id ?? '';
     // A copy kept after a revocation is a folder of its own: only where one can be opened again.
-    const askKeep = m.revoked && can('detachedCopies');
+    const askKeep = revoked && can('detachedCopies');
     const keep = askKeep
       ? await dialog.confirm(t('sharing.removeMount'), t('sharing.keepCopyQuestion'))
       : false;
@@ -142,13 +145,13 @@ const removeMount = defineAction({
       !askKeep &&
       !(await dialog.confirm(
         t('sharing.removeMount'),
-        t('sharing.confirmRemoveMount', { name: m.name }),
+        t('sharing.confirmRemoveMount', { name: m.display_name }),
         true,
       ))
     )
       return;
     const { removeFromBrowser, mountRemoved } = usePlatform.getState();
-    const isOpen = Boolean(m.vaultId) && useAppStore.getState().vault?.id === m.vaultId;
+    const isOpen = openId !== '' && useAppStore.getState().vault?.id === openId;
     if (isOpen && removeFromBrowser) {
       // The mount open in the browser: the host uploads what it can, removes the copy and its
       // marker and goes back to the console, or keeps the copy and asks (D-04).
@@ -157,8 +160,8 @@ const removeMount = defineAction({
       return;
     }
     try {
-      await api.sharing.removeMount(m.shareId, keep);
-      mountRemoved?.(m.shareId);
+      await api.sharing.removeMount(m.share_id, keep);
+      mountRemoved?.(m.share_id);
       if (isOpen) useAppStore.getState().setVault(null);
       refreshMounts(queryClient);
     } catch (e) {

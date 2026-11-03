@@ -19,6 +19,7 @@ export {
   type InvitationsListProps,
   type InvitationSection,
 } from './sharing/InvitationsList';
+export { MountsList, type MountsListProps } from './sharing/MountsList';
 export {
   DirectorySearch,
   GrantEditor,

@@ -51,11 +51,7 @@
     "colFiles": "File",
     "colCreated": "Creato",
     "kindPrivate": "Privato (cifrato)",
-    "kindShared": "Condiviso",
-    "mounts": "Condivisi con me",
-    "open": "Apri",
-    "openAria": "Apri {{name}} nel browser",
-    "colOwner": "Condiviso da"
+    "kindShared": "Condiviso"
   },
   "devices": {
     "title": "Dispositivi",

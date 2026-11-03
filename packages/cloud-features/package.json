@@ -13,7 +13,8 @@
     "./flags": "./src/featureFlags.ts",
     "./styles.css": "./src/styles.css",
     "./workbench.css": "./src/workbench.css",
-    "./testing": "./src/testing/index.ts"
+    "./testing": "./src/testing/index.ts",
+    "./testing/contract": "./src/testing/contract.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -34,11 +35,13 @@
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "ajv": "^6.14.0",
     "jsdom": "^30.1.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "yaml": "^2.8.0"
   }
 }

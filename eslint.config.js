@@ -105,6 +105,73 @@ const rawCoreCalls = [
   },
 ];
 
+// ---- The cloud lifecycle goes through the CloudPort (ADR-0045 §7) ---------------------------------
+// Vaults, devices, usage, shares, grants, invitations, mounts, directory and groups are managed by
+// the components of @memobrain/cloud-features over a CloudPort: RestCloudPort in the console,
+// CoreCloudPort in the desktop and the workbench. The hosts never call those APIs themselves, so a
+// function cannot drift on one surface. What only the console does (the ZIP export of VaultExport:
+// /vaults/{vaultId}/tree, /blobs, /key-envelopes, /export.zip, /exports) is not part of the port and
+// stays allowed: the forbidden paths are listed one by one, the others pass.
+
+/** The REST operations of the port (paths of api/openapi.yaml). */
+const portPath =
+  '(?:vaults(?:\\/\\{vaultId\\}(?::restore)?)?|me\\/(?:devices(?:\\/\\{deviceId\\})?|usage|groups)|shares(?:\\/\\{shareId\\}(?::accept|:decline|\\/grants\\/.*)?)?|shared-with-me|directory\\/(?:users|groups))';
+const consoleRestCalls = [
+  {
+    // api.GET('/vaults'), client.POST('/shares', …): the two paths that are also console routes.
+    // (Also `const { GET } = api`, `api.request('get', …)` and a template without placeholders.)
+    selector:
+      'CallExpression:matches([callee.property.name=/^(?:GET|POST|PUT|PATCH|DELETE|request)$/], [callee.name=/^(?:GET|POST|PUT|PATCH|DELETE)$/]) > :matches(Literal[value=/^\\/(?:vaults|shares)$/], TemplateLiteral[expressions.length=0][quasis.0.value.cooked=/^\\/(?:vaults|shares)$/]).arguments',
+    message:
+      'The cloud vault lifecycle goes through the CloudPort (useCloudPort, @memobrain/cloud-features), not through the REST client (ADR-0045 §7).',
+  },
+  {
+    // Any other path of the port, in a call or kept in a variable first.
+    selector: `:matches(Literal[value=/^\\/${portPath}$/], TemplateLiteral[expressions.length=0] > TemplateElement[value.cooked=/^\\/${portPath}$/]):not([value=/^\\/(?:vaults|shares)$/], [value.cooked=/^\\/(?:vaults|shares)$/]):not(TSLiteralType > Literal)`,
+    message:
+      'This is a REST path of the CloudPort: use the port (@memobrain/cloud-features), not the REST client (ADR-0045 §7).',
+  },
+  {
+    // fetch('/api/v1/shares?scope=received'), `${base}/api/v1/me/devices`
+    selector: `:matches(Literal[value=/\\/api\\/v1\\/${portPath}(?:[/?:]|$)/], TemplateElement[value.cooked=/\\/api\\/v1\\/${portPath}(?:[/?:]|$)/])`,
+    message:
+      'The cloud vault lifecycle goes through the CloudPort, not through fetch (ADR-0045 §7).',
+  },
+];
+
+// In the workbench's settings and sharing panels the cloud lifecycle goes through CoreCloudPort
+// (packages/workbench/src/cloud): its bindings are never called by the panels themselves.
+const cloudBindings = '/^(?:\\w*CloudVaults?|devices|revokeDevice|usage)$/';
+const workbenchCloudCalls = [
+  {
+    selector: "MemberExpression[object.name='api'][property.name='sharing']",
+    message:
+      'Sharing goes through CoreCloudPort (packages/workbench/src/cloud/CoreCloudPort.ts), the CloudPort of the workbench (ADR-0045 §7).',
+  },
+  {
+    selector: `MemberExpression[object.object.name='api'][object.property.name='sync'][property.name=${cloudBindings}]`,
+    message:
+      'Cloud vaults, devices and usage go through CoreCloudPort, the CloudPort of the workbench (ADR-0045 §7).',
+  },
+  {
+    selector:
+      "MemberExpression[object.name='api'][computed=true], VariableDeclarator[init.name='api'] > ObjectPattern, VariableDeclarator > MemberExpression.init[object.name='api'][property.name=/^(?:sync|sharing)$/]",
+    message:
+      'Do not alias the binding facade here: name the binding (api.sync.<method>), or use CoreCloudPort for the cloud lifecycle (ADR-0045 §7).',
+  },
+  {
+    // window.go.app.SharingAPI.…: the bindings without the facade.
+    selector: "MemberExpression[object.property.name='app'][property.name=/^[A-Z]\\w*API$/]",
+    message:
+      'Call the core through the facade of app/api.ts or CoreCloudPort, not window.go (ADR-0045 §7).',
+  },
+  {
+    selector: 'ImportDeclaration[source.value=/wailsjs\\/go\\/app\\//]',
+    message:
+      'Call the core through the facade of app/api.ts or CoreCloudPort, not the generated modules.',
+  },
+];
+
 const appSources = [
   'packages/*/src/**/*.{ts,tsx}',
   'apps/desktop/frontend/src/**/*.{ts,tsx}',
@@ -171,6 +238,14 @@ export default tseslint.config(
     rules: { 'no-restricted-syntax': ['error', ...generatedNames, ...kindChecks] },
   },
   {
+    // The console (everything of web/src but the workbench's host).
+    files: ['web/src/**/*.{ts,tsx}'],
+    ignores: [...testSources, 'web/src/workbench/**'],
+    rules: {
+      'no-restricted-syntax': ['error', ...generatedNames, ...kindChecks, ...consoleRestCalls],
+    },
+  },
+  {
     files: ['web/src/workbench/**/*.{ts,tsx}'],
     ignores: [...testSources, 'web/src/workbench/bridge.ts'],
     rules: { 'no-restricted-syntax': ['error', ...generatedNames, ...kindChecks, ...rawCoreCalls] },
@@ -179,6 +254,21 @@ export default tseslint.config(
     files: uiSources,
     ignores: [...testSources, 'packages/workbench/src/platform/**'],
     rules: { 'no-restricted-syntax': ['error', ...generatedNames, ...platformChecks] },
+  },
+  {
+    files: [
+      'packages/workbench/src/settings/**/*.{ts,tsx}',
+      'packages/workbench/src/sharing/**/*.{ts,tsx}',
+    ],
+    ignores: testSources,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...generatedNames,
+        ...platformChecks,
+        ...workbenchCloudCalls,
+      ],
+    },
   },
   {
     files: ['packages/workbench/src/platform/**/*.{ts,tsx}'],

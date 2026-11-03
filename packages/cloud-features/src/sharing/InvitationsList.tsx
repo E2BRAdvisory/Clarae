@@ -5,8 +5,9 @@ import { cloudKeys, describeError } from '../CloudVaultsTable';
 import { useFeatureFlag } from '../featureFlags';
 import { formatDay } from '../format';
 import { createT, type TFunction } from '../i18n';
-import type { CloudPort, Share } from '../port';
+import type { CloudMount, CloudPort, Share } from '../port';
 import { permissionLabel, statusTone } from './GrantEditor';
+import { MountsList } from './MountsList';
 import { shareType } from './SharesManager';
 import { useSharePages } from './useSharePages';
 
@@ -16,12 +17,13 @@ export interface InvitationsListProps {
   port: CloudPort;
   lang?: string | undefined;
   /**
-   * Which groups to show (default all). The desktop shows only the invitations: an accepted share
-   * is a mount there, with its own list (open, remove from this device).
+   * Which groups to show (default all). The accepted shares are the mounts: their group is
+   * MountsList, which a host may also show on its own (the workbench, with its actions) and then
+   * leaves out here.
    */
   sections?: InvitationSection[] | undefined;
   /** Where "Open" of an accepted share leads (console: the workbench on the mount). */
-  openHref?: ((s: Share) => string | undefined) | undefined;
+  openHref?: ((m: CloudMount) => string | undefined) | undefined;
   /** Called after an answer (the desktop prepares and lists the mount). */
   onAnswered?: ((s: Share, accepted: boolean) => void) | undefined;
 }
@@ -31,14 +33,12 @@ function Received({
   lang,
   share,
   busy,
-  href,
   onAnswer,
 }: {
   t: TFunction;
   lang: string | undefined;
   share: Share;
   busy: boolean;
-  href: string | undefined;
   onAnswer?: ((accept: boolean) => void) | undefined;
 }) {
   const expires = share.expires_at ? formatDay(share.expires_at, lang) : '';
@@ -60,39 +60,25 @@ function Received({
           {t('shares.inVault', { vault: share.vault_name })}
           {expires ? ` · ${t('shares.expires', { date: expires })}` : ''}
         </p>
-        {(onAnswer || href) && (
+        {onAnswer && (
           <div className="mbcf-actions mbcf-actions--start">
-            {href && (
-              // A full page load: the workbench has its own HTML and style sheet (ADR-0029).
-              <a
-                className="nd-button nd-button--small"
-                href={href}
-                aria-label={t('invitations.openAria', { name: share.display_name })}
-              >
-                {t('invitations.open')}
-              </a>
-            )}
-            {onAnswer && (
-              <>
-                <Button
-                  small
-                  variant="primary"
-                  disabled={busy}
-                  aria-label={t('invitations.acceptAria', { name: share.display_name })}
-                  onClick={() => onAnswer(true)}
-                >
-                  {t('invitations.accept')}
-                </Button>
-                <Button
-                  small
-                  disabled={busy}
-                  aria-label={t('invitations.declineAria', { name: share.display_name })}
-                  onClick={() => onAnswer(false)}
-                >
-                  {t('invitations.decline')}
-                </Button>
-              </>
-            )}
+            <Button
+              small
+              variant="primary"
+              disabled={busy}
+              aria-label={t('invitations.acceptAria', { name: share.display_name })}
+              onClick={() => onAnswer(true)}
+            >
+              {t('invitations.accept')}
+            </Button>
+            <Button
+              small
+              disabled={busy}
+              aria-label={t('invitations.declineAria', { name: share.display_name })}
+              onClick={() => onAnswer(false)}
+            >
+              {t('invitations.decline')}
+            </Button>
           </div>
         )}
       </section>
@@ -169,6 +155,18 @@ export function InvitationsList({
         <InlineError>{describeError(t, received.error, 'share')}</InlineError>
       ) : (
         sections.map((st) => {
+          // The accepted shares are the mounts: one list on every host (ADR-0045 §7).
+          if (st === 'accepted')
+            return (
+              <MountsList
+                key={st}
+                port={port}
+                lang={lang}
+                title={titles.accepted}
+                hideWhenEmpty
+                openHref={openHref}
+              />
+            );
           const items = by(st);
           // The invitations always say whether there are any; the other groups only when filled.
           if (st !== 'pending' && items.length === 0) return null;
@@ -186,7 +184,6 @@ export function InvitationsList({
                       lang={lang}
                       share={s}
                       busy={busy}
-                      href={st === 'accepted' ? openHref?.(s) : undefined}
                       onAnswer={st === 'pending' ? (accept) => void answer(s, accept) : undefined}
                     />
                   ))}

@@ -13,7 +13,8 @@ export async function mockApi(page: Page, routes: Record<string, unknown>) {
     const url = new URL(req.url());
     const key = `${req.method()} ${url.pathname.replace(/^\/api\/v1/, '')}`;
     calls.push(key);
-    const entry = routes[key];
+    // Nothing shared with the user unless a test says so (MountsList on the vaults page).
+    const entry = routes[key] ?? (key === 'GET /shared-with-me' ? [] : undefined);
     if (entry === undefined) {
       await route.fulfill({
         status: 404,

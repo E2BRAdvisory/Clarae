@@ -51,11 +51,7 @@
     "colFiles": "Files",
     "colCreated": "Created",
     "kindPrivate": "Private (encrypted)",
-    "kindShared": "Shared",
-    "mounts": "Shared with me",
-    "open": "Open",
-    "openAria": "Open {{name}} in the browser",
-    "colOwner": "Shared by"
+    "kindShared": "Shared"
   },
   "devices": {
     "title": "Devices",

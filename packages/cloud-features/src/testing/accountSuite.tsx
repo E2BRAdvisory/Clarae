@@ -11,6 +11,7 @@ import { formatDay } from '../format';
 import { MyGroups } from '../MyGroups';
 import { errorCode, type CloudPort, type Share } from '../port';
 import { InvitationsList } from '../sharing/InvitationsList';
+import { MountsList } from '../sharing/MountsList';
 import { SharesManager } from '../sharing/SharesManager';
 import { dayOf } from '../sharing/ShareDialogs';
 import { UsagePanel } from '../UsagePanel';
@@ -31,6 +32,19 @@ const BOB = '0198f1c2-cccc-7bbb-8ccc-000000000001';
 const CAROL = '0198f1c2-cccc-7bbb-8ccc-000000000002';
 const TEAM = '0198f1c2-dddd-7bbb-8ccc-000000000001';
 const ADA = '0198f1c2-cccc-7bbb-8ccc-0000000000ad';
+// UUIDs, as the contract says: the suite also runs on the Go core, which decodes them.
+const LAPTOP = '0198f1c2-eeee-7bbb-8ccc-0000000000d1';
+const OFFICE_PC = '0198f1c2-eeee-7bbb-8ccc-0000000000d2';
+const FIREFOX = '0198f1c2-eeee-7bbb-8ccc-0000000000d3';
+const S1 = '0198f1c2-ffff-7bbb-8ccc-000000000001';
+const S2 = '0198f1c2-ffff-7bbb-8ccc-000000000002';
+const S_MANAGED = '0198f1c2-ffff-7bbb-8ccc-00000000000a';
+const I1 = '0198f1c2-ffff-7bbb-8ccc-000000000101';
+/** A share id (UUID, like the server's) for the paged lists: `tag` keeps the lists apart. */
+const pagedId = (tag: string, i: number) =>
+  `0198f1c2-${tag}-7bbb-8ccc-${String(i).padStart(12, '0')}`;
+const I2 = '0198f1c2-ffff-7bbb-8ccc-000000000102';
+const I3 = '0198f1c2-ffff-7bbb-8ccc-000000000103';
 
 /** A share of the n-th seed vault, owned by the user unless `my_permission` says otherwise. */
 export function seedShare(over: Partial<Share> & { id: string; display_name: string }): Share {
@@ -48,7 +62,7 @@ export function seedShare(over: Partial<Share> & { id: string; display_name: str
 
 const devices: NonNullable<CloudSeed['devices']> = [
   {
-    id: 'd-laptop',
+    id: LAPTOP,
     name: 'Laptop',
     platform: 'macos',
     app_version: '1.2.0',
@@ -57,14 +71,14 @@ const devices: NonNullable<CloudSeed['devices']> = [
     current: true,
   },
   {
-    id: 'd-pc',
+    id: OFFICE_PC,
     name: 'Office PC',
     platform: 'windows',
     app_version: '1.1.0',
     created_at: '2026-02-01T00:00:00Z',
     last_seen_at: '2026-10-29T10:00:00Z',
   },
-  { id: 'd-web', name: 'Firefox', platform: 'web', created_at: '2026-03-01T00:00:00Z' },
+  { id: FIREFOX, name: 'Firefox', platform: 'web', created_at: '2026-03-01T00:00:00Z' },
 ];
 
 const directory = {
@@ -92,7 +106,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
         <DevicesPanel
           port={port}
           lang="en"
-          currentDeviceId={h.knowsCurrentDevice ? undefined : 'd-laptop'}
+          currentDeviceId={h.knowsCurrentDevice ? undefined : LAPTOP}
         />
       ));
 
@@ -128,7 +142,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       const after = await port.listDevices();
-      expect(after.find((d) => d.id === 'd-web')?.revoked_at).toBeUndefined();
+      expect(after.find((d) => d.id === FIREFOX)?.revoked_at).toBeUndefined();
     });
 
     it('shows an empty state without devices', async () => {
@@ -187,13 +201,13 @@ export function cloudAccountSuite(h: AccountHarness): void {
         vaults,
         owned: [
           seedShare({
-            id: 's-1',
+            id: S1,
             display_name: 'Handbook',
             resource_type: 'folder',
             path_prefix: 'Docs/Handbook',
             expires_at: expires,
           }),
-          seedShare({ id: 's-2', display_name: 'Ada’s notes', my_permission: 'manager' }),
+          seedShare({ id: S2, display_name: 'Ada’s notes', my_permission: 'manager' }),
         ],
       });
       const handbook = await card('Handbook');
@@ -246,7 +260,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
     });
 
     it('renames a share, sets its expiry, then removes it', async () => {
-      await show({ vaults, owned: [seedShare({ id: 's-1', display_name: 'Handbook' })] });
+      await show({ vaults, owned: [seedShare({ id: S1, display_name: 'Handbook' })] });
       fireEvent.click(await screen.findByRole('button', { name: 'Edit Handbook' }));
       let dialog = screen.getByRole('dialog', { name: 'Edit “Handbook”' });
       fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Guide' } });
@@ -268,7 +282,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
     });
 
     it('says when the expiry is in the past', async () => {
-      await show({ vaults, owned: [seedShare({ id: 's-1', display_name: 'Handbook' })] });
+      await show({ vaults, owned: [seedShare({ id: S1, display_name: 'Handbook' })] });
       fireEvent.click(await screen.findByRole('button', { name: 'Edit Handbook' }));
       const dialog = screen.getByRole('dialog', { name: 'Edit “Handbook”' });
       fireEvent.click(within(dialog).getByRole('checkbox', { name: 'No expiry' }));
@@ -287,7 +301,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
         ...directory,
         owned: [
           seedShare({
-            id: 's-1',
+            id: S1,
             display_name: 'Handbook',
             grants: [
               {
@@ -349,7 +363,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
     });
 
     it('revokes a share after a confirmation', async () => {
-      await show({ vaults, owned: [seedShare({ id: 's-1', display_name: 'Handbook' })] });
+      await show({ vaults, owned: [seedShare({ id: S1, display_name: 'Handbook' })] });
       fireEvent.click(await screen.findByRole('button', { name: 'Revoke Handbook' }));
       const dialog = screen.getByRole('dialog', { name: 'Revoke “Handbook”?' });
       expect(dialog).toHaveTextContent('lose access at once');
@@ -361,7 +375,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
     it('lets a manager share inside the share they manage, never outside (ADR-0041 §8)', async () => {
       const company = vaultId(7); // somebody else's vault: not among the user's
       const alfa = seedShare({
-        id: 's-m',
+        id: S_MANAGED,
         display_name: 'Alfa',
         vault_id: company,
         vault_name: 'Company',
@@ -374,7 +388,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
       });
       const port = await show({
         vaults,
-        owned: [alfa, seedShare({ id: 's-1', display_name: 'Handbook' })],
+        owned: [alfa, seedShare({ id: S1, display_name: 'Handbook' })],
       });
       // The owner of a share uses "New share"; only a managed share offers to share inside it.
       expect(
@@ -426,9 +440,9 @@ export function cloudAccountSuite(h: AccountHarness): void {
             { name: 'Work', kind: 'shared' },
           ],
           owned: [
-            seedShare({ id: 's-1', display_name: 'Handbook' }),
+            seedShare({ id: S1, display_name: 'Handbook' }),
             seedShare({
-              id: 's-2',
+              id: S2,
               display_name: 'Plans',
               vault_id: vaultId(1),
               vault_name: 'Work',
@@ -444,7 +458,9 @@ export function cloudAccountSuite(h: AccountHarness): void {
 
     // GET /shares is paginated (100 a page by default): the list grows a page at a time.
     const many = (n: number) =>
-      Array.from({ length: n }, (_, i) => seedShare({ id: `s-${i}`, display_name: `Share ${i}` }));
+      Array.from({ length: n }, (_, i) =>
+        seedShare({ id: pagedId('eeee', i), display_name: `Share ${i}` }),
+      );
 
     it('reads the shares a page at a time', async () => {
       await show({ vaults, owned: many(101) });
@@ -457,7 +473,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
 
     it('reads every page for the shares of one vault', async () => {
       const last = seedShare({
-        id: 's-last',
+        id: pagedId('eeee', 999_999),
         display_name: 'Plans',
         vault_id: vaultId(1),
         vault_name: 'Work',
@@ -497,7 +513,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
     };
 
     it('accepts an invitation: it moves to the accepted shares', async () => {
-      await mount({ received: [invitation('i-1', 'Budget')] }, (port) => (
+      await mount({ received: [invitation(I1, 'Budget')] }, (port) => (
         <InvitationsList port={port} lang="en" />
       ));
       const budget = await card('Budget');
@@ -511,7 +527,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
     });
 
     it('declines an invitation', async () => {
-      await mount({ received: [invitation('i-1', 'Budget')] }, (port) => (
+      await mount({ received: [invitation(I1, 'Budget')] }, (port) => (
         <InvitationsList port={port} lang="en" />
       ));
       fireEvent.click(await screen.findByRole('button', { name: 'Decline Budget' }));
@@ -523,8 +539,8 @@ export function cloudAccountSuite(h: AccountHarness): void {
       await mount(
         {
           received: [
-            invitation('i-1', 'Budget'),
-            invitation('i-2', 'Roadmap', { my_status: 'accepted' }),
+            invitation(I1, 'Budget'),
+            invitation(I2, 'Roadmap', { my_status: 'accepted' }),
           ],
         },
         (port) => <InvitationsList port={port} lang="en" sections={['pending']} />,
@@ -534,18 +550,122 @@ export function cloudAccountSuite(h: AccountHarness): void {
     });
 
     it('reads the received shares a page at a time', async () => {
-      const accepted = Array.from({ length: 101 }, (_, i) =>
-        invitation(`a-${i}`, `Mount ${i}`, { my_status: 'accepted' }),
+      // The pending invitations come from GET /shares?scope=received, a page at a time; the
+      // accepted ones are the mounts (MountsList), which reads every page of /shared-with-me.
+      const pending = Array.from({ length: 101 }, (_, i) =>
+        invitation(pagedId('dddd', i), `Invite ${i}`),
       );
-      await mount({ received: accepted }, (port) => <InvitationsList port={port} lang="en" />);
-      expect(await card('Mount 99')).toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: 'Mount 100' })).toBeNull();
-      // An invitation could be on the next page: "none" would be a guess until it is read.
-      expect(screen.queryByText('No invitations.')).toBeNull();
+      await mount({ received: pending }, (port) => <InvitationsList port={port} lang="en" />);
+      expect(await card('Invite 99')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Invite 100' })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-      expect(await card('Mount 100')).toBeInTheDocument();
-      expect(screen.getByText('No invitations.')).toBeInTheDocument();
+      expect(await card('Invite 100')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    });
+  });
+
+  describe(`MountsList on ${h.name}`, () => {
+    // A share the user received, in the shape of GET /shares?scope=received.
+    const received = (id: string, name: string, over: Partial<Share> = {}): Share => {
+      const share: Share = seedShare({
+        id,
+        display_name: name,
+        resource_type: 'folder',
+        owner_id: ADA,
+        owner_name: 'ada',
+        vault_name: 'Company',
+        my_permission: 'editor',
+        my_status: 'accepted',
+        ...over,
+      });
+      delete share.grants;
+      return share;
+    };
+
+    it('lists the accepted shares only, with type, level and owner', async () => {
+      await mount(
+        {
+          received: [
+            received(I1, 'Budget', { my_status: 'pending' }),
+            received(I2, 'Roadmap'),
+            received(I3, 'Archive', { my_status: 'declined', resource_type: 'vault' }),
+          ],
+        },
+        (port) => <MountsList port={port} lang="en" />,
+      );
+      const list = await screen.findByRole('region', { name: 'Shared with me' });
+      const roadmap = await within(list).findByRole('region', { name: 'Roadmap' });
+      expect(roadmap).toHaveTextContent('Folder');
+      expect(roadmap).toHaveTextContent('Editor');
+      expect(roadmap).toHaveTextContent('From ada');
+      expect(within(list).queryByRole('region', { name: 'Budget' })).toBeNull();
+      expect(within(list).queryByRole('region', { name: 'Archive' })).toBeNull();
+      // Nothing to open without a host that says where.
+      expect(within(roadmap).queryByRole('link')).toBeNull();
+    });
+
+    it('says when nothing is shared with the user', async () => {
+      await mount({ received: [received(I1, 'Budget', { my_status: 'pending' })] }, (port) => (
+        <MountsList port={port} lang="en" />
+      ));
+      expect(await screen.findByText('Nothing is shared with you yet.')).toBeInTheDocument();
+    });
+
+    it('opens a mount where the host says (the console: a link to the workbench)', async () => {
+      await mount({ received: [received(I2, 'Roadmap')] }, (port) => (
+        <MountsList
+          port={port}
+          lang="en"
+          openHref={(m) => `/vaults/${m.vault_id}/open?share=${m.share_id}`}
+        />
+      ));
+      expect(
+        await screen.findByRole('link', { name: 'Open Roadmap in the browser' }),
+      ).toHaveAttribute('href', `/vaults/${vaultId(0)}/open?share=${I2}`);
+    });
+
+    it('gives each mount a slot for the actions of the host', async () => {
+      await mount({ received: [received(I2, 'Roadmap')] }, (port) => (
+        <MountsList
+          port={port}
+          lang="en"
+          actions={(m) => <button type="button">{`Act on ${m.display_name}`}</button>}
+        />
+      ));
+      const roadmap = await screen.findByRole('region', { name: 'Roadmap' });
+      expect(within(roadmap).getByRole('button', { name: 'Act on Roadmap' })).toBeInTheDocument();
+    });
+
+    it('shows nothing at all when asked to hide an empty list', async () => {
+      await mount({ received: [received(I1, 'Budget', { my_status: 'pending' })] }, (port) => (
+        <>
+          <MountsList port={port} lang="en" hideWhenEmpty />
+          <InvitationsList port={port} lang="en" sections={['pending']} />
+        </>
+      ));
+      expect(await screen.findByRole('region', { name: 'Budget' })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Shared with me' })).toBeNull();
+      expect(screen.queryByText('Nothing is shared with you yet.')).toBeNull();
+    });
+
+    it('lists the port-level mounts as the components show them', async () => {
+      const port = await mount({ received: [received(I2, 'Roadmap')] }, () => null);
+      const mounts = await port.listMounts();
+      expect(mounts).toHaveLength(1);
+      expect(mounts[0]).toMatchObject({
+        share_id: I2,
+        vault_id: vaultId(0),
+        display_name: 'Roadmap',
+        resource_type: 'folder',
+        permission: 'editor',
+        owner_name: 'ada',
+      });
+      // A port that keeps a copy of the mount on this device tells its state (the folder may not
+      // exist yet: it is made when the share is accepted or the mount opened here).
+      if (port.capabilities.keepsLocalCopy) {
+        expect(mounts[0]?.local).toMatchObject({ revoked: false, open_vault_id: '' });
+        expect(typeof mounts[0]?.local?.mounted).toBe('boolean');
+      } else expect(mounts[0]?.local).toBeUndefined();
     });
   });
 
@@ -554,12 +674,13 @@ export function cloudAccountSuite(h: AccountHarness): void {
       await mount(
         {
           features: { sharing: false },
-          owned: [seedShare({ id: 's-1', display_name: 'Handbook' })],
+          owned: [seedShare({ id: S1, display_name: 'Handbook' })],
         },
         (port) => (
           <>
             <SharesManager port={port} lang="en" />
             <InvitationsList port={port} lang="en" />
+            <MountsList port={port} lang="en" />
           </>
         ),
       );
@@ -568,6 +689,7 @@ export function cloudAccountSuite(h: AccountHarness): void {
       );
       expect(screen.queryByRole('region', { name: 'Handbook' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'New share' })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Shared with me' })).toBeNull();
     });
   });
 

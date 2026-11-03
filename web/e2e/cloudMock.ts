@@ -1,9 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import type { BrowserContext, Request, Route } from '@playwright/test';
-import Ajv from 'ajv';
-import { parse } from 'yaml';
+import {
+  jsonSchemaOf,
+  operationOf,
+  requestSchemaOf,
+  responseOf,
+  validate,
+} from '@memobrain/cloud-features/testing/contract';
 
 /**
  * A cloud of the REST API (api/openapi.yaml) in the test process, so the cloud panels of the
@@ -134,85 +137,9 @@ export interface CloudMock {
   deleteVaultElsewhere(id: string): void;
 }
 
-// ---- the contract -----------------------------------------------------------------------------
-
-interface Operation {
-  id: string;
-  method: string;
-  path: string;
-  re: RegExp;
-  params: string[];
-  op: Json;
-}
-
-const openapiPath = fileURLToPath(new URL('../../api/openapi.yaml', import.meta.url));
-let contract: { doc: Json; ops: Operation[]; ajv: Ajv.Ajv } | null = null;
-
-function loadContract() {
-  if (contract) return contract;
-  const doc = parse(readFileSync(openapiPath, 'utf8')) as Json;
-  const ops: Operation[] = [];
-  for (const [path, item] of Object.entries(doc['paths'] as Record<string, Json>)) {
-    for (const method of ['get', 'put', 'post', 'patch', 'delete']) {
-      const op = item[method] as Json | undefined;
-      if (!op) continue;
-      const params: string[] = [];
-      // `{vaultId}:restore` and `/blobs:check`: the colon is a literal of the path.
-      const re = new RegExp(
-        '^' +
-          path.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\w+)\}/g, (_, name: string) => {
-            params.push(name);
-            return '([^/:]+)';
-          }) +
-          '$',
-      );
-      ops.push({
-        id: op['operationId'] as string,
-        method: method.toUpperCase(),
-        path,
-        re,
-        params,
-        op,
-      });
-    }
-  }
-  // OpenAPI 3.1 schemas are JSON Schema; formats such as int64 are annotations here.
-  const ajv = new Ajv({
-    allErrors: true,
-    unknownFormats: 'ignore',
-    nullable: true,
-    validateSchema: false,
-    logger: false,
-  });
-  ajv.addSchema(doc, 'openapi');
-  contract = { doc, ops, ajv };
-  return contract;
-}
-
-/** The JSON schema of a request body or of a response of an operation, if it has one. */
-function jsonSchemaOf(c: NonNullable<typeof contract>, holder: Json | undefined): Json | null {
-  if (!holder) return null;
-  let h = holder;
-  if (typeof h['$ref'] === 'string') {
-    // #/components/responses/X
-    const path = h['$ref'].slice(2).split('/');
-    h = path.reduce<Json>((o, k) => o[k] as Json, c.doc);
-  }
-  const content = h['content'] as Record<string, Json> | undefined;
-  const schema =
-    content?.['application/json']?.['schema'] ?? content?.['application/problem+json']?.['schema'];
-  return (schema as Json | undefined) ?? null;
-}
-
-function validate(schema: Json, value: unknown): string | null {
-  const c = loadContract();
-  // Local refs of the document resolve inside the "openapi" schema added above.
-  const rooted = JSON.parse(
-    JSON.stringify(schema).replace(/"\$ref":"#\//g, '"$ref":"openapi#/'),
-  ) as object;
-  const ok = c.ajv.validate(rooted, value);
-  return ok ? null : c.ajv.errorsText(c.ajv.errors, { dataVar: 'body' });
-}
+// ---- the contract ----------------------------------------------------------------------------
+// Matching and validation are those of @memobrain/cloud-features/testing/contract, shared with the
+// run of the cloud suites on the Go core in Node (CoreCloudPort.core.test.tsx).
 
 // ---- helpers ------------------------------------------------------------------------------------
 
@@ -259,7 +186,6 @@ export async function installCloudMock(
   context: BrowserContext,
   seed: CloudSeed = {},
 ): Promise<CloudMock> {
-  const c = loadContract();
   const state: CloudMock['state'] = {
     me: {
       id: ME,
@@ -695,18 +621,15 @@ export async function installCloudMock(
     // The notification stream is not an operation of the REST contract: the core polls instead.
     if (path === '/events')
       return answer({ status: 404, body: problem(404, 'NOT_FOUND', 'no notification stream') });
-    const match = c.ops
-      .map((o) => ({ o, m: req.method() === o.method ? o.re.exec(path) : null }))
-      .find((x) => x.m);
+    const match = operationOf(req.method(), path);
     if (!match) {
       problems.push(`${req.method()} ${path}: not an operation of api/openapi.yaml`);
       return answer({ status: 404, body: problem(404, 'NOT_FOUND', 'unknown path') });
     }
-    const { o, m } = match;
-    const params = Object.fromEntries(o.params.map((n, i) => [n, decodeURIComponent(m![i + 1]!)]));
+    const { op: o, params } = match;
     calls.push(`${o.method} ${o.id}`);
     let body: unknown;
-    const reqSchema = jsonSchemaOf(c, o.op['requestBody'] as Json | undefined);
+    const reqSchema = requestSchemaOf(o);
     if (reqSchema) {
       try {
         body = JSON.parse(req.postData() ?? 'null');
@@ -729,12 +652,11 @@ export async function installCloudMock(
     if (vaultId && deletedElsewhere.has(vaultId) && o.id !== 'restoreVault')
       out = notFound('vault');
     else out = run(params, url, body, req);
-    const responses = o.op['responses'] as Record<string, Json>;
-    const declared = responses[String(out.status)] ?? responses['default'];
+    const declared = responseOf(o, out.status);
     if (!declared)
       problems.push(`${o.id}: status ${out.status} is not a response of the operation`);
     else if (out.body !== undefined) {
-      const schema = jsonSchemaOf(c, declared);
+      const schema = jsonSchemaOf(declared);
       const err = schema ? validate(schema, out.body) : null;
       if (err) problems.push(`${o.id}: response ${out.status} ${err}`);
     }

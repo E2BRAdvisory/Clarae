@@ -15,8 +15,10 @@ export const CLIENTS = [
 /**
  * The surfaces of the tests of a feature (ADR-0045 §4) and where their files may live:
  *  - desktop: the UI (packages/workbench), the e2e specs on the Wails mock and the Go core;
- *  - workbench: the web host (web/src/workbench), the browser specs (web/e2e*) and the specs of the
- *    e2e matrix (apps/desktop/frontend/e2e, which run on the WebAssembly core too);
+ *  - workbench: the web host (web/src/workbench), the browser specs (web/e2e*), the specs of the
+ *    e2e matrix (apps/desktop/frontend/e2e, which run on the WebAssembly core too) and the tests of
+ *    the UI on the WebAssembly core in Node (`*.core.test.tsx` of packages/workbench/src, `task
+ *    test-core`);
  *  - console: the console (web/src outside the workbench, web/e2e, the REST adapter of
  *    packages/cloud-features);
  *  - cloud: services/cloud.
@@ -24,7 +26,7 @@ export const CLIENTS = [
 export const TEST_SURFACES = {
   desktop: /^(?!web\/|services\/)/,
   workbench:
-    /^(web\/(e2e|e2e-cloud|e2e-mixed|e2e-security)\/|web\/src\/workbench\/|apps\/desktop\/frontend\/e2e\/)/,
+    /^(web\/(e2e|e2e-cloud|e2e-mixed|e2e-security)\/|web\/src\/workbench\/|apps\/desktop\/frontend\/e2e\/|packages\/workbench\/src\/.+\.core\.test\.tsx?$)/,
   console: /^(web\/(e2e|e2e-security)\/|web\/src\/(?!workbench\/)|packages\/cloud-features\/)/,
   cloud: /^services\/cloud\//,
 };
@@ -37,6 +39,11 @@ export const UNVERIFIED = 'non verificata sul web';
 
 /** Browser specs that always run the workbench on the core, against a real cloud. */
 const REAL_CLOUD_SPECS = /^web\/(e2e-cloud|e2e-mixed)\/.+\.spec\.ts$/;
+/**
+ * The tests of the workbench's UI on the Go core compiled to WebAssembly, run in Node against a fake
+ * cloud checked by api/openapi.yaml (`task test-core`, ADR-0045 §7): a proof like a browser spec.
+ */
+const CORE_TESTS = /^packages\/workbench\/src\/.+\.core\.test\.tsx?$/;
 /** A browser spec that opens the workbench page (`/vaults/<id>/open`) runs the WebAssembly core. */
 const OPENS_WORKBENCH = /\.goto\(\s*[`'"][^`'"]*\/vaults\/[^`'"]*\/open\b/;
 
@@ -55,13 +62,14 @@ export function coreSpecs(specs) {
 
 /**
  * Whether a test of `tests.workbench` proves the feature `featureId` on the WebAssembly core: a
- * browser spec that runs the core (`core`: coreSpecs), or a spec of the e2e matrix (`matrix`: the
+ * test of the UI on the core in Node (CORE_TESTS), a browser spec that runs the core (`core`:
+ * coreSpecs), or a spec of the e2e matrix (`matrix`: the
  * rows of specCoverage) that runs on web-core for that feature: not skipped at file level, not an
  * opt-in benchmark, and without a skipOnWeb naming the feature (a spec whose tests of the feature
  * are skipped is not a proof of it, even when its other tests run).
  */
 export function isWorkbenchProof(file, featureId, { core, matrix }) {
-  if (core.has(file)) return true;
+  if (CORE_TESTS.test(file) || core.has(file)) return true;
   const row = matrix.find((r) => r.file === file);
   if (!row || row.desktop === 'opt-in' || row.web === 'opt-in' || row.web === 'no') return false;
   return !row.skips.some((s) => s.feature === featureId);
@@ -372,7 +380,7 @@ export function check(inputs) {
         );
       else
         errors.push(
-          `${where}: workbench is "yes" without a test on the WebAssembly core in tests.workbench (a browser spec that opens the workbench, a spec of the e2e matrix that runs on the web for it, web/e2e-cloud or web/e2e-mixed); otherwise it is "partial" with the reason "${UNVERIFIED}: …"`,
+          `${where}: workbench is "yes" without a test on the WebAssembly core in tests.workbench (a browser spec that opens the workbench, a spec of the e2e matrix that runs on the web for it, web/e2e-cloud, web/e2e-mixed or a *.core.test.tsx of packages/workbench); otherwise it is "partial" with the reason "${UNVERIFIED}: …"`,
         );
     }
     if (
@@ -693,7 +701,7 @@ export function render(inputs) {
     '',
     `### Funzioni (${features.length})`,
     '',
-    `Dal registro \`shared/parity/features.yaml\`. Desktop: ${statusCount(features, 'desktop')}. Workbench: ${statusCount(features, 'workbench')}. Console: ${statusCount(features, 'console')} (n/a = funzione sul contenuto del vault, che la console affida al workbench). Test per superficie: D = desktop (UI, e2e sul mock, core Go), W = workbench (host web, spec nel browser e spec della matrice e2e), K = console, C = cloud; in grassetto le prove sul core WebAssembly. ${proved} funzioni hanno almeno una prova sul core; ${unverified} sono \`partial\` soltanto per la mancanza di una prova (motivazione «${UNVERIFIED}: …»).`,
+    `Dal registro \`shared/parity/features.yaml\`. Desktop: ${statusCount(features, 'desktop')}. Workbench: ${statusCount(features, 'workbench')}. Console: ${statusCount(features, 'console')} (n/a = funzione sul contenuto del vault, che la console affida al workbench). Test per superficie: D = desktop (UI, e2e sul mock, core Go), W = workbench (host web, spec nel browser, spec della matrice e2e e test della UI sul core in Node, \`*.core.test.tsx\`), K = console, C = cloud; in grassetto le prove sul core WebAssembly. ${proved} funzioni hanno almeno una prova sul core; ${unverified} sono \`partial\` soltanto per la mancanza di una prova (motivazione «${UNVERIFIED}: …»).`,
     '',
     table(featureRows, [
       'Funzione',

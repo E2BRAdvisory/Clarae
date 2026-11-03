@@ -9,6 +9,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
+    // On the Go core compiled to WebAssembly: vitest.core.config.ts (`task test-core`).
+    exclude: ['**/node_modules/**', 'src/**/*.core.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
     globals: true,
   },

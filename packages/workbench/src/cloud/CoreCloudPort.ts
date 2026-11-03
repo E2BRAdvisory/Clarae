@@ -12,6 +12,7 @@ import {
   userEntries,
   type CloudCapabilities,
   type CloudDevice,
+  type CloudMount,
   type CloudPort,
   type CloudUsage,
   type CloudVault,
@@ -24,7 +25,25 @@ import {
   type SharePermission,
   type ShareUpdate,
 } from '@memobrain/cloud-features/port';
-import { api } from '../app/api';
+import type { Schemas } from '@memobrain/api-client';
+import { api, type MountState } from '../app/api';
+
+/**
+ * A mount as the components show it. The core's binding (SharingAPI.Mounts) joins GET
+ * /shared-with-me with the copy of each mount on this device and with the copies whose share
+ * ended, so it has its own DTO: this is the one mapping left in the adapter (ADR-0045 §6-7).
+ */
+export function cloudMountOf(m: MountState): CloudMount {
+  return {
+    share_id: m.shareId,
+    vault_id: m.cloudVaultId,
+    display_name: m.name,
+    owner_name: m.ownerName,
+    resource_type: m.resourceType,
+    permission: m.permission,
+    local: { path: m.path, mounted: m.mounted, revoked: m.revoked, open_vault_id: m.vaultId },
+  };
+}
 
 export class CoreCloudPort implements CloudPort {
   readonly id = 'core';
@@ -99,6 +118,21 @@ export class CoreCloudPort implements CloudPort {
     );
   }
 
+  /**
+   * A share of a folder or a document of a vault open on this device, by its local id (the
+   * explorer's «Share…»): the core finds its cloud vault and the path inside it (CreateShare). Not
+   * part of CloudPort: the console shares by cloud vault id only (createShare).
+   */
+  shareFromVault(
+    vaultId: string,
+    path: string,
+    isDir: boolean,
+    name: string,
+    grants: Schemas['NewGrant'][],
+  ): Promise<Share> {
+    return this.sharing.create(vaultId, path, isDir, name, grants);
+  }
+
   updateShare(id: string, change: ShareUpdate): Promise<Share> {
     return this.sharing.update(id, change);
   }
@@ -118,6 +152,11 @@ export class CoreCloudPort implements CloudPort {
 
   deleteGrant(shareId: string, type: PrincipalType, principalId: string): Promise<void> {
     return this.sharing.removeGrant(shareId, type, principalId);
+  }
+
+  /** The accepted shares and the copies on this device, those of ended shares included. */
+  async listMounts(): Promise<CloudMount[]> {
+    return (await this.sharing.mounts()).map(cloudMountOf);
   }
 
   /** Accepting also prepares the folder of the mount on this device (the core's AcceptShare). */

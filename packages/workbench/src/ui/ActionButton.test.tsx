@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vites
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { MountState } from '../app/api';
+import type { CloudMount } from '@memobrain/cloud-features/port';
 import type { MountRevokedPayload } from '../app/events';
 import { actionById, actions, defineAction, type ActionArg } from '../commands/actions';
 import { initI18n } from '../i18n';
@@ -51,7 +51,10 @@ describe('ActionButton', () => {
   });
 
   it('hides an action that does not apply to its argument', () => {
-    const mount = { shareId: 'sh-1', revoked: true, mounted: false } as MountState;
+    const mount = {
+      share_id: 'sh-1',
+      local: { revoked: true, mounted: false },
+    } as CloudMount;
     render(
       wrap(
         <>
@@ -98,7 +101,7 @@ describe('ActionButton', () => {
 
 describe('the action registry', () => {
   it('types each action by its id', () => {
-    expectTypeOf<ActionArg<'mount:open'>>().toEqualTypeOf<MountState>();
+    expectTypeOf<ActionArg<'mount:open'>>().toEqualTypeOf<CloudMount>();
     expectTypeOf<ActionArg<'mount:keep-copy'>>().toEqualTypeOf<MountRevokedPayload>();
     expectTypeOf<ActionArg<'account:sign-out'>>().toEqualTypeOf<void>();
     expect(actionById('sync:pause').feature).toBe('sync.engine');

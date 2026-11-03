@@ -13,7 +13,7 @@ import {
   type DirectoryEntry,
 } from '@memobrain/cloud-features';
 import '@memobrain/cloud-features/workbench.css';
-import { api, type NewGrant, type PermissionLevel } from '../app/api';
+import type { NewGrant, PermissionLevel } from '../app/api';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { useSharing, type ShareTarget } from '../state/sharing';
 import { infoOf, useSync } from '../state/sync';
@@ -81,7 +81,7 @@ function NewShare({
         principal_id: p.entry.id,
         permission: p.permission,
       }));
-      await api.sharing.create(vaultId, target.path, target.isDir, name.trim(), grants);
+      await port.shareFromVault(vaultId, target.path, target.isDir, name.trim(), grants);
       setPicked([]);
       onDone();
     } catch (e) {

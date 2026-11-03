@@ -26,6 +26,19 @@ const invitation = {
   my_status: 'pending',
 };
 const mount = { ...invitation, id: 's-mnt', display_name: 'Wiki', my_status: 'accepted' };
+/** The mount of an accepted share, as GET /shared-with-me returns it. */
+const mountOf = (s: unknown) => {
+  const share = s as typeof invitation;
+  return {
+    share_id: share.id,
+    vault_id: share.vault_id,
+    display_name: share.display_name,
+    resource_type: share.resource_type,
+    permission: share.my_permission,
+    scope: `share:${share.id}`,
+    owner_name: share.owner_name,
+  };
+};
 const owned = {
   ...common,
   id: 's-own',
@@ -76,12 +89,15 @@ describe('shares page', () => {
           () => [owned],
           () => [invitation, mount],
         ),
+        'GET /shared-with-me': { items: [mountOf(mount)] },
       },
     });
     expect(await screen.findByRole('heading', { name: 'Shared with me' })).toBeInTheDocument();
     const inv = await screen.findByRole('region', { name: 'Budget' });
     expect(within(inv).getByRole('button', { name: 'Accept Budget' })).toBeInTheDocument();
-    const wiki = screen.getByRole('region', { name: 'Wiki' });
+    // The accepted shares are the mounts (MountsList, GET /shared-with-me).
+    const accepted = await screen.findByRole('region', { name: 'Accepted shares' });
+    const wiki = within(accepted).getByRole('region', { name: 'Wiki' });
     expect(within(wiki).getByRole('link', { name: 'Open Wiki in the browser' })).toHaveAttribute(
       'href',
       `/vaults/${V1}/open?share=s-mnt`,
@@ -102,6 +118,11 @@ describe('shares page', () => {
           received = [{ ...invitation, my_status: 'accepted' }];
           return received[0];
         },
+        'GET /shared-with-me': () => ({
+          items: received
+            .filter((s) => (s as typeof invitation).my_status === 'accepted')
+            .map(mountOf),
+        }),
       },
     });
     const user = userEvent.setup();

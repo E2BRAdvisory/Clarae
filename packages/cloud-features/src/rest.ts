@@ -6,6 +6,7 @@ import {
   userEntries,
   type CloudCapabilities,
   type CloudDevice,
+  type CloudMount,
   type CloudPort,
   type CloudUsage,
   type CloudVault,
@@ -148,6 +149,20 @@ export class RestCloudPort implements CloudPort {
         params: { path: { shareId, principalType, principalId } },
       }),
     );
+  }
+
+  /** Every mount: GET /shared-with-me a page at a time until the server gives no next cursor. */
+  async listMounts(): Promise<CloudMount[]> {
+    const out: CloudMount[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await unwrap(
+        this.api.GET('/shared-with-me', { params: { query: cursor ? { cursor } : {} } }),
+      );
+      out.push(...page.items);
+      cursor = page.next_cursor;
+    } while (cursor);
+    return out;
   }
 
   async acceptInvitation(shareId: string): Promise<void> {

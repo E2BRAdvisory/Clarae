@@ -1,6 +1,9 @@
 import { createClient } from '@memobrain/api-client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { RestCloudPort, type RestCloudPortOptions } from './rest';
+import { InvitationsList } from './sharing/InvitationsList';
 import {
   cloudAccountSuite,
   cloudVaultsTableSuite,
@@ -135,7 +138,40 @@ describe('RestCloudPort', () => {
       ],
     });
     await port.acceptInvitation('i1');
+    expect(await port.listMounts()).toMatchObject([{ share_id: 'i1', display_name: 'Budget' }]);
     await port.declineInvitation('i1');
-    expect(fake.calls).toEqual(['POST /shares/i1:accept', 'POST /shares/i1:decline']);
+    expect(await port.listMounts()).toEqual([]);
+    expect(fake.calls).toEqual([
+      'POST /shares/i1:accept',
+      'GET /shared-with-me',
+      'POST /shares/i1:decline',
+      'GET /shared-with-me',
+    ]);
+  });
+
+  it('does not ask again for a configuration that cannot be read each time a list mounts', async () => {
+    const fake = fakeCloudApi({});
+    let configCalls = 0;
+    const api = createClient({
+      baseUrl: 'http://cloud.test/api/v1',
+      fetch: (req: Request) => {
+        if (new URL(req.url).pathname.endsWith('/config/effective')) {
+          configCalls++;
+          return Promise.resolve(new Response(null, { status: 503 }));
+        }
+        return fake.fetch(req);
+      },
+    });
+    const port = new RestCloudPort(api);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <InvitationsList port={port} lang="en" />
+      </QueryClientProvider>,
+    );
+    // The flag falls back to its default (sharing on) and the lists load.
+    expect(await screen.findByText('No invitations.')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(configCalls).toBe(1);
   });
 });

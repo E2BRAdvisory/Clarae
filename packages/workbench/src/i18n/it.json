@@ -915,8 +915,6 @@
   "sharing": {
     "invitations": "Inviti",
     "signIn": "Accedi al cloud (Impostazioni → Cloud) per vedere i tuoi inviti e le tue condivisioni.",
-    "sharedWithMe": "Condivisi con me",
-    "noMounts": "Nessuna condivisione ricevuta.",
     "from": "Da {{owner}}",
     "open": "Apri",
     "removeMount": "Rimuovi da questo dispositivo",

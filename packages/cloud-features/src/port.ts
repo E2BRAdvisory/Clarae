@@ -28,6 +28,28 @@ export type GrantStatus = Schemas['GrantStatus'];
 export type PrincipalType = Grant['principal_type'];
 export type GroupMembership = Schemas['GroupMembership'];
 
+/**
+ * A mount: a share the user accepted, as GET /shared-with-me describes it (accepted shares are the
+ * mounts, on every host). `scope` is the sync parameter of the core and is not part of the model. A
+ * port that keeps copies on this device (`capabilities.keepsLocalCopy`, the core) adds `local`, and
+ * also lists the copies whose share is gone (revoked, expired) until the user decides about them.
+ */
+export type CloudMount = Omit<Schemas['Mount'], 'scope'> & {
+  local?: MountCopy | undefined;
+};
+
+/** The copy of a mount on this device (core only). */
+export interface MountCopy {
+  /** Folder of the copy ("" until it is created). */
+  path: string;
+  /** The folder exists on this device. */
+  mounted: boolean;
+  /** The share is gone (revoked, expired, deleted) but the copy is still here. */
+  revoked: boolean;
+  /** The local id of the vault while the mount is open here ("" otherwise). */
+  open_vault_id: string;
+}
+
 /** A user or group found in the directory, to share with. */
 export interface DirectoryEntry {
   type: PrincipalType;
@@ -129,6 +151,11 @@ export interface CloudPort {
     permission: SharePermission,
   ): Promise<void>;
   deleteGrant(shareId: string, type: PrincipalType, principalId: string): Promise<void>;
+  /**
+   * The mounts of the user: the accepted shares (GET /shared-with-me) and, where the port keeps
+   * copies, the copies on this device whose share is gone.
+   */
+  listMounts(): Promise<CloudMount[]>;
   acceptInvitation(shareId: string): Promise<void>;
   declineInvitation(shareId: string): Promise<void>;
   /** Users or groups whose name matches `query` (at least two characters). */

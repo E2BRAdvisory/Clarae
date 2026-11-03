@@ -31,6 +31,16 @@ const received = {
   owner_name: 'Bob',
   created_at: '2026-01-01T00:00:00Z',
 };
+/** A mount as GET /shared-with-me returns it. */
+const mountOf = (id: string, name: string) => ({
+  share_id: id,
+  vault_id: received.vault_id,
+  display_name: name,
+  resource_type: received.resource_type,
+  permission: 'editor',
+  scope: `share:${id}`,
+  owner_name: received.owner_name,
+});
 const workbenchOn = { version: 1, config: {}, locked_keys: [] };
 const workbenchOff = {
   version: 2,
@@ -83,31 +93,40 @@ describe('vaults page', () => {
     expect(within(row).getByRole('button', { name: 'Download ZIP: Notes' })).toBeInTheDocument();
     const d = screen.getByRole('rowheader', { name: 'Diary' }).closest('tr') as HTMLElement;
     expect(within(d).getByText('Private (encrypted)')).toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: 'Shared with me' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Shared with me' })).not.toBeInTheDocument();
   });
 
-  it('opens an accepted share as a mount, with its share id', async () => {
-    renderApp({
+  it('opens an accepted share as a mount, with its share id (MountsList)', async () => {
+    const { api } = renderApp({
       path: '/vaults',
       routes: {
         ...vaultRoutes([]).routes,
         'GET /config/effective': workbenchOn,
-        'GET /shares': {
-          items: [
-            { ...received, id: 'sh1', display_name: 'Team', my_status: 'accepted' },
-            { ...received, id: 'sh2', display_name: 'Invited', my_status: 'pending' },
-          ],
-        },
+        'GET /shared-with-me': { items: [mountOf('sh1', 'Team')] },
       },
     });
-    const table = await screen.findByRole('table', { name: 'Shared with me' });
-    expect(within(table).getByRole('rowheader', { name: 'Team' })).toBeInTheDocument();
-    expect(within(table).getByText('Bob')).toBeInTheDocument();
-    expect(within(table).queryByRole('rowheader', { name: 'Invited' })).toBeNull();
-    expect(within(table).getByRole('link', { name: 'Open Team in the browser' })).toHaveAttribute(
+    const list = await screen.findByRole('region', { name: 'Shared with me' });
+    const team = within(list).getByRole('region', { name: 'Team' });
+    expect(team).toHaveTextContent('From Bob');
+    expect(within(team).getByRole('link', { name: 'Open Team in the browser' })).toHaveAttribute(
       'href',
       '/vaults/v9/open?share=sh1',
     );
+    // The mounts are GET /shared-with-me, through the port: no list of received shares here.
+    expect(api.called('GET', '/shares')).toHaveLength(0);
+  });
+
+  it('lists the mounts without a link when the workbench is off', async () => {
+    renderApp({
+      path: '/vaults',
+      routes: {
+        ...vaultRoutes([]).routes,
+        'GET /config/effective': workbenchOff,
+        'GET /shared-with-me': { items: [mountOf('sh1', 'Team')] },
+      },
+    });
+    const team = await screen.findByRole('region', { name: 'Team' });
+    expect(within(team).queryByRole('link')).toBeNull();
   });
 
   it('shows an empty state without vaults', async () => {

@@ -6,4 +6,5 @@ export { DevicesPanel } from './DevicesPanel';
 export { UsagePanel } from './UsagePanel';
 export { SharesManager } from './sharing/SharesManager';
 export { InvitationsList } from './sharing/InvitationsList';
+export { MountsList } from './sharing/MountsList';
 export { DirectorySearch } from './sharing/GrantEditor';

@@ -97,6 +97,8 @@ export function renderApp(opts: {
   const admin = opts.user?.roles?.includes(ADMIN_ROLE) ?? false;
   const api = mockApi({
     'GET /me': { id: 'u1', username: 'alice', role: admin ? 'admin' : 'user' },
+    // Nothing shared with the user unless a test says so (MountsList on the vaults page).
+    'GET /shared-with-me': { items: [] },
     ...opts.routes,
   });
   const auth = opts.auth ?? fakeAuth(opts.user === undefined ? {} : opts.user);

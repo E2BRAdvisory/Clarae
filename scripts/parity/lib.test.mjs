@@ -502,6 +502,15 @@ describe('proofs and consumers', () => {
     const bench = [{ file: 'b.spec.ts', tests: 1, desktop: 'opt-in', web: 'opt-in', skips: [] }];
     assert.equal(isWorkbenchProof('b.spec.ts', 'x', { core: new Set(), matrix: bench }), false);
     assert.equal(isWorkbenchProof('web/src/workbench/guard.test.ts', 'x', evidence), false);
+    // The UI on the core compiled to WebAssembly, in Node (`task test-core`).
+    assert.equal(
+      isWorkbenchProof('packages/workbench/src/cloud/CoreCloudPort.core.test.tsx', 'x', evidence),
+      true,
+    );
+    assert.equal(
+      isWorkbenchProof('packages/workbench/src/cloud/CoreCloudPort.test.tsx', 'x', evidence),
+      false,
+    );
   });
 
   it('reads the capabilities the UI uses and the console actions', () => {

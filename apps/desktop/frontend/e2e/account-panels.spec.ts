@@ -150,7 +150,11 @@ test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', as
   );
   await openSettings(page, 'Sharing');
 
-  const alfa = page.getByRole('region', { name: 'Alfa' });
+  // A share the user manages is also one they accepted: it is listed as a mount too (MountsList,
+  // where the core lists it). The card of the shares manager is the one with "Share inside".
+  const alfa = page
+    .getByRole('region', { name: 'Alfa' })
+    .filter({ has: page.getByRole('button', { name: 'Share inside Alfa' }) });
   await expect(alfa).toContainText('only its owner can revoke it');
   await alfa.getByRole('button', { name: 'Share inside Alfa' }).click();
   const dialog = page.getByRole('dialog', { name: 'Share inside “Alfa”' });
@@ -158,7 +162,8 @@ test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', as
   await dialog.getByLabel('Subfolder', { exact: true }).fill('Drafts');
   await dialog.getByRole('button', { name: 'Share' }).click();
 
-  const drafts = page.getByRole('region', { name: 'Drafts' });
+  // The card of the shares manager (it names the vault; the mount's card does not).
+  const drafts = page.getByRole('region', { name: 'Drafts' }).filter({ hasText: 'in Company' });
   await expect(drafts).toContainText('in Company · Projects/Alfa/Drafts');
   await expect(drafts.getByRole('button', { name: /Revoke/ })).toHaveCount(0);
   const made = (await cloud.ownedShares(page)).find((s) => s.display_name === 'Drafts');

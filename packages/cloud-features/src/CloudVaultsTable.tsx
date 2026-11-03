@@ -31,19 +31,22 @@ export interface CloudVaultsTableProps {
 
 /** The query keys of the package: one cache per port. */
 export const cloudKeys = {
-  all: (port: CloudPort) => ['cloud-features', port.id] as const,
-  vaults: (port: CloudPort) => ['cloud-features', port.id, 'vaults'] as const,
-  deleted: (port: CloudPort) => ['cloud-features', port.id, 'vaults', 'deleted'] as const,
-  devices: (port: CloudPort) => ['cloud-features', port.id, 'devices'] as const,
-  usage: (port: CloudPort) => ['cloud-features', port.id, 'usage'] as const,
-  shares: (port: CloudPort) => ['cloud-features', port.id, 'shares'] as const,
-  sharesOf: (port: CloudPort, scope: 'owned' | 'received') =>
+  all: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id] as const,
+  vaults: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'vaults'] as const,
+  deleted: (port: Pick<CloudPort, 'id'>) =>
+    ['cloud-features', port.id, 'vaults', 'deleted'] as const,
+  devices: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'devices'] as const,
+  usage: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'usage'] as const,
+  shares: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'shares'] as const,
+  /** Under `shares`: answering an invitation refreshes the mounts too. */
+  mounts: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'shares', 'mounts'] as const,
+  sharesOf: (port: Pick<CloudPort, 'id'>, scope: 'owned' | 'received') =>
     ['cloud-features', port.id, 'shares', scope] as const,
-  directory: (port: CloudPort, type: string, q: string) =>
+  directory: (port: Pick<CloudPort, 'id'>, type: string, q: string) =>
     ['cloud-features', port.id, 'directory', type, q] as const,
-  groups: (port: CloudPort) => ['cloud-features', port.id, 'groups'] as const,
+  groups: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'groups'] as const,
   /** The `features` of the effective configuration (useFeatureFlag). */
-  features: (port: CloudPort) => ['cloud-features', port.id, 'features'] as const,
+  features: (port: Pick<CloudPort, 'id'>) => ['cloud-features', port.id, 'features'] as const,
 };
 
 /** What an error is about, for the words of NOT_FOUND and VALIDATION_FAILED. */

@@ -123,6 +123,26 @@ export function fakeCloudApi(seed: CloudSeed, basePath = '/api/v1'): FakeCloudAp
         groups.filter((g) => g.name.toLowerCase().includes(q)),
       );
 
+    // The mounts: the accepted shares, with the level the user holds (GET /shared-with-me).
+    if (req.method === 'GET' && path === '/shared-with-me')
+      return json(
+        200,
+        page(
+          received
+            .filter((s) => s.my_status === 'accepted')
+            .map((s) => ({
+              share_id: s.id,
+              vault_id: s.vault_id,
+              display_name: s.display_name,
+              resource_type: s.resource_type,
+              permission: s.my_permission ?? 'viewer',
+              scope: `share:${s.id}`,
+              owner_name: s.owner_name,
+              ...(s.expires_at ? { expires_at: s.expires_at } : {}),
+            })),
+          url,
+        ),
+      );
     if (req.method === 'GET' && path === '/shares')
       return json(200, page(url.searchParams.get('scope') === 'received' ? received : owned, url));
     if (req.method === 'POST' && path === '/shares') {

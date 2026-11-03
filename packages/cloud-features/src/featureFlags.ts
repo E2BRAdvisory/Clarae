@@ -40,6 +40,10 @@ export function useFeatureFlag(
     queryKey: cloudKeys.features(port),
     queryFn: () => port.getFeatures(),
     staleTime: 60_000,
+    // A configuration that could not be read is not asked again by every component that mounts:
+    // a refetch puts the query back to `pending`, the components that wait for `ready` unmount
+    // their children, which mount again when it fails, and so on (the flag is the default meanwhile).
+    retryOnMount: false,
   });
   return { on: featureOn(q.data, name), ready: !q.isPending };
 }

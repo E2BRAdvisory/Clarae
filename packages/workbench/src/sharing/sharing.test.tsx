@@ -84,8 +84,31 @@ describe('invitations and mounts', () => {
     expect(item).toHaveTextContent('Folder');
     fireEvent.click(within(item).getByRole('button', { name: 'Accept Team docs' }));
     await waitFor(() => expect(screen.getByText('No invitations.')).toBeInTheDocument());
-    expect(await screen.findByText(/From ada · Editor/)).toBeInTheDocument();
+    // The mount is listed by MountsList, the console's list, with the workbench's actions.
+    const mounts = await screen.findByRole('region', { name: 'Shared with me' });
+    const mount = await within(mounts).findByRole('region', { name: 'Team docs' });
+    expect(mount).toHaveTextContent('From ada');
+    expect(mount).toHaveTextContent('Editor');
+    expect(within(mount).getByRole('button', { name: 'Open' })).toBeInTheDocument();
+    expect(within(mount).getByRole('button', { name: 'Remove from this device' })).toBeEnabled();
+    expect(within(mount).queryByRole('link')).toBeNull(); // the console's link, not here
     expect(mock.sharing.mounts).toHaveLength(1);
+  });
+
+  it('says so when nothing is shared with the user', async () => {
+    render(wrap(<SharingPanel />));
+    expect(await screen.findByText('Nothing is shared with you yet.')).toBeInTheDocument();
+  });
+
+  it('marks a mount whose share ended and offers only to remove its copy', async () => {
+    mock.sharing.mounts.push({ ...revokedMount(''), vaultId: '' });
+    render(wrap(<SharingPanel />));
+    const mounts = await screen.findByRole('region', { name: 'Shared with me' });
+    const mount = await within(mounts).findByRole('region', { name: 'Team docs' });
+    expect(mount).toHaveTextContent('Share ended');
+    expect(mount).toHaveTextContent('the copy on this device stays until you remove it');
+    expect(within(mount).queryByRole('button', { name: 'Open' })).toBeNull();
+    expect(within(mount).getByRole('button', { name: 'Remove from this device' })).toBeEnabled();
   });
 
   it('declines an invitation', async () => {

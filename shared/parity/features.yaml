@@ -17,12 +17,13 @@
 # le azioni della console che non chiamano la REST (attributo data-action in web/src).
 # I test sono file relativi alla radice, divisi per superficie (ADR-0045 §4): desktop = UI
 # (packages/workbench), e2e sul mock (apps/desktop/frontend/e2e) e core Go; workbench = host web
-# (web/src/workbench), spec nel browser (web/e2e*) e spec della matrice e2e
-# (apps/desktop/frontend/e2e, che girano anche sul core WebAssembly); console = web/src, web/e2e e
+# (web/src/workbench), spec nel browser (web/e2e*), spec della matrice e2e
+# (apps/desktop/frontend/e2e, che girano anche sul core WebAssembly) e test della UI sul core
+# WebAssembly in Node (`*.core.test.tsx` di packages/workbench, `task test-core`); console = web/src, web/e2e e
 # l'adattatore REST di packages/cloud-features; cloud = services/cloud.
 # Workbench `yes` vuole in tests.workbench almeno una prova sul core WebAssembly: uno spec del
 # browser che apre il workbench, uno spec della matrice che sul web gira per quella funzione (non
-# escluso da un skipOnWeb che la nomina), web/e2e-cloud o web/e2e-mixed. Senza prova lo stato è
+# escluso da un skipOnWeb che la nomina), web/e2e-cloud, web/e2e-mixed o un `*.core.test.tsx`. Senza prova lo stato è
 # `partial` con la motivazione «non verificata sul web: …», che il controllo rifiuta quando la
 # prova arriva. Ogni rotta, operazione chiamata e azione della console è citata da una voce.
 version: 1
@@ -104,6 +105,7 @@ features:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -169,6 +171,7 @@ features:
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -200,6 +203,7 @@ features:
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - web/src/workbench/guard.test.ts
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       console:
@@ -230,6 +234,7 @@ features:
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -511,6 +516,7 @@ features:
         - apps/desktop/internal/sync/e2e_sharing_test.go
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -544,6 +550,7 @@ features:
         - apps/desktop/internal/sync/manager_share_test.go
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -573,6 +580,7 @@ features:
         - apps/desktop/internal/sync/manager_share_test.go
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -607,6 +615,7 @@ features:
         - apps/desktop/internal/app/bindings_sharing_test.go
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -619,7 +628,7 @@ features:
     title: Inviti ricevuti (accetta, rifiuta)
     desktop:
       status: yes
-      note: InvitationsList di @memobrain/cloud-features; sul desktop una condivisione accettata diventa un mount, con il suo elenco
+      note: InvitationsList di @memobrain/cloud-features; una condivisione accettata diventa un mount (MountsList); il conteggio degli inviti nella barra di stato legge la stessa cache di InvitationsList
       bindings: [SharingAPI.Invitations, SharingAPI.AcceptShare, SharingAPI.DeclineShare]
       operationIds: [listShares, listSharedWithMe, acceptShare, declineShare]
     workbench:
@@ -634,6 +643,7 @@ features:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -646,7 +656,7 @@ features:
     title: Mount delle condivisioni ricevute
     desktop:
       status: yes
-      note: alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies)
+      note: MountsList di @memobrain/cloud-features (lo stesso elenco della console, ADR-0045 §7) con le azioni del workbench nel suo spazio; alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies)
       actions: [mount:open, mount:remove, mount:delete-copy, mount:keep-copy]
       bindings: [SharingAPI.Mounts, SharingAPI.OpenMount, SharingAPI.RemoveMount]
       operationIds: [listSharedWithMe]
@@ -656,21 +666,27 @@ features:
       reason: un mount si apre nella sua pagina (/vaults/:id/open?share=, anche da Impostazioni › Condivisione, attraverso il guard e i marcatori dell'host); la copia di un mount revocato non si conserva come cartella (nel browser nessuno potrebbe riaprirla) ma si scarica come ZIP (capability detachedCopies)
     console:
       status: yes
-      note: «Apri» di una condivisione accettata (InvitationsList) apre il workbench sul mount
-      routes: [/shares, /vaults/:id/open]
+      note: MountsList (GET /shared-with-me) su «I miei vault» e, come «Condivisioni accettate», in InvitationsList; «Apri» apre il workbench sul mount
+      routes: [/vaults, /shares, /vaults/:id/open]
+      operationIds: [listSharedWithMe]
     tests:
       desktop:
         - packages/workbench/src/sharing/sharing.test.tsx
+        - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - packages/workbench/src/ui/ActionButton.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
         - apps/desktop/internal/sync/e2e_sharing_test.go
         - apps/desktop/internal/app/bindings_sharing_test.go
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - web/src/workbench/guard.test.ts
         - web/e2e-mixed/mixed.spec.ts
         - apps/desktop/frontend/e2e/sharing.spec.ts
       console:
+        - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
+        - web/src/pages/Vaults.test.tsx
+        - web/e2e/app.spec.ts
 
   # ---- account e dispositivi ---------------------------------------------------------------------
   - id: account.login
@@ -807,6 +823,7 @@ features:
         - packages/workbench/src/settings/CloudSection.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx
@@ -858,6 +875,7 @@ features:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       workbench:
+        - packages/workbench/src/cloud/CoreCloudPort.core.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
       console:
         - packages/cloud-features/src/rest.test.tsx

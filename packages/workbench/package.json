@@ -15,7 +15,8 @@
     "gen:icons": "node scripts/gen-icons.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:core": "vitest run -c vitest.core.config.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",
@@ -62,6 +63,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@memobrain/sqlite-bridge": "workspace:*",
     "@mui/icons-material": "7.3.5",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
