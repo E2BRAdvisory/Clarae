@@ -9,6 +9,10 @@ import { setLanguage, supportedLanguages, isLanguage } from '../i18n';
 import { applyTheme, loadTheme, type Theme } from './theme';
 import { useForgetBrowser } from './ForgetBrowser';
 
+/**
+ * The frame of the console. Its actions that call no REST operation carry `data-action`: the feature
+ * registry cites each of them (shared/parity/features.yaml, `console.actions`; ADR-0045 §4).
+ */
 export function Shell() {
   const { t, i18n } = useTranslation();
   const { user, signOut } = useAuth();
@@ -46,6 +50,7 @@ export function Shell() {
             <span className="nd-visually-hidden">{t('shell.language')}</span>
             <select
               className="nd-select"
+              data-action="language"
               value={lang}
               onChange={(e) =>
                 void setLanguage(e.target.value as (typeof supportedLanguages)[number])
@@ -62,6 +67,7 @@ export function Shell() {
             <span className="nd-visually-hidden">{t('shell.theme')}</span>
             <select
               className="nd-select"
+              data-action="theme"
               value={theme}
               onChange={(e) => {
                 const next = e.target.value as Theme;
@@ -75,7 +81,7 @@ export function Shell() {
             </select>
           </label>
           <span className="app__user">{user?.name}</span>
-          <Button small onClick={forget.start} disabled={forget.working}>
+          <Button small data-action="sign-out" onClick={forget.start} disabled={forget.working}>
             {t('shell.signOut')}
           </Button>
         </div>

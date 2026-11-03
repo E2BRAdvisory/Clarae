@@ -9,9 +9,14 @@ import { parse } from 'yaml';
 import {
   BEGIN,
   END,
+  UNVERIFIED,
+  capabilityUses,
   check,
+  consoleActions,
   consoleCalls,
+  coreSpecs,
   effectiveFeatures,
+  isWorkbenchProof,
   parseBindings,
   parseOperations,
   parseRoutes,
@@ -41,6 +46,20 @@ const operations = [
   { operationId: 'listVaults', method: 'get', path: '/vaults' },
 ];
 const routes = ['/vaults'];
+const WB = 'web/e2e/workbench.spec.ts';
+const MATRIX = 'apps/desktop/frontend/e2e/cloud-vaults.spec.ts';
+/** A spec of the e2e matrix that runs on the web, and one skipped there for vault.list. */
+const matrix = [
+  { file: MATRIX, tests: 2, desktop: 'yes', web: 'yes', skips: [] },
+  {
+    file: 'apps/desktop/frontend/e2e/mock-only.spec.ts',
+    tests: 1,
+    desktop: 'yes',
+    web: 'no',
+    skips: [{ feature: 'vault.list', reason: 'drives the mock', scope: 'file' }],
+  },
+];
+const files = new Set(['a.test.ts', WB, MATRIX, 'apps/desktop/frontend/e2e/mock-only.spec.ts']);
 
 /** A registry that passes every rule; each test breaks one thing. */
 function registry() {
@@ -52,7 +71,7 @@ function registry() {
         title: 'Creazione di note',
         desktop: { status: 'yes', commands: ['note:new'], bindings: ['VaultAPI.WriteNote'] },
         workbench: { status: 'yes' },
-        tests: { desktop: ['a.test.ts'] },
+        tests: { desktop: ['a.test.ts'], workbench: [WB] },
       },
       {
         id: 'app.updater',
@@ -70,7 +89,13 @@ function registry() {
         title: 'Elenco dei vault',
         desktop: { status: 'yes' },
         workbench: { status: 'yes' },
-        console: { status: 'yes', routes: ['/vaults'], operationIds: ['listVaults'] },
+        console: {
+          status: 'yes',
+          routes: ['/vaults'],
+          operationIds: ['listVaults'],
+          actions: ['sign-out'],
+        },
+        tests: { desktop: [MATRIX], workbench: [MATRIX] },
       },
     ],
     server_only: [{ operationId: 'healthz', reason: 'sonda' }],
@@ -85,7 +110,12 @@ function run(reg, over = {}) {
     bindings,
     operations,
     routes,
-    exists: (p) => p === 'a.test.ts',
+    exists: (p) => files.has(p),
+    core: new Set([WB]),
+    matrix,
+    consoleOperations: new Set(['listVaults']),
+    consoleActions: ['sign-out'],
+    capabilityUses: new Set(['localFolders']),
     ...over,
   });
 }
@@ -121,7 +151,7 @@ describe('check', () => {
     reg.features[0].desktop.bindings.push('VaultAPI.Ghost');
     reg.features[2].console.operationIds.push('ghostOp');
     reg.features[2].console.routes.push('/ghost');
-    reg.features[0].tests.web = ['missing.spec.ts'];
+    reg.features[0].tests.workbench.push('missing.spec.ts');
     reg.server_only.push({ operationId: 'ghostProbe', reason: 'sonda' });
     const errors = run(reg);
     for (const e of [
@@ -131,7 +161,7 @@ describe('check', () => {
       'feature note.create: desktop binding VaultAPI.Ghost does not exist',
       'feature vault.list: console operation ghostOp is not in api/openapi.yaml',
       'feature vault.list: console route /ghost does not exist',
-      'feature note.create: web test missing.spec.ts does not exist',
+      'feature note.create: workbench test missing.spec.ts does not exist',
       'server_only: operation ghostProbe is not in api/openapi.yaml',
     ]) {
       assert.ok(errors.includes(e), `missing error: ${e}\n${errors.join('\n')}`);
@@ -145,6 +175,9 @@ describe('check', () => {
     assert.deepEqual(run(reg), [
       'feature app.updater: workbench is "exception" without a reason',
       'feature vault.list: console is "missing" without a reason',
+      'console route /vaults is not cited by any feature',
+      "operation listVaults, which the console calls, is not cited by any feature's console",
+      'console action sign-out is not cited by any feature',
       'operation listVaults (GET /vaults) is not referenced by any feature nor listed in server_only',
     ]);
   });
@@ -175,6 +208,92 @@ describe('check', () => {
         'feature vault.list: "console-only" describes desktop or workbench, not the console',
       ),
     );
+  });
+
+  it('refuses a workbench "yes" without a proof on the WebAssembly core', () => {
+    const reg = registry();
+    // A unit test of the web host is a workbench test, not a proof on the core.
+    files.add('web/src/workbench/guard.test.ts');
+    reg.features[0].tests.workbench = ['web/src/workbench/guard.test.ts'];
+    const errors = run(reg);
+    assert.equal(errors.length, 1);
+    assert.match(
+      errors[0],
+      /^feature note\.create: workbench is "yes" without a test on the WebAssembly core/,
+    );
+    // The same feature, honestly partial, passes.
+    reg.features[0].workbench = { status: 'partial', reason: `${UNVERIFIED}: nessun test` };
+    assert.deepEqual(run(reg), []);
+  });
+
+  it('does not count a matrix spec that is skipped on the web for the feature', () => {
+    const reg = registry();
+    reg.features[2].tests.desktop = ['apps/desktop/frontend/e2e/mock-only.spec.ts'];
+    reg.features[2].tests.workbench = ['apps/desktop/frontend/e2e/mock-only.spec.ts'];
+    assert.deepEqual(run(reg), [
+      'feature vault.list: apps/desktop/frontend/e2e/mock-only.spec.ts is skipped on the web (skipOnWeb) and the workbench is "yes": name an alternative test on the WebAssembly core in tests.workbench',
+    ]);
+    const partial = registry();
+    partial.features[2].tests.workbench = [MATRIX];
+    const skipped = [
+      {
+        ...matrix[0],
+        web: 'partial (1 of 2 skipped)',
+        skips: [{ feature: 'vault.list', reason: 'mock', scope: 'test' }],
+      },
+    ];
+    assert.match(run(partial, { matrix: skipped })[0], /workbench is "yes" without a test/);
+  });
+
+  it('refuses "not verified on the web" once a proof exists', () => {
+    const reg = registry();
+    reg.features[0].workbench = { status: 'partial', reason: `${UNVERIFIED}: nessun test` };
+    assert.deepEqual(run(reg), [
+      `feature note.create: workbench is "partial" (${UNVERIFIED}) but ${WB} proves it on the WebAssembly core: set it to "yes"`,
+    ]);
+  });
+
+  it('wants a spec of the matrix on the desktop too', () => {
+    const reg = registry();
+    reg.features[2].tests.desktop = [];
+    assert.deepEqual(run(reg), [
+      `feature vault.list: ${MATRIX} is a spec of the e2e matrix: list it in tests.desktop too (it runs on the desktop mock as well)`,
+    ]);
+  });
+
+  it('refuses a test filed under the wrong surface', () => {
+    const reg = registry();
+    files.add('web/src/pages/Vaults.test.tsx');
+    reg.features[2].tests.workbench.push('web/src/pages/Vaults.test.tsx');
+    assert.deepEqual(run(reg), [
+      'feature vault.list: web/src/pages/Vaults.test.tsx is not a workbench test',
+    ]);
+  });
+
+  it('wants every console route, called operation and action cited', () => {
+    const errors = run(registry(), {
+      routes: ['/vaults', '/admin'],
+      consoleOperations: new Set(['listVaults', 'healthz']),
+      consoleActions: ['sign-out', 'forget-browser'],
+    });
+    assert.deepEqual(errors, [
+      'console route /admin is not cited by any feature',
+      "operation healthz, which the console calls, is not cited by any feature's console",
+      'console action forget-browser is not cited by any feature',
+    ]);
+    assert.deepEqual(run(registry(), { consoleActions: [] }), [
+      'feature vault.list: console action sign-out is not a data-action of the console',
+    ]);
+  });
+
+  it('refuses a capability that nothing reads', () => {
+    assert.deepEqual(run(registry(), { capabilityUses: new Set() }), [
+      'capability localFolders has no consumer (can, useCan or Command.requires)',
+    ]);
+  });
+
+  it('needs every input, so that no rule passes on nothing', () => {
+    assert.throws(() => run(registry(), { matrix: undefined }), /input matrix is missing/);
   });
 
   it('fails when an operation is both server_only and part of a feature', () => {
@@ -243,6 +362,44 @@ describe('inputs', () => {
   });
 });
 
+describe('proofs and consumers', () => {
+  it('tells the browser specs that run the core', () => {
+    const core = coreSpecs([
+      { file: 'web/e2e/workbench.spec.ts', text: 'await page.goto(`/vaults/${v}/open?local`);' },
+      { file: 'web/e2e/vaults.spec.ts', text: "await page.route('**/vaults/new/open**', f);" },
+      { file: 'web/e2e-cloud/web-sync.spec.ts', text: 'await openVault(page);' },
+      { file: 'web/e2e/admin.spec.ts', text: "await page.goto('/admin');" },
+    ]);
+    assert.deepEqual([...core].sort(), [
+      'web/e2e-cloud/web-sync.spec.ts',
+      'web/e2e/workbench.spec.ts',
+    ]);
+  });
+
+  it('counts a matrix spec only where it runs on the web for the feature', () => {
+    const evidence = { core: new Set(), matrix };
+    assert.equal(isWorkbenchProof(MATRIX, 'vault.list', evidence), true);
+    assert.equal(
+      isWorkbenchProof('apps/desktop/frontend/e2e/mock-only.spec.ts', 'x', evidence),
+      false,
+    );
+    const bench = [{ file: 'b.spec.ts', tests: 1, desktop: 'opt-in', web: 'opt-in', skips: [] }];
+    assert.equal(isWorkbenchProof('b.spec.ts', 'x', { core: new Set(), matrix: bench }), false);
+    assert.equal(isWorkbenchProof('web/src/workbench/guard.test.ts', 'x', evidence), false);
+  });
+
+  it('reads the capabilities the UI uses and the console actions', () => {
+    assert.deepEqual(
+      [...capabilityUses(["const a = useCan('multiVault');", "if (can( 'osTrash' )) x();"])].sort(),
+      ['multiVault', 'osTrash'],
+    );
+    assert.deepEqual(
+      consoleActions(['<Button data-action="sign-out" />', '<select data-action="theme">']),
+      ['sign-out', 'theme'],
+    );
+  });
+});
+
 describe('render', () => {
   it('produces the marked block and splices it into the document', () => {
     const block = render({
@@ -252,6 +409,8 @@ describe('render', () => {
       operations,
       calledByWebTests: (b) => b === 'VaultAPI.WriteNote',
       calledByConsole: new Set(['listVaults']),
+      specs: matrix,
+      core: new Set([WB]),
     });
     assert.ok(block.startsWith(BEGIN) && block.endsWith(END));
     assert.match(
@@ -260,6 +419,9 @@ describe('render', () => {
     );
     assert.match(block, /\| `healthz` \| GET `\/healthz` \| server_only: sonda \| — \|/);
     assert.match(block, /Workbench: yes 2, exception 1\./);
+    // Tests by surface, the proofs on the core in bold.
+    assert.match(block, /D: `a\.test\.ts` · W: \*\*`workbench\.spec\.ts`\*\*/);
+    assert.match(block, /2 funzioni hanno almeno una prova sul core/);
     const doc = `# T\n\n${BEGIN}\nold\n${END}\n\ntail\n`;
     assert.equal(splice(doc, block), `# T\n\n${block}\n\ntail\n`);
   });

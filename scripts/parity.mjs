@@ -21,8 +21,11 @@ import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 import { parse } from 'yaml';
 import {
+  capabilityUses,
   check,
+  consoleActions,
   consoleCalls,
+  coreSpecs,
   formatSchemaErrors,
   parseBindings,
   parseOperations,
@@ -99,14 +102,16 @@ const routes = [
     .map(([r]) => r),
 ];
 
-function sourcesUnder(dir, keep) {
+function filesUnder(dir, keep) {
   const out = [];
   for (const e of readdirSync(rel(dir), { withFileTypes: true, recursive: true })) {
     if (!e.isFile() || !keep(e.name)) continue;
-    out.push(readFileSync(join(e.parentPath ?? e.path, e.name), 'utf8'));
+    const abs = join(e.parentPath ?? e.path, e.name);
+    out.push({ file: abs.slice(root.length + 1), text: readFileSync(abs, 'utf8') });
   }
-  return out;
+  return out.sort((a, b) => a.file.localeCompare(b.file));
 }
+const sourcesUnder = (dir, keep) => filesUnder(dir, keep).map((f) => f.text);
 const webTests = ['web/e2e', 'web/e2e-cloud']
   .flatMap((d) => sourcesUnder(d, (n) => n.endsWith('.ts')))
   .join('\n');
@@ -123,6 +128,20 @@ const calledByConsole = consoleCalls(
   ],
   operations,
 );
+
+// The browser specs that run the WebAssembly core (a proof for the workbench, ADR-0045 §4).
+const core = coreSpecs(
+  ['web/e2e', 'web/e2e-cloud', 'web/e2e-mixed', 'web/e2e-security']
+    .filter((d) => existsSync(rel(d)))
+    .flatMap((d) => filesUnder(d, (n) => n.endsWith('.spec.ts'))),
+);
+// The actions of the console that call no REST operation (data-action="<id>").
+const actions = consoleActions(sourcesUnder('web/src', consoleSource));
+// The capabilities the UI reads (can, useCan); Command.requires comes with the commands.
+const capsUsed = capabilityUses([
+  ...sourcesUnder('packages/workbench/src', consoleSource),
+  ...sourcesUnder('web/src', consoleSource),
+]);
 
 // ---- the registry -----------------------------------------------------------------------------
 let registry;
@@ -155,6 +174,11 @@ const errors = coverage.errors.concat(
     operations,
     routes,
     exists: (p) => existsSync(rel(p)),
+    core,
+    matrix: coverage.rows,
+    consoleOperations: calledByConsole,
+    consoleActions: actions,
+    capabilityUses: capsUsed,
   }),
 );
 if (errors.length) {
@@ -177,6 +201,7 @@ const next = splice(
     calledByWebTests,
     calledByConsole,
     specs: coverage.rows,
+    core,
   }),
 );
 const summary = `${registry.features.length} features, ${commands.length} commands, ${bindings.length} bindings, ${operations.length} operations`;

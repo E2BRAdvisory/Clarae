@@ -9,7 +9,9 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
  * Only how a vault is opened, filled and read differs (the helpers below); everything a spec does
  * afterwards is the UI, identical on both. A spec that cannot run on the web says why with
  * `skipOnWeb(<feature id of shared/parity/features.yaml>, <reason>)`; scripts/parity.mjs reports
- * the coverage of each target from those calls.
+ * the coverage of each target from those calls. A spec that needs a cloud account (the cloud panels,
+ * invitations, mounts, the Config Profile) uses the `cloud` fixture of cloud.ts: the Wails mock's
+ * cloud on the desktop, the REST mock of web/e2e/cloudMock.ts behind the real core on the web.
  */
 export type Target = 'desktop' | 'web';
 

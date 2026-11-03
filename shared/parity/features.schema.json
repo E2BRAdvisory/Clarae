@@ -90,17 +90,30 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/definitions/operationId" }
+        },
+        "actions": {
+          "description": "Actions of the console that call no REST operation, marked data-action=\"<id>\" in web/src.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
         }
       },
       "allOf": [{ "$ref": "#/definitions/requiresReason" }]
     },
+    "testList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/testRef" }
+    },
     "tests": {
+      "description": "Tests per surface (ADR-0045 §4). desktop: the UI on the Wails mock and the Go core; workbench: the web host and the tests in the browser, the specs of the e2e matrix included (a workbench `yes` needs one of them that runs the WebAssembly core); console: the console and its REST adapter; cloud: services/cloud.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "desktop": { "type": "array", "items": { "$ref": "#/definitions/testRef" } },
-        "web": { "type": "array", "items": { "$ref": "#/definitions/testRef" } },
-        "cloud": { "type": "array", "items": { "$ref": "#/definitions/testRef" } }
+        "desktop": { "$ref": "#/definitions/testList" },
+        "workbench": { "$ref": "#/definitions/testList" },
+        "console": { "$ref": "#/definitions/testList" },
+        "cloud": { "$ref": "#/definitions/testList" }
       }
     },
     "feature": {

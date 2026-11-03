@@ -84,7 +84,13 @@ func (s *Service) hostedToken(ctx context.Context) (string, error) {
 	}
 	tok, err := s.opts.Hosted.Token(ctx)
 	if err != nil {
-		s.setDisconnected(err)
+		// A caller that gave up (its context ended: a notification stream restarted by a change of
+		// the session) says nothing about the page or the cloud. Reporting it as a disconnection
+		// would change the session again, restart the stream again and cancel its token request:
+		// a loop of disconnected/ready states.
+		if ctx.Err() == nil {
+			s.setDisconnected(err)
+		}
 		return "", err
 	}
 	if tok == "" {

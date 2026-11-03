@@ -34,7 +34,6 @@ describe('platform capabilities', () => {
       multiVault: true,
       unlinkVault: true,
       ownsSession: true,
-      ephemeralPlaintext: false,
       detachedCopies: true,
     });
     expect(capabilitiesFor('web')).toEqual({
@@ -46,7 +45,6 @@ describe('platform capabilities', () => {
       multiVault: false,
       unlinkVault: false,
       ownsSession: false,
-      ephemeralPlaintext: true,
       detachedCopies: false,
     });
   });

@@ -99,6 +99,39 @@ func TestHostedTokenFailureDisconnects(t *testing.T) {
 	}
 }
 
+// A caller that gives up while the page is answering (a notification stream restarted by a change
+// of the session) is not a disconnection: reporting it changed the session again, which restarted
+// the stream and cancelled its next token request, in a loop of disconnected and ready states.
+func TestHostedTokenCancelledByTheCallerKeepsTheSession(t *testing.T) {
+	cloud := newFakeCloud(t, "http://issuer.invalid")
+	var states atomic.Int32
+	svc := New(Options{
+		DataDir: t.TempDir(), Logger: zerolog.Nop(),
+		OnState: func(State) { states.Add(1) },
+		Hosted: &Hosted{ServerURL: cloud.URL, Token: func(ctx context.Context) (string, error) {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			return "at-ok", nil
+		}},
+	})
+	if err := svc.Login(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	before := states.Load()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := svc.Token(ctx); err == nil {
+		t.Fatal("expected the cancelled request to fail")
+	}
+	if st := svc.State(); st.Status != StatusReady {
+		t.Fatalf("status = %s, want ready: the caller gave up, the session is fine", st.Status)
+	}
+	if n := states.Load(); n != before {
+		t.Fatalf("%d state changes for a cancelled request, want none", n-before)
+	}
+}
+
 func TestDeviceIsDroppedWhenTheAccountChanges(t *testing.T) {
 	cloud := newFakeCloud(t, "http://issuer.invalid")
 	dir := t.TempDir()

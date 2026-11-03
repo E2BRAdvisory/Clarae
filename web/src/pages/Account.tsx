@@ -172,7 +172,7 @@ export function AccountPage() {
         <h2 id="account-browser">{t('account.forgetTitle')}</h2>
         <p>{t('account.forgetBody')}</p>
         <div>
-          <Button onClick={forget} disabled={forgetBrowser.working}>
+          <Button data-action="forget-browser" onClick={forget} disabled={forgetBrowser.working}>
             {t('account.forgetButton')}
           </Button>
         </div>

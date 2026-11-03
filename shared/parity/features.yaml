@@ -10,9 +10,18 @@
 # non è `yes`; `note` aggiunge un'informazione anche quando lo stato è `yes`.
 # Il workbench eredita commands, bindings, operationIds e capability del desktop se non li elenca
 # (stessa UI e stesso core, ADR-0029). `console` si omette per le funzioni sul contenuto di un
-# vault aperto, che la console affida al workbench (rotta /vaults/:id/open).
-# I test sono file relativi alla radice: desktop = UI (packages/workbench), e2e sul mock
-# (apps/desktop/frontend/e2e) e core Go; web = console e workbench (web/); cloud = services/cloud.
+# vault aperto, che la console affida al workbench (rotta /vaults/:id/open). `console.actions` cita
+# le azioni della console che non chiamano la REST (attributo data-action in web/src).
+# I test sono file relativi alla radice, divisi per superficie (ADR-0045 §4): desktop = UI
+# (packages/workbench), e2e sul mock (apps/desktop/frontend/e2e) e core Go; workbench = host web
+# (web/src/workbench), spec nel browser (web/e2e*) e spec della matrice e2e
+# (apps/desktop/frontend/e2e, che girano anche sul core WebAssembly); console = web/src, web/e2e e
+# l'adattatore REST di packages/cloud-features; cloud = services/cloud.
+# Workbench `yes` vuole in tests.workbench almeno una prova sul core WebAssembly: uno spec del
+# browser che apre il workbench, uno spec della matrice che sul web gira per quella funzione (non
+# escluso da un skipOnWeb che la nomina), web/e2e-cloud o web/e2e-mixed. Senza prova lo stato è
+# `partial` con la motivazione «non verificata sul web: …», che il controllo rifiuta quando la
+# prova arriva. Ogni rotta, operazione chiamata e azione della console è citata da una voce.
 version: 1
 
 features:
@@ -47,10 +56,11 @@ features:
       desktop:
         - packages/workbench/src/shell/VaultSwitcher.test.tsx
         - packages/workbench/src/app/teardown.test.tsx
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
-        - web/src/pages/Vaults.test.tsx
         - web/src/workbench/guard.test.ts
+      console:
+        - web/src/pages/Vaults.test.tsx
 
   - id: vault.multi-open
     title: Più vault aperti insieme, vault recenti e cambio dal menu del vault
@@ -66,7 +76,7 @@ features:
       desktop:
         - packages/workbench/src/shell/VaultSwitcher.test.tsx
         - packages/workbench/src/platform/platform.test.tsx
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
 
   - id: vault.list
@@ -88,7 +98,10 @@ features:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
-      web:
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Vaults.test.tsx
       cloud:
@@ -119,10 +132,12 @@ features:
         - packages/workbench/src/sync/sync.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/internal/sync/manager_test.go
-      web:
+      workbench:
+        - web/src/workbench/create.test.ts
+        - web/e2e-cloud/web-create-private.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Vaults.test.tsx
-        - web/src/workbench/create.test.ts
         - web/e2e/vaults.spec.ts
       cloud:
         - services/cloud/internal/vaults/service_test.go
@@ -147,7 +162,9 @@ features:
         - apps/desktop/internal/sync/manager_vaults_test.go
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
-      web:
+      workbench:
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/e2e/vaults.spec.ts
       cloud:
@@ -176,10 +193,12 @@ features:
         - apps/desktop/internal/sync/manager_mounts_test.go
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
-      web:
+      workbench:
+        - web/src/workbench/guard.test.ts
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Vaults.test.tsx
-        - web/src/workbench/guard.test.ts
         - web/e2e/vaults.spec.ts
       cloud:
         - services/cloud/internal/vaults/service_test.go
@@ -204,7 +223,9 @@ features:
         - apps/desktop/internal/sync/manager_vaults_test.go
         - apps/desktop/internal/sync/e2e_vaults_test.go
         - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
-      web:
+      workbench:
+        - apps/desktop/frontend/e2e/cloud-vaults.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Vaults.test.tsx
         - web/e2e/vaults.spec.ts
@@ -235,7 +256,7 @@ features:
     tests:
       desktop:
         - apps/desktop/internal/indexer/indexer_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
 
   - id: settings.vault
@@ -249,6 +270,9 @@ features:
       desktop:
         - apps/desktop/internal/app/bindings_test.go
         - packages/workbench/src/workspace/layout.test.ts
+        - apps/desktop/frontend/e2e/status-bar.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/status-bar.spec.ts
 
   # ---- sincronizzazione ----------------------------------------------------------------------------
   - id: sync.link
@@ -265,7 +289,7 @@ features:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
         - apps/desktop/internal/sync/manager_test.go
-      web:
+      workbench:
         - web/e2e-cloud/web-sync.spec.ts
 
   - id: sync.unlink
@@ -280,9 +304,10 @@ features:
     tests:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
-      web:
+      workbench:
         - web/src/workbench/guard.test.ts
         - web/src/workbench/forget.test.ts
+      console:
         - web/src/layout/ForgetBrowser.test.tsx
 
   - id: sync.engine
@@ -302,7 +327,7 @@ features:
         - apps/desktop/internal/sync/e2e_test.go
         - apps/desktop/internal/sync/push_test.go
         - apps/desktop/internal/sync/scan_test.go
-      web:
+      workbench:
         - web/e2e-cloud/web-sync.spec.ts
         - web/e2e-mixed/mixed.spec.ts
       cloud:
@@ -324,7 +349,7 @@ features:
         - packages/workbench/src/sync/sync.test.tsx
         - packages/workbench/src/sync/diff.test.ts
         - apps/desktop/internal/sync/e2e_drawings_test.go
-      web:
+      workbench:
         - web/e2e-cloud/web-sync.spec.ts
 
   - id: revisions
@@ -335,7 +360,8 @@ features:
       bindings: [SyncAPI.History, SyncAPI.RevisionText, SyncAPI.RestoreRevision]
       operationIds: [listRevisions, getRevisionContent, restoreRevision]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test apre lo storico delle revisioni dal browser; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
@@ -363,7 +389,7 @@ features:
         - packages/workbench/src/recovery/recovery.test.tsx
         - apps/desktop/internal/history/history_test.go
         - apps/desktop/internal/app/bindings_history_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
 
   - id: trash
@@ -373,7 +399,8 @@ features:
       commands: [recovery:deleted]
       bindings: [HistoryAPI.ListDeleted, HistoryAPI.Restore]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test elenca o ripristina i file eliminati dal browser; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/recovery/recovery.test.tsx
@@ -402,7 +429,7 @@ features:
         - packages/workbench/src/sync/strength.test.ts
         - apps/desktop/internal/crypto/crypto_test.go
         - apps/desktop/internal/sync/lock_test.go
-      web:
+      workbench:
         - web/src/workbench/overlay.test.ts
         - web/e2e-cloud/web-private.spec.ts
         - web/e2e-cloud/web-create-private.spec.ts
@@ -416,7 +443,8 @@ features:
       bindings: [VaultCryptoAPI.ChangePassphrase]
       operationIds: [putKeyEnvelope]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test cambia la passphrase dal browser; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - apps/desktop/internal/crypto/crypto_test.go
@@ -428,7 +456,8 @@ features:
       bindings: [VaultCryptoAPI.RegenerateRecoveryKey]
       operationIds: [putKeyEnvelope]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test genera una nuova recovery key dal browser; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - apps/desktop/internal/crypto/crypto_test.go
@@ -468,9 +497,10 @@ features:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/internal/sync/manager_share_test.go
         - apps/desktop/internal/sync/e2e_sharing_test.go
-        - apps/desktop/frontend/e2e/sharing.spec.ts
         - apps/desktop/frontend/e2e/account-panels.spec.ts
-      web:
+      workbench:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/shares.spec.ts
@@ -500,7 +530,10 @@ features:
         - packages/workbench/src/sharing/sharing.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/internal/sync/manager_share_test.go
-      web:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/app.spec.ts
@@ -526,8 +559,10 @@ features:
         - packages/workbench/src/sharing/sharing.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/internal/sync/manager_share_test.go
-        - apps/desktop/frontend/e2e/sharing.spec.ts
-      web:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/shares.spec.ts
@@ -552,7 +587,10 @@ features:
         - packages/workbench/src/sharing/sharing.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/internal/app/bindings_sharing_test.go
-      web:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/e2e/shares.spec.ts
       cloud:
@@ -577,7 +615,9 @@ features:
         - packages/workbench/src/sharing/sharing.test.tsx
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/frontend/e2e/sharing.spec.ts
-      web:
+      workbench:
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Shares.test.tsx
         - web/e2e/app.spec.ts
@@ -604,10 +644,12 @@ features:
         - apps/desktop/frontend/e2e/sharing.spec.ts
         - apps/desktop/internal/sync/e2e_sharing_test.go
         - apps/desktop/internal/app/bindings_sharing_test.go
-      web:
-        - web/src/pages/Shares.test.tsx
+      workbench:
         - web/src/workbench/guard.test.ts
         - web/e2e-mixed/mixed.spec.ts
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      console:
+        - web/src/pages/Shares.test.tsx
 
   # ---- account e dispositivi ---------------------------------------------------------------------
   - id: account.login
@@ -628,7 +670,9 @@ features:
         - packages/workbench/src/settings/CloudSection.test.tsx
         - packages/workbench/src/shell/AccountButton.test.tsx
         - apps/desktop/internal/auth/auth_test.go
-      web:
+      workbench:
+        - web/e2e-cloud/web-sync.spec.ts
+      console:
         - web/src/auth/oidc.test.ts
         - web/src/auth/guards.test.tsx
         - web/e2e/app.spec.ts
@@ -644,13 +688,41 @@ features:
     workbench:
       status: exception
       reason: la sessione è quella OIDC della pagina, gestita dalla console (accesso e «Esci»); il workbench non offre login, logout né server
+    console:
+      status: yes
+      note: accesso OIDC alla prima rotta protetta; «Esci» nell'intestazione carica e rimuove prima le copie dei vault nel browser e chiede conferma per quelle con modifiche non caricate (D-04)
+      routes: [/auth/callback]
+      actions: [sign-out]
     tests:
       desktop:
         - packages/workbench/src/settings/CloudSection.test.tsx
         - apps/desktop/internal/auth/auth_test.go
         - apps/desktop/internal/auth/hosted_test.go
-      web:
+      console:
         - web/src/auth/guards.test.tsx
+        - web/src/layout/ForgetBrowser.test.tsx
+
+  - id: account.forget-browser
+    title: «Dimentica questo browser» (copie dei vault nel browser)
+    desktop:
+      status: exception
+      reason: il desktop non tiene copie nel browser; le cartelle dei vault restano dell'utente, e un dispositivo si revoca da Impostazioni › Cloud
+    workbench:
+      status: console-only
+      reason: azione della pagina Account della console; un workbench aperto in un'altra scheda carica le modifiche ed esce prima che le copie si cancellino
+    console:
+      status: yes
+      note: le copie con modifiche non caricate si elencano e si cancellano solo con una conferma (marcatori, D-04); la registrazione del dispositivo resta in IndexedDB (ADR-0029)
+      routes: [/account]
+      actions: [forget-browser]
+    tests:
+      workbench:
+        - web/src/workbench/forget.test.ts
+        - web/e2e/workbench.spec.ts
+      console:
+        - web/src/layout/ForgetBrowser.test.tsx
+        - web/src/pages/Account.test.tsx
+        - web/e2e/workbench.spec.ts
 
   - id: account.data
     title: Esportazione dei dati personali ed eliminazione dell'account
@@ -665,7 +737,7 @@ features:
       routes: [/account]
       operationIds: [exportMyData, deleteMyAccount]
     tests:
-      web:
+      console:
         - web/src/pages/Account.test.tsx
         - web/e2e/account.spec.ts
       cloud:
@@ -685,7 +757,7 @@ features:
       routes: [/account]
       operationIds: [listMyGroups]
     tests:
-      web:
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Account.test.tsx
         - web/e2e/account.spec.ts
@@ -710,7 +782,9 @@ features:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - packages/workbench/src/settings/CloudSection.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
-      web:
+      workbench:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Devices.test.tsx
         - web/e2e/devices.spec.ts
@@ -737,7 +811,7 @@ features:
         - apps/desktop/internal/sync/manager_revoked_test.go
         - apps/desktop/internal/sync/e2e_device_test.go
         - apps/desktop/internal/sync/transport/client_test.go
-      web:
+      workbench:
         - web/e2e-mixed/mixed.spec.ts
       cloud:
         - services/cloud/test/integration/api_test.go
@@ -759,7 +833,9 @@ features:
       desktop:
         - packages/workbench/src/cloud/CoreCloudPort.test.tsx
         - apps/desktop/frontend/e2e/account-panels.spec.ts
-      web:
+      workbench:
+        - apps/desktop/frontend/e2e/account-panels.spec.ts
+      console:
         - packages/cloud-features/src/rest.test.tsx
         - web/src/pages/Usage.test.tsx
         - web/e2e/app.spec.ts
@@ -788,11 +864,13 @@ features:
         - apps/desktop/frontend/e2e/sharing.spec.ts
         - shared/go/features/features_test.go
         - shared/go/features/doc_test.go
-      web:
+      workbench:
+        - web/e2e-mixed/mixed.spec.ts
+        - apps/desktop/frontend/e2e/sharing.spec.ts
+      console:
         - web/src/pages/Vaults.test.tsx
         - web/src/pages/Shares.test.tsx
         - packages/cloud-features/src/rest.test.tsx
-        - web/e2e-mixed/mixed.spec.ts
       cloud:
         - services/cloud/internal/configprofiles/schema_test.go
         - services/cloud/test/integration/config_test.go
@@ -806,10 +884,18 @@ features:
       bindings: [SettingsAPI.Get, SettingsAPI.Set, SettingsAPI.Info]
     workbench:
       status: yes
+    console:
+      status: yes
+      note: nella console solo la lingua dell'interfaccia (intestazione); le altre impostazioni riguardano un vault aperto e stanno nel workbench
+      actions: [language]
     tests:
       desktop:
         - packages/workbench/src/settings/locations.test.ts
         - apps/desktop/internal/app/bindings_test.go
+      workbench:
+        - web/e2e-cloud/web-private.spec.ts
+      console:
+        - web/src/i18n/i18n.test.tsx
 
   - id: appearance
     title: Tema e aspetto
@@ -818,10 +904,16 @@ features:
       commands: [theme:toggle, app:toggle-status-bar]
     workbench:
       status: yes
+    console:
+      status: yes
+      note: il tema della console (automatico, chiaro, scuro) nell'intestazione, senza un test; la barra di stato è del workbench
+      actions: [theme]
     tests:
       desktop:
         - packages/workbench/src/app/App.test.tsx
         - packages/workbench/src/shell/StatusBar.test.tsx
+        - apps/desktop/frontend/e2e/status-bar.spec.ts
+      workbench:
         - apps/desktop/frontend/e2e/status-bar.spec.ts
 
   - id: hotkeys
@@ -830,7 +922,8 @@ features:
       status: yes
       commands: [settings:hotkeys]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test personalizza una scorciatoia sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/commands/hotkeys.test.ts
@@ -846,6 +939,9 @@ features:
     tests:
       desktop:
         - packages/workbench/src/commands/registry.test.ts
+        - apps/desktop/frontend/e2e/keyboard.spec.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+      workbench:
         - apps/desktop/frontend/e2e/keyboard.spec.ts
         - apps/desktop/frontend/e2e/workflows.spec.ts
 
@@ -886,6 +982,8 @@ features:
       desktop:
         - apps/desktop/frontend/e2e/fullscreen.spec.ts
         - packages/workbench/src/platform/platform.test.tsx
+      workbench:
+        - apps/desktop/frontend/e2e/fullscreen.spec.ts
 
   - id: deeplink
     title: Link memobrain://
@@ -911,8 +1009,9 @@ features:
       desktop:
         - apps/desktop/frontend/e2e/workflows.spec.ts
         - packages/workbench/src/app/App.test.tsx
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
 
   - id: note.edit
     title: Lettura e salvataggio delle note
@@ -926,7 +1025,7 @@ features:
         - packages/workbench/src/editor/useNoteDocument.test.tsx
         - apps/desktop/internal/vault/fs_test.go
         - apps/desktop/internal/vault/concurrency_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
         - web/e2e/opfs-fs.spec.ts
 
@@ -943,8 +1042,10 @@ features:
         - apps/desktop/frontend/e2e/workflows.spec.ts
         - apps/desktop/frontend/e2e/keyboard.spec.ts
         - apps/desktop/internal/links/links_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+        - apps/desktop/frontend/e2e/keyboard.spec.ts
 
   - id: note.delete
     title: Eliminazione di note e file
@@ -957,7 +1058,7 @@ features:
     tests:
       desktop:
         - apps/desktop/internal/vault/fs_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
 
   - id: files.explorer
@@ -973,6 +1074,8 @@ features:
         - packages/workbench/src/sidebar/trees.test.ts
         - packages/workbench/src/sidebar/explorerCollapsed.test.tsx
         - apps/desktop/frontend/e2e/keyboard.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/keyboard.spec.ts
 
   - id: attachments
     title: Allegati e media
@@ -985,6 +1088,9 @@ features:
       desktop:
         - packages/workbench/src/embeds/media.test.ts
         - packages/workbench/src/embeds/hydrate.test.ts
+        - apps/desktop/frontend/e2e/drawing-embed.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-embed.spec.ts
 
   - id: note.random
     title: Apertura rapida e nota casuale
@@ -996,6 +1102,9 @@ features:
     tests:
       desktop:
         - packages/workbench/src/commands/registry.test.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/workflows.spec.ts
 
   - id: search
     title: Ricerca nel vault
@@ -1010,8 +1119,9 @@ features:
         - packages/workbench/src/search/highlight.test.ts
         - apps/desktop/internal/search/search_test.go
         - apps/desktop/frontend/e2e/workflows.spec.ts
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
+        - apps/desktop/frontend/e2e/workflows.spec.ts
 
   # ---- editor e vista ----------------------------------------------------------------------------
   - id: editor.formatting
@@ -1046,6 +1156,8 @@ features:
       desktop:
         - packages/workbench/src/editor/commands.test.ts
         - apps/desktop/frontend/e2e/editor-toolbar.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/editor-toolbar.spec.ts
 
   - id: editor.modes
     title: Live Preview, sorgente e lettura
@@ -1059,6 +1171,8 @@ features:
         - packages/workbench/src/editor/livePreview.test.ts
         - packages/workbench/src/reading/render.test.ts
         - apps/desktop/frontend/e2e/workflows.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/workflows.spec.ts
 
   - id: editor.links
     title: Link e completamento automatico
@@ -1066,7 +1180,8 @@ features:
       status: yes
       bindings: [LinksAPI.Resolve, LinksAPI.Suggest]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test usa il completamento dei link sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/editor/completions.test.ts
@@ -1101,6 +1216,8 @@ features:
         - packages/workbench/src/workspace/TabBar.test.tsx
         - packages/workbench/src/shell/tabs.test.ts
         - apps/desktop/frontend/e2e/workflows.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/workflows.spec.ts
 
   - id: outline
     title: Struttura della nota
@@ -1108,7 +1225,8 @@ features:
       status: yes
       commands: [sidebar:outline]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test usa il pannello della struttura sul core WebAssembly (lo spec di accessibilità lo apre soltanto); la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/sidebar/flatten.test.ts
@@ -1125,6 +1243,8 @@ features:
       desktop:
         - packages/workbench/src/sidebar/BacklinksPanel.test.tsx
         - apps/desktop/frontend/e2e/workflows.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/workflows.spec.ts
 
   - id: tags
     title: Tag
@@ -1133,7 +1253,8 @@ features:
       commands: [sidebar:tags]
       bindings: [TagsAPI.List]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test, né sul desktop né sul web; la UI e il codice Go sono quelli del desktop'
 
   - id: properties
     title: Proprietà delle note
@@ -1149,7 +1270,8 @@ features:
           PropertiesAPI.Update,
         ]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test modifica le proprietà sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - apps/desktop/internal/properties/properties_test.go
@@ -1160,7 +1282,8 @@ features:
       status: yes
       commands: [sidebar:stats]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test legge le statistiche sul core WebAssembly (lo spec di accessibilità le apre soltanto); la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/sidebar/StatsPanel.test.tsx
@@ -1179,8 +1302,9 @@ features:
         - packages/workbench/src/graph/GraphView.test.tsx
         - apps/desktop/frontend/e2e/graph.spec.ts
         - apps/desktop/internal/graph/graph_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
+        - apps/desktop/frontend/e2e/graph.spec.ts
 
   - id: slides
     title: Presentazioni da una nota
@@ -1193,6 +1317,8 @@ features:
       desktop:
         - packages/workbench/src/slides/SlideShow.test.tsx
         - packages/workbench/src/sidebar/SlidesPanel.test.tsx
+        - apps/desktop/frontend/e2e/slides.spec.ts
+      workbench:
         - apps/desktop/frontend/e2e/slides.spec.ts
 
   - id: bookmarks
@@ -1211,7 +1337,8 @@ features:
           sidebar:bookmarks,
         ]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test usa i segnalibri sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/bookmarks/BookmarksPanel.test.tsx
@@ -1224,7 +1351,8 @@ features:
       status: yes
       commands: [workspace:save, workspace:load, workspace:manage]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test salva o carica un workspace sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/workspaces/actions.test.ts
@@ -1236,7 +1364,8 @@ features:
       status: yes
       commands: [preview:link, preview:toggle]
     workbench:
-      status: yes
+      status: partial
+      reason: "non verificata sul web: nessun test apre l'anteprima di un link sul core WebAssembly; la UI e il codice Go sono quelli del desktop"
     tests:
       desktop:
         - packages/workbench/src/preview/popover.test.ts
@@ -1255,7 +1384,8 @@ features:
           TemplatesAPI.WriteSettings,
         ]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test apre una nota giornaliera sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/daily/daily.test.tsx
@@ -1274,7 +1404,8 @@ features:
           TemplatesAPI.NewUnique,
         ]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - apps/desktop/internal/app/bindings_templates_test.go
@@ -1293,7 +1424,8 @@ features:
           ComposerAPI.SuggestTitle,
         ]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test unisce o estrae note sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - apps/desktop/internal/composer/composer_test.go
@@ -1305,12 +1437,13 @@ features:
       commands: [canvas:new]
     workbench:
       status: yes
-      note: gli spec del canvas non girano ancora sul web
     tests:
       desktop:
         - apps/desktop/frontend/e2e/canvas.spec.ts
         - packages/workbench/src/canvas/model.test.ts
         - apps/desktop/internal/canvas/canvas_test.go
+      workbench:
+        - apps/desktop/frontend/e2e/canvas.spec.ts
 
   - id: bases
     title: Basi (viste tabellari delle note)
@@ -1326,7 +1459,8 @@ features:
           BasesAPI.UpdateView,
         ]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test apre una base sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - packages/workbench/src/bases/BaseView.test.tsx
@@ -1342,7 +1476,7 @@ features:
       bindings: [DrawingAPI.ReadPreview, DrawingAPI.SavePreview]
     workbench:
       status: yes
-      note: gli spec di disegno non girano ancora sul web; Excalidraw offline è verificato dalla CSP del workbench
+      note: Excalidraw offline è verificato anche sulla build di produzione, con la CSP del workbench (e2e-security)
     tests:
       desktop:
         - apps/desktop/frontend/e2e/drawing.spec.ts
@@ -1350,8 +1484,10 @@ features:
         - packages/workbench/src/drawing/commands.test.tsx
         - packages/workbench/src/drawing/describe.test.ts
         - apps/desktop/internal/drawing/drawing_test.go
-      web:
+      workbench:
         - web/e2e-security/excalidraw-offline.spec.ts
+        - apps/desktop/frontend/e2e/drawing.spec.ts
+        - apps/desktop/frontend/e2e/drawing-tools.spec.ts
 
   - id: drawing.scene-actions
     title: Azioni sulla scena di un disegno (script Excalidraw)
@@ -1427,6 +1563,9 @@ features:
         - packages/workbench/src/drawing/actions/more.test.ts
         - apps/desktop/frontend/e2e/drawing-actions.spec.ts
         - apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-actions.spec.ts
+        - apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts
 
   - id: drawing.embeds
     title: Immagini, note e disegni dentro un disegno
@@ -1448,6 +1587,8 @@ features:
         - apps/desktop/frontend/e2e/drawing-embed.spec.ts
         - packages/workbench/src/drawing/embed/insert.test.ts
         - packages/workbench/src/drawing/embed/tools.test.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-embed.spec.ts
 
   - id: drawing.latex-mermaid
     title: Formule LaTeX e diagrammi Mermaid nei disegni
@@ -1460,6 +1601,9 @@ features:
       desktop:
         - packages/workbench/src/drawing/latex/insert.test.ts
         - packages/workbench/src/drawing/mermaid/insert.test.ts
+        - apps/desktop/frontend/e2e/drawing-tools.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-tools.spec.ts
 
   - id: drawing.export
     title: Esportazione automatica di un disegno (PNG, SVG)
@@ -1468,7 +1612,8 @@ features:
       commands: [drawing:set-auto-export]
       bindings: [DrawingAPI.WriteExport]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
         - apps/desktop/frontend/e2e/drawing-export.spec.ts
@@ -1485,6 +1630,8 @@ features:
       desktop:
         - apps/desktop/frontend/e2e/drawing-slideshow-panel.spec.ts
         - packages/workbench/src/drawing/slides.test.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-slideshow-panel.spec.ts
 
   - id: drawing.library
     title: Libreria di forme Excalidraw
@@ -1495,6 +1642,8 @@ features:
       status: yes
     tests:
       desktop:
+        - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
+      workbench:
         - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
 
   - id: drawing.legacy
@@ -1508,6 +1657,9 @@ features:
     tests:
       desktop:
         - apps/desktop/internal/drawing/legacy_test.go
+        - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
 
   # ---- esportazione e importazione ---------------------------------------------------------------
   - id: export.zip
@@ -1537,8 +1689,9 @@ features:
       desktop:
         - packages/workbench/src/commands/export.test.tsx
         - apps/desktop/internal/vault/export_test.go
-      web:
+      workbench:
         - web/e2e/workbench.spec.ts
+      console:
         - web/src/pages/VaultExport.test.tsx
         - web/src/export/sharedExport.test.ts
         - web/e2e/admin.spec.ts
@@ -1553,7 +1706,8 @@ features:
       commands: [note:export-pdf, note:export-image, note:export-html]
       bindings: [ExportAPI.Print, ExportAPI.SaveFile, ExportAPI.SaveHTML]
     workbench:
-      status: yes
+      status: partial
+      reason: 'non verificata sul web: nessun test esporta una nota (PDF, immagine, HTML) nel browser; la UI e il codice Go sono quelli del desktop'
       note: al posto dei dialoghi nativi il download del browser e `window.print()` (ADR-0029)
     tests:
       desktop:
@@ -1614,7 +1768,7 @@ features:
           adminListUserSessions,
         ]
     tests:
-      web:
+      console:
         - web/src/pages/admin/Users.test.tsx
         - web/e2e/admin.spec.ts
       cloud:
@@ -1645,7 +1799,7 @@ features:
           adminRemoveGroupMember,
         ]
     tests:
-      web:
+      console:
         - web/src/pages/admin/Groups.test.tsx
       cloud:
         - services/cloud/test/integration/admin_test.go
@@ -1677,7 +1831,7 @@ features:
           adminUserEffectiveConfig,
         ]
     tests:
-      web:
+      console:
         - web/src/pages/admin/Config.test.tsx
       cloud:
         - services/cloud/test/integration/config_test.go
@@ -1693,7 +1847,8 @@ features:
       reason: amministrazione, solo nella console
     console:
       status: yes
-      routes: [/admin/storage, /admin/limits, /admin/users/:id]
+      note: la rotta /admin porta qui (prima pagina dell'amministrazione)
+      routes: [/admin, /admin/storage, /admin/limits, /admin/users/:id]
       operationIds:
         [
           adminGetStorageSettings,
@@ -1703,7 +1858,7 @@ features:
           adminSetUserQuota,
         ]
     tests:
-      web:
+      console:
         - web/src/pages/admin/Storage.test.tsx
         - web/src/pages/admin/Limits.test.tsx
         - web/e2e/admin.spec.ts
@@ -1724,7 +1879,7 @@ features:
       routes: [/admin/audit]
       operationIds: [adminAuditLog, adminAuditLogCsv]
     tests:
-      web:
+      console:
         - web/src/pages/admin/Audit.test.tsx
       cloud:
         - services/cloud/test/integration/admin_test.go

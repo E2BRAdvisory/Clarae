@@ -12,6 +12,77 @@ export const CLIENTS = [
   { surface: 'workbench', platform: 'web' },
 ];
 
+/**
+ * The surfaces of the tests of a feature (ADR-0045 §4) and where their files may live:
+ *  - desktop: the UI (packages/workbench), the e2e specs on the Wails mock and the Go core;
+ *  - workbench: the web host (web/src/workbench), the browser specs (web/e2e*) and the specs of the
+ *    e2e matrix (apps/desktop/frontend/e2e, which run on the WebAssembly core too);
+ *  - console: the console (web/src outside the workbench, web/e2e, the REST adapter of
+ *    packages/cloud-features);
+ *  - cloud: services/cloud.
+ */
+export const TEST_SURFACES = {
+  desktop: /^(?!web\/|services\/)/,
+  workbench:
+    /^(web\/(e2e|e2e-cloud|e2e-mixed|e2e-security)\/|web\/src\/workbench\/|apps\/desktop\/frontend\/e2e\/)/,
+  console: /^(web\/(e2e|e2e-security)\/|web\/src\/(?!workbench\/)|packages\/cloud-features\/)/,
+  cloud: /^services\/cloud\//,
+};
+
+/**
+ * How a workbench `partial` that only lacks a proof begins its reason: the check refuses it once a
+ * proof exists (the status must then be `yes`).
+ */
+export const UNVERIFIED = 'non verificata sul web';
+
+/** Browser specs that always run the workbench on the core, against a real cloud. */
+const REAL_CLOUD_SPECS = /^web\/(e2e-cloud|e2e-mixed)\/.+\.spec\.ts$/;
+/** A browser spec that opens the workbench page (`/vaults/<id>/open`) runs the WebAssembly core. */
+const OPENS_WORKBENCH = /\.goto\(\s*[`'"][^`'"]*\/vaults\/[^`'"]*\/open\b/;
+
+/**
+ * The browser specs of web/e2e* that run the WebAssembly core: [{ file, text }] → Set of files.
+ * The specs of web/e2e-cloud and web/e2e-mixed always do; the others when they open the workbench
+ * page (a console spec that only intercepts the address does not).
+ */
+export function coreSpecs(specs) {
+  return new Set(
+    specs
+      .filter((s) => REAL_CLOUD_SPECS.test(s.file) || OPENS_WORKBENCH.test(s.text))
+      .map((s) => s.file),
+  );
+}
+
+/**
+ * Whether a test of `tests.workbench` proves the feature `featureId` on the WebAssembly core: a
+ * browser spec that runs the core (`core`: coreSpecs), or a spec of the e2e matrix (`matrix`: the
+ * rows of specCoverage) that runs on web-core for that feature: not skipped at file level, not an
+ * opt-in benchmark, and without a skipOnWeb naming the feature (a spec whose tests of the feature
+ * are skipped is not a proof of it, even when its other tests run).
+ */
+export function isWorkbenchProof(file, featureId, { core, matrix }) {
+  if (core.has(file)) return true;
+  const row = matrix.find((r) => r.file === file);
+  if (!row || row.desktop === 'opt-in' || row.web === 'opt-in' || row.web === 'no') return false;
+  return !row.skips.some((s) => s.feature === featureId);
+}
+
+/** The capabilities the UI reads: `can('x')`, `useCan('x')` in the given sources. */
+export function capabilityUses(sources) {
+  const used = new Set();
+  for (const text of sources)
+    for (const m of text.matchAll(/\b(?:useCan|can)\(\s*['"](\w+)['"]\s*\)/g)) used.add(m[1]);
+  return used;
+}
+
+/** The actions of the console marked `data-action="<id>"` in its sources (no duplicates). */
+export function consoleActions(sources) {
+  const out = new Set();
+  for (const text of sources)
+    for (const m of text.matchAll(/\bdata-action="([a-z][a-z0-9-]*)"/g)) out.add(m[1]);
+  return [...out].sort();
+}
+
 // ---- inputs -----------------------------------------------------------------------------------
 
 /** Methods of the generated Wails bindings: [{ service, text }] → ["Service.Method"]. */
@@ -121,13 +192,10 @@ export function effectiveFeatures(registry) {
             ...f.console,
             routes: list(f.console.routes),
             operationIds: list(f.console.operationIds),
+            actions: list(f.console.actions),
           }
         : null,
-      tests: {
-        desktop: list(f.tests?.desktop),
-        web: list(f.tests?.web),
-        cloud: list(f.tests?.cloud),
-      },
+      tests: Object.fromEntries(Object.keys(TEST_SURFACES).map((k) => [k, list(f.tests?.[k])])),
     };
   });
 }
@@ -152,13 +220,26 @@ export function references(features) {
   return { commands, bindings, operations };
 }
 
+/** The tests of `tests.workbench` of a feature that prove it on the WebAssembly core. */
+export function proofsOf(f, evidence) {
+  return f.tests.workbench.filter((t) => isWorkbenchProof(t, f.id, evidence));
+}
+
 /**
  * Every rule of `parity --check` except the schema and the freshness of the document.
- * `inputs`: { registry, commands: [{id, platforms}], capabilities: {desktop, web}, bindings: [],
- * operations: [{operationId}], routes: [], exists(path) } → list of error messages.
+ * `inputs`: { registry, commands: [{id, platforms, requires}], capabilities: {desktop, web},
+ * bindings: [], operations: [{operationId}], routes: [], exists(path),
+ * core: Set of browser specs that run the WebAssembly core (coreSpecs), matrix: rows of
+ * specCoverage, consoleOperations: Set of the operationIds the console calls (consoleCalls),
+ * consoleActions: the `data-action` ids of the console (consoleActions), capabilityUses: Set of the
+ * capabilities read by the UI (capabilityUses) } → list of error messages. Every input is required:
+ * a rule with nothing to look at would pass without checking anything.
  */
 export function check(inputs) {
   const { registry, commands, capabilities, bindings, operations, routes, exists } = inputs;
+  for (const k of ['core', 'matrix', 'consoleOperations', 'consoleActions', 'capabilityUses'])
+    if (!inputs[k]) throw new Error(`check: input ${k} is missing`);
+  const evidence = { core: inputs.core, matrix: inputs.matrix };
   const errors = [];
   const features = effectiveFeatures(registry);
   const commandById = new Map(commands.map((c) => [c.id, c]));
@@ -208,9 +289,10 @@ export function check(inputs) {
     for (const r of f.console?.routes ?? []) {
       if (!routeSet.has(r)) errors.push(`${where}: console route ${r} does not exist`);
     }
-    for (const kind of ['desktop', 'web', 'cloud']) {
+    for (const [kind, place] of Object.entries(TEST_SURFACES)) {
       for (const t of f.tests[kind]) {
         if (!exists(t)) errors.push(`${where}: ${kind} test ${t} does not exist`);
+        else if (!place.test(t)) errors.push(`${where}: ${t} is not a ${kind} test`);
       }
     }
     // A surface that says yes really offers the function on its platform.
@@ -233,6 +315,70 @@ export function check(inputs) {
       }
     }
   }
+
+  // The workbench (ADR-0045 §4): "yes" is proved on the WebAssembly core; a spec of the matrix
+  // skipped on the web for a feature that says "yes" has an alternative; "not verified" goes once
+  // there is a proof.
+  const skippedWhole = new Map();
+  for (const r of inputs.matrix)
+    for (const x of r.skips)
+      if (x.scope === 'file' && !skippedWhole.has(x.feature)) skippedWhole.set(x.feature, r.file);
+  for (const f of features) {
+    const where = `feature ${f.id}`;
+    const proofs = proofsOf(f, evidence);
+    const status = f.workbench.status;
+    // A spec of the matrix is the same test on both targets: it runs on the desktop mock first.
+    for (const t of f.tests.workbench)
+      if (inputs.matrix.some((r) => r.file === t) && !f.tests.desktop.includes(t))
+        errors.push(
+          `${where}: ${t} is a spec of the e2e matrix: list it in tests.desktop too (it runs on the desktop mock as well)`,
+        );
+    if (status === 'yes' && proofs.length === 0) {
+      if (skippedWhole.has(f.id))
+        errors.push(
+          `${where}: ${skippedWhole.get(f.id)} is skipped on the web (skipOnWeb) and the workbench is "yes": name an alternative test on the WebAssembly core in tests.workbench`,
+        );
+      else
+        errors.push(
+          `${where}: workbench is "yes" without a test on the WebAssembly core in tests.workbench (a browser spec that opens the workbench, a spec of the e2e matrix that runs on the web for it, web/e2e-cloud or web/e2e-mixed); otherwise it is "partial" with the reason "${UNVERIFIED}: …"`,
+        );
+    }
+    if (
+      status === 'partial' &&
+      String(f.workbench.reason ?? '').startsWith(UNVERIFIED) &&
+      proofs.length
+    )
+      errors.push(
+        `${where}: workbench is "partial" (${UNVERIFIED}) but ${proofs.join(', ')} proves it on the WebAssembly core: set it to "yes"`,
+      );
+  }
+
+  // The console (ADR-0045 §4): every route, every operation it calls and every action is cited.
+  const cited = { routes: new Set(), operations: new Set(), actions: new Set() };
+  for (const f of features) {
+    for (const r of f.console?.routes ?? []) cited.routes.add(r);
+    for (const o of f.console?.operationIds ?? []) cited.operations.add(o);
+    for (const a of f.console?.actions ?? []) cited.actions.add(a);
+  }
+  for (const r of routes)
+    if (!cited.routes.has(r)) errors.push(`console route ${r} is not cited by any feature`);
+  for (const o of [...inputs.consoleOperations].sort())
+    if (!cited.operations.has(o))
+      errors.push(`operation ${o}, which the console calls, is not cited by any feature's console`);
+  const actions = new Set(inputs.consoleActions);
+  for (const a of actions)
+    if (!cited.actions.has(a)) errors.push(`console action ${a} is not cited by any feature`);
+  for (const f of features)
+    for (const a of f.console?.actions ?? [])
+      if (!actions.has(a))
+        errors.push(`feature ${f.id}: console action ${a} is not a data-action of the console`);
+
+  // A capability that nothing reads gates nothing (ADR-0045 §1).
+  const consumed = new Set(inputs.capabilityUses);
+  for (const c of commands) for (const r of c.requires ?? []) consumed.add(r);
+  for (const cap of Object.keys(capabilities.desktop ?? {}))
+    if (!consumed.has(cap))
+      errors.push(`capability ${cap} has no consumer (can, useCan or Command.requires)`);
 
   // Coverage: everything that exists is part of some feature.
   const refs = references(features);
@@ -319,15 +465,21 @@ function reasons(f) {
   return out.join(' — ');
 }
 
-function tests(f) {
+function tests(f, evidence) {
   const parts = [];
   for (const [k, label] of [
     ['desktop', 'D'],
-    ['web', 'W'],
+    ['workbench', 'W'],
+    ['console', 'K'],
     ['cloud', 'C'],
   ]) {
-    if (f.tests[k].length)
-      parts.push(`${label}: ${f.tests[k].map((t) => code(base(t))).join(', ')}`);
+    if (!f.tests[k].length) continue;
+    // A proof on the WebAssembly core is in bold.
+    const name = (t) =>
+      k === 'workbench' && isWorkbenchProof(t, f.id, evidence)
+        ? `**${code(base(t))}**`
+        : code(base(t));
+    parts.push(`${label}: ${f.tests[k].map(name).join(', ')}`);
   }
   return parts.join(' · ') || '—';
 }
@@ -379,11 +531,18 @@ export function specCoverage(specs, featureIds) {
 /**
  * The generated part of docs/web-workbench-parity.md (markers included).
  * `inputs`: { registry, commands, bindings, operations, calledByWebTests(binding) → bool,
- * calledByConsole: Set<operationId> }.
+ * calledByConsole: Set<operationId>, specs: rows of specCoverage, core: Set of the browser specs
+ * that run the core (coreSpecs) }.
  */
 export function render(inputs) {
   const { registry, commands, bindings, operations, calledByWebTests, calledByConsole } = inputs;
   const features = effectiveFeatures(registry);
+  const evidence = { core: inputs.core ?? new Set(), matrix: inputs.specs ?? [] };
+  const proved = features.filter((f) => proofsOf(f, evidence).length > 0).length;
+  const unverified = features.filter(
+    (f) =>
+      f.workbench.status === 'partial' && String(f.workbench.reason ?? '').startsWith(UNVERIFIED),
+  ).length;
   const byId = new Map(features.map((f) => [f.id, f]));
   const refs = references(features);
   const serverOnly = new Map(list(registry?.server_only).map((s) => [s.operationId, s]));
@@ -402,7 +561,7 @@ export function render(inputs) {
     f.workbench.status,
     f.console?.status ?? 'n/a',
     reasons(f),
-    tests(f),
+    tests(f, evidence),
   ]);
   const cmdRows = commands.map((c) => [
     code(c.id),
@@ -453,7 +612,7 @@ export function render(inputs) {
     '',
     `### Funzioni (${features.length})`,
     '',
-    `Dal registro \`shared/parity/features.yaml\`. Desktop: ${statusCount(features, 'desktop')}. Workbench: ${statusCount(features, 'workbench')}. Console: ${statusCount(features, 'console')} (n/a = funzione sul contenuto del vault, che la console affida al workbench). Test: D = desktop (UI, e2e sul mock, core Go), W = web (console e workbench), C = cloud.`,
+    `Dal registro \`shared/parity/features.yaml\`. Desktop: ${statusCount(features, 'desktop')}. Workbench: ${statusCount(features, 'workbench')}. Console: ${statusCount(features, 'console')} (n/a = funzione sul contenuto del vault, che la console affida al workbench). Test per superficie: D = desktop (UI, e2e sul mock, core Go), W = workbench (host web, spec nel browser e spec della matrice e2e), K = console, C = cloud; in grassetto le prove sul core WebAssembly. ${proved} funzioni hanno almeno una prova sul core; ${unverified} sono \`partial\` soltanto per la mancanza di una prova (motivazione «${UNVERIFIED}: …»).`,
     '',
     table(featureRows, [
       'Funzione',

@@ -1,94 +1,47 @@
 import type { Page } from '@playwright/test';
-import { expect, openVault, skipOnWeb, test } from './support';
+import { expect, test, uuid, vault, type CloudSeed } from './cloud';
 
 // Settings > Cloud and Settings > Sharing with the components of @memobrain/cloud-features over the
 // bindings (ADR-0037 §2): the server's quota level and the space of each vault, the devices with
 // the one in use protected, and the shares of the account (create, edit, give access, revoke; a
-// manager shares inside the share they manage, ADR-0041 §8).
+// manager shares inside the share they manage, ADR-0041 §8). On the web the same panels run on the
+// real Go core, which calls the REST mock of web/e2e/cloudMock.ts (the `cloud` fixture).
 
-skipOnWeb(
-  'devices',
-  'the spec seeds the devices, the usage and the shares of the Wails mock (window.__mock); a vault of this browser has no cloud: the console e2e (web/e2e/devices.spec.ts, shares.spec.ts) runs the same components over REST',
-);
+const TEAM = uuid(1);
+const DIARY = uuid(2);
+const COMPANY = uuid(9);
+const BOB = uuid(0xb0b);
+const ADA = uuid(0xada);
+const MB = 1024 * 1024;
 
-interface MockWindow {
-  __mock: {
-    sync: {
-      cloudVaults: Record<string, unknown>[];
-      devices: Record<string, unknown>[];
-      usage: Record<string, unknown>;
-    };
-    sharing: {
-      owned: { displayName: string; expiresAt: string; grants: { principalName: string }[] }[];
-      directory: Record<string, unknown>[];
-      revoked: string[];
-    };
-  };
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Cloud', exact: true }).click();
-  await page.getByLabel('Server address').fill('https://memobrain.test');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByText(/Signed in as/)).toBeVisible();
-}
-
-async function seed(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const w = window as unknown as MockWindow;
-    const vault = (id: string, name: string, kind: string, bytes: number) => ({
-      id,
-      ownerId: 'user-1',
-      name,
-      kind,
-      totalBytes: bytes,
-      fileCount: 3,
-      lastSeq: 1,
-      createdAt: '2026-10-01T10:00:00Z',
-    });
-    w.__mock.sync.cloudVaults.push(
-      vault('cloud-1', 'Team', 'shared', 30 * 1024 * 1024),
-      vault('cloud-2', 'Diary', 'private', 40 * 1024 * 1024),
-    );
-    // 70 % of the quota, above the administrator's warning threshold.
-    w.__mock.sync.usage = {
-      usedBytes: 70 * 1024 * 1024,
-      quotaBytes: 100 * 1024 * 1024,
-      level: 'warning',
-    };
-    w.__mock.sync.devices.push({
-      id: 'dev-2',
+const seed: CloudSeed = {
+  vaults: [vault(TEAM, 'Team', 'shared', 30 * MB), vault(DIARY, 'Diary', 'private', 40 * MB)],
+  // 70 % of the quota, above the administrator's warning threshold.
+  usage: { used_bytes: 70 * MB, quota_bytes: 100 * MB, level: 'warning' },
+  devices: [
+    {
+      id: uuid(0xd2),
       name: 'Office PC',
       platform: 'windows',
-      appVersion: '1.1.0',
-      lastSeenAt: '2026-10-29T10:00:00Z',
-      createdAt: '2026-02-01T00:00:00Z',
-      revokedAt: '',
-      current: false,
-    });
-    w.__mock.sharing.directory.push({
-      type: 'user',
-      id: 'u-bob',
-      name: 'bob',
-      label: 'Bob Smith (bob)',
-      displayName: 'Bob Smith',
-      description: '',
-    });
-  });
-}
+      app_version: '1.1.0',
+      last_seen_at: '2026-10-29T10:00:00Z',
+      created_at: '2026-02-01T00:00:00Z',
+    },
+  ],
+  directory: { users: [{ id: BOB, username: 'bob', display_name: 'Bob Smith' }] },
+};
 
-/** Another section and back: the panels fetch again what the test seeded. */
-async function reopen(page: Page, section: string): Promise<void> {
-  await page.getByRole('button', { name: 'Sync', exact: true }).click();
+async function openSettings(page: Page, section: string): Promise<void> {
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: section, exact: true }).click();
 }
 
-test('storage with the server level, devices with the one in use protected', async ({ page }) => {
-  await openVault(page);
-  await signIn(page);
-  await seed(page);
-  await reopen(page, 'Cloud');
+test('storage with the server level, devices with the one in use protected', async ({
+  page,
+  cloud,
+}) => {
+  await cloud.openVault(page, seed, { open: TEAM });
+  await openSettings(page, 'Cloud');
 
   await expect(page.getByText('70 MB of 100 MB')).toBeVisible();
   await expect(page.getByTestId('quota-bar')).toHaveAttribute('data-level', 'warn');
@@ -96,22 +49,26 @@ test('storage with the server level, devices with the one in use protected', asy
   const byVault = page.getByRole('table', { name: 'Space by vault' });
   await expect(byVault.getByRole('rowheader')).toHaveText(['Diary', 'Team']);
 
+  // The device this client runs on (the mock's computer, the browser the core registered).
   const devices = page.getByRole('table', { name: 'Devices' });
-  const current = devices.getByRole('row', { name: /This computer/ });
-  await expect(current.getByText('This device')).toBeVisible();
+  const current = devices.getByRole('row').filter({ hasText: 'This device' });
+  await expect(current).toHaveCount(1);
   await expect(current.getByRole('button')).toHaveCount(0);
   await page.getByRole('button', { name: 'Revoke Office PC' }).click();
   const confirm = page.getByRole('dialog', { name: 'Revoke this device?' });
   await confirm.getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByText('“Office PC” revoked.')).toBeVisible();
   await expect(devices.getByRole('rowheader', { name: 'Office PC' })).toHaveCount(0);
+  if (cloud.rest)
+    expect(cloud.rest.state.devices.find((d) => d.name === 'Office PC')?.revoked_at).toBeTruthy();
 });
 
-test('create a share of a shared vault, edit it, give access, revoke it', async ({ page }) => {
-  await openVault(page);
-  await signIn(page);
-  await seed(page);
-  await page.getByRole('button', { name: 'Sharing', exact: true }).click();
+test('create a share of a shared vault, edit it, give access, revoke it', async ({
+  page,
+  cloud,
+}) => {
+  await cloud.openVault(page, seed, { open: TEAM });
+  await openSettings(page, 'Sharing');
 
   await page.getByRole('button', { name: 'New share' }).click();
   const create = page.getByRole('dialog', { name: 'New share' });
@@ -142,10 +99,16 @@ test('create a share of a shared vault, edit it, give access, revoke it', async 
   await edit.getByRole('button', { name: 'Save' }).click();
   const renamed = page.getByRole('region', { name: 'Alfa project' });
   await expect(renamed).toContainText('Expires');
-  const owned = await page.evaluate(() => (window as unknown as MockWindow).__mock.sharing.owned);
+  const owned = await cloud.ownedShares(page);
   expect(
-    owned.map((s) => [s.displayName, s.expiresAt !== '', s.grants.map((g) => g.principalName)]),
-  ).toEqual([['Alfa project', true, ['bob']]]);
+    owned.map((s) => [
+      s.display_name,
+      s.vault_id,
+      s.path_prefix,
+      Boolean(s.expires_at),
+      (s.grants ?? []).map((g) => [g.principal_name, g.permission]),
+    ]),
+  ).toEqual([['Alfa project', TEAM, 'Projects/Alfa', true, [['bob', 'editor']]]]);
 
   await renamed.getByRole('button', { name: 'Revoke Alfa project' }).click();
   await page
@@ -154,32 +117,38 @@ test('create a share of a shared vault, edit it, give access, revoke it', async 
     .click();
   await expect(page.getByText('“Alfa project” revoked.')).toBeVisible();
   await expect(page.getByText('You have not shared anything yet')).toBeVisible();
+  expect(await cloud.ownedShares(page)).toEqual([]);
 });
 
-test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', async ({ page }) => {
-  await openVault(page);
-  await signIn(page);
-  await seed(page);
+test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', async ({
+  page,
+  cloud,
+}) => {
   // A folder of ada's vault, managed by the user: the vault is not among the user's cloud vaults.
-  await page.evaluate(() => {
-    const w = window as unknown as { __mock: { sharing: { owned: Record<string, unknown>[] } } };
-    w.__mock.sharing.owned.push({
-      id: 'share-m',
-      vaultId: 'cloud-9',
-      vaultName: 'Company',
-      resourceType: 'folder',
-      pathPrefix: 'Projects/Alfa',
-      displayName: 'Alfa',
-      ownerId: 'user-ada',
-      ownerName: 'ada',
-      createdAt: '2026-10-01T10:00:00Z',
-      expiresAt: '',
-      myPermission: 'manager',
-      myStatus: 'accepted',
-      grants: [],
-    });
-  });
-  await page.getByRole('button', { name: 'Sharing', exact: true }).click();
+  await cloud.openVault(
+    page,
+    {
+      ...seed,
+      shares: [
+        {
+          id: uuid(0x5a),
+          vault_id: COMPANY,
+          vault_name: 'Company',
+          resource_type: 'folder',
+          path_prefix: 'Projects/Alfa',
+          display_name: 'Alfa',
+          owner_id: ADA,
+          owner_name: 'ada',
+          created_at: '2026-10-01T10:00:00Z',
+          my_permission: 'manager',
+          my_status: 'accepted',
+          grants: [],
+        },
+      ],
+    },
+    { open: TEAM },
+  );
+  await openSettings(page, 'Sharing');
 
   const alfa = page.getByRole('region', { name: 'Alfa' });
   await expect(alfa).toContainText('only its owner can revoke it');
@@ -192,15 +161,11 @@ test('a manager shares a subfolder of the folder they manage (ADR-0041 §8)', as
   const drafts = page.getByRole('region', { name: 'Drafts' });
   await expect(drafts).toContainText('in Company · Projects/Alfa/Drafts');
   await expect(drafts.getByRole('button', { name: /Revoke/ })).toHaveCount(0);
-  const made = await page.evaluate(() =>
-    (
-      window as unknown as { __mock: { sharing: { owned: Record<string, unknown>[] } } }
-    ).__mock.sharing.owned.find((s) => s['displayName'] === 'Drafts'),
-  );
+  const made = (await cloud.ownedShares(page)).find((s) => s.display_name === 'Drafts');
   expect(made).toMatchObject({
-    vaultId: 'cloud-9',
-    pathPrefix: 'Projects/Alfa/Drafts',
-    ownerName: 'ada',
-    myPermission: 'manager',
+    vault_id: COMPANY,
+    path_prefix: 'Projects/Alfa/Drafts',
+    owner_name: 'ada',
+    my_permission: 'manager',
   });
 });
