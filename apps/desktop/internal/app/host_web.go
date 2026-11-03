@@ -26,6 +26,7 @@ const isWeb = true
 func defaultHost() Host { return webHost{} }
 
 // systemTrash is not available: a browser has no OS trash (VaultAPI.Trash uses the vault's .trash/).
+// Capability: osTrash (capabilities.go).
 func systemTrash(string) error { return errors.New("the system trash is not available in the browser") }
 
 // webHost implements Host in the browser. Every method forwards to a function of the page; the
@@ -237,13 +238,14 @@ func (h webHost) OpenFile(ctx context.Context, d OpenDialog) (string, error) {
 }
 
 // OpenDirectory is not offered: in the browser vaults live in the cloud, not in a local folder.
+// Capability: localFolders (HostMethodCapability).
 func (webHost) OpenDirectory(context.Context, OpenDialog) (string, error) {
 	return "", errors.New("opening a local folder is not available in the browser")
 }
 
 func (h webHost) OpenURL(_ context.Context, url string) { _, _ = h.call("openURL", url) }
 func (h webHost) Print(context.Context)                 { _, _ = h.call("print") }
-func (webHost) ShowWindow(context.Context)              {}
+func (webHost) ShowWindow(context.Context)              {} // capability nativeWindow
 func (h webHost) Quit(context.Context)                  { _, _ = h.call("quit") }
 
 func (h webHost) ErrorDialog(_ context.Context, title, message string) {

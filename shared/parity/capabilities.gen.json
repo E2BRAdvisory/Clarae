@@ -1,0 +1,24 @@
+{
+  "desktop": {
+    "localFolders": true,
+    "updater": true,
+    "diskEncryptionCheck": true,
+    "nativeWindow": true,
+    "osTrash": true,
+    "multiVault": true,
+    "unlinkVault": true,
+    "ownsSession": true,
+    "detachedCopies": true
+  },
+  "web": {
+    "localFolders": false,
+    "updater": false,
+    "diskEncryptionCheck": false,
+    "nativeWindow": false,
+    "osTrash": false,
+    "multiVault": false,
+    "unlinkVault": false,
+    "ownsSession": false,
+    "detachedCopies": false
+  }
+}

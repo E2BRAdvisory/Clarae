@@ -9,6 +9,8 @@ import (
 // Host is everything the application needs from the environment that runs it: the Wails window on
 // the desktop (host_wails.go) or the page that hosts the Go core compiled to WebAssembly in the
 // browser (host_web.go, ADR-0030). Bindings never import Wails: they go through this interface.
+// A method the browser does not support says which capability gates it ("Capability: x"), and
+// HostMethodCapability lists it (ADR-0045 §1).
 type Host interface {
 	// Emit sends a Go → TypeScript event.
 	Emit(ctx context.Context, name string, payload any)
@@ -20,17 +22,35 @@ type Host interface {
 	// OpenFile asks for a file to read and returns its path ("" when cancelled).
 	OpenFile(ctx context.Context, d OpenDialog) (string, error)
 	// OpenDirectory asks for a folder and returns its path ("" when cancelled).
+	// Capability: localFolders (the browser has cloud vaults only: it returns an error).
 	OpenDirectory(ctx context.Context, d OpenDialog) (string, error)
 	// OpenURL opens a web page in the user's browser.
 	OpenURL(ctx context.Context, url string)
 	// Print opens the print dialog for the page.
 	Print(ctx context.Context)
 	// ShowWindow brings the application to the front.
+	// Capability: nativeWindow (the browser has no window of its own to show: it does nothing).
 	ShowWindow(ctx context.Context)
 	// Quit closes the application.
 	Quit(ctx context.Context)
 	// ErrorDialog tells the user about a failure that stops the application.
 	ErrorDialog(ctx context.Context, title, message string)
+}
+
+// HostMethodCapability classifies every method of Host: the capability that gates it, or "" when
+// every host supports it. A method that fails on some host is gated, and its capability is false
+// there (TestHostCapabilities, which also fails on a method missing from this table).
+var HostMethodCapability = map[string]Capability{
+	"Emit":          "",
+	"SaveFile":      "",
+	"Delivered":     "",
+	"OpenFile":      "",
+	"OpenDirectory": CapLocalFolders,
+	"OpenURL":       "",
+	"Print":         "",
+	"ShowWindow":    CapNativeWindow,
+	"Quit":          "",
+	"ErrorDialog":   "",
 }
 
 // SessionHost is implemented by a host that owns the cloud sign-in: in the browser the page already

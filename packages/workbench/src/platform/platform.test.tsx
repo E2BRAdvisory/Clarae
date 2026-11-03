@@ -5,7 +5,15 @@ import { Welcome } from '../shell/Welcome';
 import { initI18n } from '../i18n';
 import { enterFullscreen } from '../util/fullscreen';
 import { openExternal } from '../util/external';
-import { can, capabilitiesFor, configurePlatform, usePlatform } from './index';
+import { CORE_CAPABILITIES } from './capabilities.gen';
+import {
+  applyCoreCapabilities,
+  can,
+  capabilitiesFor,
+  configurePlatform,
+  loadCoreCapabilities,
+  usePlatform,
+} from './index';
 
 initI18n();
 
@@ -24,35 +32,55 @@ function renderWelcome() {
 }
 
 describe('platform capabilities', () => {
-  it('the desktop has everything, the browser only cloud vaults', () => {
-    expect(capabilitiesFor('desktop')).toEqual({
-      localFolders: true,
-      updater: true,
-      diskEncryptionCheck: true,
-      nativeWindow: true,
-      osTrash: true,
-      multiVault: true,
-      unlinkVault: true,
-      ownsSession: true,
-      detachedCopies: true,
-    });
-    expect(capabilitiesFor('web')).toEqual({
-      localFolders: false,
-      updater: false,
-      diskEncryptionCheck: false,
-      nativeWindow: false,
-      osTrash: false,
-      multiVault: false,
-      unlinkVault: false,
-      ownsSession: false,
-      detachedCopies: false,
-    });
+  it('the desktop has everything, the browser only cloud vaults (as the core declares)', () => {
+    expect(Object.keys(capabilitiesFor('desktop')).sort()).toEqual(
+      Object.keys(CORE_CAPABILITIES.desktop).sort(),
+    );
+    expect(Object.values(capabilitiesFor('desktop')).every(Boolean)).toBe(true);
+    expect(Object.values(capabilitiesFor('web')).some(Boolean)).toBe(false);
   });
 
-  it('takes the host overrides', () => {
+  it('lets the host switch a capability off, never on', () => {
+    configurePlatform({ kind: 'desktop', capabilities: { osTrash: false } });
+    expect(can('osTrash')).toBe(false);
+    expect(can('multiVault')).toBe(true);
     configurePlatform({ kind: 'web', capabilities: { osTrash: true } });
-    expect(can('osTrash')).toBe(true);
+    expect(can('osTrash')).toBe(false);
+  });
+
+  it("takes the core's answer, still narrowed by the host", () => {
+    configurePlatform({ kind: 'desktop', capabilities: { updater: false } });
+    applyCoreCapabilities({ ...capabilitiesFor('web'), localFolders: true, updater: true });
+    expect(can('localFolders')).toBe(true);
+    expect(can('updater')).toBe(false);
     expect(can('multiVault')).toBe(false);
+  });
+
+  it('turns off what the answer does not declare as true', () => {
+    applyCoreCapabilities({ localFolders: 'yes', updater: true });
+    expect(can('localFolders')).toBe(false);
+    expect(can('updater')).toBe(true);
+    expect(can('osTrash')).toBe(false);
+    applyCoreCapabilities(null);
+    expect(can('updater')).toBe(false);
+  });
+
+  it('loads the capabilities from the core before anything reads them', async () => {
+    configurePlatform({ kind: 'desktop' });
+    await loadCoreCapabilities(() => Promise.resolve({ ...capabilitiesFor('web'), osTrash: true }));
+    expect(can('osTrash')).toBe(true);
+    expect(can('localFolders')).toBe(false);
+  });
+
+  it('keeps those of the host kind when the core does not answer', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    configurePlatform({ kind: 'web' });
+    await loadCoreCapabilities(() => Promise.reject(new Error('no binding')));
+    expect(usePlatform.getState().capabilities).toEqual(capabilitiesFor('web'));
+    configurePlatform({ kind: 'desktop' });
+    await loadCoreCapabilities(() => new Promise(() => undefined), 10);
+    expect(usePlatform.getState().capabilities).toEqual(capabilitiesFor('desktop'));
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the way to remove the copy from the browser that the host gives', () => {

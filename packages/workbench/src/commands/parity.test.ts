@@ -1,7 +1,8 @@
 // The registry as scripts/parity.mjs sees it (ADR-0037). The script runs this file with
-// MEMOBRAIN_PARITY_OUT=<file> and reads back the capabilities of each platform and, for every
-// command, its id, group and the platforms that offer it (its `requires` evaluated with
-// configurePlatform). Without the variable it only checks that the declarations are sound.
+// MEMOBRAIN_PARITY_OUT=<file> and reads back, for every command, its id, group and the platforms
+// that offer it (its `requires` evaluated with configurePlatform). It reads the capabilities of each
+// platform from the core's declaration instead (shared/parity/capabilities.gen.json, ADR-0045 §1).
+// Without the variable it only checks that the declarations are sound.
 import { afterEach, describe, expect, it } from 'vitest';
 import { capabilitiesFor, configurePlatform, type PlatformKind } from '../platform';
 import { commands, isAvailable, isEnabled } from './registry';
@@ -44,12 +45,11 @@ describe('command requirements', () => {
     }));
     expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
     const out = process.env.MEMOBRAIN_PARITY_OUT;
-    const capabilities = Object.fromEntries(PLATFORMS.map((k) => [k, capabilitiesFor(k)]));
     if (out) {
       const { writeFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
         writeFileSync: WriteFile;
       };
-      writeFileSync(out, JSON.stringify({ capabilities, commands: rows }, null, 2));
+      writeFileSync(out, JSON.stringify({ commands: rows }, null, 2));
     }
   });
 });

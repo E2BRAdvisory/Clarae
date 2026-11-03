@@ -3,8 +3,9 @@
 // a desktop has (a local folder as vault, the updater, the OS window) is gated on a capability here
 // instead of on scattered checks of the environment.
 import { create } from 'zustand';
+import { CORE_CAPABILITIES, type CoreCapabilities, type HostKind } from './capabilities.gen';
 
-export type PlatformKind = 'desktop' | 'web';
+export type PlatformKind = HostKind;
 
 /**
  * What the host offers. `true` = the UI shows the control. A control that only one host can honour
@@ -13,67 +14,18 @@ export type PlatformKind = 'desktop' | 'web';
  * Every capability has a consumer (`can`, `useCan` or `Command.requires`): `parity --check` refuses
  * one that gates nothing. Policies of a host that no control reads (the browser wipes the clear
  * text of a private vault at its lock, ADR-0029 §6) live in the host, not here.
+ *
+ * The Go core declares them (apps/desktop/internal/app/capabilities.go, ADR-0045 §1), next to the
+ * Host methods and bindings each one gates: the type and the values per kind of host are generated
+ * (capabilities.gen.ts), and mountWorkbench replaces the values with the running core's answer
+ * before the first render. A host can only switch a capability off (PlatformOptions.capabilities).
  */
-export interface Capabilities {
-  /** Open a folder of the computer as a vault, pick a folder to import. The browser has cloud vaults only. */
-  localFolders: boolean;
-  /** Automatic updates of the application. The Web UI is served by the cloud and is always current. */
-  updater: boolean;
-  /** Warn when the disk is not encrypted (a private vault's keys may end up on it). */
-  diskEncryptionCheck: boolean;
-  /** The window itself (full screen through the OS, the system browser for external links). */
-  nativeWindow: boolean;
-  /** Deleted files can go to the system trash; the browser always uses the vault's `.trash/`. */
-  osTrash: boolean;
-  /**
-   * Several vaults over time in one window: recent vaults, switching from the vault menu. The browser
-   * opens one vault per page, chosen in the console.
-   */
-  multiVault: boolean;
-  /**
-   * A local vault can be disconnected from the cloud and kept as a plain folder. In the browser the
-   * copy belongs to the cloud vault: it is removed from the browser instead.
-   */
-  unlinkVault: boolean;
-  /**
-   * The application owns the cloud session (sign-in through the system browser, sign-out, choice of
-   * the server). In the browser the session is the page's OIDC one, managed by the console.
-   */
-  ownsSession: boolean;
-  /**
-   * A copy that leaves the cloud can stay on this device as a folder of its own: the desktop keeps
-   * the mount of a revoked share as an ordinary vault. The browser has no place where such a folder
-   * could be opened again: it offers to download the copy as a ZIP instead.
-   */
-  detachedCopies: boolean;
-}
+export type Capabilities = CoreCapabilities;
 
-const DESKTOP: Capabilities = {
-  localFolders: true,
-  updater: true,
-  diskEncryptionCheck: true,
-  nativeWindow: true,
-  osTrash: true,
-  multiVault: true,
-  unlinkVault: true,
-  ownsSession: true,
-  detachedCopies: true,
-};
-
-const WEB: Capabilities = {
-  localFolders: false,
-  updater: false,
-  diskEncryptionCheck: false,
-  nativeWindow: false,
-  osTrash: false,
-  multiVault: false,
-  unlinkVault: false,
-  ownsSession: false,
-  detachedCopies: false,
-};
-
-export const capabilitiesFor = (kind: PlatformKind): Capabilities =>
-  kind === 'web' ? { ...WEB } : { ...DESKTOP };
+/** The values a kind of host starts from (a copy), as its core declares them. */
+export const capabilitiesFor = (kind: PlatformKind): Capabilities => ({
+  ...CORE_CAPABILITIES[kind],
+});
 
 /** A received share, as the host needs it to open its mount (MountState). */
 export interface MountRef {
@@ -104,13 +56,18 @@ export interface PlatformOptions {
    * the host forgets what it remembers of it (its marker).
    */
   onMountRemoved?: (shareId: string) => void;
-  /** Overrides of the kind's capabilities, for what the host detects itself. */
+  /**
+   * What the host switches off itself, for what it detects (`false` wins over the core). An
+   * override never switches on what the core lacks: the UI would offer a control whose call fails.
+   */
   capabilities?: Partial<Capabilities>;
 }
 
 interface PlatformState {
   kind: PlatformKind;
   capabilities: Capabilities;
+  /** The host's overrides, kept to narrow the core's answer too (applyCoreCapabilities). */
+  overrides: Partial<Capabilities>;
   /** Set when the host has a place to go back to (the Web UI console); the header then shows a button. */
   backToConsole: (() => void) | null;
   /** Set when the host can remove the vault's copy from the browser (see PlatformOptions). */
@@ -126,6 +83,7 @@ interface PlatformState {
 export const usePlatform = create<PlatformState>(() => ({
   kind: 'desktop',
   capabilities: capabilitiesFor('desktop'),
+  overrides: {},
   backToConsole: null,
   removeFromBrowser: null,
   openMount: null,
@@ -133,18 +91,74 @@ export const usePlatform = create<PlatformState>(() => ({
   initialVault: null,
 }));
 
-/** Applies the host's choices. Called once by mountWorkbench, before the first render. */
+/** The core's capabilities without what the host switched off. */
+function narrow(core: Capabilities, overrides: Partial<Capabilities>): Capabilities {
+  const out = { ...core };
+  for (const k of Object.keys(out) as (keyof Capabilities)[])
+    if (overrides[k] === false) out[k] = false;
+  return out;
+}
+
+/**
+ * Applies the host's choices, with the capabilities its kind starts from. Called once by
+ * mountWorkbench, before the core's own answer (loadCoreCapabilities) and the first render.
+ */
 export function configurePlatform(options: PlatformOptions = {}): void {
   const kind = options.kind ?? 'desktop';
+  const overrides = { ...options.capabilities };
   usePlatform.setState({
     kind,
-    capabilities: { ...capabilitiesFor(kind), ...options.capabilities },
+    capabilities: narrow(capabilitiesFor(kind), overrides),
+    overrides,
     backToConsole: options.onBackToConsole ?? null,
     removeFromBrowser: options.onRemoveFromBrowser ?? null,
     openMount: options.onOpenMount ?? null,
     mountRemoved: options.onMountRemoved ?? null,
     initialVault: options.vaultPath ?? null,
   });
+}
+
+/**
+ * Applies the running core's answer (SettingsAPI.Capabilities), still narrowed by the host's
+ * overrides. A capability the answer lacks, or does not give as `true`, is off: the UI never offers
+ * what the core did not declare.
+ */
+export function applyCoreCapabilities(answer: unknown): void {
+  const got =
+    answer !== null && typeof answer === 'object' ? (answer as Record<string, unknown>) : {};
+  const core = capabilitiesFor('desktop');
+  for (const k of Object.keys(core) as (keyof Capabilities)[]) core[k] = got[k] === true;
+  usePlatform.setState((s) => ({ capabilities: narrow(core, s.overrides) }));
+}
+
+/** How long mountWorkbench waits for the core's capabilities before keeping those of its kind. */
+export const CORE_CAPABILITIES_TIMEOUT_MS = 15_000;
+
+/**
+ * Asks the core for its capabilities (`ask`: SettingsAPI.Capabilities) and applies them.
+ * mountWorkbench awaits it before the first render, so no control reads the values of the kind
+ * while the answer is on its way. Without an answer (a core that does not answer in time, a test
+ * double without the binding) those values stay: the same table, generated from the core's
+ * declaration (capabilities.gen.ts).
+ */
+export async function loadCoreCapabilities(
+  ask: () => Promise<unknown>,
+  timeoutMs = CORE_CAPABILITIES_TIMEOUT_MS,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const answer = await Promise.race([
+      ask(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('no answer in time')), timeoutMs);
+      }),
+    ]);
+    applyCoreCapabilities(answer);
+  } catch (e) {
+    console.warn('capabilities: no answer from the core; keeping those of the host kind', e);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

@@ -7,7 +7,12 @@ import { api } from './app/api';
 import { useAppStore } from './state/store';
 import { flushWorkbench, installLifecycle } from './app/lifecycle';
 import { initI18n } from './i18n';
-import { configurePlatform, usesWailsBindings, type PlatformOptions } from './platform';
+import {
+  configurePlatform,
+  loadCoreCapabilities,
+  usesWailsBindings,
+  type PlatformOptions,
+} from './platform';
 import { queryClient } from './state/queryClient';
 import { installLinkGuard } from './util/links';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -47,6 +52,9 @@ export async function mountWorkbench(
     const { installWailsMock } = await import('./test/wails-mock');
     (window as unknown as { __mock: unknown }).__mock = installWailsMock();
   }
+  // What this host offers comes from its core (ADR-0045 §1), before anything reads it: the
+  // lifecycle below (nativeWindow) and every control of the first render.
+  await loadCoreCapabilities(() => api.settings.capabilities());
   installLifecycle();
   // No rendered link may navigate the window away from the app (each view routes its own links).
   installLinkGuard();
@@ -90,6 +98,7 @@ export async function mountCreateCloudVault(
   const [{ ConnectWizard }, auth] = await Promise.all([
     importWithRetry(() => import('./sync/ConnectWizard')),
     api.auth.status(),
+    loadCoreCapabilities(() => api.settings.capabilities()),
   ]);
   useAppStore.getState().setAuth(auth);
   const r = createRoot(root);

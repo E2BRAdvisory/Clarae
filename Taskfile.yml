@@ -56,6 +56,7 @@ tasks:
       - task: gen-sqlc
       - task: gen-wails
       - task: gen-events
+      - task: gen-capabilities
 
   gen-features:
     desc: Config Profile schema -> Go flags and defaults (shared/go/features), TS flags (@memobrain/api-client/features)
@@ -113,6 +114,12 @@ tasks:
     dir: '{{.DESKTOP}}'
     cmds:
       - go run ./internal/app/gen/events
+
+  gen-capabilities:
+    desc: Capabilities of the host declared by the Go core (apps/desktop/internal/app/capabilities.go) -> packages/workbench/src/platform/capabilities.gen.ts, shared/parity/capabilities.gen.json
+    dir: '{{.DESKTOP}}'
+    cmds:
+      - go run ./internal/app/gen/capabilities
 
   # The UI is typed against the generated bindings, which the repository does not hold: build them when they are
   # missing (a stale copy is refreshed by `task gen-wails`, or `task gen`).
