@@ -277,3 +277,24 @@ func IsExcluded(normalized string, excludeTrash bool) bool {
 	}
 	return false
 }
+
+// executableExts are the extensions the operating systems run, or hand to an interpreter, when such
+// a file is opened (ADR-0047): macOS (.app, .command, .tool, .pkg, .workflow, .terminal), Windows
+// (the PATHEXT defaults plus installers, shortcuts and script hosts), Unix shells, and the
+// cross-platform launchers.
+var executableExts = map[string]bool{
+	".app": true, ".command": true, ".tool": true, ".pkg": true, ".mpkg": true, ".workflow": true,
+	".terminal": true, ".action": true, ".scpt": true, ".applescript": true,
+	".exe": true, ".com": true, ".bat": true, ".cmd": true, ".msi": true, ".msix": true, ".msp": true,
+	".appx": true, ".appxbundle": true, ".scr": true, ".pif": true, ".cpl": true, ".hta": true,
+	".lnk": true, ".url": true, ".reg": true, ".inf": true, ".ps1": true, ".psm1": true, ".vbs": true,
+	".vbe": true, ".js": true, ".jse": true, ".wsf": true, ".wsh": true, ".gadget": true,
+	".appref-ms": true, ".application": true, ".settingcontent-ms": true,
+	".sh": true, ".bash": true, ".zsh": true, ".csh": true, ".ksh": true, ".fish": true, ".run": true,
+	".bin": true, ".desktop": true, ".appimage": true, ".deb": true, ".rpm": true,
+	".jar": true, ".jnlp": true, ".py": true, ".pyw": true, ".pl": true, ".rb": true,
+}
+
+// IsExecutable reports whether opening the file with the operating system would run it (by its
+// extension only: the caller checks the file mode as well, ADR-0047).
+func IsExecutable(normalized string) bool { return executableExts[Ext(normalized)] }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Entry } from '../app/api';
+import { api, type Entry } from '../app/api';
+import { downloadVaultFile, openExternally, opensInApp } from '../app/openFile';
+import { can } from '../platform';
 import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
 import { infoOf, useSync } from '../state/sync';
@@ -16,7 +18,8 @@ import { useSettings } from '../state/settings';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { dialog } from '../ui/dialogs';
 import { useExpanded } from './expanded';
-import { Icon } from '../shell/icons';
+import { classify, openTarget, type EmbedKind } from '../embeds/media';
+import { Icon, type IconName } from '../shell/icons';
 
 interface TreeNode {
   entry: Entry;
@@ -82,6 +85,22 @@ export function flattenTree(nodes: TreeNode[], open: ReadonlySet<string>): FlatR
   walk(nodes, 0, null);
   return out;
 }
+
+const KIND_ICON: Record<EmbedKind, IconName> = {
+  note: 'note',
+  image: 'image',
+  pdf: 'pdf',
+  audio: 'media',
+  video: 'media',
+  drawing: 'pencil',
+  canvas: 'canvas',
+  base: 'table',
+  other: 'attach',
+};
+
+/** The icon of a file in the tree: its kind, or a paper clip for a file the app does not show. */
+export const fileIcon = (path: string): IconName =>
+  openTarget(path) === 'external' ? 'attach' : KIND_ICON[classify(path)];
 
 /** Dot-files and dot-folders (.memobrain, .trash, .git) are not shown in the explorer. */
 export const isHidden = (path: string): boolean => path.split('/').some((s) => s.startsWith('.'));
@@ -196,37 +215,55 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     label: t('commands.recovery_open'),
     onSelect: () => useRecovery.getState().openNote(entry.path),
   });
+  // A file the app shows opens in a tab (or to the right); any other file opens outside it
+  // (ADR-0047). On the desktop every file can also be shown in the file manager.
+  const openItems = (entry: Entry, toTheRight: boolean): MenuItem[] => [
+    ...(opensInApp(entry.path)
+      ? [
+          {
+            label: t('sidebar.openNewTab'),
+            onSelect: () => openNote(entry.path, { newTab: true }),
+          },
+          ...(toTheRight
+            ? [
+                {
+                  label: t('sidebar.openRight'),
+                  onSelect: () => openNote(entry.path, { split: 'row' }),
+                },
+              ]
+            : []),
+        ]
+      : [
+          can('openWithSystemApp')
+            ? {
+                label: t('openFile.openWithApp'),
+                onSelect: () => void openExternally(entry.path),
+              }
+            : {
+                label: t('openFile.download'),
+                onSelect: () => void downloadVaultFile(entry.path),
+              },
+        ]),
+    ...(can('openWithSystemApp')
+      ? [
+          {
+            label: t('openFile.reveal'),
+            onSelect: () => void guard(api.vault.revealInFolder(vaultId, entry.path)),
+          },
+        ]
+      : []),
+  ];
   const contextFor = (entry: Entry): MenuItem[] =>
     readOnly
       ? [
-          ...(!entry.isDir
-            ? [
-                {
-                  label: t('sidebar.openNewTab'),
-                  onSelect: () => openNote(entry.path, { newTab: true }),
-                },
-                recoveryItem(entry),
-              ]
-            : []),
+          ...(!entry.isDir ? [...openItems(entry, false), recoveryItem(entry)] : []),
           {
             label: t('sidebar.copyPath'),
             onSelect: () => void navigator.clipboard?.writeText(entry.path),
           },
         ]
       : [
-          ...(!entry.isDir
-            ? [
-                {
-                  label: t('sidebar.openNewTab'),
-                  onSelect: () => openNote(entry.path, { newTab: true }),
-                },
-                {
-                  label: t('sidebar.openRight'),
-                  onSelect: () => openNote(entry.path, { split: 'row' }),
-                },
-                recoveryItem(entry),
-              ]
-            : []),
+          ...(!entry.isDir ? [...openItems(entry, true), recoveryItem(entry)] : []),
           {
             label: t('sidebar.newNote'),
             onSelect: () => void newNote(dirForNew(entry)),
@@ -401,7 +438,10 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           title={entry.path}
         >
           <span className="caret" aria-hidden="true">
-            {entry.isDir ? <Icon name={open ? 'folderOpen' : 'folderClosed'} /> : ''}
+            <Icon
+              name={entry.isDir ? (open ? 'folderOpen' : 'folderClosed') : fileIcon(entry.path)}
+              {...(entry.isDir ? {} : { size: 16 })}
+            />
           </span>
           <span className="name">{display(entry)}</span>
         </div>

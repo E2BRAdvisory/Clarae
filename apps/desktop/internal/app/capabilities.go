@@ -29,6 +29,7 @@ const (
 	CapUnlinkVault         Capability = "unlinkVault"
 	CapOwnsSession         Capability = "ownsSession"
 	CapDetachedCopies      Capability = "detachedCopies"
+	CapOpenWithSystemApp   Capability = "openWithSystemApp"
 )
 
 // Capabilities is what SettingsAPI.Capabilities returns: one bool per capability, the json tag
@@ -43,6 +44,7 @@ type Capabilities struct {
 	UnlinkVault         bool `json:"unlinkVault"`
 	OwnsSession         bool `json:"ownsSession"`
 	DetachedCopies      bool `json:"detachedCopies"`
+	OpenWithSystemApp   bool `json:"openWithSystemApp"`
 }
 
 // CapabilitySpec declares a capability: whether each host offers it, and what it gates (the doc
@@ -87,6 +89,10 @@ var capabilitySpecs = []CapabilitySpec{
 		"A copy that leaves the cloud can stay on this device as a folder of its own: the desktop keeps the mount " +
 			"of a revoked share as an ordinary vault. The browser has no place where such a folder could be opened " +
 			"again (SharingAPI.RemoveMount refuses keepCopy there): it offers to download the copy as a ZIP instead."},
+	{CapOpenWithSystemApp, true, false,
+		"A file the application cannot show (an archive, an office document) opens with the application of the " +
+			"system, and any file can be shown in the file manager (ADR-0047). The browser offers to download it " +
+			"instead (Host.OpenPath and Host.RevealPath fail there)."},
 }
 
 // CapabilitySpecs returns the declared capabilities, in order (for the generator and the tests).

@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	goruntime "runtime"
 
 	"github.com/Bios-Marcel/wastebasket/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -54,6 +55,16 @@ func (wailsHost) OpenFile(ctx context.Context, d OpenDialog) (string, error) {
 
 func (wailsHost) OpenDirectory(ctx context.Context, d OpenDialog) (string, error) {
 	return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: d.Title, CanCreateDirectories: d.CanCreateDirectories})
+}
+
+func (wailsHost) OpenPath(_ context.Context, path string) error {
+	name, args := openCommand(goruntime.GOOS, path)
+	return runLauncher(name, args...)
+}
+
+func (wailsHost) RevealPath(_ context.Context, path string) error {
+	name, args := revealCommand(goruntime.GOOS, path)
+	return runLauncher(name, args...)
 }
 
 func (wailsHost) OpenURL(ctx context.Context, url string) { runtime.BrowserOpenURL(ctx, url) }

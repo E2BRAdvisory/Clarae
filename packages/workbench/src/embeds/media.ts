@@ -36,6 +36,29 @@ export function classify(path: string): EmbedKind {
   return EXT[path.slice(i + 1).toLowerCase()] ?? 'other';
 }
 
+/** The kinds of file the application shows in a tab of its own (ADR-0047). */
+const IN_APP: ReadonlySet<EmbedKind> = new Set<EmbedKind>([
+  'note',
+  'image',
+  'audio',
+  'video',
+  'pdf',
+  'drawing',
+  'canvas',
+  'base',
+]);
+
+/**
+ * Where a file of the vault opens (ADR-0047): in a tab of the application, or outside it (the
+ * system's application on the desktop, a download in the browser). The path is a real file, so a
+ * name without extension (LICENSE, Makefile, .gitignore) is not a note, unlike in classify.
+ */
+export function openTarget(path: string): 'in-app' | 'external' {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  if (name.lastIndexOf('.') <= 0) return 'external';
+  return IN_APP.has(classify(name)) ? 'in-app' : 'external';
+}
+
 /** Size hint of an embed alias: "300" or "300x200". */
 export function parseSize(alias: string): { width?: number; height?: number } {
   const m = /^(\d+)(?:x(\d+))?$/.exec(alias.trim());

@@ -28,6 +28,13 @@ type Host interface {
 	OpenURL(ctx context.Context, url string)
 	// Print opens the print dialog for the page.
 	Print(ctx context.Context)
+	// OpenPath opens a file (absolute path) with the application the operating system associates
+	// with its type. The caller has refused executables (ADR-0047).
+	// Capability: openWithSystemApp (the browser has no applications to hand a file to: it fails).
+	OpenPath(ctx context.Context, path string) error
+	// RevealPath shows a file (absolute path) selected in the system file manager.
+	// Capability: openWithSystemApp (the browser has no file manager: it fails).
+	RevealPath(ctx context.Context, path string) error
 	// ShowWindow brings the application to the front.
 	// Capability: nativeWindow (the browser has no window of its own to show: it does nothing).
 	ShowWindow(ctx context.Context)
@@ -48,6 +55,8 @@ var HostMethodCapability = map[string]Capability{
 	"OpenDirectory": CapLocalFolders,
 	"OpenURL":       "",
 	"Print":         "",
+	"OpenPath":      CapOpenWithSystemApp,
+	"RevealPath":    CapOpenWithSystemApp,
 	"ShowWindow":    CapNativeWindow,
 	"Quit":          "",
 	"ErrorDialog":   "",

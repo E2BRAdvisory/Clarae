@@ -121,6 +121,10 @@ export interface WailsMock {
   /** Vaults exported to ZIP (VaultAPI.ExportZip); set `exportCancelled` to simulate a cancelled dialog. */
   exports: string[];
   exportCancelled: boolean;
+  /** VaultAPI.OpenWithSystemApp / RevealInFolder / DownloadFile calls, as "vaultId:path". */
+  systemOpens: string[];
+  reveals: string[];
+  downloads: string[];
   /** ExportAPI: standalone HTML files "saved" (cancelled when `exportCancelled`) and print requests. */
   htmlExports: { vaultId: string; name: string; html: string }[];
   /** ExportAPI.SaveFile: PNG/SVG/PDF/JSON files "saved" through the native dialog. */
@@ -342,6 +346,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     previews: new Map<string, string>(),
     vaults: seed?.vaults ?? new Map<string, MockVault>(),
     exports: [],
+    systemOpens: [],
+    reveals: [],
+    downloads: [],
     exportCancelled: false,
     htmlExports: [],
     fileExports: [],
@@ -520,6 +527,33 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
           } as Record<string, string>
         )[ext] ?? 'application/octet-stream';
       return Promise.resolve({ path, mime, data, size: data.length });
+    },
+    OpenWithSystemApp: (id: string, path: string): Promise<void> => {
+      const v = vaultOf(id);
+      if (!v.files.has(path) && !v.binaries.has(path)) return reject('not-found: no such file');
+      // The core refuses programs (pathrules.IsExecutable); a few extensions stand for the list.
+      if (/\.(exe|bat|cmd|msi|sh|command|app|ps1|lnk)$/i.test(path))
+        return reject(`executable: ${path} is a program: show it in the file manager to open it`);
+      mock.systemOpens.push(`${id}:${path}`);
+      return Promise.resolve();
+    },
+    RevealInFolder: (id: string, path: string): Promise<void> => {
+      mock.reveals.push(`${id}:${path}`);
+      return Promise.resolve();
+    },
+    DownloadFile: (id: string, path: string): Promise<ExportResult> => {
+      const v = vaultOf(id);
+      const data = v.binaries.get(path) ?? v.files.get(path);
+      if (data === undefined) return reject('not-found: no such file');
+      if (mock.exportCancelled)
+        return Promise.resolve({ path: '', files: 0, bytes: 0, cancelled: true });
+      mock.downloads.push(`${id}:${path}`);
+      return Promise.resolve({
+        path: `/mock/exports/${baseName(path)}`,
+        files: 1,
+        bytes: data.length,
+        cancelled: false,
+      });
     },
     SaveAttachment: (id: string, dir: string, name: string, base64: string): Promise<string> => {
       const v = vaultOf(id);

@@ -243,6 +243,18 @@ func (webHost) OpenDirectory(context.Context, OpenDialog) (string, error) {
 	return "", errors.New("opening a local folder is not available in the browser")
 }
 
+// OpenPath is not offered: the page offers to download the file instead (VaultAPI.DownloadFile).
+// Capability: openWithSystemApp (HostMethodCapability).
+func (webHost) OpenPath(context.Context, string) error {
+	return errors.New("opening a file with a system application is not available in the browser")
+}
+
+// RevealPath is not offered: a browser has no file manager.
+// Capability: openWithSystemApp (HostMethodCapability).
+func (webHost) RevealPath(context.Context, string) error {
+	return errors.New("showing a file in the file manager is not available in the browser")
+}
+
 func (h webHost) OpenURL(_ context.Context, url string) { _, _ = h.call("openURL", url) }
 func (h webHost) Print(context.Context)                 { _, _ = h.call("print") }
 func (webHost) ShowWindow(context.Context)              {} // capability nativeWindow

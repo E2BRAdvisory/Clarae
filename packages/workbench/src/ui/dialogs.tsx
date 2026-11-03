@@ -20,6 +20,8 @@ type Request =
       title: string;
       message: string;
       danger: boolean;
+      /** Text of the confirming button (default: OK). */
+      confirmLabel?: string;
       resolve: (v: boolean) => void;
     }
   | { kind: 'alert'; title: string; message: string; resolve: () => void }
@@ -56,8 +58,17 @@ export const dialog = {
     new Promise((resolve) =>
       enqueue({ kind: 'prompt', title, initial, ...(label ? { label } : {}), resolve }),
     ),
-  confirm: (title: string, message = '', danger = false): Promise<boolean> =>
-    new Promise((resolve) => enqueue({ kind: 'confirm', title, message, danger, resolve })),
+  confirm: (title: string, message = '', danger = false, confirmLabel?: string): Promise<boolean> =>
+    new Promise((resolve) =>
+      enqueue({
+        kind: 'confirm',
+        title,
+        message,
+        danger,
+        ...(confirmLabel ? { confirmLabel } : {}),
+        resolve,
+      }),
+    ),
   alert: (title: string, message = ''): Promise<void> =>
     new Promise((resolve) => enqueue({ kind: 'alert', title, message, resolve })),
   /** Asks to choose one of the items (with a filter); resolves its value, null when cancelled. */
@@ -215,7 +226,7 @@ export function DialogHost() {
               autoFocus
               onClick={() => finish(true)}
             >
-              {t('common.ok')}
+              {(current.kind === 'confirm' && current.confirmLabel) || t('common.ok')}
             </button>
           </div>
         </>

@@ -56,6 +56,12 @@ export interface CoreCapabilities {
    * the copy as a ZIP instead.
    */
   detachedCopies: boolean;
+  /**
+   * A file the application cannot show (an archive, an office document) opens with the application
+   * of the system, and any file can be shown in the file manager (ADR-0047). The browser offers to
+   * download it instead (Host.OpenPath and Host.RevealPath fail there).
+   */
+  openWithSystemApp: boolean;
 }
 
 /** The kinds of host. */
@@ -73,6 +79,7 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     unlinkVault: true,
     ownsSession: true,
     detachedCopies: true,
+    openWithSystemApp: true,
   },
   web: {
     localFolders: false,
@@ -84,5 +91,6 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     unlinkVault: false,
     ownsSession: false,
     detachedCopies: false,
+    openWithSystemApp: false,
   },
 };

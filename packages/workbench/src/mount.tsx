@@ -6,6 +6,7 @@ import { App } from './app/App';
 import { api } from './app/api';
 import { useAppStore } from './state/store';
 import { flushWorkbench, installLifecycle } from './app/lifecycle';
+import { installOpenFile } from './app/openFile';
 import { initI18n } from './i18n';
 import {
   configurePlatform,
@@ -58,6 +59,8 @@ export async function mountWorkbench(
   installLifecycle();
   // No rendered link may navigate the window away from the app (each view routes its own links).
   installLinkGuard();
+  // A file the app does not show opens outside it instead of in a tab (ADR-0047).
+  installOpenFile();
   createRoot(root).render(
     <StrictMode>
       <ErrorBoundary scope="shell">

@@ -56,6 +56,7 @@ export type FeatureId =
   | 'note.delete' // Eliminazione di note e file
   | 'files.explorer' // Esplora file
   | 'attachments' // Allegati e media
+  | 'files.open-by-type' // Apertura dei file per tipo (applicazione del sistema o download)
   | 'note.random' // Apertura rapida e nota casuale
   | 'search' // Ricerca nel vault
   | 'editor.formatting' // Formattazione nell'editor
@@ -146,6 +147,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'note.delete',
   'files.explorer',
   'attachments',
+  'files.open-by-type',
   'note.random',
   'search',
   'editor.formatting',

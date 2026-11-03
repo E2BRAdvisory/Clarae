@@ -178,17 +178,20 @@ export interface CoreClient {
   readonly VaultAPI: {
     CloseVault(arg1: string): Promise<void>;
     CreateFolder(arg1: string, arg2: string): Promise<void>;
+    DownloadFile(arg1: string, arg2: string): Promise<Data<app.ExportResult>>;
     ExportZip(arg1: string): Promise<Data<app.ExportResult>>;
     ListOpen(): Promise<Data<Array<app.VaultInfo>>>;
     ListRecent(): Promise<Data<Array<app.VaultInfo>>>;
     ListTree(arg1: string): Promise<Data<Array<vault.Entry>>>;
     OpenVault(arg1: string): Promise<Data<app.VaultInfo>>;
+    OpenWithSystemApp(arg1: string, arg2: string): Promise<void>;
     PickFolder(arg1: string): Promise<string>;
     ReadBinary(arg1: string, arg2: string): Promise<Data<app.BinaryContent>>;
     ReadConfig(arg1: string, arg2: string): Promise<string>;
     ReadNote(arg1: string, arg2: string): Promise<Data<app.NoteContent>>;
     RebuildIndex(arg1: string): Promise<void>;
     Rename(arg1: string, arg2: string, arg3: string): Promise<void>;
+    RevealInFolder(arg1: string, arg2: string): Promise<void>;
     SaveAttachment(arg1: string, arg2: string, arg3: string, arg4: string): Promise<string>;
     Trash(arg1: string, arg2: string): Promise<string>;
     WriteConfig(arg1: string, arg2: string, arg3: string): Promise<void>;
@@ -225,7 +228,7 @@ export const BINDINGS = {
   TagsAPI: ['List'],
   TemplatesAPI: ['CreateFromTemplate', 'DailyAdjacent', 'Expand', 'List', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
   UpdaterAPI: ['Check', 'GetSettings', 'Install', 'SetSettings', 'Skip', 'Status'],
-  VaultAPI: ['CloseVault', 'CreateFolder', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'OpenVault', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
+  VaultAPI: ['CloseVault', 'CreateFolder', 'DownloadFile', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'OpenVault', 'OpenWithSystemApp', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'RevealInFolder', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
   VaultCryptoAPI: ['Activity', 'ChangePassphrase', 'DiskEncryption', 'Lock', 'RegenerateRecoveryKey', 'SetPassphrase', 'Unlock'],
 } as const;
 
@@ -425,17 +428,20 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
       return {
         CloseVault: (arg1: string) => call('VaultAPI', 'CloseVault', [arg1]),
         CreateFolder: (arg1: string, arg2: string) => call('VaultAPI', 'CreateFolder', [arg1, arg2]),
+        DownloadFile: (arg1: string, arg2: string) => call('VaultAPI', 'DownloadFile', [arg1, arg2]),
         ExportZip: (arg1: string) => call('VaultAPI', 'ExportZip', [arg1]),
         ListOpen: () => call('VaultAPI', 'ListOpen', []),
         ListRecent: () => call('VaultAPI', 'ListRecent', []),
         ListTree: (arg1: string) => call('VaultAPI', 'ListTree', [arg1]),
         OpenVault: (arg1: string) => call('VaultAPI', 'OpenVault', [arg1]),
+        OpenWithSystemApp: (arg1: string, arg2: string) => call('VaultAPI', 'OpenWithSystemApp', [arg1, arg2]),
         PickFolder: (arg1: string) => call('VaultAPI', 'PickFolder', [arg1]),
         ReadBinary: (arg1: string, arg2: string) => call('VaultAPI', 'ReadBinary', [arg1, arg2]),
         ReadConfig: (arg1: string, arg2: string) => call('VaultAPI', 'ReadConfig', [arg1, arg2]),
         ReadNote: (arg1: string, arg2: string) => call('VaultAPI', 'ReadNote', [arg1, arg2]),
         RebuildIndex: (arg1: string) => call('VaultAPI', 'RebuildIndex', [arg1]),
         Rename: (arg1: string, arg2: string, arg3: string) => call('VaultAPI', 'Rename', [arg1, arg2, arg3]),
+        RevealInFolder: (arg1: string, arg2: string) => call('VaultAPI', 'RevealInFolder', [arg1, arg2]),
         SaveAttachment: (arg1: string, arg2: string, arg3: string, arg4: string) => call('VaultAPI', 'SaveAttachment', [arg1, arg2, arg3, arg4]),
         Trash: (arg1: string, arg2: string) => call('VaultAPI', 'Trash', [arg1, arg2]),
         WriteConfig: (arg1: string, arg2: string, arg3: string) => call('VaultAPI', 'WriteConfig', [arg1, arg2, arg3]),

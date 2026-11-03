@@ -154,6 +154,9 @@ const (
 	// Attachments: Allegati e media
 	Attachments FeatureID = "attachments"
 
+	// FilesOpenByType: Apertura dei file per tipo (applicazione del sistema o download)
+	FilesOpenByType FeatureID = "files.open-by-type"
+
 	// NoteRandom: Apertura rapida e nota casuale
 	NoteRandom FeatureID = "note.random"
 
@@ -318,6 +321,7 @@ var Features = []FeatureID{
 	NoteDelete,
 	FilesExplorer,
 	Attachments,
+	FilesOpenByType,
 	NoteRandom,
 	Search,
 	EditorFormatting,

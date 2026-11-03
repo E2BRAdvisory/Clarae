@@ -203,3 +203,23 @@ func TestIsExcluded(t *testing.T) {
 		}
 	}
 }
+
+func TestIsExecutable(t *testing.T) {
+	for path, want := range map[string]bool{
+		"setup.exe":          true,
+		"Tools/run.SH":       true,
+		"x/Deploy.command":   true,
+		"a/Link.lnk":         true,
+		"report.pdf":         false,
+		"archive.zip":        false,
+		"deck.pptx":          false,
+		"Makefile":           false,
+		".bashrc":            false,
+		"notes/exe":          false,
+		"notes/setup.exe.md": false,
+	} {
+		if got := IsExecutable(path); got != want {
+			t.Errorf("IsExecutable(%q) = %v want %v", path, got, want)
+		}
+	}
+}

@@ -3,6 +3,7 @@ import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
 import { followLink } from '../app/actions';
+import { downloadVaultFile, openExternally } from '../app/openFile';
 import { onVaultChanges, staleTargets, type VaultChangeBatch } from '../app/fileChanges';
 import { Editor, type LinkResolver } from '../editor/Editor';
 import { EditorToolbar } from '../editor/EditorToolbar';
@@ -29,6 +30,7 @@ import { openExternal } from '../util/external';
 import { safeDecodeURI } from '../util/uri';
 import type { Pane, Tab } from './layout';
 import { lazyView } from '../ui/lazyView';
+import { useCan } from '../platform';
 
 // The graph (its renderer and the d3 layout) and the canvas are fetched when a tab of theirs first
 // opens, which keeps them out of the bundle loaded at startup (ADR-0020).
@@ -118,6 +120,26 @@ function AttachmentView({ vaultId, path }: { vaultId: string; path: string }) {
   return <div className="attachment-view" ref={ref} />;
 }
 
+/**
+ * A tab of a file the application does not show (restored from the workspace, or opened before
+ * ADR-0047): it offers what a click in the explorer does, the system's application or a download.
+ */
+function ExternalFileView({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const desktop = useCan('openWithSystemApp');
+  return (
+    <div className="attachment-view external-file">
+      <p className="muted">{t('openFile.notShown')}</p>
+      <button
+        className="primary"
+        onClick={() => void (desktop ? openExternally(path) : downloadVaultFile(path))}
+      >
+        {desktop ? t('openFile.openWithApp') : t('openFile.download')}
+      </button>
+    </div>
+  );
+}
+
 interface Props {
   vaultId: string;
   pane: Pane;
@@ -143,6 +165,7 @@ export function NoteView({ vaultId, pane, tab, visible }: Props) {
       </Suspense>
     );
   if (kind === 'base') return <BaseView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (kind === 'other') return <ExternalFileView path={tab.path} />;
   if (kind !== 'note') return <AttachmentView vaultId={vaultId} path={tab.path} />;
   return (
     <MarkdownNote key={tab.path} vaultId={vaultId} pane={pane} tab={tab} visible={visible} t={t} />

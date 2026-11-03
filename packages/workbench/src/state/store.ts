@@ -142,6 +142,17 @@ interface AppState {
 
 let nonce = 0;
 
+/**
+ * Takes over the opening of a path that must not become a tab (a file the app does not show,
+ * ADR-0047): returns true when it handled it. Installed once by the workbench (installOpenFile);
+ * without one every path opens in a tab.
+ */
+let openInterceptor: ((path: string) => boolean) | null = null;
+
+export function setOpenInterceptor(f: ((path: string) => boolean) | null): void {
+  openInterceptor = f;
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   settings: { language: '', theme: 'system', trashMode: 'system' },
   auth: null,
@@ -176,6 +187,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setLayout: (layout) => set({ layout }),
   openNote(path, o = {}) {
+    if (openInterceptor?.(path)) return;
     const mode = o.mode ?? useSettings.getState().editor.defaultMode;
     let layout = get().layout;
     let paneId = o.paneId ?? layout.activePane;

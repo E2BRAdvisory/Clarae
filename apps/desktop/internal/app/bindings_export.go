@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -130,6 +131,11 @@ func writeExportHTML(vaultRoot, dest, html string) (ExportResult, error) {
 
 // writeExportData is the destination check and the atomic write shared by every export.
 func writeExportData(vaultRoot, dest string, data []byte) (ExportResult, error) {
+	return writeExportFrom(vaultRoot, dest, bytes.NewReader(data))
+}
+
+// writeExportFrom is writeExportData for a stream (a copy of a vault file of any size).
+func writeExportFrom(vaultRoot, dest string, src io.Reader) (ExportResult, error) {
 	if r, err := filepath.EvalSymlinks(vaultRoot); err == nil {
 		vaultRoot = r
 	}
@@ -143,7 +149,7 @@ func writeExportData(vaultRoot, dest string, data []byte) (ExportResult, error) 
 		return ExportResult{}, err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
-	n, err := tmp.Write(data)
+	n, err := io.Copy(tmp, src)
 	if err == nil {
 		err = tmp.Sync()
 	}
@@ -159,7 +165,7 @@ func writeExportData(vaultRoot, dest string, data []byte) (ExportResult, error) 
 	if err := os.Rename(tmp.Name(), dest); err != nil {
 		return ExportResult{}, err
 	}
-	return ExportResult{Path: dest, Files: 1, Bytes: int64(n)}, nil
+	return ExportResult{Path: dest, Files: 1, Bytes: n}, nil
 }
 
 // exportFormats are the files SaveFile accepts: the MIME type decides the extension and what the

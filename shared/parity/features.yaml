@@ -1137,6 +1137,26 @@ features:
       workbench:
         - apps/desktop/frontend/e2e/drawing-embed.spec.ts
 
+  - id: files.open-by-type
+    title: Apertura dei file per tipo (applicazione del sistema o download)
+    desktop:
+      status: yes
+      note: note, lavagne, base, disegni, immagini, PDF, audio e video si aprono in una scheda; ogni altro file con l'applicazione del sistema, e un programma mai (si mostra nella cartella), ADR-0047
+      capability: openWithSystemApp
+      bindings: [VaultAPI.OpenWithSystemApp, VaultAPI.RevealInFolder]
+    workbench:
+      status: exception
+      reason: il browser non ha applicazioni a cui passare un file né un file manager; dopo la conferma «Apertura File» il file si scarica (VaultAPI.DownloadFile), ADR-0047
+      bindings: [VaultAPI.DownloadFile]
+    tests:
+      desktop:
+        - packages/workbench/src/app/openFile.test.tsx
+        - apps/desktop/internal/app/bindings_files_test.go
+        - shared/go/pathrules/pathrules_test.go
+        - apps/desktop/frontend/e2e/open-by-type.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/open-by-type.spec.ts
+
   - id: note.random
     title: Apertura rapida e nota casuale
     desktop:

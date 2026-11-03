@@ -186,6 +186,15 @@ export const api = {
       VaultAPI.ReadBinary(vaultId, path),
     saveAttachment: (vaultId: string, dir: string, name: string, base64: string): Promise<string> =>
       VaultAPI.SaveAttachment(vaultId, dir, name, base64),
+    /** Opens a file with the system's application for its type (capability openWithSystemApp). */
+    openWithSystemApp: (vaultId: string, path: string): Promise<void> =>
+      VaultAPI.OpenWithSystemApp(vaultId, path),
+    /** Shows a file selected in the system file manager (capability openWithSystemApp). */
+    revealInFolder: (vaultId: string, path: string): Promise<void> =>
+      VaultAPI.RevealInFolder(vaultId, path),
+    /** Saves a copy of a file outside the vault: a download in the browser, "save as" on the desktop. */
+    downloadFile: (vaultId: string, path: string): Promise<ExportResult> =>
+      VaultAPI.DownloadFile(vaultId, path),
   },
   drawing: {
     /** SVG cached for a drawing content hash ("" when there is none). */

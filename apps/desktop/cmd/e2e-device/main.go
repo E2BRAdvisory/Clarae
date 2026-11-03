@@ -192,6 +192,12 @@ func (h *host) OpenFile(context.Context, app.OpenDialog) (string, error) {
 func (h *host) OpenDirectory(context.Context, app.OpenDialog) (string, error) {
 	return "", errors.New("no dialogs in the e2e device")
 }
+func (h *host) OpenPath(context.Context, string) error {
+	return errors.New("no system applications in the e2e device")
+}
+func (h *host) RevealPath(context.Context, string) error {
+	return errors.New("no file manager in the e2e device")
+}
 func (h *host) OpenURL(context.Context, string)                  {}
 func (h *host) Print(context.Context)                            {}
 func (h *host) ShowWindow(context.Context)                       {}

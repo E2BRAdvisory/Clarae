@@ -38,6 +38,9 @@ const (
 	// The passphrase or recovery key does not open the vault key
 	// (crypto.ErrWrongSecret): unlock, change of passphrase, new recovery key.
 	ErrCodeWrongSecret = "wrong-secret"
+	// The file would run as a program if the operating system opened it (VaultAPI.OpenWithSystemApp,
+	// ADR-0047): the frontend offers to show it in the file manager instead.
+	ErrCodeExecutable = "executable"
 )
 
 // codedError is a binding error with a stable code; Unwrap keeps the cause

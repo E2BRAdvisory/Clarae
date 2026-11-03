@@ -1169,6 +1169,15 @@
     "send": "Invia",
     "comingSoon": "La chat con i modelli (ACP) non è ancora disponibile."
   },
+  "openFile": {
+    "title": "Apertura File",
+    "message": "Il file {{name}} non può essere visualizzato direttamente. Desideri scaricarlo?",
+    "download": "Download",
+    "executable": "{{name}} è un programma: per sicurezza MemoBrain Notes non lo apre. Vuoi mostrarlo nella cartella?",
+    "reveal": "Mostra nella cartella",
+    "openWithApp": "Apri con l'app predefinita",
+    "notShown": "Questo file non può essere visualizzato in MemoBrain Notes."
+  },
   "exportNote": {
     "title": "Esporta nota",
     "notANote": "Apri una nota Markdown per esportarla.",
@@ -1349,7 +1358,8 @@
     "weak-passphrase": "La passphrase è troppo debole: {{detail}}",
     "weak-passphrase_too-short": "La passphrase deve avere almeno 12 caratteri.",
     "weak-passphrase_guessable": "Questa passphrase è troppo facile da indovinare: aggiungi parole o allungala.",
-    "wrong-secret": "Passphrase o chiave di recupero errata."
+    "wrong-secret": "Passphrase o chiave di recupero errata.",
+    "executable": "Il file è un programma e, per sicurezza, non viene aperto: mostralo nella cartella."
   },
   "embeds": {
     "depthLimit": "{{label}} (limite di incorporamento)",

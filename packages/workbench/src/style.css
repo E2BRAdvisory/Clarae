@@ -703,6 +703,11 @@ button.icon[aria-pressed='true'] {
 .attachment-view img {
   max-width: 100%;
 }
+.attachment-view.external-file {
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+}
 .note-properties {
   border-bottom: 1px solid var(--border);
   padding: 4px 16px;
