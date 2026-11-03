@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"memobrain/apps/desktop/internal/crypto"
 	"memobrain/apps/desktop/internal/links"
 	syncpkg "memobrain/apps/desktop/internal/sync"
 	"memobrain/apps/desktop/internal/vault"
@@ -30,6 +31,10 @@ const (
 	ErrCodeCancelled   = "cancelled"    // the operation was cancelled
 	ErrCodeIO          = "io"           // another file system failure
 	ErrCodeInternal    = "internal"     // a failure of the local index or another internal component
+	// A new passphrase the policy refuses (crypto.ValidatePassphrase); the
+	// text starts with the reason, crypto.WeakTooShort or crypto.WeakGuessable:
+	// "weak-passphrase: too-short: the passphrase must have at least 12 characters".
+	ErrCodeWeakPassphrase = "weak-passphrase"
 )
 
 // codedError is a binding error with a stable code; Unwrap keeps the cause
@@ -59,11 +64,14 @@ func bindingError(err error) error {
 	var ce *codedError
 	var pe *fs.PathError
 	var le *os.LinkError
+	var wp *crypto.WeakPassphraseError
 	switch {
 	case err == nil:
 		return nil
 	case errors.As(err, &ce):
 		return err
+	case errors.As(err, &wp):
+		return coded(ErrCodeWeakPassphrase, wp.Reason+": "+wp.Error(), err)
 	case errors.Is(err, syncpkg.ErrConflictChanged):
 		return coded(ErrCodeConflict, err.Error(), err)
 	case errors.Is(err, vault.ErrHashMismatch):

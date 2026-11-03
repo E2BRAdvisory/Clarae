@@ -23,16 +23,26 @@ export function errorCodeOf(e: unknown): string {
   return CODE.exec(rawOf(e))?.[1] ?? '';
 }
 
+/** A reason after the code: "weak-passphrase: too-short: …" -> "too-short". */
+const REASON = /^([a-z][a-z0-9-]*):\s/;
+
 /**
  * A translated message for a known error code, otherwise the raw message. The text after the code
- * is available to the translation as {{detail}} (errors.io quotes the failed operation).
+ * is available to the translation as {{detail}} (errors.io quotes the failed operation). A code may
+ * carry a reason as the first word of its text ("weak-passphrase: too-short: …", see bindingError in
+ * apps/desktop/internal/app): `errors.<code>_<reason>` then wins over `errors.<code>`.
  */
 export function errorMessage(e: unknown): string {
   const raw = rawOf(e);
   const code = errorCodeOf(raw);
+  const detail = raw.slice(code.length).replace(/^:\s*/, '').trim();
+  const reason = code ? REASON.exec(detail)?.[1] : undefined;
+  if (reason && i18next.exists(`errors.${code}_${reason}`))
+    return i18next.t(`errors.${code}_${reason}`, {
+      detail: detail.slice(reason.length + 1).trim(),
+    });
   const key = `errors.${code}`;
-  if (code && i18next.exists(key))
-    return i18next.t(key, { detail: raw.slice(code.length).replace(/^:\s*/, '').trim() });
+  if (code && i18next.exists(key)) return i18next.t(key, { detail });
   const known = KNOWN_TEXT.get(raw.trim());
   if (known) return i18next.t(known);
   return raw;

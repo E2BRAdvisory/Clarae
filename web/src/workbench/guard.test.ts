@@ -66,6 +66,16 @@ function guardWith(handlers: Record<string, Handler> = {}, extra: Partial<GuardO
 
 const flushAsync = () => new Promise((r) => setTimeout(r, 0));
 
+/** The core's verdict on removing the copy (SyncAPI.CopyVerdict), as the core answers it. */
+const verdict =
+  (pending: number, conflicts = 0) =>
+  () => ({
+    removable: pending === 0 && conflicts === 0,
+    reason: pending > 0 ? 'pending' : conflicts > 0 ? 'conflicts' : 'clean',
+    pending,
+    conflicts,
+  });
+
 beforeEach(() => localStorage.clear());
 afterEach(() => closeOverlay());
 
@@ -145,19 +155,17 @@ describe('vault guard: lock of a private vault', () => {
     expect(readMarkers(A)['cloud-1']).toBeUndefined();
   });
 
-  it('asks the core for the counts when the event carries only the vault id', async () => {
-    const { guard, emit, calls } = guardWith({
-      'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'locked', pending: 4, conflicts: 0 }),
-    });
+  it("asks the core's verdict when the event carries only the vault id", async () => {
+    const { guard, emit, calls } = guardWith({ 'SyncAPI.CopyVerdict': verdict(4) });
     guard.noteUnlocked();
     emit('vault:locked', { vaultId: 'local-1' });
     expect(await screen.findByText(/4 changes not uploaded yet/)).toBeInTheDocument();
-    expect(calls).toContain('SyncAPI.Status');
+    expect(calls).toContain('SyncAPI.CopyVerdict');
   });
 
   it('keeps the copy when the counts cannot be known', async () => {
     const { guard, emit, wipe } = guardWith({
-      'SyncAPI.Status': () => Promise.reject(new Error('the vault engine stopped')),
+      'SyncAPI.CopyVerdict': () => Promise.reject(new Error('the vault engine stopped')),
     });
     guard.noteUnlocked();
     emit('vault:locked', { vaultId: 'local-1' });
@@ -231,6 +239,7 @@ describe('vault guard: lock and forget', () => {
           pending: 5,
           conflicts: 0,
         }),
+        'SyncAPI.CopyVerdict': verdict(5),
       },
       { drainMs: 20 },
     );
@@ -242,29 +251,43 @@ describe('vault guard: lock and forget', () => {
     expect(g.opts.goToConsole).not.toHaveBeenCalled();
   });
 
-  it('keeps a copy changed while it was never unlocked here', async () => {
+  it("decides a copy never unlocked here by the core's verdict, which scans it", async () => {
     const g = guardWith({
       'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'locked', pending: 0, conflicts: 0 }),
+      // The sync never ran (no key): the verdict's scan finds the change made while locked.
+      'SyncAPI.CopyVerdict': verdict(1),
     });
     g.emit('vault:file-changed', { vaultId: 'local-1', paths: ['new.md'] });
     await g.guard.lockAndForget();
-    expect(screen.getByText(/may not have been uploaded yet/)).toBeInTheDocument();
+    expect(screen.getByText(/1 change not uploaded yet/)).toBeInTheDocument();
     expect(g.calls).not.toContain('VaultCryptoAPI.Lock');
     expect(g.wipe).not.toHaveBeenCalled();
+
+    closeOverlay();
+    localStorage.clear();
+    const clean = guardWith({ 'SyncAPI.CopyVerdict': verdict(0) });
+    await clean.guard.lockAndForget();
+    expect(clean.calls).not.toContain('VaultCryptoAPI.Lock');
+    expect(clean.wipe).toHaveBeenCalledWith('/vaults/cloud-1');
   });
 
   it('leaves a shared vault after writing and uploading the edits, without locking or removing it', async () => {
     const g = guardWith(
-      { 'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }) },
+      {
+        'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }),
+        'SyncAPI.CopyVerdict': verdict(0),
+      },
       { kind: 'shared' },
     );
+    g.emit('vault:file-changed', { vaultId: 'local-1', paths: ['new.md'] });
     await g.guard.leave();
     expect(g.opts.flush).toHaveBeenCalledOnce();
     expect(g.calls).toContain('SyncAPI.SyncNow');
     expect(g.calls).not.toContain('VaultCryptoAPI.Lock');
     expect(g.opts.goToConsole).toHaveBeenCalledOnce();
     expect(g.wipe).not.toHaveBeenCalled();
-    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 0, conflicts: 0 });
+    // The verdict scanned the copy: the change was uploaded, the marker is clean.
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 0, conflicts: 0, dirty: false });
   });
 
   it('leaving a shared vault records what could not be uploaded, for the console to ask', async () => {
@@ -273,23 +296,32 @@ describe('vault guard: lock and forget', () => {
         'SyncAPI.Status': () => ({
           vaultId: 'local-1',
           phase: 'offline',
-          pending: 2,
+          pending: 1,
           conflicts: 0,
         }),
+        // Written by the flush, not scanned by a sync yet: the verdict's scan counts it.
+        'SyncAPI.CopyVerdict': verdict(2),
       },
       { kind: 'shared' },
     );
-    // Written by the flush, not scanned by a sync yet.
     g.emit('vault:file-changed', { vaultId: 'local-1', paths: ['new.md'] });
     await g.guard.leave();
-    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 2, dirty: true });
+    expect(readMarkers(A)['cloud-1']).toMatchObject({ pending: 2, dirty: false });
     expect(g.wipe).not.toHaveBeenCalled();
     expect(g.opts.goToConsole).toHaveBeenCalledOnce();
   });
 
-  it('leaving with an unknown status keeps the copy flagged', async () => {
+  it('leaving with an unknown verdict keeps the copy flagged', async () => {
     const g = guardWith(
-      { 'SyncAPI.Status': () => Promise.reject(new Error('engine stopped')) },
+      {
+        'SyncAPI.Status': () => Promise.reject(new Error('engine stopped')),
+        'SyncAPI.CopyVerdict': () => ({
+          removable: false,
+          reason: 'unknown',
+          pending: -1,
+          conflicts: 0,
+        }),
+      },
       { kind: 'shared' },
     );
     await g.guard.leave();
@@ -313,6 +345,7 @@ describe('vault guard: lock and forget', () => {
     const g = guardWith({
       'SyncAPI.Info': () => ({ locked: false }),
       'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }),
+      'SyncAPI.CopyVerdict': verdict(0),
     });
     g.guard.noteUnlocked();
     await g.guard.leave(to);
@@ -330,11 +363,12 @@ describe('vault guard: lock and forget', () => {
           polls++;
           return { vaultId: 'local-1', phase: 'offline', pending: 1, conflicts: 0 };
         },
+        'SyncAPI.CopyVerdict': verdict(1),
       },
       { kind: 'shared', drainMs: 60_000, pollMs: 0 },
     );
     await g.guard.leave();
-    expect(polls).toBeLessThanOrEqual(2); // the drain's poll and the final count
+    expect(polls).toBe(1); // the drain's poll; the final count is the verdict
     expect(readMarkers(A)['cloud-1']?.pending).toBe(1);
   });
 });
@@ -399,6 +433,12 @@ describe('vault guard: cloud vault deleted elsewhere', () => {
           conflicts: 0,
           kind: '',
         }),
+        'SyncAPI.CopyVerdict': () => ({
+          removable: false,
+          reason: 'unlinked',
+          pending: -1,
+          conflicts: -1,
+        }),
       },
       { kind: 'shared', drainMs: 0 },
     );
@@ -447,7 +487,10 @@ describe('needsGate', () => {
 describe('vault guard: remove from this browser', () => {
   it('uploads, then removes the copy of a shared vault and goes to the console', async () => {
     const { guard, opts, wipe, calls } = guardWith(
-      { 'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }) },
+      {
+        'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'idle', pending: 0, conflicts: 0 }),
+        'SyncAPI.CopyVerdict': verdict(0),
+      },
       { kind: 'shared' },
     );
     await guard.removeCopy();
@@ -468,6 +511,7 @@ describe('vault guard: remove from this browser', () => {
           pending: 2,
           conflicts: 0,
         }),
+        'SyncAPI.CopyVerdict': verdict(2),
       },
       { kind: 'shared', drainMs: 0 },
     );
@@ -481,16 +525,45 @@ describe('vault guard: remove from this browser', () => {
     expect(opts.goToConsole).toHaveBeenCalled();
   });
 
-  it('keeps a copy with a change no completed sync has scanned, even when the counts are zero', async () => {
-    const { guard, emit, wipe } = guardWith(
+  it("keeps a copy whose change the core's scan finds, even when the sync counts are zero", async () => {
+    const { guard, emit, wipe, calls } = guardWith(
       {
         'SyncAPI.Status': () => ({ vaultId: 'local-1', phase: 'error', pending: 0, conflicts: 0 }),
+        'SyncAPI.CopyVerdict': verdict(1),
       },
       { kind: 'shared', drainMs: 0 },
     );
     emit('vault:file-changed', { vaultId: 'local-1', paths: ['late.md'] });
     await guard.removeCopy();
+    expect(calls).toContain('SyncAPI.CopyVerdict');
     expect(wipe).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('1 change not uploaded yet');
+  });
+
+  it('keeps a copy in conflict, and one whose verdict is unknown', async () => {
+    const conflict = guardWith(
+      { 'SyncAPI.CopyVerdict': verdict(0, 1) },
+      { kind: 'shared', drainMs: 0 },
+    );
+    await conflict.guard.removeCopy();
+    expect(conflict.wipe).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('1 conflict is not resolved yet');
+
+    closeOverlay();
+    localStorage.clear();
+    const unknown = guardWith(
+      {
+        'SyncAPI.CopyVerdict': () => ({
+          removable: false,
+          reason: 'unknown',
+          pending: -1,
+          conflicts: 0,
+        }),
+      },
+      { kind: 'shared', drainMs: 0 },
+    );
+    await unknown.guard.removeCopy();
+    expect(unknown.wipe).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toHaveTextContent('may not have been uploaded yet');
   });
 

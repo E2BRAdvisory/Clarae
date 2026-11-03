@@ -1348,6 +1348,9 @@
     "io": "The file could not be read or written ({{detail}}).",
     "internal": "An internal error occurred (local index): see the log.",
     "insecure-url": "Sign-in refused: the server or its identity provider would be reached over plain http, which sends your credentials and notes unencrypted. Use an https address (http is accepted only for this computer, localhost).",
+    "weak-passphrase": "The passphrase is too weak: {{detail}}",
+    "weak-passphrase_too-short": "The passphrase needs at least 12 characters.",
+    "weak-passphrase_guessable": "This passphrase is too easy to guess: add words or make it longer.",
     "wrongSecret": "Wrong passphrase or recovery key."
   },
   "embeds": {

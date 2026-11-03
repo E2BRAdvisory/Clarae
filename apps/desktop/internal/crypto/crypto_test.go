@@ -143,7 +143,7 @@ func TestRecoveryKeyFlow(t *testing.T) {
 	}
 }
 
-func TestPassphrasePolicy(t *testing.T) {
+func TestNewPassphraseNeedsPolicyAndKey(t *testing.T) {
 	m, _, _ := newManager(t)
 	if _, err := m.NewMaterial("short"); !errors.Is(err, ErrShortPassphrase) {
 		t.Fatalf("short passphrase: %v", err)

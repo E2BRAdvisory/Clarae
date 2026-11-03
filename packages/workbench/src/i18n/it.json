@@ -1348,6 +1348,9 @@
     "io": "Non è stato possibile leggere o scrivere il file ({{detail}}).",
     "internal": "Si è verificato un errore interno (indice locale): vedi il log.",
     "insecure-url": "Accesso rifiutato: il server o il suo provider di identità verrebbero raggiunti in http semplice, che invia credenziali e note senza cifratura. Usa un indirizzo https (http è accettato solo per questo computer, localhost).",
+    "weak-passphrase": "La passphrase è troppo debole: {{detail}}",
+    "weak-passphrase_too-short": "La passphrase deve avere almeno 12 caratteri.",
+    "weak-passphrase_guessable": "Questa passphrase è troppo facile da indovinare: aggiungi parole o allungala.",
     "wrongSecret": "Passphrase o chiave di recupero errata."
   },
   "embeds": {

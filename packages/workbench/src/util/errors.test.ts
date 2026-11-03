@@ -9,6 +9,15 @@ const goSources = import.meta.glob<string>(
   { query: '?raw', import: 'default', eager: true },
 );
 
+// The passphrase policy of the core (its reasons, WeakX = "…").
+const cryptoPolicy = Object.values(
+  import.meta.glob<string>('../../../../apps/desktop/internal/crypto/policy.go', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }),
+)[0];
+
 beforeAll(() => {
   initI18n('en');
 });
@@ -62,6 +71,34 @@ describe('codes of the desktop bindings', () => {
       /errore interno/,
     );
     await i18next.changeLanguage('en');
+  });
+
+  it('translate a weak passphrase by its reason (the policy is enforced in the core)', async () => {
+    const short = new Error(
+      'weak-passphrase: too-short: the passphrase must have at least 12 characters',
+    );
+    const guessable = new Error(
+      'weak-passphrase: guessable: the passphrase is too easy to guess: add words or make it longer',
+    );
+    expect(errorCodeOf(short)).toBe('weak-passphrase');
+    expect(errorMessage(short)).toBe('The passphrase needs at least 12 characters.');
+    expect(errorMessage(guessable)).toBe(
+      'This passphrase is too easy to guess: add words or make it longer.',
+    );
+    // A reason this version does not know: the generic sentence, with the core's text.
+    expect(errorMessage(new Error('weak-passphrase: reused: seen in a breach'))).toBe(
+      'The passphrase is too weak: reused: seen in a breach',
+    );
+    await i18next.changeLanguage('it');
+    expect(errorMessage(short)).toBe('La passphrase deve avere almeno 12 caratteri.');
+    expect(errorMessage(guessable)).toMatch(/troppo facile da indovinare/);
+    await i18next.changeLanguage('en');
+    // The reasons the core declares (crypto.WeakX = "…") each have a sentence.
+    const reasons = [...(cryptoPolicy ?? '').matchAll(/\bWeak\w+\s*=\s*"([^"]+)"/g)].map(
+      (m) => m[1] as string,
+    );
+    expect(reasons.length).toBeGreaterThanOrEqual(2);
+    expect(reasons.filter((r) => !(`weak-passphrase_${r}` in en.errors))).toEqual([]);
   });
 
   it('translate the known messages of the core that have no code', async () => {

@@ -120,7 +120,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, exception 1, consol
 | `index.rebuild` Ricostruzione dell'indice del vault | yes | yes | n/a |  | D: `indexer_test.go` · W: **`workbench.spec.ts`** |
 | `settings.vault` Configurazione del vault (.memobrain/) | yes | yes | n/a |  | D: `bindings_test.go`, `layout.test.ts`, `status-bar.spec.ts` · W: **`status-bar.spec.ts`** |
 | `sync.link` Collegamento di un vault locale a un vault cloud | yes | yes | n/a | workbench (nota): sul web il collegamento avviene da solo all'apertura del vault (web/src/workbench/launch.ts) | D: `sync.test.tsx`, `manager_test.go` · W: **`web-sync.spec.ts`** |
-| `sync.unlink` Scollegamento di un vault dal cloud | yes | exception | n/a | workbench: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia (web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare | D: `sync.test.tsx` · W: `guard.test.ts`, `forget.test.ts` · K: `ForgetBrowser.test.tsx` |
+| `sync.unlink` Scollegamento di un vault dal cloud | yes | exception | n/a | workbench: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare | D: `sync.test.tsx`, `copies_test.go` · W: `guard.test.ts`, `forget.test.ts` · K: `ForgetBrowser.test.tsx` |
 | `sync.engine` Sincronizzazione del vault (stato, pausa, sincronizza ora) | yes | yes | n/a | desktop (nota): Impostazioni › Sync mostra quanti file del cloud il dispositivo non riesce a leggere (quarantena, ADR-0039) — workbench (nota): le modifiche fatte offline restano in coda finché la scheda è aperta (ADR-0029) | D: `sync.test.tsx`, `e2e_test.go`, `push_test.go`, `scan_test.go` · W: **`web-sync.spec.ts`**, **`mixed.spec.ts`** · C: `sync_test.go`, `tus_test.go` |
 | `conflicts` Conflitti di sincronizzazione | yes | yes | n/a | desktop (nota): se il file cambia dopo che le versioni sono state mostrate, «Tieni la mia» e la fusione non scrivono nulla, le versioni si ricaricano e un avviso chiede di scegliere di nuovo — workbench (nota): dal browser è provata solo la fusione di un `.md`, non la copia di conflitto di `.canvas` ed `.excalidraw` | D: `sync.test.tsx`, `diff.test.ts`, `e2e_drawings_test.go` · W: **`web-sync.spec.ts`** |
 | `revisions` Storico delle revisioni nel cloud | yes | partial | n/a | workbench: non verificata sul web: nessun test apre lo storico delle revisioni dal browser; la UI e il codice Go sono quelli del desktop | D: `sync.test.tsx` · C: `history_test.go`, `retention_test.go` |
@@ -145,7 +145,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, exception 1, consol
 | `devices.revoked` Dispositivo revocato mentre il client è aperto e nuova registrazione | yes | yes | n/a | desktop (nota): il cloud rifiuta il commit (FORBIDDEN, extra.reason device_revoked): la sync si ferma senza toccare file né outbox, la sessione passa a `device_revoked` (auth:state) e il banner offre «Registra di nuovo questo dispositivo», dopo la quale parte ciò che era in attesa — workbench (nota): stesso banner; la nuova registrazione del browser è salvata in IndexedDB (ADR-0029) | D: `DeviceRevokedBanner.test.tsx`, `hosted_test.go`, `manager_revoked_test.go`, `e2e_device_test.go`, `client_test.go` · W: **`mixed.spec.ts`** · C: `api_test.go` |
 | `usage` Spazio occupato e quota | yes | yes | yes | desktop (nota): UsagePanel di @memobrain/cloud-features, con il livello calcolato dal server e lo spazio di ogni vault (§2.8.2) | D: `CoreCloudPort.test.tsx`, `account-panels.spec.ts` · W: **`account-panels.spec.ts`** · K: `rest.test.tsx`, `Usage.test.tsx`, `app.spec.ts`, `devices.spec.ts` · C: `quota_test.go` |
 | `config.flags` Configurazione distribuita e feature flag | yes | yes | yes | console (nota): la console applica `web_workbench` e `sharing` (gli altri flag riguardano il contenuto di un vault aperto, quindi il workbench); nomi e default dei flag vengono dallo schema del Config Profile, generati in `shared/go/features` e `@memobrain/api-client/features` (`task gen`) | D: `managed.test.ts`, `managed_test.go`, `config_test.go`, `features_test.go`, `sharing.spec.ts`, `features_test.go`, `doc_test.go` · W: **`mixed.spec.ts`**, **`sharing.spec.ts`** · K: `Vaults.test.tsx`, `Shares.test.tsx`, `rest.test.tsx` · C: `schema_test.go`, `config_test.go` |
-| `settings` Impostazioni dell'applicazione | yes | yes | yes | console (nota): nella console solo la lingua dell'interfaccia (intestazione); le altre impostazioni riguardano un vault aperto e stanno nel workbench | D: `locations.test.ts`, `bindings_test.go` · W: **`web-private.spec.ts`** · K: `i18n.test.tsx` |
+| `settings` Impostazioni dell'applicazione | yes | yes | yes | console (nota): nella console solo la lingua dell'interfaccia (intestazione); le altre impostazioni riguardano un vault aperto e stanno nel workbench | D: `locations.test.ts`, `platform.test.tsx`, `bindings_test.go`, `capabilities_test.go`, `capabilities_web_test.go` · W: **`web-private.spec.ts`** · K: `i18n.test.tsx` |
 | `appearance` Tema e aspetto | yes | yes | yes | console (nota): il tema della console (automatico, chiaro, scuro) nell'intestazione, senza un test; la barra di stato è del workbench | D: `App.test.tsx`, `StatusBar.test.tsx`, `status-bar.spec.ts` · W: **`status-bar.spec.ts`** |
 | `hotkeys` Scorciatoie da tastiera personalizzabili | yes | partial | n/a | workbench: non verificata sul web: nessun test personalizza una scorciatoia sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `hotkeys.test.ts`, `registry.test.ts` |
 | `command-palette` Palette dei comandi | yes | yes | n/a |  | D: `registry.test.ts`, `keyboard.spec.ts`, `workflows.spec.ts` · W: **`keyboard.spec.ts`**, **`workflows.spec.ts`** |
@@ -385,9 +385,9 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 79, exception 1, consol
 | `drawing:import-legacy` | editor | yes | `drawing.legacy` |  |
 | `drawing:edit-latex` | editor | yes | `drawing.latex-mermaid` |  |
 
-### Binding Go (131 metodi, 20 servizi)
+### Binding Go (134 metodi, 20 servizi)
 
-Il dispatcher del core espone tutti i 131 metodi (verificato da `TestDispatcherMatchesTheGeneratedBindings`). **20 su 131** sono chiamati da un test del workbench web contro il core vero (`web/e2e`, `web/e2e-cloud`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (`task test-wasm`), ma non hanno ancora un test nel browser.
+Il dispatcher del core espone tutti i 134 metodi (verificato da `TestDispatcherMatchesTheGeneratedBindings`). **20 su 134** sono chiamati da un test del workbench web contro il core vero (`web/e2e`, `web/e2e-cloud`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (`task test-wasm`), ma non hanno ancora un test nel browser.
 
 | Binding | Funzione | Chiamato in un test web | Nota |
 | --- | --- | --- | --- |
@@ -442,6 +442,7 @@ Il dispatcher del core espone tutti i 131 metodi (verificato da `TestDispatcherM
 | `PropertiesAPI.Update` | `properties` | — | non verificata sul web: nessun test modifica le proprietà sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `SearchAPI.Explain` | `search` | — |  |
 | `SearchAPI.Query` | `search` | yes |  |
+| `SettingsAPI.Capabilities` | `settings` | — |  |
 | `SettingsAPI.Get` | `settings` | yes |  |
 | `SettingsAPI.Info` | `settings` | yes |  |
 | `SettingsAPI.Set` | `settings` | yes |  |
@@ -456,13 +457,15 @@ Il dispatcher del core espone tutti i 131 metodi (verificato da `TestDispatcherM
 | `SharingAPI.RemoveGrant` | `share.grants` | — |  |
 | `SharingAPI.RemoveMount` | `mounts` | — | un mount si apre nella sua pagina (/vaults/:id/open?share=, anche da Impostazioni › Condivisione, attraverso il guard e i marcatori dell'host); la copia di un mount revocato non si conserva come cartella (nel browser nessuno potrebbe riaprirla) ma si scarica come ZIP (capability detachedCopies) |
 | `SharingAPI.RevokeShare` | `share.manage` | — |  |
-| `SharingAPI.SearchDirectory` | `share.grants` | — |  |
+| `SharingAPI.SearchDirectoryGroups` | `share.grants` | — |  |
+| `SharingAPI.SearchDirectoryUsers` | `share.grants` | — |  |
 | `SharingAPI.SetGrant` | `share.grants` | — |  |
 | `SharingAPI.Share` | `share.manage` | — |  |
 | `SharingAPI.UpdateShare` | `share.update` | — |  |
 | `SharingAPI.VaultShares` | `share.manage` | — |  |
 | `SyncAPI.ConflictTexts` | `conflicts` | — |  |
 | `SyncAPI.Conflicts` | `conflicts` | — |  |
+| `SyncAPI.CopyVerdict` | `sync.unlink` | — | la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare |
 | `SyncAPI.DeleteCloudVault` | `vault.delete` | — |  |
 | `SyncAPI.Devices` | `devices` | — |  |
 | `SyncAPI.History` | `revisions` | — | non verificata sul web: nessun test apre lo storico delle revisioni dal browser; la UI e il codice Go sono quelli del desktop |
@@ -481,7 +484,7 @@ Il dispatcher del core espone tutti i 131 metodi (verificato da `TestDispatcherM
 | `SyncAPI.SetPollInterval` | `sync.engine` | — |  |
 | `SyncAPI.Status` | `sync.engine` | yes |  |
 | `SyncAPI.SyncNow` | `sync.engine` | yes |  |
-| `SyncAPI.Unlink` | `sync.unlink` | — | la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia (web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare |
+| `SyncAPI.Unlink` | `sync.unlink` | — | la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare |
 | `SyncAPI.Usage` | `usage` | — |  |
 | `TagsAPI.List` | `tags` | yes | non verificata sul web: nessun test, né sul desktop né sul web; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.CreateFromTemplate` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |

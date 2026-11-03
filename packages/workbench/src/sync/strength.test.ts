@@ -1,5 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { checkPassphrase, sameRecoveryKey } from './strength';
+import {
+  MAX_ESTIMATED_LENGTH,
+  MIN_PASSPHRASE_LENGTH,
+  MIN_SCORE,
+  checkPassphrase,
+  sameRecoveryKey,
+} from './strength';
+
+interface PolicyFixture {
+  minLength: number;
+  minScore: number;
+  maxEstimatedLength: number;
+  cases: { note?: string; passphrase: string; ok: boolean; reason?: string }[];
+}
+
+// The cases the core's policy (apps/desktop/internal/crypto/policy_test.go) runs too.
+const fixture = JSON.parse(
+  Object.values(
+    import.meta.glob<string>('../../../../shared/conformance/passphrase/policy.json', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }),
+  )[0] ?? '{}',
+) as PolicyFixture;
+
+describe('passphrase policy: shared fixtures', () => {
+  it('has the rule of the core', () => {
+    expect(fixture.minLength).toBe(MIN_PASSPHRASE_LENGTH);
+    expect(fixture.minScore).toBe(MIN_SCORE);
+    expect(fixture.maxEstimatedLength).toBe(MAX_ESTIMATED_LENGTH);
+    expect(fixture.cases.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it.each(fixture.cases ?? [])('$passphrase', async (c) => {
+    const r = await checkPassphrase(c.passphrase);
+    expect(r.ok).toBe(c.ok);
+    expect(r.reason).toBe(c.ok ? undefined : c.reason);
+  });
+});
 
 describe('passphrase policy', () => {
   it('rejects short and guessable passphrases', async () => {

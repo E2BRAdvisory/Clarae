@@ -9,10 +9,16 @@
  *   console) uploads what it can first, and records in the marker what could not be uploaded;
  * - when the cloud vault is deleted elsewhere (`vault:cloud-deleted`) the copy can no longer upload: the
  *   marker says so and the copy is removed only by what the marker records (the UI offers it).
+ *
+ * Whether a copy may be removed without losing changes is the core's decision (SyncAPI.CopyVerdict,
+ * ADR-0045 point 8): it scans the files first, so a change no sync has seen counts. The guard removes the
+ * files and keeps the marker, the only record the console has (it runs without a core) and the only one
+ * left once the core disconnected a folder whose cloud vault was deleted.
  */
 import { Events, type EventPayloads } from '@memobrain/workbench/events';
 import type { CoreHandle } from './bridge';
-import { coreClient } from './core.gen';
+import type { sync } from '@memobrain/workbench/wailsjs/models';
+import { coreClient, type Data } from './core.gen';
 import { readMarkers, removeMarker, unsynced, updateMarker, type VaultMarker } from './markers';
 import { closeOverlay, confirmDelete, showLocked, showOverlay, unsyncedLines } from './overlay';
 import { message } from './strings';
@@ -36,6 +42,15 @@ type SyncStatus = Pick<EventPayloads['sync:status'], 'vaultId' | 'pending' | 'co
  * (its zero counts are not "everything uploaded"), so it never updates the marker.
  */
 const unlinkedStatus = (s: SyncStatus | null | undefined): boolean => s?.kind === '';
+
+/**
+ * The core's verdict on removing the copy: `reason` is "clean", "pending", "conflicts", "unknown" or
+ * "unlinked"; the counts are -1 when unknown.
+ */
+type CopyVerdict = Data<sync.CopyVerdict>;
+
+/** How long the verdict may take: it scans the copy's files. */
+const VERDICT_MS = 60_000;
 
 /** Phases after which waiting longer uploads nothing soon: offline, paused, failed. */
 const STALLED = new Set(['offline', 'paused', 'error']);
@@ -106,6 +121,12 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
   let runStartedAt = 0;
 
   const marker = (): VaultMarker | undefined => readMarkers(o.account)[o.markerId];
+  /** The core's verdict on removing the copy; null when it could not answer (kept like changes). */
+  const verdict = (): Promise<CopyVerdict | null> =>
+    within(VERDICT_MS)
+      .SyncAPI.CopyVerdict(info.id)
+      .then((v): CopyVerdict | null => v ?? null)
+      .catch(() => null);
   const patch = (p: Partial<VaultMarker>): void => {
     const m = marker();
     if (m && Object.entries(p).every(([k, v]) => m[k as keyof VaultMarker] === v)) return;
@@ -183,15 +204,14 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
     deciding = true;
     let { pending, conflicts } = p;
     if (typeof pending !== 'number' || typeof conflicts !== 'number') {
-      const s: SyncStatus | null = await within(15_000)
-        .SyncAPI.Status(info.id)
-        .catch(() => null);
-      if (!s || unlinkedStatus(s)) {
+      // No counts with the event: the core's verdict scans and counts.
+      const v = await verdict();
+      if (!v || v.reason === 'unlinked') {
         // Not knowing is not the same as nothing pending: keep the copy.
         const m = marker();
         return keep({ pending: m?.pending ?? 0, conflicts: m?.conflicts ?? 0, dirty: true });
       }
-      ({ pending, conflicts } = s);
+      ({ pending, conflicts } = v);
     }
     if (pending < 0 || conflicts < 0) {
       // The core could not count them (-1): unknown is kept, like changes.
@@ -203,7 +223,9 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
         dirty: true,
       });
     }
-    patch({ pending, conflicts });
+    // Counts the core took after a scan (the lock's event, or the verdict): nothing pending and no
+    // conflict is a copy the cloud has entirely.
+    patch({ pending, conflicts, dirty: false });
     if (pending === 0 && conflicts === 0) return wipeAndLeave();
     keep({ pending, conflicts });
   };
@@ -254,21 +276,8 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
         .then((i: { locked?: boolean } | null) => (i ? !i.locked : unlocked))
         .catch(() => unlocked);
       if (!isUnlocked) {
-        // Never unlocked in this page: nothing could be uploaded. A change made here while it was
-        // locked is not counted by the core until a sync scans it, hence the marker's flag.
-        const m = marker();
-        if (m?.dirty) {
-          const status: SyncStatus | null = await within(15_000)
-            .SyncAPI.Status(info.id)
-            .catch(() => null);
-          const s = unlinkedStatus(status) ? null : status;
-          deciding = true;
-          return keep({
-            pending: s?.pending ?? m.pending,
-            conflicts: s?.conflicts ?? m.conflicts,
-            dirty: true,
-          });
-        }
+        // Never unlocked in this page: nothing could be uploaded. The core's verdict scans the copy
+        // (no key needed), so a change made here while it was locked counts.
         return decide({});
       }
       await within(15_000)
@@ -350,21 +359,18 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
         .SyncAPI.SyncNow(info.id)
         .catch(() => undefined);
       await drain();
-      const s: SyncStatus | null = await within(15_000)
-        .SyncAPI.Status(info.id)
-        .catch(() => null);
-      // Disconnected meanwhile (deleted elsewhere): its zero counts mean nothing.
-      if (detached || unlinkedStatus(s)) return removeByMarker();
-      // A change no completed sync has scanned (the marker's flag) is not "nothing pending" either.
-      const dirty = Boolean(marker()?.dirty);
-      if (s && s.pending === 0 && s.conflicts === 0 && !dirty) return wipeAndLeave();
+      const v = await verdict();
+      // Disconnected meanwhile (deleted elsewhere): the core no longer vouches for the copy.
+      if (detached || v?.reason === 'unlinked') return removeByMarker();
+      if (v?.removable) return wipeAndLeave();
+      const known = v !== null && v.reason !== 'unknown';
       const counts = {
-        pending: Math.max(s?.pending ?? marker()?.pending ?? 0, 0),
-        conflicts: Math.max(s?.conflicts ?? marker()?.conflicts ?? 0, 0),
+        pending: Math.max(known ? v.pending : (marker()?.pending ?? 0), 0),
+        conflicts: Math.max(known ? v.conflicts : (marker()?.conflicts ?? 0), 0),
       };
-      if (s) patch(counts);
+      if (known) patch({ ...counts, dirty: false });
       // Unknown counts are kept like changes (D-04): the user decides.
-      askBeforeRemoving(counts, !s || dirty);
+      askBeforeRemoving(counts, !known);
     })().finally(() => {
       running = null;
     });
@@ -386,17 +392,12 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
           .SyncAPI.SyncNow(info.id)
           .catch(() => undefined);
         await drain();
-        const s: SyncStatus | null = await within(15_000)
-          .SyncAPI.Status(info.id)
-          .catch(() => null);
-        if (!s)
+        // The core's verdict counts what is left after a scan: the marker is exact for the console.
+        const v = await verdict();
+        if (!v || v.reason === 'unknown')
           patch({ dirty: true }); // not knowing is kept like changes
-        else if (!detached && !unlinkedStatus(s))
-          patch({
-            pending: Math.max(s.pending, 0),
-            conflicts: Math.max(s.conflicts, 0),
-            ...(s.pending < 0 || s.conflicts < 0 ? { dirty: true } : {}),
-          });
+        else if (!detached && v.reason !== 'unlinked')
+          patch({ pending: v.pending, conflicts: v.conflicts, dirty: false });
       }
       go();
     })().finally(() => {

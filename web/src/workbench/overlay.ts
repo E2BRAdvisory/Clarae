@@ -143,11 +143,11 @@ export interface UnlockGateOptions {
   counts: { pending: number; conflicts: number; dirty?: boolean };
   /** VaultCryptoAPI.Unlock: resolves to true when a new passphrase must be set (recovery key used). */
   unlock: (secret: string, recovery: boolean) => Promise<boolean>;
-  /** VaultCryptoAPI.SetPassphrase. */
+  /** VaultCryptoAPI.SetPassphrase: the core refuses a weak passphrase (`weak-passphrase: …`). */
   setPassphrase: (passphrase: string) => Promise<void>;
   /**
-   * The strength policy of a new passphrase (§3.8.2): the workbench's own check (zxcvbn), so the
-   * gate accepts exactly what the unlock dialog does. Replaceable in tests.
+   * The live feedback on a new passphrase (§3.8.2): the workbench's own check (zxcvbn), the same rule
+   * the core enforces, so the gate says early what the core would refuse. Replaceable in tests.
    */
   check?: (passphrase: string) => Promise<{ longEnough: boolean; ok: boolean }>;
   deleteCopy: () => void;
@@ -156,6 +156,22 @@ export interface UnlockGateOptions {
 
 const errorText = (e: unknown): string =>
   e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+
+/**
+ * The text of a failure of the core in the gate. The typed errors of the passphrase are translated:
+ * `weak-passphrase: <reason>: …` (the core's policy, ADR-0045 point 8) and a wrong secret; anything
+ * else is shown as written.
+ */
+export function gateErrorText(e: unknown): string {
+  const raw = errorText(e).trim();
+  const weak = /^weak-passphrase:\s*([a-z-]+):/.exec(raw);
+  if (weak)
+    return message(
+      weak[1] === 'too-short' ? 'workbench.newPassphraseShort' : 'workbench.newPassphraseWeak',
+    );
+  if (raw === 'wrong passphrase or recovery key') return message('workbench.wrongSecret');
+  return raw;
+}
 
 /**
  * Opening a private vault whose copy holds changes that were not uploaded: the clear text must not show
@@ -216,7 +232,7 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
           (mustChange) => (mustChange ? passphraseStep() : finish()),
           (e: unknown) => {
             submit.disabled = false;
-            error.textContent = errorText(e);
+            error.textContent = gateErrorText(e);
             error.hidden = false;
           },
         );
@@ -269,9 +285,11 @@ export function showUnlockGate(o: UnlockGateOptions): Promise<void> {
             if (value !== again.value) throw new Error(message('workbench.newPassphraseMismatch'));
             return o.setPassphrase(value);
           })
+          // The live check is feedback: the core applies the policy again and its refusal
+          // (`weak-passphrase`) is shown translated like the rest.
           .then(finish, (e: unknown) => {
             submit.disabled = false;
-            fail(errorText(e));
+            fail(gateErrorText(e));
           });
       });
       showOverlay({

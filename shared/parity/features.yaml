@@ -300,10 +300,12 @@ features:
       capability: unlinkVault
     workbench:
       status: exception
-      reason: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia (web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare
+      reason: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare
+      bindings: [SyncAPI.CopyVerdict]
     tests:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
+        - apps/desktop/internal/sync/copies_test.go
       workbench:
         - web/src/workbench/guard.test.ts
         - web/src/workbench/forget.test.ts
@@ -574,7 +576,13 @@ features:
     desktop:
       status: yes
       note: GrantEditor e ricerca nella directory di @memobrain/cloud-features, gli stessi della console; una richiesta per tipo (utenti o gruppi) con i campi dell'API, descrizione dei gruppi compresa
-      bindings: [SharingAPI.SetGrant, SharingAPI.RemoveGrant, SharingAPI.SearchDirectory]
+      bindings:
+        [
+          SharingAPI.SetGrant,
+          SharingAPI.RemoveGrant,
+          SharingAPI.SearchDirectoryUsers,
+          SharingAPI.SearchDirectoryGroups,
+        ]
       operationIds: [putGrant, deleteGrant, searchDirectoryUsers, searchDirectoryGroups]
     workbench:
       status: yes
@@ -881,7 +889,7 @@ features:
     desktop:
       status: yes
       commands: [settings:open]
-      bindings: [SettingsAPI.Get, SettingsAPI.Set, SettingsAPI.Info]
+      bindings: [SettingsAPI.Get, SettingsAPI.Set, SettingsAPI.Info, SettingsAPI.Capabilities]
     workbench:
       status: yes
     console:
@@ -891,7 +899,10 @@ features:
     tests:
       desktop:
         - packages/workbench/src/settings/locations.test.ts
+        - packages/workbench/src/platform/platform.test.tsx
         - apps/desktop/internal/app/bindings_test.go
+        - apps/desktop/internal/app/capabilities_test.go
+        - apps/desktop/internal/app/capabilities_web_test.go
       workbench:
         - web/e2e-cloud/web-private.spec.ts
       console:

@@ -10,6 +10,8 @@ import { linkInfo } from '../../app/api';
 import type { FileChange } from '../../app/events';
 import { Events } from '../../app/events';
 import { buildMockGraph } from '../../graph/mockBuild';
+import { capabilitiesFor, type Capabilities } from '../../platform';
+import { checkPassphrase } from '../../sync/strength';
 import { syntheticGraph } from '../../graph/synthetic';
 import type { GraphData, GraphOptions } from '../../graph/types';
 import { makeBasesAPI } from './bases';
@@ -20,17 +22,20 @@ import { createUpdaterMock } from '../../updater/mock';
 import type {
   AppSettings,
   ConfigState,
-  DirectoryEntry,
-  GrantInput,
+  DirectoryGroup,
+  DirectoryUser,
   MountState,
+  NewGrant,
+  Share,
   ShareGrant,
-  ShareInfo,
+  ShareUpdate,
   AuthState,
   BinaryContent,
   CloudVault,
   ConflictAction,
   ConflictTexts,
-  DeviceInfo,
+  CloudDevice,
+  CloudUsage,
   DiskEncryption,
   Entry,
   Mention,
@@ -47,7 +52,6 @@ import type {
   SyncLinkInfo,
   SyncStatus,
   TagCount,
-  UsageInfo,
   VaultInfo,
   WriteResult,
 } from '../../app/api';
@@ -73,24 +77,30 @@ export interface MockSync {
   history: Map<string, RevisionInfo[]>; // key: vaultId + '|' + path
   revisionTexts: Map<string, string>; // key: vaultId + '|' + path + '|' + rev
   restored: { vaultId: string; path: string; rev: number }[];
+  /** The cloud's vaults and the account's devices and usage, as the API describes them. */
   cloudVaults: CloudVault[];
-  devices: DeviceInfo[];
-  usage: UsageInfo;
+  devices: CloudDevice[];
+  usage: CloudUsage;
   disk: DiskEncryption;
   /** Passphrase and recovery key that unlock a cloud vault being linked on a new device. */
   secrets: Map<string, { passphrase: string; recoveryKey: string }>;
 }
 
-/** State behind the SharingAPI mock: tests seed invitations and read what the UI did. */
+/**
+ * State behind the SharingAPI mock: tests seed invitations and read what the UI did. Shares, grants
+ * and the directory are the types of the API (ADR-0045 §6).
+ */
 export interface MockSharing {
-  invitations: ShareInfo[];
+  invitations: Share[];
   /** Accepted shares; accepting an invitation adds one. */
   mounts: MountState[];
-  /** Shares created (or managed) by the user, on any vault; `myPermission` '' for the owner. */
-  owned: ShareInfo[];
+  /** Shares created (or managed) by the user, on any vault; no `my_permission` for the owner. */
+  owned: Share[];
   /** Received shares already answered (accepted or declined), as ListShares("received") lists them. */
-  received: ShareInfo[];
-  directory: DirectoryEntry[];
+  received: Share[];
+  /** The directory: users and groups to share with. */
+  users: DirectoryUser[];
+  groups: DirectoryGroup[];
   /** Files that appear in a mount when it is opened: share id -> path -> text. */
   mountFiles: Map<string, Record<string, string>>;
   declined: string[];
@@ -303,14 +313,12 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
           id: 'dev-1',
           name: 'This computer',
           platform: 'macos',
-          appVersion: '0.0.1',
-          lastSeenAt: null,
-          createdAt: '2026-01-01T00:00:00Z',
-          revokedAt: '',
+          app_version: '0.0.1',
+          created_at: '2026-01-01T00:00:00Z',
           current: true,
         },
       ],
-      usage: { usedBytes: 0, quotaBytes: 5 * 1024 ** 3, level: 'ok' },
+      usage: { used_bytes: 0, quota_bytes: 5 * 1024 ** 3, level: 'ok' },
       disk: 'encrypted',
       secrets: new Map(),
     },
@@ -320,7 +328,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       mounts: [],
       owned: [],
       received: [],
-      directory: [],
+      users: [],
+      groups: [],
       mountFiles: new Map(),
       declined: [],
       revoked: [],
@@ -357,6 +366,17 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     return v;
   };
   const reject = (msg: string): Promise<never> => Promise.reject(new Error(msg));
+  /**
+   * The core's passphrase policy on a new passphrase (crypto.ValidatePassphrase): the same rule as
+   * the dialogs' live check, refused with the core's message ("weak-passphrase: <reason>: …").
+   */
+  const weakPassphrase = async (passphrase: string): Promise<string | null> => {
+    const c = await checkPassphrase(passphrase);
+    if (c.ok) return null;
+    return c.reason === 'too-short'
+      ? 'weak-passphrase: too-short: the passphrase must have at least 12 characters'
+      : 'weak-passphrase: guessable: the passphrase is too easy to guess: add words or make it longer';
+  };
   /**
    * vault:file-changed as the core sends it: every path, classified (internal/app/changes.go). The
    * mock has no index to tell a creation from an edit, so callers name the paths they created.
@@ -866,6 +886,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
     Info: (): Promise<Record<string, string>> =>
       Promise.resolve({ version: 'test', dataDir: '/mock/data' }),
+    // The mock stands for the desktop core, which declares the desktop column (capabilities.go).
+    Capabilities: (): Promise<Capabilities> => Promise.resolve(capabilitiesFor('desktop')),
   };
 
   const AuthAPI = {
@@ -979,8 +1001,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
 
   const shownConflicts = new Map<number, string>();
   mock.deleteCloudVaultElsewhere = (cloudVaultId) => {
-    const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
-    if (v) v.deletedAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deleted_at);
+    if (v) v.deleted_at = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
     for (const [id, l] of [...sy.links]) {
       if (l.cloudVaultId !== cloudVaultId || l.mount) continue;
       sy.links.delete(id);
@@ -1024,32 +1046,32 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
           kind: linkOf(id).kind,
         },
       ),
-    LinkNew: (
+    LinkNew: async (
       id: string,
       name: string,
       kind: string,
       passphrase: string,
     ): Promise<{ cloudVaultId: string; recoveryKey: string }> => {
+      const weak = kind === 'private' ? await weakPassphrase(passphrase) : null;
+      if (weak) return reject(weak);
       const err = requireSignIn();
       if (err) return err;
       if (linkOf(id).linked) return reject('this vault is already connected to the cloud');
       if (kind !== 'shared' && kind !== 'private') return reject(`unknown vault kind "${kind}"`);
-      if (kind === 'private' && [...passphrase].length < 12)
-        return reject('the passphrase must have at least 12 characters');
-      if (sy.cloudVaults.some((v) => v.name === name && !v.deletedAt))
+      if (sy.cloudVaults.some((v) => v.name === name && !v.deleted_at))
         return reject('name-in-use: you already have a vault with this name');
       const cloudVaultId = `cloud-${sy.cloudVaults.length + 1}`;
       const recoveryKey =
         kind === 'private' ? 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z2345-67ABC-DEFGH-IJKLM-NOPQR-STU' : '';
       sy.cloudVaults.push({
         id: cloudVaultId,
-        ownerId: 'user-1',
+        owner_id: 'user-1',
         name,
         kind,
-        totalBytes: 0,
-        fileCount: 0,
-        lastSeq: 0,
-        createdAt: new Date().toISOString(),
+        total_bytes: 0,
+        file_count: 0,
+        last_seq: 0,
+        created_at: new Date().toISOString(),
       });
       sy.links.set(id, {
         ...linkInfo({
@@ -1070,18 +1092,18 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve({ cloudVaultId, recoveryKey });
     },
     ListCloudVaults: (): Promise<CloudVault[]> =>
-      requireSignIn() ?? Promise.resolve(sy.cloudVaults.filter((v) => !v.deletedAt)),
+      requireSignIn() ?? Promise.resolve(sy.cloudVaults.filter((v) => !v.deleted_at)),
     ListDeletedCloudVaults: (): Promise<CloudVault[]> =>
-      requireSignIn() ?? Promise.resolve(sy.cloudVaults.filter((v) => Boolean(v.deletedAt))),
+      requireSignIn() ?? Promise.resolve(sy.cloudVaults.filter((v) => Boolean(v.deleted_at))),
     // The lifecycle of a cloud vault (ADR-0037 §2): like the server, a name is unique among the
     // owner's live vaults; like the core, a delete disconnects the vaults linked to it (files stay).
     RenameCloudVault: (cloudVaultId: string, name: string): Promise<CloudVault> => {
       const err = requireSignIn();
       if (err) return err;
-      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deleted_at);
       if (!v) return reject('NOT_FOUND: vault not found');
       if (name.trim() === '') return reject('VALIDATION_FAILED: name is required');
-      if (sy.cloudVaults.some((x) => x.id !== v.id && x.name === name && !x.deletedAt))
+      if (sy.cloudVaults.some((x) => x.id !== v.id && x.name === name && !x.deleted_at))
         return reject('NAME_IN_USE: a vault with this name already exists');
       v.name = name;
       for (const [id, l] of sy.links)
@@ -1094,9 +1116,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     DeleteCloudVault: (cloudVaultId: string): Promise<void> => {
       const err = requireSignIn();
       if (err) return err;
-      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deleted_at);
       if (!v) return reject('NOT_FOUND: vault not found');
-      v.deletedAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+      v.deleted_at = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
       for (const [id, l] of [...sy.links])
         if (l.cloudVaultId === cloudVaultId && !l.mount) unlink(id);
       return Promise.resolve();
@@ -1104,11 +1126,11 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     RestoreCloudVault: (cloudVaultId: string): Promise<CloudVault> => {
       const err = requireSignIn();
       if (err) return err;
-      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && x.deletedAt);
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && x.deleted_at);
       if (!v) return reject('NOT_FOUND: vault not found');
-      if (sy.cloudVaults.some((x) => x.id !== v.id && x.name === v.name && !x.deletedAt))
+      if (sy.cloudVaults.some((x) => x.id !== v.id && x.name === v.name && !x.deleted_at))
         return reject('NAME_IN_USE: a vault with this name already exists');
-      delete v.deletedAt;
+      delete v.deleted_at;
       return Promise.resolve({ ...v });
     },
     LinkExisting: (id: string, cloudVaultId: string): Promise<void> => {
@@ -1195,33 +1217,46 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       sy.restored.push({ vaultId: id, path, rev });
       return Promise.resolve();
     },
-    Devices: (): Promise<DeviceInfo[]> => requireSignIn() ?? Promise.resolve(sy.devices),
+    Devices: (): Promise<CloudDevice[]> => requireSignIn() ?? Promise.resolve(sy.devices),
     RevokeDevice: (devId: string): Promise<void> => {
       // The server lists only the active devices: a revoked one disappears.
       sy.devices = sy.devices.filter((d) => d.id !== devId);
       return Promise.resolve();
     },
-    Usage: (): Promise<UsageInfo> => requireSignIn() ?? Promise.resolve(sy.usage),
+    Usage: (): Promise<CloudUsage> => requireSignIn() ?? Promise.resolve(sy.usage),
   };
 
   // --- sharing and configuration ----------------------------------------------
   const sh = mock.sharing;
+  /** A new recipient, named as the directory names them (a user by username, a group by name). */
+  const newGrant = (g: NewGrant): ShareGrant => ({
+    ...g,
+    principal_name:
+      (g.principal_type === 'user'
+        ? sh.users.find((u) => u.id === g.principal_id)?.username
+        : sh.groups.find((x) => x.id === g.principal_id)?.name) ?? g.principal_id,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+  });
+  /** The directory's search: a name containing the query, without case. */
+  const matches = (q: string, ...names: string[]) =>
+    names.some((n) => n.toLowerCase().includes(q.toLowerCase()));
   const SharingAPI = {
     // Copies: the UI's query cache must see a different array after the test mutated the state.
-    Invitations: (): Promise<ShareInfo[]> => Promise.resolve(structuredClone(sh.invitations)),
+    Invitations: (): Promise<Share[]> => Promise.resolve(structuredClone(sh.invitations)),
     Mounts: (): Promise<MountState[]> => Promise.resolve(structuredClone(sh.mounts)),
     AcceptShare: (shareId: string): Promise<MountState> => {
       const inv = sh.invitations.find((i) => i.id === shareId);
       if (!inv) return reject('not-found: no such invitation');
       sh.invitations = sh.invitations.filter((i) => i.id !== shareId);
-      sh.received.push({ ...inv, myStatus: 'accepted' });
+      sh.received.push({ ...inv, my_status: 'accepted' });
       const m: MountState = {
         shareId,
-        cloudVaultId: inv.vaultId,
-        name: inv.displayName,
-        ownerName: inv.ownerName,
-        resourceType: inv.resourceType,
-        permission: inv.myPermission || 'viewer',
+        cloudVaultId: inv.vault_id,
+        name: inv.display_name,
+        ownerName: inv.owner_name,
+        resourceType: inv.resource_type,
+        permission: inv.my_permission ?? 'viewer',
         path: `/mock/mounts/${shareId}`,
         mounted: true,
         revoked: false,
@@ -1234,7 +1269,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     DeclineShare: (shareId: string): Promise<void> => {
       const inv = sh.invitations.find((i) => i.id === shareId);
       sh.invitations = sh.invitations.filter((i) => i.id !== shareId);
-      if (inv) sh.received.push({ ...inv, myStatus: 'declined' });
+      if (inv) sh.received.push({ ...inv, my_status: 'declined' });
       sh.declined.push(shareId);
       return Promise.resolve();
     },
@@ -1275,45 +1310,36 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         lastOpenedAt: new Date(),
       });
     },
-    VaultShares: (vaultId: string): Promise<ShareInfo[]> => {
+    VaultShares: (vaultId: string): Promise<Share[]> => {
       const cloud = sy.links.get(vaultId)?.cloudVaultId;
-      return Promise.resolve(structuredClone(sh.owned.filter((s) => s.vaultId === cloud)));
+      return Promise.resolve(structuredClone(sh.owned.filter((s) => s.vault_id === cloud)));
     },
     CreateShare: (
       vaultId: string,
       path: string,
       isDir: boolean,
       name: string,
-      grants: GrantInput[],
-    ): Promise<ShareInfo> => {
+      grants: NewGrant[],
+    ): Promise<Share> => {
       const link = sy.links.get(vaultId);
       if (!link?.linked)
         return reject('validation-failed: this vault is not connected to the cloud');
-      const share: ShareInfo = {
+      const share: Share = {
         id: `share-${sh.owned.length + 1}`,
-        vaultId: link.cloudVaultId,
-        vaultName: link.name,
-        resourceType: !isDir ? 'file' : path ? 'folder' : 'vault',
-        pathPrefix: path,
-        displayName: name || path || link.name,
-        ownerId: mock.auth.profile.userId,
-        ownerName: 'me',
-        createdAt: new Date().toISOString(),
-        expiresAt: '',
-        myPermission: '',
-        myStatus: '',
-        grants: grants.map((g) => ({
-          principalType: g.principalType,
-          principalId: g.principalId,
-          principalName: sh.directory.find((d) => d.id === g.principalId)?.name ?? g.principalId,
-          permission: g.permission,
-          status: 'pending',
-        })),
+        vault_id: link.cloudVaultId,
+        vault_name: link.name,
+        resource_type: !isDir ? 'file' : path ? 'folder' : 'vault',
+        ...(path ? { path_prefix: path } : {}),
+        display_name: name || path || link.name,
+        owner_id: mock.auth.profile.userId,
+        owner_name: 'me',
+        created_at: new Date().toISOString(),
+        grants: grants.map(newGrant),
       };
       sh.owned.push(share);
       return Promise.resolve(share);
     },
-    ListShares: (scope: string): Promise<ShareInfo[]> => {
+    ListShares: (scope: string): Promise<Share[]> => {
       if (scope !== 'owned' && scope !== 'received')
         return reject(`invalid: share scope "${scope}" (owned or received)`);
       return (
@@ -1327,13 +1353,13 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       cloudVaultId: string,
       pathPrefix: string,
       name: string,
-      grants: GrantInput[],
+      grants: NewGrant[],
       expiresAt: string,
-    ): Promise<ShareInfo> => {
+    ): Promise<Share> => {
       const signedOut = requireSignIn();
       if (signedOut) return signedOut;
       const prefix = pathPrefix.trim().replace(/^\/+|\/+$/g, '');
-      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deletedAt);
+      const v = sy.cloudVaults.find((x) => x.id === cloudVaultId && !x.deleted_at);
       // Not the user's vault: a manager shares inside a share they manage (ADR-0041 §8), with the
       // server's rules (vault ⊇ folder ⊇ subfolder, path_key compared without case).
       const key = (p: string) => p.normalize('NFC').toLowerCase();
@@ -1341,71 +1367,62 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         ? undefined
         : sh.owned.filter(
             (s) =>
-              s.vaultId === cloudVaultId &&
-              s.myPermission === 'manager' &&
-              s.myStatus === 'accepted',
+              s.vault_id === cloudVaultId &&
+              s.my_permission === 'manager' &&
+              s.my_status === 'accepted',
           );
       if (!v && !managed?.length) return reject('NOT_FOUND: vault not found');
       if (v && v.kind !== 'shared')
         return reject('VAULT_ENCRYPTED: a private (end-to-end encrypted) vault cannot be shared');
       const via = managed?.find(
         (s) =>
-          s.resourceType === 'vault' ||
-          (s.resourceType === 'folder' &&
+          s.resource_type === 'vault' ||
+          (s.resource_type === 'folder' &&
             prefix !== '' &&
-            (key(prefix) === key(s.pathPrefix) || key(prefix).startsWith(`${key(s.pathPrefix)}/`))),
+            (key(prefix) === key(s.path_prefix ?? '') ||
+              key(prefix).startsWith(`${key(s.path_prefix ?? '')}/`))),
       );
       if (managed && !via)
         return reject('FORBIDDEN: a manager can share only what lies inside a share they manage');
       if (expiresAt && new Date(expiresAt).getTime() <= Date.now())
         return reject('VALIDATION_FAILED: expires_at must be in the future');
-      const vaultName = v?.name ?? via?.vaultName ?? '';
-      const share: ShareInfo = {
+      const vaultName = v?.name ?? via?.vault_name ?? '';
+      const share: Share = {
         id: `share-${sh.owned.length + sh.revoked.length + 1}`,
-        vaultId: cloudVaultId,
-        vaultName,
-        resourceType: prefix ? 'folder' : 'vault',
-        pathPrefix: prefix,
-        displayName: name.trim() || (prefix ? (prefix.split('/').pop() ?? prefix) : vaultName),
-        ownerId: via ? via.ownerId : mock.auth.profile.userId,
-        ownerName: via ? via.ownerName : 'me',
-        createdAt: new Date().toISOString(),
-        expiresAt,
-        myPermission: via ? 'manager' : '',
-        myStatus: via ? 'accepted' : '',
-        grants: grants.map((g) => ({
-          principalType: g.principalType,
-          principalId: g.principalId,
-          principalName: sh.directory.find((d) => d.id === g.principalId)?.name ?? g.principalId,
-          permission: g.permission,
-          status: 'pending',
-        })),
+        vault_id: cloudVaultId,
+        vault_name: vaultName,
+        resource_type: prefix ? 'folder' : 'vault',
+        ...(prefix ? { path_prefix: prefix } : {}),
+        display_name: name.trim() || (prefix ? (prefix.split('/').pop() ?? prefix) : vaultName),
+        owner_id: via ? via.owner_id : mock.auth.profile.userId,
+        owner_name: via ? via.owner_name : 'me',
+        created_at: new Date().toISOString(),
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+        ...(via ? { my_permission: 'manager' as const, my_status: 'accepted' as const } : {}),
+        grants: grants.map(newGrant),
       };
       sh.owned.push(share);
       return Promise.resolve(structuredClone(share));
     },
-    UpdateShare: (
-      id: string,
-      name: string,
-      expiresAt: string,
-      clearExpiry: boolean,
-    ): Promise<ShareInfo> => {
+    // The body of PATCH /shares/{id}, with the server's rules (clear_expiry wins).
+    UpdateShare: (id: string, change: ShareUpdate): Promise<Share> => {
       const s = sh.owned.find((x) => x.id === id);
       if (!s) return reject('NOT_FOUND: share not found');
-      if (!clearExpiry && expiresAt && new Date(expiresAt).getTime() <= Date.now())
+      const { display_name: name, expires_at: expiresAt, clear_expiry: clear } = change;
+      if (!clear && expiresAt && new Date(expiresAt).getTime() <= Date.now())
         return reject('VALIDATION_FAILED: expires_at must be in the future');
-      if (name.trim()) s.displayName = name.trim();
-      if (clearExpiry) s.expiresAt = '';
-      else if (expiresAt) s.expiresAt = expiresAt;
+      if (name?.trim()) s.display_name = name.trim();
+      if (clear) delete s.expires_at;
+      else if (expiresAt) s.expires_at = expiresAt;
       return Promise.resolve(structuredClone(s));
     },
-    Share: (id: string): Promise<ShareInfo> => {
+    Share: (id: string): Promise<Share> => {
       const s = sh.owned.find((x) => x.id === id);
       return s ? Promise.resolve(s) : reject('not-found: share not found');
     },
     RevokeShare: (id: string): Promise<void> => {
       const s = sh.owned.find((x) => x.id === id);
-      if (s?.myPermission)
+      if (s?.my_permission)
         return reject('FORBIDDEN: only the owner of the vault can revoke a share');
       sh.owned = sh.owned.filter((x) => x.id !== id);
       sh.revoked.push(id);
@@ -1419,18 +1436,17 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     ): Promise<ShareGrant> => {
       const s = sh.owned.find((x) => x.id === id);
       if (!s) return reject('not-found: share not found');
-      let g = s.grants.find(
-        (x) => x.principalId === principalId && x.principalType === principalType,
+      const grants = (s.grants ??= []);
+      let g = grants.find(
+        (x) => x.principal_id === principalId && x.principal_type === principalType,
       );
       if (!g) {
-        g = {
-          principalType: principalType as ShareGrant['principalType'],
-          principalId,
-          principalName: sh.directory.find((d) => d.id === principalId)?.name ?? principalId,
+        g = newGrant({
+          principal_type: principalType as ShareGrant['principal_type'],
+          principal_id: principalId,
           permission: permission as ShareGrant['permission'],
-          status: 'pending',
-        };
-        s.grants.push(g);
+        });
+        grants.push(g);
       }
       g.permission = permission as ShareGrant['permission'];
       return Promise.resolve(g);
@@ -1438,17 +1454,15 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     RemoveGrant: (id: string, principalType: string, principalId: string): Promise<void> => {
       const s = sh.owned.find((x) => x.id === id);
       if (s)
-        s.grants = s.grants.filter(
-          (g) => !(g.principalId === principalId && g.principalType === principalType),
+        s.grants = (s.grants ?? []).filter(
+          (g) => !(g.principal_id === principalId && g.principal_type === principalType),
         );
       return Promise.resolve();
     },
-    SearchDirectory: (type: string, q: string): Promise<DirectoryEntry[]> =>
-      Promise.resolve(
-        sh.directory.filter(
-          (d) => d.type === type && d.label.toLowerCase().includes(q.toLowerCase()),
-        ),
-      ),
+    SearchDirectoryUsers: (q: string): Promise<DirectoryUser[]> =>
+      Promise.resolve(sh.users.filter((u) => matches(q, u.username, u.display_name ?? ''))),
+    SearchDirectoryGroups: (q: string): Promise<DirectoryGroup[]> =>
+      Promise.resolve(sh.groups.filter((g) => matches(q, g.name))),
   };
   const ConfigAPI = {
     Effective: (): Promise<ConfigState> => Promise.resolve(mock.config),
@@ -1513,20 +1527,20 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       mock.activity++;
       return Promise.resolve();
     },
-    SetPassphrase: (id: string, passphrase: string): Promise<void> => {
+    SetPassphrase: async (id: string, passphrase: string): Promise<void> => {
+      const weak = await weakPassphrase(passphrase);
+      if (weak) return reject(weak);
       const l = linkOf(id);
-      if ([...passphrase].length < 12)
-        return reject('the passphrase must have at least 12 characters');
       const keys = sy.secrets.get(l.cloudVaultId);
       if (keys) sy.secrets.set(l.cloudVaultId, { ...keys, passphrase });
       return Promise.resolve();
     },
-    ChangePassphrase: (id: string, oldPass: string, newPass: string): Promise<void> => {
+    ChangePassphrase: async (id: string, oldPass: string, newPass: string): Promise<void> => {
+      const weak = await weakPassphrase(newPass);
+      if (weak) return reject(weak);
       const l = linkOf(id);
       const keys = sy.secrets.get(l.cloudVaultId);
       if (!keys || keys.passphrase !== oldPass) return reject('wrong passphrase or recovery key');
-      if ([...newPass].length < 12)
-        return reject('the passphrase must have at least 12 characters');
       sy.secrets.set(l.cloudVaultId, { ...keys, passphrase: newPass });
       return Promise.resolve();
     },

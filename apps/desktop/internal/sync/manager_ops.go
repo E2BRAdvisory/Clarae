@@ -113,6 +113,13 @@ func (m *Manager) saveLink(ctx context.Context, mv *managed, v transport.Vault, 
 // succeeds with the recovery key and the server vault left unlinked
 // (WarnLinkIncomplete): the folder can be connected to it later.
 func (m *Manager) Link(ctx context.Context, localID, name, kind, passphrase string) (LinkResult, error) {
+	if kind == "private" {
+		// The passphrase policy first: a weak passphrase is refused for what
+		// it is, signed in or not (NewMaterial checks it again).
+		if err := crypto.ValidatePassphrase(passphrase); err != nil {
+			return LinkResult{}, err
+		}
+	}
 	mv, err := m.get(localID)
 	if err != nil {
 		return LinkResult{}, err
@@ -624,7 +631,12 @@ func (m *Manager) lockedEvent(ctx context.Context, localID string, eng *Engine, 
 func (m *Manager) Activity() { m.crypto.Touch() }
 
 // ChangePassphrase re-wraps the VMK under a new passphrase; nothing is re-encrypted.
+// The new passphrase must meet the policy (crypto.ValidatePassphrase), the old
+// one only has to open the vault.
 func (m *Manager) ChangePassphrase(ctx context.Context, localID, oldPassphrase, newPassphrase string) error {
+	if err := crypto.ValidatePassphrase(newPassphrase); err != nil {
+		return err // before the network and the slow check of the old one
+	}
 	mv, c, err := m.privateVault(localID)
 	if err != nil {
 		return err
@@ -642,6 +654,9 @@ func (m *Manager) ChangePassphrase(ctx context.Context, localID, oldPassphrase, 
 // SetPassphrase sets a new passphrase on an unlocked vault without asking for
 // the old one: the step that follows an unlock with the recovery key.
 func (m *Manager) SetPassphrase(ctx context.Context, localID, newPassphrase string) error {
+	if err := crypto.ValidatePassphrase(newPassphrase); err != nil {
+		return err
+	}
 	mv, c, err := m.privateVault(localID)
 	if err != nil {
 		return err

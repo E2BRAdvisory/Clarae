@@ -533,6 +533,7 @@
     "newPassphraseShort": "La passphrase deve avere almeno 12 caratteri.",
     "newPassphraseWeak": "Questa passphrase è troppo facile da indovinare: aggiungi altre parole o caratteri.",
     "newPassphraseMismatch": "Le due passphrase sono diverse.",
+    "wrongSecret": "Passphrase o chiave di recupero errata.",
     "save": "Salva"
   }
 }

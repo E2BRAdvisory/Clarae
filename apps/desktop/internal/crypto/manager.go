@@ -9,7 +9,6 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -19,16 +18,11 @@ import (
 	"memobrain/shared/vaultcrypto"
 )
 
-// MinPassphraseLength is the shortest accepted passphrase (§3.8.2). The UI also
-// enforces a strength estimate (zxcvbn >= 3); the length is the hard floor.
-const MinPassphraseLength = 12
-
 // Errors.
 var (
-	ErrWrongSecret     = errors.New("wrong passphrase or recovery key")
-	ErrShortPassphrase = fmt.Errorf("the passphrase must have at least %d characters", MinPassphraseLength)
-	ErrNoEnvelope      = errors.New("the vault has no matching key envelope")
-	ErrLocked          = errors.New("vault is locked")
+	ErrWrongSecret = errors.New("wrong passphrase or recovery key")
+	ErrNoEnvelope  = errors.New("the vault has no matching key envelope")
+	ErrLocked      = errors.New("vault is locked")
 	// ErrEnvelopeDowngrade means the server served a v1 envelope of a kind
 	// this device has already seen in format v2 for the vault (ADR-0034
 	// pinning): it may be the envelope of another vault.
@@ -252,14 +246,6 @@ func (mat *Material) Wipe() {
 		vaultcrypto.WipeKey(&kek)
 		mat.keks[k] = kek
 	}
-}
-
-// ValidatePassphrase enforces the minimum length (strength is estimated in the UI).
-func ValidatePassphrase(p string) error {
-	if len([]rune(p)) < MinPassphraseLength {
-		return ErrShortPassphrase
-	}
-	return nil
 }
 
 func kdfToTransport(k vaultcrypto.KDFParams) transport.KDF {

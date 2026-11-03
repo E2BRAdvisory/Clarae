@@ -7,6 +7,7 @@ shared/conformance/
 ├── markdown/        # <caso>.md + <caso>.expected.json   (parser OFM)
 ├── merge/           # <caso>/{base,ours,theirs,expected}.md (+ meta.json)  — da M2
 ├── crypto/          # vectors.json                        — da M2 (§3.8.7)
+├── passphrase/      # policy.json: politica della passphrase (§3.8.2), core Go e strength.ts
 └── ts/              # pacchetto @memobrain/conformance: tipi e loader per i test TS
 ```
 

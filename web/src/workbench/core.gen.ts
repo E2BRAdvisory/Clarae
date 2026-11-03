@@ -6,7 +6,7 @@
 // with a time limit (`coreClient(core, ms)`; 0 = no limit). The host never writes a service or
 // method name by hand: ESLint refuses them outside this file. A new binding appears here after
 // `task gen` (docs/desktop-web-sync.md, "Contratto degli eventi").
-import type { app, auth, bases, composer, graph, history, importer, links, search, sync, updater, vault } from '@memobrain/workbench/wailsjs/models';
+import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, search, sync, updater, vault } from '@memobrain/workbench/wailsjs/models';
 
 /** A model of the bindings as plain data: the core answers with JSON, not with model classes. */
 export type Data<T> = T extends (...args: never[]) => unknown
@@ -105,42 +105,45 @@ export interface CoreClient {
     Query(arg1: string, arg2: string, arg3: string, arg4: number): Promise<Data<search.Results>>;
   };
   readonly SettingsAPI: {
+    Capabilities(): Promise<Data<app.Capabilities>>;
     Get(): Promise<Data<app.AppSettings>>;
     Info(): Promise<Record<string, string>>;
     Set(arg1: Data<app.AppSettings>): Promise<void>;
   };
   readonly SharingAPI: {
     AcceptShare(arg1: string): Promise<Data<sync.MountState>>;
-    CreateCloudShare(arg1: string, arg2: string, arg3: string, arg4: Data<Array<app.GrantInput>>, arg5: string): Promise<Data<app.ShareInfo>>;
-    CreateShare(arg1: string, arg2: string, arg3: boolean, arg4: string, arg5: Data<Array<app.GrantInput>>, arg6: string): Promise<Data<app.ShareInfo>>;
+    CreateCloudShare(arg1: string, arg2: string, arg3: string, arg4: Data<Array<cloudapi.NewGrant>>, arg5: string): Promise<Data<cloudapi.Share>>;
+    CreateShare(arg1: string, arg2: string, arg3: boolean, arg4: string, arg5: Data<Array<cloudapi.NewGrant>>, arg6: string): Promise<Data<cloudapi.Share>>;
     DeclineShare(arg1: string): Promise<void>;
-    Invitations(): Promise<Data<Array<app.ShareInfo>>>;
-    ListShares(arg1: string): Promise<Data<Array<app.ShareInfo>>>;
+    Invitations(): Promise<Data<Array<cloudapi.Share>>>;
+    ListShares(arg1: string): Promise<Data<Array<cloudapi.Share>>>;
     Mounts(): Promise<Data<Array<sync.MountState>>>;
     OpenMount(arg1: string): Promise<Data<app.VaultInfo>>;
     RemoveGrant(arg1: string, arg2: string, arg3: string): Promise<void>;
     RemoveMount(arg1: string, arg2: boolean): Promise<Data<app.VaultInfo>>;
     RevokeShare(arg1: string): Promise<void>;
-    SearchDirectory(arg1: string, arg2: string): Promise<Data<Array<app.DirectoryEntry>>>;
-    SetGrant(arg1: string, arg2: string, arg3: string, arg4: string): Promise<Data<app.GrantInfo>>;
-    Share(arg1: string): Promise<Data<app.ShareInfo>>;
-    UpdateShare(arg1: string, arg2: string, arg3: string, arg4: boolean): Promise<Data<app.ShareInfo>>;
-    VaultShares(arg1: string): Promise<Data<Array<app.ShareInfo>>>;
+    SearchDirectoryGroups(arg1: string): Promise<Data<Array<cloudapi.DirectoryGroup>>>;
+    SearchDirectoryUsers(arg1: string): Promise<Data<Array<cloudapi.DirectoryUser>>>;
+    SetGrant(arg1: string, arg2: string, arg3: string, arg4: string): Promise<Data<cloudapi.Grant>>;
+    Share(arg1: string): Promise<Data<cloudapi.Share>>;
+    UpdateShare(arg1: string, arg2: Data<cloudapi.UpdateShare>): Promise<Data<cloudapi.Share>>;
+    VaultShares(arg1: string): Promise<Data<Array<cloudapi.Share>>>;
   };
   readonly SyncAPI: {
     ConflictTexts(arg1: string, arg2: number): Promise<Data<app.ConflictTexts>>;
     Conflicts(arg1: string): Promise<Data<Array<sync.Conflict>>>;
+    CopyVerdict(arg1: string): Promise<Data<sync.CopyVerdict>>;
     DeleteCloudVault(arg1: string): Promise<void>;
-    Devices(): Promise<Data<Array<app.DeviceInfo>>>;
+    Devices(): Promise<Data<Array<cloudapi.AccountDevice>>>;
     History(arg1: string, arg2: string): Promise<Data<Array<sync.RevisionInfo>>>;
     Info(arg1: string): Promise<Data<sync.LinkInfo>>;
     LinkExisting(arg1: string, arg2: string): Promise<void>;
     LinkNew(arg1: string, arg2: string, arg3: string, arg4: string): Promise<Data<sync.LinkResult>>;
-    ListCloudVaults(): Promise<Data<Array<app.CloudVault>>>;
-    ListDeletedCloudVaults(): Promise<Data<Array<app.CloudVault>>>;
-    RenameCloudVault(arg1: string, arg2: string): Promise<Data<app.CloudVault>>;
+    ListCloudVaults(): Promise<Data<Array<cloudapi.Vault>>>;
+    ListDeletedCloudVaults(): Promise<Data<Array<cloudapi.Vault>>>;
+    RenameCloudVault(arg1: string, arg2: string): Promise<Data<cloudapi.Vault>>;
     ResolveConflict(arg1: string, arg2: number, arg3: string, arg4: string): Promise<void>;
-    RestoreCloudVault(arg1: string): Promise<Data<app.CloudVault>>;
+    RestoreCloudVault(arg1: string): Promise<Data<cloudapi.Vault>>;
     RestoreRevision(arg1: string, arg2: string, arg3: number): Promise<void>;
     RevisionText(arg1: string, arg2: string, arg3: number): Promise<string>;
     RevokeDevice(arg1: string): Promise<void>;
@@ -149,7 +152,7 @@ export interface CoreClient {
     Status(arg1: string): Promise<Data<sync.Status>>;
     SyncNow(arg1: string): Promise<void>;
     Unlink(arg1: string): Promise<void>;
-    Usage(): Promise<Data<app.UsageInfo>>;
+    Usage(): Promise<Data<cloudapi.Usage>>;
   };
   readonly TagsAPI: {
     List(arg1: string): Promise<Data<Array<app.TagCount>>>;
@@ -216,9 +219,9 @@ export const BINDINGS = {
   LinksAPI: ['ApplyRename', 'Backlinks', 'Outgoing', 'PlanRename', 'Resolve', 'Suggest', 'UnlinkedMentions'],
   PropertiesAPI: ['Keys', 'Remove', 'Schema', 'SetType', 'Update'],
   SearchAPI: ['Explain', 'Query'],
-  SettingsAPI: ['Get', 'Info', 'Set'],
-  SharingAPI: ['AcceptShare', 'CreateCloudShare', 'CreateShare', 'DeclineShare', 'Invitations', 'ListShares', 'Mounts', 'OpenMount', 'RemoveGrant', 'RemoveMount', 'RevokeShare', 'SearchDirectory', 'SetGrant', 'Share', 'UpdateShare', 'VaultShares'],
-  SyncAPI: ['ConflictTexts', 'Conflicts', 'DeleteCloudVault', 'Devices', 'History', 'Info', 'LinkExisting', 'LinkNew', 'ListCloudVaults', 'ListDeletedCloudVaults', 'RenameCloudVault', 'ResolveConflict', 'RestoreCloudVault', 'RestoreRevision', 'RevisionText', 'RevokeDevice', 'SetPaused', 'SetPollInterval', 'Status', 'SyncNow', 'Unlink', 'Usage'],
+  SettingsAPI: ['Capabilities', 'Get', 'Info', 'Set'],
+  SharingAPI: ['AcceptShare', 'CreateCloudShare', 'CreateShare', 'DeclineShare', 'Invitations', 'ListShares', 'Mounts', 'OpenMount', 'RemoveGrant', 'RemoveMount', 'RevokeShare', 'SearchDirectoryGroups', 'SearchDirectoryUsers', 'SetGrant', 'Share', 'UpdateShare', 'VaultShares'],
+  SyncAPI: ['ConflictTexts', 'Conflicts', 'CopyVerdict', 'DeleteCloudVault', 'Devices', 'History', 'Info', 'LinkExisting', 'LinkNew', 'ListCloudVaults', 'ListDeletedCloudVaults', 'RenameCloudVault', 'ResolveConflict', 'RestoreCloudVault', 'RestoreRevision', 'RevisionText', 'RevokeDevice', 'SetPaused', 'SetPollInterval', 'Status', 'SyncNow', 'Unlink', 'Usage'],
   TagsAPI: ['List'],
   TemplatesAPI: ['CreateFromTemplate', 'DailyAdjacent', 'Expand', 'List', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
   UpdaterAPI: ['Check', 'GetSettings', 'Install', 'SetSettings', 'Skip', 'Status'],
@@ -337,6 +340,7 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
     },
     get SettingsAPI(): CoreClient['SettingsAPI'] {
       return {
+        Capabilities: () => call('SettingsAPI', 'Capabilities', []),
         Get: () => call('SettingsAPI', 'Get', []),
         Info: () => call('SettingsAPI', 'Info', []),
         Set: (arg1: Data<app.AppSettings>) => call('SettingsAPI', 'Set', [arg1]),
@@ -345,8 +349,8 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
     get SharingAPI(): CoreClient['SharingAPI'] {
       return {
         AcceptShare: (arg1: string) => call('SharingAPI', 'AcceptShare', [arg1]),
-        CreateCloudShare: (arg1: string, arg2: string, arg3: string, arg4: Data<Array<app.GrantInput>>, arg5: string) => call('SharingAPI', 'CreateCloudShare', [arg1, arg2, arg3, arg4, arg5]),
-        CreateShare: (arg1: string, arg2: string, arg3: boolean, arg4: string, arg5: Data<Array<app.GrantInput>>, arg6: string) => call('SharingAPI', 'CreateShare', [arg1, arg2, arg3, arg4, arg5, arg6]),
+        CreateCloudShare: (arg1: string, arg2: string, arg3: string, arg4: Data<Array<cloudapi.NewGrant>>, arg5: string) => call('SharingAPI', 'CreateCloudShare', [arg1, arg2, arg3, arg4, arg5]),
+        CreateShare: (arg1: string, arg2: string, arg3: boolean, arg4: string, arg5: Data<Array<cloudapi.NewGrant>>, arg6: string) => call('SharingAPI', 'CreateShare', [arg1, arg2, arg3, arg4, arg5, arg6]),
         DeclineShare: (arg1: string) => call('SharingAPI', 'DeclineShare', [arg1]),
         Invitations: () => call('SharingAPI', 'Invitations', []),
         ListShares: (arg1: string) => call('SharingAPI', 'ListShares', [arg1]),
@@ -355,10 +359,11 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         RemoveGrant: (arg1: string, arg2: string, arg3: string) => call('SharingAPI', 'RemoveGrant', [arg1, arg2, arg3]),
         RemoveMount: (arg1: string, arg2: boolean) => call('SharingAPI', 'RemoveMount', [arg1, arg2]),
         RevokeShare: (arg1: string) => call('SharingAPI', 'RevokeShare', [arg1]),
-        SearchDirectory: (arg1: string, arg2: string) => call('SharingAPI', 'SearchDirectory', [arg1, arg2]),
+        SearchDirectoryGroups: (arg1: string) => call('SharingAPI', 'SearchDirectoryGroups', [arg1]),
+        SearchDirectoryUsers: (arg1: string) => call('SharingAPI', 'SearchDirectoryUsers', [arg1]),
         SetGrant: (arg1: string, arg2: string, arg3: string, arg4: string) => call('SharingAPI', 'SetGrant', [arg1, arg2, arg3, arg4]),
         Share: (arg1: string) => call('SharingAPI', 'Share', [arg1]),
-        UpdateShare: (arg1: string, arg2: string, arg3: string, arg4: boolean) => call('SharingAPI', 'UpdateShare', [arg1, arg2, arg3, arg4]),
+        UpdateShare: (arg1: string, arg2: Data<cloudapi.UpdateShare>) => call('SharingAPI', 'UpdateShare', [arg1, arg2]),
         VaultShares: (arg1: string) => call('SharingAPI', 'VaultShares', [arg1]),
       };
     },
@@ -366,6 +371,7 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
       return {
         ConflictTexts: (arg1: string, arg2: number) => call('SyncAPI', 'ConflictTexts', [arg1, arg2]),
         Conflicts: (arg1: string) => call('SyncAPI', 'Conflicts', [arg1]),
+        CopyVerdict: (arg1: string) => call('SyncAPI', 'CopyVerdict', [arg1]),
         DeleteCloudVault: (arg1: string) => call('SyncAPI', 'DeleteCloudVault', [arg1]),
         Devices: () => call('SyncAPI', 'Devices', []),
         History: (arg1: string, arg2: string) => call('SyncAPI', 'History', [arg1, arg2]),

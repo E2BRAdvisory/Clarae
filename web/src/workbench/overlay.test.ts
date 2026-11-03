@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { closeOverlay, showFatal, showUnlockGate, unsyncedLines } from './overlay';
+import { closeOverlay, gateErrorText, showFatal, showUnlockGate, unsyncedLines } from './overlay';
 
 afterEach(() => closeOverlay());
 
@@ -97,6 +97,60 @@ describe('unlock gate', () => {
     await vi.waitFor(() => expect(done).toHaveBeenCalledOnce());
     expect(setPassphrase).toHaveBeenCalledWith(strong);
   }, 20_000);
+
+  it("shows the core's refusal of a weak passphrase, translated (the live check is not the guard)", async () => {
+    const setPassphrase = vi
+      .fn<(p: string) => Promise<void>>()
+      .mockRejectedValueOnce(
+        new Error('weak-passphrase: guessable: the passphrase is too easy to guess'),
+      )
+      .mockRejectedValueOnce(
+        new Error('weak-passphrase: too-short: the passphrase must have at least 12 characters'),
+      )
+      .mockResolvedValueOnce(undefined);
+    const done = vi.fn();
+    // A live check that lets everything through: only the core decides.
+    const check = () => Promise.resolve({ longEnough: true, ok: true });
+    void showUnlockGate({
+      ...base,
+      unlock: () => Promise.resolve(true),
+      setPassphrase,
+      check,
+    }).then(done);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Passphrase'), 'AAAA-BBBB{Enter}');
+    const pass = 'a passphrase the core judges';
+    await user.type(await screen.findByLabelText('New passphrase'), pass);
+    await user.type(screen.getByLabelText('Repeat the new passphrase'), pass);
+    const save = screen.getByRole('button', { name: 'Save' });
+    await user.click(save);
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'This passphrase is too easy to guess: add more words or characters.',
+      ),
+    );
+    await user.click(save);
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The passphrase needs at least 12 characters.',
+      ),
+    );
+    expect(done).not.toHaveBeenCalled();
+    await user.click(save);
+    await vi.waitFor(() => expect(done).toHaveBeenCalledOnce());
+    expect(setPassphrase).toHaveBeenCalledTimes(3);
+  });
+
+  it('translates the typed errors of the core and keeps the rest as written', () => {
+    expect(gateErrorText(new Error('weak-passphrase: too-short: at least 12'))).toBe(
+      'The passphrase needs at least 12 characters.',
+    );
+    expect(gateErrorText('weak-passphrase: guessable: too easy')).toMatch(/too easy to guess/);
+    expect(gateErrorText(new Error('wrong passphrase or recovery key'))).toBe(
+      'Wrong passphrase or recovery key.',
+    );
+    expect(gateErrorText(new Error('the vault engine stopped'))).toBe('the vault engine stopped');
+  });
 
   it('deletes the copy only after a confirmation', async () => {
     const deleteCopy = vi.fn();

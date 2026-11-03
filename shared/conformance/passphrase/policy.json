@@ -1,0 +1,53 @@
+{
+  "minLength": 12,
+  "minScore": 3,
+  "maxEstimatedLength": 64,
+  "cases": [
+    { "passphrase": "", "ok": false, "reason": "too-short" },
+    { "passphrase": "short", "ok": false, "reason": "too-short" },
+    { "passphrase": "abcdefghijk", "ok": false, "reason": "too-short" },
+    {
+      "note": "11 letters written decomposed (22 code points): counted in NFC",
+      "passphrase": "a\u0300e\u0300i\u0300o\u0300u\u0300a\u0301e\u0301i\u0301o\u0301u\u0301y\u0301",
+      "ok": false,
+      "reason": "too-short"
+    },
+    { "passphrase": "aaaaaaaaaaaa", "ok": false, "reason": "guessable" },
+    { "passphrase": "123456789012", "ok": false, "reason": "guessable" },
+    { "passphrase": "passwordpassword", "ok": false, "reason": "guessable" },
+    { "passphrase": "P@ssw0rdP@ssw0rd", "ok": false, "reason": "guessable" },
+    { "passphrase": "qwertyuiopasdf", "ok": false, "reason": "guessable" },
+    { "passphrase": "1qaz2wsx3edc4rfv", "ok": false, "reason": "guessable" },
+    { "passphrase": "letmeinletmein", "ok": false, "reason": "guessable" },
+    { "passphrase": "iloveyou12345", "ok": false, "reason": "guessable" },
+    { "passphrase": "sunshine2026", "ok": false, "reason": "guessable" },
+    { "passphrase": "Gianluca1985", "ok": false, "reason": "guessable" },
+    { "passphrase": "abc123abc123abc", "ok": false, "reason": "guessable" },
+    {
+      "note": "only the first 64 code points are estimated",
+      "passphrase": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa correct horse battery staple",
+      "ok": false,
+      "reason": "guessable"
+    },
+    {
+      "note": "long and strong: the estimated prefix is strong",
+      "passphrase": "frog lamp orbit cello frog lamp orbit cello frog lamp orbit cello frog lamp orbit cello frog lamp orbit cello frog lamp orbit cello",
+      "ok": true
+    },
+    { "passphrase": "correct horse battery staple", "ok": true },
+    { "passphrase": "correct horse battery staple orbit", "ok": true },
+    { "passphrase": "purple monkey dishwasher", "ok": true },
+    { "passphrase": "frog-lamp-orbit-cello", "ok": true },
+    { "passphrase": "x7#kQ9!mZ2@pL", "ok": true },
+    { "passphrase": "january2024!!", "ok": true },
+    { "passphrase": "Zürich Bahnhof 2026", "ok": true },
+    { "passphrase": "càffè latte molto caldo", "ok": true },
+    {
+      "note": "the same passphrase written decomposed",
+      "passphrase": "ca\u0300ffe\u0300 latte molto caldo",
+      "ok": true
+    },
+    { "passphrase": "пароль пароль пароль", "ok": true },
+    { "passphrase": "日本語のパスフレーズです", "ok": true }
+  ]
+}

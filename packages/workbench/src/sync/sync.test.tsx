@@ -193,6 +193,40 @@ describe('ConnectWizard', () => {
     expect((await api.sync.info(vaultId)).kind).toBe('private');
   });
 
+  it("shows the core's refusal of a passphrase, translated: the live check is not the only guard", async () => {
+    await signIn();
+    const spy = vi
+      .spyOn(api.sync, 'linkNew')
+      .mockRejectedValue(
+        new Error(
+          'weak-passphrase: guessable: the passphrase is too easy to guess: add words or make it longer',
+        ),
+      );
+    render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Diary" />));
+    fireEvent.click(screen.getByRole('radio', { name: /Private encrypted vault/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(screen.getByLabelText('Passphrase'), { target: { value: GOOD } });
+    fireEvent.change(screen.getByLabelText('Repeat the passphrase'), { target: { value: GOOD } });
+    const create = screen.getByRole('button', { name: 'Create encrypted vault' });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This passphrase is too easy to guess: add words or make it longer.',
+    );
+    expect(screen.queryByLabelText('Recovery key')).not.toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it('the mock core refuses a weak passphrase like the core (weak-passphrase)', async () => {
+    await signIn();
+    await expect(api.sync.linkNew(vaultId, 'Diary', 'private', 'short')).rejects.toThrow(
+      /^weak-passphrase: too-short: /,
+    );
+    await expect(api.sync.linkNew(vaultId, 'Diary', 'private', 'passwordpassword')).rejects.toThrow(
+      /^weak-passphrase: guessable: /,
+    );
+  });
+
   it('preset by the console: asks only for the passphrase, then hands the new vault over', async () => {
     await signIn();
     const linked: string[] = [];
@@ -234,13 +268,13 @@ describe('ConnectWizard', () => {
     await signIn();
     mock.sync.cloudVaults.push({
       id: 'cv1',
-      ownerId: 'user-1',
+      owner_id: 'user-1',
       name: 'Old diary',
       kind: 'private',
-      totalBytes: 10,
-      fileCount: 2,
-      lastSeq: 4,
-      createdAt: new Date().toISOString(),
+      total_bytes: 10,
+      file_count: 2,
+      last_seq: 4,
+      created_at: new Date().toISOString(),
     });
     render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Notes" />));
     fireEvent.click(screen.getByRole('radio', { name: /existing cloud vault/ }));
@@ -254,13 +288,13 @@ describe('ConnectWizard', () => {
     await signIn();
     mock.sync.cloudVaults.push({
       id: 'cv1',
-      ownerId: 'user-1',
+      owner_id: 'user-1',
       name: 'Notes',
       kind: 'shared',
-      totalBytes: 0,
-      fileCount: 0,
-      lastSeq: 0,
-      createdAt: new Date().toISOString(),
+      total_bytes: 0,
+      file_count: 0,
+      last_seq: 0,
+      created_at: new Date().toISOString(),
     });
     render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Notes" />));
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
