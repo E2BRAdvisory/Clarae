@@ -319,7 +319,9 @@ func TestEveryEmbeddedScriptIsPinned(t *testing.T) {
 		}
 		t.Skip("dist/ holds only the placeholder index (run task web-build)")
 	}
-	byHash := map[string]string{} // sha384 integrity -> file
+	// sha384 integrity -> every file with that content: byte-identical files (the empty modules esbuild
+	// makes for an unused import) share one hash, and the integrity of one pins them all.
+	byHash := map[string][]string{}
 	var scripts []string
 	_ = fs.WalkDir(root, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || (!strings.HasSuffix(p, ".js") && !strings.HasSuffix(p, ".mjs")) {
@@ -330,7 +332,8 @@ func TestEveryEmbeddedScriptIsPinned(t *testing.T) {
 			return err
 		}
 		sum := sha512.Sum384(data)
-		byHash["sha384-"+base64.StdEncoding.EncodeToString(sum[:])] = p
+		h := "sha384-" + base64.StdEncoding.EncodeToString(sum[:])
+		byHash[h] = append(byHash[h], p)
 		scripts = append(scripts, p)
 		return nil
 	})
@@ -339,9 +342,11 @@ func TestEveryEmbeddedScriptIsPinned(t *testing.T) {
 	var queue []string
 	pin := func(text []byte) {
 		for _, h := range integrityRe.FindAll(text, -1) {
-			if f, ok := byHash[string(h)]; ok && !pinned[f] {
-				pinned[f] = true
-				queue = append(queue, f)
+			for _, f := range byHash[string(h)] {
+				if !pinned[f] {
+					pinned[f] = true
+					queue = append(queue, f)
+				}
 			}
 		}
 	}

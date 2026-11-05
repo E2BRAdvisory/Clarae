@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SLIDE_KEYS, SLIDE_THEMES, SLIDE_TRANSITIONS, type SlideConfig } from '@memobrain/markdown';
 import { api } from '../app/api';
@@ -5,6 +6,7 @@ import { useActiveNote } from '../state/activeNote';
 import { selectActivePath, useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
+import { lazyView } from '../ui/lazyView';
 import { slideTitle } from '../slides/model';
 import { startSlideshow } from '../slides/actions';
 import { DrawingSlidesPanel } from './DrawingSlidesPanel';
@@ -12,12 +14,23 @@ import { SlideView } from '../slides/SlideView';
 import { useSlideshow } from '../slides/store';
 import { useDeck, useSlideHtml } from '../slides/useDeck';
 
+// The Slideshow tab of a .marp file is fetched when one is opened: it stays out of the startup bundle (ADR-0020).
+const MarpSlidesPanel = lazyView(async () => ({
+  default: (await import('./MarpSlidesPanel')).MarpSlidesPanel,
+}));
+
 type Key = keyof SlideConfig;
 
-/** Right sidebar, "Slides" tab: a note's presentation, or a drawing's slideshow (its frames). */
+/** Right sidebar, "Slides" tab: a note's presentation, or the slideshow of a drawing (its frames) or of a .marp file. */
 export function SlidesPanel({ vaultId }: { vaultId: string }) {
   const path = useAppStore(selectActivePath);
   if (path && /\.excalidraw$/i.test(path)) return <DrawingSlidesPanel path={path} />;
+  if (path && /\.marp$/i.test(path))
+    return (
+      <Suspense fallback={<div className="muted pad" aria-busy="true" />}>
+        <MarpSlidesPanel vaultId={vaultId} path={path} />
+      </Suspense>
+    );
   return <NoteSlidesPanel vaultId={vaultId} />;
 }
 

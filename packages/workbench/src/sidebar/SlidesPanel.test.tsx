@@ -101,6 +101,17 @@ describe('Slides tab', () => {
   });
 });
 
+describe('Slides tab on a Marp presentation', () => {
+  it('shows the slideshow panel of the presentation, not the note presentation', async () => {
+    await setup('Talk.marp', '---\nmarp: true\n---\n\n# One\n');
+    expect(screen.queryByText('Open a Markdown note to present it.')).toBeNull();
+    expect(screen.queryByLabelText('Transition')).toBeNull();
+    // The editor has not published the deck yet: the panel says so with its own empty state.
+    expect(await screen.findByText('This presentation has no slides.')).toBeInTheDocument();
+    expect(screen.getByRole('toolbar', { name: 'Slideshow' })).toBeInTheDocument();
+  });
+});
+
 describe('Slides tab on a read-only vault', () => {
   it('disables the options but still lets the user present', async () => {
     await setup();

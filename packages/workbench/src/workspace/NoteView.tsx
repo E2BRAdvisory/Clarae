@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
@@ -22,6 +22,7 @@ import { useSettings, type NoteMode } from '../state/settings';
 import { BaseView } from '../bases/BaseView';
 import { DrawingView } from '../drawing/DrawingView';
 import { isGraphPath } from '../graph/paths';
+import { useMarpDeck } from '../marp/deckStore';
 import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
@@ -40,8 +41,6 @@ const GraphView = lazyView(async () => ({
 const CanvasView = lazyView(async () => ({
   default: (await import('../canvas/CanvasView')).CanvasView,
 }));
-// The slide preview of a presentation brings Marp along (ADR-0047).
-const MarpPane = lazyView(() => import('../marp/MarpPane'));
 
 const MODES: NoteMode[] = ['live', 'source', 'reading'];
 
@@ -185,41 +184,11 @@ export function NoteView({ vaultId, pane, tab, visible }: Props) {
 
 /** Pause in typing before the sidebars see the new text. */
 const PUBLISH_DELAY_MS = 300;
-/** Pause in typing before a presentation's preview gets the new text (it renders after its own). */
-const PREVIEW_DELAY_MS = 100;
-
-/** The bar between the editor and the slides of a presentation: dragging it moves the split. */
-function SplitHandle({ onResize }: { onResize: (share: number) => void }) {
-  const { t } = useTranslation();
-  return (
-    <div
-      className="marp-split-handle"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={t('marp.resize')}
-      onPointerDown={(e) => {
-        const box = e.currentTarget.parentElement?.getBoundingClientRect();
-        if (!box) return;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        const move = (ev: PointerEvent): void =>
-          onResize(Math.min(0.8, Math.max(0.2, (ev.clientX - box.left) / box.width)));
-        const up = (): void => {
-          window.removeEventListener('pointermove', move);
-          window.removeEventListener('pointerup', up);
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', up);
-      }}
-    />
-  );
-}
-
-/** Share of the width the editor takes in the split view of a presentation. */
-const SPLIT_DEFAULT = 0.5;
 
 /**
  * A Markdown file in its editor: a note (live preview, source or reading view), or a Marp
- * presentation (ADR-0047), whose source editor sits next to the preview of its slides.
+ * presentation (ADR-0047, ADR-0048), whose editor is the plain source at full width; its slides
+ * are in the Slideshow tab of the right sidebar.
  */
 function MarkdownNote({
   vaultId,
@@ -243,24 +212,6 @@ function MarkdownNote({
   const publishTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const publishRef = useRef<() => void>(() => undefined);
   useEffect(() => () => clearTimeout(publishTimer.current), []);
-  // A presentation's preview follows the text after a short pause, and the slide of the cursor.
-  // The text typed for the preview, for the version of the document it was typed in: a reload
-  // from disk (a new version) makes the preview show the file again.
-  const [typed, setTyped] = useState<{ version: number; text: string } | null>(null);
-  const [cursorLine, setCursorLine] = useState(0);
-  const [split, setSplit] = useState(SPLIT_DEFAULT);
-  const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(previewTimer.current), []);
-  const pickSlide = useCallback(
-    (line: number) => {
-      const view = getEditor(pane.id);
-      if (!view) return;
-      const at = view.state.doc.line(Math.min(view.state.doc.lines, line + 1)).from;
-      view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
-      view.focus();
-    },
-    [pane.id],
-  );
   const settingsRef = useRef(editorSettings);
   useEffect(() => {
     settingsRef.current = editorSettings;
@@ -353,7 +304,23 @@ function MarkdownNote({
       publishRef.current = () => undefined;
       return;
     }
-    const publish = (): void =>
+    const publish = (): void => {
+      if (presentation) {
+        const view = getEditor(pane.id);
+        useMarpDeck.getState().publish({
+          vaultId,
+          path,
+          paneId: pane.id,
+          // The editor's text: CodeMirror reads every line break as \n, whatever the file has.
+          source: view
+            ? view.state.doc.toString()
+            : docRef.current.current().replace(/\r\n?/g, '\n'),
+          cursorLine: view
+            ? view.state.doc.lineAt(view.state.selection.main.head).number - 1
+            : undefined,
+          readOnly,
+        });
+      }
       useActiveNote.getState().publish({
         vaultId,
         path,
@@ -369,10 +336,20 @@ function MarkdownNote({
         // Unsaved edits typed meanwhile are kept (they become a conflict), never discarded.
         reload: () => void docRef.current.refresh(),
       });
+    };
     publishRef.current = publish;
     publish();
-  }, [isActive, doc.status, vaultId, path, text]);
-  useEffect(() => () => useActiveNote.getState().retire(path), [path]);
+  }, [isActive, doc.status, vaultId, path, text, presentation, pane.id, readOnly]);
+  useEffect(
+    () => () => {
+      useActiveNote.getState().retire(path);
+      // Notes typed in the Slideshow tab a moment ago go into the editor (still alive: its own
+      // cleanup runs after this one) before the presentation is cleared.
+      if (useMarpDeck.getState().path === path) useMarpDeck.getState().flushNotes?.();
+      useMarpDeck.getState().clear(path);
+    },
+    [path],
+  );
   // The editor reports its figures when the text or the selection changes: a tab just opened, a
   // pane just focused or a switch out of reading view reports them at once instead.
   useEffect(() => {
@@ -449,70 +426,6 @@ function MarkdownNote({
             onSearchTag={(tag) => search(`tag:#${tag.replace(/^#/, '')}`)}
           />
         </div>
-      ) : presentation ? (
-        <div
-          className="marp-split"
-          style={{ gridTemplateColumns: `${split}fr 6px ${1 - split}fr` }}
-        >
-          <div className="marp-source">
-            <EditorToolbar
-              vaultId={vaultId}
-              paneId={pane.id}
-              disabled={readOnly}
-              attachmentDir={attachmentDir(editorSettings, path)}
-            />
-            <Editor
-              id={pane.id}
-              doc={text}
-              version={doc.version}
-              mode={presentation || tab.mode === 'reading' ? 'source' : tab.mode}
-              settings={editorSettings}
-              context={context}
-              completion={completion}
-              paste={paste}
-              resolver={link.resolver}
-              hotkey={(e) => {
-                const c = commandForEvent(e, useSettings.getState().hotkeys);
-                if (!c) return false;
-                e.preventDefault();
-                void c.run();
-                return true;
-              }}
-              reveal={revealHere}
-              readOnly={readOnly}
-              onChange={(v) => {
-                doc.edit(v); // the save state re-renders this view when it changes, not every key
-                clearTimeout(publishTimer.current);
-                publishTimer.current = setTimeout(() => publishRef.current(), PUBLISH_DELAY_MS);
-                if (presentation) {
-                  clearTimeout(previewTimer.current);
-                  const version = doc.version;
-                  previewTimer.current = setTimeout(
-                    () => setTyped({ version, text: v() }),
-                    PREVIEW_DELAY_MS,
-                  );
-                }
-              }}
-              onStats={(s) => {
-                if (isActive) setStats(s);
-                if (!presentation) return;
-                const view = getEditor(pane.id);
-                if (view)
-                  setCursorLine(view.state.doc.lineAt(view.state.selection.main.head).number - 1);
-              }}
-            />
-          </div>
-          <SplitHandle onResize={setSplit} />
-          <Suspense fallback={<div className="note-loading muted">{t('marp.loading')}</div>}>
-            <MarpPane
-              vaultId={vaultId}
-              path={path}
-              source={typed?.version === doc.version ? typed.text : text}
-              cursorLine={cursorLine}
-              onPickSlide={pickSlide}
-            />
-          </Suspense>
-        </div>
       ) : (
         <>
           <EditorToolbar
@@ -544,21 +457,15 @@ function MarkdownNote({
               doc.edit(v); // the save state re-renders this view when it changes, not every key
               clearTimeout(publishTimer.current);
               publishTimer.current = setTimeout(() => publishRef.current(), PUBLISH_DELAY_MS);
-              if (presentation) {
-                clearTimeout(previewTimer.current);
-                const version = doc.version;
-                previewTimer.current = setTimeout(
-                  () => setTyped({ version, text: v() }),
-                  PREVIEW_DELAY_MS,
-                );
-              }
             }}
             onStats={(s) => {
               if (isActive) setStats(s);
-              if (!presentation) return;
+              if (!presentation || !isActive) return;
               const view = getEditor(pane.id);
               if (view)
-                setCursorLine(view.state.doc.lineAt(view.state.selection.main.head).number - 1);
+                useMarpDeck
+                  .getState()
+                  .setCursor(view.state.doc.lineAt(view.state.selection.main.head).number - 1);
             }}
           />
         </>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import { Events } from './events';
@@ -22,6 +22,7 @@ import { useImporter } from '../importer/store';
 import { LazyDialog } from '../ui/LazyDialog';
 import { lazyView } from '../ui/lazyView';
 import { UpdateDialog } from '../updater/UpdateDialog';
+import { useMarpShow } from '../marp/showStore';
 import { SlideShow } from '../slides/SlideShow';
 import { Header } from '../shell/Header';
 import { DeviceRevokedBanner } from '../sync/DeviceRevokedBanner';
@@ -42,6 +43,20 @@ const SettingsPanel = lazyView(async () => ({
 const RecoveryDialogs = lazyView(async () => ({
   default: (await import('../recovery/RecoveryDialog')).RecoveryDialogs,
 }));
+
+// The presentation of a .marp file is fetched when it starts (ADR-0020).
+const MarpShow = lazyView(async () => ({
+  default: (await import('../marp/MarpShow')).MarpShow,
+}));
+
+function MarpShowGate() {
+  const open = useMarpShow((s) => s.open);
+  return open ? (
+    <Suspense fallback={null}>
+      <MarpShow />
+    </Suspense>
+  ) : null;
+}
 
 function ImportWizardGate() {
   const open = useImporter((s) => s.open);
@@ -219,6 +234,7 @@ export function App() {
       <CommandPalette />
       <QuickSwitcher />
       <SlideShow />
+      <MarpShowGate />
       <DialogHost />
     </div>
   );

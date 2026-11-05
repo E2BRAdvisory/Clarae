@@ -1187,18 +1187,32 @@
   },
   "marp": {
     "title": "Presentation",
-    "loading": "Loading the preview…",
-    "toolbar": "Presentation",
-    "preview": "Slide preview",
-    "present": "Present",
-    "exportHtml": "HTML",
-    "exportPdf": "PDF",
-    "exportPptx": "PPTX",
-    "pptxLater": "Exporting to PowerPoint (PPTX) is not available yet: export to PDF or HTML instead.",
+    "pptxDone": "The presentation was saved to {{path}}.",
+    "pptxSkipped": "These pictures could not be included: {{list}}.",
     "notADeck": "Open a presentation (.marp) to use this command.",
     "htmlDone": "The presentation was saved to {{path}}.",
     "secondSlide": "Second slide",
-    "resize": "Resize editor and preview"
+    "panel": {
+      "label": "Slideshow",
+      "summary": "Slideshow · {{n}} of {{total}} slides included",
+      "empty": "This presentation has no slides.",
+      "untitled": "Slide {{n}}",
+      "goTo": "Go to this slide in the editor",
+      "info": "Presentation information",
+      "infoSlides": "Slides",
+      "infoIncluded": "Included in the presentation",
+      "infoWords": "Words",
+      "infoNotes": "Slides with notes",
+      "paginate": "Page numbers on the slides",
+      "theme": "Theme",
+      "theme_default": "Default",
+      "theme_gaia": "Gaia",
+      "theme_uncover": "Uncover",
+      "noReorder": "Slides cannot be moved when headings split them (headingDivider)."
+    },
+    "show": {
+      "empty": "Every slide is left out of the presentation."
+    }
   },
   "exportNote": {
     "title": "Export note",

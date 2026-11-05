@@ -603,52 +603,6 @@ button.icon[aria-pressed='true'] {
   display: flex;
   flex-direction: column;
 }
-/* A presentation (ADR-0047): the source editor and the slide preview side by side. */
-.marp-split {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-}
-.marp-source {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.marp-split-handle {
-  cursor: col-resize;
-  background: var(--border);
-}
-.marp-split-handle:hover {
-  background: var(--accent);
-}
-.marp-pane {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.marp-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.marp-toolbar .spacer {
-  flex: 1;
-}
-.marp-toolbar .unavailable {
-  opacity: 0.55;
-}
-.marp-error {
-  padding: 8px 12px;
-  color: var(--danger);
-}
-.marp-slides {
-  flex: 1;
-  min-height: 0;
-}
 .note-header {
   display: flex;
   align-items: center;
@@ -673,6 +627,9 @@ button.icon[aria-pressed='true'] {
 }
 .mode-toggle {
   display: flex;
+}
+.mode-toggle[hidden] {
+  display: none;
 }
 .mode-toggle button {
   border-radius: 0;
@@ -1934,6 +1891,38 @@ textarea.merge {
   color: #e8890c;
 }
 
+/* Full-screen presentation of a .marp file (ADR-0048) */
+.marp-show {
+  position: fixed;
+  inset: 0;
+  z-index: 150; /* above the workspace and menus, below the dialogs (200) */
+  display: flex;
+  background: #000;
+  color: #fff;
+  outline: none;
+}
+.marp-show-slides {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.marp-show-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.marp-show .slideshow-bar {
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.marp-show .slideshow-bar:hover,
+.marp-show .slideshow-bar:focus-within {
+  opacity: 1;
+}
+
 /* Slideshow controls (bottom center of a presenting drawing) and the tools panel. */
 .drawing-canvas {
   position: relative;
@@ -2385,6 +2374,29 @@ textarea.merge {
 }
 .slide-card.selected {
   border-color: var(--accent);
+}
+.slide-card.current {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.marp-slides-panel .slide-thumb-box {
+  width: 120px;
+}
+.marp-slides-panel .slide-thumb {
+  display: block;
+}
+.slides-info {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: 12px;
+}
+.slides-info dt {
+  color: var(--text-muted);
+}
+.slides-info dd {
+  margin: 0;
 }
 .slide-card.excluded .slide-thumb-box {
   opacity: 0.4;

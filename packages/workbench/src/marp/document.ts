@@ -1,17 +1,19 @@
 // The application's own CSS around Marp's slides (the slides themselves are styled by the theme):
-// the preview pane, the print layer of "Export to PDF" and the standalone HTML document.
+// the thumbnails and the full-screen presentation, the print layer of "Export to PDF" and the standalone HTML document.
 
-/** Layout of the live preview (inside its shadow root) and of presenting. */
-export const PREVIEW_CSS = `
-:host { display: block; overflow: auto; background: var(--bg-secondary, #f1f1f1); }
-div.marpit { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
-div.marpit > svg { display: block; width: 100%; height: auto; cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); }
-div.marpit > svg.current { outline: 3px solid var(--accent, #7c3aed); outline-offset: 2px; }
-:host(.presenting) { position: fixed; inset: 0; z-index: 1000; overflow: hidden; background: #000; }
-:host(.presenting) div.marpit { height: 100%; padding: 0; gap: 0; align-items: center; justify-content: center; }
-:host(.presenting) div.marpit > svg { display: none; outline: none; box-shadow: none; cursor: default; }
-:host(.presenting) div.marpit > svg.current { display: block; width: 100%; height: 100%; }
+/** Layout of a slide thumbnail (inside its shadow root): the slide fills the width of the card. */
+export const THUMB_CSS = `
+:host { display: block; }
+div.marpit { margin: 0; padding: 0; }
+div.marpit > svg { display: block; width: 100%; height: auto; }
+`;
+
+/** Layout of the full-screen presentation (inside its shadow root): only the current slide shows. */
+export const SHOW_CSS = `
+:host { display: block; width: 100%; height: 100%; }
+div.marpit { width: 100%; height: 100%; }
+div.marpit > svg { display: none; width: 100%; height: 100%; }
+div.marpit > svg.current { display: block; }
 `;
 
 /** Print layer of "Export to PDF": one slide per page of the slide's size (Marp sets @page). */

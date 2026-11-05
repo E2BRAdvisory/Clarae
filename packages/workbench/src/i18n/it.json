@@ -1187,18 +1187,32 @@
   },
   "marp": {
     "title": "Presentazione",
-    "loading": "Caricamento dell’anteprima…",
-    "toolbar": "Presentazione",
-    "preview": "Anteprima delle slide",
-    "present": "Presenta",
-    "exportHtml": "HTML",
-    "exportPdf": "PDF",
-    "exportPptx": "PPTX",
-    "pptxLater": "L’export in PowerPoint (PPTX) non è ancora disponibile: esporta in PDF o in HTML.",
+    "pptxDone": "La presentazione è stata salvata in {{path}}.",
+    "pptxSkipped": "Queste immagini non è stato possibile includerle: {{list}}.",
     "notADeck": "Apri una presentazione (.marp) per usare questo comando.",
     "htmlDone": "La presentazione è stata salvata in {{path}}.",
     "secondSlide": "Seconda slide",
-    "resize": "Ridimensiona editor e anteprima"
+    "panel": {
+      "label": "Slideshow",
+      "summary": "Slideshow · {{n}} di {{total}} slide incluse",
+      "empty": "Questa presentazione non ha slide.",
+      "untitled": "Slide {{n}}",
+      "goTo": "Vai a questa slide nell’editor",
+      "info": "Informazioni sulla presentazione",
+      "infoSlides": "Slide",
+      "infoIncluded": "Incluse nella presentazione",
+      "infoWords": "Parole",
+      "infoNotes": "Slide con note",
+      "paginate": "Numeri di pagina sulle slide",
+      "theme": "Tema",
+      "theme_default": "Predefinito",
+      "theme_gaia": "Gaia",
+      "theme_uncover": "Uncover",
+      "noReorder": "Le slide non si possono spostare quando sono divise dai titoli (headingDivider)."
+    },
+    "show": {
+      "empty": "Tutte le slide sono escluse dalla presentazione."
+    }
   },
   "exportNote": {
     "title": "Esporta nota",

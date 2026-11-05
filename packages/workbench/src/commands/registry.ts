@@ -215,7 +215,7 @@ export const commands: Command[] = [
     feature: 'presentations',
     defaults: [],
     enabled: hasDeck,
-    run: presentDeck,
+    run: () => presentDeck(),
   },
   {
     id: 'marp:export-html',

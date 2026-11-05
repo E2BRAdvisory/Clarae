@@ -32,6 +32,15 @@ describe('Marp rendering', () => {
     expect(deck.css).toContain('div.marpit');
   });
 
+  it('reports the presenter notes and the slides that are left out', async () => {
+    const deck = await renderDeck(
+      '# A\n\n<!-- _class: lead -->\n<!-- say hi -->\n\n---\n\n# B\n\n<!-- memobrain: hidden -->\n',
+      vault,
+    );
+    expect(deck.notes).toEqual(['say hi', '']);
+    expect(deck.hidden).toEqual([false, true]);
+  });
+
   it('shows the pictures of the vault and nothing from the network', async () => {
     const deck = await renderDeck(
       `${DECK}\n---\n\n![](https://example.com/x.png)\n\n![bg](https://example.com/y.png)\n`,

@@ -1514,14 +1514,18 @@ features:
     title: Presentazioni Marp (.marp)
     desktop:
       status: yes
-      note: vista divisa con l'editor della sorgente e l'anteprima delle slide, presentazione a tutto schermo, export HTML e PDF; PPTX non ancora disponibile (ADR-0047)
+      note: editor della sorgente a tutta larghezza, tab Slideshow con le card delle slide (riordino, esclusione, note, impostazioni), presentazione a tutto schermo, export HTML, PDF e PPTX modificabile dai pulsanti del ribbon, con le slide escluse lasciate fuori (ADR-0047, ADR-0048)
       commands: [marp:new, marp:present, marp:export-html, marp:export-pdf, marp:export-pptx]
     workbench:
       status: yes
     tests:
       desktop:
         - packages/workbench/src/marp/engine.test.ts
-        - packages/workbench/src/marp/MarpPane.test.tsx
+        - packages/workbench/src/marp/slides.test.ts
+        - packages/workbench/src/marp/pptx.test.ts
+        - packages/workbench/src/marp/MarpShow.test.tsx
+        - packages/workbench/src/sidebar/MarpSlidesPanel.test.tsx
+        - packages/workbench/src/sidebar/SlidesPanel.test.tsx
         - apps/desktop/internal/indexer/indexer_test.go
         - shared/go/merge/merge_test.go
         - apps/desktop/frontend/e2e/marp.spec.ts

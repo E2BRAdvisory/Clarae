@@ -26,6 +26,23 @@ class VaultMarp extends Marp {
       (tokens) => tokens.find((t) => t.type === 'marpit_slide_open')?.map?.[0] ?? 0,
     );
   }
+
+  /**
+   * Whether each slide moved Marp's page counter on: every slide but those with `paginate: skip` or
+   * `hold` (`false` still counts). Read from the directives Marpit resolved, so inheritance and
+   * `_paginate` are as the engine has them.
+   */
+  pageAdvances(): boolean[] {
+    const slides = (this.lastSlideTokens ?? []) as {
+      type: string;
+      meta?: { marpitDirectives?: { paginate?: unknown } };
+    }[][];
+    return slides.map((tokens) => {
+      const p = tokens.find((t) => t.type === 'marpit_slide_open')?.meta?.marpitDirectives
+        ?.paginate;
+      return p !== 'skip' && p !== 'hold';
+    });
+  }
 }
 
 let marp: VaultMarp | null = null;
@@ -57,6 +74,12 @@ export interface Deck {
   css: string;
   /** 0-based first line of each slide in the source. */
   slideLines: number[];
+  /** Presenter notes of each slide (its non-directive HTML comments, without memobrain markers). */
+  notes: string[];
+  /** True for each slide left out of the presentation (`<!-- memobrain: hidden -->`). */
+  hidden: boolean[];
+  /** For each slide, whether it advanced the page counter (not `paginate: skip` or `hold`). */
+  advances: boolean[];
   /** Frees the pictures the slides hold. */
   release(): void;
 }
@@ -70,6 +93,9 @@ export function embedsToImages(source: string): string {
   );
 }
 
+/** The marker comment that leaves a slide out of the presentation and its exports. */
+export const HIDDEN_COMMENT = /^memobrain:\s*hidden$/i;
+
 const URL_IN_CSS = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
 
 /** Renders a presentation: slides, theme and the pictures they show, all sanitized. */
@@ -77,6 +103,7 @@ export async function renderDeck(source: string, resolve: AssetResolver): Promis
   const m = engine();
   const out = m.render(embedsToImages(source));
   const slideLines = m.slideLines();
+  const advances = m.pageAdvances();
   const doc = new DOMParser().parseFromString(`<body>${out.html}</body>`, 'text/html');
 
   // Every picture the slides reference: <img> and the url() of the inline styles of ![bg].
@@ -112,17 +139,25 @@ export async function renderDeck(source: string, resolve: AssetResolver): Promis
       .join(';');
     el.setAttribute('style', style);
   }
+  const comments = out.comments ?? [];
+  const notes = slideLines.map((_l, i) =>
+    (comments[i] ?? [])
+      .map((c) => c.trim())
+      .filter((c) => c && !HIDDEN_COMMENT.test(c))
+      .join('\n\n'),
+  );
+  const hidden = slideLines.map((_l, i) =>
+    (comments[i] ?? []).some((c) => HIDDEN_COMMENT.test(c.trim())),
+  );
   return {
     html: sanitizeMarpHtml(doc.body.innerHTML),
     css: sanitizeMarpCss(out.css),
     slideLines,
+    notes,
+    hidden,
+    advances,
     release: () => held.splice(0).forEach((r) => r()),
   };
 }
 
-/** The slide that holds a 0-based line of the source. */
-export function slideAt(slideLines: readonly number[], line: number): number {
-  let i = 0;
-  while (i + 1 < slideLines.length && (slideLines[i + 1] ?? Infinity) <= line) i++;
-  return i;
-}
+export { slideAt } from './slides';
