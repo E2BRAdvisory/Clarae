@@ -4,7 +4,7 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.3.4] - 2026-11-05
 
 Le presentazioni Marp come i disegni (milestone M14, [roadmap](docs/roadmap.md) §13-septies). La decisione è in ADR-0048, accettato: supera in parte ADR-0047 e, come questo, devia da `Specifications.md` (§2.2.1, §3.4.5, §3.4.6), che il proprietario deve aggiornare. Nessuna modifica al cloud né al protocollo di sync.
 
