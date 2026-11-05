@@ -1,6 +1,8 @@
 package app
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/base64"
 	"os"
 	"path/filepath"
@@ -99,6 +101,10 @@ func TestDecodeExportValidatesContent(t *testing.T) {
 		{"not pdf", "application/pdf", svg("hello"), false},
 		{"json", "application/json", svg(`{"type":"excalidraw","elements":[]}`), true},
 		{"bad json", "application/json", svg(`{`), false},
+		{"pptx", pptxMIME, pptxB64(t, "[Content_Types].xml", "ppt/presentation.xml"), true},
+		{"pptx without presentation part", pptxMIME, pptxB64(t, "[Content_Types].xml"), false},
+		{"pptx without content types", pptxMIME, pptxB64(t, "ppt/presentation.xml"), false},
+		{"pptx that is not a zip", pptxMIME, svg("PK not really"), false},
 		{"empty", "image/png", "", false},
 		{"not base64", "image/png", "!!!", false},
 	}
@@ -117,5 +123,60 @@ func TestSafeExportName(t *testing.T) {
 	}
 	if got := safeExportName("///", ".svg", "export", now); got != "export-20261027.svg" {
 		t.Errorf("got %q", got)
+	}
+}
+
+const pptxMIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+// pptxB64 is a base64 ZIP holding the named (empty) entries.
+func pptxB64(t *testing.T, names ...string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, n := range names {
+		w, err := zw.Create(n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte("<x/>")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
+func TestSaveFilePPTX(t *testing.T) {
+	a, info, _ := newTestApp(t)
+	h := &filesHost{Host: a.host}
+	a.host = h
+	api := NewExportAPI(a)
+	out := t.TempDir()
+
+	h.saveTo = filepath.Join(out, "deck")
+	res, err := api.SaveFile(info.ID, "deck", pptxMIME, pptxB64(t, "[Content_Types].xml", "ppt/presentation.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(res.Path) != "deck.pptx" {
+		t.Fatalf("path %q, want .pptx appended", res.Path)
+	}
+	if _, err := os.Stat(res.Path); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, data := range map[string]string{
+		"missing parts": pptxB64(t, "[Content_Types].xml"),
+		"not a zip":     base64.StdEncoding.EncodeToString([]byte("hello")),
+	} {
+		h.saveTo = filepath.Join(out, "bad.pptx")
+		if _, err := api.SaveFile(info.ID, "bad", pptxMIME, data); err == nil || !strings.HasPrefix(err.Error(), "invalid-export:") {
+			t.Errorf("%s: err %v, want invalid-export", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, "bad.pptx")); err == nil {
+		t.Error("an invalid export was written")
 	}
 }

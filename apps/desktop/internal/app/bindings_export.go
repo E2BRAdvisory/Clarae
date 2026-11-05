@@ -1,6 +1,7 @@
 package app
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -200,11 +201,27 @@ var exportFormats = map[string]struct {
 		}
 		return nil
 	}},
+	// A Marp deck exported by the frontend: an OOXML package, so a ZIP with the two parts every
+	// presentation has.
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": {".pptx", "PowerPoint presentation (*.pptx)", func(d []byte) error {
+		zr, err := zip.NewReader(bytes.NewReader(d), int64(len(d)))
+		if err != nil {
+			return errors.New("not a PowerPoint presentation")
+		}
+		have := map[string]bool{}
+		for _, f := range zr.File {
+			have[f.Name] = true
+		}
+		if !have["[Content_Types].xml"] || !have["ppt/presentation.xml"] {
+			return errors.New("not a PowerPoint presentation")
+		}
+		return nil
+	}},
 }
 
 // SaveFile asks where to save and writes base64-encoded `data` of the given MIME type (png, svg,
-// pdf or an excalidraw JSON). Cancelling the dialog is not an error. Like SaveHTML it refuses
-// destinations inside the vault.
+// pdf, an excalidraw JSON or a pptx presentation). Cancelling the dialog is not an error. Like
+// SaveHTML it refuses destinations inside the vault.
 func (e *ExportAPI) SaveFile(vaultID, suggestedName, mime, dataBase64 string) (ExportResult, error) {
 	ov, err := e.app.vault(vaultID)
 	if err != nil {
