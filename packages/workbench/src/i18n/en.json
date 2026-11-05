@@ -513,6 +513,9 @@
     "drawing_import_legacy": "Drawing: convert an Obsidian .excalidraw.md into a drawing",
     "drawing_import_library": "Drawing: import a shape library (.excalidrawlib)",
     "drawing_export_library": "Drawing: export the shape library (.excalidrawlib)",
+    "drawing_export_png": "Drawing: export as PNG image…",
+    "drawing_export_svg": "Drawing: export as SVG image…",
+    "drawing_export_pdf": "Drawing: export the whole drawing to PDF",
     "drawing_set_slide_notes": "Drawing: edit the presenter notes of the selected frame",
     "drawing_describe": "Drawing: describe the drawing as text"
   },

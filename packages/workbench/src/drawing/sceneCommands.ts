@@ -4,7 +4,8 @@ import i18next from 'i18next';
 import type { Command } from '../commands/registry';
 import { dialog } from '../ui/dialogs';
 import { drawingFeatureOn, type DrawingFeature } from '../state/managed';
-import { getSceneController } from './actions/active';
+import { selectActivePath, useAppStore } from '../state/store';
+import { getSceneController, type SceneController } from './actions/active';
 import { SCENE_ACTIONS } from './actions/registry';
 import {
   insertDrawingIntoDrawing,
@@ -88,6 +89,9 @@ export const sceneCommands: Command[] = SCENE_ACTIONS.map((a) => ({
 }));
 
 const drawingFeature = (): boolean => drawingFeatureOn();
+/** The editor of the drawing in the active tab: the last editor registered may be one in another pane. */
+const activeDrawing = (): SceneController | null =>
+  getSceneController(selectActivePath(useAppStore.getState()));
 /** An editable drawing is open and the function (a sub-flag, or just "drawings") is available. */
 const editable = (flag?: DrawingFeature) => (): boolean => {
   const c = getSceneController();
@@ -179,6 +183,30 @@ export const toolCommands: Command[] = [
     defaults: [],
     enabled: editable('drawing_auto_export'),
     run: () => setDrawingAutoExport(),
+  },
+  {
+    id: 'drawing:export-png',
+    group: 'editor',
+    feature: 'drawing.export',
+    defaults: [],
+    enabled: () => !!activeDrawing() && drawingFeature(),
+    run: () => activeDrawing()?.openExport('png'),
+  },
+  {
+    id: 'drawing:export-svg',
+    group: 'editor',
+    feature: 'drawing.export',
+    defaults: [],
+    enabled: () => !!activeDrawing() && drawingFeature(),
+    run: () => activeDrawing()?.openExport('svg'),
+  },
+  {
+    id: 'drawing:export-pdf',
+    group: 'editor',
+    feature: 'drawing.export',
+    defaults: [],
+    enabled: () => !!activeDrawing() && drawingFeature(),
+    run: () => activeDrawing()?.printDrawing(),
   },
   {
     id: 'drawing:slideshow',

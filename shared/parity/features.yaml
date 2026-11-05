@@ -1523,6 +1523,7 @@ features:
         - packages/workbench/src/marp/engine.test.ts
         - packages/workbench/src/marp/slides.test.ts
         - packages/workbench/src/marp/pptx.test.ts
+        - packages/workbench/src/shell/Ribbon.test.tsx
         - packages/workbench/src/marp/MarpShow.test.tsx
         - packages/workbench/src/sidebar/MarpSlidesPanel.test.tsx
         - packages/workbench/src/sidebar/SlidesPanel.test.tsx
@@ -1693,10 +1694,11 @@ features:
         - apps/desktop/frontend/e2e/drawing-tools.spec.ts
 
   - id: drawing.export
-    title: Esportazione automatica di un disegno (PNG, SVG)
+    title: Esportazione di un disegno (PNG, SVG, PDF dal ribbon) ed esportazione automatica
     desktop:
       status: yes
-      commands: [drawing:set-auto-export]
+      commands:
+        [drawing:set-auto-export, drawing:export-png, drawing:export-svg, drawing:export-pdf]
       bindings: [DrawingAPI.WriteExport]
     workbench:
       status: partial
@@ -1705,6 +1707,8 @@ features:
       desktop:
         - apps/desktop/frontend/e2e/drawing-export.spec.ts
         - packages/workbench/src/drawing/export/options.test.ts
+        - packages/workbench/src/drawing/exportCommands.test.ts
+        - packages/workbench/src/shell/Ribbon.test.tsx
 
   - id: drawing.slideshow
     title: Presentazione di un disegno

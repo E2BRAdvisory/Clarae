@@ -199,3 +199,37 @@ test('auto-export writes the PNG and SVG variants next to the drawing after a sa
   });
   expect(JSON.parse(cfg)).toMatchObject({ autoExport: 'both', autoExportTheme: 'both' });
 });
+
+test('the ribbon exports a drawing: PNG and SVG open the dialog with the format chosen', async ({
+  page,
+}) => {
+  const external = watchNetwork(page);
+  await openDrawing(page, WITH_FRAME);
+  const ribbon = page.getByRole('navigation', { name: 'Quick actions' });
+  await expect(ribbon.getByRole('button', { name: 'Export the presentation to PDF' })).toHaveCount(
+    0,
+  );
+
+  await ribbon.getByRole('button', { name: 'Drawing: export as SVG image…' }).click();
+  let dialog = page.getByRole('dialog', { name: 'Export' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: 'SVG' })).toBeChecked();
+  await expect(dialog.getByRole('radio', { name: 'PNG' })).not.toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  // The format of the ribbon button was for that one opening: the toolbar's Export is back to the default.
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: 'Export' });
+  await expect(dialog.getByRole('radio', { name: 'PNG' })).toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  await ribbon.getByRole('button', { name: 'Drawing: export as PNG image…' }).click();
+  dialog = page.getByRole('dialog', { name: 'Export' });
+  await expect(dialog.getByRole('radio', { name: 'PNG' })).toBeChecked();
+  await expect(
+    ribbon.getByRole('button', { name: 'Drawing: export the whole drawing to PDF' }),
+  ).toBeEnabled();
+  expect(external).toEqual([]);
+});

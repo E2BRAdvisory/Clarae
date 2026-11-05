@@ -513,6 +513,9 @@
     "drawing_import_legacy": "Disegno: converti un .excalidraw.md di Obsidian in un disegno",
     "drawing_import_library": "Disegno: importa una libreria di forme (.excalidrawlib)",
     "drawing_export_library": "Disegno: esporta la libreria di forme (.excalidrawlib)",
+    "drawing_export_png": "Disegno: esporta come immagine PNG…",
+    "drawing_export_svg": "Disegno: esporta come immagine SVG…",
+    "drawing_export_pdf": "Disegno: esporta tutto il disegno in PDF",
     "drawing_set_slide_notes": "Disegno: modifica le note del relatore della cornice selezionata",
     "drawing_describe": "Disegno: descrivi il disegno come testo"
   },

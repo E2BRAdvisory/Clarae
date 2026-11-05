@@ -183,13 +183,13 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 81, exception 1, consol
 | `templates` Modelli e note con identificativo unico | yes | partial | n/a | workbench: non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `bindings_templates_test.go`, `templates_test.go` |
 | `composer` Unione ed estrazione di note | yes | partial | n/a | workbench: non verificata sul web: nessun test unisce o estrae note sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `composer_test.go` |
 | `canvas` Canvas | yes | yes | n/a |  | D: `canvas.spec.ts`, `model.test.ts`, `canvas_test.go` · W: **`canvas.spec.ts`** |
-| `presentations` Presentazioni Marp (.marp) | yes | yes | n/a | desktop (nota): vista divisa con l'editor della sorgente e l'anteprima delle slide, presentazione a tutto schermo, export HTML e PDF; PPTX non ancora disponibile (ADR-0047) | D: `engine.test.ts`, `MarpPane.test.tsx`, `indexer_test.go`, `merge_test.go`, `marp.spec.ts` · W: **`marp.spec.ts`** |
+| `presentations` Presentazioni Marp (.marp) | yes | yes | n/a | desktop (nota): editor della sorgente a tutta larghezza, tab Slideshow con le card delle slide (riordino, esclusione, note, impostazioni), presentazione a tutto schermo, export HTML, PDF e PPTX modificabile dai pulsanti del ribbon, con le slide escluse lasciate fuori (ADR-0047, ADR-0048) | D: `engine.test.ts`, `slides.test.ts`, `pptx.test.ts`, `Ribbon.test.tsx`, `MarpShow.test.tsx`, `MarpSlidesPanel.test.tsx`, `SlidesPanel.test.tsx`, `indexer_test.go`, `merge_test.go`, `marp.spec.ts` · W: **`marp.spec.ts`** |
 | `bases` Basi (viste tabellari delle note) | yes | partial | n/a | workbench: non verificata sul web: nessun test apre una base sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `BaseView.test.tsx`, `bases_test.go`, `bindings_bases_test.go` |
 | `drawing.edit` Disegni Excalidraw | yes | yes | n/a | workbench (nota): Excalidraw offline è verificato anche sulla build di produzione, con la CSP del workbench (e2e-security) | D: `drawing.spec.ts`, `drawing-tools.spec.ts`, `commands.test.tsx`, `describe.test.ts`, `drawing_test.go` · W: **`excalidraw-offline.spec.ts`**, **`drawing.spec.ts`**, **`drawing-tools.spec.ts`** |
 | `drawing.scene-actions` Azioni sulla scena di un disegno (script Excalidraw) | yes | yes | n/a |  | D: `actions.test.ts`, `more.test.ts`, `drawing-actions.spec.ts`, `drawing-obsidian-tools.spec.ts` · W: **`drawing-actions.spec.ts`**, **`drawing-obsidian-tools.spec.ts`** |
 | `drawing.embeds` Immagini, note e disegni dentro un disegno | yes | yes | n/a |  | D: `drawing-embed.spec.ts`, `insert.test.ts`, `tools.test.ts` · W: **`drawing-embed.spec.ts`** |
 | `drawing.latex-mermaid` Formule LaTeX e diagrammi Mermaid nei disegni | yes | yes | n/a |  | D: `insert.test.ts`, `insert.test.ts`, `drawing-tools.spec.ts` · W: **`drawing-tools.spec.ts`** |
-| `drawing.export` Esportazione automatica di un disegno (PNG, SVG) | yes | partial | n/a | workbench: non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop | D: `drawing-export.spec.ts`, `options.test.ts` |
+| `drawing.export` Esportazione di un disegno (PNG, SVG, PDF dal ribbon) ed esportazione automatica | yes | partial | n/a | workbench: non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop | D: `drawing-export.spec.ts`, `options.test.ts`, `exportCommands.test.ts`, `Ribbon.test.tsx` |
 | `drawing.slideshow` Presentazione di un disegno | yes | yes | n/a |  | D: `drawing-slideshow-panel.spec.ts`, `slides.test.ts` · W: **`drawing-slideshow-panel.spec.ts`** |
 | `drawing.library` Libreria di forme Excalidraw | yes | yes | n/a |  | D: `drawing-wp6.spec.ts` · W: **`drawing-wp6.spec.ts`** |
 | `drawing.legacy` Conversione dei disegni Obsidian (.excalidraw.md) | yes | yes | n/a |  | D: `legacy_test.go`, `drawing-wp6.spec.ts` · W: **`drawing-wp6.spec.ts`** |
@@ -202,9 +202,9 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 81, exception 1, consol
 | `admin.storage` Spazio, quote e limiti | console-only | console-only | yes | desktop: amministrazione, solo nella console — workbench: amministrazione, solo nella console — console (nota): la rotta /admin porta qui (prima pagina dell'amministrazione) | K: `Storage.test.tsx`, `Limits.test.tsx`, `admin.spec.ts` · C: `quota_test.go`, `admin_test.go` |
 | `admin.audit` Registro di audit | console-only | console-only | yes | desktop: amministrazione, solo nella console — workbench: amministrazione, solo nella console | K: `Audit.test.tsx` · C: `admin_test.go` |
 
-### Comandi (187)
+### Comandi (190)
 
-185 su 187 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente; ogni comando dichiara la sua funzione (`Command.feature`, un `FeatureId` generato), che deve essere una di quelle che lo elencano.
+188 su 190 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente; ogni comando dichiara la sua funzione (`Command.feature`, un `FeatureId` generato), che deve essere una di quelle che lo elencano.
 
 | Comando | Gruppo | Sul web | Funzione | Nota |
 | --- | --- | --- | --- | --- |
@@ -387,6 +387,9 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 81, exception 1, consol
 | `drawing:deconstruct-into-new-drawing` | editor | yes | `drawing.embeds` |  |
 | `drawing:refresh-note-cards` | editor | yes | `drawing.embeds` |  |
 | `drawing:set-auto-export` | editor | yes | `drawing.export` | non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop |
+| `drawing:export-png` | editor | yes | `drawing.export` | non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop |
+| `drawing:export-svg` | editor | yes | `drawing.export` | non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop |
+| `drawing:export-pdf` | editor | yes | `drawing.export` | non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop |
 | `drawing:slideshow` | editor | yes | `drawing.slideshow` |  |
 | `drawing:set-slide-notes` | editor | yes | `drawing.slideshow` |  |
 | `drawing:describe` | editor | yes | `drawing.edit` |  |
@@ -662,7 +665,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/cloud-vaults.spec.ts` | 2 | yes | yes | — |
 | `apps/desktop/frontend/e2e/drawing-actions.spec.ts` | 12 | yes | yes | — |
 | `apps/desktop/frontend/e2e/drawing-embed.spec.ts` | 8 | yes | yes | — |
-| `apps/desktop/frontend/e2e/drawing-export.spec.ts` | 5 | yes | partial (4 of 5 skipped) | `drawing.export` (un test): the spec reads the files the Wails mock captures from the save dialog (window.__mock.fileExports); in the browser an export is a download · `drawing.export` (un test): the spec reads the files the Wails mock captures from the save dialog (window.__mock.fileExports); in the browser an export is a download · `drawing.export` (un test): the spec cancels the save dialog of the Wails mock (window.__mock.exportCancelled); the browser has no save dialog to cancel · `drawing.export` (un test): the spec reads the exports the Wails mock captures (window.__mock.drawingExports) |
+| `apps/desktop/frontend/e2e/drawing-export.spec.ts` | 6 | yes | partial (4 of 6 skipped) | `drawing.export` (un test): the spec reads the files the Wails mock captures from the save dialog (window.__mock.fileExports); in the browser an export is a download · `drawing.export` (un test): the spec reads the files the Wails mock captures from the save dialog (window.__mock.fileExports); in the browser an export is a download · `drawing.export` (un test): the spec cancels the save dialog of the Wails mock (window.__mock.exportCancelled); the browser has no save dialog to cancel · `drawing.export` (un test): the spec reads the exports the Wails mock captures (window.__mock.drawingExports) |
 | `apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts` | 3 | yes | yes | — |
 | `apps/desktop/frontend/e2e/drawing-slideshow-panel.spec.ts` | 2 | yes | yes | — |
 | `apps/desktop/frontend/e2e/drawing-tools.spec.ts` | 4 | yes | yes | — |
@@ -674,7 +677,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/graph-bench.spec.ts` | 1 | opt-in | no | `graph`: the synthetic graph comes from the Wails mock (window.__MEMOBRAIN_GRAPH_FIXTURE__) |
 | `apps/desktop/frontend/e2e/graph.spec.ts` | 1 | yes | yes | — |
 | `apps/desktop/frontend/e2e/keyboard.spec.ts` | 5 | yes | yes | — |
-| `apps/desktop/frontend/e2e/marp.spec.ts` | 3 | yes | yes | — |
+| `apps/desktop/frontend/e2e/marp.spec.ts` | 8 | yes | yes | — |
 | `apps/desktop/frontend/e2e/open-by-type.spec.ts` | 3 | yes | yes | — |
 | `apps/desktop/frontend/e2e/sharing.spec.ts` | 2 | yes | yes | — |
 | `apps/desktop/frontend/e2e/slides.spec.ts` | 3 | yes | yes | — |

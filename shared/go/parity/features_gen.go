@@ -235,7 +235,7 @@ const (
 	// DrawingLatexMermaid: Formule LaTeX e diagrammi Mermaid nei disegni
 	DrawingLatexMermaid FeatureID = "drawing.latex-mermaid"
 
-	// DrawingExport: Esportazione automatica di un disegno (PNG, SVG)
+	// DrawingExport: Esportazione di un disegno (PNG, SVG, PDF dal ribbon) ed esportazione automatica
 	DrawingExport FeatureID = "drawing.export"
 
 	// DrawingSlideshow: Presentazione di un disegno

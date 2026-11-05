@@ -1,6 +1,7 @@
 // Which drawing editor the scene-action commands act on. The Excalidraw editor registers a
 // controller while it is mounted; commands (palette, hotkeys, menus) reach it from here without
 // importing Excalidraw, so this module stays out of the main bundle.
+import { selectActivePath, useAppStore } from '../../state/store';
 import type { SceneContext, ScenePatch, SceneFile } from './types';
 
 export interface SceneController {
@@ -38,22 +39,51 @@ export interface SceneController {
   showFrame(id: string): void;
   /** Prints the included slides, one per page (the system dialog offers "Save as PDF"). */
   printSlides(): Promise<void>;
+  /** Opens the export dialog with the format preselected. */
+  openExport(format: 'png' | 'svg'): void;
+  /** Prints the whole drawing (the system dialog offers "Save as PDF"). */
+  printDrawing(): Promise<void>;
   /** The drawing's own settings (`memobrain` key of the file). */
   fileSettings(): Record<string, unknown>;
 }
 
 export type ToolKind = 'latex' | 'mermaid' | 'tools' | 'describe';
 
-let active: SceneController | null = null;
+/** The editors that are mounted, in the order they registered (split panes can show several). */
+const controllers: SceneController[] = [];
+const listeners = new Set<() => void>();
+const changed = (): void => listeners.forEach((l) => l());
 
 export function registerSceneController(c: SceneController): void {
-  active = c;
+  const at = controllers.indexOf(c);
+  if (at >= 0) controllers.splice(at, 1);
+  controllers.push(c);
+  changed();
 }
 
 export function unregisterSceneController(c: SceneController): void {
-  if (active === c) active = null;
+  const at = controllers.indexOf(c);
+  if (at < 0) return;
+  controllers.splice(at, 1);
+  changed();
 }
 
-export function getSceneController(): SceneController | null {
-  return active;
+/** Calls `listener` when a drawing editor registers or goes away (the ribbon enables its buttons). */
+export function subscribeSceneController(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/**
+ * The editor of the drawing at `path` (the last one registered when a drawing is shown twice); null
+ * when it is not open. Without a path: the editor of the active tab's drawing, else (a note is in
+ * focus) the one that registered last.
+ */
+export function getSceneController(path?: string | null): SceneController | null {
+  const of = (p: string | null): SceneController | null =>
+    p === null ? null : ([...controllers].reverse().find((c) => c.drawingPath === p) ?? null);
+  if (path !== undefined) return of(path);
+  return (
+    of(selectActivePath(useAppStore.getState())) ?? controllers[controllers.length - 1] ?? null
+  );
 }

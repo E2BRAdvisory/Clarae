@@ -150,7 +150,7 @@ test('Present toggles: it hides Excalidraw’s icons and Escape shows them again
     timeout: 60_000,
   });
   const chrome = page.locator('.drawing-canvas .excalidraw .App-top-bar');
-  const present = page.getByRole('button', { name: 'Present' });
+  const present = page.getByRole('button', { name: 'Present', exact: true });
 
   await expect(chrome).toBeVisible();
   await expect(present).toHaveAttribute('aria-pressed', 'false');

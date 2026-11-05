@@ -52,18 +52,21 @@ export function insertImageIntoDrawing(): Promise<void> {
 
 type Point = { x: number; y: number };
 
-/** Adds the image at `path` to the open drawing, centered on `at` (default: the view). */
-export async function insertImageAt(path: string, at?: Point): Promise<void> {
-  const c = getSceneController();
+/**
+ * Adds the image at `path` to the open drawing (`drawingPath`, default: the active one), centered on
+ * `at` (default: the view).
+ */
+export async function insertImageAt(path: string, at?: Point, drawingPath?: string): Promise<void> {
+  const c = getSceneController(drawingPath);
   if (!c?.canEdit()) return;
   const content = await api.vault.readBinary(c.vaultId, path);
   const natural = await imageSize(`data:${content.mime};base64,${content.data}`);
   c.apply(imagePatch(content, natural, at ?? c.viewportCenter()));
 }
 
-/** Adds the note at `path` to the open drawing as a card, centered on `at` (default: the view). */
-export async function insertNoteAt(path: string, at?: Point): Promise<void> {
-  const c = getSceneController();
+/** Adds the note at `path` to the drawing as a card; `at` and `drawingPath` as in insertImageAt. */
+export async function insertNoteAt(path: string, at?: Point, drawingPath?: string): Promise<void> {
+  const c = getSceneController(drawingPath);
   if (!c?.canEdit()) return;
   const note = await api.vault.readNote(c.vaultId, path);
   c.apply(noteCardPatch(path, note.content, at ?? c.viewportCenter()));
@@ -82,8 +85,12 @@ export function svgSize(svg: string): { width: number; height: number } {
 }
 
 /** Adds another drawing of the vault as a picture (SVG in `files`), centered on `at`. */
-export async function insertDrawingAt(path: string, at?: Point): Promise<void> {
-  const c = getSceneController();
+export async function insertDrawingAt(
+  path: string,
+  at?: Point,
+  drawingPath?: string,
+): Promise<void> {
+  const c = getSceneController(drawingPath);
   if (!c?.canEdit()) return;
   if (path === c.drawingPath) {
     await dialog.alert(t('drawingTitle'), t('cannotSelf'));
@@ -115,12 +122,15 @@ export function insertDrawingIntoDrawing(): Promise<void> {
   });
 }
 
-/** What dropping a vault file on the drawing does: images and notes are added, the rest is refused. */
-export function dropVaultFile(path: string, at: Point): Promise<void> {
+/**
+ * What dropping a vault file on the drawing at `drawingPath` does: images and notes are added, the
+ * rest is refused. The target is the drawing dropped on, which need not be the active tab.
+ */
+export function dropVaultFile(path: string, at: Point, drawingPath: string): Promise<void> {
   return guard(async () => {
-    if (isImagePath(path)) return insertImageAt(path, at);
-    if (/\.md$/i.test(path)) return insertNoteAt(path, at);
-    if (/\.excalidraw$/i.test(path)) return insertDrawingAt(path, at);
+    if (isImagePath(path)) return insertImageAt(path, at, drawingPath);
+    if (/\.md$/i.test(path)) return insertNoteAt(path, at, drawingPath);
+    if (/\.excalidraw$/i.test(path)) return insertDrawingAt(path, at, drawingPath);
     await dialog.alert(t('dropTitle'), t('cannotDrop'));
   });
 }

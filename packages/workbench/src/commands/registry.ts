@@ -311,7 +311,7 @@ export const commands: Command[] = [
     group: 'file',
     feature: 'export.note',
     defaults: [],
-    enabled: hasNote,
+    enabled: () => hasNote() && /\.md$/i.test(activePath() ?? ''),
     run: exportNotePdf,
   },
   {

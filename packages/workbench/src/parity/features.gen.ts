@@ -83,7 +83,7 @@ export type FeatureId =
   | 'drawing.scene-actions' // Azioni sulla scena di un disegno (script Excalidraw)
   | 'drawing.embeds' // Immagini, note e disegni dentro un disegno
   | 'drawing.latex-mermaid' // Formule LaTeX e diagrammi Mermaid nei disegni
-  | 'drawing.export' // Esportazione automatica di un disegno (PNG, SVG)
+  | 'drawing.export' // Esportazione di un disegno (PNG, SVG, PDF dal ribbon) ed esportazione automatica
   | 'drawing.slideshow' // Presentazione di un disegno
   | 'drawing.library' // Libreria di forme Excalidraw
   | 'drawing.legacy' // Conversione dei disegni Obsidian (.excalidraw.md)

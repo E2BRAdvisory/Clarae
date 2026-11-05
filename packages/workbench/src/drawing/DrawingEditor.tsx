@@ -124,6 +124,11 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // Presentation settings of this drawing (Slideshow tab): loop, slide counter, notes.
   const [slideOpts, setSlideOpts] = useState({ loop: false, numbers: true, notes: true });
   const [exporting, setExporting] = useState(false);
+  // The format the export dialog opens with (the ribbon buttons preselect one).
+  // The format chosen from the ribbon, for this one opening of the dialog; null: the saved default.
+  const [exportFormat, setExportFormat] = useState<ExportOptions['format'] | null>(null);
+  // The export functions are defined further down: the scene controller reaches them from here.
+  const exportHooks = useRef<{ print(): Promise<void> }>({ print: () => Promise.resolve() });
   const host = useRef<HTMLDivElement>(null);
   const signature = useRef('');
   // Top-level keys of the file other than Excalidraw's own (per-drawing settings): kept and
@@ -435,6 +440,11 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       },
       defaultColor: () => excalidraw.getAppState().currentItemStrokeColor,
       openTool: (kind, editId) => setTool({ kind, ...(editId ? { editId } : {}) }),
+      openExport: (format) => {
+        setExportFormat(format);
+        setExporting(true);
+      },
+      printDrawing: () => exportHooks.current.print(),
       importLibrary: async (json) => {
         const items = await ExcalidrawLib.loadLibraryFromBlob(new Blob([json]), 'unpublished');
         await excalidraw.updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: true });
@@ -568,12 +578,16 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       e.preventDefault();
       e.stopPropagation();
       const st = excalidraw.getAppState();
-      void dropVaultFile(dropped, {
-        x: (e.clientX - st.offsetLeft) / st.zoom.value - st.scrollX,
-        y: (e.clientY - st.offsetTop) / st.zoom.value - st.scrollY,
-      });
+      void dropVaultFile(
+        dropped,
+        {
+          x: (e.clientX - st.offsetLeft) / st.zoom.value - st.scrollX,
+          y: (e.clientY - st.offsetTop) / st.zoom.value - st.scrollY,
+        },
+        path,
+      );
     },
-    [excalidraw],
+    [excalidraw, path],
   );
   const onCanvasDragOver = useCallback((e: React.DragEvent) => {
     if (!e.dataTransfer.types.includes('application/x-memobrain-path')) return;
@@ -585,7 +599,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // Double click on a LaTeX formula edits it.
   const onCanvasDoubleClick = useCallback(
     (e: React.MouseEvent) => {
-      const c = getSceneController();
+      const c = getSceneController(path);
       if (!excalidraw || !c?.canEdit() || !drawingFeatureOn('drawing_latex')) return;
       const st = excalidraw.getAppState();
       const x = (e.clientX - st.offsetLeft) / st.zoom.value - st.scrollX;
@@ -599,7 +613,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       );
       if (hit) setTool({ kind: 'latex', editId: hit.id });
     },
-    [excalidraw],
+    [excalidraw, path],
   );
 
   // Excalidraw consumes some Cmd/Ctrl shortcuts while elements are selected (Mod+P, Mod+O).
@@ -718,10 +732,15 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     };
   }, [excalidraw]);
 
+  const closeExport = (): void => {
+    setExporting(false);
+    setExportFormat(null);
+  };
+
   const doExport = async (o: ExportOptions, action: ExportAction) => {
     const input = exportInput();
     if (!input) return;
-    setExporting(false);
+    closeExport();
     try {
       if (action === 'copy') {
         await copyExport(ExcalidrawLib, input, o);
@@ -754,6 +773,18 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       else await dialog.error(e);
     }
   };
+
+  useEffect(() => {
+    exportHooks.current.print = () =>
+      doExport(
+        {
+          ...defaultExportOptions(useDrawingSettings.getState().settings),
+          scope: { kind: 'all' },
+          format: 'svg',
+        },
+        'print',
+      );
+  });
 
   // Auto-export: after a save that followed an edit, write the PNG/SVG variants next to the
   // drawing (overwriting the previous ones). A failure never blocks editing.
@@ -830,7 +861,13 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           {saveLabel}
         </span>
         <div className="mode-toggle" role="group" aria-label={t('drawing.tools')}>
-          <button onClick={() => setExporting(true)} disabled={locked}>
+          <button
+            onClick={() => {
+              setExportFormat(null);
+              setExporting(true);
+            }}
+            disabled={locked}
+          >
             {t('drawing.export')}
           </button>
           <button
@@ -976,7 +1013,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           submitLabel={t(tool.editId ? 'drawing.latex.update' : 'drawing.latex.insert')}
           onClose={() => setTool(null)}
           onSubmit={async (text) => {
-            const c = getSceneController();
+            const c = getSceneController(path);
             if (!c) return;
             const existing = tool.editId
               ? c.context().elements.find((e) => e.id === tool.editId)
@@ -1000,7 +1037,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           submitLabel={t('drawing.mermaid.insert')}
           onClose={() => setTool(null)}
           onSubmit={async (text) => {
-            const c = getSceneController();
+            const c = getSceneController(path);
             if (!c) return;
             const patch = await mermaidPatch(text, c.viewportCenter(), {
               parse: parseMermaid,
@@ -1016,10 +1053,13 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       )}
       {exporting && (
         <ExportDialog
-          initial={defaultExportOptions(useDrawingSettings.getState().settings)}
+          initial={{
+            ...defaultExportOptions(useDrawingSettings.getState().settings),
+            ...(exportFormat ? { format: exportFormat } : {}),
+          }}
           selectionCount={Object.keys(excalidraw?.getAppState().selectedElementIds ?? {}).length}
           frames={framesOf(excalidraw?.getSceneElements() ?? [])}
-          onClose={() => setExporting(false)}
+          onClose={closeExport}
           onExport={(o, action) => void doExport(o, action)}
         />
       )}
