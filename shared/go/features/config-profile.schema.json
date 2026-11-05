@@ -46,7 +46,7 @@
         "presentations": {
           "type": "boolean",
           "default": true,
-          "description": "Marp presentations (.marp): creating them, the split view with the live slide preview, presenting and exporting (ADR-0047)."
+          "description": "Marp presentations (.marp): creating them, the SlideShow panel, full-screen presenting and the HTML, PDF and PPTX exports (ADR-0047, ADR-0048)."
         },
         "sharing": {
           "type": "boolean",

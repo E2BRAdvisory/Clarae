@@ -17,8 +17,8 @@ export const Feature = {
   Drawings: 'drawings',
   // Canvas (.canvas): creating and opening canvases.
   Canvas: 'canvas',
-  // Marp presentations (.marp): creating them, the split view with the live slide preview,
-  // presenting and exporting (ADR-0047).
+  // Marp presentations (.marp): creating them, the SlideShow panel, full-screen presenting and the
+  // HTML, PDF and PPTX exports (ADR-0047, ADR-0048).
   Presentations: 'presentations',
   // Sharing a vault with users and groups, and the received shares: settings section, status bar and
   // file menu of the workbench; Sharing page, mounts and invitations of the console.

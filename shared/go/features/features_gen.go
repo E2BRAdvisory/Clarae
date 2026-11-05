@@ -27,8 +27,8 @@ const (
 	// Canvas: Canvas (.canvas): creating and opening canvases.
 	Canvas = "canvas"
 
-	// Presentations: Marp presentations (.marp): creating them, the split view with the live slide
-	// preview, presenting and exporting (ADR-0047).
+	// Presentations: Marp presentations (.marp): creating them, the SlideShow panel, full-screen
+	// presenting and the HTML, PDF and PPTX exports (ADR-0047, ADR-0048).
 	Presentations = "presentations"
 
 	// Sharing: Sharing a vault with users and groups, and the received shares: settings section,
@@ -107,7 +107,7 @@ var Descriptions = map[string]string{
 	WebWorkbench:      "Opening vaults in the browser (vault workbench of the Web UI, ADR-0029). The desktop ignores it.",
 	Drawings:          "Excalidraw drawings: creating, opening and embedding .excalidraw files. Off also disables every drawing_* flag.",
 	Canvas:            "Canvas (.canvas): creating and opening canvases.",
-	Presentations:     "Marp presentations (.marp): creating them, the split view with the live slide preview, presenting and exporting (ADR-0047).",
+	Presentations:     "Marp presentations (.marp): creating them, the SlideShow panel, full-screen presenting and the HTML, PDF and PPTX exports (ADR-0047, ADR-0048).",
 	Sharing:           "Sharing a vault with users and groups, and the received shares: settings section, status bar and file menu of the workbench; Sharing page, mounts and invitations of the console.",
 	DrawingLatex:      "LaTeX formulas in drawings (only while drawings is on).",
 	DrawingMermaid:    "Mermaid diagrams converted to drawings (only while drawings is on).",

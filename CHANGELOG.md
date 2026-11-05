@@ -4,6 +4,29 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Le presentazioni Marp come i disegni (milestone M14, [roadmap](docs/roadmap.md) §13-septies). La decisione è in ADR-0048, accettato: supera in parte ADR-0047 e, come questo, devia da `Specifications.md` (§2.2.1, §3.4.5, §3.4.6), che il proprietario deve aggiornare. Nessuna modifica al cloud né al protocollo di sync.
+
+### Compatibilità
+
+- **Slide escluse:** si escludono con il commento `<!-- memobrain: hidden -->` nel file della presentazione. Un client fino alla 1.3.3 (e ogni altro strumento Marp) non lo riconosce: mostra la slide e può leggere il commento come nota del relatore. L'esclusione vale solo nei client che la conoscono.
+- **Impostazioni nel frontmatter:** `memobrain-loop` e `memobrain-notes` sono chiavi sconosciute a Marp, che le ignora, come i client precedenti. Il tema e i numeri di pagina usano le direttive native `theme` e `paginate`.
+- Il merge a 3 vie dei `.marp` non cambia (per la sync sono ancora Markdown).
+
+### Client desktop e workbench
+
+- **Presentazioni Marp (ADR-0048):** un `.marp` si apre in un editor del solo sorgente a tutta larghezza: la vista divisa con l'anteprima non c'è più, e non compaiono più i pulsanti Live, Sorgente e Lettura, che su un `.marp` non facevano nulla.
+- **Scheda Slideshow:** per un `.marp` mostra una card per ogni slide, come per i disegni: titolo, miniatura, vai alla slide nell'editor, sposta su e giù, includi o escludi, avvia da questa slide, e le note del relatore, che si scrivono nella card e si salvano da sole come commento nel file. Nella barra: avvia la presentazione, stampa o salva in PDF, informazioni (slide, incluse, tema, parole, slide con note), impostazioni (ricomincia alla fine, numeri di pagina, note del relatore, tema Predefinito, Gaia o Uncover) e il menu per includere o escludere tutte le slide. Ogni modifica è annullabile con undo nell'editor e, in sola lettura, è disattivata. Con le slide divise dai titoli (`headingDivider`) il riordino non è disponibile.
+- **Presentazione a tutto schermo:** mostra le slide incluse del testo come è nell'editor, anche non salvato, con gli stessi tasti e la stessa ripetizione dei disegni; la barra ha slide precedente e successiva, l'elenco delle slide e le note del relatore. I numeri di pagina seguono Marp anche quando alcune slide sono escluse.
+- **Export nel ribbon, per tipo di file:** i pulsanti a sinistra cambiano con il file attivo. Una nota ha PDF, immagine e HTML; un disegno ha PNG, SVG e PDF; una presentazione ha HTML, PDF e PPTX. Per gli altri file non compare nulla. _Esporta in PDF_ delle note è ora attivo solo per le note `.md`.
+- **Export PPTX:** nuovo, con testo modificabile in PowerPoint o Keynote, note del relatore e numeri di pagina. Il tema è approssimato (colori e font di Predefinito, Gaia e Uncover, classi `invert` e `lead`) e non identico all'HTML. Le immagini che non si riescono a convertire (per esempio certi SVG) sono saltate e l'app le elenca. Le slide escluse restano fuori dall'HTML, dal PDF e dal PPTX. Nel browser il file viene scaricato.
+- **Disegni:** nuovi comandi per esportare in PNG, SVG e PDF (_Disegno: esporta come immagine PNG…_, _…SVG…_, _Disegno: esporta tutto il disegno in PDF_), disponibili anche dal ribbon. I comandi dei disegni agiscono sul disegno della scheda attiva, e un file del vault trascinato su un disegno lo aggiunge a quel disegno.
+
+### Documentazione
+
+- ADR-0048, roadmap M14, guida utente delle presentazioni (ora anche per i `.marp`), pagina di parità.
+
 ## [1.3.3] - 2026-11-03
 
 L'apertura dei file per tipo e le presentazioni Marp (milestone M13, [roadmap](docs/roadmap.md) §13-sexies). La decisione è in ADR-0047, accettato; devia da `Specifications.md` (§2.2.1, §3.4.5, §3.4.6) e va recepita dal proprietario. Nessuna modifica al cloud né al protocollo di sync.

@@ -731,6 +731,40 @@ Due richieste del 2026-11-03. I file che l'app non mostra devono aprirsi con l'a
 - **Bundle iniziale del desktop:** 1979 kB su 2000. Marp ne è fuori, ma il margine è stretto.
 - **Specifica:** ADR-0047 va recepito dal proprietario.
 
+## 13-septies. M14 — Presentazioni Marp come i disegni: tab SlideShow, tutto schermo, export nel ribbon e PPTX
+
+Richiesta del 2026-11-05. Un `.marp` si apre in un editor a tutta larghezza, senza vista divisa. Il tab SlideShow offre le stesse funzioni dei disegni, con presentazione a tutto schermo. Gli export HTML, PDF e PPTX (modificabile, con pptxgenjs) sono nel ribbon, per tipo di file attivo. La decisione è [ADR-0048](adr/0048-presentazioni-marp-slideshow-ribbon-pptx.md), accettato il 2026-11-05. Devia da `Specifications.md` come ADR-0047 e supera in parte ADR-0047 (vista divisa e PPTX). Ogni onda si chiude con i commit `[M14-Wn.m]`; il controllo finale è `task ci` verde.
+
+**Stato: fatta (2026-11-05).**
+
+| Onda                                      | Contenuto                                                                                                                                                                                                                                                                                                                                                                                       | Stato |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| W1 — ADR e roadmap                        | ADR-0048 (accettato il 2026-11-05), ADR-0047 «parzialmente superata da ADR-0048», indice, questa sezione                                                                                                                                                                                                                                                                                        | fatto |
+| W2 — Go: formato PPTX nell'export         | `exportFormats` in `bindings_export.go`: MIME PPTX → `.pptx`; la validazione apre lo ZIP e richiede `[Content_Types].xml` e `ppt/presentation.xml`, `MaxBinaryBytes` invariato; test (valido, senza voci, non ZIP, troppo grande); verifica anche con `GOOS=js GOARCH=wasm`; binding invariati, niente `task gen`                                                                               | fatto |
+| W3 — Frontend: editor, modello, SlideShow | editor a tutta larghezza (via `SplitHandle`, `MarpPane`, `presenter.ts`, CSS `.marp-split*`; fix `.mode-toggle[hidden]`); modulo puro `marp/slides.ts` (slide, `hidden`, note, frontmatter, riordino per blocchi) con transazioni di CodeMirror; store e controller; `MarpSlidesPanel` (barra, impostazioni, card, miniature, note); overlay `MarpShow` con gli stessi tasti e loop dei disegni | fatto |
+| W4 — Frontend: ribbon ed export PPTX      | gruppo export del ribbon per tipo di file; comandi `drawing:export-png/svg/pdf`; correzione di `note:export-pdf`; `marp/pptx.ts` con `pptxgenjs` a versione esatta, lazy; slide escluse saltate anche in HTML e PDF; voci di parità `presentations` e `drawing.export`, poi `task gen` e `task parity`                                                                                          | fatto |
+| W5 — Verifica, revisione, documenti       | `reviewer` sul diff (undo senza perdita di testo, `---` in codice e frontmatter, sanificazione miniature, niente `style` inline, pptxgenjs offline e senza `eval`, esclusioni nei tre export); `qa-engineer` (`task typecheck`, vitest, `task test-wasm`, `task parity`, e2e, `task e2e-matrix -- marp`, `task ci`); CHANGELOG, guida utente, pagina di parità                                  | fatto |
+
+**Criteri di uscita M14:** ADR-0048 accettato; nessuna vista divisa e nessun pulsante di modalità su un `.marp`; il tab SlideShow permette riordino, esclusione, note e presentazione con undo nell'editor; la presentazione a tutto schermo risponde a tasti, loop ed Esc; il ribbon mostra gli export del tipo di file attivo; il PPTX è valido, con testo modificabile e note, ed è scaricato dal workbench web; le slide escluse non compaiono negli export; nessuna richiesta di rete; `task ci` verde, `task e2e-matrix -- marp drawing-export` verde.
+
+**Esito (2026-11-05):** tutte le onde sono fatte. In W5 il `reviewer` ha fatto tre revisioni del diff, l'ultima senza rilievi gravi o medi; `task ci` è verde (2026-11-05), come gli e2e desktop sui mock dei binding, la matrice sul core WASM nel browser e il bundle di produzione. CHANGELOG (_Unreleased_), guida utente, guida admin (flag `presentations`) e pagina di parità sono aggiornati. ADR-0048 è accettato e ADR-0047 è parzialmente superata.
+
+**Ancora da verificare:**
+
+- prova manuale del PPTX aprendolo in PowerPoint e in Keynote (testo modificabile, note, resa del tema);
+- `task test-desktop-e2e` (sync a due dispositivi contro il cloud reale) non è stato eseguito.
+
+**Follow-up a bassa priorità:**
+
+- la riscrittura di una nota su più righe (spostata in fondo alla slide) può lasciare nel sorgente una riga di soli spazi o una riga vuota in più: solo estetico;
+- caso stretto: una nota scritta entro 300 ms da una modifica nell'editor si perde se si cambia scheda entro 600 ms (il salvataggio della nota è differito di 600 ms, la pubblicazione dello stato dell'editor di 300 ms).
+
+**Punti da tenere d'occhio:**
+
+- **Compatibilità:** un client ≤ 1.3.3 vede `<!-- memobrain: hidden -->` come una nota e mostra la slide (riportato nel CHANGELOG, _Unreleased_).
+- **Tema nel PPTX:** approssimato; da verificare aprendo il file in PowerPoint o Keynote.
+- **Specifica:** ADR-0047 e ADR-0048 vanno recepiti insieme dal proprietario.
+
 ---
 
 ## 14. Trasversale: test e verifica
