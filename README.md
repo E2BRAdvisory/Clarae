@@ -29,6 +29,11 @@ chiedono conferma. Non c'è un installer per Windows arm64 (tolto nella 1.2.3) n
 l'aggiornamento automatico è disattivato in queste build: le nuove versioni si installano a mano. All'avvio si apre o si crea un vault: per la sincronizzazione inserire l'URL del server
 in _Impostazioni → Cloud_. Dettagli nella [guida utente](docs/user-guide/installazione.md).
 
+> **macOS Security Note**
+> 
+> Esegui questo comando nel Terminale per rimuovere il flag di quarantena:
+> `sudo xattr -cr /Applications/MemoBrain\ Notes.app`
+
 ### Cloud Service
 
 Il servizio è un unico binario (`memobrain-cloud --role=api|worker|all`) distribuito come immagine
