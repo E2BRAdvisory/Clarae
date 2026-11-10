@@ -132,7 +132,7 @@ else
   log "Creating k3d cluster '$CLUSTER'"
   # Loopback only: Keycloak (admin/admin), the API and S3 hold development credentials.
   k3d cluster create "$CLUSTER" \
-    --servers 1 --agents 0 --wait \
+    --servers 1 --agents 3 --wait \
     --k3s-arg "--disable=traefik@server:0" \
     -p "127.0.0.1:18081:18081@loadbalancer" -p "127.0.0.1:18082:18082@loadbalancer" \
     -p "127.0.0.1:18080:18080@loadbalancer" -p "127.0.0.1:9000:9000@loadbalancer" >/dev/null \
