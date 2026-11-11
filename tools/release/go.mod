@@ -3,7 +3,7 @@
 // the pinned-tools module; run it with GOWORK=off (see `task release-tool`).
 module memobrain/tools/release
 
-go 1.27.3
+go 1.27.4
 
 require memobrain/shared v0.0.0
 
