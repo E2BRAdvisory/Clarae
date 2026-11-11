@@ -16,6 +16,14 @@ const (
 	// ADR-0026).
 	Chat = "chat"
 
+	// Ai: Reserved: AI writing assistant of the editor (ADR-0050). Implemented but inactive: it also
+	// needs a build that enables it, so a profile alone cannot switch it on in a released build.
+	Ai = "ai"
+
+	// Collab: Reserved: real-time collaboration in the editor (ADR-0050). Implemented but off: it also
+	// needs a build that enables it and a registered provider, and none exists.
+	Collab = "collab"
+
 	// WebWorkbench: Opening vaults in the browser (vault workbench of the Web UI, ADR-0029). The
 	// desktop ignores it.
 	WebWorkbench = "web_workbench"
@@ -68,6 +76,8 @@ var Known = []string{
 	AudioRecorder,
 	WebViewer,
 	Chat,
+	Ai,
+	Collab,
 	WebWorkbench,
 	Drawings,
 	Canvas,
@@ -86,6 +96,8 @@ var Defaults = map[string]bool{
 	AudioRecorder:     false,
 	WebViewer:         false,
 	Chat:              false,
+	Ai:                false,
+	Collab:            false,
 	WebWorkbench:      true,
 	Drawings:          true,
 	Canvas:            true,
@@ -104,6 +116,8 @@ var Descriptions = map[string]string{
 	AudioRecorder:     "Audio recorder in the editor. Reserved: no client offers the function yet, so the flag has no visible effect.",
 	WebViewer:         "Built-in web page viewer. Reserved: no client offers the function yet, so the flag has no visible effect.",
 	Chat:              "Chat bar of the workbench (a disabled placeholder until the ACP integration exists, ADR-0026).",
+	Ai:                "Reserved: AI writing assistant of the editor (ADR-0050). Implemented but inactive: it also needs a build that enables it, so a profile alone cannot switch it on in a released build.",
+	Collab:            "Reserved: real-time collaboration in the editor (ADR-0050). Implemented but off: it also needs a build that enables it and a registered provider, and none exists.",
 	WebWorkbench:      "Opening vaults in the browser (vault workbench of the Web UI, ADR-0029). The desktop ignores it.",
 	Drawings:          "Excalidraw drawings: creating, opening and embedding .excalidraw files. Off also disables every drawing_* flag.",
 	Canvas:            "Canvas (.canvas): creating and opening canvases.",
@@ -124,9 +138,11 @@ func productDefaults() map[string]any {
 			"redirect_mode": "auto",
 		},
 		"features": map[string]any{
+			"ai":                  false,
 			"audio_recorder":      false,
 			"canvas":              true,
 			"chat":                false,
+			"collab":              false,
 			"drawing_actions":     true,
 			"drawing_auto_export": true,
 			"drawing_latex":       true,

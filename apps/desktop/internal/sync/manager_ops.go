@@ -26,28 +26,71 @@ type LinkResult struct {
 	Warning string `json:"warning,omitempty"`
 }
 
-// Info returns the cloud connection of a vault.
+// Info returns the cloud connection of a vault. It is for the screens, which show what they can: a value of the
+// meta table that cannot be read is left out (a link whose cloud vault cannot be read is shown as not linked).
+// A decision that depends on the answer, such as who may see the text of a vault, uses InfoStrict.
 func (m *Manager) Info(ctx context.Context, localID string) (LinkInfo, error) {
 	mv, err := m.get(localID)
 	if err != nil {
 		return LinkInfo{}, err
 	}
-	cloud, _ := mv.db.Meta(ctx, MetaCloudVault)
+	info, _ := m.readInfo(ctx, mv)
+	return info, nil
+}
+
+// InfoStrict is Info that reports a failure to read the meta table instead of hiding it: the error is returned
+// with an empty LinkInfo, never a partial one. An unreadable table is not "not linked" (Info says so) and not
+// "shared" either: the caller must treat it as unknown (the assistant of the editor fails closed on it).
+func (m *Manager) InfoStrict(ctx context.Context, localID string) (LinkInfo, error) {
+	mv, err := m.get(localID)
+	if err != nil {
+		return LinkInfo{}, err
+	}
+	info, err := m.readInfo(ctx, mv)
+	if err != nil {
+		return LinkInfo{}, fmt.Errorf("read the link of vault %s: %w", localID, err)
+	}
+	return info, nil
+}
+
+// readInfo reads the link of a vault from its meta table. It reads everything it can and returns the first
+// error it met next to what it got: Info drops the error, InfoStrict returns it. Without the cloud vault it
+// stops (nothing else says anything about a vault that is not linked), and with an error there it cannot tell
+// whether the vault is linked.
+func (m *Manager) readInfo(ctx context.Context, mv *managed) (LinkInfo, error) {
+	var first error
+	note := func(err error) {
+		if first == nil {
+			first = err
+		}
+	}
+	cloud, err := mv.db.Meta(ctx, MetaCloudVault)
+	if err != nil {
+		return LinkInfo{}, err
+	}
 	if cloud == "" {
 		return LinkInfo{}, nil
 	}
-	kind, _ := mv.db.Meta(ctx, MetaKind)
-	name, _ := mv.db.Meta(ctx, MetaVaultName)
-	server, _ := mv.db.Meta(ctx, MetaServerURL)
-	paused, _ := mv.db.Meta(ctx, MetaPaused)
-	poll, _ := mv.db.MetaInt(ctx, MetaPollSeconds)
+	meta := func(key string) string {
+		v, err := mv.db.Meta(ctx, key)
+		note(err)
+		return v
+	}
+	kind := meta(MetaKind)
+	name := meta(MetaVaultName)
+	server := meta(MetaServerURL)
+	paused := meta(MetaPaused)
+	poll, err := mv.db.MetaInt(ctx, MetaPollSeconds)
+	note(err)
 	info := LinkInfo{PollSeconds: poll, Linked: true, CloudVaultID: cloud, Kind: kind, Name: name, ServerURL: server, Paused: paused == "1", Locked: kind == "private" && m.crypto.IsLocked(cloud), Permission: PermOwner}
-	if mm, ok, _ := readMountMeta(ctx, mv.db); ok {
+	mm, ok, err := readMountMeta(ctx, mv.db)
+	note(err)
+	if ok {
 		info.Mount, info.Permission, info.Revoked = true, mm.Permission, mm.Revoked
 		info.ReadOnly = mm.Revoked || mm.Permission == PermViewer
 		info.OwnerName, info.ShareID, info.Name = mm.OwnerName, mm.ShareID, mm.Name
 	}
-	return info, nil
+	return info, first
 }
 
 // Status returns the latest status of a vault.

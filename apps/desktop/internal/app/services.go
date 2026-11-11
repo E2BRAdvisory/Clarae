@@ -25,5 +25,6 @@ func (a *App) Services() []any {
 		NewComposerAPI(a),
 		NewImporterAPI(a),
 		NewUpdaterAPI(a),
+		NewAIAPI(a),
 	}
 }

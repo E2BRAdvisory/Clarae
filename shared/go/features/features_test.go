@@ -44,7 +44,9 @@ func TestEveryFlagHasADefault(t *testing.T) {
 	}
 	// The flags whose default is off: functions not offered yet. The format switches of ADR-0034
 	// and ADR-0042 are on by default since release N+1.
-	off := []string{features.AudioRecorder, features.WebViewer, features.Chat}
+	// ai and collab (ADR-0050) are functions not offered yet that the code already reads: a flag the
+	// schema did not declare would be on, so both must stay declared and off.
+	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.Ai, features.Collab}
 	for _, k := range features.Known {
 		want := true
 		for _, o := range off {
@@ -99,5 +101,19 @@ func TestFlags(t *testing.T) {
 	}
 	if !features.Enabled(nil, "unheard_of") || features.Enabled(cfg, "mystery") {
 		t.Fatal("an unknown flag is on unless the configuration switches it off")
+	}
+}
+
+// An empty or absent profile leaves the reserved functions off, and only an explicit true turns the
+// flag on (the build constant of ADR-0050 is the second gate).
+func TestReservedFlagsAreOffWithoutAProfile(t *testing.T) {
+	for _, name := range []string{features.Ai, features.Collab} {
+		if features.Enabled(nil, name) || features.Enabled(map[string]any{}, name) ||
+			features.Enabled(map[string]any{"features": map[string]any{}}, name) {
+			t.Errorf("%s is on without a profile: a flag read by the code must be declared with default false", name)
+		}
+		if !features.Enabled(map[string]any{"features": map[string]any{name: true}}, name) {
+			t.Errorf("%s: an explicit true must turn the flag on", name)
+		}
 	}
 }

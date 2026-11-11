@@ -28,6 +28,16 @@
           "default": false,
           "description": "Chat bar of the workbench (a disabled placeholder until the ACP integration exists, ADR-0026)."
         },
+        "ai": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reserved: AI writing assistant of the editor (ADR-0050). Implemented but inactive: it also needs a build that enables it, so a profile alone cannot switch it on in a released build."
+        },
+        "collab": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reserved: real-time collaboration in the editor (ADR-0050). Implemented but off: it also needs a build that enables it and a registered provider, and none exists."
+        },
         "web_workbench": {
           "type": "boolean",
           "default": true,

@@ -30,6 +30,7 @@ const (
 	CapOwnsSession         Capability = "ownsSession"
 	CapDetachedCopies      Capability = "detachedCopies"
 	CapOpenWithSystemApp   Capability = "openWithSystemApp"
+	CapAIAssistant         Capability = "aiAssistant"
 )
 
 // Capabilities is what SettingsAPI.Capabilities returns: one bool per capability, the json tag
@@ -45,6 +46,7 @@ type Capabilities struct {
 	OwnsSession         bool `json:"ownsSession"`
 	DetachedCopies      bool `json:"detachedCopies"`
 	OpenWithSystemApp   bool `json:"openWithSystemApp"`
+	AIAssistant         bool `json:"aiAssistant"`
 }
 
 // CapabilitySpec declares a capability: whether each host offers it, and what it gates (the doc
@@ -93,6 +95,11 @@ var capabilitySpecs = []CapabilitySpec{
 		"A file the application cannot show (an archive, an office document) opens with the application of the " +
 			"system, and any file can be shown in the file manager (ADR-0047). The browser offers to download it " +
 			"instead (Host.OpenPath and Host.RevealPath fail there)."},
+	{CapAIAssistant, true, false,
+		"The writing assistant of the editor (ADR-0050): the model is reached from the Go core, which only the " +
+			"desktop links (AIAPI refuses every call in the browser, whose Content-Security-Policy allows no third " +
+			"party). Even on the desktop it is inactive: it also needs the `ai` flag of the profile, a build that " +
+			"enables it, a vault that is not private and a configured provider (AIAPI.Status)."},
 }
 
 // CapabilitySpecs returns the declared capabilities, in order (for the generator and the tests).
@@ -140,7 +147,7 @@ func capabilityFields() map[Capability]int {
 	return out
 }
 
-// platformCapabilities returns the capabilities of the running build (isWeb: host_wails.go, host_web.go).
+// platformCapabilities returns the capabilities of the running build (isWeb: host_native.go, host_web.go).
 func platformCapabilities() Capabilities {
 	platform := "desktop"
 	if isWeb {

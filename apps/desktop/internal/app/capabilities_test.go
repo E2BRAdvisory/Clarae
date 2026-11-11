@@ -108,4 +108,7 @@ func TestSettingsCapabilitiesFollowTheBuild(t *testing.T) {
 	if isWeb == want.Updater {
 		t.Errorf("updater = %v with isWeb = %v: UpdaterAPI is gated by it", want.Updater, isWeb)
 	}
+	if isWeb == want.AIAssistant {
+		t.Errorf("aiAssistant = %v with isWeb = %v: the WebAssembly core links no AI (bindings_ai_js.go)", want.AIAssistant, isWeb)
+	}
 }

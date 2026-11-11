@@ -11,7 +11,7 @@ import (
 
 // Events is the registry of every Go → TypeScript event of the core (ADR-0045 §5): the input of the
 // generator of packages/workbench/src/app/events.gen.ts (`task gen`, internal/app/gen/events). It is
-// built for the desktop, the superset (the browser build has no updater). TestEventRegistry fails when
+// built for the desktop, the superset (the browser build has no updater and no AI assistant). TestEventRegistry fails when
 // an event is declared but not listed here, or sent by name instead of through its declaration.
 // The contract and how to add an event: docs/desktop-web-sync.md, "Contratto degli eventi".
 var Events = []events.Spec{
@@ -30,6 +30,8 @@ var Events = []events.Spec{
 	EventImportProgress.Spec(),
 	EventImportDone.Spec(),
 	EventUpdaterStatus.Spec(),
+	EventAIChunk.Spec(),
+	EventAIDone.Spec(),
 	EventOpenRequest.Spec(),
 	EventBeforeClose.Spec(),
 }

@@ -44,6 +44,10 @@ export const Events = {
   importerDone: 'importer:done',
   /** Desktop: the state of the application update changed (check, download, ready to install). */
   updaterStatus: 'updater:status',
+  /** Desktop: a piece of the answer of the AI assistant to a request (AIAPI.Start), in order of seq. */
+  aiChunk: 'ai:chunk',
+  /** Desktop: a request of the AI assistant ended (complete, cancelled or failed); no chunk follows. */
+  aiDone: 'ai:done',
   /** A memobrain://open link handled by the operating system asks to open a vault (and a file). */
   appOpenRequest: 'app:open-request',
   /** Desktop: the window is closing; write the pending edits, then call the runtime Quit again. */
@@ -70,12 +74,29 @@ export interface EventPayloads {
   'importer:progress': ImportProgressPayload;
   'importer:done': ImportDonePayload;
   'updater:status': UpdaterStatus;
+  'ai:chunk': AIChunkPayload;
+  'ai:done': AIDonePayload;
   'app:open-request': OpenRequestPayload;
   'app:before-close': undefined;
 }
 
 /** The payload of the event `N`. */
 export type EventPayload<N extends EventName> = EventPayloads[N];
+
+/** Go app.AIChunkPayload. */
+export interface AIChunkPayload {
+  requestId: string;
+  seq: number;
+  text: string;
+}
+
+/** Go app.AIDonePayload. */
+export interface AIDonePayload {
+  requestId: string;
+  ok: boolean;
+  cancelled: boolean;
+  error: string;
+}
 
 /** Go auth.Profile. */
 export interface AuthProfile {

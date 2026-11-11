@@ -29,6 +29,12 @@ export interface CoreCaller {
 
 /** Every binding of the core, by service. */
 export interface CoreClient {
+  readonly AIAPI: {
+    Cancel(arg1: string): Promise<boolean>;
+    SetKey(arg1: string): Promise<void>;
+    Start(arg1: Data<app.AIStartRequest>): Promise<void>;
+    Status(arg1: string): Promise<Data<app.AIStatus>>;
+  };
   readonly AuthAPI: {
     Login(arg1: string): Promise<Data<auth.State>>;
     Logout(): Promise<Data<auth.State>>;
@@ -210,6 +216,7 @@ export interface CoreClient {
 
 /** The services and methods of the bindings. */
 export const BINDINGS = {
+  AIAPI: ['Cancel', 'SetKey', 'Start', 'Status'],
   AuthAPI: ['Login', 'Logout', 'ReregisterDevice', 'Status'],
   BasesAPI: ['Load', 'NewBaseContent', 'Run', 'UpdateProperty', 'UpdateView'],
   ComposerAPI: ['ApplyMerge', 'Extract', 'PlanMerge', 'SuggestTitle'],
@@ -242,6 +249,14 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
   const call = <T>(service: ServiceName, method: string, args: unknown[]): Promise<T> =>
     core.callWithin<T>(timeoutMs, service, method, ...args);
   return {
+    get AIAPI(): CoreClient['AIAPI'] {
+      return {
+        Cancel: (arg1: string) => call('AIAPI', 'Cancel', [arg1]),
+        SetKey: (arg1: string) => call('AIAPI', 'SetKey', [arg1]),
+        Start: (arg1: Data<app.AIStartRequest>) => call('AIAPI', 'Start', [arg1]),
+        Status: (arg1: string) => call('AIAPI', 'Status', [arg1]),
+      };
+    },
     get AuthAPI(): CoreClient['AuthAPI'] {
       return {
         Login: (arg1: string) => call('AuthAPI', 'Login', [arg1]),

@@ -10,6 +10,12 @@ export const Feature = {
   WebViewer: 'web_viewer',
   // Chat bar of the workbench (a disabled placeholder until the ACP integration exists, ADR-0026).
   Chat: 'chat',
+  // Reserved: AI writing assistant of the editor (ADR-0050). Implemented but inactive: it also needs
+  // a build that enables it, so a profile alone cannot switch it on in a released build.
+  Ai: 'ai',
+  // Reserved: real-time collaboration in the editor (ADR-0050). Implemented but off: it also needs a
+  // build that enables it and a registered provider, and none exists.
+  Collab: 'collab',
   // Opening vaults in the browser (vault workbench of the Web UI, ADR-0029). The desktop ignores it.
   WebWorkbench: 'web_workbench',
   // Excalidraw drawings: creating, opening and embedding .excalidraw files. Off also disables every
@@ -53,6 +59,8 @@ export const FEATURES: readonly Feature[] = [
   Feature.AudioRecorder,
   Feature.WebViewer,
   Feature.Chat,
+  Feature.Ai,
+  Feature.Collab,
   Feature.WebWorkbench,
   Feature.Drawings,
   Feature.Canvas,
@@ -71,6 +79,8 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.AudioRecorder]: false,
   [Feature.WebViewer]: false,
   [Feature.Chat]: false,
+  [Feature.Ai]: false,
+  [Feature.Collab]: false,
   [Feature.WebWorkbench]: true,
   [Feature.Drawings]: true,
   [Feature.Canvas]: true,

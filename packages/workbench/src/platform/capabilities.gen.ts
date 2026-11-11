@@ -62,6 +62,14 @@ export interface CoreCapabilities {
    * download it instead (Host.OpenPath and Host.RevealPath fail there).
    */
   openWithSystemApp: boolean;
+  /**
+   * The writing assistant of the editor (ADR-0050): the model is reached from the Go core, which
+   * only the desktop links (AIAPI refuses every call in the browser, whose Content-Security-Policy
+   * allows no third party). Even on the desktop it is inactive: it also needs the `ai` flag of the
+   * profile, a build that enables it, a vault that is not private and a configured provider
+   * (AIAPI.Status).
+   */
+  aiAssistant: boolean;
 }
 
 /** The kinds of host. */
@@ -80,6 +88,7 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     ownsSession: true,
     detachedCopies: true,
     openWithSystemApp: true,
+    aiAssistant: true,
   },
   web: {
     localFolders: false,
@@ -92,5 +101,6 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     ownsSession: false,
     detachedCopies: false,
     openWithSystemApp: false,
+    aiAssistant: false,
   },
 };
