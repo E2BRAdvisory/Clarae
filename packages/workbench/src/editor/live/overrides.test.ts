@@ -3,8 +3,13 @@ import { editorViewCtx } from '@milkdown/kit/core';
 import { extract } from '@memobrain/markdown';
 import { TextSelection } from '@milkdown/kit/prose/state';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 import { open, posAfter, tx } from './testing/helpers';
+import { fullCorpus } from './testing/corpus';
 import { createLiveCore, type LiveCore } from './headless';
+import { narrowJoin, ruleHandler } from './kit';
 
 let core: LiveCore;
 beforeAll(async () => {
@@ -210,5 +215,68 @@ describe('an item with no text keeps what it holds nested when the note is opene
     // (an empty item that holds a list is a block of its own for the layer: what matters is the file's reading)
     const bare = emptied('- q\n\n  a\n\n  -\n    - x\n', 'q');
     expect(extract('t.md', bare).headings, bare).toEqual([]);
+  });
+});
+
+describe('the blocks of a narrow item are written as the blocks the editor shows (consolidation)', () => {
+  /** The note opened, its first item made narrow (an edit made it so), written again. */
+  const narrowed = (md: string): string => {
+    const s = open(core, md);
+    let item = -1;
+    s.doc.descendants((n, pos) => {
+      if (item < 0 && n.type.name === 'list_item') item = pos;
+      return item < 0;
+    });
+    const doc = tx(s.doc).setNodeMarkup(item, undefined, {
+      ...s.doc.nodeAt(item)!.attrs,
+      spread: false,
+    }).doc;
+    return s.text(doc, { forceDirty: true });
+  };
+
+  it('puts a blank line between a list, a quote or a table and the paragraph that follows it', () => {
+    expect(narrowed('- a\n\n  - x\n\n  b\n')).toBe('- a\n  - x\n\n  b\n');
+    expect(narrowed('- a\n\n  > x\n\n  b\n')).toBe('- a\n  > x\n\n  b\n');
+    expect(narrowed('- a\n\n  | x |\n  | - |\n\n  b\n')).toBe('- a\n  | x |\n  | - |\n\n  b\n');
+  });
+
+  it('keeps a raw block apart from the paragraphs around it when it would be a line of them', () => {
+    // a comment on a line of its own is a line of text for CommonMark: next to a paragraph it would be one with it
+    const text = narrowed('- a\n\n  %%c%%\n\n  b\n');
+    expect(text).toBe('- a\n\n  %%c%%\n\n  b\n');
+    expect(extract('t.md', text).headings).toEqual([]);
+  });
+
+  it('writes a rule right under the text of a narrow item as `***`, and keeps `---` where it is no underline', () => {
+    const rule = (md: string): string => {
+      const s = open(core, md);
+      return s.text(s.doc, { forceDirty: true });
+    };
+    // (the file's own rule is `-`: what it says elsewhere stays so)
+    expect(narrowed('---\n\n- a\n\n  ---\n')).toBe('---\n\n- a\n  ***\n');
+    expect(narrowed('---\n\n- a\n\n  %%c%%\n\n  ---\n')).toBe('---\n\n- a\n\n  %%c%%\n  ***\n');
+    expect(rule('---\n\n- a\n\n  ---\n')).toBe('---\n\n- a\n\n  ---\n');
+    expect(rule('---\n\n- a\n  - b\n  ---\n')).toBe('---\n\n- a\n  - b\n  ---\n');
+  });
+
+  it('never changes a file that is read: no pair of blocks of a narrow container is joined otherwise', () => {
+    type Flow = { type: string; spread?: boolean | null; children?: Flow[] };
+    const reader = unified().use(remarkParse).use(remarkGfm);
+    const state = { options: { rule: '-' } };
+    const changed: string[] = [];
+    for (const sample of fullCorpus()) {
+      const walk = (parent: Flow): void => {
+        const kids = parent.children ?? [];
+        kids.forEach((k, i) => {
+          if (parent.spread === false && i > 0 && narrowJoin(kids[i - 1]!, k, parent) !== undefined)
+            changed.push(`${sample.id}: ${kids[i - 1]!.type} then ${k.type}`);
+          if (k.type === 'thematicBreak' && ruleHandler(k, parent, state) !== '---')
+            changed.push(`${sample.id}: the rule after a ${kids[i - 1]?.type}`);
+          walk(k);
+        });
+      };
+      walk(reader.parse(sample.raw) as Flow);
+    }
+    expect(changed).toEqual([]);
   });
 });

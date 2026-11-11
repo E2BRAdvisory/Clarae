@@ -625,11 +625,11 @@ describe('the text of a task stays its first line', () => {
     expect(ed.view.state.selection.$from.parent.textContent).toBe('x');
   });
 
-  it('writes a rule typed at the start of its text after it, with the blank line that keeps it a rule', async () => {
+  it('writes a rule typed at the start of its text after it, as `***` (a `---` under the text would underline it)', async () => {
     const ed = await open('- [ ] a\n- [x] b\n');
     ed.view.dispatch(ed.view.state.tr.setSelection(TextSelection.create(ed.view.state.doc, 3)));
     ed.type('---');
-    expect(ed.editor.text()).toBe('- [ ] a\n\n  ---\n- [x] b\n');
+    expect(ed.editor.text()).toBe('- [ ] a\n  ***\n- [x] b\n');
     expect((await open(ed.editor.text())).node('hr')).toBe(1);
   });
 
@@ -646,7 +646,7 @@ describe('the text of a task stays its first line', () => {
       quote.view.state.tr.setSelection(TextSelection.create(quote.view.state.doc, 4)),
     );
     quote.type('---');
-    expect(quote.editor.text()).toBe('> - [ ] a\n>\n>   ---\n> - [x] b\n');
+    expect(quote.editor.text()).toBe('> - [ ] a\n>   ***\n> - [x] b\n');
   });
 
   it('leaves the lines of the note it did not touch as the file has them (a CRLF note with closed headings)', async () => {

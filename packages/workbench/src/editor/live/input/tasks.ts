@@ -244,11 +244,8 @@ function mendTaskHeads(tr: Transaction): boolean {
       return start + to.get(kids[i]!)! + (rel - from[i]!);
     };
     const next = { anchor: move(anchor), head: move(head) };
+    // (a rule that now follows the text is written `***` by the serializer: `---` there would underline it)
     tr.replaceWith(start, start + item.content.size, Fragment.fromArray(order));
-    // `a` then `---` on the next line is a heading underline: a rule that now follows the text needs a blank line
-    if (order[1]?.type.name === 'hr' && item.attrs['spread'] === false) {
-      tr.setNodeMarkup(pos, undefined, { ...item.attrs, spread: true });
-    }
     anchor = next.anchor;
     head = next.head;
   }

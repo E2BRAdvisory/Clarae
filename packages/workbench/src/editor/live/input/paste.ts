@@ -140,8 +140,26 @@ function pasteMarkdown(view: EditorView, parse: (md: string) => PMNode, md: stri
     doc.childCount === 1 && first.type.name === 'paragraph'
       ? new Slice(first.content, 0, 0)
       : new Slice(doc.content, 0, 0);
-  view.dispatch(view.state.tr.replaceSelection(slice).setMeta('uiEvent', 'paste').scrollIntoView());
+  view.dispatch(
+    replaceWithBlocks(view.state.tr, slice).setMeta('uiEvent', 'paste').scrollIntoView(),
+  );
   return true;
+}
+
+/**
+ * The selection replaced by `slice`. Blocks pasted in the middle of a line split it, and the text after
+ * them starts a block of its own: the blanks it starts with go (` line` after a list), as a line of
+ * Markdown has none at its start (the file would hold them as `&#x20;`, a text the user did not write).
+ */
+function replaceWithBlocks(tr: Transaction, slice: Slice): Transaction {
+  const { $to } = tr.selection;
+  const rest = $to.parent.isTextblock && $to.parentOffset < $to.parent.content.size;
+  tr.replaceSelection(slice);
+  if (!rest || slice.content.firstChild?.isInline !== false) return tr;
+  const $at = tr.doc.resolve(tr.mapping.map($to.pos, 1));
+  if (!$at.parent.isTextblock || $at.parentOffset !== 0) return tr;
+  const blanks = /^[ \t]+/.exec($at.parent.firstChild?.text ?? '')?.[0].length ?? 0;
+  return blanks > 0 ? tr.delete($at.pos, $at.pos + blanks) : tr;
 }
 
 const EDGE = /^([ \t]*)([\s\S]*?)([ \t]*)$/;
@@ -245,7 +263,9 @@ function pastePlainText(view: EditorView, parse: (md: string) => PMNode, text: s
   } else {
     slice = new Slice(doc.content, 0, 0);
   }
-  view.dispatch(view.state.tr.replaceSelection(slice).setMeta('uiEvent', 'paste').scrollIntoView());
+  view.dispatch(
+    replaceWithBlocks(view.state.tr, slice).setMeta('uiEvent', 'paste').scrollIntoView(),
+  );
   return true;
 }
 

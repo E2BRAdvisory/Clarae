@@ -7,6 +7,8 @@ import { trailingConfig } from '@milkdown/kit/plugin/trailing';
 import { remarkGFMPlugin } from '@milkdown/kit/preset/gfm';
 import type { Ctx } from '@milkdown/kit/ctx';
 import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 import { liveTextHandler } from './ofm/escape';
 import { ofmSchemas, MDAST } from './ofm/nodes';
 import { liveOptions } from './ofm/options';
@@ -26,8 +28,10 @@ export function liveConfig(ctx: Ctx): void {
     const handlers = o.handlers ?? {};
     return {
       ...o,
+      join: [...(o.join ?? []), narrowJoin as never],
       handlers: {
         ...handlers,
+        thematicBreak: ruleHandler as never,
         text: liveTextHandler as never,
         emphasis: markHandler('emphasis') as never,
         strong: markHandler('strong') as never,
@@ -157,6 +161,99 @@ function markHandler(type: 'emphasis' | 'strong') {
     }),
     peek: (node: { marker?: string }, _parent: unknown, state: MarkState) => marker(node, state),
   });
+}
+
+interface FlowNode {
+  type: string;
+  value?: string;
+}
+interface FlowParent {
+  spread?: boolean | null;
+  children?: FlowNode[];
+}
+interface RuleState {
+  options: { rule?: string; ruleRepetition?: number; ruleSpaces?: boolean };
+}
+
+/** The blocks a paragraph that follows them with no blank line is a line of (a lazy line, a row). */
+const TAKE_A_LINE = new Set(['list', 'blockquote', 'table']);
+
+/** A block of each kind, as the text the reading of two blocks one under the other is tried with. */
+const SAMPLE: Record<string, string> = {
+  paragraph: 'x',
+  list: '- x',
+  blockquote: '> x',
+  table: '| x |\n| - |',
+  heading: '# x',
+  code: '```\nx\n```',
+  math: '$$\nx\n$$',
+  thematicBreak: '***',
+};
+
+const blockReader = unified().use(remarkParse).use(remarkGfm);
+const apartMemo = new Map<string, boolean>();
+
+/** Whether `a` then `b` on the next line are read as the blocks of each, none taking a line of the other. */
+function readApart(a: string, b: string): boolean {
+  const key = a + '\u0000' + b;
+  let apart = apartMemo.get(key);
+  if (apart === undefined) {
+    const count = (md: string): number => blockReader.parse(md).children.length;
+    apart = count(a) + count(b) === count(a + '\n' + b);
+    if (apartMemo.size > 500) apartMemo.clear();
+    apartMemo.set(key, apart);
+  }
+  return apart;
+}
+
+const sampleOf = (node: FlowNode): string | undefined =>
+  node.type === MDAST.verbatim ? (node.value ?? '') : SAMPLE[node.type];
+
+/**
+ * The blocks of a narrow item (or list) are written one under the other, and the serializer's own rule
+ * (`joinDefaults`) knows of paragraphs and HTML only: a paragraph right under a list, a quote or a table
+ * is a line of it (`- y`, then `line` is `y line`; under a table, a row), what the editor shows as two
+ * blocks would be one for the file. A blank line keeps them two (the item is a wide one for the file,
+ * as it is the only way to say it). A raw block is the text it holds, which may take the line of what
+ * follows it or be one of what precedes it: the two are tried. A file that is read never has such a
+ * pair with no blank line between (it would have been read as one block), so the files the user did not
+ * edit are written as they were.
+ */
+export function narrowJoin(
+  left: FlowNode,
+  right: FlowNode,
+  parent: FlowParent,
+): number | undefined {
+  if (parent.spread !== false) return undefined;
+  if (right.type === 'paragraph' && TAKE_A_LINE.has(left.type)) return 1;
+  if (left.type !== MDAST.verbatim && right.type !== MDAST.verbatim) return undefined;
+  const a = sampleOf(left);
+  const b = sampleOf(right);
+  if (a === undefined || b === undefined) return undefined;
+  return readApart(a, b) ? undefined : 1;
+}
+
+/** Whether a `---` that comes right under `node` would be read as its underline (a setext heading). */
+const underlined = (node: FlowNode | undefined): boolean =>
+  node !== undefined &&
+  (node.type === 'paragraph' ||
+    (node.type === MDAST.verbatim && !readApart(node.value ?? '', '---')));
+
+/**
+ * A rule, with the marker the file uses; but in a narrow item a rule right under its text is written
+ * `***`: a `---` there is the underline of a heading (the text becomes a heading, a task is lost), and
+ * a blank line would make the whole list a wide one, which is not what the editor shows.
+ */
+export function ruleHandler(
+  node: FlowNode,
+  parent: FlowParent | undefined,
+  state: RuleState,
+): string {
+  const { rule = '*', ruleRepetition = 3, ruleSpaces = false } = state.options;
+  const kids = parent?.children ?? [];
+  const before = kids[kids.indexOf(node) - 1];
+  const marker = rule === '-' && parent?.spread === false && underlined(before) ? '*' : rule;
+  return Array.from({ length: ruleRepetition }, () => marker).join(ruleSpaces ? ' ' : '');
 }
 
 /**
