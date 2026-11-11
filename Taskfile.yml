@@ -10,11 +10,14 @@ vars:
   WEBEMBED: '{{.CLOUD}}/web-embed'
   DESKTOP: apps/desktop
   COMPOSE: docker compose -f deploy/docker/compose.dev.yaml
-  WAILS:
-    sh: command -v wails 2>/dev/null || echo "$(go env GOPATH)/bin/wails"
-  # Linux distros with only webkit2gtk-4.1 need the webkit2_41 build tag (see scripts/lib.sh).
+  # Wails v3 CLI (installed by `task wails-cli`, pinned to apps/desktop/go.mod; ADR-0051). It is not used to build:
+  # scripts/build-desktop-bin.sh runs `go build`. It provides the dev watcher and the Windows resources.
+  WAILS: wails3
+  # On Linux the webview binding is GTK3 + WebKit2GTK 4.1: the build tag gtk3 (the default would be GTK4). Every Go
+  # tool that compiles apps/desktop needs it there (vet, tests, golangci-lint, govulncheck); empty elsewhere.
   WAILS_TAGS:
-    sh: '[ "$(uname -s)" = Linux ] && ! pkg-config --exists webkit2gtk-4.0 2>/dev/null && echo "-tags webkit2_41" || true'
+    sh: '[ "$(uname -s)" = Linux ] && echo gtk3 || true'
+  GO_TAGS_FLAG: '{{if .WAILS_TAGS}}-tags {{.WAILS_TAGS}}{{end}}'
   VERSION:
     sh: echo "${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
   WASM_OUT: '{{.WASM_OUT | default "build/wasm"}}'
@@ -43,7 +46,7 @@ tasks:
   ## ---- code generation -------------------------------------------------------
 
   wails-cli:
-    desc: Install the Wails CLI at the library version of apps/desktop/go.mod, built with the repo's Go
+    desc: Install the Wails v3 CLI (wails3) at the library version of apps/desktop/go.mod, built with the repo's Go
     cmds:
       - scripts/install-wails.sh
 
@@ -96,18 +99,12 @@ tasks:
 
   # The bindings themselves are not committed (packages/workbench/wailsjs); the typed client of the browser
   # host derived from them is (web/src/workbench/core.gen.ts, ADR-0045 §5), so `task check-gen` sees it drift.
+  # The tree is written by a Go program that reflects App.Services (ADR-0051, B-D3): the same files `wails generate
+  # module` wrote, no Wails CLI and no frontend build needed.
   gen-wails:
-    desc: Wails Go bindings -> packages/workbench/wailsjs, and the browser host's typed client (web/src/workbench/core.gen.ts)
-    preconditions: &wails-version
-      - sh: '{{.ROOT_DIR}}/scripts/install-wails.sh --check'
-        msg: The Wails CLI must match the library version in apps/desktop/go.mod (run `task wails-cli`)
+    desc: Go bindings (App.Services) -> packages/workbench/wailsjs, and the browser host's typed client (web/src/workbench/core.gen.ts)
     cmds:
-      - cmd: mkdir -p {{.DESKTOP}}/frontend/dist
-        silent: true
-      # main.go embeds the frontend build
-      - cmd: '[ -e {{.DESKTOP}}/frontend/dist/index.html ] || touch {{.DESKTOP}}/frontend/dist/index.html'
-        silent: true
-      - cd {{.DESKTOP}} && {{.WAILS}} generate module
+      - cd {{.DESKTOP}} && go run ./internal/app/gen/bindings
       - node scripts/gen-core-client.mjs
 
   gen-events:
@@ -134,8 +131,6 @@ tasks:
     status:
       - test -f packages/workbench/wailsjs/go/models.ts
     cmds:
-      - cmd: scripts/install-wails.sh --check 2>/dev/null || scripts/install-wails.sh
-        silent: true
       - task: gen-wails
 
   ## ---- quality ---------------------------------------------------------------
@@ -143,14 +138,33 @@ tasks:
   lint:
     desc: Lint everything
     cmds:
+      - task: lint-wails-versions
       - task: lint-go
       - task: lint-ts
+
+  # apps/desktop/main.go embeds the frontend build (go:embed all:frontend/dist): a placeholder lets every Go task
+  # that compiles it (lint, vulncheck, tests) run on a clean checkout, before any frontend build.
+  frontend-placeholder:
+    internal: true
+    silent: true
+    cmds:
+      - mkdir -p {{.DESKTOP}}/frontend/dist
+      - '[ -e {{.DESKTOP}}/frontend/dist/index.html ] || touch {{.DESKTOP}}/frontend/dist/index.html'
+
+  # Wails v3 is written in three places that must be the same release: apps/desktop/go.mod (the source), the exact pin of
+  # @wailsio/runtime in apps/desktop/frontend/package.json and the wails3 CLI, when one is installed (ADR-0051).
+  lint-wails-versions:
+    desc: The Wails version of go.mod, of the npm runtime and of the wails3 CLI (when installed) must match
+    silent: true
+    cmds:
+      - scripts/install-wails.sh --check-pins
 
   lint-go:
     desc: golangci-lint on all Go modules
     silent: true
+    deps: [frontend-placeholder]
     cmds:
-      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && golangci-lint run ./...) || exit 1; done
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && golangci-lint run {{if .WAILS_TAGS}}--build-tags {{.WAILS_TAGS}} {{end}}./...) || exit 1; done
 
   lint-ts:
     desc: ESLint + Prettier
@@ -160,8 +174,9 @@ tasks:
   vuln:
     desc: govulncheck on all Go modules
     silent: true
+    deps: [frontend-placeholder]
     cmds:
-      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && govulncheck ./...) || exit 1; done
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && govulncheck {{.GO_TAGS_FLAG}} ./...) || exit 1; done
 
   test:
     desc: Unit tests (Go + TS) and conformance suite
@@ -173,13 +188,12 @@ tasks:
   test-go:
     desc: go test -race on all Go modules
     silent: true
+    deps: [frontend-placeholder]
     env:
       # Set by `task ci`: the dispatcher/bindings test fails instead of skipping when wailsjs is missing.
       MEMOBRAIN_REQUIRE_BINDINGS: '{{.REQUIRE_BINDINGS | default ""}}'
     cmds:
-      # apps/desktop/main.go embeds the frontend build: a placeholder lets it compile without one.
-      - mkdir -p {{.DESKTOP}}/frontend/dist && [ -e {{.DESKTOP}}/frontend/dist/index.html ] || touch {{.DESKTOP}}/frontend/dist/index.html
-      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && go test -race -count=1 {{.WAILS_TAGS}} ./...) || exit 1; done
+      - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && go test -race -count=1 {{.GO_TAGS_FLAG}} ./...) || exit 1; done
 
   wasm-core:
     desc: The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core) + wasm_exec.js (ADR-0030)
@@ -343,13 +357,19 @@ tasks:
     cmds:
       - bash -c '. scripts/lib.sh; if [ "${WEB:-1}" != 0 ]; then trap web_stop EXIT; web_start; fi; cd {{.CLOUD}} && set -a && . ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/memobrain-cloud --role=all'
 
+  # `wails3 dev` is not used: it forces `localhost` and a port of its own, while our esbuild server (ADR-0025) listens on
+  # 127.0.0.1:5173. The watcher (build/config.yml) starts that server, rebuilds the Go binary on every .go change and
+  # restarts it; the app proxies the UI from FRONTEND_DEVSERVER_URL.
   dev-desktop:
-    desc: Run the desktop app with live reload (esbuild, no HMR)
+    desc: Run the desktop app with live reload (esbuild server on 127.0.0.1:5173, Go rebuilt on change)
     dir: '{{.DESKTOP}}'
-    preconditions: *wails-version
+    preconditions:
+      - sh: '{{.ROOT_DIR}}/scripts/install-wails.sh --check'
+        msg: The Wails CLI (wails3) must match the library version in apps/desktop/go.mod (run `task wails-cli`)
+    env:
+      FRONTEND_DEVSERVER_URL: http://127.0.0.1:5173
     cmds:
-      # -nosyncgomod: never let the CLI rewrite go.mod to its own Wails version.
-      - wails dev -nosyncgomod {{.WAILS_TAGS}}
+      - '{{.WAILS}} tool watcher -config build/config.yml'
 
   dev-web:
     desc: Web UI on :5174 with live reload, proxying /api to the cloud on :18081
@@ -378,12 +398,18 @@ tasks:
 
   ## ---- build -----------------------------------------------------------------
 
+  # The Web UI of a release is the default build: no MEMOBRAIN_LIVE_ENGINE / _AI / _COLLAB / _E2E / _DIST in the environment
+  # (check-editor-switches.sh, first, before the slow steps) and no Milkdown or binding mock in web/dist (check-dist.sh, last, before the
+  # copy). The cloud image does the same in services/cloud/Dockerfile. A web build with a switch on is made by calling
+  # `yarn workspace @memobrain/web run build` directly (e2e, docs/dev-setup.md).
   web-build:
     desc: Build the Web UI (with the WebAssembly core) and copy it into the cloud binary's embed dir (then run build-cloud)
     cmds:
+      - sh scripts/release/check-editor-switches.sh
       - task: wasm-core
       - task: wailsjs
       - MEMOBRAIN_VERSION={{.VERSION}} yarn workspace @memobrain/web run build
+      - sh scripts/release/check-dist.sh {{.WEB_DIR}}/dist
       - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
       - cp -R {{.WEB_DIR}}/dist/. {{.WEBEMBED}}/dist/
 
@@ -399,12 +425,14 @@ tasks:
     cmds:
       - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o ../../bin/memobrain-cloud ./cmd/memobrain-cloud
 
+  # Frontend build, then `go build -tags production[,gtk3]` into apps/desktop/build/bin (macOS: universal .app).
   build-desktop:
-    desc: Build the desktop app for the current OS
-    dir: '{{.DESKTOP}}'
-    preconditions: *wails-version
+    desc: Build the desktop app for the current OS (scripts/build-desktop-bin.sh)
+    preconditions:
+      - sh: '{{.ROOT_DIR}}/scripts/install-wails.sh --check-pins'
+        msg: Wails library, npm runtime and CLI must have the same version (see scripts/install-wails.sh)
     cmds:
-      - wails build -clean -nosyncgomod {{.WAILS_TAGS}} -ldflags "-X main.Version={{.VERSION}}"
+      - scripts/build-desktop-bin.sh --version {{.VERSION}}
 
   docker-build:
     desc: Build the cloud image (Web UI + workbench embedded) for this machine and load it as IMAGE:VERSION
@@ -444,11 +472,13 @@ tasks:
       - if ! helm template ci . -f ci/values-ha.yaml --kube-version 1.30.0 | grep -q 'sleep:'; then echo "preStop sleep missing for Kubernetes 1.30" >&2; exit 1; fi; echo "ok preStop sleep only on 1.30+"
 
   release-desktop:
-    desc: 'Local installer build: task release-desktop OS=darwin|windows|linux V=1.0.0-rc.1'
+    desc: 'Installer build, release guards on (needs UPDATE_PUBLIC_KEY + UPDATE_BASE_URL, or ALLOW_UNSIGNED_UPDATES=1): task release-desktop OS=darwin|windows|linux V=1.0.0-rc.1'
     requires:
       vars: [OS, V]
     cmds:
-      - bash scripts/release/build-desktop.sh {{.OS}} {{.V}}
+      # --release: no build switch or MEMOBRAIN_DIST in the environment, no Milkdown and no binding mock in the built UI
+      # (check-editor-switches.sh, check-dist.sh), no development update key. What it builds is what is shipped.
+      - bash scripts/release/build-desktop.sh {{.OS}} {{.V}} --release
 
   ## ---- maintenance -----------------------------------------------------------
 

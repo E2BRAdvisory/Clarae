@@ -1,6 +1,6 @@
 //go:build !js
 
-package app
+package shell
 
 import (
 	"errors"

@@ -40,12 +40,15 @@ Aggiornare la versione in `release.yml` e la riga corrispondente di `scripts/rel
 
 ## Wails
 
-La versione esiste in un solo posto, `apps/desktop/go.mod`; `scripts/install-wails.sh` costruisce la CLI di quella versione e la cache di `release.yml` dipende da quel file.
+La versione (Wails v3, ADR-0051) esiste in un solo posto, `apps/desktop/go.mod`; `scripts/install-wails.sh` costruisce la CLI di quella versione e la cache di `release.yml` dipende da quel file. Libreria Go, runtime npm e CLI devono essere la stessa release: `@wailsio/runtime` in `apps/desktop/frontend/package.json` ha un pin esatto, uguale a quella di `go.mod` senza la `v`. `task lint` (`lint-wails-versions`) e `scripts/install-wails.sh --check-pins` lo verificano, `--check` verifica anche la CLI installata.
 
 ```sh
-go -C apps/desktop get github.com/wailsapp/wails/v2@vX.Y.Z && go -C apps/desktop mod tidy
+go -C apps/desktop get github.com/wailsapp/wails/v3@vX.Y.Z && go -C apps/desktop mod tidy
+yarn workspace @memobrain/desktop-frontend add --exact @wailsio/runtime@X.Y.Z    # stessa versione, senza la v
 task wails-cli && task gen-wails      # poi un build desktop su ogni OS
 ```
+
+Non usare `wails/v2`: seguirlo reintrodurrebbe la libreria sostituita dalla migrazione.
 
 Il bootstrapper WebView2 dell'installer Windows è quello incluso nel modulo Wails (hash coperto da `go.sum`); l'URL `fwlink` di Microsoft serve un file che cambia a ogni aggiornamento e non è fissabile.
 

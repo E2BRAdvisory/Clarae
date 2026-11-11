@@ -127,7 +127,7 @@ func writeExportHTML(vaultRoot, dest, html string) (ExportResult, error) {
 	if !strings.EqualFold(filepath.Ext(dest), ".html") && !strings.EqualFold(filepath.Ext(dest), ".htm") {
 		dest += ".html"
 	}
-	return writeExportData(vaultRoot, dest, []byte(html))
+	return writeExportFrom(vaultRoot, dest, strings.NewReader(html)) // no second copy of a document of 256 MiB
 }
 
 // writeExportData is the destination check and the atomic write shared by every export.

@@ -26,11 +26,11 @@ const moduleRoot = "../.."
 // rawEmitAllowed are the functions that may call an emitter by name: the emitter itself and the
 // hosts that deliver what it gets (file relative to apps/desktop, then the enclosing function).
 var rawEmitAllowed = map[string][]string{
-	"internal/app/events.go":     {"emit"},
-	"internal/app/host_wails.go": {"Emit"},
-	"internal/app/host_web.go":   {"Emit"},
-	"internal/events/events.go":  {"Send"},
-	"main.go":                    {"emitTo"},
+	"internal/app/events.go":    {"emit"},
+	"internal/app/host_web.go":  {"Emit"},
+	"internal/events/events.go": {"Send"},
+	"internal/shell/close.go":   {"Emitter"},
+	"internal/shell/host.go":    {"Emit"},
 }
 
 var wireNameRE = regexp.MustCompile(`^[a-z]+(-[a-z]+)*:[a-z]+(-[a-z]+)*$`)

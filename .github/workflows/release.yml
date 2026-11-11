@@ -126,23 +126,30 @@ jobs:
         shell: bash
       - run: yarn install --immutable
         shell: bash
-      # The CLI version is the Wails library version in apps/desktop/go.mod (scripts/install-wails.sh reads it):
+      # The binary is built with plain `go build` (scripts/build-desktop-bin.sh, ADR-0051); the wails3 CLI is needed only
+      # on Windows (`wails3 generate syso` for the exe resources, `wails3 generate webview2bootstrapper` for the
+      # installer). Its version is the Wails library version in apps/desktop/go.mod (scripts/install-wails.sh reads it):
       # the cache key follows that file, so a library bump rebuilds the CLI.
+      - name: Wails pins (go.mod, npm runtime)
+        shell: bash
+        run: bash scripts/install-wails.sh --check-pins
       - name: Wails CLI (cached)
+        if: matrix.os_name == 'windows'
         id: wails-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/go/bin/wails*
-          key: wails-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/go.mod', 'go.work', 'tools/go.mod', 'scripts/install-wails.sh') }}
+          path: ~/go/bin/wails3*
+          key: wails3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/go.mod', 'go.work', 'tools/go.mod', 'scripts/install-wails.sh') }}
       - name: Wails CLI (build)
-        if: steps.wails-cache.outputs.cache-hit != 'true'
+        if: matrix.os_name == 'windows' && steps.wails-cache.outputs.cache-hit != 'true'
         shell: bash
         run: bash scripts/install-wails.sh
-      - shell: bash
-        run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
       - name: Wails CLI (version check)
+        if: matrix.os_name == 'windows'
         shell: bash
-        run: bash scripts/install-wails.sh --check
+        run: |
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          PATH="$HOME/go/bin:$PATH" bash scripts/install-wails.sh --check
 
       - name: macOS (.dmg)
         if: matrix.os_name == 'darwin'
@@ -166,6 +173,7 @@ jobs:
           # appimagetool is itself an AppImage: run it extracted, so the runner needs no FUSE.
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
+          # GTK3 + WebKit2GTK 4.1: the build script passes -tags production,gtk3 and checks what the binary links.
           sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev desktop-file-utils
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${{ env.NFPM_VERSION }}
           pins="$RUNNER_TEMP/appimage"; mkdir -p "$pins"

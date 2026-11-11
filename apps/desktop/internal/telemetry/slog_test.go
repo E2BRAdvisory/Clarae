@@ -40,3 +40,52 @@ func TestRouteSlogWritesToTheAppLogger(t *testing.T) {
 		t.Fatalf("logged %v", got)
 	}
 }
+
+// The toolkit logger never carries what a binding call is made of: a passphrase passed at debug
+// level (the toolkit logs "Binding call complete" with the arguments there) must not reach the
+// application log, even when the application runs at debug level.
+func TestUIRuntimeLoggerKeepsBindingArgumentsOutOfTheLog(t *testing.T) {
+	var buf bytes.Buffer
+	l := UIRuntimeLogger(zerolog.New(&buf).Level(zerolog.DebugLevel))
+	l.Debug("Binding call complete:", "args", `["correct horse battery staple"]`, "result", "null")
+	l.Info("Binding call started:", "args", `["correct horse battery staple"]`)
+	l.With("window", "main").WithGroup("g").Debug("again", "args", "secret")
+	if buf.Len() != 0 {
+		t.Fatalf("debug and info records reached the log: %s", buf.String())
+	}
+	l.Warn("Runtime call failed", "error", "conflict: file changed on disk")
+	l.With("window", "main").Error("boom")
+	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+	if len(lines) != 2 {
+		t.Fatalf("want the warning and the error, got %d lines: %s", len(lines), buf.String())
+	}
+	var rec map[string]any
+	if err := json.Unmarshal(lines[0], &rec); err != nil || rec["level"] != "warn" {
+		t.Fatalf("first line: %s (%v)", lines[0], err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("correct horse")) {
+		t.Fatal("the secret is in the log")
+	}
+}
+
+// The error a bound method returns is an answer for the frontend, not a failure of the
+// application: the toolkit logs it at error level with the text of the error, which names paths of
+// the vault; at the default level it must not reach the log. The other errors of a call do.
+func TestUIRuntimeLoggerDropsTheErrorsOfBoundMethods(t *testing.T) {
+	var buf bytes.Buffer
+	l := UIRuntimeLogger(zerolog.New(&buf).Level(zerolog.InfoLevel))
+	l.Error("Binding call failed: Bound method returned an error: not-found: Secret Vault/clients/acme.md")
+	l.With("window", "main").Error("Binding call failed: Bound method returned an error: conflict: Secret Vault/a.md")
+	if buf.Len() != 0 {
+		t.Fatalf("a binding error reached the log: %s", buf.String())
+	}
+	l.Error("Binding call failed: failed to call binding: unknown method")
+	l.Error("panic in bound method core.Call: boom")
+	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+	if len(lines) != 2 {
+		t.Fatalf("want the two other errors, got %d lines: %s", len(lines), buf.String())
+	}
+	if bytes.Contains(buf.Bytes(), []byte("Secret Vault")) {
+		t.Fatal("a vault path is in the log")
+	}
+}

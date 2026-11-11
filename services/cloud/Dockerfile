@@ -4,9 +4,10 @@
 # workbench (ADR-0029), which needs two things the repository does not hold: the Wails bindings the UI is
 # typed against (generated from the Go code) and the desktop core compiled to WebAssembly.
 
-# 1. The Wails bindings (packages/workbench/wailsjs): TypeScript generated from the Go API.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS bindings
-RUN apk add --no-cache git bash ca-certificates
+# 1. The Wails bindings (packages/workbench/wailsjs): TypeScript generated from the Go API by a Go program
+# of this repository (ADR-0051, B-D3), so neither the Wails CLI nor cgo (GTK, WebKit) is needed.
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS bindings
+RUN apk add --no-cache git ca-certificates
 WORKDIR /src
 COPY go.work go.work.sum ./
 COPY shared/go/go.mod shared/go/go.sum shared/go/
@@ -15,14 +16,11 @@ COPY apps/desktop/go.mod apps/desktop/go.sum apps/desktop/
 RUN cd apps/desktop && go mod download
 COPY shared/ shared/
 COPY apps/desktop/ apps/desktop/
-COPY scripts/install-wails.sh scripts/install-wails.sh
-RUN bash scripts/install-wails.sh
-# main.go embeds the desktop frontend build; the generator only needs the directory to exist.
-RUN mkdir -p apps/desktop/frontend/dist packages/workbench && touch apps/desktop/frontend/dist/index.html \
-    && cd apps/desktop && /go/bin/wails generate module
+# The generator writes <root>/packages/workbench/wailsjs; it does not need the desktop frontend build.
+RUN mkdir -p packages/workbench && cd apps/desktop && CGO_ENABLED=0 go run ./internal/app/gen/bindings
 
 # 2. The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core), run in a Web Worker by the browser.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS wasm
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS wasm
 WORKDIR /src
 COPY go.work go.work.sum ./
 COPY shared/go/go.mod shared/go/go.sum shared/go/
@@ -47,16 +45,21 @@ COPY --from=bindings /src/packages/workbench/wailsjs packages/workbench/wailsjs
 COPY --from=wasm /out/ build/wasm/
 # The admin console validates configuration profiles against the shared JSON Schema.
 COPY api/config-profile.schema.json api/config-profile.schema.json
+# The two checks of a release build (scripts/release/check-*.sh, plain sh): the front end build switches
+# (Milkdown, AI, collaboration, test doubles) must not be set in this stage, and no Milkdown may be in what is built.
+COPY scripts/release/check-editor-switches.sh scripts/release/check-dist.sh scripts/release/
 # yarn needs the manifest of every workspace to resolve the lockfile; only the web app is installed.
 COPY apps/desktop/frontend/package.json apps/desktop/frontend/package.json
 COPY shared/conformance/ts/package.json shared/conformance/ts/package.json
 RUN yarn workspaces focus @memobrain/web
 ARG VERSION=dev
-RUN MEMOBRAIN_VERSION=${VERSION} yarn workspace @memobrain/web run build
+RUN sh scripts/release/check-editor-switches.sh \
+    && MEMOBRAIN_VERSION=${VERSION} yarn workspace @memobrain/web run build \
+    && sh scripts/release/check-dist.sh web/dist
 
 # 4. The cloud binary, with the Web UI embedded. It runs on the build machine and cross-compiles for the
 # target (CGO is off), so a multi-arch image needs no emulation: the Go compiler is the same speed for both.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src

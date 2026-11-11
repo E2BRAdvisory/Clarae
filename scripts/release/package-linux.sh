@@ -3,7 +3,7 @@
 #
 #   scripts/release/package-linux.sh <deb|appimage|all> <version>
 #
-# Input : apps/desktop/build/bin/memobrain (scripts/release/build-desktop.sh linux <version>)
+# Input : apps/desktop/build/bin/memobrain (scripts/release/build-desktop.sh linux <version>: go build -tags production,gtk3)
 # Output: dist/memobrain-<version>-linux-amd64.deb and dist/memobrain-<version>-linux-amd64.AppImage
 #
 # Needs (Linux runner): nfpm for the deb, appimagetool (+ libfuse2 or --appimage-extract-and-run)

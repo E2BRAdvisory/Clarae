@@ -1,0 +1,45 @@
+# Dev watcher of the desktop app: `wails3 tool watcher -config build/config.yml` (run by `task dev-desktop`
+# from apps/desktop, with FRONTEND_DEVSERVER_URL=http://127.0.0.1:5173). ADR-0051, ADR-0025.
+#
+# `wails3 dev` is not used: it forces `localhost` and a port of its own, and our esbuild server listens on
+# 127.0.0.1:5173 only. Build assets of the product (name, bundle id, URL scheme) live in project.json.
+version: '3'
+
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - frontend
+      - bin
+      - build
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+      - '*_test.go'
+    watched_extension:
+      - '*.go'
+    git_ignore: true
+  executes:
+    # The esbuild dev server: rebuilds the UI on every change and tells the open page to reload.
+    - name: frontend
+      command: [yarn, run, dev]
+      dir: frontend
+      type: background
+      # HTTP, not TCP: the server listens before the first bundle is built and answers 404 until dist/index.html
+      # exists; the Go step below embeds dist/ and must not start earlier.
+      readiness:
+        http: http://127.0.0.1:5173/
+        timeout: 60s
+    # Rebuilds the Go binary on every change of a .go file.
+    - name: go
+      command: [bash, ../../scripts/build-desktop-bin.sh, --dev]
+      type: blocking
+    - name: app
+      command: [bash, ../../scripts/build-desktop-bin.sh, --run-dev]
+      type: primary
+      exit_policy: shutdown

@@ -45,7 +45,7 @@ count "HTML titles / index pages"          "$NAME" 'web/index.html' 'apps/deskto
 count "Web UI source (not i18n)"           "$NAME" 'web/src/*.ts' 'web/src/*.tsx' 'web/public/*'
 echo
 echo "== Application identity"
-count "Desktop app: wails.json, build/ (name, bundle id dev.nodus.desktop, protocols)" "$NAME" 'apps/desktop/wails.json' 'apps/desktop/build/*'
+count "Desktop app: build/ (project.json, config.yml, plists, installer: name, bundle id dev.nodus.desktop, protocols)" "$NAME" 'apps/desktop/build/*'
 count "URL scheme nodus:// (code, config, docs)" "$NAME://" '*.go' '*.ts' '*.tsx' '*.json' '*.md' '*.yaml' '*.plist'
 count "Desktop Go sources (incl. module path, app strings)" "$NAME" 'apps/desktop/main.go' 'apps/desktop/internal/*.go'
 count "Environment variables NODUS_*"      "NODUS_[A-Z_]+" '*.go' '*.sh' '*.md' '*.yaml' '*.env' 'Taskfile.yml'

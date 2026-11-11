@@ -33,10 +33,25 @@ func DataDir() (string, error) {
 	return dir, nil
 }
 
+// instanceIDPrefix starts every single-instance id. Wails v3 turns the id into a D-Bus name on
+// Linux, and D-Bus refuses a dot-separated element that starts with a digit: the element that holds
+// the hash starts with a letter ("i"), so no data directory can produce a name that is refused (a
+// bare hex element starts with a digit in 10 cases out of 16).
+const instanceIDPrefix = "dev.memobrain.desktop.i"
+
 // InstanceID derives the single-instance lock id from the data directory so
 // that instances with different data directories do not redirect to each
-// other (Wails v2 SingleInstanceLock.UniqueId).
+// other (Wails SingleInstance UniqueID): "dev.memobrain.desktop.i<16 hex>".
 func InstanceID(dataDir string) string {
 	sum := sha256.Sum256([]byte(filepath.Clean(dataDir)))
-	return "dev.memobrain.desktop." + hex.EncodeToString(sum[:8])
+	return instanceIDPrefix + hex.EncodeToString(sum[:8])
+}
+
+// InstanceKey is the key that encrypts the messages between a second instance and the first one
+// (SingleInstance EncryptionKey). It is derived from the id, not random: both instances compute
+// it with no state to share, and a stale file or a different key between versions cannot lock the
+// application out. It keeps other processes from injecting arguments by accident; the arguments
+// stay untrusted either way (ParseSchemeURL).
+func InstanceKey(id string) [32]byte {
+	return sha256.Sum256([]byte("memobrain/single-instance/" + id))
 }

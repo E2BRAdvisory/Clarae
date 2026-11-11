@@ -63,8 +63,7 @@ type MountsChangedPayload struct {
 }
 
 // emit sends an event to the frontend (an events.Emitter: events are sent with Event.Send). Tests
-// replace App.emitter because the Wails runtime aborts the process when given a context it did not
-// create.
+// replace App.emitter because the desktop host sends through the Wails application, which tests do not have.
 func (a *App) emit(name string, payload any) {
 	a.emitterMu.RLock()
 	emitter := a.emitter

@@ -94,9 +94,9 @@ func promise(fn func() (any, error)) js.Value {
 // install publishes the core's entry points on globalThis.__memobrainCore:
 //
 //	call(service, method, argsJSON) -> Promise<string>   a binding call, JSON in and out
-//	start()    -> Promise<void>                          Wails' OnStartup: opens app.db, restores the session
-//	domReady() -> void                                   Wails' OnDomReady: the page can receive events
-//	shutdown() -> Promise<void>                          Wails' OnShutdown
+//	start()    -> Promise<void>                          App.Startup (the desktop's Lifecycle.Start): opens app.db, restores the session
+//	domReady() -> void                                   App.DomReady (the desktop's "frontend ready"): the page can receive events
+//	shutdown() -> Promise<void>                          App.Shutdown (the desktop's Lifecycle.Stop)
 //	methods()  -> string                                 JSON {service: [method, ...]}
 func install(a *app.App, d *rpc.Dispatcher) {
 	ctx, cancel := context.WithCancel(context.Background())

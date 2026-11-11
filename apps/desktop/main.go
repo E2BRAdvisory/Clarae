@@ -1,26 +1,24 @@
-// Command memobrain is the MemoBrain Notes desktop client (Wails v2: Go backend + React
-// frontend). See internal/app for the composition root.
+// Command memobrain is the MemoBrain Notes desktop client (Wails v3: Go backend + React
+// frontend). See internal/app for the composition root and internal/shell for the Wails side.
 package main
 
 import (
-	"context"
 	"embed"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
-	"sync"
-	"time"
+	"runtime"
+	"runtime/debug"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/events"
 	"memobrain/apps/desktop/internal/platform"
+	"memobrain/apps/desktop/internal/rpc"
+	"memobrain/apps/desktop/internal/shell"
 	"memobrain/apps/desktop/internal/telemetry"
 )
 
@@ -30,6 +28,9 @@ var assets embed.FS
 // Version is set at build time via -ldflags "-X main.Version=...".
 var Version = "dev"
 
+// appName is the name of the application: window title, menu and About box.
+const appName = "MemoBrain Notes"
+
 func main() {
 	os.Exit(run())
 }
@@ -38,6 +39,16 @@ func run() int {
 	dataDirFlag := flag.String("data-dir", "", "application data directory (default $MEMOBRAIN_DATA_DIR or the OS config dir)")
 	logLevel := flag.String("log-level", "info", "log level: debug|info|warn|error")
 	flag.Parse()
+
+	// A released binary carries none of the tags that open the application to the outside (an MCP
+	// server on a local port, a server mode, the web inspector). The tag "production" is ours to
+	// pass to go build, so it also tells a release from a dev build.
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if found, production := shell.ForbiddenBuildTags(bi); production && len(found) > 0 {
+			fmt.Fprintln(os.Stderr, "memobrain: a production build must not carry the build tags", found)
+			return 1
+		}
+	}
 
 	if *dataDirFlag != "" {
 		_ = os.Setenv(platform.DataDirEnv, *dataDirFlag)
@@ -55,44 +66,86 @@ func run() int {
 	defer func() { _ = closer.Close() }()
 	telemetry.RouteSlog(logger)
 
-	a := app.New(app.Options{DataDir: dataDir, Logger: logger, Version: Version})
+	distFS, err := fs.Sub(assets, "frontend/dist")
+	if err != nil {
+		logger.Error().Err(err).Msg("frontend assets")
+		return 1
+	}
+
+	// The shell is the Wails side of the application: the host the core talks to, the guard that
+	// holds the window open until the frontend has flushed its notes, and the lifecycle that starts
+	// and stops the core. They are built before the Wails application, which needs the services of
+	// the core (the guard's ShouldQuit is one of its options), and are given the application below.
+	var lc *shell.Lifecycle
+	guard, guardWindow := shell.NewWailsCloseGuard(func() { lc.ArmWatchdog() })
+	host := shell.NewHost()
+	a := app.New(app.Options{DataDir: dataDir, Logger: logger, Version: Version, Host: host})
+	lc = shell.NewLifecycle(a, guard)
+
+	dispatcher := rpc.New()
+	for _, s := range a.Services() {
+		if err := dispatcher.Register(s); err != nil {
+			logger.Error().Err(err).Msg("register service")
+			return 1
+		}
+	}
 
 	// A memobrain:// URL on our own command line (first instance launched by the OS).
 	if u, ok := platform.FindSchemeURL(os.Args[1:]); ok {
 		a.HandleURL(u)
 	}
 
-	err = wails.Run(&options.App{
-		Title:     "MemoBrain Notes",
-		Width:     1280,
-		Height:    820,
-		MinWidth:  720,
-		MinHeight: 480,
-		AssetServer: &assetserver.Options{
-			Assets:     assets,
-			Middleware: cspMiddleware,
+	// The arguments of the calls larger than the transport of Wails takes (B-W4b) come in chunks to
+	// a path of the asset server, behind the same middleware that sets the CSP.
+	uploads := shell.NewUploadStore()
+
+	wa := application.New(application.Options{
+		Name:        appName,
+		Description: "Local-first notes and knowledge base\nVersion " + Version,
+		// Wails logs at debug level the arguments and the result of every binding call, passphrases
+		// included: its logger has a floor at Warn, whatever --log-level says (E4).
+		Logger:   telemetry.UIRuntimeLogger(logger),
+		Services: []application.Service{application.NewService(NewCoreBridge(dispatcher, lc, uploads))},
+		Assets: application.AssetOptions{
+			Handler:        application.BundledAssetFileServer(distFS),
+			Middleware:     assetMiddleware(uploads),
+			DisableLogging: true, // the asset server logs every request
 		},
-		BackgroundColour: &options.RGBA{R: 30, G: 30, B: 30, A: 1},
-		OnStartup:        a.Startup,
-		OnDomReady:       a.DomReady,
-		OnShutdown:       a.Shutdown,
-		OnBeforeClose:    (&closeGuard{}).beforeClose,
-		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               platform.InstanceID(dataDir),
-			OnSecondInstanceLaunch: a.OnSecondInstance,
-		},
-		Mac: &mac.Options{
-			OnUrlOpen:            a.HandleURL,
-			TitleBar:             mac.TitleBarHiddenInset(),
-			Appearance:           mac.DefaultAppearance,
-			WebviewIsTransparent: false,
-			About: &mac.AboutInfo{
-				Title:   "MemoBrain Notes",
-				Message: "Local-first notes and knowledge base\nVersion " + Version,
-			},
-		},
-		Bind: a.Services(),
+		ShouldQuit:     guard.ShouldQuit,
+		OnShutdown:     lc.Stop,
+		SingleInstance: singleInstanceOptions(dataDir, a.OnSecondInstance),
+		Mac:            application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
+		Linux:          application.LinuxOptions{ProgramName: "memobrain"}, // the icon in the dock (StartupWMClass)
 	})
+	guardWindow.Bind(wa)
+
+	win := wa.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             "main",
+		Title:            appName,
+		Width:            1280,
+		Height:           820,
+		MinWidth:         720,
+		MinHeight:        480,
+		BackgroundColour: application.NewRGB(30, 30, 30),
+		// The drag and drop of files uses the DOM (the editor and Excalidraw read dataTransfer): the
+		// native file drop would take the drag from the web view.
+		EnableFileDrop:             false,
+		DefaultContextMenuDisabled: true,
+		Mac:                        application.MacWindow{TitleBar: application.MacTitleBarHiddenInset},
+	})
+	host.Attach(wa, win)
+	// The window close button (on macOS the only gesture that reaches the guard through the window:
+	// wails#6570) and Cmd+Q, Alt+F4 and Quit (ShouldQuit) all go through the one guard.
+	win.RegisterHook(events.Common.WindowClosing, guard.WindowClosing)
+
+	// ServiceStartup runs before the loop of the platform: a failure of the core to start is shown
+	// when the loop does.
+	wa.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) { host.Started() })
+	shell.ListenForURLs(wa, runtime.GOOS, a.HandleURL)
+	shell.SetMenu(wa, runtime.GOOS, appName)
+
+	err = wa.Run()
+	lc.Stop() // idempotent: Run can return without OnShutdown having run (wails#6368)
 	if err != nil {
 		logger.Error().Err(err).Msg("wails run")
 		return 1
@@ -100,64 +153,28 @@ func run() int {
 	return 0
 }
 
-// emitTo sends an event of the registry (app.EventBeforeClose) through the Wails runtime: this hook
-// runs outside the App, whose emitter the bindings use.
-func emitTo(ctx context.Context) events.Emitter {
-	return func(name string, payload any) {
-		if payload == nil {
-			runtime.EventsEmit(ctx, name)
-			return
-		}
-		runtime.EventsEmit(ctx, name, payload)
+// singleInstanceOptions is the single-instance lock of a data directory: two instances with
+// different data directories coexist (two devices on one machine), a second one with the same
+// directory hands its command line to the first and exits. The id is a valid D-Bus name on Linux
+// (platform.InstanceID) and the messages between the instances are encrypted with a key derived
+// from it. onSecond receives the whole os.Args of the second instance, program name included
+// (FindSchemeURL finds the memobrain:// URL among them: that is how Windows and Linux deliver it).
+func singleInstanceOptions(dataDir string, onSecond func(args []string)) *application.SingleInstanceOptions {
+	id := platform.InstanceID(dataDir)
+	return &application.SingleInstanceOptions{
+		UniqueID:      id,
+		EncryptionKey: platform.InstanceKey(id),
+		OnSecondInstanceLaunch: func(d application.SecondInstanceData) {
+			onSecond(d.Args)
+		},
 	}
 }
 
-// closeFlushTimeout bounds the wait for the frontend: a frontend that never answers (still loading,
-// hung) does not keep the app open. The frontend gives up on its own writes a few seconds earlier.
-const closeFlushTimeout = 10 * time.Second
-
-// closeGuard holds the first close request (window closed, Cmd+Q, runtime Quit) until the frontend
-// has flushed its open notes (no silent data loss, D-04). The second request quits.
-type closeGuard struct {
-	mu       sync.Mutex
-	pending  bool
-	release  bool
-	answered chan struct{}
-}
-
-// beforeClose is the Wails OnBeforeClose hook: true keeps the app open. It must not block (Windows
-// calls it on the UI thread), so the event is emitted and the timeout watched in goroutines.
-func (g *closeGuard) beforeClose(ctx context.Context) bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	switch {
-	case g.release:
-		return false
-	case g.pending:
-		// The frontend has flushed (or the user insists): quit.
-		g.release = true
-		close(g.answered)
-		return false
-	}
-	g.pending = true
-	g.answered = make(chan struct{})
-	answered := g.answered
-	// app:before-close: the frontend writes its pending edits and calls the runtime Quit again.
-	go app.EventBeforeClose.Send(emitTo(ctx))
-	go func() {
-		select {
-		case <-answered:
-		case <-time.After(closeFlushTimeout):
-			g.mu.Lock()
-			quit := !g.release
-			g.release = true
-			g.mu.Unlock()
-			if quit {
-				runtime.Quit(ctx)
-			}
-		}
-	}()
-	return true
+// assetMiddleware is what the asset server runs on every request: the CSP on the responses, in front
+// of the chunks of the uploads (they are answered, not served, and carry the headers all the same).
+func assetMiddleware(uploads *shell.UploadStore) func(http.Handler) http.Handler {
+	chunks := uploads.Middleware()
+	return func(next http.Handler) http.Handler { return cspMiddleware(chunks(next)) }
 }
 
 // cspMiddleware sets the Content-Security-Policy on every asset response

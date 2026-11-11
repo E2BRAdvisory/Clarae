@@ -2,7 +2,7 @@
 # Run the desktop app standalone: no cloud, no Docker. Useful to check the
 # editor, vault handling, indexing and search offline (local-first mode).
 #
-#   scripts/run-desktop.sh                 hot-reload dev mode (wails dev)
+#   scripts/run-desktop.sh                 hot-reload dev mode (wails3 tool watcher, build/config.yml)
 #   scripts/run-desktop.sh --build         production build, then run the binary
 #   scripts/run-desktop.sh --demo          also create and open nothing, but seed a demo vault
 #                                          in .dev/standalone/vaults/Demo (open it from the app)
@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-need wails; need node; need yarn
+need node; need yarn
 [ "$FRESH" = 1 ] && { log "Removing $DATA_DIR"; rm -rf "$DATA_DIR"; }
 mkdir -p "$DATA_DIR/vaults"
 [ "$DEMO" = 1 ] && seed_demo_vault "$DATA_DIR/vaults/Demo"
@@ -40,11 +40,8 @@ export MEMOBRAIN_DATA_DIR="$DATA_DIR"
 unset MEMOBRAIN_DEFAULT_SERVER_URL
 if [ "$BUILD" = 1 ]; then
   log "Building (production)"
-  (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -nosyncgomod $WAILS_TAGS -ldflags "-X main.Version=dev-standalone")
-  case "$(uname -s)" in
-    Darwin) exec "$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)/Contents/MacOS/memobrain" ;;
-    *) exec "$ROOT/apps/desktop/build/bin/memobrain" ;;
-  esac
+  run_quiet "desktop build" "$ROOT/scripts/build-desktop-bin.sh" --version dev-standalone
+  exec "$(desktop_bin)"
 else
-  cd "$ROOT/apps/desktop" && exec wails dev -nosyncgomod $WAILS_TAGS
+  desktop_dev
 fi

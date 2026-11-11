@@ -1,35 +1,31 @@
-# Build Directory
+# Cartella `build`
 
-The build directory is used to house all the build files and assets for your application.
+Risorse e configurazione per compilare l'app desktop (Wails v3, ADR-0051). Il binario si costruisce con
+`scripts/build-desktop-bin.sh` (`task build-desktop`): `go build` con i tag di produzione, senza `wails3 build`.
 
-The structure is:
+- `project.json` — dati del prodotto (nome, nome dell'eseguibile, bundle id, schema `memobrain://`, azienda,
+  copyright). È la sorgente dei template qui sotto, resi da `scripts/release/render-assets.go`. Prima era `wails.json`.
+- `config.yml` — configurazione del watcher di sviluppo (`wails3 tool watcher`, `task dev-desktop`): avvia il server
+  esbuild su `127.0.0.1:5173`, ricompila il binario a ogni modifica dei `.go` e lo riavvia.
+- `bin/` — output (ignorato da git): su macOS `MemoBrain Notes.app` universale, su Windows `memobrain.exe`, su Linux
+  `memobrain`; in sviluppo `memobrain-dev` (su macOS `memobrain.dev.app`).
+- `appicon.png` — sorgente delle icone.
 
-- bin - Output directory
-- darwin - macOS specific files
-- windows - Windows specific files
+## macOS (`darwin/`)
 
-## Mac
+- `Info.plist` — template del bundle di produzione. `Info.dev.plist` — quello del bundle di sviluppo
+  (`memobrain.dev.app`, bundle id diverso e `NSAllowsLocalNetworking`).
+- `icon.icns` — copiata in `Contents/Resources/iconfile.icns` (`CFBundleIconFile` è `iconfile`).
+- `entitlements.plist` — usato dalla firma di `scripts/release/package-macos.sh`.
 
-The `darwin` directory holds files specific to Mac builds.
-These may be customised and used as part of the build. To return these files to the default state, simply delete them
-and
-build with `wails build`.
+## Windows (`windows/`)
 
-The directory contains the following files:
+- `icon.ico`, `wails.exe.manifest` e `info.json` (template dei dati di versione) diventano il file `.syso` che
+  `wails3 generate syso` produce durante la build e che il linker aggiunge all'exe.
+- `installer/` — i file dell'installer NSIS (`project.nsi`, `wails_tools.nsh`), resi e compilati dagli script di
+  rilascio.
 
-- `Info.plist` - the main plist file used for Mac builds. It is used when building using `wails build`.
-- `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
+## Linux (`linux/`)
 
-## Windows
-
-The `windows` directory contains the manifest and rc files used when building with `wails build`.
-These may be customised for your application. To return these files to the default state, simply delete them and
-build with `wails build`.
-
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
-- `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
-- `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
-  as well as the application itself (right click the exe -> properties -> details)
-- `wails.exe.manifest` - The main application manifest file.
+`memobrain.desktop`, icone, metainfo e `nfpm.yaml` per i pacchetti `.deb` e AppImage (`scripts/release/package-linux.sh`).
+Si compila con `-tags gtk3` (GTK3 + WebKit2GTK 4.1).

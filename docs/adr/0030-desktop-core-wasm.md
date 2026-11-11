@@ -46,7 +46,7 @@ Il core del desktop viene compilato con `GOOS=js GOARCH=wasm` in `apps/desktop/c
    - Migrazioni goose, schema e query restano invariati.
 3. **Host.**
    - `internal/app` dipende da un'interfaccia `Host` (`host.go`): eventi, dialoghi di salvataggio e apertura, `Delivered` (il file scelto è completo: il browser avvia il download), apertura URL, stampa, uscita, finestra, errori.
-   - `host_wails.go` (`!js`) contiene il codice Wails di prima, compreso `OnSecondInstance`; `host_web.go` (`js`) inoltra le chiamate a `globalThis.__memobrainHost`, attendendo le promise senza bloccare il ciclo di eventi. Fuori da `host_wails.go` nessun binding importa Wails.
+   - `internal/shell/host.go` (`!js`, pacchetto della shell Wails) contiene il codice Wails di prima, compreso `OnSecondInstance`, mentre `internal/app/host_native.go` fornisce l'host di default senza finestra; `host_web.go` (`js`) inoltra le chiamate a `globalThis.__memobrainHost`, attendendo le promise senza bloccare il ciclo di eventi. Fuori da `internal/shell` nessun binding importa Wails.
    - `SaveFile` nel browser restituisce un percorso in `<tmp>/memobrain-downloads/`; `Delivered` lo trasforma in download.
    - Una costante `isWeb` (definita nei due file host) spegne ciò che il browser non ha: aggiornamenti (il motivo compare nello stato dell'updater), cestino di sistema (si usa `.trash/` del vault), file watcher. `SettingsAPI.Info` espone `platform: "desktop" | "web"`, che la UI userà per le capability di M9-WP4.
 4. **RPC.**

@@ -1,0 +1,288 @@
+export namespace fixture {
+	
+	export class Link {
+	    target: string;
+	    parent?: Link;
+	    group?: Group;
+	
+	    static createFrom(source: any = {}) {
+	        return new Link(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.target = source["target"];
+	        this.parent = this.convertValues(source["parent"], Link);
+	        this.group = this.convertValues(source["group"], Group);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Note {
+	    id: string;
+	    created: number;
+	    note2?: string;
+	    title: string;
+	    body?: string;
+	    count: number;
+	    ratio: number;
+	    flag: boolean;
+	    raw: number[];
+	    any: any;
+	    tags: string[];
+	    grid: number[][];
+	    pairs: string[];
+	    children: Note[];
+	    links: Link[];
+	    matrix: Link[][];
+	    parent?: Link;
+	    pointer?: number;
+	    nested: Link;
+	    props: Record<string, string>;
+	    byId: Record<string, Link>;
+	    byPtr: Record<string, Link>;
+	    lists: Record<string, Array<Link>>;
+	    counts: Record<number, number>;
+	    maps: Record<string, any>;
+	    foreign: other.Tag;
+	    foreignPtr?: other.Tag;
+	    foreignAll: other.Tag[];
+	    foreignMap: Record<string, other.Labels>;
+	    when: time.Time;
+	    whenPtr?: time.Time;
+	    stamp: string;
+	    stampList: string[];
+	    kind: 'a' | 'b';
+	    date: Date;
+	    "odd-name": string;
+	    "odd ptr"?: Link;
+	    odd.map: Record<string, string>;
+	    // Go type: struct { A int }
+	    inline: any;
+	    Untagged: string;
+	    UntaggedP?: Link;
+	
+	    static createFrom(source: any = {}) {
+	        return new Note(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.created = source["created"];
+	        this.note2 = source["note2"];
+	        this.title = source["title"];
+	        this.body = source["body"];
+	        this.count = source["count"];
+	        this.ratio = source["ratio"];
+	        this.flag = source["flag"];
+	        this.raw = source["raw"];
+	        this.any = source["any"];
+	        this.tags = source["tags"];
+	        this.grid = source["grid"];
+	        this.pairs = source["pairs"];
+	        this.children = this.convertValues(source["children"], Note);
+	        this.links = this.convertValues(source["links"], Link);
+	        this.matrix = this.convertValues(source["matrix"], Link);
+	        this.parent = this.convertValues(source["parent"], Link);
+	        this.pointer = source["pointer"];
+	        this.nested = this.convertValues(source["nested"], Link);
+	        this.props = source["props"];
+	        this.byId = this.convertValues(source["byId"], Link, true);
+	        this.byPtr = this.convertValues(source["byPtr"], Link, true);
+	        this.lists = this.convertValues(source["lists"], Array<Link>, true);
+	        this.counts = source["counts"];
+	        this.maps = source["maps"];
+	        this.foreign = this.convertValues(source["foreign"], other.Tag);
+	        this.foreignPtr = this.convertValues(source["foreignPtr"], other.Tag);
+	        this.foreignAll = this.convertValues(source["foreignAll"], other.Tag);
+	        this.foreignMap = this.convertValues(source["foreignMap"], other.Labels, true);
+	        this.when = this.convertValues(source["when"], time.Time);
+	        this.whenPtr = this.convertValues(source["whenPtr"], time.Time);
+	        this.stamp = source["stamp"];
+	        this.stampList = source["stampList"];
+	        this.kind = source["kind"];
+	        this.date = new Date(source["date"]);
+	        this["odd-name"] = source["odd-name"];
+	        this["odd ptr"] = this.convertValues(source["odd ptr"], Link);
+	        this["odd.map"] = source["odd.map"];
+	        this.inline = this.convertValues(source["inline"], Object);
+	        this.Untagged = source["Untagged"];
+	        this.UntaggedP = this.convertValues(source["UntaggedP"], Link);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Group {
+	    notes: Note[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Group(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.notes = this.convertValues(source["notes"], Note);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class Options {
+	
+	
+	    static createFrom(source: any = {}) {
+	        return new Options(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	
+	    }
+	}
+	export class Page_memobrain_apps_desktop_internal_app_gen_bindings_fixture_Link_ {
+	    items: Link[];
+	    next?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Page_memobrain_apps_desktop_internal_app_gen_bindings_fixture_Link_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], Link);
+	        this.next = source["next"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Page_string_ {
+	    items: string[];
+	    next?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Page_string_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = source["items"];
+	        this.next = source["next"];
+	    }
+	}
+
+}
+
+export namespace other {
+	
+	export class Labels {
+	    items: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Labels(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = source["items"];
+	    }
+	}
+	export class Tag {
+	    name: string;
+	    score?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tag(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.score = source["score"];
+	    }
+	}
+
+}
+
+export namespace time {
+	
+	export class Time {
+	
+	
+	    static createFrom(source: any = {}) {
+	        return new Time(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	
+	    }
+	}
+
+}
+

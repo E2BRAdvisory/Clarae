@@ -55,7 +55,9 @@ test-results/
 playwright-report/
 apps/desktop/build/bin/
 packages/workbench/wailsjs/
-# Wails also writes its runtime here on `wails generate`/`dev`: generated, unused (the UI imports packages/workbench/wailsjs)
+# Windows resources (icon, manifest, version info) that scripts/build-desktop-bin.sh writes next to main.go while it builds
+apps/desktop/rsrc_windows_*.syso
+# Left by the Wails v2 CLI (before ADR-0051)
 apps/desktop/frontend/wailsjs/
 apps/desktop/frontend/package.json.md5
 

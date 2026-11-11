@@ -69,7 +69,7 @@ export interface CoreHandle {
     ...args: unknown[]
   ): Promise<T>;
   /**
-   * Wails' OnStartup / OnDomReady / OnShutdown. `start` rejects with a CoreTimeoutError when the core
+   * The core's Startup / DomReady / Shutdown (the desktop shell calls them from its Lifecycle). `start` rejects with a CoreTimeoutError when the core
    * does not answer within `timeoutMs` (no limit without it).
    */
   start(timeoutMs?: number): Promise<void>;

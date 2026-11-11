@@ -3,7 +3,7 @@
 #
 #   scripts/release/package-macos.sh <version> [--require-signing]
 #
-# Input : apps/desktop/build/bin/<name>.app (scripts/release/build-desktop.sh darwin <version>; the bundle is named after "name" in wails.json)
+# Input : apps/desktop/build/bin/<name>.app (scripts/release/build-desktop.sh darwin <version>; the bundle is named after "name" in apps/desktop/build/project.json)
 # Output: dist/memobrain-<version>-darwin-universal.dmg
 #
 # Signing and notarisation run ONLY when their secrets are present; otherwise the dmg is built
@@ -21,11 +21,13 @@ set -euo pipefail
 VERSION="${1:-}"; REQUIRE="${2:-}"
 [ -n "$VERSION" ] || die "usage: $0 <version> [--require-signing]"
 VERSION="${VERSION#v}"
-APP="$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)"
+# The exact bundle, not "the first .app": build/bin may still hold one left by an older build (the Wails v2 CLI named it "memobrain.app").
+NAME="$(GOWORK=off go run "$ROOT/scripts/release/render-assets.go" -project "$ROOT/apps/desktop/build/project.json" -field name)"
+APP="$ROOT/apps/desktop/build/bin/$NAME.app"
 ENTITLEMENTS="$ROOT/apps/desktop/build/darwin/entitlements.plist"
 OUT_DIR="$ROOT/dist"; DMG="$OUT_DIR/memobrain-$VERSION-darwin-universal.dmg"
 [ -n "$APP" ] && [ -d "$APP" ] || die "no .app in apps/desktop/build/bin: run scripts/release/build-desktop.sh darwin $VERSION first"
-need hdiutil; need codesign; need xcrun
+need go; need hdiutil; need codesign; need xcrun
 mkdir -p "$OUT_DIR"
 
 SIGNED=0; NOTARISED=0
@@ -38,7 +40,7 @@ if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
 elif [ "$REQUIRE" = "--require-signing" ]; then
   die "APPLE_SIGNING_IDENTITY is not set: refusing to produce an unsigned release (docs/release/secrets.md)"
 else
-  warn "APPLE_SIGNING_IDENTITY not set: the .app keeps Wails' ad-hoc signature; the dmg is NOT signed or notarised"
+  warn "APPLE_SIGNING_IDENTITY not set: the .app keeps the ad-hoc signature of build-desktop-bin.sh; the dmg is NOT signed or notarised"
 fi
 
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT

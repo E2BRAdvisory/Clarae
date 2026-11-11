@@ -12,12 +12,33 @@ CLOUD_URL="http://127.0.0.1:18081"
 WEB_PID="$DEV_DIR/web.pid"
 WEB_LOG="$DEV_DIR/logs/web.log"
 WEB_URL="http://localhost:5174"
-# Wails v2 links webkit2gtk-4.0 unless built with the webkit2_41 tag; current distros
-# (Ubuntu 24.04+, Fedora 40+, Arch) ship only 4.1. Expand unquoted: `wails dev $WAILS_TAGS`.
+# Wails v3 on Linux is GTK3 + WebKit2GTK 4.1 (ADR-0051): the build tag gtk3 selects it (the default would be GTK4).
+# Empty elsewhere. scripts/build-desktop-bin.sh sets it by itself; this is for the commands that compile apps/desktop
+# directly: `go build -tags "$WAILS_TAGS"` only when it is not empty.
 WAILS_TAGS=""
-if [ "$(uname -s)" = Linux ] && ! pkg-config --exists webkit2gtk-4.0 2>/dev/null; then
-  WAILS_TAGS="-tags webkit2_41"
+if [ "$(uname -s)" = Linux ]; then
+  WAILS_TAGS="gtk3"
 fi
+
+# desktop_bin prints the executable that scripts/build-desktop-bin.sh builds for this OS (apps/desktop/build/bin).
+desktop_bin() {
+  local bin="$ROOT/apps/desktop/build/bin" project="$ROOT/apps/desktop/build/project.json" render="$ROOT/scripts/release/render-assets.go" out name
+  out="$(GOWORK=off go run "$render" -project "$project" -field outputfilename)"
+  case "$(uname -s)" in
+    Darwin) name="$(GOWORK=off go run "$render" -project "$project" -field name)"; echo "$bin/$name.app/Contents/MacOS/$out" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "$bin/$out.exe" ;;
+    *) echo "$bin/$out" ;;
+  esac
+}
+
+# desktop_dev runs the desktop app with live reload (ADR-0051, ADR-0025): `wails3 tool watcher` with build/config.yml
+# starts our esbuild server on 127.0.0.1:5173, rebuilds the Go binary on every change and restarts it. `wails3 dev`
+# is not used: it forces localhost and a port of its own. The environment (MEMOBRAIN_DATA_DIR, ...) is inherited.
+desktop_dev() {
+  "$ROOT/scripts/install-wails.sh" --check || die "the Wails CLI is missing or does not match apps/desktop/go.mod: run 'task wails-cli'"
+  cd "$ROOT/apps/desktop"
+  FRONTEND_DEVSERVER_URL="http://127.0.0.1:5173" wails3 tool watcher -config build/config.yml
+}
 
 if [ -t 1 ]; then
   C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'; C_RED=$'\033[31m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_OFF=$'\033[0m'

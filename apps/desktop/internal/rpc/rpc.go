@@ -1,8 +1,10 @@
 // Package rpc calls the methods of the bound API structs by name, with JSON arguments and results.
-// Wails does exactly that between the web view and Go; this package does it for the Go core
-// compiled to WebAssembly, whose callers (a page and its worker) have no Wails runtime (ADR-0030).
+// Wails v2 did exactly that between the web view and Go, binding each service; this package does it
+// for the Go core compiled to WebAssembly, whose callers (a page and its worker) have no Wails
+// runtime (ADR-0030), and for the desktop too: Wails v3 binds one service, CoreBridge (package main),
+// which calls this dispatcher, so both hosts answer a call in the same way (ADR-0051).
 //
-// The semantics follow Wails: every exported method of a registered struct is callable as
+// The semantics are those of the Wails bindings: every exported method of a registered struct is callable as
 // Service.Method; the arguments are a JSON array, one element per parameter; a method returns
 // nothing, a value, an error, or a value and an error; a non-nil error rejects the call with its
 // message; []byte travels as base64 and time.Time as RFC 3339 (encoding/json).
@@ -85,6 +87,12 @@ func (d *Dispatcher) Methods() map[string][]string {
 // Call runs service.method with argsJSON (a JSON array, "" meaning none) and returns the result
 // as JSON ("null" when the method returns nothing). A panic in the method is an error, not a crash.
 func (d *Dispatcher) Call(serviceName, method, argsJSON string) (result string, err error) {
+	return d.CallBytes(serviceName, method, []byte(argsJSON))
+}
+
+// CallBytes is Call for arguments already held as bytes: the desktop bridge passes the body of a
+// large call (an export of hundreds of MiB) without making one more copy of it.
+func (d *Dispatcher) CallBytes(serviceName, method string, argsJSON []byte) (result string, err error) {
 	d.mu.RLock()
 	s := d.services[serviceName]
 	d.mu.RUnlock()
@@ -98,8 +106,8 @@ func (d *Dispatcher) Call(serviceName, method, argsJSON string) (result string, 
 	t := fn.Type()
 
 	var raw []json.RawMessage
-	if argsJSON != "" {
-		if err := json.Unmarshal([]byte(argsJSON), &raw); err != nil {
+	if len(argsJSON) > 0 {
+		if err := json.Unmarshal(argsJSON, &raw); err != nil {
 			return "", fmt.Errorf("rpc: %s.%s: arguments must be a JSON array: %w", serviceName, method, err)
 		}
 	}

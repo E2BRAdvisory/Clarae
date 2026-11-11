@@ -17,8 +17,8 @@ import (
 	"memobrain/shared/pathrules"
 )
 
-// Binding errors are messages "<code>: <text>" (Wails v2 has no typed
-// errors): the frontend branches on the code (errorCode in the workbench's
+// Binding errors are messages "<code>: <text>" (Wails has no typed
+// errors: v3 puts err.Error() in the message of the rejected promise): the frontend branches on the code (errorCode in the workbench's
 // api.ts) and shows the text. These are the codes the file bindings return;
 // the Wails mock of the workbench answers with the same messages.
 const (

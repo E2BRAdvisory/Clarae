@@ -7,7 +7,7 @@ import (
 )
 
 // Host is everything the application needs from the environment that runs it: the Wails window on
-// the desktop (host_wails.go) or the page that hosts the Go core compiled to WebAssembly in the
+// the desktop (internal/shell) or the page that hosts the Go core compiled to WebAssembly in the
 // browser (host_web.go, ADR-0030). Bindings never import Wails: they go through this interface.
 // A method the browser does not support says which capability gates it ("Capability: x"), and
 // HostMethodCapability lists it (ADR-0045 §1).

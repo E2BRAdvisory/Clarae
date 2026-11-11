@@ -40,7 +40,8 @@ type Options struct {
 	Version string
 	// KeyStore keeps the keys of private vaults (nil = OS keychain).
 	KeyStore crypto.KeyStore
-	// Host connects the application to its environment (nil = the Wails window).
+	// Host connects the application to its environment: the Wails window of internal/shell on the
+	// desktop, the page in the browser (nil = no window, host_native.go).
 	Host Host
 }
 
@@ -55,13 +56,15 @@ type App struct {
 	crypto    *crypto.Manager
 	sync      *syncpkg.Manager
 	config    *config.Service
-	emitter   func(name string, payload any) // nil = Wails runtime
+	emitter   func(name string, payload any) // nil = the host
 	emitterMu sync.RWMutex                   // guards emitter (tests swap it while indexing runs)
 	mu        sync.Mutex
 	vaults    map[string]*openVault
 	opening   map[string]*vaultOpening // opens in progress, by vault id (guarded by mu)
-	pending   []string                 // memobrain:// URLs received before the frontend was ready
+	pending   []string                 // memobrain:// URLs received before the frontend was ready (guarded by mu)
+	ready     bool                     // the frontend can receive events: DomReady was called (guarded by mu)
 	updates   updaterState             // the update channel (none in the browser build)
+	ai        aiState                  // the writing assistant (inactive; none in the browser build)
 	// reconciler runs the reconciles of the mounts one at a time (requestReconcile).
 	reconciler coalescer
 }
@@ -94,7 +97,7 @@ type VaultInfo struct {
 	LastOpenedAt time.Time `json:"lastOpenedAt"`
 }
 
-// New prepares the application; Startup finishes initialization once Wails
+// New prepares the application; Startup finishes initialization once the shell
 // provides the context.
 func New(opts Options) *App {
 	if opts.Host == nil {
@@ -116,10 +119,11 @@ func New(opts Options) *App {
 		AppVersion:   opts.Version,
 		RedirectMode: envRedirectMode(), // "" = from the Config Profile, else auto; "scheme" forces the fallback (checklist)
 		OpenURL: func(u string) error {
-			if a.ctx == nil {
+			ctx := a.appContext()
+			if ctx == nil {
 				return errors.New("application not ready")
 			}
-			a.host.OpenURL(a.ctx, u)
+			a.host.OpenURL(ctx, u)
 			return nil
 		},
 		OnState: func(st auth.State) {
@@ -164,9 +168,11 @@ func (s sessionAdapter) Info() (syncpkg.SessionInfo, bool) {
 	}, true
 }
 
-// Startup is the Wails OnStartup hook.
+// Startup finishes the initialization with the context of the application (the desktop shell calls it from the start of its bridge service, shell.Lifecycle).
 func (a *App) Startup(ctx context.Context) {
+	a.mu.Lock()
 	a.ctx = ctx
+	a.mu.Unlock()
 	db, err := store.Open(ctx, filepath.Join(a.opts.DataDir, "app.db"), store.KindApp)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("open app.db")
@@ -187,9 +193,21 @@ func (a *App) Startup(ctx context.Context) {
 	a.logger.Info().Str("version", a.opts.Version).Str("data_dir", a.opts.DataDir).Msg("started")
 }
 
-// DomReady is the Wails OnDomReady hook: the frontend can receive events.
+// appContext is the context given to Startup, nil before it; Startup and the shell hooks that
+// need it (second instance, auth) run on different goroutines.
+func (a *App) appContext() context.Context {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ctx
+}
+
+// DomReady is the explicit "frontend ready" signal: the shell calls it when the frontend can
+// receive events (the frontend shim through CoreBridge.DomReady; the page in the browser). memobrain:// URLs that
+// arrived earlier, whatever the state of the context, are delivered now, in order, and the ones
+// that follow are handled at once.
 func (a *App) DomReady(_ context.Context) {
 	a.mu.Lock()
+	a.ready = true
 	pending := a.pending
 	a.pending = nil
 	a.mu.Unlock()
@@ -198,8 +216,10 @@ func (a *App) DomReady(_ context.Context) {
 	}
 }
 
-// Shutdown is the Wails OnShutdown hook.
+// Shutdown releases what Startup and the open vaults hold (the desktop shell calls it from shell.Lifecycle.Stop). It is
+// idempotent: the shell may call it from more than one place.
 func (a *App) Shutdown(_ context.Context) {
+	a.shutdownAI()
 	a.sync.Shutdown()
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -212,8 +232,9 @@ func (a *App) Shutdown(_ context.Context) {
 	a.logger.Info().Msg("stopped")
 }
 
-// HandleURL processes a memobrain:// URL (macOS OnUrlOpen, second instance
-// arguments, or the login flow's custom-scheme fallback).
+// HandleURL processes a memobrain:// URL (macOS ApplicationLaunchedWithUrl, second instance
+// arguments, or the login flow's custom-scheme fallback). Until DomReady the URL is queued: the
+// frontend could not receive the event, and an auth callback needs the login the frontend started.
 func (a *App) HandleURL(raw string) {
 	u, err := platform.ParseSchemeURL(raw)
 	if err != nil {
@@ -224,12 +245,13 @@ func (a *App) HandleURL(raw string) {
 		a.logger.Warn().Err(err).Str("url", redactURL(raw)).Msg("ignored url")
 		return
 	}
-	if a.ctx == nil {
-		a.mu.Lock()
+	a.mu.Lock()
+	if !a.ready {
 		a.pending = append(a.pending, raw)
 		a.mu.Unlock()
 		return
 	}
+	a.mu.Unlock()
 	switch u.Kind {
 	case platform.URLOpen:
 		EventOpenRequest.Send(a.emit, OpenRequestPayload{Vault: u.Params.Get("vault"), File: u.Params.Get("file")})
@@ -239,6 +261,20 @@ func (a *App) HandleURL(raw string) {
 		}
 	case platform.URLAuthLogout:
 		a.logger.Info().Msg("logout redirect received")
+	}
+}
+
+// OnSecondInstance handles another instance launched with these arguments (the single-instance
+// callback of the shell; Windows and Linux deliver memobrain:// URLs this way). The running window
+// is brought to the front; the arguments may be the whole command line, the first URL is the one
+// handled.
+func (a *App) OnSecondInstance(args []string) {
+	a.logger.Info().Strs("args", redactArgs(args)).Msg("second instance launch")
+	if ctx := a.appContext(); ctx != nil {
+		a.host.ShowWindow(ctx)
+	}
+	if u, ok := platform.FindSchemeURL(args); ok {
+		a.HandleURL(u)
 	}
 }
 

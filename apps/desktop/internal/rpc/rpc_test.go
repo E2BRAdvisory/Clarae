@@ -119,3 +119,22 @@ func TestRegisterRefusesWhatWailsCannotBind(t *testing.T) {
 		t.Error("registering a service twice was accepted")
 	}
 }
+
+// CallBytes is Call on bytes (the desktop bridge passes the body of an upload as it is).
+func TestCallBytesIsCall(t *testing.T) {
+	d := newCalc(t)
+	for _, args := range []string{`[2,3]`, ``, `[1]`, `nope`} {
+		method := "Add"
+		if args == `` {
+			method = "Nothing"
+		}
+		want, wantErr := d.Call("Calc", method, args)
+		got, gotErr := d.CallBytes("Calc", method, []byte(args))
+		if got != want || (gotErr == nil) != (wantErr == nil) {
+			t.Errorf("%s%s: CallBytes = %q, %v; Call = %q, %v", method, args, got, gotErr, want, wantErr)
+		}
+	}
+	if got, err := d.CallBytes("Calc", "Nothing", nil); err != nil || got != `null` {
+		t.Errorf("nil arguments: %q, %v", got, err)
+	}
+}

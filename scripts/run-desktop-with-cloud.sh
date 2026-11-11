@@ -3,7 +3,7 @@
 # and debugging of sign-in, sync and sharing: PostgreSQL + S3 + Keycloak in
 # Docker, the cloud service as a local background process, and the desktop app.
 #
-#   scripts/run-desktop-with-cloud.sh                 stack + cloud + desktop (wails dev, hot reload)
+#   scripts/run-desktop-with-cloud.sh                 stack + cloud + desktop (hot reload: wails3 tool watcher)
 #   scripts/run-desktop-with-cloud.sh --two-devices   stack + cloud + TWO desktop instances (built binary,
 #                                                     separate data dirs) to simulate two devices
 #   scripts/run-desktop-with-cloud.sh --cloud-only    stack + cloud, no desktop (use your own client)
@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
 done
 
 need curl
-if [ "$CLOUD_ONLY" = 0 ]; then need wails; need node; need yarn; fi
+if [ "$CLOUD_ONLY" = 0 ]; then need node; need yarn; fi
 
 cleanup() {
   trap - EXIT INT TERM
@@ -76,11 +76,8 @@ export MEMOBRAIN_DEFAULT_SERVER_URL="$CLOUD_URL"
 DESKTOP_PIDS=""
 if [ "$TWO" = 1 ]; then
   log "Building desktop (production) for two instances"
-  (cd "$ROOT/apps/desktop" && run_quiet "desktop build" wails build -clean -nosyncgomod $WAILS_TAGS -ldflags "-X main.Version=dev-cloud")
-  case "$(uname -s)" in
-    Darwin) BIN="$(find "$ROOT/apps/desktop/build/bin" -maxdepth 1 -name '*.app' -type d | head -n 1)/Contents/MacOS/memobrain" ;;
-    *) BIN="$ROOT/apps/desktop/build/bin/memobrain" ;;
-  esac
+  run_quiet "desktop build" "$ROOT/scripts/build-desktop-bin.sh" --version dev-cloud
+  BIN="$(desktop_bin)"
   for n in 1 2; do
     d="$DEV_DIR/with-cloud-$n"; mkdir -p "$d/vaults"
     [ "$DEMO" = 1 ] && seed_demo_vault "$d/vaults/Demo"
@@ -94,6 +91,5 @@ else
   d="$DEV_DIR/with-cloud"; mkdir -p "$d/vaults"
   [ "$DEMO" = 1 ] && seed_demo_vault "$d/vaults/Demo"
   log "Starting desktop in dev mode (data: ${d#$ROOT/})"
-  cd "$ROOT/apps/desktop"
-  MEMOBRAIN_DATA_DIR="$d" wails dev -nosyncgomod $WAILS_TAGS
+  MEMOBRAIN_DATA_DIR="$d" desktop_dev
 fi

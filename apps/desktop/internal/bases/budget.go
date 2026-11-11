@@ -45,7 +45,7 @@ func newRunBudget(ctx context.Context, onPanic func(error)) *runBudget {
 
 // PanicError is an unexpected failure (a bug) of the evaluator. It is
 // recovered so that it can neither take the process down nor leave a binding
-// call without an answer (Wails v2 never resolves the promise after a panic).
+// call without an answer (Wails v2 never resolved the promise after a panic; v3 rejects it).
 type PanicError struct {
 	Value any
 	Stack []byte
