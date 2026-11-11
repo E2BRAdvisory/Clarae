@@ -20,6 +20,9 @@ func Set(src []byte, key string, value any) ([]byte, error) {
 	if strings.TrimSpace(key) == "" {
 		return nil, errors.New("property name is empty")
 	}
+	// A leading BOM is not part of the block: it is cut here and put back in front of the result, so the block
+	// is edited in place instead of a second one being written before the BOM.
+	bom, src := parser.CutBOM(src)
 	body, _, fm := parser.SplitFrontmatter(src)
 	crlf := bytes.Contains(src[:min(len(src), 200)], []byte("\r\n"))
 	var root yaml.Node
@@ -46,19 +49,21 @@ func Set(src []byte, key string, value any) ([]byte, error) {
 			old := mapping.Content[i+1]
 			valNode.HeadComment, valNode.LineComment, valNode.FootComment = old.HeadComment, old.LineComment, old.FootComment
 			mapping.Content[i+1] = &valNode
-			return render(&root, body, crlf)
+			return render(&root, bom, body, crlf)
 		}
 	}
 	keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}
 	mapping.Content = append(mapping.Content, keyNode, &valNode)
-	return render(&root, body, crlf)
+	return render(&root, bom, body, crlf)
 }
 
 // Delete removes key from the frontmatter; the block disappears when it becomes empty.
 func Delete(src []byte, key string) ([]byte, error) {
+	whole := src
+	bom, src := parser.CutBOM(src)
 	body, _, fm := parser.SplitFrontmatter(src)
 	if fm == nil {
-		return src, nil
+		return whole, nil
 	}
 	crlf := bytes.Contains(src[:min(len(src), 200)], []byte("\r\n"))
 	var root yaml.Node
@@ -73,7 +78,7 @@ func Delete(src []byte, key string) ([]byte, error) {
 		}
 	}
 	mapping.Content = kept
-	return render(&root, body, crlf)
+	return render(&root, bom, body, crlf)
 }
 
 // ensureMapping returns the top-level mapping of a (possibly empty) document.
@@ -87,9 +92,10 @@ func ensureMapping(root *yaml.Node) *yaml.Node {
 	return root.Content[0]
 }
 
-func render(root *yaml.Node, body []byte, crlf bool) ([]byte, error) {
+func render(root *yaml.Node, bom, body []byte, crlf bool) ([]byte, error) {
 	mapping := root.Content[0]
 	var out bytes.Buffer
+	out.Write(bom)
 	if len(mapping.Content) > 0 {
 		var y bytes.Buffer
 		enc := yaml.NewEncoder(&y)

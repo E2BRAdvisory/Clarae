@@ -192,3 +192,16 @@ func TestApplyRenameRollback(t *testing.T) {
 		t.Fatal("A.md not restored")
 	}
 }
+
+// A note with a leading BOM is a rename candidate like any other and its property links are rewritten in place,
+// the BOM untouched (the offsets point into the file as it is on disk).
+func TestRenameRewritesPropertyLinksBehindBOM(t *testing.T) {
+	const bom = "\xef\xbb\xbf"
+	note := bom + "---\nrelated: \"[[Plan]]\"\n---\nBody [[Plan]].\n"
+	e := newRenameEnv(t, map[string]string{"Projects/Plan.md": "# Plan\n", "Ref.md": note})
+	e.rename("Projects/Plan.md", "Projects/Roadmap.md")
+	want := bom + "---\nrelated: \"[[Roadmap]]\"\n---\nBody [[Roadmap]].\n"
+	if got := e.read("Ref.md"); got != want {
+		t.Fatalf("note after rename:\n%q\nwant\n%q", got, want)
+	}
+}

@@ -26,7 +26,12 @@ import { stripFrontmatter } from './sections';
 const ESC = ''; // stands for an escaped "[" until text nodes are processed
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
-/** Blanks %%comments%% (also across lines) outside code fences and protects \[[ and \^[ escapes. */
+/**
+ * Blanks %%comments%% (also across lines) outside code fences and protects \[[ and \^[ escapes.
+ * A leading BOM is dropped (by `stripFrontmatter`, whether the note has a frontmatter or not, as the
+ * indexer does): it is not part of the note, and left in place it would hide a fence or a frontmatter
+ * block on the first line from the scan below.
+ */
 export function prepareSource(src: string): string {
   const lines = stripFrontmatter(src).split('\n');
   const st: BlockState = { inMath: false, inComment: false };

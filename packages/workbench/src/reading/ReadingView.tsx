@@ -4,7 +4,7 @@ import { mountBaseEmbed } from '../bases/embed';
 import { drawingPreviewUrl } from '../drawing/preview';
 import { api } from '../app/api';
 import { hydrate, type EmbedBackend } from '../embeds/hydrate';
-import type { LinkSpec } from '../editor/context';
+import type { LinkSpec } from '../editor/types';
 import { handleLinkClick } from '../util/links';
 import { readingPreviewHandlers } from '../preview/hover';
 import { renderQueryInto } from '../query/env';

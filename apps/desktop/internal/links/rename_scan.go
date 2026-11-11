@@ -105,7 +105,10 @@ var frontmatterLink = regexp.MustCompile(`(!?)\[\[([^\[\]|#"\\\n]+)(#[^\[\]|"\\\
 // value are scanned (the rename candidates are selected that way), never
 // tags, aliases or cssclasses, and never past a YAML comment.
 func scanFrontmatterLinks(data []byte) []rewritable {
-	_, _, fm := parser.SplitFrontmatter(data)
+	// A leading BOM is not content (parser.Parse and ParseProperties skip it); the offsets below still count it,
+	// they point into the file as it is on disk.
+	_, content := parser.CutBOM(data)
+	_, _, fm := parser.SplitFrontmatter(content)
 	if len(fm) == 0 {
 		return nil
 	}

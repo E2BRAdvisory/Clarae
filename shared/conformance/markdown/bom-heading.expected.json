@@ -1,0 +1,22 @@
+{
+  "title": "bom-heading",
+  "aliases": [],
+  "properties": {},
+  "headings": [{ "level": 1, "text": "H", "line": 1 }],
+  "links": [
+    {
+      "line": 2,
+      "kind": "wikilink",
+      "target": "l",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [],
+  "blockIds": [],
+  "tasks": [{ "line": 3, "state": " ", "text": "todo" }],
+  "footnotes": [],
+  "wordCount": 4
+}

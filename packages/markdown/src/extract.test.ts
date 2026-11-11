@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maskBlocks, scanSpans, type BlockState } from './extract';
+import { maskBlocks, scanSpans, type BlockState } from './inline';
 
 describe('scanSpans / maskBlocks', () => {
   it('finds comment and math spans on one line', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown } from './render';
+import { prepareSource, renderMarkdown } from './render';
 import { extractBlock, extractSection } from './sections';
 
 const dom = (html: string): HTMLElement => {
@@ -118,6 +118,32 @@ describe('renderMarkdown', () => {
     );
     expect(html).not.toMatch(/<script|<iframe|<style|onclick|onerror|style=|javascript:/i);
     expect(html).toContain('<b>ok</b>');
+  });
+});
+
+describe('a leading BOM', () => {
+  it('is dropped by prepareSource and never shows in the rendering', () => {
+    expect(prepareSource('\uFEFFtext %%c%% more\n')).toBe('text       more\n');
+    // one mark, as the indexer takes off: a second one is text, and is not dropped here either
+    expect(prepareSource('\uFEFF\uFEFFtext\n')).toBe('\uFEFFtext\n');
+    // A guard only: micromark drops a leading BOM by itself, so this holds without prepareSource.
+    expect(renderMarkdown('\uFEFFhello\n')).not.toContain('\uFEFF');
+  });
+
+  it('does not hide a fence on the first line: its content is code, comments included', () => {
+    const src = '\uFEFF```\n%% not a comment %%\n```\n';
+    expect(prepareSource(src)).toBe('```\n%% not a comment %%\n```\n');
+    const d = dom(renderMarkdown(src));
+    expect(d.querySelector('pre code')?.textContent).toBe('%% not a comment %%\n');
+    // A guard only (micromark drops the BOM anyway): the discriminating checks are the ones above.
+    expect(d.textContent).not.toContain('\uFEFF');
+  });
+
+  it('does not hide a frontmatter block on the first line', () => {
+    const d = dom(renderMarkdown('\uFEFF---\ntitle: x\n---\n# Body\n'));
+    expect(d.querySelector('h1')?.textContent).toBe('Body');
+    expect(d.textContent).not.toContain('title');
+    expect(d.querySelector('hr')).toBeNull();
   });
 });
 

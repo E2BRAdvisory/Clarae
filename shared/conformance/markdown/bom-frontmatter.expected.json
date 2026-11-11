@@ -1,0 +1,22 @@
+{
+  "title": "bom-frontmatter",
+  "aliases": [],
+  "properties": { "title": "x" },
+  "headings": [{ "level": 1, "text": "H", "line": 5 }],
+  "links": [
+    {
+      "line": 6,
+      "kind": "wikilink",
+      "target": "l",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [{ "line": 2, "name": "t" }],
+  "blockIds": [],
+  "tasks": [],
+  "footnotes": [],
+  "wordCount": 2
+}

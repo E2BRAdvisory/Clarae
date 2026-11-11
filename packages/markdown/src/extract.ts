@@ -7,9 +7,10 @@
 // Block structure (headings, code blocks) comes from an mdast tree; inline
 // OFM elements are found by scanning source lines outside code, exactly like
 // the Go parser. Offsets are UTF-16 code units (what CodeMirror uses).
-import { fromMarkdown } from 'mdast-util-from-markdown';
-import type { Code, Heading as MdHeading, Root } from 'mdast';
+import type { Heading as MdHeading } from 'mdast';
 import { parse as parseYaml } from 'yaml';
+import { scanBody } from './body';
+import { isValidTag, type InlineSpan } from './inline';
 
 export type LinkKind = 'wikilink' | 'markdown' | 'external';
 
@@ -64,22 +65,16 @@ export interface NoteDocument {
   frontmatterLines: number;
 }
 
-const WIKILINK = /(!?)\[\[([^[\]]+?)\]\]/g;
-const MD_LINK = /(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
-const TAG = /(^|[ \t\n\f\r([{,;])#([\p{L}\p{N}_\-/]+)/gu;
-const BLOCK_ID = /[ \t\n\f\r]\^([A-Za-z0-9-]+)[ \t\n\f\r]*$/;
-const TASK =
-  /^[ \t\n\f\r]*(?:>[ \t\n\f\r]*)*(?:[-*+]|\d+[.)])[ \t\n\f\r]+\[(.)\][ \t\n\f\r]*(.*)$/u;
-const FOOTNOTE = /^\[\^([^\]]+)\]:/;
-const URL_RE = /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s<>)]+/g;
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
-
-/** Splits a leading YAML block delimited by "---" lines. */
-export function splitFrontmatter(src: string): {
+/**
+ * Splits a leading YAML block delimited by "---" lines. A leading BOM is not content, as in the Go
+ * parser: it neither hides the block nor stays in `body`.
+ */
+export function splitFrontmatter(raw: string): {
   body: string;
   lines: number;
   yaml: string | null;
 } {
+  const src = raw.startsWith('\uFEFF') ? raw.slice(1) : raw;
   const first = src.indexOf('\n');
   if (first < 0 || src.slice(0, first).replace(/\r+$/, '') !== '---') {
     return { body: src, lines: 0, yaml: null };
@@ -99,15 +94,6 @@ export function splitFrontmatter(src: string): {
     pos = next;
   }
   return { body: src, lines: 0, yaml: null };
-}
-
-/** Obsidian rule: a tag needs at least one character that is not a digit, '/', '-' or '_'. */
-export function isValidTag(name: string): boolean {
-  if (name === '') return false;
-  for (const ch of name) {
-    if (!/\p{Nd}/u.test(ch) && ch !== '/' && ch !== '-' && ch !== '_') return true;
-  }
-  return false;
 }
 
 function stringList(v: unknown): string[] {
@@ -186,271 +172,70 @@ function applyFrontmatter(doc: NoteDocument, fm: string | null): void {
   }
 }
 
-/** Blanks `` `code` `` spans keeping every column. */
-export function stripInlineCode(s: string): string {
-  let out = '';
-  let inCode = false;
-  for (const ch of s) {
-    if (ch === '`') {
-      inCode = !inCode;
-      out += ' ';
-    } else {
-      out += inCode ? ' '.repeat(ch.length) : ch;
-    }
-  }
-  return out;
-}
-
-/** True for URLs (https://…, mailto:…); one-letter schemes are drive letters. */
-export function isExternal(target: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9+.-]+:/.test(target);
-}
-
-export interface BlockState {
-  inMath: boolean;
-  inComment: boolean;
-}
-
-export interface BlockSpan {
-  kind: 'comment' | 'math';
-  /** Offsets within the line; the delimiters themselves are included. */
-  from: number;
-  to: number;
-  /** True when the span starts before this line (it continues a block). */
-  continued: boolean;
-  /** True when the span is closed on this line (false = runs on to the next line). */
-  closed: boolean;
-}
-
-/**
- * Finds the %%comment%% and $$math$$ spans of one line, updating the state
- * that carries to the next line. An unclosed block runs to the end of the
- * document. Delimiters belong to the span.
- */
-export function scanSpans(s: string, st: BlockState): BlockSpan[] {
-  const spans: BlockSpan[] = [];
-  let p = 0;
-  while (p < s.length) {
-    if (st.inComment || st.inMath) {
-      const kind = st.inMath ? 'math' : 'comment';
-      const delim = st.inMath ? '$$' : '%%';
-      const end = s.indexOf(delim, p);
-      if (end < 0) {
-        spans.push({
-          kind,
-          from: p,
-          to: s.length,
-          continued: spans.length === 0 && p === 0,
-          closed: false,
+/** Records what scanInline found on one line of the body (offsets made absolute with `base`). */
+function addSpans(doc: NoteDocument, spans: InlineSpan[], lineNo: number, base: number): void {
+  for (const sp of spans) {
+    switch (sp.kind) {
+      case 'wikilink':
+        doc.links.push({
+          line: lineNo,
+          kind: 'wikilink',
+          target: sp.target,
+          heading: sp.heading,
+          block: sp.block,
+          alias: sp.alias,
+          embed: sp.embed,
+          start: base + sp.from,
+          end: base + sp.to,
+          targetStart: base + sp.targetFrom,
+          targetEnd: base + sp.targetTo,
         });
-        return spans;
-      }
-      spans.push({
-        kind,
-        from: p,
-        to: end + 2,
-        continued: spans.length === 0 && p === 0,
-        closed: true,
-      });
-      p = end + 2;
-      st.inComment = false;
-      st.inMath = false;
-    } else {
-      const c = s.indexOf('%%', p);
-      const m = s.indexOf('$$', p);
-      if (c < 0 && m < 0) return spans;
-      const isComment = m < 0 || (c >= 0 && c < m);
-      const start = isComment ? c : m;
-      const delim = isComment ? '%%' : '$$';
-      const end = s.indexOf(delim, start + 2);
-      if (end < 0) {
-        spans.push({
-          kind: isComment ? 'comment' : 'math',
-          from: start,
-          to: s.length,
-          continued: false,
-          closed: false,
+        break;
+      case 'link':
+        doc.links.push({
+          line: lineNo,
+          kind: sp.linkKind,
+          target: sp.target,
+          heading: '',
+          block: '',
+          alias: sp.text,
+          embed: sp.embed,
+          start: base + sp.from,
+          end: base + sp.to,
+          targetStart: base + sp.targetFrom,
+          targetEnd: base + sp.targetTo,
         });
-        if (isComment) st.inComment = true;
-        else st.inMath = true;
-        return spans;
-      }
-      spans.push({
-        kind: isComment ? 'comment' : 'math',
-        from: start,
-        to: end + 2,
-        continued: false,
-        closed: true,
-      });
-      p = end + 2;
-    }
-  }
-  return spans;
-}
-
-/**
- * Blanks (keeping every column) everything inside %%comments%% and $$math$$,
- * updating the state that carries to the next line.
- */
-export function maskBlocks(s: string, st: BlockState): string {
-  let out = s;
-  for (const sp of scanSpans(s, st)) {
-    out = out.slice(0, sp.from) + ' '.repeat(sp.to - sp.from) + out.slice(sp.to);
-  }
-  return out;
-}
-
-interface Parsed {
-  target: string;
-  heading: string;
-  block: string;
-  alias: string;
-}
-
-/** Splits the inside of a wikilink: target#heading|alias or target#^block|alias. */
-export function parseWikilinkInner(inner: string): Parsed {
-  let target = inner;
-  let alias = '';
-  const bar = inner.indexOf('|');
-  if (bar >= 0) {
-    target = inner.slice(0, bar);
-    alias = inner.slice(bar + 1);
-  }
-  let heading = '';
-  let block = '';
-  const hash = target.indexOf('#');
-  if (hash >= 0) {
-    const frag = target.slice(hash + 1);
-    target = target.slice(0, hash);
-    if (frag.startsWith('^')) block = frag.slice(1);
-    else heading = frag;
-  }
-  return { target: target.trim(), heading, block, alias };
-}
-
-function wikiTargetSpan(clean: string, from: number, to: number, base: number): [number, number] {
-  let end = to;
-  const m = /[|#]/.exec(clean.slice(from, to));
-  if (m) end = from + m.index;
-  let start = from;
-  while (start < end && (clean[start] === ' ' || clean[start] === '\t')) start++;
-  while (end > start && (clean[end - 1] === ' ' || clean[end - 1] === '\t')) end--;
-  return [base + start, base + end];
-}
-
-function scanLine(
-  doc: NoteDocument,
-  line: string,
-  clean: string,
-  lineNo: number,
-  base: number,
-  startedHidden: boolean,
-): void {
-  const found: { col: number; link: Link }[] = [];
-  const wikiRe = new RegExp(WIKILINK.source, 'dg');
-  for (const m of clean.matchAll(wikiRe)) {
-    const idx = (m as RegExpMatchArray & { indices: [number, number][] }).indices;
-    const [m0, m1] = idx[0] as [number, number];
-    const [bang0, bang1] = idx[1] as [number, number];
-    const [in0, in1] = idx[2] as [number, number];
-    if (m0 > 0 && clean[m0 - 1] === '\\') continue; // escaped: \[[not a link]]
-    const p = parseWikilinkInner(clean.slice(in0, in1));
-    const [targetStart, targetEnd] = wikiTargetSpan(clean, in0, in1, base);
-    found.push({
-      col: m0,
-      link: {
-        line: lineNo,
-        kind: 'wikilink',
-        ...p,
-        embed: bang1 > bang0,
-        start: base + m0,
-        end: base + m1,
-        targetStart,
-        targetEnd,
-      },
-    });
-  }
-  // Blank wikilinks keeping columns so Markdown links can be located/ordered.
-  const noWiki = clean.replace(new RegExp(WIKILINK.source, 'g'), (m) => ' '.repeat(m.length));
-  const mdRe = new RegExp(MD_LINK.source, 'dg');
-  for (const m of noWiki.matchAll(mdRe)) {
-    const idx = (m as RegExpMatchArray & { indices: [number, number][] }).indices;
-    const [m0, m1] = idx[0] as [number, number];
-    const [bang0, bang1] = idx[1] as [number, number];
-    const [a0, a1] = idx[2] as [number, number];
-    const [t0, t1] = idx[3] as [number, number];
-    const target = noWiki.slice(t0, t1);
-    const kind: LinkKind = isExternal(target) ? 'external' : 'markdown';
-    const hash = target.indexOf('#');
-    found.push({
-      col: m0,
-      link: {
-        line: lineNo,
-        kind,
-        target,
-        heading: '',
-        block: '',
-        alias: noWiki.slice(a0, a1),
-        embed: bang1 > bang0,
-        start: base + m0,
-        end: base + m1,
-        targetStart: base + t0,
-        targetEnd: base + (hash >= 0 ? t0 + hash : t1),
-      },
-    });
-  }
-  found.sort((a, b) => a.col - b.col); // stable
-  for (const f of found) doc.links.push(f.link);
-
-  const noUrl = noWiki
-    .replace(new RegExp(URL_RE.source, 'g'), ' ')
-    .replace(new RegExp(MD_LINK.source, 'g'), ' ');
-  for (const m of noUrl.matchAll(new RegExp(TAG.source, TAG.flags))) {
-    const name = m[2] ?? '';
-    if (isValidTag(name)) doc.tags.push({ line: lineNo, name });
-  }
-  const b = BLOCK_ID.exec(clean);
-  if (b) doc.blockIds.push({ line: lineNo, id: b[1] ?? '' });
-  if (startedHidden) return;
-  const t = TASK.exec(line);
-  if (t) doc.tasks.push({ line: lineNo, state: t[1] ?? '', text: (t[2] ?? '').trim() });
-  const f = FOOTNOTE.exec(line);
-  if (f) doc.footnotes.push(f[1] ?? '');
-  for (let n = inlineFootnotes(clean); n > 0; n--) {
-    const inline = doc.footnotes.filter((x) => x.startsWith('^')).length + 1;
-    doc.footnotes.push(`^${inline}`);
-  }
-}
-
-/**
- * Counts the inline footnotes ^[…] of a line whose code spans, comments and math are blanked. The
- * brackets may nest (^[see [[Note]]]); an escaped \^[ and an unclosed one do not count. Inline
- * footnotes have no label: the index names them ^1, ^2, … in document order, as they are numbered.
- * Same algorithm as the Go parser (shared conformance fixtures).
- */
-export function inlineFootnotes(clean: string): number {
-  let n = 0;
-  for (let i = 0; i + 1 < clean.length; i++) {
-    if (clean[i] !== '^' || clean[i + 1] !== '[' || (i > 0 && clean[i - 1] === '\\')) continue;
-    let depth = 0;
-    for (let j = i + 1; j < clean.length; j++) {
-      if (clean[j] === '[') depth++;
-      else if (clean[j] === ']') depth--;
-      if (depth === 0) {
-        n++;
-        i = j;
+        break;
+      case 'tag':
+        doc.tags.push({ line: lineNo, name: sp.name });
+        break;
+      case 'blockId':
+        doc.blockIds.push({ line: lineNo, id: sp.id });
+        break;
+      case 'task':
+        doc.tasks.push({ line: lineNo, state: sp.state, text: sp.text });
+        break;
+      case 'footnoteDef':
+        doc.footnotes.push(sp.label);
+        break;
+      case 'footnoteInline': {
+        // No label: the index names them ^1, ^2, … in document order.
+        const inline = doc.footnotes.filter((x) => x.startsWith('^')).length + 1;
+        doc.footnotes.push(`^${inline}`);
         break;
       }
+      default:
+        break;
     }
   }
-  return n;
 }
 
 function headingText(node: MdHeading, lines: string[]): string {
   const start = node.position?.start.line ?? 1;
   const end = node.position?.end.line ?? start;
   const raw = lines.slice(start - 1, end);
-  const first = raw[0] ?? '';
+  // The CR of a CRLF line is a line ending, not text: "# B #\r" closes its heading like "# B #".
+  const first = (raw[0] ?? '').replace(/\r$/, '');
   if (/^ {0,3}#{1,6}(?:[ \t]|$)/.test(first)) {
     return first
       .replace(/^ {0,3}#{1,6}[ \t]*/, '')
@@ -478,53 +263,23 @@ export function extract(title: string, src: string): NoteDocument {
   applyFrontmatter(doc, fm.yaml);
 
   const body = fm.body;
-  const lines = body.split('\n');
-  const codeLines = new Array<boolean>(lines.length).fill(false);
-
-  const tree: Root = fromMarkdown(body);
+  const scan = scanBody(body);
+  const { lines } = scan;
   const visit = (node: { type: string; children?: unknown[] }): void => {
     if (node.type === 'heading') {
       const h = node as MdHeading;
       const text = headingText(h, lines);
       if (text !== '')
         doc.headings.push({ level: h.depth, text, line: (h.position?.start.line ?? 1) + fm.lines });
-    } else if (node.type === 'code') {
-      const c = node as Code;
-      const s = c.position?.start.line ?? 0;
-      const e = c.position?.end.line ?? 0;
-      for (let l = s; l <= e; l++) if (l >= 1 && l <= codeLines.length) codeLines[l - 1] = true;
     }
     for (const child of (node.children ?? []) as { type: string; children?: unknown[] }[])
       visit(child);
   };
-  visit(tree);
+  visit(scan.tree);
 
-  // Fence delimiters (also handles fences goldmark-style at any nesting we saw in the Go port).
-  let inFence = false;
-  let fence = '';
-  lines.forEach((l, i) => {
-    const m = FENCE.exec(l);
-    if (!m) return;
-    const delim = m[1] ?? '';
-    if (!inFence) {
-      inFence = true;
-      fence = delim;
-      codeLines[i] = true;
-    } else if (delim.startsWith(fence.charAt(0)) && delim.length >= fence.length) {
-      inFence = false;
-      codeLines[i] = true;
-    }
-  });
-
-  const state: BlockState = { inMath: false, inComment: false };
-  let lineStart = src.length - body.length;
-  lines.forEach((raw, i) => {
-    const base = lineStart;
-    lineStart += raw.length + 1;
-    if (codeLines[i]) return;
-    const hidden = state.inMath || state.inComment;
-    const visible = maskBlocks(stripInlineCode(raw), state);
-    scanLine(doc, raw, visible, i + 1 + fm.lines, base, hidden);
+  const bodyStart = src.length - body.length;
+  lines.forEach((_raw, i) => {
+    addSpans(doc, scan.spans[i] ?? [], i + 1 + fm.lines, bodyStart + (scan.starts[i] ?? 0));
   });
   doc.wordCount = countWords(body);
   return doc;

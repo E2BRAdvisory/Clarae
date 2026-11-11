@@ -92,13 +92,27 @@ type Task struct {
 	Text  string
 }
 
+// utf8BOM is the byte order mark some editors put at the start of a file.
+var utf8BOM = []byte("\xef\xbb\xbf")
+
+// CutBOM splits a leading UTF-8 BOM from src: bom is the mark (nil when there is none) and rest the content
+// after it. Packages that rewrite a note (properties) work on rest and put bom back in front of the result.
+func CutBOM(src []byte) (bom, rest []byte) {
+	if rest, ok := bytes.CutPrefix(src, utf8BOM); ok {
+		return utf8BOM, rest
+	}
+	return nil, src
+}
+
 var md = goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Footnote))
 
 // Parse extracts the structure of a note. title is the file name without
 // extension (Obsidian semantics: the H1 is not the title).
 func Parse(title string, src []byte) Document {
 	doc := Document{Title: title, Aliases: []string{}, Properties: map[string]any{}, Headings: []Heading{}, Links: []Link{}, Tags: []Tag{}, BlockIDs: []BlockID{}, Tasks: []Task{}, Footnotes: []string{}}
-	body, bodyLineOffset, fm := splitFrontmatter(src)
+	// A leading BOM is not content: it must not hide a frontmatter block or an ATX heading on the
+	// first line. Offsets still point into src, the file as it is on disk.
+	body, bodyLineOffset, fm := splitFrontmatter(bytes.TrimPrefix(src, utf8BOM))
 	parseFrontmatter(&doc, fm)
 
 	lines := bytes.Split(body, []byte("\n"))
@@ -570,7 +584,7 @@ func countWords(body []byte) int {
 // the reserved tags/aliases/cssclasses keys). It is much cheaper than Parse
 // and is what property filters use.
 func ParseProperties(src []byte) map[string]any {
-	_, _, fm := splitFrontmatter(src)
+	_, _, fm := splitFrontmatter(bytes.TrimPrefix(src, utf8BOM))
 	doc := Document{Properties: map[string]any{}}
 	parseFrontmatter(&doc, fm)
 	return doc.Properties

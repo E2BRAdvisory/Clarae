@@ -1,0 +1,31 @@
+{
+  "title": "crlf-headings-tasks",
+  "aliases": [],
+  "properties": {},
+  "headings": [
+    { "level": 1, "text": "Alpha", "line": 1 },
+    { "level": 2, "text": "Beta", "line": 2 },
+    { "level": 1, "text": "Setext", "line": 3 }
+  ],
+  "links": [
+    {
+      "line": 7,
+      "kind": "wikilink",
+      "target": "l",
+      "heading": "",
+      "block": "",
+      "alias": "",
+      "embed": false
+    }
+  ],
+  "tags": [{ "line": 6, "name": "t" }],
+  "blockIds": [{ "line": 19, "id": "blk" }],
+  "tasks": [
+    { "line": 6, "state": " ", "text": "todo #t" },
+    { "line": 7, "state": "x", "text": "done [[l]]" },
+    { "line": 8, "state": "-", "text": "cancelled" },
+    { "line": 9, "state": " ", "text": "quoted" }
+  ],
+  "footnotes": ["n"],
+  "wordCount": 19
+}

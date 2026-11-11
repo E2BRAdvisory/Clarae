@@ -883,10 +883,12 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (cur === undefined) return reject('not-found: no such file');
       if (expectedHash && hashOf(cur) !== expectedHash)
         return reject('conflict: file changed on disk');
+      // Like the Go writer: a leading BOM stays the first character, the block is edited behind it.
+      const bom = cur.startsWith('\uFEFF') ? '\uFEFF' : '';
       const fm = splitFrontmatter(cur);
       const doc = parseDocument(fm.yaml ?? '');
       doc.set(key, JSON.parse(valueJSON));
-      const out = `---\n${doc.toString()}---\n${fm.body}`;
+      const out = `${bom}---\n${doc.toString()}---\n${fm.body}`;
       v.files.set(path, out);
       changed(id, [path]);
       return Promise.resolve({ path, hash: hashOf(out), size: out.length });
@@ -897,12 +899,14 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       if (cur === undefined) return reject('not-found: no such file');
       if (expectedHash && hashOf(cur) !== expectedHash)
         return reject('conflict: file changed on disk');
+      const bom = cur.startsWith('\uFEFF') ? '\uFEFF' : '';
       const fm = splitFrontmatter(cur);
       if (fm.yaml === null) return Promise.resolve({ path, hash: hashOf(cur), size: cur.length });
       const doc = parseDocument(fm.yaml);
       doc.delete(key);
-      const body = doc.toString().trim();
-      const out = body ? `---\n${doc.toString()}---\n${fm.body}` : fm.body;
+      // An empty mapping prints as "{}": the block goes away instead, as in the Go writer.
+      const empty = Object.keys((doc.toJS() as Record<string, unknown> | null) ?? {}).length === 0;
+      const out = bom + (empty ? fm.body : `---\n${doc.toString()}---\n${fm.body}`);
       v.files.set(path, out);
       changed(id, [path]);
       return Promise.resolve({ path, hash: hashOf(out), size: out.length });
