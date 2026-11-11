@@ -30,7 +30,7 @@ l'aggiornamento automatico è disattivato in queste build: le nuove versioni si 
 in _Impostazioni → Cloud_. Dettagli nella [guida utente](docs/user-guide/installazione.md).
 
 > **macOS Security Note**
-> 
+>
 > Esegui questo comando nel Terminale per rimuovere il flag di quarantena:
 > `sudo xattr -cr /Applications/MemoBrain\ Notes.app`
 

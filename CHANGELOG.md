@@ -4,6 +4,37 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Il client desktop passa a Wails v3 (milestone M15, [roadmap](docs/roadmap.md) §13-octies, ADR-0051) e arrivano le prime parti del nuovo editor Live (milestone M16, §13-nonies, ADR-0049 e ADR-0050). Gli ADR 0049, 0050 e 0051 sono in stato proposta: non sono accettati né recepiti in `Specifications.md`, che il proprietario deve aggiornare (V-07, A-03, D-07, §2.3, §2.6.6, §3.4.2, §4.2, §4.5). L'editor Milkdown, l'assistente AI e la collaborazione in tempo reale **non sono ancora offerti**: sono nel codice dietro interruttori di build spenti e le build rilasciate usano il Live di sempre. Il protocollo di sync, le API e le migrazioni del cloud non cambiano.
+
+### Compatibilità
+
+- **Go 1.27.4:** desktop, cloud e strumenti si compilano con Go 1.27.4 (prima 1.27.3) per GO-2026-6859, vulnerabilità di `net/http` segnalata da `govulncheck` (ADR-0006). Le immagini Docker del cloud usano `golang:1.27.4-alpine3.24`; chi compila dai sorgenti ha bisogno di Go 1.27.4, che con `GOTOOLCHAIN=auto` viene scaricato.
+- **macOS 13 o successivo:** l'app desktop richiede macOS 13 (prima l'`Info.plist` dichiarava 10.13). Il linker di Go 1.27 compila per macOS 13: la 1.3.4 dichiarava 10.13 su Intel e 11.0 su Apple Silicon, ma non era stata provata sotto macOS 13. Su macOS 12 o precedente il Finder rifiuta l'app. **Chi usa macOS 12 o precedente non può installare la 1.3.5** (serve macOS 13, `LSMinimumSystemVersion` `13.0.0`) e resta sulla 1.3.4 finché non aggiorna il sistema.
+- **Wails v3 sul desktop (ADR-0051):** funzioni, nomi degli artefatti, installer e dati restano quelli della 1.3.x. Su macOS e Linux l'elenco degli **strumenti recenti di Excalidraw** si azzera una volta, perché cambia l'origine della pagina (`wails://wails` diventa `wails://localhost`). L'app è provata su macOS; su Windows c'è solo il cross-build e su Linux la build non è ancora stata eseguita (matrice manuale in `docs/qa/m15-wails3-matrice.md`). Le build pubblicate non hanno l'aggiornamento automatico (canale non firmato): la nuova versione si installa a mano sopra la 1.3.4, su ogni sistema operativo. Questo percorso non è ancora provato su Windows e Linux. Non è previsto un ritorno a Wails v2: un problema grave si corregge con una nuova versione. Lo smoke del binario su macOS (avvio, seconda istanza con `memobrain://`, chiusura con SIGTERM) è verde.
+- **Config Profile:** nuovi flag riservati `features.ai` e `features.collab` (default `false`). Non hanno effetto: l'assistente AI e la collaborazione in tempo reale sono implementati ma inattivi, e servono anche una build che li abiliti (e, per la collaborazione, un provider che oggi non esiste). Un profilo con `true` in una build rilasciata non cambia nulla (ADR-0050).
+
+### Client desktop e workbench
+
+- **Export HTML fino a 256 MiB** anche sul desktop su Wails v3, che per la richiesta ammette 64 MiB: i payload oltre 32 MiB viaggiano a blocchi su un percorso dedicato della stessa origine, senza cambiare la CSP. Provato su macOS (65, 200 e 250 MiB); Windows e Linux no.
+- **Dialoghi di file e cartella** agganciati alla finestra dell'app. Su Windows, «Annulla» non deve mostrare errori: da verificare su una macchina vera.
+- **Build e sviluppo:** `task build-desktop`, `task dev-desktop` e `task release-desktop` non usano più la CLI di Wails v2: la build è un `go build`, lo sviluppo usa il watcher di Wails v3 con il server esbuild su `127.0.0.1:5173`, e la CLI `wails3` serve solo su Windows (risorse dell'exe e bootstrapper WebView2) e nel watcher. Un controllo in `task lint` verifica che le versioni di Wails (Go, runtime npm, CLI) coincidano, e ogni binario di rilascio è controllato (tag `production` presente, `mcp`, `server` e `devtools` assenti).
+- **Build di rilascio:** `task release-desktop`, `task web-build` e l'immagine Docker del cloud rifiutano le variabili `MEMOBRAIN_LIVE_ENGINE`, `MEMOBRAIN_AI`, `MEMOBRAIN_COLLAB`, `MEMOBRAIN_E2E` e `MEMOBRAIN_DIST` se sono impostate nella shell di chi compila, e controllano che l'interfaccia costruita non contenga né il nuovo editor né il finto binding delle prove: un rilascio esce sempre con la build predefinita. `MEMOBRAIN_DIST` accetta ora anche percorsi assoluti (uno relativo parte dalla cartella del pacchetto dell'app; un valore che coincide con il pacchetto o con una sua cartella madre è rifiutato, perché la build svuota la cartella di destinazione).
+- **Comandi nuovi:** _Cerca nella nota_ (`Mod+F`) e _Vai alla riga_ (`Mod+Alt+G`, con una finestra per il numero) sono comandi della palette e di _Scorciatoie_ (`editor:find` e `editor:goto-line`), assegnabili e disponibili anche in Sorgente.
+- **Menu slash e barra:** `/table` (o `/tabella`) e il pulsante Tabella della barra dell'editor inseriscono la tabella intera (prima il primo `|` spariva); `/callout` e `/divider` a metà riga iniziano su una riga propria.
+- **Tag:** `Mod+clic` su un `#tag` nell'editor in modalità Live apre la ricerca del tag (prima non faceva nulla); in Sorgente il clic non segue il tag.
+- **File con CRLF:** le sezioni incorporate, le statistiche e le query della nota leggono ora tutti i titoli (anche con i `#` finali) e tutte le attività. L'indice desktop leggeva già bene il CRLF.
+- **File con BOM iniziale:** il BOM non nasconde più il frontmatter né il titolo in prima riga, né nell'indice né in Reading; Reading non mostra il BOM e riconosce fence e frontmatter in prima riga. Di conseguenza il pannello Proprietà mostra le proprietà di questi file, e modificarle o rimuoverle non duplica più il blocco e conserva il BOM; rinominare una nota aggiorna anche i link scritti nelle proprietà di un file con BOM.
+
+### Contratti
+
+- `api/config-profile.schema.json` (e la sua copia incorporata nel core del client): chiavi `features.ai` e `features.collab`, booleane, default `false`. `api/openapi.yaml` non cambia.
+
+### Documentazione
+
+- ADR-0049 (editor Live su Milkdown, con l'elenco delle differenze trovate in Live), ADR-0050 (AI inattiva e collaborazione spenta) e ADR-0051 (Wails v3), tutti in proposta; roadmap M15 e M16 con lo stato reale delle onde e dei criteri di uscita; matrice di QA manuale `docs/qa/m15-wails3-matrice.md` (anche l'installazione a mano sopra la 1.3.4, il percorso reale delle build senza aggiornamento automatico); `docs/release/README.md` (build e rilascio su Wails v3); tabella delle chiavi del Config Profile nella guida admin; guida utente (nuovi comandi); `shared/conformance/README.md` (chi consuma le fixture, `roundtrip/` e le fixture `bom-*` e `crlf-*`); pagina di parità.
+
 ## [1.3.4] - 2026-11-05
 
 Le presentazioni Marp come i disegni (milestone M14, [roadmap](docs/roadmap.md) §13-septies). La decisione è in ADR-0048, accettato: supera in parte ADR-0047 e, come questo, devia da `Specifications.md` (§2.2.1, §3.4.5, §3.4.6), che il proprietario deve aggiornare. Nessuna modifica al cloud né al protocollo di sync.

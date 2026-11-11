@@ -31,7 +31,10 @@ Non sono previsti plugin, temi di terze parti né CSS personalizzato: l'aspetto 
 | Grassetto / corsivo            | `Mod+B` / `Mod+I`        | Evidenzia / barrato / codice          | `Mod+Maiusc+H` / `X` / `C` |
 | Link / wikilink                | `Mod+K` / `Mod+Maiusc+K` | Elenco puntato / numerato / citazione | `Mod+Maiusc+8` / `7` / `9` |
 | Attiva attività                | `Mod+Invio`              | Sincronizza ora                       | `Mod+Maiusc+S`             |
-| Impostazioni                   | `Mod+,`                  |                                       |                            |
+| Impostazioni                   | `Mod+,`                  | Cerca nella nota                      | `Mod+F`                    |
+| Vai alla riga                  | `Mod+Alt+G`              |                                       |                            |
+
+_Cerca nella nota_ apre la barra di ricerca dell'editor (anche con espressioni regolari e distinzione delle maiuscole); _Vai alla riga_ chiede il numero di riga. Valgono per la nota aperta in Live o in Sorgente, non in Lettura.
 
 Senza scorciatoia predefinita, ma nella palette e assegnabili da _Scorciatoie_: cambio vault, passaggio chiaro/scuro, blocca/sblocca scheda e chiusure delle schede (a destra, a sinistra, altre, tutte), nuova cartella, inserisci separatore, esporta come immagine, avvio della presentazione (dall'inizio o dalla slide corrente), mostra le schede della barra destra (proprietà, link, slide, statistiche).
 

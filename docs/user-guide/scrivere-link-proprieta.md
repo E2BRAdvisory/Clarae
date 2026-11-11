@@ -4,8 +4,8 @@
 
 Ogni nota si apre in una di tre modalità (`Mod+E` alterna lettura/modifica, `Mod+Maiusc+E` sorgente/anteprima, o dalla palette: _Modalità Live Preview / sorgente / lettura_):
 
-- **Live Preview:** scrivete in Markdown e vedete subito il risultato (i simboli compaiono solo sulla riga in cui siete).
-- **Sorgente:** Markdown puro, con colorazione.
+- **Live Preview:** è la modalità predefinita. Scrivete in Markdown e vedete subito il risultato (i simboli compaiono solo sulla riga in cui siete).
+- **Sorgente:** Markdown puro, con colorazione. È l'unica modalità in cui si vede il frontmatter YAML della nota.
 - **Lettura:** vista di sola lettura, con embed e blocchi renderizzati.
 
 ## Formattazione
@@ -23,8 +23,8 @@ Supportati: titoli, elenchi, attività (`- [ ]`, con stati personalizzati), cita
 
 ## Tag e proprietà
 
-- **Tag:** `#idea`, `#progetto/memobrain` (gerarchici). La scheda _Tag_ elenca i tag con i conteggi.
-- **Proprietà (frontmatter YAML):** in cima alla nota, tra `---`. Il pannello _Proprietà_ e l'editor in cima alla nota permettono di aggiungerle e modificarle con il tipo corretto (testo, numero, data, elenco, casella). Le proprietà `tags` e `aliases` hanno un significato speciale: gli alias diventano nomi alternativi per i link.
+- **Tag:** `#idea`, `#progetto/memobrain` (gerarchici). La scheda _Tag_ elenca i tag con i conteggi. In Live Preview, `Mod+clic` su un tag apre la ricerca di quel tag; in Sorgente il tag resta testo e il clic non fa nulla.
+- **Proprietà (frontmatter YAML):** in cima alla nota, tra `---`. In Live Preview il frontmatter è nascosto: il pannello _Proprietà_ permette di aggiungere e modificare le proprietà con il tipo corretto (testo, numero, data, elenco, casella). In Sorgente lo scrivete come testo. Le proprietà `tags` e `aliases` hanno un significato speciale: gli alias diventano nomi alternativi per i link.
 
 ## Blocchi di ricerca incorporati
 
