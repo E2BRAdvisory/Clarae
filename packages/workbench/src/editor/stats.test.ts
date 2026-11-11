@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { countDocWords, countWords, createStatsTracker } from './stats';
-import type { EditorStats } from './Editor';
+import type { EditorStats } from './types';
 
 afterEach(() => vi.useRealTimers());
 

@@ -1,4 +1,5 @@
-import { iconElement, type IconName } from '../shell/icons';
+import { iconElement } from '../shell/icons';
+import { calloutIcon } from './calloutIcon';
 import { WidgetType, type EditorView } from '@codemirror/view';
 import { livePreviewContext, type EmbedDisposer, type LinkSpec } from './context';
 
@@ -160,40 +161,6 @@ export class ImageWidget extends WidgetType {
   override ignoreEvent(): boolean {
     return false;
   }
-}
-
-const CALLOUT_ICONS: Record<string, IconName> = {
-  note: 'edit',
-  abstract: 'list',
-  summary: 'list',
-  tldr: 'list',
-  info: 'info',
-  todo: 'task',
-  tip: 'lightbulb',
-  hint: 'lightbulb',
-  important: 'fire',
-  success: 'success',
-  check: 'success',
-  done: 'success',
-  question: 'help',
-  help: 'help',
-  faq: 'help',
-  warning: 'warning',
-  caution: 'warning',
-  attention: 'warning',
-  failure: 'error',
-  fail: 'error',
-  missing: 'error',
-  danger: 'bolt',
-  error: 'bolt',
-  bug: 'bug',
-  example: 'example',
-  quote: 'quote',
-  cite: 'quote',
-};
-
-export function calloutIcon(type: string): IconName {
-  return CALLOUT_ICONS[type.toLowerCase()] ?? 'edit';
 }
 
 /** The title row of a callout: icon + title (+ fold chevron). */

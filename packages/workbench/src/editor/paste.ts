@@ -2,50 +2,19 @@
 // a URL pasted over a selection becomes a link, rich HTML becomes Markdown.
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { EditorView, ViewPlugin } from '@codemirror/view';
-import TurndownService from 'turndown';
+import {
+  attachmentName,
+  embedText,
+  htmlToMarkdown,
+  isPlainUrl,
+  isRichHtml,
+  toBase64,
+  type PasteDeps,
+} from './pasteCore';
 
-export interface PasteDeps {
-  /** Stores bytes as an attachment and returns the vault path. */
-  saveAttachment(name: string, base64: string): Promise<string>;
-  enabled(): boolean;
-  /** Shows a file that could not be stored (read-only vault, too large, disk full…). */
-  onError?(e: unknown): void;
-}
-
-const RICH = /<(p|h[1-6]|ul|ol|li|a|strong|b|em|i|table|pre|code|blockquote|img|br)\b/i;
-let turndown: TurndownService | null = null;
-
-export function htmlToMarkdown(html: string): string {
-  turndown ??= new TurndownService({
-    headingStyle: 'atx',
-    bulletListMarker: '-',
-    codeBlockStyle: 'fenced',
-    emDelimiter: '*',
-  });
-  // Turndown pads list markers to a tab stop ("-   a"); normalize to one space.
-  return turndown
-    .turndown(html)
-    .replace(/^(\s*(?:[-*+]|\d+\.)) {2,}/gm, '$1 ')
-    .trim();
-}
-
-function stamp(): string {
-  const d = new Date();
-  const p = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-}
-
-async function toBase64(file: File): Promise<string> {
-  const buf = new Uint8Array(await file.arrayBuffer());
-  let bin = '';
-  for (let i = 0; i < buf.length; i += 0x8000)
-    bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-  return btoa(bin);
-}
-
-function embedText(path: string): string {
-  return `![[${path}]]`;
-}
+// The decisions are shared with the Live editor (pasteCore.ts); re-exported so that the existing imports
+// keep compiling.
+export { htmlToMarkdown, type PasteDeps } from './pasteCore';
 
 let lastMark = 0;
 const markAdded = StateEffect.define<{ id: number; pos: number }>();
@@ -99,15 +68,8 @@ export async function insertFiles(
   const parts: string[] = [];
   let failure: unknown = null;
   for (const f of files) {
-    const generic = /^(image|blob|unnamed)\.\w+$/i.test(f.name) || f.name === '';
-    const ext = f.name.includes('.')
-      ? f.name.slice(f.name.lastIndexOf('.'))
-      : f.type.startsWith('image/')
-        ? '.' + (f.type.split('/')[1] ?? 'png')
-        : '';
-    const name = generic ? `Pasted image ${stamp()}${ext}` : f.name;
     try {
-      parts.push(embedText(await deps.saveAttachment(name, await toBase64(f))));
+      parts.push(embedText(await deps.saveAttachment(attachmentName(f), await toBase64(f))));
     } catch (e) {
       failure ??= e;
     }
@@ -154,7 +116,7 @@ function smartPasteHandlers(deps: PasteDeps): Extension {
       }
       const plain = cd.getData('text/plain');
       const sel = view.state.selection.main;
-      if (!sel.empty && /^https?:\/\/\S+$/.test(plain.trim())) {
+      if (!sel.empty && isPlainUrl(plain)) {
         event.preventDefault();
         const text = view.state.doc.sliceString(sel.from, sel.to);
         const insert = `[${text}](${plain.trim()})`;
@@ -166,7 +128,7 @@ function smartPasteHandlers(deps: PasteDeps): Extension {
         return true;
       }
       const html = cd.getData('text/html');
-      if (html && RICH.test(html)) {
+      if (html && isRichHtml(html)) {
         const md = htmlToMarkdown(html);
         if (md) {
           event.preventDefault();

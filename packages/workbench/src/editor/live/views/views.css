@@ -1,0 +1,286 @@
+/* The views of the Live editor (A-W5a), on the tokens of the application: both themes, and nothing else
+   (no user CSS, D-01). What a construct shows while the caret is not in it is `:not(.ofm-active)`;
+   `.ofm-active` is put on a node by decorations.ts when the selection is in it or next to it. */
+
+/* ---- quotes and callouts ---- */
+.live-host .ProseMirror blockquote {
+  margin: 0.6em 0;
+  padding: 0 0 0 12px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+.live-host .ProseMirror blockquote.ofm-callout {
+  position: relative;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--callout, #448aff) 10%, transparent);
+  border-left: 3px solid var(--callout, #448aff);
+  border-radius: 0 6px 6px 0;
+  color: var(--text);
+}
+.ofm-callout-warning,
+.ofm-callout-caution,
+.ofm-callout-attention {
+  --callout: #ff9100;
+}
+.ofm-callout-danger,
+.ofm-callout-error,
+.ofm-callout-bug,
+.ofm-callout-failure,
+.ofm-callout-fail,
+.ofm-callout-missing {
+  --callout: #ff5252;
+}
+.ofm-callout-tip,
+.ofm-callout-hint,
+.ofm-callout-success,
+.ofm-callout-check,
+.ofm-callout-done {
+  --callout: #00bfa5;
+}
+.ofm-callout-quote,
+.ofm-callout-cite {
+  --callout: #9e9e9e;
+}
+.ofm-callout-example {
+  --callout: #7c4dff;
+}
+.live-host .ProseMirror blockquote.ofm-callout > :first-child {
+  position: relative;
+  margin-top: 0;
+}
+.ofm-callout-head,
+.ofm-callout-hidden {
+  display: none !important;
+}
+.ofm-callout-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  font-weight: 600;
+  user-select: none;
+}
+.ofm-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--callout, #448aff);
+}
+.ofm-callout-title-text {
+  font-weight: 600;
+}
+.ofm-callout-chevron {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.ofm-callout-chevron:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- links, tags, marks ---- */
+.ofm-wikilink {
+  color: var(--accent);
+  cursor: pointer;
+}
+.ofm-wikilink:not(.ofm-active):hover {
+  text-decoration: underline;
+}
+.ofm-wikilink.ofm-unresolved {
+  opacity: 0.65;
+  text-decoration: underline dotted;
+}
+.ofm-wl-hide {
+  display: none !important;
+}
+.ofm-wikilink.ofm-active,
+.ofm-embed.ofm-active {
+  color: var(--text-muted);
+  opacity: 1;
+  text-decoration: none;
+}
+.ofm-wikilink.ofm-active > .ofm-wl-hide {
+  display: inline !important;
+}
+.ofm-wikilink.ofm-active::before {
+  content: '[[';
+}
+.ofm-wikilink.ofm-active::after {
+  content: ']]';
+}
+.ofm-embed.ofm-active::before {
+  content: '![[';
+}
+.ofm-embed.ofm-active::after {
+  content: ']]';
+}
+.live-host .ProseMirror a[href] {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.live-host .ProseMirror a[href]:hover {
+  text-decoration: underline;
+}
+span[data-ofm='tag'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 10px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+span[data-ofm='blockid'] {
+  color: var(--text-faint);
+  font-size: 0.8em;
+}
+mark[data-ofm='highlight'] {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* ---- embeds ---- */
+.ofm-embed:not(.ofm-active) {
+  display: block;
+  margin: 4px 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-secondary);
+}
+.ofm-embed:not(.ofm-active) > .ofm-wl-text {
+  display: none !important;
+}
+.ofm-embed.ofm-active > .ofm-embed-render {
+  display: none !important;
+}
+.ofm-embed-render img,
+.ofm-image-body img,
+.ofm-drawn svg {
+  max-width: 100%;
+}
+
+/* ---- images ---- */
+.ofm-image-block {
+  display: block;
+  margin: 0.6em 0;
+}
+.ofm-image-inline {
+  display: inline-block;
+  vertical-align: bottom;
+}
+.ofm-image.ofm-selected,
+.ofm-image.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ofm-image-missing .ofm-image-body {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ---- what the editor holds as source ---- */
+.ofm-raw-text {
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+div.ofm-raw > pre.ofm-raw-text {
+  margin: 0.4em 0;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+.ofm-raw-comment {
+  color: var(--text-faint);
+}
+.ofm-raw-comment:not(.ofm-active) {
+  display: none !important;
+}
+.ofm-raw-footdef,
+.ofm-raw-linkdef,
+.ofm-raw-source,
+.ofm-raw-html {
+  color: var(--text-muted);
+}
+.ofm-raw-footref,
+.ofm-raw-footnote {
+  vertical-align: super;
+  font-size: 0.75em;
+  color: var(--accent);
+}
+.ofm-raw-footref .ofm-raw-text,
+.ofm-raw-footnote .ofm-raw-text {
+  font-family: inherit;
+  font-size: inherit;
+}
+.ofm-raw-math:not(.ofm-active) > .ofm-raw-text,
+.ofm-raw-htmlblock:not(.ofm-active) > .ofm-raw-text,
+.ofm-raw-br:not(.ofm-active) > .ofm-raw-text {
+  display: none !important;
+}
+.ofm-raw-math.ofm-active > .ofm-math-render,
+.ofm-raw-htmlblock.ofm-active > .ofm-html-render {
+  display: none !important;
+}
+.ofm-raw-br:not(.ofm-active) {
+  display: block;
+}
+.ofm-html-render {
+  margin: 0.4em 0;
+}
+.ofm-html-paired:not(.ofm-active) {
+  display: none !important;
+}
+.ofm-html-bold {
+  font-weight: 700;
+}
+.ofm-html-italic {
+  font-style: italic;
+}
+.ofm-html-underline {
+  text-decoration: underline;
+}
+.ofm-html-strike {
+  text-decoration: line-through;
+}
+.ofm-html-mark {
+  background: var(--mark);
+  border-radius: 2px;
+}
+.ofm-html-sub {
+  vertical-align: sub;
+  font-size: 0.8em;
+}
+.ofm-html-sup {
+  vertical-align: super;
+  font-size: 0.8em;
+}
+.ofm-html-kbd,
+.ofm-html-code {
+  font-family: var(--font-mono);
+  background: var(--bg-hover);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 0.9em;
+}
+.ofm-html-small {
+  font-size: 0.8em;
+}
+
+/* ---- diagrams, queries and display math in place of their source ---- */
+.ofm-block-drawn {
+  display: none !important;
+}
+.ofm-drawn {
+  display: block;
+  margin: 0.6em 0;
+  cursor: text;
+}
+.ofm-drawn.ofm-latex {
+  overflow-x: auto;
+}

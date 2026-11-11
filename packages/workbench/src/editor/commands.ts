@@ -189,12 +189,16 @@ export const toggleUnderline = toggleWrap('<u>', '</u>');
 export const toggleSubscript = toggleWrap('<sub>', '</sub>');
 export const toggleSuperscript = toggleWrap('<sup>', '</sup>');
 
-/** Inserts a block of text at the selection; "|" marks where the cursor goes. */
-export function insertSnippet(snippet: string) {
+/**
+ * Inserts a block of text at the selection; `marker` ("|" by default) marks where the cursor goes
+ * and is removed from the text. An empty marker means the snippet has none (it may contain "|",
+ * like a table) and the cursor goes to its end.
+ */
+export function insertSnippet(snippet: string, marker = '|') {
   return (view: EditorView): boolean => {
     const r = view.state.selection.main;
-    const at = snippet.indexOf('|');
-    const text = snippet.replace('|', '');
+    const at = marker ? snippet.indexOf(marker) : -1;
+    const text = at < 0 ? snippet : snippet.replace(marker, '');
     // Block snippets start on their own line.
     const line = view.state.doc.lineAt(r.from);
     const lead = /^[>`|$-]/.test(snippet) && r.from > line.from ? '\n' : '';

@@ -75,13 +75,77 @@
     "mode_reading": "Lettura",
     "saveError": "Salvataggio non riuscito",
     "ariaLabel": "Editor della nota",
+    "calloutToggle": "Mostra o nascondi il contenuto del callout",
+    "suggest": {
+      "label": "Suggerimenti",
+      "status": "{{label}}, {{n}} di {{count}}"
+    },
     "notSaved": "Questa nota ha modifiche non ancora salvate (vedi il messaggio sopra l'editor). Ricarica o sovrascrivi, poi riprova.",
     "notSavedTitle": "Modifiche non salvate",
     "notSavedList": "Non è stato possibile salvare le modifiche a queste note: {{paths}}. Risolvi il conflitto (ricarica o sovrascrivi) oppure copia il testo, poi riprova.",
     "renameBlocked": "Le modifiche a {{paths}} non sono ancora salvate. Risolvi il conflitto (ricarica o sovrascrivi), poi rinomina.",
     "rescuedTitle": "Modifiche salvate in una copia",
     "rescued": "Non è stato possibile salvare queste modifiche nel loro file: sono state salvate in una copia accanto: {{paths}}",
-    "rescueName": "{{name}} (non salvato {{time}})"
+    "rescueName": "{{name}} (non salvato {{time}})",
+    "liveFallback": "Questa nota è mostrata come Sorgente: {{reason}}",
+    "liveFallbackReason_chars": "ha più di {{max, number}} caratteri.",
+    "liveFallbackReason_blocks": "ha più di {{max, number}} blocchi.",
+    "liveFallbackReason_block": "uno dei suoi blocchi ha più di {{max, number}} caratteri.",
+    "liveFallbackReason_codeBlocks": "ha più di {{max, number}} blocchi di codice.",
+    "liveFallbackReason_mixed-eol": "le sue righe finiscono sia con CRLF sia con LF.",
+    "liveFallbackReason_parse-error": "Live non riesce a leggerla senza perdere parte del contenuto.",
+    "liveFallbackReason_no-table": "Live non riesce a farla corrispondere al suo testo senza modificarla.",
+    "liveFallbackReason_identity": "Live non la restituirebbe identica a com'è.",
+    "liveFallbackReason_load": "l'editor Live non è stato caricato.",
+    "crepe": {
+      "copy": "Copia",
+      "searchLanguage": "Cerca linguaggio",
+      "noResult": "Nessun risultato",
+      "previewEdit": "Modifica",
+      "previewHide": "Nascondi",
+      "uploadFile": "Carica file",
+      "pasteLink": "oppure incolla un link",
+      "confirm": "Conferma",
+      "captionPlaceholder": "Scrivi la didascalia dell'immagine",
+      "codeBlock": "Blocco di codice",
+      "task": "Attività",
+      "table": {
+        "addRow": "Aggiungi riga",
+        "addColumn": "Aggiungi colonna",
+        "deleteRow": "Elimina riga",
+        "deleteColumn": "Elimina colonna",
+        "alignLeft": "Allinea la colonna a sinistra",
+        "alignCenter": "Centra la colonna",
+        "alignRight": "Allinea la colonna a destra"
+      }
+    },
+    "find": {
+      "label": "Cerca e sostituisci nella nota",
+      "search": "Cerca",
+      "replaceWith": "Sostituisci con",
+      "matchCase": "Maiuscole/minuscole",
+      "regex": "Espressione regolare",
+      "previous": "Occorrenza precedente",
+      "next": "Occorrenza successiva",
+      "close": "Chiudi la ricerca",
+      "replaceOne": "Sostituisci",
+      "replaceAll": "Sostituisci tutto",
+      "none": "Nessun risultato",
+      "invalid": "Espressione regolare non valida",
+      "position": "{{n}} di {{total}}",
+      "matches_one": "{{count}} occorrenza",
+      "matches_other": "{{count}} occorrenze",
+      "matchesAtLeast_one": "{{count}}+ occorrenza",
+      "matchesAtLeast_other": "{{count}}+ occorrenze"
+    },
+    "fold": {
+      "fold": "Comprimi",
+      "unfold": "Espandi"
+    },
+    "gotoLine": {
+      "title": "Vai alla riga",
+      "label": "Numero di riga (da 1 a {{max}})"
+    }
   },
   "status": {
     "kindPresentation": "Presentazione",
@@ -517,7 +581,9 @@
     "drawing_export_svg": "Disegno: esporta come immagine SVG…",
     "drawing_export_pdf": "Disegno: esporta tutto il disegno in PDF",
     "drawing_set_slide_notes": "Disegno: modifica le note del relatore della cornice selezionata",
-    "drawing_describe": "Disegno: descrivi il disegno come testo"
+    "drawing_describe": "Disegno: descrivi il disegno come testo",
+    "editor_find": "Cerca nella nota",
+    "editor_goto_line": "Vai alla riga"
   },
   "sync": {
     "title": "Sync",
@@ -1398,7 +1464,12 @@
     "weak-passphrase_too-short": "La passphrase deve avere almeno 12 caratteri.",
     "weak-passphrase_guessable": "Questa passphrase è troppo facile da indovinare: aggiungi parole o allungala.",
     "wrong-secret": "Passphrase o chiave di recupero errata.",
-    "executable": "Il file è un programma e, per sicurezza, non viene aperto: mostralo nella cartella."
+    "executable": "Il file è un programma e, per sicurezza, non viene aperto: mostralo nella cartella.",
+    "ai-disabled": "L'assistente AI non è disponibile: è disattivato in questa versione o nel profilo di configurazione.",
+    "ai-private-vault": "L'assistente AI non viene mai usato in un vault privato: le sue note sono cifrate end-to-end e non vengono inviate a nessun provider.",
+    "ai-not-configured": "L'assistente AI non ha un provider o una chiave configurati.",
+    "ai-busy": "Ci sono troppe richieste in corso all'assistente AI: attendi che una finisca.",
+    "ai-invalid": "La richiesta all'assistente AI non è valida o è troppo grande."
   },
   "embeds": {
     "depthLimit": "{{label}} (limite di incorporamento)",

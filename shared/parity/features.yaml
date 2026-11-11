@@ -1252,6 +1252,63 @@ features:
         - packages/workbench/src/editor/completions.test.ts
         - apps/desktop/internal/links/links_test.go
 
+  - id: editor.find
+    title: Cerca e sostituisci nella nota, vai a riga
+    desktop:
+      status: yes
+      commands: [editor:find, editor:goto-line]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/editor/live/frame/frame.test.ts
+        - apps/desktop/frontend/e2e/editor-find.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/editor-find.spec.ts
+
+  # AI e collaborazione in tempo reale: implementate, testate e inattive (ADR-0050). Nessun comando, nessuna
+  # azione e nessuna UI: la voce registra i binding, la capability e le prove, perché `task parity` li veda.
+  - id: editor.ai
+    title: Assistente di scrittura AI dell'editor (inattivo)
+    desktop:
+      status: exception
+      capability: aiAssistant
+      bindings: [AIAPI.Cancel, AIAPI.SetKey, AIAPI.Start, AIAPI.Status]
+      reason: "inattiva (ADR-0050): il core è implementato e provato e `attachAi` è collegato in `MilkdownAdapter.ts`, ma la funzione resta irraggiungibile: la costante di build è spenta nella build di rilascio, il flag `ai` del profilo vale false e l'interruttore Milkdown è spento, quindi l'utente non può usarla. Il core rifiuta se la costante di build è spenta, se il flag `ai` del profilo è spento, se il vault è privato (E2EE) o se manca il provider. La rete parte solo dal core Go"
+    workbench:
+      status: exception
+      reason: 'il core WebAssembly non contiene il codice AI (la CSP della pagina non ammette terze parti e il provider metterebbe la chiave nella pagina); ogni metodo di AIAPI rifiuta e la capability aiAssistant è falsa'
+    tests:
+      desktop:
+        - apps/desktop/internal/ai/service_test.go
+        - apps/desktop/internal/ai/providers_test.go
+        - apps/desktop/internal/app/bindings_ai_test.go
+        - packages/workbench/src/editor/live/ai/provider.test.ts
+        - packages/workbench/src/editor/live/ai/gate.test.ts
+        - packages/workbench/src/editor/live/ai/feature.test.ts
+        - packages/workbench/src/editor/live/ai/ai.live.test.ts
+        - packages/workbench/src/editor/live/ai/wiring.test.ts
+        - apps/desktop/frontend/e2e/live-ai.spec.ts
+        - apps/desktop/internal/app/bindings_ai_js_test.go
+        - apps/desktop/internal/ai/linked_test.go
+
+  - id: editor.collab
+    title: Collaborazione in tempo reale nell'editor (spenta)
+    desktop:
+      status: missing
+      reason: "spenta (ADR-0050): il flag `collab` del profilo, riservato, vale false e non esiste né un provider né un server; la collaborazione asincrona di D-04 resta quella del sync. Il chunk Yjs esiste (`packages/workbench/src/editor/live/chunks/collab.ts`, A-W7) ma non si carica mai: servono la costante di build, il flag `collab` e un provider registrato, e nessuno dei tre c'è in una build rilasciata"
+    workbench:
+      status: missing
+      reason: 'spenta come sul desktop (ADR-0050): stesso flag riservato, nessun provider registrato nella build'
+    tests:
+      desktop:
+        - shared/go/features/features_test.go
+        - packages/workbench/src/editor/live/ai/gate.test.ts
+        - packages/workbench/src/editor/live/collab/collab.test.ts
+        - packages/workbench/src/editor/live/collab/converge.test.ts
+        - packages/workbench/src/editor/live/collab/wiring.test.ts
+        - apps/desktop/frontend/e2e/live-collab.spec.ts
+
   - id: workspace.layout
     title: Schede, pannelli divisi e barre laterali
     desktop:

@@ -172,6 +172,15 @@ const (
 	// EditorLinks: Link e completamento automatico
 	EditorLinks FeatureID = "editor.links"
 
+	// EditorFind: Cerca e sostituisci nella nota, vai a riga
+	EditorFind FeatureID = "editor.find"
+
+	// EditorAi: Assistente di scrittura AI dell'editor (inattivo)
+	EditorAi FeatureID = "editor.ai"
+
+	// EditorCollab: Collaborazione in tempo reale nell'editor (spenta)
+	EditorCollab FeatureID = "editor.collab"
+
 	// WorkspaceLayout: Schede, pannelli divisi e barre laterali
 	WorkspaceLayout FeatureID = "workspace.layout"
 
@@ -330,6 +339,9 @@ var Features = []FeatureID{
 	EditorFormatting,
 	EditorModes,
 	EditorLinks,
+	EditorFind,
+	EditorAi,
+	EditorCollab,
 	WorkspaceLayout,
 	Outline,
 	LinksBacklinks,

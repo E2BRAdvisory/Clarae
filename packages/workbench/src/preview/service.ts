@@ -3,7 +3,7 @@
 import { api } from '../app/api';
 import { canvasPreviewUrl } from '../canvas/preview';
 import { drawingPreviewUrl } from '../drawing/preview';
-import type { LinkSpec } from '../editor/context';
+import type { LinkSpec } from '../editor/types';
 import type { EmbedBackend } from '../embeds/hydrate';
 import { classify } from '../embeds/media';
 import { renderMarkdown } from '../reading/render';

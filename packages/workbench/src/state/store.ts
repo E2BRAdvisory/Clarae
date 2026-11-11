@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AppSettings, AuthState, VaultInfo } from '../app/api';
 import type { IndexProgressPayload } from '../app/events';
-import type { EditorStats } from '../editor/Editor';
+import type { EditorStats } from '../editor/types';
 import type { Reveal } from '../reading/ReadingView';
 import {
   activeTab,

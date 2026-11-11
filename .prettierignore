@@ -14,6 +14,8 @@ deploy/helm/**/templates/**
 Specifications.md
 shared/conformance/markdown/**
 shared/conformance/slides/**
+# Byte-exact inputs of the round-trip corpus of the Live editor (trailing spaces, CRLF, odd indentation)
+shared/conformance/roundtrip/**
 
 # Playwright output
 **/test-results/

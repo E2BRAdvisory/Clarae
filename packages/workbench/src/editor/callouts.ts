@@ -1,27 +1,7 @@
 import { StateEffect, StateField, type EditorState } from '@codemirror/state';
 
-/** Parses a callout title line (after the quote marker): [!type]± title */
-export const CALLOUT_RE = /^(\s*>+\s*)\[!([A-Za-z0-9_-]+)\]([+-]?)[ \t]*(.*)$/;
-
-export interface CalloutHead {
-  /** Characters before "[!" (the quote marker and spaces). */
-  prefixLength: number;
-  type: string;
-  /** "+" (open by default), "-" (folded by default) or "" (not foldable). */
-  marker: string;
-  title: string;
-}
-
-export function parseCalloutHead(line: string): CalloutHead | null {
-  const m = CALLOUT_RE.exec(line);
-  if (!m) return null;
-  return {
-    prefixLength: (m[1] ?? '').length,
-    type: (m[2] ?? '').toLowerCase(),
-    marker: m[3] ?? '',
-    title: (m[4] ?? '').trim(),
-  };
-}
+// The callout head rules live with the other inline rules in @memobrain/markdown.
+export { CALLOUT_RE, parseCalloutHead, type CalloutHead } from '@memobrain/markdown';
 
 /** Title-line positions whose fold state the user flipped from the default. */
 export const toggleCallout = StateEffect.define<number>({

@@ -1,0 +1,4 @@
+- [[a]] #t
+  - nested [[b|alias]] ==h==
+    - deep ^blk
+- [ ] task [[c]]

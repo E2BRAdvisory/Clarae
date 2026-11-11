@@ -4,7 +4,7 @@
 // All of it is text in the .marp file: each action is one transaction of its editor (one undo step).
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ChangeSpec } from '@codemirror/state';
+import type { SourceEdit } from '../editor/types';
 import { backendFor } from '../reading/ReadingView';
 import { importWithRetry } from '../ui/lazyView';
 import { Icon } from '../shell/icons';
@@ -203,7 +203,7 @@ export function MarpSlidesPanel({ vaultId, path }: { vaultId: string; path: stri
   const included = slides.filter((s) => !s.hidden);
   const firstIncluded = included[0]?.index ?? -1;
 
-  const edit = (build: (src: string, lines: readonly number[]) => ChangeSpec[]): EditResult => {
+  const edit = (build: (src: string, lines: readonly number[]) => SourceEdit[]): EditResult => {
     if (!rendered) return false;
     return applyEdit(rendered.source, build(rendered.source, rendered.deck.slideLines));
   };

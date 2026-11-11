@@ -4,26 +4,43 @@
 //                                             --no-watch builds once, for the e2e matrix)
 //   node scripts/esbuild.mjs preview [--port N]   production bundle in node_modules/.preview/, served as is (Playwright)
 // MEMOBRAIN_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
+// MEMOBRAIN_LIVE_ENGINE=milkdown builds the Live mode on Milkdown (ADR-0049, A-D8): a build constant,
+// never a setting; without it the Live mode is the CodeMirror one and no Milkdown code is in the build.
+// The style sheets of the lazy chunks are linked by the chunks themselves (lazyStyles): a safety net, it links none today.
 import * as esbuild from 'esbuild';
 import { createReadStream } from 'node:fs';
 import { createServer } from 'node:http';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, extname, join, normalize, relative } from 'node:path';
+import { dirname, extname, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { baseOptions, copyExcalidrawAssets, graphWorkerEntry } from '@memobrain/workbench/build';
+import {
+  baseOptions,
+  copyExcalidrawAssets,
+  copyTwemojiAssets,
+  distDir,
+  graphWorkerEntry,
+  lazyStyles,
+  liveCollab,
+  liveEngine as liveEnginePlugin,
+} from '@memobrain/workbench/build';
 
-const root = dirname(fileURLToPath(import.meta.url)) + '/..';
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const mode = process.argv[2] ?? 'build';
 const dev = mode === 'dev';
 // `preview` builds the production bundle somewhere else, so it never touches the embedded dist/.
-// MEMOBRAIN_DIST (relative to this package) builds elsewhere: the e2e matrix keeps its own copy.
-const dist = join(
-  root,
-  process.env['MEMOBRAIN_DIST'] ?? (mode === 'preview' ? 'node_modules/.preview' : 'dist'),
-);
+// MEMOBRAIN_DIST builds elsewhere: the e2e matrix keeps its own copy. An absolute path is taken as it is, a
+// relative one starts at this package (never at the working directory).
+const dist = distDir(root, mode === 'preview' ? 'node_modules/.preview' : 'dist');
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5173;
 const e2e = process.env['MEMOBRAIN_E2E'] === '1';
+const liveEngine = process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown' ? 'milkdown' : '';
+// MEMOBRAIN_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
+// (ADR-0050); without it no Yjs is in any file and a profile cannot switch collaboration on.
+const collab = process.env['MEMOBRAIN_COLLAB'] === '1';
+// MEMOBRAIN_AI=1 lets the editor ask for the AI assistant (ADR-0050): the second gate, next to the `ai` flag
+// of the Config Profile; a released build is made without it, so a profile cannot switch the assistant on.
+const ai = process.env['MEMOBRAIN_AI'] === '1';
 
 /** Writes dist/index.html with the hashed bundle and stylesheet, and copies Excalidraw's fonts. */
 const html = {
@@ -112,6 +129,8 @@ function serve(port) {
 const base = baseOptions({ dev });
 const options = {
   ...base,
+  // The metafile paths (the entry, the sheets of lazyStyles) start at the package, wherever the script is run from.
+  absWorkingDir: root,
   entryPoints: { main: join(root, 'src/main.tsx') },
   outdir: dist,
   entryNames: dev ? 'assets/[name]' : 'assets/[name]-[hash]',
@@ -123,12 +142,24 @@ const options = {
   minify: !dev,
   metafile: true,
   logLevel: 'info',
-  define: { ...base.define, 'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : '') },
-  plugins: dev ? [...base.plugins, html, reload] : [...base.plugins, html],
+  define: {
+    ...base.define,
+    'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : ''),
+    'import.meta.env.MEMOBRAIN_COLLAB': JSON.stringify(collab ? '1' : ''),
+    'import.meta.env.MEMOBRAIN_AI': JSON.stringify(ai ? '1' : ''),
+  },
+  plugins: [
+    ...base.plugins,
+    liveEnginePlugin(liveEngine),
+    liveCollab(collab),
+    lazyStyles({ root, dist, entries: ['src/main.tsx'] }),
+    ...(dev ? [html, reload] : [html]),
+  ],
 };
 
 // The graph layout runs in a worker: a separate, self-contained bundle at a fixed URL.
 const workerOptions = {
+  absWorkingDir: root,
   entryPoints: { 'layout.worker': graphWorkerEntry },
   outdir: join(dist, 'assets'),
   bundle: true,
@@ -172,6 +203,7 @@ function checkBudget(meta) {
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await copyExcalidrawAssets(dist);
+if (liveEngine) await copyTwemojiAssets(dist);
 
 if (dev) {
   await writeFile(

@@ -1,0 +1,79 @@
+/* The input of the Live editor (A-W5b), on the tokens of the application: both themes, and nothing else
+   (no user CSS, D-01). The popup of the suggestions is `position: fixed` and placed by the plugin with
+   the caret's coordinates; it is a child of the editor's host and goes with it. */
+.mb-suggest {
+  position: fixed;
+  z-index: 50;
+  min-width: 220px;
+  max-width: min(420px, calc(100vw - 16px));
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--nd-shadow);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+.mb-suggest[hidden] {
+  display: none;
+}
+.mb-suggest-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mb-suggest-item:hover {
+  background: var(--bg-hover);
+}
+.mb-suggest-item[aria-selected='true'] {
+  background: var(--bg-active);
+}
+.mb-suggest-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-suggest-detail {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* The label of Crepe's task box is wrapped in a focusable element with the role of a checkbox (nameTaskBox):
+   it takes the size of the label, so that the icon is where it was and the two boxes of two rows never overlap. */
+.live-host .ProseMirror .ofm-task-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* The box of a custom task state (`[/] text`): the text of the file, drawn as the box that Source Live
+   Preview draws for it. It is a click target: the click makes the item an open task. */
+.live-host .ProseMirror .ofm-task-state {
+  display: inline-block;
+  min-width: 1.1em;
+  margin-right: 0.35em;
+  padding: 0 0.25em;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+}

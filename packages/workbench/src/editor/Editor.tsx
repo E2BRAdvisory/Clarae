@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import './suspended.css';
 import { i18next } from '../i18n';
 import { createStatsTracker } from './stats';
 import {
@@ -29,15 +30,18 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view';
-import { extract } from '@memobrain/markdown';
 import type { Reveal } from '../reading/ReadingView';
 import type { EditorSettings } from '../state/settings';
 import { blockWidgets } from './blockWidgets';
 import { ofmCompletionSources, type CompletionOptions } from './completions';
 import { livePreviewContext, type LivePreviewContext } from './context';
 import { External, externalReplace } from './external';
+import { LIVE_SYNC_EVENT } from './liveSync';
 import { linkStatusChanged, livePreview } from './livePreview';
-import { pagePreviewHover } from '../preview/hover';
+import { pagePreviewHover } from './source/pagePreview';
+import { codeMirrorHandle } from './source/CodeMirrorAdapter';
+import type { NoteEditorHandle } from './handle';
+import type { EditorStats } from './types';
 import { smartPaste, type PasteDeps } from './paste';
 import { iconElement } from '../shell/icons';
 import { registerEditor, setActiveEditor, unregisterEditor } from './registry';
@@ -46,20 +50,14 @@ import { slashCompletionSource } from '../slash/slash';
 import { slashHost } from '../slash/host';
 import { dialog } from '../ui/dialogs';
 
-export interface EditorStats {
-  words: number;
-  chars: number;
-  selWords: number;
-  selChars: number;
-  line: number;
-  col: number;
-}
+// Moved to ./types (engine independent); re-exported so that the existing imports keep compiling.
+export type { EditorStats } from './types';
 
 export interface LinkResolver {
   subscribe(cb: () => void): () => void;
 }
 
-interface Props {
+export interface EditorProps {
   /** Registry key (pane id): formatting commands act on the focused editor. */
   id: string;
   doc: string;
@@ -82,9 +80,35 @@ interface Props {
    */
   onChange(text: () => string): void;
   onStats(stats: EditorStats): void;
+  /**
+   * The Live editor (Milkdown) is on its way (`wait`) or showing (`away`) and this editor stays under
+   * it, because its state is the spine of the undo between the modes (ADR-0049, A-D9). It reports
+   * nothing, so while it waits it is read-only (what is typed in that window would be reported by no
+   * one and Live would open without it); once Live shows, it is no longer the pane's editor and is out
+   * of the accessibility tree.
+   */
+  suspended?: 'wait' | 'away' | undefined;
+  /** The handle of this editor once it exists (null when it goes). */
+  onHandle?: (handle: NoteEditorHandle | null) => void;
 }
 
-function settingsExtensions(s: EditorSettings): Extension[] {
+/**
+ * Read-only, and while the Live editor is loading (`waiting`) closed to every edit that nobody would
+ * report: the typing, and also the commands and the toolbar, which dispatch on the view directly. A
+ * file that is loaded again (`External`) and the transfer from Live (`LIVE_SYNC_EVENT`) still go through.
+ */
+function readOnlyExtensions(readOnly: boolean, waiting: boolean): Extension[] {
+  return [
+    EditorState.readOnly.of(readOnly || waiting),
+    waiting
+      ? EditorState.transactionFilter.of((tr) =>
+          tr.docChanged && !tr.annotation(External) && !tr.isUserEvent(LIVE_SYNC_EVENT) ? [] : tr,
+        )
+      : [],
+  ];
+}
+
+function settingsExtensions(s: EditorSettings, suspended?: 'wait' | 'away'): Extension[] {
   return [
     s.lineNumbers ? lineNumbers() : [],
     s.wrap ? EditorView.lineWrapping : [],
@@ -106,16 +130,20 @@ function settingsExtensions(s: EditorSettings): Extension[] {
     EditorView.contentAttributes.of({
       spellcheck: String(s.spellcheck),
       autocorrect: 'off',
-      'aria-label': i18next.t('editor.ariaLabel'),
+      // An editor that is out of the way, or that waits for the Live one to show, has no name: the one
+      // the user types into has it (two editors of one name would be heard as one, and a test or a
+      // script that asks for it by name must never meet the one that is going away).
+      ...(suspended ? {} : { 'aria-label': i18next.t('editor.ariaLabel') }),
     }),
     EditorView.theme({ '&': { fontSize: `${s.fontSize}px` } }),
   ];
 }
 
 /** The note editor: CodeMirror 6 in Source or Live Preview mode (ADR-0004). */
-export function Editor(props: Props) {
+export function Editor(props: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const handleRef = useRef<NoteEditorHandle | null>(null);
   const latest = useRef(props);
   useEffect(() => {
     latest.current = props;
@@ -177,13 +205,19 @@ export function Editor(props: Props) {
             indentWithTab,
           ]),
           modeC.of(p.mode === 'live' ? [livePreview(), blockWidgets()] : sourceMode()),
-          settingsC.of(settingsExtensions(p.settings)),
+          settingsC.of(settingsExtensions(p.settings, p.suspended)),
           contextC.of(livePreviewContext.of(p.context)),
-          readOnlyC.of(EditorState.readOnly.of(!!p.readOnly)),
+          readOnlyC.of(readOnlyExtensions(!!p.readOnly, p.suspended === 'wait')),
           pagePreviewHover(),
           EditorView.updateListener.of((u) => {
             const cur = latest.current;
-            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External))) {
+            if (cur.suspended) return; // the editor that shows reports
+            if (
+              u.docChanged &&
+              !u.transactions.some(
+                (tr) => tr.annotation(External) || tr.isUserEvent(LIVE_SYNC_EVENT),
+              )
+            ) {
               const changed = u.state.doc; // immutable: the text of this edit, whenever it is read
               let text: string | undefined;
               cur.onChange(() => (text ??= changed.toString()));
@@ -194,14 +228,22 @@ export function Editor(props: Props) {
         ],
       }),
     });
+    const handle = codeMirrorHandle(view, {
+      paneId: p.id,
+      mode: () => latest.current.mode,
+    });
     viewRef.current = view;
-    registerEditor(p.id, view);
+    handleRef.current = handle;
+    registerEditor(p.id, handle);
     setActiveEditor(p.id);
+    latest.current.onHandle?.(handle);
     return () => {
       stats.dispose();
-      unregisterEditor(p.id, view);
+      unregisterEditor(p.id, handle);
+      latest.current.onHandle?.(null);
       view.destroy();
       viewRef.current = null;
+      handleRef.current = null;
     };
     // Created once per mount; everything else is reconfigured below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,9 +260,17 @@ export function Editor(props: Props) {
 
   useEffect(() => {
     viewRef.current?.dispatch({
-      effects: settingsC.reconfigure(settingsExtensions(props.settings)),
+      effects: settingsC.reconfigure(settingsExtensions(props.settings, props.suspended)),
     });
-  }, [props.settings, settingsC]);
+  }, [props.settings, props.suspended, settingsC]);
+
+  // While the Live editor shows, this one is not the pane's editor: the registry hands out its handle.
+  useEffect(() => {
+    const handle = handleRef.current;
+    if (!handle) return;
+    if (props.suspended === 'away') unregisterEditor(props.id, handle);
+    else registerEditor(props.id, handle);
+  }, [props.suspended, props.id]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
@@ -230,9 +280,11 @@ export function Editor(props: Props) {
 
   useEffect(() => {
     viewRef.current?.dispatch({
-      effects: readOnlyC.reconfigure(EditorState.readOnly.of(!!props.readOnly)),
+      effects: readOnlyC.reconfigure(
+        readOnlyExtensions(!!props.readOnly, props.suspended === 'wait'),
+      ),
     });
-  }, [props.readOnly, readOnlyC]);
+  }, [props.readOnly, props.suspended, readOnlyC]);
 
   // Link resolution finished: rebuild decorations.
   useEffect(() => {
@@ -253,30 +305,17 @@ export function Editor(props: Props) {
 
   // Scroll to a heading, block or line.
   useEffect(() => {
-    const view = viewRef.current;
     const r = props.reveal;
-    if (!view || !r) return;
-    let line = r.line ?? 0;
-    if (!line) {
-      const note = extract('', view.state.doc.toString());
-      if (r.block) line = note.blockIds.find((b) => b.id === r.block)?.line ?? 0;
-      else if (r.heading) {
-        const norm = (s: string): string =>
-          s
-            .toLowerCase()
-            .replace(/[*_`=~[\]]/g, '')
-            .trim();
-        line = note.headings.find((h) => norm(h.text) === norm(r.heading ?? ''))?.line ?? 0;
-      }
-    }
-    if (line < 1 || line > view.state.doc.lines) return;
-    const pos = view.state.doc.line(line).from;
-    view.dispatch({
-      selection: { anchor: pos },
-      effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 24 }),
-    });
-    view.focus();
+    if (r) handleRef.current?.reveal(r);
   }, [props.reveal]);
 
-  return <div className="editor-host" ref={host} data-mode={props.mode} />;
+  return (
+    <div
+      className="editor-host"
+      ref={host}
+      data-mode={props.mode}
+      data-suspended={props.suspended}
+      aria-hidden={props.suspended === 'away' ? true : undefined}
+    />
+  );
 }

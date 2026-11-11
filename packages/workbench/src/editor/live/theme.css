@@ -1,0 +1,61 @@
+/* The Live editor on the colours of the application (ADR-0049): Crepe's palette variables are mapped on
+   the workbench tokens, so the light and dark themes (and nothing else: no user CSS, D-01) apply. */
+.live-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+.live-host .milkdown {
+  --crepe-color-background: var(--bg);
+  --crepe-color-on-background: var(--text);
+  --crepe-color-surface: var(--bg-secondary);
+  --crepe-color-surface-low: var(--bg-secondary);
+  --crepe-color-on-surface: var(--text);
+  --crepe-color-on-surface-variant: var(--text-muted);
+  --crepe-color-outline: var(--border);
+  --crepe-color-primary: var(--accent-text);
+  --crepe-color-secondary: var(--bg-active);
+  --crepe-color-on-secondary: var(--text);
+  --crepe-color-inverse: var(--text);
+  --crepe-color-on-inverse: var(--bg);
+  --crepe-color-inline-code: var(--accent-text);
+  --crepe-color-error: var(--danger);
+  --crepe-color-hover: var(--bg-hover);
+  --crepe-color-selected: var(--bg-active);
+  --crepe-color-inline-area: var(--bg-secondary);
+  --crepe-font-title: var(--font-ui);
+  --crepe-font-default: var(--font-ui);
+  --crepe-font-code: var(--font-mono);
+  --crepe-base-font-size: var(--live-font-size, 15px);
+  min-height: 100%;
+}
+.live-host .milkdown .ProseMirror {
+  margin: 0 auto;
+  padding: 16px 24px;
+  line-height: 1.6;
+  outline: none;
+}
+.live-host .milkdown .ProseMirror :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The bullets, the numbers and the boxes of the lists: Crepe draws them in the colour of the borders
+   (--crepe-color-outline), which is a line for the eye and no text for contrast (1.4:1 on the numbers). */
+.live-host .milkdown .milkdown-list-item-block li .label-wrapper {
+  color: var(--crepe-color-on-surface-variant);
+}
+.live-host .milkdown .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--crepe-color-on-surface-variant);
+}
+/* The line length of the `readableWidth` setting: the class is the note view's, as for the other editors. */
+.note-view.readable .live-host .milkdown .ProseMirror {
+  max-width: 760px;
+}
+/* A read-only editor shows none of the controls that change the note (the filter refuses them anyway). */
+.live-host[data-readonly='true'] .milkdown-table-block .handle,
+.live-host[data-readonly='true'] .milkdown-table-block .button-group,
+.live-host[data-readonly='true'] .milkdown-code-block .language-picker,
+.live-host[data-readonly='true'] .milkdown-image-block .operation {
+  display: none;
+}

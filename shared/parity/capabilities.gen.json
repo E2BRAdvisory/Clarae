@@ -9,7 +9,8 @@
     "unlinkVault": true,
     "ownsSession": true,
     "detachedCopies": true,
-    "openWithSystemApp": true
+    "openWithSystemApp": true,
+    "aiAssistant": true
   },
   "web": {
     "localFolders": false,
@@ -21,6 +22,7 @@
     "unlinkVault": false,
     "ownsSession": false,
     "detachedCopies": false,
-    "openWithSystemApp": false
+    "openWithSystemApp": false,
+    "aiAssistant": false
   }
 }

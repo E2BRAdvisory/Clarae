@@ -75,13 +75,77 @@
     "mode_reading": "Reading",
     "saveError": "Could not save",
     "ariaLabel": "Note editor",
+    "calloutToggle": "Show or hide the content of the callout",
+    "suggest": {
+      "label": "Suggestions",
+      "status": "{{label}}, {{n}} of {{count}}"
+    },
     "notSaved": "This note has changes that are not saved yet (see the message above the editor). Reload or overwrite first, then try again.",
     "notSavedTitle": "Unsaved changes",
     "notSavedList": "The changes to these notes could not be saved: {{paths}}. Resolve the conflict (reload or overwrite) or copy the text, then try again.",
     "renameBlocked": "The changes to {{paths}} are not saved yet. Resolve the conflict (reload or overwrite), then rename.",
     "rescuedTitle": "Changes saved in a copy",
     "rescued": "These changes could not be saved in their own file and were saved as a copy next to it: {{paths}}",
-    "rescueName": "{{name}} (unsaved {{time}})"
+    "rescueName": "{{name}} (unsaved {{time}})",
+    "liveFallback": "This note is shown as Source: {{reason}}",
+    "liveFallbackReason_chars": "it has more than {{max, number}} characters.",
+    "liveFallbackReason_blocks": "it has more than {{max, number}} blocks.",
+    "liveFallbackReason_block": "one of its blocks has more than {{max, number}} characters.",
+    "liveFallbackReason_codeBlocks": "it has more than {{max, number}} code blocks.",
+    "liveFallbackReason_mixed-eol": "its lines end both with CRLF and with LF.",
+    "liveFallbackReason_parse-error": "Live could not read it without losing some of its content.",
+    "liveFallbackReason_no-table": "Live could not match it to its text without changing it.",
+    "liveFallbackReason_identity": "Live would not give it back exactly as it is.",
+    "liveFallbackReason_load": "the Live editor could not be loaded.",
+    "crepe": {
+      "copy": "Copy",
+      "searchLanguage": "Search language",
+      "noResult": "No result",
+      "previewEdit": "Edit",
+      "previewHide": "Hide",
+      "uploadFile": "Upload file",
+      "pasteLink": "or paste link",
+      "confirm": "Confirm",
+      "captionPlaceholder": "Write image caption",
+      "codeBlock": "Code block",
+      "task": "Task",
+      "table": {
+        "addRow": "Add row",
+        "addColumn": "Add column",
+        "deleteRow": "Delete row",
+        "deleteColumn": "Delete column",
+        "alignLeft": "Align column left",
+        "alignCenter": "Align column center",
+        "alignRight": "Align column right"
+      }
+    },
+    "find": {
+      "label": "Find and replace in the note",
+      "search": "Find",
+      "replaceWith": "Replace with",
+      "matchCase": "Match case",
+      "regex": "Regular expression",
+      "previous": "Previous match",
+      "next": "Next match",
+      "close": "Close find",
+      "replaceOne": "Replace",
+      "replaceAll": "Replace all",
+      "none": "No results",
+      "invalid": "Invalid regular expression",
+      "position": "{{n}} of {{total}}",
+      "matches_one": "{{count}} match",
+      "matches_other": "{{count}} matches",
+      "matchesAtLeast_one": "{{count}}+ match",
+      "matchesAtLeast_other": "{{count}}+ matches"
+    },
+    "fold": {
+      "fold": "Fold",
+      "unfold": "Unfold"
+    },
+    "gotoLine": {
+      "title": "Go to line",
+      "label": "Line number (1 to {{max}})"
+    }
   },
   "status": {
     "kindPresentation": "Presentation",
@@ -517,7 +581,9 @@
     "drawing_export_svg": "Drawing: export as SVG image…",
     "drawing_export_pdf": "Drawing: export the whole drawing to PDF",
     "drawing_set_slide_notes": "Drawing: edit the presenter notes of the selected frame",
-    "drawing_describe": "Drawing: describe the drawing as text"
+    "drawing_describe": "Drawing: describe the drawing as text",
+    "editor_find": "Find in note",
+    "editor_goto_line": "Go to line"
   },
   "sync": {
     "title": "Sync",
@@ -1398,7 +1464,12 @@
     "weak-passphrase_too-short": "The passphrase needs at least 12 characters.",
     "weak-passphrase_guessable": "This passphrase is too easy to guess: add words or make it longer.",
     "wrong-secret": "Wrong passphrase or recovery key.",
-    "executable": "The file is a program and is not opened, for safety: show it in its folder."
+    "executable": "The file is a program and is not opened, for safety: show it in its folder.",
+    "ai-disabled": "The AI assistant is not available: it is off in this build or in the configuration profile.",
+    "ai-private-vault": "The AI assistant is never used in a private vault: its notes are end-to-end encrypted and are not sent to any provider.",
+    "ai-not-configured": "The AI assistant has no provider or key set up.",
+    "ai-busy": "Too many requests to the AI assistant are running: wait for one to finish.",
+    "ai-invalid": "The request to the AI assistant is not valid or is too large."
   },
   "embeds": {
     "depthLimit": "{{label}} (embed depth limit)",

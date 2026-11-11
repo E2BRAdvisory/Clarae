@@ -2,9 +2,10 @@
 // (checked on random documents and edits), while typing in a long note reads a few lines instead
 // of the whole document.
 import { describe, expect, it } from 'vitest';
-import { EditorState, type ChangeSpec, type Text } from '@codemirror/state';
+import { EditorState, Text, type ChangeSpec } from '@codemirror/state';
 import { blocksField, scanDocument, scanStats, updateScan, type BlockScan } from './blockWidgets';
-import { blockStates } from './blockState';
+import { splitFrontmatter } from '@memobrain/markdown';
+import { blockStates, frontmatterOf } from './blockState';
 
 declare const process: { stderr: { write(s: string): boolean } };
 const report = (...parts: unknown[]): void => void process.stderr.write(parts.join(' ') + '\n');
@@ -158,5 +159,27 @@ describe('incremental block scan', () => {
     // Was a full scan (and a copy of the whole text) per keystroke: 200 of them took seconds.
     expect(typing).toBeLessThan(Math.max(1000, full * 20));
     expect(plain(state.field(blocksField))).toEqual(plain(scanDocument(state.doc)));
+  });
+});
+
+describe('frontmatterOf', () => {
+  const NOTES = [
+    '---\na: 1\n---\nbody\n',
+    '\uFEFF---\na: 1\n---\nbody\n',
+    '\uFEFF---\r\na: 1\r\n...\r\nbody\r\n',
+    '\uFEFF\uFEFF---\na: 1\n---\nbody\n',
+    '\uFEFF---\na: 1\nbody\n',
+    '\uFEFFplain\n---\n',
+    '\uFEFF',
+    '---',
+    '',
+  ];
+  it.each(NOTES)('answers as splitFrontmatter does on %j, a BOM included', (raw) => {
+    const fm = splitFrontmatter(raw);
+    const mine = frontmatterOf(Text.of(raw.split('\n')));
+    expect(mine.lines).toBe(fm.lines);
+    // an open block is one that `splitFrontmatter` does not close, with a first line that opens it
+    const first = (raw.split('\n')[0] ?? '').replace(/^\uFEFF/, '').replace(/\r+$/, '');
+    expect(mine.open).toBe(fm.yaml === null && raw.includes('\n') && first === '---');
   });
 });

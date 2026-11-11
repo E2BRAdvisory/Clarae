@@ -17,14 +17,18 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 import {
+  FOOTREF,
+  HIGHLIGHT,
+  INLINE_MATH,
   isValidTag,
+  parseCalloutHead,
   parseWikilinkInner,
   scanSpans,
   stripInlineCode,
   type BlockState,
 } from '@memobrain/markdown';
 import { blockStateAt, blockStates } from './blockState';
-import { calloutToggles, isCalloutFolded, parseCalloutHead, toggleCallout } from './callouts';
+import { calloutToggles, isCalloutFolded, toggleCallout } from './callouts';
 import { livePreviewContext, type LivePreviewContext } from './context';
 import { safeDecodeURI } from '../util/uri';
 import {
@@ -45,9 +49,11 @@ const MD_LINK = /(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const URL_RE = /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s<>)]+/g;
 const TAG = /(^|[ \t\n\f\r([{,;])#([\p{L}\p{N}_\-/]+)/gu;
 const BLOCK_ID = /[ \t]\^([A-Za-z0-9-]+)[ \t]*$/;
-const HIGHLIGHT = /==(?=\S)([^\n]+?)(?<=\S)==/g;
-const INLINE_MATH = /(?<![\\$])\$(?![\s$])([^$\n]+?)(?<![\s\\])\$(?!\d)/g;
-const FOOTREF = /\[\^[^\]\s]+\](?!:)/g;
+// The rules shared with the indexer come from @memobrain/markdown without the g flag; only
+// matchAll uses these copies, and it clones them.
+const HIGHLIGHT_G = new RegExp(HIGHLIGHT.source, 'g');
+const INLINE_MATH_G = new RegExp(INLINE_MATH.source, 'g');
+const FOOTREF_G = new RegExp(FOOTREF.source, 'g');
 
 const hideDeco = Decoration.replace({});
 
@@ -372,7 +378,7 @@ function ofmLine(c: Ctx, lineFrom: number, text: string, startState: BlockState)
 
   // Everything below must not see wikilinks, URLs or Markdown links.
   const noWiki = visible.replace(new RegExp(WIKILINK.source, 'g'), (s) => ' '.repeat(s.length));
-  for (const m of noWiki.matchAll(HIGHLIGHT)) {
+  for (const m of noWiki.matchAll(HIGHLIGHT_G)) {
     const s = lineFrom + (m.index ?? 0);
     const e = s + m[0].length;
     if (c.touches(s, e)) mark(c, s, e, 'cm-lp-highlight');
@@ -382,14 +388,14 @@ function ofmLine(c: Ctx, lineFrom: number, text: string, startState: BlockState)
       hide(c, e - 2, e);
     }
   }
-  for (const m of noWiki.matchAll(INLINE_MATH)) {
+  for (const m of noWiki.matchAll(INLINE_MATH_G)) {
     const s = lineFrom + (m.index ?? 0);
     const e = s + m[0].length;
     if (!c.touches(s, e))
       c.out.push(Decoration.replace({ widget: new MathWidget(m[1] ?? '', false) }).range(s, e));
     else mark(c, s, e, 'cm-lp-math-raw');
   }
-  for (const m of noWiki.matchAll(FOOTREF)) {
+  for (const m of noWiki.matchAll(FOOTREF_G)) {
     const s = lineFrom + (m.index ?? 0);
     mark(c, s, s + m[0].length, 'cm-lp-footref');
   }

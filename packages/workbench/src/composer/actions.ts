@@ -78,8 +78,7 @@ export async function extractSelection(): Promise<void> {
   const vault = state.vault;
   const source = activeTab(state.layout)?.path;
   if (!view || !vault || !source) return;
-  const sel = view.state.selection.main;
-  const text = view.state.sliceDoc(sel.from, sel.to);
+  const text = view.selectionMarkdown();
   if (!text.trim()) {
     await dialog.alert(i18next.t('composer.extractTitle'), i18next.t('composer.noSelection'));
     return;
@@ -97,13 +96,7 @@ export async function extractSelection(): Promise<void> {
     carryFrontmatter: s.extractFrontmatter,
   });
   // The selection may have moved while the dialogs were open: replace it only if it is intact.
-  const now = view.state.selection.main;
-  if (view.state.sliceDoc(now.from, now.to) === text) {
-    view.dispatch({
-      changes: { from: now.from, to: now.to, insert: res.link },
-      selection: { anchor: now.from + res.link.length },
-    });
-  } else {
+  if (!view.replaceSelectionIf(text, res.link)) {
     await dialog.alert(
       i18next.t('composer.extractTitle'),
       i18next.t('composer.selectionChanged', { path: res.path }),

@@ -1,20 +1,18 @@
 // The editing toolbar above a note: formatting, headings, lists, blocks and inserts in one row,
-// like the "Editing Toolbar" plugin for Obsidian. It acts on the CodeMirror view of its pane.
+// like the "Editing Toolbar" plugin for Obsidian. It acts on the editor of its pane through its handle.
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { redo, undo } from '@codemirror/commands';
-import type { EditorView } from '@codemirror/view';
 import { api } from '../app/api';
 import { dialog } from '../ui/dialogs';
 import { Icon } from '../shell/icons';
-import * as fmt from './commands';
+import { headingCommand, type EditorCommand } from './handle';
 import { getEditor } from './registry';
 
 interface Item {
   id: string;
   label: string;
   glyph: ReactNode;
-  run: (view: EditorView) => boolean | void;
+  command: EditorCommand;
 }
 
 interface Props {
@@ -42,10 +40,10 @@ export function EditorToolbar({
   const [headings, setHeadings] = useState(false);
   const file = useRef<HTMLInputElement>(null);
 
-  const act = (fn: Item['run']) => () => {
+  const act = (command: EditorCommand) => () => {
     const v = getEditor(paneId);
     if (!v) return;
-    fn(v);
+    v.exec(command);
     v.focus();
   };
 
@@ -60,7 +58,7 @@ export function EditorToolbar({
         bytesToBase64(await f.arrayBuffer()),
       );
       const name = saved.split('/').pop() ?? saved;
-      fmt.insertSnippet(`![[${name}]]`)(v);
+      v.replaceSelection(`![[${name}]]`);
       v.focus();
     } catch (e) {
       await dialog.error(e);
@@ -69,131 +67,131 @@ export function EditorToolbar({
 
   const groups: Item[][] = [
     [
-      { id: 'undo', label: t('toolbar.undo'), glyph: <Icon name="undo" />, run: undo },
-      { id: 'redo', label: t('toolbar.redo'), glyph: <Icon name="redo" />, run: redo },
+      { id: 'undo', label: t('toolbar.undo'), glyph: <Icon name="undo" />, command: 'undo' },
+      { id: 'redo', label: t('toolbar.redo'), glyph: <Icon name="redo" />, command: 'redo' },
       {
         id: 'clear',
         label: t('toolbar.clear'),
         glyph: <Icon name="clearFormat" />,
-        run: fmt.clearFormatting,
+        command: 'clear',
       },
     ],
     [
-      { id: 'h1', label: t('toolbar.h1'), glyph: 'H1', run: fmt.setHeading(1) },
-      { id: 'h2', label: t('toolbar.h2'), glyph: 'H2', run: fmt.setHeading(2) },
-      { id: 'h3', label: t('toolbar.h3'), glyph: 'H3', run: fmt.setHeading(3) },
+      { id: 'h1', label: t('toolbar.h1'), glyph: 'H1', command: 'heading-1' },
+      { id: 'h2', label: t('toolbar.h2'), glyph: 'H2', command: 'heading-2' },
+      { id: 'h3', label: t('toolbar.h3'), glyph: 'H3', command: 'heading-3' },
     ],
   ];
   const inline: Item[] = [
-    { id: 'bold', label: t('toolbar.bold'), glyph: <Icon name="bold" />, run: fmt.toggleBold },
+    { id: 'bold', label: t('toolbar.bold'), glyph: <Icon name="bold" />, command: 'bold' },
     {
       id: 'italic',
       label: t('toolbar.italic'),
       glyph: <Icon name="italic" />,
-      run: fmt.toggleItalic,
+      command: 'italic',
     },
     {
       id: 'strike',
       label: t('toolbar.strike'),
       glyph: <Icon name="strike" />,
-      run: fmt.toggleStrike,
+      command: 'strike',
     },
     {
       id: 'underline',
       label: t('toolbar.underline'),
       glyph: <Icon name="underline" />,
-      run: fmt.toggleUnderline,
+      command: 'underline',
     },
     {
       id: 'highlight',
       label: t('toolbar.highlight'),
       glyph: <Icon name="highlight" />,
-      run: fmt.toggleHighlight,
+      command: 'highlight',
     },
     {
       id: 'code',
       label: t('toolbar.code'),
       glyph: <Icon name="code" />,
-      run: fmt.toggleInlineCode,
+      command: 'code',
     },
     {
       id: 'sub',
       label: t('toolbar.sub'),
       glyph: <Icon name="subscript" />,
-      run: fmt.toggleSubscript,
+      command: 'sub',
     },
     {
       id: 'sup',
       label: t('toolbar.sup'),
       glyph: <Icon name="superscript" />,
-      run: fmt.toggleSuperscript,
+      command: 'sup',
     },
   ];
   const links: Item[] = [
-    { id: 'link', label: t('toolbar.link'), glyph: <Icon name="link" />, run: fmt.insertLink },
+    { id: 'link', label: t('toolbar.link'), glyph: <Icon name="link" />, command: 'link' },
     {
       id: 'wikilink',
       label: t('toolbar.wikilink'),
       glyph: <Icon name="wikilink" />,
-      run: fmt.insertWikilink,
+      command: 'wikilink',
     },
     {
       id: 'embed',
       label: t('toolbar.embed'),
       glyph: <Icon name="embed" />,
-      run: fmt.insertSnippet('![[|]]'),
+      command: 'embed',
     },
   ];
   const blocks: Item[] = [
-    { id: 'task', label: t('toolbar.task'), glyph: <Icon name="task" />, run: fmt.toggleTask },
+    { id: 'task', label: t('toolbar.task'), glyph: <Icon name="task" />, command: 'task' },
     {
       id: 'bullet',
       label: t('toolbar.bullet'),
       glyph: <Icon name="bullet" />,
-      run: fmt.toggleBulletList,
+      command: 'bullet',
     },
     {
       id: 'numbered',
       label: t('toolbar.numbered'),
       glyph: <Icon name="numbered" />,
-      run: fmt.toggleNumberedList,
+      command: 'numbered',
     },
-    { id: 'quote', label: t('toolbar.quote'), glyph: <Icon name="quote" />, run: fmt.toggleQuote },
+    { id: 'quote', label: t('toolbar.quote'), glyph: <Icon name="quote" />, command: 'quote' },
     {
       id: 'callout',
       label: t('toolbar.callout'),
       glyph: <Icon name="callout" />,
-      run: fmt.insertSnippet('> [!note] |\n> '),
+      command: 'callout',
     },
     {
       id: 'codeblock',
       label: t('toolbar.codeBlock'),
       glyph: <Icon name="codeBlock" />,
-      run: fmt.insertSnippet('```\n|\n```'),
+      command: 'code-block',
     },
     {
       id: 'table',
       label: t('toolbar.table'),
       glyph: <Icon name="table" />,
-      run: fmt.insertSnippet('| Column 1 | Column 2 |\n| --- | --- |\n| | |'),
+      command: 'table',
     },
     {
       id: 'math',
       label: t('toolbar.math'),
       glyph: <Icon name="math" />,
-      run: fmt.insertSnippet('$$\n|\n$$'),
+      command: 'math',
     },
     {
       id: 'divider',
       label: t('toolbar.divider'),
       glyph: <Icon name="separator" />,
-      run: fmt.insertSeparator,
+      command: 'separator',
     },
     {
       id: 'comment',
       label: t('toolbar.comment'),
       glyph: <Icon name="comment" />,
-      run: fmt.toggleComment,
+      command: 'comment',
     },
   ];
 
@@ -206,7 +204,7 @@ export function EditorToolbar({
       aria-label={it.label}
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={act(it.run)}
+      onClick={act(it.command)}
     >
       {it.glyph}
     </button>
@@ -241,7 +239,7 @@ export function EditorToolbar({
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         setHeadings(false);
-                        act(fmt.setHeading(n))();
+                        act(headingCommand(n))();
                       }}
                     >
                       H{n}

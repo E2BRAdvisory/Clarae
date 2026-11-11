@@ -1,9 +1,9 @@
 // The slides of a presentation as text (ADR-0048): where each one starts and ends, its title, its
 // presenter notes, whether it is left out, and the edits the Slideshow tab makes (move, leave out,
-// notes, settings). Pure: every edit is a list of CodeMirror changes against the source it was
+// notes, settings). Pure: every edit is a list of source edits against the source it was
 // computed from, applied as one transaction, so it is a single undo step. The positions of the
 // slides come from the renderer (`Deck.slideLines`): Marp is the authority on what a slide is.
-import type { ChangeSpec } from '@codemirror/state';
+import type { SourceEdit } from '../editor/types';
 
 /** The comment that leaves a slide out of the presentation and of its exports. */
 export const HIDDEN_MARKER = '<!-- memobrain: hidden -->';
@@ -391,7 +391,7 @@ function lineOfOffset(lay: Layout, off: number): number {
 }
 
 /** Deletes a comment; when it fills its lines the lines go with it. */
-function removal(lay: Layout, c: Comment): ChangeSpec {
+function removal(lay: Layout, c: Comment): SourceEdit {
   const a = lineOfOffset(lay, c.from);
   const b = lineOfOffset(lay, c.to);
   const fills = c.from === lay.offs[a] && c.to === lineEnd(lay, b);
@@ -411,7 +411,7 @@ function appendToSlide(
   lay: Layout,
   slide: { bodyStart: number; end: number },
   add: string,
-): ChangeSpec {
+): SourceEdit {
   let last = slide.end;
   while (last >= slide.bodyStart && !(lay.lines[last] ?? '').trim()) last--;
   if (last < slide.bodyStart) {
@@ -456,7 +456,7 @@ export function hiddenEdit(
   slideLines: readonly number[],
   index: number,
   hidden: boolean,
-): ChangeSpec[] {
+): SourceEdit[] {
   const lay = layoutOf(source);
   const b = slideBounds(lay, slideLines)[index];
   if (!b) return [];
@@ -471,7 +471,7 @@ export function setHiddenEdit(
   slideLines: readonly number[],
   indices: readonly number[],
   hidden: boolean,
-): ChangeSpec[] {
+): SourceEdit[] {
   return indices.flatMap((i) => hiddenEdit(source, slideLines, i, hidden));
 }
 
@@ -481,7 +481,7 @@ export function notesEdit(
   slideLines: readonly number[],
   index: number,
   text: string,
-): ChangeSpec[] {
+): SourceEdit[] {
   const lay = layoutOf(source);
   const b = slideBounds(lay, slideLines)[index];
   if (!b) return [];
@@ -505,7 +505,7 @@ export function moveSlideEdit(
   slideLines: readonly number[],
   index: number,
   dir: -1 | 1,
-): ChangeSpec[] {
+): SourceEdit[] {
   const lo = dir < 0 ? index - 1 : index;
   if (lo < 0 || lo + 1 >= slideLines.length || !canReorder(source, slideLines)) return [];
   const lay = layoutOf(source);
@@ -576,7 +576,7 @@ export function frontmatterEdit(
   source: string,
   key: string,
   value: string | boolean | number | null,
-): ChangeSpec[] {
+): SourceEdit[] {
   const lay = layoutOf(source);
   const end = frontmatterEnd(lay.lines);
   const row = value === null ? '' : `${key}: ${yamlValue(value)}`;

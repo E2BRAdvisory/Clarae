@@ -15,7 +15,7 @@ import { dialog } from '../ui/dialogs';
 import { isSafeExternalUrl } from '../util/sanitize';
 import { openExternal } from '../util/external';
 import { interceptLinks } from '../util/links';
-import type { LinkSpec } from '../editor/context';
+import type { LinkSpec } from '../editor/types';
 import {
   addEdge,
   addNode,

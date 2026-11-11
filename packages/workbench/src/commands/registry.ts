@@ -6,7 +6,7 @@ import { activeTab, findPane } from '../workspace/layout';
 import { createNote, deleteEntry, promptNewFolder, renameEntry, toggleTheme } from '../app/actions';
 import { api } from '../app/api';
 import { getActiveEditor } from '../editor/registry';
-import * as fmt from '../editor/commands';
+import { headingCommand, type EditorCommand } from '../editor/handle';
 import { dialog } from '../ui/dialogs';
 import { newCanvas } from '../canvas/commands';
 import { openGraph, openLocalGraph } from '../graph/commands';
@@ -38,7 +38,6 @@ import {
 } from '../marp/commands';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
-import type { EditorView } from '@codemirror/view';
 import { can, type Capabilities } from '../platform';
 import type { FeatureId } from '../parity/features.gen';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
@@ -91,11 +90,11 @@ const editorMode = (): boolean => {
 
 const t = (key: string): string => i18next.t(key);
 
-function withEditor(fn: (v: EditorView) => boolean): () => void {
+function withEditor(command: EditorCommand): () => void {
   return () => {
     const v = getActiveEditor();
     if (v) {
-      fn(v);
+      v.exec(command);
       v.focus();
     }
   };
@@ -106,6 +105,21 @@ function setMode(mode: NoteMode): () => void {
     const tab = activeTab(store().layout);
     if (tab) store().setTabMode(tab.id, mode);
   };
+}
+
+/** Asks for a line number and puts the cursor of the active editor at its start (a number past the end is the last line). */
+async function gotoLine(): Promise<void> {
+  const before = getActiveEditor();
+  if (!before) return;
+  const lines = before.text().split('\n').length;
+  const answer = await dialog.prompt(
+    t('editor.gotoLine.title'),
+    String(before.cursor().line),
+    i18next.t('editor.gotoLine.label', { max: lines }),
+  );
+  const line = Number.parseInt((answer ?? '').trim(), 10);
+  if (!Number.isFinite(line)) return; // cancelled, or not a number: nothing is done
+  getActiveEditor()?.gotoLine(line);
 }
 
 async function guard(p: Promise<unknown>): Promise<void> {
@@ -614,7 +628,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: [],
     enabled: () => editorMode() && !readOnlyVault(),
-    run: withEditor(fmt.insertSeparator),
+    run: withEditor('separator'),
   },
   {
     id: 'sidebar:outline',
@@ -712,7 +726,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-b'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleBold),
+    run: withEditor('bold'),
   },
   {
     id: 'editor:italic',
@@ -720,7 +734,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-i'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleItalic),
+    run: withEditor('italic'),
   },
   {
     id: 'editor:highlight',
@@ -728,7 +742,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-h'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleHighlight),
+    run: withEditor('highlight'),
   },
   {
     id: 'editor:strike',
@@ -736,7 +750,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-x'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleStrike),
+    run: withEditor('strike'),
   },
   {
     id: 'editor:code',
@@ -744,7 +758,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-c'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleInlineCode),
+    run: withEditor('code'),
   },
   {
     id: 'editor:comment',
@@ -752,7 +766,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: [],
     enabled: editorMode,
-    run: withEditor(fmt.toggleComment),
+    run: withEditor('comment'),
   },
   {
     id: 'editor:link',
@@ -760,7 +774,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-k'],
     enabled: editorMode,
-    run: withEditor(fmt.insertLink),
+    run: withEditor('link'),
   },
   {
     id: 'editor:wikilink',
@@ -768,7 +782,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-k'],
     enabled: editorMode,
-    run: withEditor(fmt.insertWikilink),
+    run: withEditor('wikilink'),
   },
   ...[1, 2, 3, 4, 5, 6].map<Command>((n) => ({
     id: `editor:heading-${n}`,
@@ -776,7 +790,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: [`Mod-${n}`],
     enabled: editorMode,
-    run: withEditor(fmt.setHeading(n)),
+    run: withEditor(headingCommand(n)),
   })),
   {
     id: 'editor:bullet',
@@ -784,7 +798,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-8'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleBulletList),
+    run: withEditor('bullet'),
   },
   {
     id: 'editor:numbered',
@@ -792,7 +806,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-7'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleNumberedList),
+    run: withEditor('numbered'),
   },
   {
     id: 'editor:quote',
@@ -800,7 +814,7 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Shift-9'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleQuote),
+    run: withEditor('quote'),
   },
   {
     id: 'editor:task',
@@ -808,7 +822,23 @@ export const commands: Command[] = [
     feature: 'editor.formatting',
     defaults: ['Mod-Enter'],
     enabled: editorMode,
-    run: withEditor(fmt.toggleTask),
+    run: withEditor('task'),
+  },
+  {
+    id: 'editor:find',
+    group: 'editor',
+    feature: 'editor.find',
+    defaults: ['Mod-f'],
+    enabled: editorMode,
+    run: () => getActiveEditor()?.openSearch(),
+  },
+  {
+    id: 'editor:goto-line',
+    group: 'editor',
+    feature: 'editor.find',
+    defaults: ['Mod-Alt-g'],
+    enabled: editorMode,
+    run: gotoLine,
   },
 
   // ---- cloud ----

@@ -5,11 +5,13 @@ import { api } from '../app/api';
 import { followLink } from '../app/actions';
 import { downloadVaultFile, openExternally } from '../app/openFile';
 import { onVaultChanges, staleTargets, type VaultChangeBatch } from '../app/fileChanges';
-import { Editor, type LinkResolver } from '../editor/Editor';
+import type { LinkResolver } from '../editor/Editor';
+import { NoteEditor } from '../editor/NoteEditor';
 import { EditorToolbar } from '../editor/EditorToolbar';
 import { getEditor } from '../editor/registry';
-import { statsOf } from '../editor/stats';
-import type { LinkSpec, LivePreviewContext } from '../editor/context';
+import { tagSearchOf } from '../editor/linkSpec';
+import type { LinkSpec } from '../editor/types';
+import type { LivePreviewContext } from '../editor/context';
 import { useNoteDocument } from '../editor/useNoteDocument';
 import { renderEmbedInto } from '../embeds/hydrate';
 import { classify } from '../embeds/media';
@@ -227,8 +229,13 @@ function MarkdownNote({
   );
 
   const open = useCallback(
-    (spec: LinkSpec, newTab: boolean) => void followLink(path, spec, newTab),
-    [path],
+    (spec: LinkSpec, newTab: boolean) => {
+      // a #tag followed with Mod+click in the editor is a search for it, as in the reading view
+      const tag = tagSearchOf(spec);
+      if (tag) search(tag);
+      else void followLink(path, spec, newTab);
+    },
+    [path, search],
   );
 
   const context = useMemo<LivePreviewContext>(
@@ -262,7 +269,7 @@ function MarkdownNote({
       openExternal,
       renderMath: (tex, display, el) => renderMath(el, tex, display),
       renderMermaid: (code, el) => renderMermaid(el, code),
-      renderQuery: (source, el) => void renderQueryInto(el, source, vaultId, path),
+      renderQuery: (source, el) => renderQueryInto(el, source, vaultId, path),
     }),
     [link, vaultId, path, open],
   );
@@ -312,12 +319,8 @@ function MarkdownNote({
           path,
           paneId: pane.id,
           // The editor's text: CodeMirror reads every line break as \n, whatever the file has.
-          source: view
-            ? view.state.doc.toString()
-            : docRef.current.current().replace(/\r\n?/g, '\n'),
-          cursorLine: view
-            ? view.state.doc.lineAt(view.state.selection.main.head).number - 1
-            : undefined,
+          source: view ? view.text() : docRef.current.current().replace(/\r\n?/g, '\n'),
+          cursorLine: view ? view.cursor().line - 1 : undefined,
           readOnly,
         });
       }
@@ -355,7 +358,7 @@ function MarkdownNote({
   useEffect(() => {
     if (!isActive || doc.status !== 'ready' || tab.mode === 'reading') return;
     const view = getEditor(pane.id);
-    if (view) setStats(statsOf(view.state));
+    if (view) setStats(view.stats());
   }, [isActive, doc.status, tab.mode, pane.id, setStats]);
 
   const revealHere =
@@ -434,7 +437,7 @@ function MarkdownNote({
             disabled={readOnly}
             attachmentDir={attachmentDir(editorSettings, path)}
           />
-          <Editor
+          <NoteEditor
             id={pane.id}
             doc={text}
             version={doc.version}
@@ -462,10 +465,7 @@ function MarkdownNote({
               if (isActive) setStats(s);
               if (!presentation || !isActive) return;
               const view = getEditor(pane.id);
-              if (view)
-                useMarpDeck
-                  .getState()
-                  .setCursor(view.state.doc.lineAt(view.state.selection.main.head).number - 1);
+              if (view) useMarpDeck.getState().setCursor(view.cursor().line - 1);
             }}
           />
         </>

@@ -4,7 +4,7 @@
 // updates: the cursor position is reported at once, the word count of the document is recomputed
 // only after typing pauses, and a selection is counted at once only while it is short.
 import type { EditorState, Text } from '@codemirror/state';
-import type { EditorStats } from './Editor';
+import type { EditorStats } from './types';
 
 /** Pause after the last edit before the document's words are counted again. */
 export const STATS_DELAY_MS = 250;

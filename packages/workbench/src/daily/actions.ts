@@ -107,11 +107,7 @@ export async function insertTemplate(): Promise<void> {
   if (!tpl) return;
   const title = path.replace(/^.*\//, '').replace(/\.md$/, '');
   const text = await api.templates.expand(vaultId(), tpl.ref, title, uiLang());
-  const sel = view.state.selection.main;
-  view.dispatch({
-    changes: { from: sel.from, to: sel.to, insert: text },
-    selection: { anchor: sel.from + text.length },
-  });
+  view.replaceSelection(text);
   view.focus();
 }
 

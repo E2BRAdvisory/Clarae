@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createNote } from '../app/actions';
 import { extractSelection, mergeActiveNote } from '../composer/actions';
 import { api } from '../app/api';
+import { codeMirrorHandle } from '../editor/source/CodeMirrorAdapter';
 import { getActiveEditor, registerEditor, setActiveEditor } from '../editor/registry';
 import { initI18n } from '../i18n';
 import { fromState, unmanaged, type Managed } from '../state/managed';
@@ -204,9 +205,10 @@ describe('note composer', () => {
       state: EditorState.create({ doc, selection: { anchor: 7, head: 19 } }),
       parent: document.body,
     });
-    registerEditor('p1', view);
+    const handle = codeMirrorHandle(view, { paneId: 'p1' });
+    registerEditor('p1', handle);
     setActiveEditor('p1');
-    expect(getActiveEditor()).toBe(view);
+    expect(getActiveEditor()).toBe(handle);
     render(<DialogHost />);
     const done = extractSelection();
     await screen.findByDisplayValue('Plan');

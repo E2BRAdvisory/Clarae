@@ -14,7 +14,7 @@ import { drawingDir, drawingName, useDrawingSettings } from './settings';
 export function insertIntoActiveNote(text: string): boolean {
   const view = getActiveEditor();
   if (!view) return false;
-  view.dispatch(view.state.replaceSelection(text));
+  view.replaceSelection(text);
   view.focus();
   return true;
 }

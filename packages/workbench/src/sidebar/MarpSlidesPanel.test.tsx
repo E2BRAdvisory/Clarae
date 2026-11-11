@@ -5,6 +5,7 @@ import { EditorView } from '@codemirror/view';
 import { history, undo } from '@codemirror/commands';
 import { MarpSlidesPanel } from './MarpSlidesPanel';
 import { api } from '../app/api';
+import { codeMirrorHandle } from '../editor/source/CodeMirrorAdapter';
 import { registerEditor, unregisterEditor } from '../editor/registry';
 import { initI18n } from '../i18n';
 import { applyEdit } from '../marp/controller';
@@ -38,7 +39,7 @@ async function setup(opts: { readOnly?: boolean; doc?: string } = {}) {
   useAppStore.getState().setVault(info);
   const doc = opts.doc ?? DECK;
   view = new EditorView({ state: EditorState.create({ doc, extensions: [history()] }) });
-  registerEditor('p1', view);
+  registerEditor('p1', codeMirrorHandle(view, { paneId: 'p1' }));
   useMarpShow.setState({ open: false });
   useMarpDeck.getState().publish({
     vaultId,
@@ -59,7 +60,7 @@ async function setup(opts: { readOnly?: boolean; doc?: string } = {}) {
 
 afterEach(() => {
   cleanup();
-  unregisterEditor('p1', view);
+  unregisterEditor('p1', codeMirrorHandle(view));
   view.destroy();
   useMarpDeck.getState().clear('Deck.marp');
 });
@@ -185,7 +186,7 @@ describe('Slideshow tab of a presentation', () => {
   it('reports an edit that leaves the text as it was, and does not record an undo step', () => {
     const doc = '# A\n\n<!-- n -->\n';
     const v = new EditorView({ state: EditorState.create({ doc, extensions: [history()] }) });
-    registerEditor('p9', v);
+    registerEditor('p9', codeMirrorHandle(v, { paneId: 'p9' }));
     useMarpDeck.getState().publish({
       vaultId: 'x',
       path: 'Z.marp',
@@ -200,7 +201,7 @@ describe('Slideshow tab of a presentation', () => {
       expect(real(doc, [{ from: 0, insert: 'x' }])).toBe('changed');
       expect(real(doc, [{ from: 0, insert: 'y' }])).toBe(false); // the text moved on
     } finally {
-      unregisterEditor('p9', v);
+      unregisterEditor('p9', codeMirrorHandle(v));
       v.destroy();
       useMarpDeck.getState().clear('Z.marp');
     }
@@ -280,7 +281,7 @@ describe('Slideshow tab of a presentation', () => {
     const info = await api.vault.open('/vaults/Panel');
     vaultId = info.id;
     view = new EditorView({ state: EditorState.create({ doc: DECK }) });
-    registerEditor('p1', view);
+    registerEditor('p1', codeMirrorHandle(view, { paneId: 'p1' }));
     useMarpDeck.getState().publish({
       vaultId,
       path: 'Deck.marp',

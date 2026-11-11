@@ -7,7 +7,7 @@ import { extractBlock, extractSection, stripFrontmatter } from '../reading/secti
 import { classify, embedOptions, loadMedia, parseSize, pdfPage, type FileStamp } from './media';
 import { renderPdf } from './pdf';
 import { renderMath, renderMermaid } from './typeset';
-import type { LinkSpec } from '../editor/context';
+import type { LinkSpec } from '../editor/types';
 import { parseDrawingRef, type DrawingRef } from '../drawing/embed/ref';
 
 /** What embeds need from the backend (a subset of `api`, so tests can fake it). */

@@ -62,6 +62,9 @@ export type FeatureId =
   | 'editor.formatting' // Formattazione nell'editor
   | 'editor.modes' // Live Preview, sorgente e lettura
   | 'editor.links' // Link e completamento automatico
+  | 'editor.find' // Cerca e sostituisci nella nota, vai a riga
+  | 'editor.ai' // Assistente di scrittura AI dell'editor (inattivo)
+  | 'editor.collab' // Collaborazione in tempo reale nell'editor (spenta)
   | 'workspace.layout' // Schede, pannelli divisi e barre laterali
   | 'outline' // Struttura della nota
   | 'links.backlinks' // Backlink, link in uscita e menzioni non collegate
@@ -154,6 +157,9 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'editor.formatting',
   'editor.modes',
   'editor.links',
+  'editor.find',
+  'editor.ai',
+  'editor.collab',
   'workspace.layout',
   'outline',
   'links.backlinks',

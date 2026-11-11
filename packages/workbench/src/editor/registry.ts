@@ -1,27 +1,27 @@
-// Which CodeMirror view is "the" editor right now: formatting commands act on
-// the focused one. Views register themselves under their pane id.
-import type { EditorView } from '@codemirror/view';
+// Which note editor is "the" editor right now: formatting commands act on the focused one. Editors
+// register their NoteEditorHandle under their pane id; nobody outside the editor sees the engine.
+import type { NoteEditorHandle } from './handle';
 
-const views = new Map<string, EditorView>();
+const editors = new Map<string, NoteEditorHandle>();
 let active: string | null = null;
 
-export function registerEditor(id: string, view: EditorView): void {
-  views.set(id, view);
+export function registerEditor(id: string, handle: NoteEditorHandle): void {
+  editors.set(id, handle);
 }
 
-export function unregisterEditor(id: string, view: EditorView): void {
-  if (views.get(id) === view) views.delete(id);
-  if (active === id && !views.has(id)) active = null;
+export function unregisterEditor(id: string, handle: NoteEditorHandle): void {
+  if (editors.get(id) === handle) editors.delete(id);
+  if (active === id && !editors.has(id)) active = null;
 }
 
 export function setActiveEditor(id: string): void {
   active = id;
 }
 
-export function getActiveEditor(): EditorView | null {
-  return (active && views.get(active)) || null;
+export function getActiveEditor(): NoteEditorHandle | null {
+  return (active && editors.get(active)) || null;
 }
 
-export function getEditor(id: string): EditorView | null {
-  return views.get(id) ?? null;
+export function getEditor(id: string): NoteEditorHandle | null {
+  return editors.get(id) ?? null;
 }

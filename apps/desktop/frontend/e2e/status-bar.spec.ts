@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, openVault, readVaultFile, test } from './support';
+import { expect, liveEngine, openVault, readVaultFile, test } from './support';
 import { runCommand } from './drawingHelpers';
 
 // The optional status bar (ADR-0035): off by default, turned on from the palette and remembered in
@@ -22,7 +22,9 @@ test('the palette turns the status bar on and off, and the vault remembers it', 
 
   await runCommand(page, 'toggle status bar');
   await expect(bar).toContainText('4 words, 25 chars');
-  await expect(bar).toContainText('Ln 1, Col 1'); // reported when the tab opened, before any key
+  // reported when the tab opened, before any key. The line is exact on both engines; the column is exact
+  // in CodeMirror, and in Milkdown the caret starts on the text of the heading, after its `# ` (ADR-0049)
+  await expect(bar).toContainText(liveEngine() === 'milkdown' ? 'Ln 1, Col' : 'Ln 1, Col 1');
   await expect.poll(() => statusBar(page)).toBe(true);
 
   await page.getByLabel('Note editor').click();

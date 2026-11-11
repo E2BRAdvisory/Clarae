@@ -24,6 +24,27 @@ export const test = base.extend<object, { target: Target }>({
 
 export { expect };
 
+/**
+ * The engine of the Live mode of the build under test (ADR-0049, A-D8): `milkdown` when the specs run
+ * on a build made with MEMOBRAIN_LIVE_ENGINE=milkdown, `codemirror` otherwise. The specs of the editor
+ * run on both; what one of them shows differently in Live (the syntax of the line, the marks in the
+ * DOM) is asserted by `liveEngine()`, and the rest through the file or the Source mode.
+ */
+export type LiveEngine = 'milkdown' | 'codemirror';
+export const liveEngine = (): LiveEngine =>
+  process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown' ? 'milkdown' : 'codemirror';
+
+/** The Live editor's element in a build whose Live mode is Milkdown (CodeMirror stays mounted under it). */
+export const proseMirror = (page: Page): Locator => page.locator('.live-host .ProseMirror');
+
+/**
+ * The note editor of the pane. With the Milkdown engine the CodeMirror editor stays under it and, while
+ * the Live editor loads, has the same name: the Live one is asked for by its element, so that a spec
+ * never meets both (a strict-mode violation) and never types into the one that is going away.
+ */
+export const noteEditor = (page: Page): Locator =>
+  liveEngine() === 'milkdown' ? proseMirror(page) : page.getByLabel('Note editor');
+
 /** The target of the running test (from its project; E2E_TARGET for the single-target configs). */
 export function target(): Target {
   return (test.info().project.use as { target?: Target }).target ?? envTarget;

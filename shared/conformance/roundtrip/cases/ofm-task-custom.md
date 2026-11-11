@@ -1,0 +1,3 @@
+- [/] half
+- [-] cancelled
+- [?] question

@@ -27,6 +27,14 @@ const eventRE = `/^(?:${eventNames.map(escape).join('|')})$/`;
 // A binding service ('VaultAPI') or a `Service.Method` key ('SyncAPI.Status').
 const serviceRE = '/^[A-Z][A-Za-z]*API(?:\\.[A-Za-z]+)?$/';
 
+// `no-restricted-imports` (llmProviderImports below) does not see `import()`: this selector covers it.
+// It is in `generatedNames` for the sources and has its own block for the tests.
+const llmProviderDynamicImport = {
+  selector: 'ImportExpression[source.value=/^@milkdown\\/crepe\\/llm-providers/]',
+  message:
+    "Crepe's LLM providers call the network from the frontend: the model is reached through the core (ADR-0050).",
+};
+
 const generatedNames = [
   {
     selector: `Literal[value=${serviceRE}]:not(TSLiteralType > Literal)`,
@@ -46,6 +54,7 @@ const generatedNames = [
     selector: `TemplateElement[value.cooked=${eventRE}]`,
     message: 'Event names are generated from the Go registry: use Events.<key>.',
   },
+  llmProviderDynamicImport,
 ];
 
 const platformKind = '/^(?:web|desktop)$/';
@@ -172,6 +181,55 @@ const workbenchCloudCalls = [
   },
 ];
 
+// ---- The model is reached from the Go core only (ADR-0050) -------------------------------------------
+// The ready-made providers of Crepe (`@milkdown/crepe/llm-providers/*`) call the network from the
+// frontend, with the key in the DOM, against `connect-src 'self'` and the network perimeter. The AI
+// provider of the editor is a bridge to the core's AIAPI (editor/live/ai/provider.ts). Nothing may
+// import them, in any file: this pattern is part of every `no-restricted-imports` block below.
+const llmProviderImports = {
+  group: ['@milkdown/crepe/llm-providers', '@milkdown/crepe/llm-providers/*'],
+  message:
+    "Crepe's LLM providers call the network from the frontend: the model is reached through the core (AIAPI, editor/live/ai/provider.ts, ADR-0050).",
+};
+
+// ---- The editor engine stays behind NoteEditorHandle (ADR-0049) -----------------------------------
+// The rest of the application talks to a note editor through the handle (editor/handle.ts), never
+// through CodeMirror: that is what lets another engine sit behind the same handle. Only
+// packages/workbench/src/editor/source/ (the CodeMirror adapter) may import @codemirror/* and
+// @lezer/*. These files still do and are exempt for now; each goes when its code moves into
+// editor/source/ or is removed with the CodeMirror Live Preview (wave A-W9). Do not add to the list.
+const engineImports = {
+  patterns: [
+    {
+      group: ['@codemirror/*', '@lezer/*'],
+      message:
+        'The editor engine is reached through NoteEditorHandle (packages/workbench/src/editor/handle.ts): import it only from editor/source/ (ADR-0049).',
+    },
+    llmProviderImports,
+  ],
+};
+const engineExempt = [
+  'packages/workbench/src/editor/source/**',
+  // The CodeMirror editor and the extensions it is made of.
+  'packages/workbench/src/editor/Editor.tsx',
+  'packages/workbench/src/editor/context.ts', // the LivePreviewContext facet
+  'packages/workbench/src/editor/blockState.ts',
+  'packages/workbench/src/editor/commands.ts',
+  'packages/workbench/src/editor/completions.ts',
+  'packages/workbench/src/editor/external.ts',
+  'packages/workbench/src/editor/paste.ts',
+  'packages/workbench/src/editor/sourceMode.ts',
+  'packages/workbench/src/editor/stats.ts',
+  // The CodeMirror Live Preview, removed in A-W9.
+  'packages/workbench/src/editor/blockWidgets.ts',
+  'packages/workbench/src/editor/callouts.ts',
+  'packages/workbench/src/editor/livePreview.ts',
+  'packages/workbench/src/editor/widgets.ts',
+  'packages/workbench/src/query/widget.ts',
+  // The slash menu is a CodeMirror completion source (its items are editor commands already).
+  'packages/workbench/src/slash/slash.ts',
+];
+
 const appSources = [
   'packages/*/src/**/*.{ts,tsx}',
   'apps/desktop/frontend/src/**/*.{ts,tsx}',
@@ -187,6 +245,8 @@ export default tseslint.config(
   {
     ignores: [
       '**/node_modules/**',
+      // Agent worktrees and plans (git-ignored): each worktree is a full copy of the repository.
+      '.claude/**',
       // Local scratch (git-ignored): e2e-matrix/e2e-mixed builds and module copies, perf datasets.
       '.dev/**',
       '.perf/**',
@@ -274,6 +334,25 @@ export default tseslint.config(
     files: ['packages/workbench/src/platform/**/*.{ts,tsx}'],
     ignores: testSources,
     rules: { 'no-restricted-syntax': ['error', ...generatedNames] },
+  },
+  {
+    // Everywhere, tests included (the engine block below replaces it where it applies, and carries the pattern too).
+    files: [...appSources, 'packages/*/*.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [llmProviderImports] }] },
+  },
+  {
+    files: ['packages/workbench/src/**/*.{ts,tsx}'],
+    ignores: [...testSources, ...engineExempt],
+    rules: { 'no-restricted-imports': ['error', engineImports] },
+  },
+  {
+    // The tests too: they have no other `no-restricted-syntax`, so this one is the only rule they get.
+    files: [
+      'packages/*/src/**/*.test.{ts,tsx}',
+      'apps/desktop/frontend/src/**/*.test.{ts,tsx}',
+      'web/src/**/*.test.{ts,tsx}',
+    ],
+    rules: { 'no-restricted-syntax': ['error', llmProviderDynamicImport] },
   },
   prettier,
 );

@@ -3,6 +3,8 @@
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload, proxying /api to the cloud
 //                                             (--no-watch builds once, for the e2e matrix)
 // MEMOBRAIN_E2E=1 makes main.tsx install the OIDC test double (Playwright); it is compiled out otherwise.
+// MEMOBRAIN_LIVE_ENGINE=milkdown builds the workbench's Live mode on Milkdown (ADR-0049, A-D8): a build
+// constant, never a setting; without it the Live mode is the CodeMirror one and no Milkdown is in the build.
 //
 // Two pages are built: the console (index.html) and the vault workbench (workbench.html, served for
 // /vaults/:id/open). The workbench is a page of its own so that the desktop UI's global style sheet
@@ -13,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer, request } from 'node:http';
-import { dirname, extname, join, normalize, relative } from 'node:path';
+import { dirname, extname, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 // The workbench's address (/vaults/:id/open), shared with the pages and checked against the cloud's.
@@ -21,20 +23,33 @@ import { isWorkbenchRoute } from '../src/shared/routes.ts';
 import {
   baseOptions,
   copyExcalidrawAssets,
+  copyTwemojiAssets,
+  distDir,
   excalidrawFork,
   excalidrawForkPlugin,
   graphWorkerEntry,
+  linkLazyStyles,
+  liveCollab,
+  liveEngine as liveEnginePlugin,
 } from '@memobrain/workbench/build';
 
-const root = dirname(fileURLToPath(import.meta.url)) + '/..';
-// MEMOBRAIN_DIST builds elsewhere (the browser test of the production handler uses an E2E build of its own).
-const dist = join(root, process.env['MEMOBRAIN_DIST'] ?? 'dist');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// MEMOBRAIN_DIST builds elsewhere (the browser test of the production handler uses an E2E build of its own). An
+// absolute path is taken as it is, a relative one starts at this package (never at the working directory).
+const dist = distDir(root, 'dist');
 const mode = process.argv[2] ?? 'build';
 const dev = mode === 'dev';
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5174;
 const apiTarget = new URL(process.env['MEMOBRAIN_API'] ?? 'http://127.0.0.1:18081');
 const e2e = process.env['MEMOBRAIN_E2E'] === '1';
+const liveEngine = process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown' ? 'milkdown' : '';
+// MEMOBRAIN_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
+// (ADR-0050); without it no Yjs is in any file and a profile cannot switch collaboration on.
+const collab = process.env['MEMOBRAIN_COLLAB'] === '1';
+// MEMOBRAIN_AI=1 lets the editor ask for the AI assistant (ADR-0050): the second gate, next to the `ai` flag
+// of the Config Profile; a released build is made without it, so a profile cannot switch the assistant on.
+const ai = process.env['MEMOBRAIN_AI'] === '1';
 const version = process.env['MEMOBRAIN_VERSION'] ?? 'dev';
 
 /** The pages of the app: each has an HTML template and the entry point it loads. */
@@ -141,6 +156,14 @@ const html = {
   setup(build) {
     build.onEnd(async (result) => {
       if (result.errors.length || !result.metafile) return;
+      // The lazy chunks link their own style sheets (the sheets' integrity in production): done before
+      // the chunks are hashed for the import map below.
+      await linkLazyStyles(result.metafile, {
+        root,
+        dist,
+        entries: PAGES.map((p) => p.entry),
+        integrity: dev ? () => '' : sri384,
+      });
       const url = urlOf;
       const sri = async (p) => {
         if (dev) return '';
@@ -400,6 +423,7 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(join(root, 'public'), dist, { recursive: true });
 await copyExcalidrawAssets(dist);
+if (liveEngine) await copyTwemojiAssets(dist);
 // Excalidraw is a classic script added by a <script> tag at run time: the tag carries its integrity.
 const excalidrawIntegrity = sri384(
   await readFile(join(dist, 'excalidraw-assets', 'excalidraw.js')),
@@ -409,6 +433,8 @@ const { assets, sizes } = await prepareCore();
 const base = baseOptions({ dev });
 const shared = {
   ...base,
+  // The metafile paths (the entries, the sheets of linkLazyStyles) start at the package, wherever the script is run from.
+  absWorkingDir: root,
   tsconfig: join(root, 'tsconfig.esbuild.json'),
   target: base.target,
   bundle: true,
@@ -420,6 +446,8 @@ const shared = {
   define: {
     ...base.define,
     'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : ''),
+    'import.meta.env.MEMOBRAIN_COLLAB': JSON.stringify(collab ? '1' : ''),
+    'import.meta.env.MEMOBRAIN_AI': JSON.stringify(ai ? '1' : ''),
     __MEMOBRAIN_CORE__: JSON.stringify(assets),
     __MEMOBRAIN_VERSION__: JSON.stringify(version),
   },
@@ -447,7 +475,12 @@ const common = {
   publicPath: '/',
   metafile: true,
   logLevel: 'info',
-  plugins: dev ? [...plugins, html, reload] : [...plugins, html],
+  plugins: [
+    ...plugins,
+    liveEnginePlugin(liveEngine),
+    liveCollab(collab),
+    ...(dev ? [html, reload] : [html]),
+  ],
 };
 const builds = [
   { ...common, entryPoints: { main: join(root, 'src/main.tsx') }, splitting: false },

@@ -66,8 +66,7 @@ export function bookmarkFolder(path: string): void {
 function cursor(): { text: string; line: number } | null {
   const view = getActiveEditor();
   if (!view) return null;
-  const head = view.state.selection.main.head;
-  return { text: view.state.doc.toString(), line: view.state.doc.lineAt(head).number };
+  return { text: view.text(), line: view.cursor().line };
 }
 
 export const headingUnderCursor = (): string | null => {
@@ -97,8 +96,7 @@ export function bookmarkBlock(): void {
   let id = block.id;
   if (!id) {
     id = newBlockId();
-    const line = view.state.doc.line(block.endLine);
-    view.dispatch({ changes: { from: line.to, insert: ` ^${id}` } });
+    if (!view.appendToLine(block.endLine, ` ^${id}`)) return;
   }
   addBookmark(fileItem(path, blockSubpath(id)));
 }

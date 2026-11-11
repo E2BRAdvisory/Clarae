@@ -23,7 +23,9 @@ export interface DocBlockStates {
  */
 export function frontmatterOf(doc: Text): { lines: number; open: boolean } {
   const strip = (t: string): string => t.replace(/\r+$/, '');
-  if (doc.lines < 2 || strip(doc.line(1).text) !== '---') return { lines: 0, open: false };
+  // a mark at the start of the file is not content (one, as in `splitFrontmatter` and in the indexer)
+  const first = doc.lines > 0 ? doc.line(1).text.replace(/^\uFEFF/, '') : '';
+  if (doc.lines < 2 || strip(first) !== '---') return { lines: 0, open: false };
   for (let n = 2; n <= doc.lines; n++) {
     const t = strip(doc.line(n).text);
     if (t === '---' || t === '...') return { lines: n, open: false };

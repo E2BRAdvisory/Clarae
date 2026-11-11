@@ -11,6 +11,10 @@ declare module '*?url' {
 interface ImportMetaEnv {
   /** "1" when built for Playwright: use the in-memory Wails mock. */
   readonly MEMOBRAIN_E2E?: string;
+  /** "1" when built with the AI assistant enabled (ADR-0050); absent in every released build. */
+  readonly MEMOBRAIN_AI?: string;
+  /** "1" when built with real-time collaboration enabled (ADR-0050); absent in every released build. */
+  readonly MEMOBRAIN_COLLAB?: string;
 }
 
 interface ImportMeta {

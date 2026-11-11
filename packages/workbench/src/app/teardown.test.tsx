@@ -61,7 +61,10 @@ async function typeAtEnd(text: string) {
     if (!v) throw new Error('no editor yet');
     return v;
   });
-  act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: text } }));
+  act(() => {
+    const base = view.text();
+    view.applySourceEdits(base, [{ from: base.length, insert: text }]);
+  });
   return view;
 }
 
@@ -108,7 +111,7 @@ describe('teardown flush', () => {
     fireEvent.blur(input);
     expect(await screen.findByText(/changes that are not saved yet/)).toBeInTheDocument();
     expect(update).not.toHaveBeenCalled();
-    expect(view.state.doc.toString()).toBe('---\nstatus: draft\n---\n# Home\ntyped');
+    expect(view.text()).toBe('---\nstatus: draft\n---\n# Home\ntyped');
     expect(disk('Home.md')).toBe('---\nstatus: draft\n---\n# Theirs');
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
   });

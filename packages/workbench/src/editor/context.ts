@@ -2,16 +2,10 @@
 // (bindings, navigation): extensions never import the API, they call this
 // context, which the Editor component provides through a facet.
 import { Facet } from '@codemirror/state';
+import type { LinkSpec } from './types';
 
-/** A wikilink or embed as the user wrote it. */
-export interface LinkSpec {
-  target: string;
-  heading: string;
-  block: string;
-  /** Display text, or the size for embeds ("300" / "300x200"). */
-  alias: string;
-  embed: boolean;
-}
+// Moved to ./types (engine independent); re-exported so that the existing imports keep compiling.
+export type { LinkSpec } from './types';
 
 /** Frees what an embed render holds; a function or a render handle with dispose(). */
 export type EmbedDisposer = (() => void) | { dispose(): void };
@@ -34,8 +28,11 @@ export interface LivePreviewContext {
   renderMath(tex: string, display: boolean, el: HTMLElement): void;
   /** Renders a Mermaid diagram into el (lazy-loaded). */
   renderMermaid(code: string, el: HTMLElement): void;
-  /** Renders a ```query block (embedded search) into el. */
-  renderQuery?(source: string, el: HTMLElement): void;
+  /**
+   * Renders a ```query block (embedded search) into el. May return what stops it following the index
+   * (the widgets also stop it with `disposeQueryBlock(el)`).
+   */
+  renderQuery?(source: string, el: HTMLElement): EmbedDisposer | void;
 }
 
 const noop = (): void => undefined;

@@ -75,8 +75,23 @@ describe('slash menu', () => {
       res?.from ?? 0,
       state.doc.length,
     );
-    expect(view.state.doc.toString()).toBe('intro > [!note] \n> ');
-    expect(view.state.selection.main.head).toBe('intro > [!note] '.length);
+    // a block starts on a line of its own, whatever was in front of the slash
+    expect(view.state.doc.toString()).toBe('intro \n> [!note] \n> ');
+    expect(view.state.selection.main.head).toBe('intro \n> [!note] '.length);
+    view.destroy();
+  });
+
+  it('inserts a table whole: its first pipe is not the place of the caret', async () => {
+    const { res, state } = await open('/table|');
+    const view = new EditorView({ state, parent: document.body });
+    const option = res?.options.find((o) => o.label === '/Table') as Completion;
+    (option.apply as (v: EditorView, c: Completion, a: number, b: number) => void)(
+      view,
+      option,
+      0,
+      state.doc.length,
+    );
+    expect(view.state.doc.toString()).toBe('| Column 1 | Column 2 |\n| --- | --- |\n| | |');
     view.destroy();
   });
 
@@ -93,6 +108,41 @@ describe('slash menu', () => {
     expect(view.state.doc.toString()).toBe(todayText());
     expect(todayText(new Date(2026, 2, 5))).toBe('2026-03-05');
     view.destroy();
+  });
+
+  it('applies an editor command item through the handle of the editor', async () => {
+    const { res, state } = await open('some title /head|');
+    const view = new EditorView({ state, parent: document.body });
+    const option = res?.options.find((o) => o.label === '/Heading 2') as Completion;
+    (option.apply as (v: EditorView, c: Completion, a: number, b: number) => void)(
+      view,
+      option,
+      res?.from ?? 0,
+      state.doc.length,
+    );
+    expect(view.state.doc.toString()).toBe('## some title ');
+    view.destroy();
+  });
+
+  it('gives every item exactly one way to act, and only known editor commands', () => {
+    for (const it of slashItems) {
+      const ways = [it.insert !== undefined, it.command !== undefined, it.exec !== undefined];
+      expect(ways.filter(Boolean), it.id).toHaveLength(1);
+    }
+    expect(slashItems.filter((it) => it.exec).map((it) => it.exec)).toEqual([
+      'heading-1',
+      'heading-2',
+      'heading-3',
+      'callout',
+      'code-block',
+      'table',
+      'separator',
+      'math',
+      'wikilink',
+      'embed',
+    ]);
+    // a snippet with the caret inside the syntax is a command of the editor, never text with a mark
+    expect(slashItems.filter((it) => it.insert !== undefined).map((it) => it.id)).toEqual(['date']);
   });
 
   it('applies a registry command item through the host', async () => {

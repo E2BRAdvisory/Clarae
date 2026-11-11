@@ -3,7 +3,7 @@
 // desktop that would replace the app in the Wails window, in the browser it would leave the
 // workbench and drop pending edits. Wikilinks and relative links open in the vault, tags start a
 // search, external URLs go to the system browser (or a new tab), in-page anchors stay put.
-import type { LinkSpec } from '../editor/context';
+import type { LinkSpec } from '../editor/types';
 import { openExternal } from './external';
 import { safeDecodeURI } from './uri';
 

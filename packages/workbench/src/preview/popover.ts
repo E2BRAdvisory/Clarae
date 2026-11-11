@@ -9,18 +9,14 @@
 import i18next from 'i18next';
 import { followLink } from '../app/actions';
 import { hydrate, MAX_EMBED_DEPTH } from '../embeds/hydrate';
-import type { LinkSpec } from '../editor/context';
+import type { AnchorRect, LinkSpec } from '../editor/types';
 import { interceptLinks } from '../util/links';
 import { linkKey } from './target';
 import { loadPreview, previewBackend, stripRemoteResources } from './service';
 import './preview.css';
 
-export interface AnchorRect {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
+// Moved to editor/types (the editor handle returns it); re-exported for the existing imports.
+export type { AnchorRect } from '../editor/types';
 
 export interface ShowRequest {
   vaultId: string;

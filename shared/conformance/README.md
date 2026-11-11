@@ -1,10 +1,15 @@
 # Suite di conformità condivisa
 
-Fixture eseguite **sia dal parser Go** (`apps/desktop/internal/parser`, usato dall'indicizzatore) **sia dai parser TypeScript** (Lezer per l'editor, remark per la reading view) a ogni CI. Evitano che un link, un tag o un heading siano visti da un lato e non dall'altro (spec §2.3.3). Nessuna release con fixture non verdi.
+Fixture eseguite da **tre consumatori** con `task conformance` (che è parte di `task ci`). Evitano che un link, un tag o un heading siano visti da un lato e non dall'altro (spec §2.3.3). Nessuna release con fixture non verdi.
+
+- **Parser Go** (`apps/desktop/internal/parser`, `conformance_test.go`): è quello dell'indicizzatore.
+- **Estrattore TypeScript** (`@memobrain/markdown`, `packages/markdown/src/conformance.test.ts`): serve le sezioni incorporate, le statistiche della nota, le query e l'adattatore di Source. Reading rende con remark/rehype e non legge le fixture; il cancello A del terzo parser ne confronta però l'HTML.
+- **Terzo parser: l'editor Live su Milkdown** ([ADR-0049](../../docs/adr/0049-editor-live-milkdown.md), `packages/workbench/src/test/conformance.test.ts`): le stesse fixture passano dalla pipeline Milkdown e ciò che l'indice estrae dal risultato dev'essere l'atteso; poi round-trip (identità, dieci giri idempotenti) e, sul corpus di `roundtrip/`, l'invariante di escape e i criteri C1–C4 del cancello A. L'editor in Source (CodeMirror) non ha un parser Markdown proprio da confrontare.
 
 ```
 shared/conformance/
 ├── markdown/        # <caso>.md + <caso>.expected.json   (parser OFM)
+├── roundtrip/       # corpus dell'editor Live (demo/, cases/, commonmark/): vedi roundtrip/README.md
 ├── merge/           # <caso>/{base,ours,theirs,expected}.md (+ meta.json)  — da M2
 ├── crypto/          # vectors.json                        — da M2 (§3.8.7)
 ├── passphrase/      # policy.json: politica della passphrase (§3.8.2), core Go e strength.ts
@@ -16,7 +21,7 @@ I loader Go stanno in `shared/go/conformance`.
 
 ## Fixture Markdown
 
-`<caso>.md` è il documento di input, letto come byte grezzi (nessuna normalizzazione di newline: le fixture usano LF). `<caso>.expected.json` descrive ciò che **ogni** parser deve estrarre. Tutti i campi sono obbligatori; una lista vuota vale `[]`. Le posizioni sono **righe 1-based** del file `.md` (il frontmatter conta).
+`<caso>.md` è il documento di input, letto come byte grezzi (nessuna normalizzazione di newline: le fixture usano LF, salvo `crlf-*`, che hanno CRLF reali, e `bom-*`, che iniziano con un BOM reale, i byte `ef bb bf`; `.gitattributes` e `.prettierignore` le proteggono). Un BOM iniziale non fa parte del contenuto: non nasconde il frontmatter né il titolo in prima riga, e le righe si contano come se non ci fosse. `<caso>.expected.json` descrive ciò che **ogni** parser deve estrarre. Tutti i campi sono obbligatori; una lista vuota vale `[]`. Le posizioni sono **righe 1-based** del file `.md` (il frontmatter conta).
 
 ```jsonc
 {

@@ -1,22 +1,21 @@
 import AxeBuilder from '@axe-core/playwright';
 import { appendFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, onWeb, openVault as openVaultOn, test } from './support';
+import { expect, liveEngine, onWeb, openVault as openVaultOn, proseMirror, test } from './support';
 import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 
 // Automated WCAG 2.1 A/AA scan of the app chrome on the Wails mock, light and dark.
 // CodeMirror's content DOM is excluded from the scan (documented in docs/qa/a11y-desktop.md);
-// the editor surface is covered by the manual screen reader checklist. Excalidraw's own canvas
+// the editor surface is covered by the manual screen reader checklist. The Live editor of the Milkdown
+// build is scanned whole (a rich note, below): its DOM is HTML like the chrome's, and ProseMirror is not excluded. Excalidraw's own canvas
 // and toolbars are excluded too; MemoBrain's chrome around it (header, export dialog, tools
 // panel, slideshow bar, tool dialogs) is scanned.
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-async function scan(page: Page, label: string) {
-  const results = await new AxeBuilder({ page })
-    .withTags(TAGS)
-    .exclude('.cm-content')
-    .exclude('.excalidraw')
-    .analyze();
+async function scan(page: Page, label: string, opts: { editor?: boolean } = {}) {
+  const builder = new AxeBuilder({ page }).withTags(TAGS).exclude('.excalidraw');
+  // the Live editor of Milkdown is scanned with its content; CodeMirror's is not
+  const results = await (opts.editor ? builder : builder.exclude('.cm-content')).analyze();
   const blocking = results.violations.filter(
     (v) => v.impact === 'serious' || v.impact === 'critical',
   );
@@ -63,8 +62,108 @@ async function command(page: Page, query: string) {
   await page.keyboard.press('Enter');
 }
 
+// What a note can hold, one of each: lists (bullets, numbers, nested), tasks, a callout, a table, code,
+// a formula and an embed. No tag, wikilink or external link: their colour is the one of the CodeMirror
+// Live Preview too (contrast of the accent on the page, tracked apart).
+const RICH = [
+  '# Rich note',
+  '',
+  'A paragraph with **bold** and *italic* text.',
+  '',
+  '- a bullet',
+  '  - a nested bullet',
+  '- another bullet',
+  '',
+  '1. the first',
+  '2. the second',
+  '   1. a nested number',
+  '',
+  '- [ ] an open task',
+  '- [x] a done task',
+  '',
+  '> [!note] A callout',
+  '> with its body',
+  '',
+  '| Name | Value |',
+  '| --- | --- |',
+  '| one | 1 |',
+  '| two | 2 |',
+  '',
+  '```ts',
+  'const answer = 42;',
+  '```',
+  '',
+  '$$',
+  'x^2 + y^2',
+  '$$',
+  '',
+  '![[Target]]',
+  '',
+].join('\n');
+
+// The view of a list item is updated in place when the item changes: the marker is read again each time.
+test('a bullet that becomes a task is a checkbox for the accessibility tree, and a task that becomes a bullet is not', async ({
+  page,
+}) => {
+  test.skip(
+    liveEngine() !== 'milkdown',
+    'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
+  );
+  await openVaultOn(page, { 'Note.md': '- foo\n- bar\n' });
+  await page.locator('.tree .node', { hasText: 'Note' }).first().click();
+  const editor = proseMirror(page);
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('li.list-item')).toHaveCount(2);
+  await expect(editor.getByRole('checkbox')).toHaveCount(0);
+  // `[ ] ` typed at the start of the first item makes it a task
+  await editor.getByText('foo').click();
+  await page.keyboard.press('Home');
+  await page.keyboard.type('[ ] ');
+  const box = editor.getByRole('checkbox', { name: 'Task: foo' });
+  await expect(box).toHaveCount(1);
+  await expect(box).toBeVisible();
+  await expect(editor.getByRole('checkbox')).toHaveCount(1);
+  // the marker of the other item is still the list's to say
+  await expect(editor.locator('.label-wrapper[aria-hidden="true"]')).toHaveCount(1);
+  // and back to a bullet (open, done, plain): no checkbox is left, and the glyph is hidden again
+  await command(page, 'Toggle task');
+  await expect(editor.getByRole('checkbox', { name: 'Task: foo' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await command(page, 'Toggle task');
+  await expect(editor.getByRole('checkbox')).toHaveCount(0);
+  await expect(editor.locator('.label-wrapper[aria-hidden="true"]')).toHaveCount(2);
+});
+
 for (const theme of ['light', 'dark'] as const) {
   test.describe(`desktop axe, ${theme}`, () => {
+    test('the Live editor on a rich note, ProseMirror included', async ({ page }) => {
+      test.skip(
+        liveEngine() !== 'milkdown',
+        'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
+      );
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await openVaultOn(page, { 'Rich.md': RICH, 'Target.md': '# Target\n\nthe embedded note\n' });
+      await page.locator('.tree .node', { hasText: 'Rich' }).first().click();
+      const editor = proseMirror(page);
+      await expect(editor).toBeVisible();
+      // everything the note holds is drawn before the scan
+      await expect(editor.locator('li.list-item')).toHaveCount(8);
+      await expect(editor.getByRole('table')).toBeVisible();
+      await expect(editor.locator('[role="checkbox"]')).toHaveCount(2);
+      // the lists are lists for the accessibility tree, and the boxes tell which task they are
+      await expect(
+        editor.locator('ul > div[role="listitem"], ol > div[role="listitem"]'),
+      ).toHaveCount(8);
+      await expect(editor.locator('[role="checkbox"]').first()).toHaveAttribute(
+        'aria-label',
+        'Task: an open task',
+      );
+      await page.waitForTimeout(600);
+      await scan(page, `live editor (${theme})`, { editor: true });
+    });
+
     test('shell with a note open, sidebar panels and status bar', async ({ page }) => {
       await openVault(page, theme);
       await page.keyboard.press('ControlOrMeta+n');

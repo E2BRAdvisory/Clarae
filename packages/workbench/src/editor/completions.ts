@@ -1,6 +1,6 @@
-// Autocomplete for [[wikilinks]] (notes, aliases, #headings, #^blocks), #tags
-// and frontmatter property names. Ranking happens in the backend (fuzzy), so
-// the sources ask again on every keystroke instead of filtering client side.
+// Autocomplete of [[wikilinks]] (notes, aliases, #headings, #^blocks), #tags and frontmatter property
+// names in CodeMirror. The links and tags come from the engine in completionEngine.ts (shared with the
+// Live editor); the property names are Source only, because the frontmatter is not part of Live.
 import type {
   Completion,
   CompletionContext,
@@ -8,142 +8,70 @@ import type {
   CompletionSource,
 } from '@codemirror/autocomplete';
 import { splitFrontmatter } from '@memobrain/markdown';
-import type { Suggestion, SuggestKind } from '../app/api';
+import {
+  tagCandidates,
+  wikilinkCandidates,
+  type Candidate,
+  type CandidateSet,
+  type CompletionOptions,
+} from './completionEngine';
 
-export type LinkFormat = 'shortest' | 'path' | 'relative';
-
-export interface CompletionBackend {
-  suggest(kind: SuggestKind, query: string, notePath: string): Promise<Suggestion[]>;
-  resolve(from: string, target: string): Promise<string>;
-}
-
-export interface CompletionOptions {
-  backend: CompletionBackend;
-  notePath: () => string;
-  linkFormat: () => LinkFormat;
-}
-
-const stripMd = (p: string): string => p.replace(/\.md$/, '');
-
-/** The text to put inside [[ ]] for a note, honoring the "link format" setting. */
-export function linkTextFor(
-  s: Suggestion,
-  from: string,
-  format: LinkFormat,
-  ambiguous: boolean,
-): string {
-  const path = stripMd(s.path);
-  if (format === 'path') return path;
-  if (format === 'relative') {
-    const fromDir = from.includes('/') ? from.slice(0, from.lastIndexOf('/')).split('/') : [];
-    const target = path.split('/');
-    let i = 0;
-    while (i < fromDir.length && i < target.length - 1 && fromDir[i] === target[i]) i++;
-    return [...fromDir.slice(i).map(() => '..'), ...target.slice(i)].join('/');
-  }
-  if (ambiguous) return path;
-  // Only a .md note resolves by its bare title; a presentation (.marp) needs its full name.
-  return /\.md$/i.test(s.path) ? stripMd(s.label) : s.path.slice(s.path.lastIndexOf('/') + 1);
-}
+export {
+  linkTextFor,
+  type CompletionBackend,
+  type CompletionOptions,
+  type LinkFormat,
+} from './completionEngine';
 
 function closing(context: CompletionContext, to: number): string {
   return context.state.doc.sliceString(to, to + 2) === ']]' ? '' : ']]';
 }
 
+/** The text of the line in front of the caret: what the engine reads. */
+function textBefore(context: CompletionContext): string {
+  const line = context.state.doc.lineAt(context.pos);
+  return line.text.slice(0, context.pos - line.from);
+}
+
+function toResult(
+  set: CandidateSet,
+  context: CompletionContext,
+  apply: (c: Candidate) => Completion['apply'],
+): CompletionResult {
+  const before = textBefore(context);
+  return {
+    from: context.pos - before.length + set.from,
+    filter: false,
+    options: set.options.map<Completion>((c) => {
+      const how = apply(c);
+      return {
+        label: c.label,
+        ...(c.displayLabel !== undefined ? { displayLabel: c.displayLabel } : {}),
+        ...(c.detail !== undefined ? { detail: c.detail } : {}),
+        type: c.type,
+        ...(how !== undefined ? { apply: how } : {}),
+      };
+    }),
+  };
+}
+
 function wikilinkSource(o: CompletionOptions): CompletionSource {
   return async (context): Promise<CompletionResult | null> => {
-    const m = context.matchBefore(/\[\[[^\]\n]*$/);
-    if (!m) return null;
-    const typed = m.text.slice(2);
-    const from = m.from + 2;
-    const here = o.notePath();
-
-    const hash = typed.indexOf('#');
-    if (hash >= 0) {
-      const targetText = typed.slice(0, hash);
-      const rest = typed.slice(hash + 1);
-      const notePath = targetText ? await o.backend.resolve(here, targetText) : here;
-      if (!notePath) return null;
-      if (rest.startsWith('^')) {
-        const items = await o.backend.suggest('blocks', rest.slice(1), notePath);
-        return {
-          from,
-          filter: false,
-          options: items.map<Completion>((s) => ({
-            label: `${targetText}#^${s.label}`,
-            displayLabel: `^${s.label}`,
-            detail: s.detail,
-            type: 'text',
-            apply: (view, _c, a, b) =>
-              view.dispatch({
-                changes: {
-                  from: a,
-                  to: b,
-                  insert: `${targetText}#^${s.label}${closing(context, b)}`,
-                },
-              }),
-          })),
-        };
-      }
-      const items = await o.backend.suggest('headings', rest, notePath);
-      return {
-        from,
-        filter: false,
-        options: items.map<Completion>((s) => ({
-          label: `${targetText}#${s.label}`,
-          displayLabel: s.label,
-          detail: s.detail,
-          type: 'keyword',
-          apply: (view, _c, a, b) =>
-            view.dispatch({
-              changes: { from: a, to: b, insert: `${targetText}#${s.label}${closing(context, b)}` },
-            }),
-        })),
-      };
-    }
-
-    const items = await o.backend.suggest('notes', typed, '');
-    const counts = new Map<string, number>();
-    for (const s of items)
-      if (s.kind === 'note')
-        counts.set(s.label.toLowerCase(), (counts.get(s.label.toLowerCase()) ?? 0) + 1);
-    return {
-      from,
-      filter: false,
-      options: items.map<Completion>((s) => {
-        const ambiguous = (counts.get(s.label.toLowerCase()) ?? 0) > 1;
-        const text = linkTextFor(s, here, o.linkFormat(), ambiguous);
-        const insert = s.kind === 'alias' ? `${text}|${s.label}` : text;
-        return {
-          label: s.kind === 'alias' ? s.label : text,
-          detail: s.kind === 'alias' ? `→ ${s.detail}` : s.detail,
-          type: s.kind === 'alias' ? 'variable' : 'class',
-          apply: (view, _c, a, b) =>
-            view.dispatch({ changes: { from: a, to: b, insert: insert + closing(context, b) } }),
-        };
-      }),
-    };
+    const set = await wikilinkCandidates(textBefore(context), o);
+    if (!set) return null;
+    return toResult(
+      set,
+      context,
+      (c) => (view, _c, a, b) =>
+        view.dispatch({ changes: { from: a, to: b, insert: c.insert + closing(context, b) } }),
+    );
   };
 }
 
 function tagSource(o: CompletionOptions): CompletionSource {
   return async (context): Promise<CompletionResult | null> => {
-    const m = context.matchBefore(/(?:^|[\s([{,;])#[\p{L}\p{N}_\-/]*$/u);
-    if (!m) return null;
-    const hashAt = m.text.lastIndexOf('#');
-    const typed = m.text.slice(hashAt + 1);
-    // "# " at the start of a line is a heading, not a tag: only complete once a character follows.
-    if (typed === '' && !context.explicit) return null;
-    const items = await o.backend.suggest('tags', typed, '');
-    return {
-      from: m.from + hashAt + 1,
-      filter: false,
-      options: items.map<Completion>((s) => ({
-        label: s.label,
-        detail: `${s.detail}×`,
-        type: 'keyword',
-      })),
-    };
+    const set = await tagCandidates(textBefore(context), context.explicit, o);
+    return set ? toResult(set, context, () => undefined) : null;
   };
 }
 

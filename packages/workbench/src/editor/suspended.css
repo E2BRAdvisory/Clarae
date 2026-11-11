@@ -1,0 +1,15 @@
+/* The CodeMirror editor while the Live editor is on its way or showing (ADR-0049, A-D9). It stays
+   mounted, because its state is the spine of the undo between the two modes. `wait`: the Live editor is
+   loading, this one keeps its place (its selection and scroll are read from it, and then it goes away).
+   `away`: the Live editor shows; this one takes no room and nobody reaches it. */
+.editor-host[data-suspended='wait'],
+.editor-host[data-suspended='away'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.editor-host[data-suspended='away'] {
+  flex: none;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+}
