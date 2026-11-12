@@ -137,6 +137,10 @@ elif [ "$SKIP_FRONTEND" = 0 ]; then
     log "Installing frontend dependencies"
     (cd "$ROOT" && yarn install --immutable)
   fi
+  # The UI imports the Wails bindings, which the repository does not hold (a fresh checkout has none): they are
+  # written from the Go API every time, so the UI never builds against a stale copy (Taskfile gen-wails).
+  log "Generating the Wails bindings"
+  (cd "$DESKTOP" && go run ./internal/app/gen/bindings)
   log "Building the frontend"
   (cd "$ROOT" && yarn workspace @memobrain/desktop-frontend run build)
 fi
