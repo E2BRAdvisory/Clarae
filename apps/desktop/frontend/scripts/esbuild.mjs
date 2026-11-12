@@ -4,8 +4,6 @@
 //                                             --no-watch builds once, for the e2e matrix)
 //   node scripts/esbuild.mjs preview [--port N]   production bundle in node_modules/.preview/, served as is (Playwright)
 // MEMOBRAIN_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
-// MEMOBRAIN_LIVE_ENGINE=milkdown builds the Live mode on Milkdown (ADR-0049, A-D8): a build constant,
-// never a setting; without it the Live mode is the CodeMirror one and no Milkdown code is in the build.
 // The style sheets of the lazy chunks are linked by the chunks themselves (lazyStyles): a safety net, it links none today.
 import * as esbuild from 'esbuild';
 import { createReadStream } from 'node:fs';
@@ -21,7 +19,6 @@ import {
   graphWorkerEntry,
   lazyStyles,
   liveCollab,
-  liveEngine as liveEnginePlugin,
 } from '@memobrain/workbench/build';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,7 +31,6 @@ const dist = distDir(root, mode === 'preview' ? 'node_modules/.preview' : 'dist'
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5173;
 const e2e = process.env['MEMOBRAIN_E2E'] === '1';
-const liveEngine = process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown' ? 'milkdown' : '';
 // MEMOBRAIN_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
 // (ADR-0050); without it no Yjs is in any file and a profile cannot switch collaboration on.
 const collab = process.env['MEMOBRAIN_COLLAB'] === '1';
@@ -150,7 +146,6 @@ const options = {
   },
   plugins: [
     ...base.plugins,
-    liveEnginePlugin(liveEngine),
     liveCollab(collab),
     lazyStyles({ root, dist, entries: ['src/main.tsx'] }),
     ...(dev ? [html, reload] : [html]),
@@ -203,7 +198,7 @@ function checkBudget(meta) {
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await copyExcalidrawAssets(dist);
-if (liveEngine) await copyTwemojiAssets(dist);
+await copyTwemojiAssets(dist);
 
 if (dev) {
   await writeFile(

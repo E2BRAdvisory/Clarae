@@ -2,7 +2,7 @@
 // the layer reads it as the `checked` attribute of the item, and Crepe's list item draws the box and
 // ticks it. A custom state (`[/]`, `[-]`, `[>]`: any other single character between the brackets) is
 // no task for Markdown and stays the text `[/] ` at the start of the item, as the file has it. This
-// file gives that text what CodeMirror's Live Preview gives it, a box that shows the state and a click
+// file gives that text a box that shows the state and a click
 // that makes the item an open task, and gives the command `editor:task` its cycle:
 //
 //   plain item  ->  open task  ->  done task  ->  plain item        (a custom state also goes to plain)

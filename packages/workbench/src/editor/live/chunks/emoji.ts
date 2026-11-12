@@ -5,9 +5,9 @@
 // type, or the chunk would be folded into the editor's); the Twemoji images are served by the application.
 //
 // The images are Twemoji, Copyright Twitter, Inc. and other contributors, licensed CC-BY 4.0
-// (https://creativecommons.org/licenses/by/4.0/); the code of the library is MIT. The builds with the
-// Live editor copy them, with this attribution and the licence of the package, to `emoji/`
-// (`copyTwemojiAssets`, build/esbuild.mjs).
+// (https://creativecommons.org/licenses/by/4.0/); the code of the library is MIT. Every build copies them,
+// with this attribution and the licence of the package, to `emoji/` (`copyTwemojiAssets`,
+// build/esbuild.mjs), and the About section of the settings states it (`settings.twemojiAttribution`).
 import {
   emojiAttr,
   emojiSchema,

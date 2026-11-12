@@ -1,8 +1,4 @@
-/* Embedded search (```query blocks) in Live Preview and Reading view. */
-.cm-lp-query {
-  display: block;
-  margin: 4px 0;
-}
+/* Embedded search (```query blocks) in the Live editor and Reading view. */
 .query-block {
   border: 1px solid var(--border);
   border-radius: 6px;

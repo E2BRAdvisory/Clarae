@@ -1,15 +1,15 @@
-// Resource counts of Live Preview embeds: binary reads, object URLs and pdf.js documents when
-// widgets are recreated (scrolling) and when notes are switched. CodeMirror calls toDOM when a
-// widget enters the viewport and destroy when it leaves it (or the editor goes away), which is
-// exactly what these scenarios do. Before the attachment cache and the widget disposers they were:
+// Resource counts of the embeds of the Live editor: binary reads, object URLs and pdf.js documents when
+// the views are recreated (scrolling) and when notes are switched. A view of the Live editor renders its
+// embed through `context.renderEmbed` when it enters the document and releases what that returned when
+// it leaves it (or the editor goes away), which is exactly what these scenarios do (live/views/wikilink.ts
+// does the same, with the same `release`). Before the attachment cache and the disposers they were:
 //   (d1) 5 scroll passes over 30 images: resolve 150, readBinary 150, object URLs created 30, revoked 0
 //   (d2) 10 note switches (30 images + 1 PDF each): readBinary 310, URLs created 300, revoked 0,
 //        300 still alive, 10 pdf.js documents alive (none destroyed)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
-import { defaultContext, livePreviewContext, type LivePreviewContext } from '../editor/context';
-import { EmbedWidget } from '../editor/widgets';
+import { defaultContext, type EmbedDisposer, type LivePreviewContext } from '../editor/context';
+import type { LinkSpec } from '../editor/types';
+import { release } from '../editor/live/views/host';
 import { renderEmbedInto, type EmbedBackend } from './hydrate';
 import { mediaLimits, mediaStats, releaseVaultMedia } from './media';
 import type { BinaryContent } from '../app/api';
@@ -66,24 +66,39 @@ const backend = {
   stat: (path: string) => ({ size: binary(path).size, mtime: '2026-01-01T00:00:00Z' }),
 } as EmbedBackend;
 
-function view(): EditorView {
-  const ctx: LivePreviewContext = {
-    ...defaultContext,
-    renderEmbed: (spec, el) =>
-      renderEmbedInto(el, spec, { backend, fromPath: 'Host.md', depth: 0, visited: ['Host.md'] }),
-  };
-  return new EditorView({
-    state: EditorState.create({ extensions: [livePreviewContext.of(ctx)] }),
-  });
+const ctx: LivePreviewContext = {
+  ...defaultContext,
+  renderEmbed: (spec, el) =>
+    renderEmbedInto(el, spec, { backend, fromPath: 'Host.md', depth: 0, visited: ['Host.md'] }),
+};
+
+const spec = (target: string): LinkSpec => ({
+  target,
+  heading: '',
+  block: '',
+  alias: '',
+  embed: true,
+});
+
+/** What a view of the Live editor holds for an embed: its element and what the render returned. */
+class EmbedView {
+  private held: EmbedDisposer | void = undefined;
+  readonly el = document.createElement('span');
+  constructor(readonly spec: LinkSpec) {}
+  show(): void {
+    this.held = ctx.renderEmbed(this.spec, this.el);
+  }
+  destroy(): void {
+    release(this.held);
+    this.held = undefined;
+  }
 }
 
-const spec = (target: string) => ({ target, heading: '', block: '', alias: '', embed: true });
-
-/** Shows the widgets (toDOM), lets their renders finish, then removes them (destroy). */
-async function showThenHide(v: EditorView, widgets: EmbedWidget[]): Promise<void> {
-  const doms = widgets.map((w) => w.toDOM(v));
+/** Shows the views (render), lets their renders finish, then removes them (destroy). */
+async function showThenHide(views: EmbedView[]): Promise<void> {
+  views.forEach((v) => v.show());
   for (let i = 0; i < 5; i++) await sleep(5);
-  widgets.forEach((w, i) => w.destroy(doms[i] as HTMLElement));
+  views.forEach((v) => v.destroy());
   for (let i = 0; i < 3; i++) await sleep(5);
 }
 
@@ -111,30 +126,26 @@ afterEach(() => vi.restoreAllMocks());
 // Counts resources, not time: a generous timeout keeps it stable on a loaded machine.
 describe('embed resources', { timeout: 30_000 }, () => {
   it('(d1) scrolling a note with 30 image embeds back and forth 5 times', async () => {
-    const v = view();
-    const widgets = Array.from({ length: 30 }, (_, i) => new EmbedWidget(spec(`scroll${i}.png`)));
-    for (let pass = 0; pass < 5; pass++) await showThenHide(v, widgets);
+    const views = Array.from({ length: 30 }, (_, i) => new EmbedView(spec(`scroll${i}.png`)));
+    for (let pass = 0; pass < 5; pass++) await showThenHide(views);
     report('[perf d1] 5 scroll passes over 30 images:', JSON.stringify(calls));
-    v.destroy();
     expect(calls.readBinary).toBe(30);
     expect(calls.created).toBe(30);
   });
 
   it('(d2) switching between 10 notes of 30 images and a PDF each', async () => {
-    const v = view();
     for (let note = 0; note < 10; note++) {
-      const widgets = [
-        ...Array.from({ length: 30 }, (_, i) => new EmbedWidget(spec(`n${note}/img${i}.png`))),
-        new EmbedWidget(spec(`n${note}/doc.pdf`)),
+      const views = [
+        ...Array.from({ length: 30 }, (_, i) => new EmbedView(spec(`n${note}/img${i}.png`))),
+        new EmbedView(spec(`n${note}/doc.pdf`)),
       ];
-      await showThenHide(v, widgets);
+      await showThenHide(views);
     }
     const pdfAlive = pdf.loaded - pdf.destroyed;
     report(
       '[perf d2] 10 note switches:',
       JSON.stringify({ ...calls, liveUrls: live.size, pdfAlive, cache: mediaStats() }),
     );
-    v.destroy();
     expect(pdfAlive).toBe(0);
     expect(live.size).toBeLessThanOrEqual(mediaLimits.entries);
     releaseVaultMedia(''); // the vault is closed

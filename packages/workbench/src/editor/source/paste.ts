@@ -10,11 +10,11 @@ import {
   isRichHtml,
   toBase64,
   type PasteDeps,
-} from './pasteCore';
+} from '../pasteCore';
 
 // The decisions are shared with the Live editor (pasteCore.ts); re-exported so that the existing imports
 // keep compiling.
-export { htmlToMarkdown, type PasteDeps } from './pasteCore';
+export { htmlToMarkdown, type PasteDeps } from '../pasteCore';
 
 let lastMark = 0;
 const markAdded = StateEffect.define<{ id: number; pos: number }>();

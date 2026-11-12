@@ -140,21 +140,6 @@ export function withoutCdnFallback(script) {
 }
 
 /**
- * The engine switch (ADR-0049, A-D8): with `engine === 'milkdown'` the module `editor/NoteEditor` is
- * resolved to `editor/NoteEditor.live.tsx`, which shows the Live mode with Milkdown. Without it nothing
- * of Milkdown is in the build. A build constant: never a setting, never written in a vault.
- */
-export const liveEngine = (engine) => ({
-  name: 'live-engine',
-  setup(build) {
-    if (engine !== 'milkdown') return;
-    build.onResolve({ filter: /[\\/]editor[\\/]NoteEditor$/ }, () => ({
-      path: join(workbenchRoot, 'src/editor/NoteEditor.live.tsx'),
-    }));
-  },
-});
-
-/**
  * The collaboration chunk (ADR-0050, A-D12) exists only in a build made for it (`MEMOBRAIN_COLLAB=1`):
  * in every other one `live/chunks/collab.ts` is replaced by a stub, so that Yjs, y-prosemirror and the
  * plugin are in no file of a released build, however a profile is set. The gate of the editor refuses
@@ -180,17 +165,16 @@ export const liveCollab = (enabled) => ({
 /**
  * The Twemoji images of the Live editor (A-W4): the `<img>` of an emoji points at `/emoji/svg/<code>.svg`
  * (live/chunks/emoji.ts), so that no request leaves the application (spec §2.7.3, V-08 offline) and
- * `img-src 'self'` is enough. They are copied by the build with the Milkdown switch on, as the fonts of
- * Excalidraw are, and are no output of esbuild: the bundle budget (ADR-0020) counts the code, not them.
+ * `img-src 'self'` is enough. Every build copies them, as it does the fonts of Excalidraw; they are no
+ * output of esbuild: the bundle budget (ADR-0020) counts the code, not them.
  *
  * The graphics are Twemoji by Twitter, Inc. and other contributors, licensed CC-BY 4.0 (the code of the
  * library is MIT); the files come from `@discordapp/twemoji`, the release of the project's set that ships
  * the SVGs (the `twemoji` package has none), with the same Unicode version as the parser the editor
- * uses. CC-BY 4.0 asks for attribution. Where it really is: in `emoji/ATTRIBUTION.txt`, written by this
- * function next to the images (with the licence of the package), so only in a build with the Milkdown switch on
- * (`MEMOBRAIN_LIVE_ENGINE`; the default build copies nothing and has no Twemoji). The comment of
- * live/chunks/emoji.ts repeats it in the source only: esbuild's minification drops it, so the JS the build ships
- * carries no attribution. Showing it in the application is open until the switch is turned on (roadmap M16).
+ * uses. CC-BY 4.0 asks for attribution. Where it is: in `emoji/ATTRIBUTION.txt`, written by this
+ * function next to the images (with the licence of the package), and in the About section of the settings (`settings.twemojiAttribution`).
+ * The comment of live/chunks/emoji.ts repeats it in the source only: esbuild's minification drops it, so
+ * the JS the build ships carries no attribution.
  */
 export async function copyTwemojiAssets(dist) {
   const pkg = dirname(require.resolve('@discordapp/twemoji/package.json'));
@@ -213,7 +197,7 @@ export async function copyTwemojiAssets(dist) {
  * esbuild writes next to the chunk and links to nothing: the page's <link> is only the entry's. This puts
  * the link where the chunk needs it: the chunk waits, before it runs, for the sheets it imports (a
  * top-level await in a module that is only ever imported dynamically), and takes them only once. A sheet
- * whose files the page's own sheet already has (the build without Milkdown has most of them there) is not
+ * whose files the page's own sheet already has is not
  * linked at all. Returns the sheets it linked and the ones it left out.
  *
  * `integrity(bytes)` gives the Subresource Integrity value of a sheet for builds that pin their files
@@ -225,9 +209,8 @@ export async function copyTwemojiAssets(dist) {
  * `root` is also esbuild's working directory: the metafile paths are relative to it, so the build passes
  * `absWorkingDir: root` and the result no longer depends on where the script is run from.
  *
- * Today it links nothing (0 sheets in the build without Milkdown, with 7 left out because the page's sheet has
- * them; 9 left out in the one with it): every sheet a lazy chunk imports is already in the page's. It stays as a
- * safety net for the day a chunk brings a sheet of its own, which would otherwise be written and never loaded.
+ * Today it links nothing (every sheet a lazy chunk imports is already in the page's: 9 left out). It stays
+ * as a safety net for the day a chunk brings a sheet of its own, which would otherwise be written and never loaded.
  */
 export async function linkLazyStyles(metafile, { root, dist, entries, integrity = () => '' }) {
   const linked = [];

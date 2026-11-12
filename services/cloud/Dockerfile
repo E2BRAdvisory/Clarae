@@ -46,7 +46,8 @@ COPY --from=wasm /out/ build/wasm/
 # The admin console validates configuration profiles against the shared JSON Schema.
 COPY api/config-profile.schema.json api/config-profile.schema.json
 # The two checks of a release build (scripts/release/check-*.sh, plain sh): the front end build switches
-# (Milkdown, AI, collaboration, test doubles) must not be set in this stage, and no Milkdown may be in what is built.
+# (AI, collaboration, test doubles) must not be set in this stage, and no collaboration code may be in what is built,
+# which must have the Milkdown editor.
 COPY scripts/release/check-editor-switches.sh scripts/release/check-dist.sh scripts/release/
 # yarn needs the manifest of every workspace to resolve the lockfile; only the web app is installed.
 COPY apps/desktop/frontend/package.json apps/desktop/frontend/package.json

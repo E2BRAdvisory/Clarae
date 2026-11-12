@@ -5,13 +5,7 @@ import { expect, test, uuid, vault } from './cloud';
 // it, because it also takes a build made for it (`MEMOBRAIN_AI=1`), the capability, a vault that is not
 // private and a core that says `Status` is available. In a normal build no gate but the flag is open, and
 // the chunk of the assistant is never requested, whatever the profile says. It runs on both targets
-// (desktop-mock, web-core) in a build with the engine switch on:
-//   MEMOBRAIN_LIVE_ENGINE=milkdown yarn workspace @memobrain/web run e2e:workbench-ui e2e/live-ai.spec.ts
-test.skip(
-  process.env['MEMOBRAIN_LIVE_ENGINE'] !== 'milkdown',
-  'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-);
-
+// (desktop-mock, web-core).
 const HOME = uuid(1);
 
 test('a profile with ai: true does not load the AI chunk in a normal build', async ({

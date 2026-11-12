@@ -11,14 +11,8 @@ import {
 
 // The chrome around the document of the Live mode on Milkdown (ADR-0049, M16-UX1): the handle of the blocks
 // ("+" and drag), the toolbar over a selection, the tooltip of a link and the placeholder, and the slash menu
-// the "+" opens. It runs on both targets (desktop-mock, web-core) in a build with the engine switch on:
-//   MEMOBRAIN_LIVE_ENGINE=milkdown yarn workspace @memobrain/web run e2e:workbench-ui live-chrome
+// the "+" opens. It runs on both targets (desktop-mock, web-core).
 // The file is what each test ends on: none of the chrome may touch what the user did not edit.
-test.skip(
-  process.env['MEMOBRAIN_LIVE_ENGINE'] !== 'milkdown',
-  'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-);
-
 const NOTE = [
   '# Title',
   '',

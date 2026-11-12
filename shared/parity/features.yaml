@@ -1219,7 +1219,7 @@ features:
       status: yes
     tests:
       desktop:
-        - packages/workbench/src/editor/commands.test.ts
+        - packages/workbench/src/editor/source/commands.test.ts
         - packages/workbench/src/editor/live/chrome/chrome.test.ts
         - apps/desktop/frontend/e2e/editor-toolbar.spec.ts
         - apps/desktop/frontend/e2e/live-chrome.spec.ts
@@ -1236,7 +1236,8 @@ features:
       status: yes
     tests:
       desktop:
-        - packages/workbench/src/editor/livePreview.test.ts
+        - packages/workbench/src/editor/NoteEditor.test.tsx
+        - packages/workbench/src/editor/live/MilkdownAdapter.test.ts
         - packages/workbench/src/reading/render.test.ts
         - apps/desktop/frontend/e2e/workflows.spec.ts
       workbench:
@@ -1252,7 +1253,7 @@ features:
       reason: 'non verificata sul web: nessun test usa il completamento dei link sul core WebAssembly; la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
-        - packages/workbench/src/editor/completions.test.ts
+        - packages/workbench/src/editor/source/completions.test.ts
         - apps/desktop/internal/links/links_test.go
 
   - id: editor.find
@@ -1277,7 +1278,7 @@ features:
       status: exception
       capability: aiAssistant
       bindings: [AIAPI.Cancel, AIAPI.SetKey, AIAPI.Start, AIAPI.Status]
-      reason: "inattiva (ADR-0050): il core è implementato e provato e `attachAi` è collegato in `MilkdownAdapter.ts`, ma la funzione resta irraggiungibile: la costante di build è spenta nella build di rilascio, il flag `ai` del profilo vale false e l'interruttore Milkdown è spento, quindi l'utente non può usarla. Il core rifiuta se la costante di build è spenta, se il flag `ai` del profilo è spento, se il vault è privato (E2EE) o se manca il provider. La rete parte solo dal core Go"
+      reason: "inattiva (ADR-0050): il core è implementato e provato e `attachAi` è collegato in `MilkdownAdapter.ts`, ma la funzione resta irraggiungibile: la costante di build `MEMOBRAIN_AI` è spenta nella build di rilascio e il flag `ai` del profilo vale false, quindi l'utente non può usarla. Il core rifiuta se la costante di build è spenta, se il flag `ai` del profilo è spento, se il vault è privato (E2EE) o se manca il provider. La rete parte solo dal core Go"
     workbench:
       status: exception
       reason: 'il core WebAssembly non contiene il codice AI (la CSP della pagina non ammette terze parti e il provider metterebbe la chiave nella pagina); ogni metodo di AIAPI rifiuta e la capability aiAssistant è falsa'

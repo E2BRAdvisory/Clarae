@@ -6,7 +6,7 @@
 //             textblock and remembered by the (immutable) node, so a keystroke recomputes the block it
 //             is in and nothing else.
 //   active    the atoms and links the caret is in or next to get `ofm-active`: their source shows, as
-//             the source of a construct shows under the caret in Live Preview of CodeMirror.
+//             the source of a construct shows under the caret.
 import { parseWikilinkInner } from '@memobrain/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@milkdown/kit/prose/state';

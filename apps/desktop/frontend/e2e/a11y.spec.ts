@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { appendFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, liveEngine, onWeb, openVault as openVaultOn, proseMirror, test } from './support';
+import { expect, onWeb, openVault as openVaultOn, proseMirror, test } from './support';
 import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 
 // Automated WCAG 2.1 A/AA scan of the app chrome on the Wails mock, light and dark.
@@ -113,10 +113,6 @@ const RICH = [
 test('a bullet that becomes a task is a checkbox for the accessibility tree, and a task that becomes a bullet is not', async ({
   page,
 }) => {
-  test.skip(
-    liveEngine() !== 'milkdown',
-    'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-  );
   await openVaultOn(page, { 'Note.md': '- foo\n- bar\n' });
   await page.locator('.tree .node', { hasText: 'Note' }).first().click();
   const editor = proseMirror(page);
@@ -147,10 +143,6 @@ test('a bullet that becomes a task is a checkbox for the accessibility tree, and
 for (const theme of ['light', 'dark'] as const) {
   test.describe(`desktop axe, ${theme}`, () => {
     test('the Live editor on a rich note, ProseMirror included', async ({ page }) => {
-      test.skip(
-        liveEngine() !== 'milkdown',
-        'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-      );
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
       await openVaultOn(page, { 'Rich.md': RICH, 'Target.md': '# Target\n\nthe embedded note\n' });
       await page.locator('.tree .node', { hasText: 'Rich' }).first().click();
@@ -175,10 +167,6 @@ for (const theme of ['light', 'dark'] as const) {
     // The chrome the Live editor draws beside the text (ADR-0049, M16-UX1), each piece shown: the handle of the
     // blocks, the toolbar over a selection and the tooltip of a link. Their buttons are icons, with names.
     test('the chrome of the Live editor: handle, toolbar and link tooltip', async ({ page }) => {
-      test.skip(
-        liveEngine() !== 'milkdown',
-        'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-      );
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
       await openVaultOn(page, {
         'Chrome.md': '# Chrome\n\nsome words to select, and [a link](https://example.com) too\n',

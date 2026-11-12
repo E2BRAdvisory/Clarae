@@ -195,9 +195,8 @@ const llmProviderImports = {
 // ---- The editor engine stays behind NoteEditorHandle (ADR-0049) -----------------------------------
 // The rest of the application talks to a note editor through the handle (editor/handle.ts), never
 // through CodeMirror: that is what lets another engine sit behind the same handle. Only
-// packages/workbench/src/editor/source/ (the CodeMirror adapter) may import @codemirror/* and
-// @lezer/*. These files still do and are exempt for now; each goes when its code moves into
-// editor/source/ or is removed with the CodeMirror Live Preview (wave A-W9). Do not add to the list.
+// packages/workbench/src/editor/source/ (the Source editor, the CodeMirror adapter) may import
+// @codemirror/* and @lezer/*. Do not add to the list.
 const engineImports = {
   patterns: [
     {
@@ -208,27 +207,7 @@ const engineImports = {
     llmProviderImports,
   ],
 };
-const engineExempt = [
-  'packages/workbench/src/editor/source/**',
-  // The CodeMirror editor and the extensions it is made of.
-  'packages/workbench/src/editor/Editor.tsx',
-  'packages/workbench/src/editor/context.ts', // the LivePreviewContext facet
-  'packages/workbench/src/editor/blockState.ts',
-  'packages/workbench/src/editor/commands.ts',
-  'packages/workbench/src/editor/completions.ts',
-  'packages/workbench/src/editor/external.ts',
-  'packages/workbench/src/editor/paste.ts',
-  'packages/workbench/src/editor/sourceMode.ts',
-  'packages/workbench/src/editor/stats.ts',
-  // The CodeMirror Live Preview, removed in A-W9.
-  'packages/workbench/src/editor/blockWidgets.ts',
-  'packages/workbench/src/editor/callouts.ts',
-  'packages/workbench/src/editor/livePreview.ts',
-  'packages/workbench/src/editor/widgets.ts',
-  'packages/workbench/src/query/widget.ts',
-  // The slash menu is a CodeMirror completion source (its items are editor commands already).
-  'packages/workbench/src/slash/slash.ts',
-];
+const engineExempt = ['packages/workbench/src/editor/source/**'];
 
 const appSources = [
   'packages/*/src/**/*.{ts,tsx}',

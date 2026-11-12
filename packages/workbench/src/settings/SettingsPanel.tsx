@@ -386,6 +386,11 @@ export function SettingsPanel() {
               </span>
             </Row>
             {can('updater') && <UpdateSettings />}
+            <Row label={t('settings.licenses')}>
+              <span className="muted" style={{ userSelect: 'text' }}>
+                {t('settings.twemojiAttribution')}
+              </span>
+            </Row>
           </>
         );
     }

@@ -14,14 +14,14 @@ import {
   type Candidate,
   type CandidateSet,
   type CompletionOptions,
-} from './completionEngine';
+} from '../completionEngine';
 
 export {
   linkTextFor,
   type CompletionBackend,
   type CompletionOptions,
   type LinkFormat,
-} from './completionEngine';
+} from '../completionEngine';
 
 function closing(context: CompletionContext, to: number): string {
   return context.state.doc.sliceString(to, to + 2) === ']]' ? '' : ']]';

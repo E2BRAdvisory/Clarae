@@ -18,9 +18,9 @@
 #   $ARCH defaults to amd64; macOS is always universal.
 # - SKIP_FRONTEND=1 reuses apps/desktop/frontend/dist instead of building the UI again (local checks only: with
 #   --release it is refused, a release always builds it). Any other value than 1, 0 or empty is an error.
-# - With --release the build switches of the frontend (MEMOBRAIN_LIVE_ENGINE, MEMOBRAIN_AI, MEMOBRAIN_COLLAB,
-#   MEMOBRAIN_E2E) and MEMOBRAIN_DIST must not be set, and neither Milkdown nor the binding mock of the e2e tests may
-#   be in the frontend that was built (check-editor-switches.sh, check-dist.sh, run by build-desktop-bin.sh). A release
+# - With --release the build switches of the frontend (MEMOBRAIN_AI, MEMOBRAIN_COLLAB,
+#   MEMOBRAIN_E2E) and MEMOBRAIN_DIST must not be set, and neither the collaboration code nor the binding mock of the
+#   e2e tests may be in the frontend that was built, which must have the Milkdown editor (check-editor-switches.sh, check-dist.sh, run by build-desktop-bin.sh). A release
 #   is the default build. `task release-desktop` always passes --release.
 # - Every binary is checked with scripts/release/check-build-tags.sh: it must carry the tag "production" and none
 #   of mcp, server, devtools (ADR-0051, B-D8).

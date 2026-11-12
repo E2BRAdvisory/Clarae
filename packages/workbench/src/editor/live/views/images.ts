@@ -1,6 +1,6 @@
 // The views of images (A-W5a): the block image (`![alt](src)` alone in its paragraph: Crepe's
 // `image-block`) and the inline one. Both draw through the application's `renderImage`, the way the
-// CodeMirror Live Preview does: an image of the vault is read through the backend (a path relative to
+// application does everywhere: an image of the vault is read through the backend (a path relative to
 // the note, with the `|300` or `|300x200` of its alt as the size), one of the web only when its scheme
 // is one that may be opened (`isSafeExternalUrl`). Crepe's own views are replaced: they would load
 // `src` as it stands (a relative path would not load), and their resize handle writes a ratio that the

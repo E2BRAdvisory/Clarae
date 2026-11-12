@@ -4,9 +4,7 @@ import { defineConfig } from '@playwright/test';
 // makes main.tsx install it); the Go backend is covered by its own tests.
 // E2E_PREVIEW=1 (yarn e2e:prod) runs the same specs on the minified production bundle, so
 // bundling problems (split chunks, CommonJS interop, CSP-sensitive code) show up before a release.
-// MEMOBRAIN_LIVE_ENGINE=milkdown runs the same specs on a build whose Live mode is Milkdown (ADR-0049);
-// its server has a port of its own, so that one left running by the other engine is never reused.
-const PORT = process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown' ? 5299 : 5199;
+const PORT = 5199;
 
 export default defineConfig({
   testDir: './e2e',

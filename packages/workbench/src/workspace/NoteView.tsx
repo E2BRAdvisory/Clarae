@@ -5,7 +5,7 @@ import { api } from '../app/api';
 import { followLink } from '../app/actions';
 import { downloadVaultFile, openExternally } from '../app/openFile';
 import { onVaultChanges, staleTargets, type VaultChangeBatch } from '../app/fileChanges';
-import type { LinkResolver } from '../editor/Editor';
+import type { LinkResolver } from '../editor/types';
 import { NoteEditor } from '../editor/NoteEditor';
 import { EditorToolbar } from '../editor/EditorToolbar';
 import { getEditor } from '../editor/registry';

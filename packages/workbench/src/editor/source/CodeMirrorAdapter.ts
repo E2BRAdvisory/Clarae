@@ -1,13 +1,13 @@
-// NoteEditorHandle over a CodeMirror view (Source and the CodeMirror Live Preview): each method
+// NoteEditorHandle over a CodeMirror view (the Source editor): each method
 // delegates to the code the editor already had (commands.ts, stats.ts, the search panel), it adds no
 // behaviour of its own. The handle is what the registry stores and what the rest of the application
-// calls; the view itself does not leave this folder and Editor.tsx.
+// calls; the view itself does not leave this folder.
 import { moveLineDown, moveLineUp, redo, undo } from '@codemirror/commands';
 import { openSearchPanel } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
 import { extract } from '@memobrain/markdown';
-import * as fmt from '../commands';
-import { statsOf } from '../stats';
+import * as fmt from './commands';
+import { statsOf } from './stats';
 import type {
   EditorCommand,
   EditResult,
@@ -64,19 +64,16 @@ const normHeading = (s: string): string =>
 
 export interface CodeMirrorHandleOptions {
   paneId?: string;
-  /** The mode the pane shows now; the view does not know (it is one view for both). */
-  mode?: () => 'live' | 'source';
 }
 
 class CodeMirrorHandle implements NoteEditorHandle {
   constructor(
     private readonly view: EditorView,
     readonly paneId: string,
-    private readonly mode: () => 'live' | 'source',
   ) {}
 
-  get kind(): 'source' | 'live' {
-    return this.mode();
+  get kind(): 'source' {
+    return 'source';
   }
   get root(): HTMLElement {
     return this.view.dom;
@@ -216,14 +213,14 @@ class CodeMirrorHandle implements NoteEditorHandle {
 
 const handles = new WeakMap<EditorView, NoteEditorHandle>();
 
-/** The handle of a view: the same object every time, the first call fixes its pane and mode. */
+/** The handle of a view: the same object every time, the first call fixes its pane. */
 export function codeMirrorHandle(
   view: EditorView,
   opts: CodeMirrorHandleOptions = {},
 ): NoteEditorHandle {
   let h = handles.get(view);
   if (!h) {
-    h = new CodeMirrorHandle(view, opts.paneId ?? '', opts.mode ?? (() => 'source'));
+    h = new CodeMirrorHandle(view, opts.paneId ?? '');
     handles.set(view, h);
   }
   return h;

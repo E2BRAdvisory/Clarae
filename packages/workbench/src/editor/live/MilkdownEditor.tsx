@@ -12,7 +12,7 @@ import { dialog } from '../../ui/dialogs';
 import type { Reveal } from '../../reading/ReadingView';
 import { useSettings, type EditorSettings } from '../../state/settings';
 import { useAppStore } from '../../state/store';
-import type { LinkResolver } from '../Editor';
+import type { LinkResolver } from '../types';
 import type { CompletionOptions } from '../completionEngine';
 import type { LivePreviewContext } from '../context';
 import type { PasteDeps } from '../pasteCore';

@@ -54,13 +54,18 @@ function renderApp() {
 
 /** Types at the end of the note open in the (only) pane, like the user would. */
 async function typeAtEnd(text: string) {
-  await screen.findByLabelText('Note editor');
+  await screen.findByLabelText('Note editor', undefined, { timeout: 20_000 });
   const paneId = allPanes(useAppStore.getState().layout.root)[0]?.id ?? '';
-  const view = await waitFor(() => {
-    const v = getEditor(paneId);
-    if (!v) throw new Error('no editor yet');
-    return v;
-  });
+  const view = await waitFor(
+    () => {
+      const v = getEditor(paneId);
+      // the Live editor (Milkdown) is the one the user types into; the CodeMirror one under it is
+      // read-only while Live loads
+      if (v?.kind !== 'live') throw new Error('no Live editor yet');
+      return v;
+    },
+    { timeout: 20_000 },
+  );
   act(() => {
     const base = view.text();
     view.applySourceEdits(base, [{ from: base.length, insert: text }]);
@@ -68,7 +73,8 @@ async function typeAtEnd(text: string) {
   return view;
 }
 
-describe('teardown flush', () => {
+// The note opens in Live (Milkdown), a chunk fetched on first use: a generous timeout keeps these stable on a loaded machine.
+describe('teardown flush', { timeout: 30_000 }, () => {
   beforeEach(() => useSettings.getState().reset());
   afterEach(() => vi.restoreAllMocks());
 

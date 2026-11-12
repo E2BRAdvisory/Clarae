@@ -1,14 +1,13 @@
-// The editor of a note in a build with the Milkdown switch on: the Live mode is Milkdown, Source is
-// CodeMirror under it, and a note that Live cannot hold shows as Source with a notice.
+// The editor of a note: the Live mode is Milkdown, Source is CodeMirror under it, and a note that Live
+// cannot hold shows as Source with a notice.
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '../i18n';
 import { defaultEditorSettings } from '../state/settings';
 import { defaultContext } from './context';
-import { Editor, type EditorProps } from './Editor';
 import { getEditor } from './registry';
-import { NoteEditor } from './NoteEditor.live';
-import { NoteEditor as DefaultNoteEditor } from './NoteEditor';
+import { NoteEditor, type NoteEditorProps } from './NoteEditor';
+import { SourceEditor } from './source/SourceEditor';
 import { LiveSession } from './live/fidelity/session';
 
 beforeAll(() => {
@@ -16,7 +15,7 @@ beforeAll(() => {
 });
 afterEach(() => cleanup());
 
-function props(over: Partial<EditorProps> = {}): EditorProps {
+function props(over: Partial<NoteEditorProps> = {}): NoteEditorProps {
   return {
     id: 'pane',
     doc: 'one\n\ntwo\n\nthree\n',
@@ -43,41 +42,31 @@ const source = () =>
 describe('the CodeMirror editor under Live', () => {
   it('takes no typing while Live is on its way, and takes it again if Live does not come', () => {
     const onChange = vi.fn();
-    const { rerender } = render(<Editor {...props({ mode: 'source', onChange })} />);
+    const { rerender } = render(<SourceEditor {...props({ onChange })} />);
     const ed = getEditor('pane')!;
     expect(ed.readOnly()).toBe(false);
-    rerender(<Editor {...props({ mode: 'source', onChange, suspended: 'wait' })} />);
+    rerender(<SourceEditor {...props({ onChange, suspended: 'wait' })} />);
     expect(ed.readOnly()).toBe(true);
     // the commands and the toolbar dispatch on the view: they are closed too
     act(() => void ed.replaceSelection('X'));
     expect(ed.text()).toBe('one\n\ntwo\n\nthree\n');
     expect(onChange).not.toHaveBeenCalled();
-    rerender(<Editor {...props({ mode: 'source', onChange })} />);
+    rerender(<SourceEditor {...props({ onChange })} />);
     expect(ed.readOnly()).toBe(false);
     act(() => void ed.replaceSelection('X'));
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   it('still takes the file when it is loaded again while Live is on its way', () => {
-    const { rerender } = render(<Editor {...props({ mode: 'source', suspended: 'wait' })} />);
-    rerender(
-      <Editor {...props({ mode: 'source', suspended: 'wait', doc: 'new\n', version: 2 })} />,
-    );
+    const { rerender } = render(<SourceEditor {...props({ suspended: 'wait' })} />);
+    rerender(<SourceEditor {...props({ suspended: 'wait', doc: 'new\n', version: 2 })} />);
     expect(getEditor('pane')!.text()).toBe('new\n');
   });
 
   it('stays read-only for a read-only pane when Live is gone', () => {
-    const { rerender } = render(
-      <Editor {...props({ mode: 'source', readOnly: true, suspended: 'wait' })} />,
-    );
-    rerender(<Editor {...props({ mode: 'source', readOnly: true })} />);
+    const { rerender } = render(<SourceEditor {...props({ readOnly: true, suspended: 'wait' })} />);
+    rerender(<SourceEditor {...props({ readOnly: true })} />);
     expect(getEditor('pane')!.readOnly()).toBe(true);
-  });
-});
-
-describe('the build switch', () => {
-  it('is off by default: the editor of a note is the CodeMirror one', () => {
-    expect(DefaultNoteEditor).toBe(Editor);
   });
 });
 

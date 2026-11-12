@@ -11,6 +11,11 @@ export interface LinkSpec {
   embed: boolean;
 }
 
+/** Link resolution finished: what a note editor asks to be told, to show its links again. */
+export interface LinkResolver {
+  subscribe(cb: () => void): () => void;
+}
+
 /** The figures of the editor: words, characters, selection, and the position of the cursor. */
 export interface EditorStats {
   words: number;

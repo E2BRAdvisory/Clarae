@@ -1,5 +1,5 @@
 // What the views of the Live editor (A-W5a) need from the application. They never import the API: they
-// call the same `LivePreviewContext` the CodeMirror editor gets through its facet (resolving links,
+// call the `LivePreviewContext` of the application (resolving links,
 // rendering embeds, images, math, diagrams and queries, opening links), and follow the link resolver.
 import type { EmbedDisposer, LivePreviewContext } from '../../context';
 

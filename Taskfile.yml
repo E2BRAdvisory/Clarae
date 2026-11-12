@@ -398,9 +398,9 @@ tasks:
 
   ## ---- build -----------------------------------------------------------------
 
-  # The Web UI of a release is the default build: no MEMOBRAIN_LIVE_ENGINE / _AI / _COLLAB / _E2E / _DIST in the environment
-  # (check-editor-switches.sh, first, before the slow steps) and no Milkdown or binding mock in web/dist (check-dist.sh, last, before the
-  # copy). The cloud image does the same in services/cloud/Dockerfile. A web build with a switch on is made by calling
+  # The Web UI of a release is the default build: no MEMOBRAIN_AI / _COLLAB / _E2E / _DIST in the environment
+  # (check-editor-switches.sh, first, before the slow steps), no collaboration code or binding mock and the Milkdown editor chunk in
+  # web/dist (check-dist.sh, last, before the copy). The cloud image does the same in services/cloud/Dockerfile. A web build with a switch on is made by calling
   # `yarn workspace @memobrain/web run build` directly (e2e, docs/dev-setup.md).
   web-build:
     desc: Build the Web UI (with the WebAssembly core) and copy it into the cloud binary's embed dir (then run build-cloud)
@@ -476,7 +476,7 @@ tasks:
     requires:
       vars: [OS, V]
     cmds:
-      # --release: no build switch or MEMOBRAIN_DIST in the environment, no Milkdown and no binding mock in the built UI
+      # --release: no build switch or MEMOBRAIN_DIST in the environment, no collaboration code and no binding mock in the built UI
       # (check-editor-switches.sh, check-dist.sh), no development update key. What it builds is what is shipped.
       - bash scripts/release/build-desktop.sh {{.OS}} {{.V}} --release
 

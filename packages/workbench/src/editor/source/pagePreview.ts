@@ -1,5 +1,5 @@
-// CodeMirror extension: a page preview on hover over a [[wikilink]] in the editor (Live Preview and
-// Source). The triggers of the reading view and of the keyboard are in preview/hover.ts.
+// CodeMirror extension: a page preview on hover over a [[wikilink]] in the Source editor.
+// The triggers of the reading view and of the keyboard are in preview/hover.ts.
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { pathOfElement, previewWanted } from '../../preview/hover';

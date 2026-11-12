@@ -3,7 +3,7 @@ import { CompletionContext, type Completion } from '@codemirror/autocomplete';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { initI18n } from '../i18n';
+import { initI18n } from '../../i18n';
 import { filterItems, slashCompletionSource, slashItems, slashMatch, todayText } from './slash';
 
 beforeAll(() => initI18n('en'));

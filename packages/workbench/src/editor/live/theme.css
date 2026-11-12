@@ -51,6 +51,11 @@
   --crepe-shadow-2: var(--live-shadow-2);
   min-height: 100%;
 }
+/* the code of a code block (CodeMirror inside Crepe's block) is in the application's monospace font; its own
+   theme names the generic `monospace` */
+.live-host .milkdown-code-block .cm-scroller {
+  font-family: var(--crepe-font-code);
+}
 .live-host .milkdown .ProseMirror {
   margin: 0 auto;
   padding: var(--live-pad-y) var(--live-pad-r) var(--live-pad-y) var(--live-pad-l);

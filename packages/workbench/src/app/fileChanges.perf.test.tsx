@@ -104,11 +104,13 @@ beforeEach(async () => {
       <App />
     </QueryClientProvider>,
   );
-  await screen.findByLabelText('Note editor');
-  await waitFor(() => expect(counts.resolve).toBe(LINKS));
+  // The note opens in Live (Milkdown): its chunk is fetched, which on a loaded machine takes more than the
+  // default second of a query.
+  await screen.findByLabelText('Note editor', undefined, { timeout: 20_000 });
+  await waitFor(() => expect(counts.resolve).toBe(LINKS), { timeout: 10_000 });
   await settle();
   await settle();
-});
+}, 40_000);
 
 afterEach(() => {
   useAppStore.getState().setVault(null);

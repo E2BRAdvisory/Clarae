@@ -159,16 +159,13 @@ describe('CodeMirror handle: the top line of a snapshot', () => {
   });
 });
 
-describe('CodeMirror handle: identity and mode', () => {
-  it('is the same object for a view, and its kind follows the mode of the pane', () => {
-    let mode: 'live' | 'source' = 'live';
+describe('CodeMirror handle: identity and kind', () => {
+  it('is the same object for a view, and its kind is Source', () => {
     const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: '' }) });
     try {
-      const h = codeMirrorHandle(view, { paneId: 'p', mode: () => mode });
+      const h = codeMirrorHandle(view, { paneId: 'p' });
       expect(codeMirrorHandle(view)).toBe(h);
       expect(h.paneId).toBe('p');
-      expect(h.kind).toBe('live');
-      mode = 'source';
       expect(h.kind).toBe('source');
     } finally {
       view.destroy();

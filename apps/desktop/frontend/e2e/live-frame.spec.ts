@@ -5,14 +5,7 @@ import { expect, openVault, proseMirror, readVaultFile, test } from './support';
 
 // The frame of the Live mode on Milkdown (ADR-0049, A-W5c): folding, the settings that follow the
 // application while a note is open, and the colours of the code blocks in both themes. It runs on both
-// targets (desktop-mock, web-core) in a build with the engine switch on:
-//   MEMOBRAIN_LIVE_ENGINE=milkdown yarn workspace @memobrain/web run e2e:workbench-ui live-frame
-// (find and go to line, which both engines have, are in editor-find.spec.ts).
-test.skip(
-  process.env['MEMOBRAIN_LIVE_ENGINE'] !== 'milkdown',
-  'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-);
-
+// targets (desktop-mock, web-core). (Find and go to line are in editor-find.spec.ts.)
 const NOTE = [
   '# Alpha',
   '',
@@ -252,6 +245,29 @@ test('the code blocks are highlighted from the language chunk, in the light and 
   }
   // the dark theme has its own palette
   expect(seen['dark']).not.toEqual(seen['light']);
+});
+
+test('the code of a code block is in the monospace font, as in Source, and the text around it is not', async ({
+  page,
+}) => {
+  await openNote(page);
+  const ed = proseMirror(page);
+  await expect(ed.locator('.milkdown-code-block .cm-content')).toBeVisible();
+  const family = (selector: string) =>
+    page.evaluate(
+      (sel) => getComputedStyle(document.querySelector(sel) as HTMLElement).fontFamily,
+      selector,
+    );
+  const mono = await page.evaluate(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--font-mono')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  );
+  expect(mono).not.toBe('');
+  expect(await family('.live-host .milkdown-code-block .cm-scroller')).toBe(mono);
+  expect(await family('.live-host .milkdown-code-block .cm-content')).toBe(mono);
+  expect(await family('.live-host .ProseMirror p')).not.toBe(mono);
 });
 
 test('the frame has no accessibility violation: find bar, chevrons and code, in both themes', async ({

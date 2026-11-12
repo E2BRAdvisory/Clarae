@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CompletionContext } from '@codemirror/autocomplete';
 import { EditorState } from '@codemirror/state';
-import type { Suggestion } from '../app/api';
+import type { Suggestion } from '../../app/api';
 import { linkTextFor, ofmCompletionSources, type CompletionBackend } from './completions';
 import { htmlToMarkdown } from './paste';
 

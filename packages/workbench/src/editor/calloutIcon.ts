@@ -1,5 +1,4 @@
-// The icon of each callout type (the names of the shell's icon set), shared by the CodeMirror Live Preview
-// and the Milkdown Live editor.
+// The icon of each callout type (the names of the shell's icon set), used by the Milkdown Live editor.
 import type { IconName } from '../shell/icons';
 
 export const CALLOUT_ICONS: Record<string, IconName> = {

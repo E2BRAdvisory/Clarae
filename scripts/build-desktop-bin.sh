@@ -18,9 +18,10 @@
 # The updater flags (-X <updater>.PublicKeyB64 / ManifestBaseURL / DisabledByBuild) are passed with --ldflags or
 # LDFLAGS_EXTRA: scripts/release/build-desktop.sh decides them and refuses a release without the production key.
 # --release is for a build that is shipped: it refuses the build switches of the frontend in the environment
-# (MEMOBRAIN_LIVE_ENGINE, MEMOBRAIN_AI, MEMOBRAIN_COLLAB, MEMOBRAIN_E2E) and MEMOBRAIN_DIST (the UI would be built
+# (MEMOBRAIN_AI, MEMOBRAIN_COLLAB, MEMOBRAIN_E2E) and MEMOBRAIN_DIST (the UI would be built
 # where Go does not embed it from): release/check-editor-switches.sh. It always builds the frontend (no --skip-frontend,
-# no --dev) and checks that neither Milkdown nor the binding mock of the e2e tests is in what it built (release/check-dist.sh).
+# no --dev) and checks that neither the collaboration code nor the binding mock of the e2e tests is in what it built, and that
+# the Milkdown editor is (release/check-dist.sh).
 # Defaults: the host OS, the host architecture (universal on macOS), version from `git describe`.
 #
 # The product data (name, bundle id, URL scheme) is apps/desktop/build/project.json; the templates it fills are
@@ -142,7 +143,7 @@ fi
 if [ "$DEV" = 0 ]; then
   [ -s "$DIST/index.html" ] || die "$DIST has no index.html: build the frontend (omit --skip-frontend)"
 fi
-# What a release carries is the default build: Milkdown, AI, collaboration and the binding mock only come from the switches checked above.
+# What a release carries is the default build: AI, collaboration and the binding mock only come from the switches checked above.
 [ "$RELEASE" = 0 ] || sh "$ROOT/scripts/release/check-dist.sh" "$DIST"
 
 

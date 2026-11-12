@@ -71,9 +71,12 @@ describe('App shell', () => {
       renderApp();
       fireEvent.click(await screen.findByText('Home'));
       expect(await screen.findByRole('tab', { name: /Home/ })).toBeInTheDocument();
-      expect(await screen.findByLabelText('Note editor')).toBeInTheDocument();
+      // the Live editor (Milkdown) is a chunk fetched on first use: more than the default second on a loaded machine
+      expect(
+        await screen.findByLabelText('Note editor', undefined, { timeout: 20_000 }),
+      ).toBeInTheDocument();
       expect(useAppStore.getState().layout.root).toMatchObject({ kind: 'pane' });
-    });
+    }, 30_000);
 
     it('shows the typed properties of the note in the Properties sidebar tab', async () => {
       await openDemo();

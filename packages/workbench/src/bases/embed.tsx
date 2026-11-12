@@ -1,4 +1,4 @@
-// `![[x.base]]` / `![[x.base#View]]` inside notes (Live Preview widgets and Reading view both go
+// `![[x.base]]` / `![[x.base#View]]` inside notes (the Live editor's views and Reading view both go
 // through embeds/hydrate.ts, which calls this). A small React root is mounted into the embed
 // element and torn down when the element leaves the document.
 import { createRoot, type Root } from 'react-dom/client';

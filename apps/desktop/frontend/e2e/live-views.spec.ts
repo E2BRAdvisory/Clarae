@@ -4,15 +4,7 @@ import { appOrigin, expect, openVault, readVaultFile, test } from './support';
 import { runCommand } from './drawingHelpers';
 
 // The Live mode on Milkdown (ADR-0049, A-W5a): links, embeds, images, callouts, math, diagrams, tags and
-// the pointer. It runs on both targets (desktop-mock, web-core) in a build with the engine switch on:
-//   MEMOBRAIN_LIVE_ENGINE=milkdown yarn workspace @memobrain/web run e2e:workbench-ui e2e/live-views.spec.ts
-// In the default build the Live mode is CodeMirror, whose selectors the other specs use, and this
-// spec has nothing to look at.
-test.skip(
-  process.env['MEMOBRAIN_LIVE_ENGINE'] !== 'milkdown',
-  'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-);
-
+// the pointer. It runs on both targets (desktop-mock, web-core).
 // A 1x1 PNG.
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

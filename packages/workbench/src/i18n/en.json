@@ -188,6 +188,8 @@
     "themeDark": "Dark",
     "version": "Version",
     "dataDir": "Data folder",
+    "licenses": "Licenses",
+    "twemojiAttribution": "Emoji graphics: Twemoji, Copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/), used unmodified.",
     "needsVault": "Open a vault to change these settings (they are stored per vault).",
     "section_general": "General",
     "section_editor": "Editor",

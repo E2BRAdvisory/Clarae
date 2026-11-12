@@ -1,7 +1,5 @@
-// The bridge between the CodeMirror extensions (pure UI) and the application
-// (bindings, navigation): extensions never import the API, they call this
-// context, which the Editor component provides through a facet.
-import { Facet } from '@codemirror/state';
+// The bridge between the Live editor's views (pure UI) and the application (bindings, navigation):
+// the views never import the API, they call this context, which NoteView provides (editor/live/views).
 import type { LinkSpec } from './types';
 
 // Moved to ./types (engine independent); re-exported so that the existing imports keep compiling.
@@ -17,7 +15,7 @@ export interface LivePreviewContext {
   requestResolve(target: string): void;
   /**
    * Fills el with the rendered embed (note, image, pdf, audio, video). May return what frees its
-   * resources: the widget calls it when CodeMirror discards el (scrolled away, edited, closed).
+   * resources: the view calls it when the editor discards el (scrolled away, edited, closed).
    */
   renderEmbed(spec: LinkSpec, el: HTMLElement): EmbedDisposer | void;
   /** Fills el with an image from a Markdown image link (disposer as for renderEmbed). */
@@ -30,7 +28,7 @@ export interface LivePreviewContext {
   renderMermaid(code: string, el: HTMLElement): void;
   /**
    * Renders a ```query block (embedded search) into el. May return what stops it following the index
-   * (the widgets also stop it with `disposeQueryBlock(el)`).
+   * (the views also stop it with `disposeQueryBlock(el)`).
    */
   renderQuery?(source: string, el: HTMLElement): EmbedDisposer | void;
 }
@@ -55,7 +53,3 @@ export const defaultContext: LivePreviewContext = {
     el.textContent = code;
   },
 };
-
-export const livePreviewContext = Facet.define<LivePreviewContext, LivePreviewContext>({
-  combine: (values) => values[values.length - 1] ?? defaultContext,
-});

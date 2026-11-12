@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './suspended.css';
-import { i18next } from '../i18n';
+import { i18next } from '../../i18n';
 import { createStatsTracker } from './stats';
 import {
   autocompletion,
@@ -30,45 +30,34 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view';
-import type { Reveal } from '../reading/ReadingView';
-import type { EditorSettings } from '../state/settings';
-import { blockWidgets } from './blockWidgets';
-import { ofmCompletionSources, type CompletionOptions } from './completions';
-import { livePreviewContext, type LivePreviewContext } from './context';
+import type { Reveal } from '../../reading/ReadingView';
+import type { EditorSettings } from '../../state/settings';
+import { ofmCompletionSources } from './completions';
+import type { CompletionOptions } from '../completionEngine';
 import { External, externalReplace } from './external';
-import { LIVE_SYNC_EVENT } from './liveSync';
-import { linkStatusChanged, livePreview } from './livePreview';
-import { pagePreviewHover } from './source/pagePreview';
-import { codeMirrorHandle } from './source/CodeMirrorAdapter';
-import type { NoteEditorHandle } from './handle';
-import type { EditorStats } from './types';
-import { smartPaste, type PasteDeps } from './paste';
-import { iconElement } from '../shell/icons';
-import { registerEditor, setActiveEditor, unregisterEditor } from './registry';
+import { LIVE_SYNC_EVENT } from '../liveSync';
+import { pagePreviewHover } from './pagePreview';
+import { codeMirrorHandle } from './CodeMirrorAdapter';
+import type { NoteEditorHandle } from '../handle';
+import type { EditorStats } from '../types';
+import { smartPaste } from './paste';
+import type { PasteDeps } from '../pasteCore';
+import { iconElement } from '../../shell/icons';
+import { registerEditor, setActiveEditor, unregisterEditor } from '../registry';
 import { sourceMode } from './sourceMode';
-import { slashCompletionSource } from '../slash/slash';
-import { slashHost } from '../slash/host';
-import { dialog } from '../ui/dialogs';
+import { slashCompletionSource } from './slash';
+import { slashHost } from '../../slash/host';
+import { dialog } from '../../ui/dialogs';
 
-// Moved to ./types (engine independent); re-exported so that the existing imports keep compiling.
-export type { EditorStats } from './types';
-
-export interface LinkResolver {
-  subscribe(cb: () => void): () => void;
-}
-
-export interface EditorProps {
+export interface SourceEditorProps {
   /** Registry key (pane id): formatting commands act on the focused editor. */
   id: string;
   doc: string;
   /** Increment to replace the document with `doc` (after a reload from disk). */
   version: number;
-  mode: 'live' | 'source';
   settings: EditorSettings;
-  context: LivePreviewContext;
   completion: CompletionOptions;
   paste: PasteDeps;
-  resolver?: LinkResolver;
   reveal?: Reveal | undefined;
   readOnly?: boolean;
   /** Gets every key event first; return true when it ran an application command. */
@@ -139,8 +128,8 @@ function settingsExtensions(s: EditorSettings, suspended?: 'wait' | 'away'): Ext
   ];
 }
 
-/** The note editor: CodeMirror 6 in Source or Live Preview mode (ADR-0004). */
-export function Editor(props: EditorProps) {
+/** The Source editor of a note: CodeMirror 6 on the Markdown text, as it is in the file (ADR-0004). */
+export function SourceEditor(props: SourceEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const handleRef = useRef<NoteEditorHandle | null>(null);
@@ -148,9 +137,7 @@ export function Editor(props: EditorProps) {
   useEffect(() => {
     latest.current = props;
   });
-  const [modeC] = useState(() => new Compartment());
   const [settingsC] = useState(() => new Compartment());
-  const [contextC] = useState(() => new Compartment());
   const [readOnlyC] = useState(() => new Compartment());
   const versionRef = useRef(props.version);
 
@@ -204,9 +191,8 @@ export function Editor(props: EditorProps) {
             ...defaultKeymap,
             indentWithTab,
           ]),
-          modeC.of(p.mode === 'live' ? [livePreview(), blockWidgets()] : sourceMode()),
+          sourceMode(),
           settingsC.of(settingsExtensions(p.settings, p.suspended)),
-          contextC.of(livePreviewContext.of(p.context)),
           readOnlyC.of(readOnlyExtensions(!!p.readOnly, p.suspended === 'wait')),
           pagePreviewHover(),
           EditorView.updateListener.of((u) => {
@@ -228,10 +214,7 @@ export function Editor(props: EditorProps) {
         ],
       }),
     });
-    const handle = codeMirrorHandle(view, {
-      paneId: p.id,
-      mode: () => latest.current.mode,
-    });
+    const handle = codeMirrorHandle(view, { paneId: p.id });
     viewRef.current = view;
     handleRef.current = handle;
     registerEditor(p.id, handle);
@@ -249,15 +232,6 @@ export function Editor(props: EditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mode switch keeps selection and scroll.
-  useEffect(() => {
-    viewRef.current?.dispatch({
-      effects: modeC.reconfigure(
-        props.mode === 'live' ? [livePreview(), blockWidgets()] : sourceMode(),
-      ),
-    });
-  }, [props.mode, modeC]);
-
   useEffect(() => {
     viewRef.current?.dispatch({
       effects: settingsC.reconfigure(settingsExtensions(props.settings, props.suspended)),
@@ -274,24 +248,11 @@ export function Editor(props: EditorProps) {
 
   useEffect(() => {
     viewRef.current?.dispatch({
-      effects: contextC.reconfigure(livePreviewContext.of(props.context)),
-    });
-  }, [props.context, contextC]);
-
-  useEffect(() => {
-    viewRef.current?.dispatch({
       effects: readOnlyC.reconfigure(
         readOnlyExtensions(!!props.readOnly, props.suspended === 'wait'),
       ),
     });
   }, [props.readOnly, props.suspended, readOnlyC]);
-
-  // Link resolution finished: rebuild decorations.
-  useEffect(() => {
-    return props.resolver?.subscribe(() =>
-      viewRef.current?.dispatch({ effects: linkStatusChanged.of(null) }),
-    );
-  }, [props.resolver]);
 
   // The document was replaced from outside (reload after an external change).
   useEffect(() => {
@@ -313,7 +274,7 @@ export function Editor(props: EditorProps) {
     <div
       className="editor-host"
       ref={host}
-      data-mode={props.mode}
+      data-mode="source"
       data-suspended={props.suspended}
       aria-hidden={props.suspended === 'away' ? true : undefined}
     />

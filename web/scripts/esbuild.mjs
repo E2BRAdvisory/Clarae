@@ -3,8 +3,6 @@
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload, proxying /api to the cloud
 //                                             (--no-watch builds once, for the e2e matrix)
 // MEMOBRAIN_E2E=1 makes main.tsx install the OIDC test double (Playwright); it is compiled out otherwise.
-// MEMOBRAIN_LIVE_ENGINE=milkdown builds the workbench's Live mode on Milkdown (ADR-0049, A-D8): a build
-// constant, never a setting; without it the Live mode is the CodeMirror one and no Milkdown is in the build.
 //
 // Two pages are built: the console (index.html) and the vault workbench (workbench.html, served for
 // /vaults/:id/open). The workbench is a page of its own so that the desktop UI's global style sheet
@@ -30,7 +28,6 @@ import {
   graphWorkerEntry,
   linkLazyStyles,
   liveCollab,
-  liveEngine as liveEnginePlugin,
 } from '@memobrain/workbench/build';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,7 +40,6 @@ const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5174;
 const apiTarget = new URL(process.env['MEMOBRAIN_API'] ?? 'http://127.0.0.1:18081');
 const e2e = process.env['MEMOBRAIN_E2E'] === '1';
-const liveEngine = process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown' ? 'milkdown' : '';
 // MEMOBRAIN_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
 // (ADR-0050); without it no Yjs is in any file and a profile cannot switch collaboration on.
 const collab = process.env['MEMOBRAIN_COLLAB'] === '1';
@@ -423,7 +419,7 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(join(root, 'public'), dist, { recursive: true });
 await copyExcalidrawAssets(dist);
-if (liveEngine) await copyTwemojiAssets(dist);
+await copyTwemojiAssets(dist);
 // Excalidraw is a classic script added by a <script> tag at run time: the tag carries its integrity.
 const excalidrawIntegrity = sri384(
   await readFile(join(dist, 'excalidraw-assets', 'excalidraw.js')),
@@ -475,12 +471,7 @@ const common = {
   publicPath: '/',
   metafile: true,
   logLevel: 'info',
-  plugins: [
-    ...plugins,
-    liveEnginePlugin(liveEngine),
-    liveCollab(collab),
-    ...(dev ? [html, reload] : [html]),
-  ],
+  plugins: [...plugins, liveCollab(collab), ...(dev ? [html, reload] : [html])],
 };
 const builds = [
   { ...common, entryPoints: { main: join(root, 'src/main.tsx') }, splitting: false },

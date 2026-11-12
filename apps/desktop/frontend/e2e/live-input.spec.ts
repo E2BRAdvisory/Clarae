@@ -3,16 +3,7 @@ import type { Page } from '@playwright/test';
 import { appOrigin, expect, listVaultFiles, openVault, readVaultFile, test } from './support';
 
 // The input of the Live mode on Milkdown (ADR-0049, A-W5b): what the user types, pastes and drops, and what
-// the file says after it. It runs on both targets (desktop-mock, web-core) in a build with the engine
-// switch on:
-//   MEMOBRAIN_LIVE_ENGINE=milkdown yarn workspace @memobrain/web run e2e:workbench-ui e2e/live-input.spec.ts
-// In the default build the Live mode is CodeMirror, whose selectors the other specs use, and this spec has
-// nothing to look at.
-test.skip(
-  process.env['MEMOBRAIN_LIVE_ENGINE'] !== 'milkdown',
-  'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
-);
-
+// the file says after it. It runs on both targets (desktop-mock, web-core).
 // A 1x1 PNG.
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

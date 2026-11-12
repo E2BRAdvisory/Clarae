@@ -8,19 +8,14 @@ import { defineConfig } from '@playwright/test';
 // A spec that cannot run on the web calls skipOnWeb(<feature id>, <reason>) (support.ts); the
 // coverage of each target is in docs/web-workbench-parity.md (scripts/parity.mjs).
 // Prerequisite: `task wasm-core`. Run with: yarn workspace @memobrain/web e2e:workbench-ui
-// (one target: add `--project web-core` or `--project desktop-mock`; the Milkdown Live editor: set
-// MEMOBRAIN_LIVE_ENGINE=milkdown, `task e2e-matrix` passes it on).
+// (one target: add `--project web-core` or `--project desktop-mock`).
 /** The `target` option of e2e/support.ts (the specs are not part of this TypeScript project). */
 type Target = 'desktop' | 'web';
 
 // Two runs at once (several worktrees or agents) need their own ports: E2E_MATRIX_DESKTOP_PORT and
 // E2E_MATRIX_WEB_PORT; the build folders and the results follow the ports.
-// The Live editor of the build is an engine switch (ADR-0049, A-D8): MEMOBRAIN_LIVE_ENGINE=milkdown builds
-// the matrix on Milkdown, and the same specs run on it. Its default ports and folders are its own, so that a
-// server left running by the other engine is never taken for this one (`reuseExistingServer`).
-const MILKDOWN = process.env['MEMOBRAIN_LIVE_ENGINE'] === 'milkdown';
-const DESKTOP_PORT = Number(process.env['E2E_MATRIX_DESKTOP_PORT'] ?? (MILKDOWN ? 5299 : 5199));
-const WEB_PORT = Number(process.env['E2E_MATRIX_WEB_PORT'] ?? (MILKDOWN ? 5276 : 5176));
+const DESKTOP_PORT = Number(process.env['E2E_MATRIX_DESKTOP_PORT'] ?? 5199);
+const WEB_PORT = Number(process.env['E2E_MATRIX_WEB_PORT'] ?? 5176);
 const DESKTOP = `http://localhost:${DESKTOP_PORT}`;
 const WEB = `http://localhost:${WEB_PORT}`;
 const OUT = `../.dev/e2e-matrix/${DESKTOP_PORT}-${WEB_PORT}`;

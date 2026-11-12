@@ -12,14 +12,14 @@ import type {
 } from '@codemirror/autocomplete';
 import type { EditorState } from '@codemirror/state';
 import { splitFrontmatter } from '@memobrain/markdown';
-import { codeMirrorHandle } from '../editor/source/CodeMirrorAdapter';
+import { codeMirrorHandle } from './CodeMirrorAdapter';
 import {
   filterItems,
   slashLabel as label,
   slashMatch,
   todayText,
   type SlashOptions,
-} from './items';
+} from '../../slash/items';
 
 // The list and the rules of the menu are shared with the Live editor (items.ts); re-exported so that the
 // existing imports keep compiling.
@@ -30,7 +30,7 @@ export {
   todayText,
   type SlashItem,
   type SlashOptions,
-} from './items';
+} from '../../slash/items';
 
 const CODE_NODES = new Set([
   'FencedCode',

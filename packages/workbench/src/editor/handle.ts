@@ -81,7 +81,7 @@ export interface LinkHit {
 export type EditResult = false | 'noop' | 'changed';
 
 export interface NoteEditorHandle {
-  /** What the pane is showing now: the plain source, or Live Preview. */
+  /** What the pane is showing now: the plain source (Source), or the Live editor. */
   readonly kind: 'source' | 'live';
   /** The pane the editor is registered under. */
   readonly paneId: string;

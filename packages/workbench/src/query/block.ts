@@ -1,5 +1,5 @@
 // Live rendering of a ```query block (embedded search) into a DOM element, shared by
-// Live Preview (CodeMirror widget) and Reading view (hydrate). Results come from the
+// the Live editor (live/views/blocks.ts) and Reading view (hydrate). Results come from the
 // same search binding as the search panel and refresh when the shared query client
 // invalidates `['search', vaultId]` (file changes, end of indexing), as the other
 // panels do. Everything is built with DOM nodes and textContent: no HTML strings.
