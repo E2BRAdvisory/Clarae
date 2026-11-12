@@ -1220,9 +1220,12 @@ features:
     tests:
       desktop:
         - packages/workbench/src/editor/commands.test.ts
+        - packages/workbench/src/editor/live/chrome/chrome.test.ts
         - apps/desktop/frontend/e2e/editor-toolbar.spec.ts
+        - apps/desktop/frontend/e2e/live-chrome.spec.ts
       workbench:
         - apps/desktop/frontend/e2e/editor-toolbar.spec.ts
+        - apps/desktop/frontend/e2e/live-chrome.spec.ts
 
   - id: editor.modes
     title: Live Preview, sorgente e lettura

@@ -34,6 +34,7 @@ import type { AnchorRect, EditorStats, SourceEdit } from '../types';
 import { loadEmoji, loadLanguages } from './chunks';
 import { COMMANDS } from './commands';
 import { buildCrepe, EXTERNAL_META, type CrepeLabels } from './crepe';
+import type { ShortcutOf } from './chrome';
 import { installDomShims } from './domShims';
 import { attachFoldHover, FindBar, foldKey, type LiveSettings } from './frame';
 import { inertInput, type LiveInputApp } from './input';
@@ -71,6 +72,8 @@ export interface LiveEditorOptions {
   vaultId?: () => string | undefined;
   /** The application's hotkeys: true when the event ran a command (and was handled). Read at every key. */
   hotkey(): ((event: KeyboardEvent) => boolean) | undefined;
+  /** The shortcut of a command of the registry, for the toolbar over a selection (none are shown without it). */
+  shortcut?: ShortcutOf;
   /** After an edit by the user, with a getter of the text of that edit (see NoteView / useNoteDocument). */
   onChange(text: () => string): void;
   /** After the document or the selection changed (the status bar's figures). */
@@ -131,6 +134,7 @@ export async function openLiveEditor(
         }
       },
       readOnly: () => live?.readOnlyNow ?? opts.readOnly,
+      ...(opts.shortcut ? { shortcut: opts.shortcut } : {}),
       hooks: { update: (docChanged, userEdit) => live?.transaction(docChanged, userEdit) },
     });
     const surfaceOf = captureSurface(builder.editor);

@@ -109,6 +109,22 @@
       "captionPlaceholder": "Write image caption",
       "codeBlock": "Code block",
       "task": "Task",
+      "addBlock": "Add a block below",
+      "dragBlock": "Drag to move the block",
+      "placeholder": "Write, or press / for commands",
+      "placeholderNoSlash": "Write here",
+      "toolbar": {
+        "label": "Format the selection",
+        "math": "Inline math"
+      },
+      "link": {
+        "copy": "Copy link",
+        "edit": "Edit link",
+        "remove": "Remove link",
+        "confirm": "Apply link",
+        "input": "Paste link…",
+        "copied": "Link copied"
+      },
       "table": {
         "addRow": "Add row",
         "addColumn": "Add column",
@@ -1137,7 +1153,13 @@
     "embed": "Embed",
     "drawing": "Drawing",
     "template": "Insert template",
-    "date": "Today's date"
+    "date": "Today's date",
+    "group": {
+      "text": "Text",
+      "list": "Lists",
+      "advanced": "Advanced",
+      "vault": "Vault"
+    }
   },
   "bookmarks": {
     "title": "Bookmarks",

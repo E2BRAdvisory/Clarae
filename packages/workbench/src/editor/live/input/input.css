@@ -4,29 +4,42 @@
 .mb-suggest {
   position: fixed;
   z-index: 50;
-  min-width: 220px;
+  min-width: 260px;
   max-width: min(420px, calc(100vw - 16px));
-  max-height: 260px;
+  max-height: 380px;
   overflow: auto;
-  padding: 4px;
-  background: var(--bg);
+  overscroll-behavior: contain;
+  padding: 4px 8px 8px;
+  background: var(--bg-secondary);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--nd-shadow);
+  border-radius: 12px;
+  box-shadow: var(--live-shadow-1, var(--nd-shadow));
   font-family: var(--font-ui);
   font-size: 13px;
 }
 .mb-suggest[hidden] {
   display: none;
 }
+/* The heading of a group of the slash menu, as Crepe's menu has it: small capitals over a rule. */
+.mb-suggest-group {
+  padding: 10px 10px 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.mb-suggest-group:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
 .mb-suggest-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 7px 10px;
+  border-radius: 8px;
   cursor: pointer;
 }
 .mb-suggest-item:hover {
@@ -35,10 +48,22 @@
 .mb-suggest-item[aria-selected='true'] {
   background: var(--bg-active);
 }
+.mb-suggest-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+.mb-suggest-icon svg {
+  fill: var(--text-muted);
+}
 .mb-suggest-label {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.mb-suggest-item:has(.mb-suggest-icon) .mb-suggest-label {
+  font-weight: 600;
 }
 .mb-suggest-detail {
   flex: none;

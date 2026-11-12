@@ -165,7 +165,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 82, exception 2, consol
 | `files.open-by-type` Apertura dei file per tipo (applicazione del sistema o download) | yes | exception | n/a | desktop (nota): note, lavagne, base, disegni, immagini, PDF, audio e video si aprono in una scheda; ogni altro file con l'applicazione del sistema, e un programma mai (si mostra nella cartella), ADR-0047 — workbench: il browser non ha applicazioni a cui passare un file né un file manager; dopo la conferma «Apertura File» il file si scarica (VaultAPI.DownloadFile), ADR-0047 | D: `openFile.test.tsx`, `bindings_files_test.go`, `pathrules_test.go`, `open-by-type.spec.ts` · W: **`open-by-type.spec.ts`** |
 | `note.random` Apertura rapida e nota casuale | yes | yes | n/a |  | D: `registry.test.ts`, `workflows.spec.ts` · W: **`workflows.spec.ts`** |
 | `search` Ricerca nel vault | yes | yes | n/a |  | D: `highlight.test.ts`, `search_test.go`, `workflows.spec.ts` · W: **`workbench.spec.ts`**, **`workflows.spec.ts`** |
-| `editor.formatting` Formattazione nell'editor | yes | yes | n/a |  | D: `commands.test.ts`, `editor-toolbar.spec.ts` · W: **`editor-toolbar.spec.ts`** |
+| `editor.formatting` Formattazione nell'editor | yes | yes | n/a |  | D: `commands.test.ts`, `chrome.test.ts`, `editor-toolbar.spec.ts`, `live-chrome.spec.ts` · W: **`editor-toolbar.spec.ts`**, **`live-chrome.spec.ts`** |
 | `editor.modes` Live Preview, sorgente e lettura | yes | yes | n/a |  | D: `livePreview.test.ts`, `render.test.ts`, `workflows.spec.ts` · W: **`workflows.spec.ts`** |
 | `editor.links` Link e completamento automatico | yes | partial | n/a | workbench: non verificata sul web: nessun test usa il completamento dei link sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `completions.test.ts`, `links_test.go` |
 | `editor.find` Cerca e sostituisci nella nota, vai a riga | yes | yes | n/a |  | D: `frame.test.ts`, `editor-find.spec.ts` · W: **`editor-find.spec.ts`** |
@@ -662,13 +662,13 @@ Da `api/openapi.yaml`. **68 su 83** sono chiamate dalla console (`web/src`); le 
 | `getExport` | GET `/vaults/{vaultId}/exports/{exportId}` | `export.zip` | yes |
 | `downloadExport` | GET `/vaults/{vaultId}/exports/{exportId}/download` | `export.zip` | — |
 
-### Spec e2e per target (31)
+### Spec e2e per target (32)
 
-Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **27** interi, **2** in parte, **2** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
+Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **28** interi, **2** in parte, **2** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
 
 | Spec | Test | Desktop (mock) | Web (core) | Esclusioni sul web |
 | --- | --- | --- | --- | --- |
-| `apps/desktop/frontend/e2e/a11y.spec.ts` | 8 | yes | yes | — |
+| `apps/desktop/frontend/e2e/a11y.spec.ts` | 9 | yes | yes | — |
 | `apps/desktop/frontend/e2e/account-panels.spec.ts` | 3 | yes | yes | — |
 | `apps/desktop/frontend/e2e/canvas.spec.ts` | 5 | yes | yes | — |
 | `apps/desktop/frontend/e2e/cloud-vaults.spec.ts` | 2 | yes | yes | — |
@@ -688,6 +688,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/graph.spec.ts` | 1 | yes | yes | — |
 | `apps/desktop/frontend/e2e/keyboard.spec.ts` | 5 | yes | yes | — |
 | `apps/desktop/frontend/e2e/live-ai.spec.ts` | 1 | yes | yes | — |
+| `apps/desktop/frontend/e2e/live-chrome.spec.ts` | 9 | yes | yes | — |
 | `apps/desktop/frontend/e2e/live-collab.spec.ts` | 1 | yes | yes | — |
 | `apps/desktop/frontend/e2e/live-frame.spec.ts` | 7 | yes | yes | — |
 | `apps/desktop/frontend/e2e/live-input.spec.ts` | 19 | yes | yes | — |

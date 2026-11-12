@@ -1,0 +1,111 @@
+/* The chrome around the document of the Live editor (chrome/): the handle of the blocks, the toolbar over a
+   selection, the tooltip of a link and the notice of a copied one. Crepe's sheets draw them; these rules
+   put them on the tokens of the application (the palette variables are mapped in theme.css) and give the
+   icons a colour that is text for contrast (Crepe draws them in the colour of the borders). */
+
+/* ---- the handle of the blocks ---- */
+.live-host .milkdown .milkdown-block-handle .operation-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--crepe-color-on-surface-variant);
+  cursor: pointer;
+}
+.live-host .milkdown .milkdown-block-handle .operation-item:last-child {
+  cursor: grab;
+}
+.live-host .milkdown .milkdown-block-handle .operation-item svg {
+  fill: var(--crepe-color-on-surface-variant);
+}
+.live-host .milkdown .milkdown-block-handle .operation-item:focus-visible {
+  outline: 2px solid var(--accent);
+}
+/* a block being dragged: the handle is not in the way of the drop */
+.live-host .milkdown .ProseMirror[data-dragging='true'] ~ .milkdown-block-handle {
+  opacity: 0.5;
+}
+.live-host[data-size='compact'] .milkdown .milkdown-block-handle {
+  gap: 0;
+}
+.live-host[data-size='compact'] .milkdown .milkdown-block-handle .operation-item {
+  width: 26px;
+  height: 26px;
+  padding: 3px;
+}
+.live-host[data-size='compact'] .milkdown .milkdown-block-handle .operation-item svg {
+  width: 20px;
+  height: 20px;
+}
+.live-host[data-size='narrow'] .milkdown .milkdown-block-handle {
+  display: none;
+}
+
+/* ---- the toolbar over a selection and the tooltip of a link ---- */
+.live-host .milkdown .milkdown-toolbar .toolbar-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--crepe-color-on-surface-variant);
+  background: transparent;
+}
+.live-host .milkdown .milkdown-toolbar .toolbar-item svg,
+.live-host .milkdown .milkdown-link-preview > .link-preview svg,
+.live-host .milkdown .milkdown-link-edit > .link-edit svg {
+  color: var(--crepe-color-on-surface-variant);
+  fill: var(--crepe-color-on-surface-variant);
+}
+.live-host .milkdown .milkdown-toolbar .toolbar-item.active svg {
+  color: var(--crepe-color-primary);
+  fill: var(--crepe-color-primary);
+}
+.live-host .milkdown .milkdown-link-preview > .link-preview > .link-display {
+  color: var(--crepe-color-on-surface);
+}
+/* the buttons of the tooltip are icons: their names are for the screen reader, and show on hover as titles do */
+.live-host .milkdown .milkdown-link-preview .button,
+.live-host .milkdown .milkdown-link-edit .button {
+  cursor: pointer;
+}
+.live-host .milkdown .milkdown-link-edit > .link-edit > .input-area::placeholder {
+  color: var(--crepe-color-on-surface-variant);
+}
+
+/* ---- the notice (a copied link) ---- */
+/* Always there for the screen reader, out of sight until it has something to say. Then it is zero in height
+   and stuck to the bottom of the scrolled host, so that it never moves the text. */
+.live-chrome-status {
+  position: absolute;
+  /* (at the top: left where the flow puts it, the 1px would stretch the scroll of the host) */
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.live-chrome-status.on {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  top: auto;
+  left: auto;
+  display: flex;
+  justify-content: center;
+  width: auto;
+  height: 0;
+  overflow: visible;
+  clip: auto;
+}
+.live-chrome-status > span {
+  position: relative;
+  top: -48px;
+  padding: 6px 12px;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 8px;
+  box-shadow: var(--live-shadow-1);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}

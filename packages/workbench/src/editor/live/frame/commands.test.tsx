@@ -1,6 +1,6 @@
 // What the rest of the application does with the Live editor through its handle (A-W5c): the commands
 // that find text and go to a line, and the editing toolbar, which has no other way to the editor.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { TextSelection } from '@milkdown/kit/prose/state';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { commands } from '../../../commands/registry';
@@ -83,8 +83,10 @@ describe('the editing toolbar on the Live editor', () => {
       ),
     );
     render(<EditorToolbar paneId={PANE} vaultId="v1" attachmentDir="" />);
-    expect(screen.getByRole('toolbar', { name: 'Editing toolbar' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+    const bar = screen.getByRole('toolbar', { name: 'Editing toolbar' });
+    expect(bar).toBeTruthy();
+    // (the toolbar over a selection, which the editor draws itself, has a Bold button of its own)
+    fireEvent.click(within(bar).getByRole('button', { name: 'Bold' }));
     expect(live.editor.text()).toBe('**hello**\n');
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(live.editor.text()).toBe('hello\n');

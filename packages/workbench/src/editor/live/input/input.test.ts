@@ -1345,15 +1345,46 @@ describe('the suggestions: links, tags and the slash menu', () => {
     expect(popup()).toBeNull();
   });
 
+  it('draws the slash menu in groups with an icon each, and keeps the options in one listbox in the order shown', async () => {
+    const ed = await open('\n', { input: suggesting() });
+    ed.type('/');
+    await shown();
+    const headings = [...document.querySelectorAll('.mb-suggest-group')];
+    expect(headings.map((h) => h.textContent)).toEqual(['Text', 'Lists', 'Advanced', 'Vault']);
+    // the headings are for the eye: no role of their own, and not read
+    expect(headings.every((h) => h.getAttribute('aria-hidden') === 'true')).toBe(true);
+    const options = [
+      ...document.querySelectorAll('.mb-suggest [role="listbox"] > [role="option"]'),
+    ];
+    expect(options).toHaveLength(18);
+    expect(options.every((o) => o.querySelector('.mb-suggest-icon svg'))).toBe(true);
+    // the groups come one after the other: the text ones first (headings, quote, callout, divider)
+    expect(labels().slice(0, 6)).toEqual([
+      'Heading 1',
+      'Heading 2',
+      'Heading 3',
+      'Quote',
+      'Callout',
+      'Divider',
+    ]);
+    // a query that matches in two groups shows each heading once
+    ed.type('t');
+    const found = [...document.querySelectorAll('.mb-suggest-group')].map((h) => h.textContent);
+    expect(new Set(found).size).toBe(found.length);
+    // arrow keys move through the options in the order shown, headings skipped
+    ed.key('ArrowDown');
+    expect(document.querySelectorAll('.mb-suggest [aria-selected="true"]')).toHaveLength(1);
+  });
+
   it('opens the slash menu at the start of a line and after a space, filters it, and runs the item', async () => {
     const run = vi.fn();
     const ed = await open('\n', { input: suggesting({ slash: { enabled: () => true, run } }) });
     ed.type('/');
     await shown();
-    expect(labels()[0]).toBe('/Heading 1');
+    expect(labels()[0]).toBe('Heading 1');
     expect(labels()).toHaveLength(18);
     ed.type('call');
-    expect(labels()).toEqual(['/Callout']);
+    expect(labels()).toEqual(['Callout']);
     ed.key('Enter');
     expect(ed.editor.text()).toBe('> [!note] \n');
     expect(popup()).toBeNull();
@@ -1367,7 +1398,7 @@ describe('the suggestions: links, tags and the slash menu', () => {
     });
     quote.end();
     quote.type(' /tab');
-    expect(labels()).toEqual(['/Table']);
+    expect(labels()).toEqual(['Table']);
     quote.key('Enter');
     expect(quote.node('table')).toBe(1);
 

@@ -60,7 +60,9 @@ describe('attaching the assistant to the editor', () => {
     const load = vi.fn(() => Promise.resolve(mod));
     expect(await attachAi(b, { vaultId: 'v', deps: deps(), load })).toBe(true);
     expect(load).toHaveBeenCalledTimes(1);
-    expect(b.addFeature).toHaveBeenCalledTimes(1);
+    // the assistant, and the step that takes its flag off the toolbar over a selection (see feature.ts)
+    expect(b.addFeature).toHaveBeenCalledTimes(2);
+    expect(typeof b.addFeature.mock.calls[1]?.[0]).toBe('function');
     const [feature, config] = b.addFeature.mock.calls[0] as [
       unknown,
       { provider: unknown; diffReviewOnEnd: boolean },

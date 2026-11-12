@@ -43,6 +43,8 @@ import {
 } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
 import { $prose } from '@milkdown/kit/utils';
+import { chromeIcon, type ChromeIconName } from '../chrome/icons';
+import { slashLook, type SlashGroup } from './slashLook';
 import { isUserEdit } from '../userEdit';
 
 export interface SuggestHost {
@@ -72,11 +74,49 @@ interface Trigger {
 interface Choice {
   label: string;
   detail: string;
+  /** The slash items only: the section of the menu they are in, and the icon beside them. */
+  group?: SlashGroup;
+  icon?: ChromeIconName;
   apply(view: EditorView, trigger: Trigger): void;
 }
 
 const SUGGEST_META = 'memobrain-suggest';
-const key = new PluginKey<{ typed: number }>('memobrain-suggest');
+/** A transaction with this meta arms the slash menu at a position (a number) or disarms it (null). */
+const ARM_META = 'memobrain-suggest-arm';
+
+/**
+ * What the plugin keeps: how many edits the user made (what opens the popup) and the position where the
+ * slash menu was opened without a typed "/" (the block handle's "+"): the menu stays open while the text
+ * from there to the caret is what a query is made of, and the query is that text.
+ */
+interface SuggestState {
+  typed: number;
+  armed: number | null;
+}
+const key = new PluginKey<SuggestState>('memobrain-suggest');
+
+/** The query typed since the slash menu was armed at `armed`, or null when the arming no longer holds. */
+function armedQuery(state: EditorState, armed: number): string | null {
+  const sel = state.selection;
+  if (!(sel instanceof TextSelection) || !sel.empty) return null;
+  const $pos = sel.$from;
+  const { parent } = $pos;
+  if (!parent.inlineContent || parent.type.spec.code) return null;
+  if (armed < $pos.start() || armed > sel.from) return null;
+  const typed = parent.textBetween(armed - $pos.start(), $pos.parentOffset);
+  return /^[\p{L}\p{N}-]*$/u.test(typed) ? typed : null;
+}
+
+/**
+ * Opens the slash menu at the caret, with nothing typed (the "+" of the block handle). Returns false when
+ * the editor has no such menu. The menu closes as it does when typed: Escape, a click outside, or text
+ * that is no query any more.
+ */
+export function armSlash(view: EditorView): boolean {
+  if (!key.getState(view.state)) return false;
+  view.dispatch(view.state.tr.setMeta(ARM_META, view.state.selection.from));
+  return true;
+}
 
 /** The text right before `$pos` in its textblock: the text nodes up to the nearest node that is not text. */
 function textBefore($pos: ResolvedPos): string {
@@ -175,6 +215,24 @@ function triggerAt(
         query: typed,
       },
     };
+  }
+  const armed = key.getState(state)?.armed;
+  if (host.slash.enabled() && armed != null) {
+    const query = armedQuery(state, armed);
+    if (query !== null) {
+      return {
+        match: 'slash',
+        trigger: {
+          kind: 'slash',
+          before,
+          from: armed,
+          to: pos,
+          embed: false,
+          node: null,
+          query,
+        },
+      };
+    }
   }
   if (host.slash.enabled() && !protectedText(before)) {
     const m = slashMatch(before, before.length);
@@ -323,12 +381,21 @@ class Suggestions {
     else this.timer = setTimeout(run, wait);
   }
 
+  /** The items for a query, a group after the other (the groups in the order their best item comes). */
   private slashChoices(query: string): Choice[] {
-    return filterItems(query).map((item) => ({
-      label: `/${slashLabel(item)}`,
-      detail: '',
-      apply: (view, t) => applySlash(view, t, item, this.host),
-    }));
+    const items = filterItems(query).map((item) => ({ item, look: slashLook(item.id) }));
+    const groups = [...new Set(items.map((i) => i.look.group))];
+    return groups.flatMap((group) =>
+      items
+        .filter((i) => i.look.group === group)
+        .map(({ item, look }): Choice => ({
+          label: slashLabel(item),
+          detail: '',
+          group,
+          ...(look.icon ? { icon: look.icon } : {}),
+          apply: (view, t) => applySlash(view, t, item, this.host),
+        })),
+    );
   }
 
   private show(trigger: Trigger, choices: Choice[]): void {
@@ -347,13 +414,31 @@ class Suggestions {
   }
 
   private render(): void {
+    let group: SlashGroup | undefined;
     this.list.replaceChildren(
-      ...this.choices.map((c, i) => {
+      ...this.choices.flatMap((c, i) => {
+        const nodes: HTMLElement[] = [];
+        if (c.group && c.group !== group) {
+          // the heading of a section is for the eye: the options keep their place in the one listbox
+          const heading = document.createElement('div');
+          heading.className = 'mb-suggest-group';
+          heading.setAttribute('role', 'presentation');
+          heading.setAttribute('aria-hidden', 'true');
+          heading.textContent = i18next.t(`slash.group.${c.group}`);
+          nodes.push(heading);
+        }
+        group = c.group;
         const row = document.createElement('div');
         row.className = 'mb-suggest-item';
         row.id = `${this.id}-${i}`;
         row.setAttribute('role', 'option');
         row.setAttribute('aria-selected', String(i === this.index));
+        if (c.icon) {
+          const icon = document.createElement('span');
+          icon.className = 'mb-suggest-icon';
+          icon.append(chromeIcon(c.icon, 20));
+          row.append(icon);
+        }
         const label = document.createElement('span');
         label.className = 'mb-suggest-label';
         label.textContent = c.label;
@@ -369,7 +454,8 @@ class Suggestions {
           this.index = i;
           this.accept();
         });
-        return row;
+        nodes.push(row);
+        return nodes;
       }),
     );
     const active = this.choices[this.index];
@@ -380,7 +466,7 @@ class Suggestions {
           count: this.choices.length,
         })
       : '';
-    this.list.children[this.index]?.scrollIntoView?.({ block: 'nearest' });
+    this.list.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });
   }
 
   private place(pos: number): void {
@@ -416,6 +502,12 @@ class Suggestions {
     if (!at || !shown || at.trigger.kind !== shown.kind) return;
     choice.apply(this.view, at.trigger);
     this.view.focus();
+  }
+
+  /** Forgets where the slash menu was armed (the popup is closed for good, not only for now). */
+  disarm(): void {
+    if (key.getState(this.view.state)?.armed != null)
+      this.view.dispatch(this.view.state.tr.setMeta(ARM_META, null));
   }
 
   close(): void {
@@ -461,6 +553,7 @@ class Suggestions {
         break;
       case 'Escape':
         this.close();
+        this.disarm();
         break;
       default:
         return false;
@@ -475,19 +568,31 @@ class Suggestions {
 export const suggestions = (host: SuggestHost) =>
   $prose(() => {
     let ui: Suggestions | null = null;
-    return new Plugin<{ typed: number }>({
+    return new Plugin<SuggestState>({
       key,
       state: {
-        init: () => ({ typed: 0 }),
-        apply: (tr, value) =>
-          isUserEdit(tr) && !tr.getMeta(SUGGEST_META) ? { typed: value.typed + 1 } : value,
+        init: () => ({ typed: 0, armed: null }),
+        apply: (tr, value, _old, state) => {
+          const typed = isUserEdit(tr) && !tr.getMeta(SUGGEST_META) ? value.typed + 1 : value.typed;
+          let armed = value.armed;
+          const meta = tr.getMeta(ARM_META) as number | null | undefined;
+          // a choice made ends the arming, so that what is typed next is not a query
+          if (meta !== undefined) armed = meta;
+          else if (tr.getMeta(SUGGEST_META)) armed = null;
+          else if (armed != null) armed = tr.mapping.map(armed, -1);
+          if (armed != null && armedQuery(state, armed) === null) armed = null;
+          return typed === value.typed && armed === value.armed ? value : { typed, armed };
+        },
       },
       view(view) {
         ui = new Suggestions(view, host);
         return {
           update(v, prev) {
-            const typed = key.getState(v.state)?.typed !== key.getState(prev)?.typed;
-            if (typed) ui?.evaluate();
+            const now = key.getState(v.state);
+            const before = key.getState(prev);
+            if (now?.typed !== before?.typed) ui?.evaluate();
+            // armed: the menu opens with nothing typed
+            else if (now?.armed != null && now.armed !== before?.armed) ui?.evaluate(false, false);
             else if (
               ui?.open &&
               (!prev.doc.eq(v.state.doc) || !prev.selection.eq(v.state.selection))
@@ -505,6 +610,7 @@ export const suggestions = (host: SuggestHost) =>
           keydown: (_view, event) => ui?.key(event) ?? false,
           blur: () => {
             ui?.close();
+            ui?.disarm();
             return false;
           },
         },

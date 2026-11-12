@@ -698,18 +698,32 @@ export function makeComposer(core: SerializerFor): Composer {
   }
 
   /** A top-level block written again, as `forceDirty` does: with the style and the indentation of its place. */
-  const forcedBlock = (t: BlockTable, doc: PMNode, kid: PMNode, e: Entry): string => {
+  const forcedBlock = (
+    t: BlockTable,
+    doc: PMNode,
+    kid: PMNode,
+    e: Entry,
+    place: Entry = e,
+  ): string => {
     // a block the edit left as it is is written the same at every keystroke: the neighbours of a window are
-    if (kid !== e.node) return forcedBlockOf(t, doc, kid, e);
+    // (`place`: the entry whose position the block is written at, when it is not its own: a block that moved)
+    if (kid !== e.node || place !== e) return forcedBlockOf(t, doc, kid, e, place);
     let text = forcedMemo.get(e);
     if (text === undefined) forcedMemo.set(e, (text = forcedBlockOf(t, doc, kid, e)));
     return text;
   };
   const forcedMemo = new WeakMap<Entry, string>();
-  const forcedBlockOf = (t: BlockTable, doc: PMNode, kid: PMNode, e: Entry): string => {
+  const forcedBlockOf = (
+    t: BlockTable,
+    doc: PMNode,
+    kid: PMNode,
+    e: Entry,
+    place: Entry = e,
+  ): string => {
     const slice = t.body.slice(e.start, e.end);
-    // a rule has no content to write again: the file's own form (`***`, `- - -`) stays
-    if (kid.type.name === 'hr') return slice;
+    // a rule has no content to write again: the file's own form (`***`, `- - -`) stays (when the entry is
+    // a rule: a block moved over one is paired with the entry of its old place, which is some other block's)
+    if (kid.type.name === 'hr' && e.node.type.name === 'hr') return slice;
     // a raw block that is the file's own is its lines, with what ends them (an HTML block ends at the file's end)
     if (
       kid.type.name === 'raw_block' &&
@@ -719,7 +733,8 @@ export function makeComposer(core: SerializerFor): Composer {
       return slice;
     }
     let text = fresh(kid, styleOf(t, e, t.style));
-    if (!topRaw(doc, kid)) text = indentLines(text, prefixOf(t.body, e.start, ''));
+    // the style is the block's own entry's; the indentation is the one of the place it is written at
+    if (!topRaw(doc, kid)) text = indentLines(text, prefixOf(t.body, place.start, ''));
     return kid.type.name === 'blockquote' ? keepEmptyQuoteLines(slice, text) : text;
   };
 
@@ -1007,8 +1022,13 @@ export function makeComposer(core: SerializerFor): Composer {
     // (the blocks of the document that are blocks of the file, when they are written one by one)
     let pairedWith: (Entry | undefined)[] | undefined;
     if (kids.length === n) {
+      // (a block that moved is written with the style of its own entry, found by identity: the nodes a move
+      // carries are the ones the file's blocks were made into; the others go by place. The indentation is the
+      // place's in both cases)
       region = newMid
-        .map((k, i) => forcedBlock(t, doc, k, oldMid[i]!))
+        .map((k, i) =>
+          forcedBlock(t, doc, k, oldMid.find((e) => e.node === k) ?? oldMid[i]!, oldMid[i]),
+        )
         .reduce((acc, text, i) => {
           if (i === 0) return text;
           const gap = t.body.slice(oldMid[i - 1]!.end, oldMid[i]!.start);

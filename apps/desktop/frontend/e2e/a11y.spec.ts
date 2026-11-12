@@ -10,10 +10,18 @@ import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 // build is scanned whole (a rich note, below): its DOM is HTML like the chrome's, and ProseMirror is not excluded. Excalidraw's own canvas
 // and toolbars are excluded too; MemoBrain's chrome around it (header, export dialog, tools
 // panel, slideshow bar, tool dialogs) is scanned.
+// The colour of a link in the document is the accent on the page, which the dark theme gives too little contrast
+// for: it is the same for the CodeMirror editor and tracked apart. The chrome is what the scans below look at.
+const LINK_TEXT = ['.live-host .ProseMirror a[href]'];
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-async function scan(page: Page, label: string, opts: { editor?: boolean } = {}) {
+async function scan(
+  page: Page,
+  label: string,
+  opts: { editor?: boolean; exclude?: string[] } = {},
+) {
   const builder = new AxeBuilder({ page }).withTags(TAGS).exclude('.excalidraw');
+  for (const selector of opts.exclude ?? []) builder.exclude(selector);
   // the Live editor of Milkdown is scanned with its content; CodeMirror's is not
   const results = await (opts.editor ? builder : builder.exclude('.cm-content')).analyze();
   const blocking = results.violations.filter(
@@ -162,6 +170,44 @@ for (const theme of ['light', 'dark'] as const) {
       );
       await page.waitForTimeout(600);
       await scan(page, `live editor (${theme})`, { editor: true });
+    });
+
+    // The chrome the Live editor draws beside the text (ADR-0049, M16-UX1), each piece shown: the handle of the
+    // blocks, the toolbar over a selection and the tooltip of a link. Their buttons are icons, with names.
+    test('the chrome of the Live editor: handle, toolbar and link tooltip', async ({ page }) => {
+      test.skip(
+        liveEngine() !== 'milkdown',
+        'needs a build with the Milkdown Live editor (MEMOBRAIN_LIVE_ENGINE=milkdown)',
+      );
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await openVaultOn(page, {
+        'Chrome.md': '# Chrome\n\nsome words to select, and [a link](https://example.com) too\n',
+      });
+      await page.locator('.tree .node', { hasText: 'Chrome' }).first().click();
+      const editor = proseMirror(page);
+      await expect(editor.getByText('some words')).toBeVisible();
+      // the handle, at a block
+      await editor.getByText('some words').hover();
+      const handle = page.locator('.live-host .milkdown-block-handle');
+      await expect(handle).toHaveAttribute('data-show', 'true');
+      await scan(page, `live handle (${theme})`, {
+        editor: true,
+        exclude: LINK_TEXT,
+      });
+      // the toolbar, over a word
+      await editor.getByText('some words').dblclick({ position: { x: 12, y: 10 } });
+      const toolbar = page.getByRole('toolbar', { name: 'Format the selection' });
+      await expect(toolbar).toBeVisible();
+      await scan(page, `live toolbar (${theme})`, { editor: true, exclude: LINK_TEXT });
+      // the tooltip, on the link
+      await editor.getByText('a link').click();
+      const preview = page.locator('.milkdown-link-preview');
+      await expect(preview).toBeVisible();
+      await page.waitForTimeout(300);
+      await scan(page, `live link tooltip (${theme})`, { editor: true, exclude: LINK_TEXT });
+      await preview.locator('.link-edit-button').click();
+      await expect(page.locator('.milkdown-link-edit .input-area')).toBeVisible();
+      await scan(page, `live link edit (${theme})`, { editor: true, exclude: LINK_TEXT });
     });
 
     test('shell with a note open, sidebar panels and status bar', async ({ page }) => {

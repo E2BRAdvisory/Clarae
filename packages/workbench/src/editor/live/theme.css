@@ -5,6 +5,25 @@
   min-height: 0;
   overflow: auto;
   position: relative;
+  /* The margins of the text, as the playground of Milkdown has them: room at the left for the handle of the
+     blocks and the chevron of the fold. They shrink with the width of the pane (`data-size`, set by
+     chrome/index.ts from the host's own size: the pane, not the window). */
+  --live-pad-l: 112px;
+  --live-pad-r: 56px;
+  --live-pad-y: 40px;
+  --live-shadow-1: 0 1px 3px 1px rgb(0 0 0 / 0.15), 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --live-shadow-2: 0 2px 6px 2px rgb(0 0 0 / 0.15), 0 1px 2px 0 rgb(0 0 0 / 0.3);
+}
+.live-host[data-size='compact'] {
+  --live-pad-l: 84px;
+  --live-pad-r: 28px;
+  --live-pad-y: 28px;
+}
+/* The handle has no room in a pane this narrow: the text keeps the margin of the chevron of the fold. */
+.live-host[data-size='narrow'] {
+  --live-pad-l: 28px;
+  --live-pad-r: 16px;
+  --live-pad-y: 16px;
 }
 .live-host .milkdown {
   --crepe-color-background: var(--bg);
@@ -28,11 +47,13 @@
   --crepe-font-default: var(--font-ui);
   --crepe-font-code: var(--font-mono);
   --crepe-base-font-size: var(--live-font-size, 15px);
+  --crepe-shadow-1: var(--live-shadow-1);
+  --crepe-shadow-2: var(--live-shadow-2);
   min-height: 100%;
 }
 .live-host .milkdown .ProseMirror {
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: var(--live-pad-y) var(--live-pad-r) var(--live-pad-y) var(--live-pad-l);
   line-height: 1.6;
   outline: none;
 }
@@ -50,9 +71,15 @@
 }
 /* The line length of the `readableWidth` setting: the class is the note view's, as for the other editors. */
 .note-view.readable .live-host .milkdown .ProseMirror {
-  max-width: 760px;
+  max-width: calc(712px + var(--live-pad-l) + var(--live-pad-r));
 }
-/* A read-only editor shows none of the controls that change the note (the filter refuses them anyway). */
+/* A read-only editor shows none of the controls that change the note (the filter refuses them anyway). The
+   editor stays `editable` there, so the features of Crepe, which look at that, do not hide theirs. */
+.live-host[data-readonly='true'] .milkdown-block-handle,
+.live-host[data-readonly='true'] .milkdown-toolbar,
+.live-host[data-readonly='true'] .milkdown-link-preview,
+.live-host[data-readonly='true'] .milkdown-link-edit,
+.live-host[data-readonly='true'] .crepe-placeholder::before,
 .live-host[data-readonly='true'] .milkdown-table-block .handle,
 .live-host[data-readonly='true'] .milkdown-table-block .button-group,
 .live-host[data-readonly='true'] .milkdown-code-block .language-picker,

@@ -37,5 +37,16 @@ export async function attachAi(
     // The user reviews the change as a diff and accepts or rejects it: nothing is written without that.
     diffReviewOnEnd: true,
   });
+  // The toolbar over a selection (chrome/) adds an "Ask AI" button when this flag is set, and looks the
+  // provider's configuration up with a copy of the slice that is its own (the entries of Crepe's package are
+  // bundled apart, so it is not the one the assistant sets): with the flag the toolbar cannot be drawn. The
+  // assistant has the toolbar without its button; the flag is the only thing the toolbar reads of it.
+  builder.addFeature((editor) =>
+    editor.config((ctx) => {
+      ctx
+        .use<string[], 'FeaturesCtx'>('FeaturesCtx')
+        .update((flags) => flags.filter((f) => f !== 'ai'));
+    }),
+  );
   return true;
 }

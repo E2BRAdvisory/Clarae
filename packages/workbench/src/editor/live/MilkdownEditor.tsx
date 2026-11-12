@@ -5,10 +5,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { effectiveTheme, type Theme } from '../../app/theme';
 import { i18next } from '../../i18n';
+import { formatCombo, isMac } from '../../commands/hotkeys';
+import { currentCombos } from '../../commands/registry';
 import { slashHost } from '../../slash/host';
 import { dialog } from '../../ui/dialogs';
 import type { Reveal } from '../../reading/ReadingView';
-import type { EditorSettings } from '../../state/settings';
+import { useSettings, type EditorSettings } from '../../state/settings';
 import { useAppStore } from '../../state/store';
 import type { LinkResolver } from '../Editor';
 import type { CompletionOptions } from '../completionEngine';
@@ -19,6 +21,7 @@ import { registerEditor, setActiveEditor, unregisterEditor } from '../registry';
 import type { ViewSnapshot } from '../handle';
 import type { EditorStats } from '../types';
 import { openLiveEditor, type Fallback, type LiveEditor } from './MilkdownAdapter';
+import { ariaCombo, type ShortcutOf } from './chrome/shortcuts';
 import type { CrepeLabels } from './crepe';
 import type { LiveSettings } from './frame';
 import { LiveHost } from './views';
@@ -80,6 +83,30 @@ const labels = (): CrepeLabels => ({
   captionPlaceholder: i18next.t('editor.crepe.captionPlaceholder'),
   codeBlock: i18next.t('editor.crepe.codeBlock'),
   task: i18next.t('editor.crepe.task'),
+  chrome: {
+    addBlock: i18next.t('editor.crepe.addBlock'),
+    dragBlock: i18next.t('editor.crepe.dragBlock'),
+    placeholder: i18next.t('editor.crepe.placeholder'),
+    placeholderNoSlash: i18next.t('editor.crepe.placeholderNoSlash'),
+    toolbar: {
+      label: i18next.t('editor.crepe.toolbar.label'),
+      bold: i18next.t('commands.editor_bold'),
+      italic: i18next.t('commands.editor_italic'),
+      strike: i18next.t('commands.editor_strike'),
+      highlight: i18next.t('commands.editor_highlight'),
+      code: i18next.t('commands.editor_code'),
+      math: i18next.t('editor.crepe.toolbar.math'),
+      link: i18next.t('commands.editor_link'),
+    },
+    link: {
+      copy: i18next.t('editor.crepe.link.copy'),
+      edit: i18next.t('editor.crepe.link.edit'),
+      remove: i18next.t('editor.crepe.link.remove'),
+      confirm: i18next.t('editor.crepe.link.confirm'),
+      input: i18next.t('editor.crepe.link.input'),
+      copied: i18next.t('editor.crepe.link.copied'),
+    },
+  },
   table: {
     addRow: i18next.t('editor.crepe.table.addRow'),
     addColumn: i18next.t('editor.crepe.table.addColumn'),
@@ -90,6 +117,12 @@ const labels = (): CrepeLabels => ({
     alignRight: i18next.t('editor.crepe.table.alignRight'),
   },
 });
+
+/** The shortcut the registry and the user's bindings give a command: what the toolbar over a selection shows. */
+const shortcutOf: ShortcutOf = (id) => {
+  const combo = currentCombos(useSettings.getState().hotkeys).get(id)?.[0];
+  return combo ? { display: formatCombo(combo), aria: ariaCombo(combo, isMac()) } : undefined;
+};
 
 /** Whether the dark theme is the one in force (the `data-theme` of the page, or the system's choice). */
 function useDark(): boolean {
@@ -159,6 +192,7 @@ export function MilkdownEditor(props: MilkdownEditorProps) {
       readOnly: !!p.readOnly,
       settings: settingsRef.current,
       labels: labels(),
+      shortcut: shortcutOf,
       ariaLabel: i18next.t('editor.ariaLabel'),
       views,
       // the vault, for the AI assistant, which is off (ADR-0050): the gates decide, here only the vault is read

@@ -1,7 +1,7 @@
 // Icons: the Material UI "Two tone" set. The path data is generated (iconData.ts, see
 // scripts/gen-icons.mjs), so nothing is loaded at runtime: local, offline and CSP-safe.
 // The secondary tone is the same colour at 30% opacity, so icons follow the text colour.
-import { ICON_DATA } from './iconData';
+import { ICON_DATA, type IconPath } from './iconData';
 
 export type IconName = keyof typeof ICON_DATA;
 
@@ -29,6 +29,11 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 
 /** The same icon as a DOM node, for CodeMirror widgets (which are not React). */
 export function iconElement(name: IconName, size = 16): SVGSVGElement {
+  return svgIcon(ICON_DATA[name], size);
+}
+
+/** An icon from its path data (the icons of the lazy chunks keep their own tables: see svgIcon's users). */
+export function svgIcon(data: readonly IconPath[], size = 16): SVGSVGElement {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('class', 'svg-icon');
@@ -38,7 +43,7 @@ export function iconElement(name: IconName, size = 16): SVGSVGElement {
   svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  for (const [d, opacity] of ICON_DATA[name]) {
+  for (const [d, opacity] of data) {
     const p = document.createElementNS(ns, 'path');
     p.setAttribute('d', d);
     if (opacity !== undefined) p.setAttribute('opacity', String(opacity));

@@ -337,8 +337,9 @@ test('a rule typed at the start of the text of a task keeps the task: the box st
   await live(page).getByText('a', { exact: true }).click();
   await page.keyboard.press('Home');
   await page.keyboard.type('---');
-  // the rule goes after the text of the task (a task has no text before its box), the second task is as it was
-  expect(await saved(page)).toBe('- [ ] a\n\n  ---\n- [x] b\n');
+  // the rule goes after the text of the task (a task has no text before its box), the second task is as it was;
+  // right under the text of a narrow item it is written `***` (a `---` there would underline a heading, ADR-0049 §9)
+  expect(await saved(page)).toBe('- [ ] a\n  ***\n- [x] b\n');
   await expect(live(page).locator('[role="checkbox"]')).toHaveCount(2);
   await expect(live(page).locator('[role="checkbox"]').first()).toHaveAttribute(
     'aria-label',

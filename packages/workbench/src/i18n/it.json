@@ -109,6 +109,22 @@
       "captionPlaceholder": "Scrivi la didascalia dell'immagine",
       "codeBlock": "Blocco di codice",
       "task": "Attività",
+      "addBlock": "Aggiungi un blocco sotto",
+      "dragBlock": "Trascina per spostare il blocco",
+      "placeholder": "Scrivi, oppure premi / per i comandi",
+      "placeholderNoSlash": "Scrivi qui",
+      "toolbar": {
+        "label": "Formatta la selezione",
+        "math": "Formula inline"
+      },
+      "link": {
+        "copy": "Copia il link",
+        "edit": "Modifica il link",
+        "remove": "Rimuovi il link",
+        "confirm": "Applica il link",
+        "input": "Incolla il link…",
+        "copied": "Link copiato"
+      },
       "table": {
         "addRow": "Aggiungi riga",
         "addColumn": "Aggiungi colonna",
@@ -1137,7 +1153,13 @@
     "embed": "Incorpora",
     "drawing": "Disegno",
     "template": "Inserisci template",
-    "date": "Data di oggi"
+    "date": "Data di oggi",
+    "group": {
+      "text": "Testo",
+      "list": "Elenchi",
+      "advanced": "Avanzati",
+      "vault": "Vault"
+    }
   },
   "bookmarks": {
     "title": "Segnalibri",

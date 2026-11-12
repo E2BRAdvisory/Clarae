@@ -164,7 +164,9 @@ test('the settings reach the open editor: type size, wrapping, line width, spell
   await openNote(page);
   const ed = proseMirror(page);
   await expect(ed).toHaveCSS('font-size', '15px');
-  await expect(ed).toHaveCSS('max-width', '760px');
+  // the line of text is 712px wide, and the margins of a wide pane (handle of the blocks and chevron at the
+  // left, 112px; 56px at the right) are inside the box
+  await expect(ed).toHaveCSS('max-width', '880px');
   await expect(ed).toHaveAttribute('spellcheck', 'true');
   await openEditorSettings(page);
   await page.getByLabel('Editor font size').fill('22');
@@ -191,7 +193,9 @@ test('the settings reach the open editor: type size, wrapping, line width, spell
   await page.getByLabel('Fold headings').check();
   await page.keyboard.press('Escape');
   await expect(ed).toHaveCSS('font-size', '15px');
-  await expect(ed).toHaveCSS('max-width', '760px');
+  // the line of text is 712px wide, and the margins of a wide pane (handle of the blocks and chevron at the
+  // left, 112px; 56px at the right) are inside the box
+  await expect(ed).toHaveCSS('max-width', '880px');
   await expect(ed).toHaveCSS('white-space', /pre-wrap|break-spaces/);
   await clickCaret(page, ed.locator('h1', { hasText: 'Alpha' }));
   await page.keyboard.press('Control+Shift+[');

@@ -2,33 +2,44 @@
 // Markdown layer of A-W3 on top, and the settings the A-W0 spike found necessary. Only the features
 // that decide how a note is shown and written are on (code blocks, lists and tasks, tables, images,
 // math, the drop cursor); the rich OFM views, the input and the frame (find, folding) are the application's
-// own and come from the folders next to this file. Crepe's own chrome (toolbar, top bar, slash menu) stays
-// off: the toolbar of the note is `EditorToolbar`, and the others have no translation or accessible names.
+// own and come from the folders next to this file. The chrome of the playground (the toolbar over a selection,
+// the tooltip of a link, the placeholder) is on with the names, icons and shortcuts of the application, and the
+// handle of the blocks is built on the plugin of Milkdown (chrome/). Crepe's top bar, its AI and its slash menu
+// stay off: the last has no translation, and the menu of the editor is the one of Source (input/suggest.ts).
 import '@milkdown/crepe/theme/common/prosemirror.css';
 import '@milkdown/crepe/theme/common/reset.css';
 import '@milkdown/crepe/theme/common/code-mirror.css';
 import '@milkdown/crepe/theme/common/cursor.css';
+import '@milkdown/crepe/theme/common/block-edit.css';
 import '@milkdown/crepe/theme/common/image-block.css';
 import '@milkdown/crepe/theme/common/latex.css';
+import '@milkdown/crepe/theme/common/link-tooltip.css';
 import '@milkdown/crepe/theme/common/list-item.css';
+import '@milkdown/crepe/theme/common/placeholder.css';
 import '@milkdown/crepe/theme/common/table.css';
+import '@milkdown/crepe/theme/common/toolbar.css';
 import './theme.css';
 import './views/views.css';
 import './input/input.css';
 import './frame/frame.css';
+import './chrome/chrome.css';
 import { CrepeBuilder } from '@milkdown/crepe/builder';
 import { codeMirror, type CodeMirrorFeatureConfig } from '@milkdown/crepe/feature/code-mirror';
 import { cursor } from '@milkdown/crepe/feature/cursor';
 import { imageBlock } from '@milkdown/crepe/feature/image-block';
 import { latex } from '@milkdown/crepe/feature/latex';
+import { linkTooltip } from '@milkdown/crepe/feature/link-tooltip';
 import { listItem } from '@milkdown/crepe/feature/list-item';
+import { placeholder } from '@milkdown/crepe/feature/placeholder';
 import { table } from '@milkdown/crepe/feature/table';
+import { toolbar } from '@milkdown/crepe/feature/toolbar';
 import { tableBlockConfig, type RenderType } from '@milkdown/kit/component/table-block';
 import { editorViewOptionsCtx } from '@milkdown/kit/core';
 import { uploadConfig } from '@milkdown/kit/plugin/upload';
 import { $prose } from '@milkdown/kit/utils';
 import { Plugin, PluginKey } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
+import { createChrome, type ChromeLabels, type ShortcutOf } from './chrome';
 import { installFrame } from './frame';
 import { installInput, type LiveInputHost } from './input';
 import { nameTaskBox } from './input/tasks';
@@ -52,6 +63,8 @@ export interface CrepeLabels {
   codeBlock: string;
   /** The name of the box of a task (a screen reader says it with its state). */
   task: string;
+  /** The strings of the chrome around the document (chrome/). */
+  chrome: ChromeLabels;
   /** The names of the icon buttons of a table (Crepe draws them without one). */
   table: {
     addRow: string;
@@ -90,6 +103,8 @@ export interface CrepeOptions {
   upload: (file: File) => Promise<string>;
   /** Whether the editor refuses edits now (read on every transaction). */
   readOnly: () => boolean;
+  /** The shortcut of a command of the registry, for the toolbar over a selection (none shown without it). */
+  shortcut?: ShortcutOf;
   hooks: ViewHooks;
 }
 
@@ -104,6 +119,13 @@ const readOnlyKey = new PluginKey('memobrain-readonly');
  */
 export function buildCrepe(o: CrepeOptions): CrepeBuilder {
   const { labels } = o;
+  const chrome = createChrome({
+    labels: labels.chrome,
+    readOnly: o.readOnly,
+    slashEnabled: () => o.input.slash.enabled(),
+    exec: (command) => o.input.exec(command),
+    ...(o.shortcut ? { shortcut: o.shortcut } : {}),
+  });
   const builder = new CrepeBuilder({ root: o.root, defaultValue: '' })
     .addFeature(codeMirror, {
       languages: o.languages,
@@ -127,6 +149,9 @@ export function buildCrepe(o: CrepeOptions): CrepeBuilder {
       onUpload: (file: File) => o.upload(file),
     })
     .addFeature(latex)
+    .addFeature(toolbar, chrome.toolbar)
+    .addFeature(linkTooltip, chrome.linkTooltip)
+    .addFeature(placeholder, chrome.placeholder)
     // The native caret stays: a drawn one hides the IME's composition and the spellchecker's marks.
     .addFeature(cursor, { virtual: false });
   installLive(builder.editor);
@@ -134,6 +159,7 @@ export function buildCrepe(o: CrepeOptions): CrepeBuilder {
   installViews(builder.editor, o.views);
   installInput(builder.editor, o.input, { task: labels.task });
   installFrame(builder.editor, { foldHeadings: o.foldHeadings });
+  chrome.install(builder.editor);
   builder.editor.use(o.emoji.emojiAsTyped);
   builder.editor.use(
     $prose(
