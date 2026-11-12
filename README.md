@@ -4,7 +4,7 @@
 
 **MemoBrain Notes** è un'app di knowledge management _local-first_. Le note sono file Markdown ordinari in una cartella (il _vault_), compatibile con i vault di Obsidian: l'app funziona completamente offline e il cloud è facoltativo.
 
-- **Client desktop** (macOS, Windows, Linux) basato su Wails: editor CodeMirror con Live Preview, link e backlink, grafo, ricerca full-text, canvas (`.canvas`), disegni Excalidraw (`.excalidraw`), Bases (`.base`),
+- **Client desktop** (macOS, Windows, Linux) basato su Wails: editor Markdown con modalità Live (WYSIWYG, Milkdown), Sorgente (CodeMirror) e Lettura, link e backlink, grafo, ricerca full-text, canvas (`.canvas`), disegni Excalidraw (`.excalidraw`), Bases (`.base`),
   template, note giornaliere, presentazioni e cronologia delle versioni.
 - **Cloud Service** self-hosted (Go, PostgreSQL, storage S3-compatibile, autenticazione Keycloak/OIDC) per sincronizzare i vault tra dispositivi e condividerli con utenti e gruppi. Il merge avviene sempre sul
   client: il server ordina le modifiche e archivia i contenuti senza interpretarli.
@@ -170,6 +170,10 @@ Dettagli in [docs/architecture.md](docs/architecture.md); vincoli e decisioni in
 | [docs/release/README.md](docs/release/README.md)                 | processo di rilascio                                                                                                                                     |
 | [CHANGELOG.md](CHANGELOG.md)                                     | note di rilascio                                                                                                                                         |
 | [docs/roadmap.md](docs/roadmap.md)                               | piano di sviluppo per milestone                                                                                                                          |
+
+## Attribuzioni
+
+La grafica delle emoji è [Twemoji](https://github.com/jdecked/twemoji): Copyright Twitter, Inc. e altri collaboratori, con licenza [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), usata senza modifiche (il codice del progetto Twemoji è MIT). L'attribuzione è anche in _Impostazioni → Informazioni → Licenze_ e nel file `emoji/ATTRIBUTION.txt` incluso in ogni build dell'interfaccia.
 
 ## Contribuire
 

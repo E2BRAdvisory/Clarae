@@ -7,7 +7,7 @@ Panoramica per chi inizia a lavorare sul codice. La fonte di verità resta [`Spe
 ```mermaid
 flowchart LR
   subgraph Desktop["Client desktop (Wails v2)"]
-    WBd["@memobrain/workbench<br/>(React, CodeMirror 6)"] -- binding Wails --> CoreD["core Go<br/>apps/desktop/internal"]
+    WBd["@memobrain/workbench<br/>(React, Milkdown, CodeMirror 6)"] -- binding Wails --> CoreD["core Go<br/>apps/desktop/internal"]
     CoreD --> FS[("vault = cartella<br/>.md .canvas .base .excalidraw")]
     CoreD --> SQL[("index.db, sync.db, app.db<br/>SQLite pure-Go")]
   end
@@ -32,7 +32,7 @@ flowchart LR
   API -. JWKS .-> KC
 ```
 
-- **Client desktop** (`apps/desktop`): app Wails v2, una finestra per processo. La UI è il pacchetto condiviso `@memobrain/workbench` (React, CodeMirror 6); la logica è il core Go in `apps/desktop/internal` (vault, indice, link, sync, crittografia), esposto alla UI come binding (`App.Services()`). Funziona offline su un vault che è una cartella di file ordinari, compatibile con Obsidian.
+- **Client desktop** (`apps/desktop`): app Wails v2, una finestra per processo. La UI è il pacchetto condiviso `@memobrain/workbench` (React; editor Live su Milkdown, editor Sorgente su CodeMirror 6, ADR-0049); la logica è il core Go in `apps/desktop/internal` (vault, indice, link, sync, crittografia), esposto alla UI come binding (`App.Services()`). Funziona offline su un vault che è una cartella di file ordinari, compatibile con Obsidian.
 - **Workbench web**: la stessa UI e lo stesso core Go, compilato in WebAssembly (`apps/desktop/cmd/memobrain-core`) e avviato in un Web Worker dalla pagina `/vaults/:id/open` della Web UI. I file stanno in OPFS e gli indici in sqlite-wasm. Il browser è un dispositivo come gli altri (ADR-0029, ADR-0030).
 - **Console web** (`web/`): area utente e amministrazione, in React. Parla con la REST attraverso il client TypeScript generato (`@memobrain/api-client`). La console e il workbench sono compilati e incorporati nel binario del cloud (`services/cloud/web-embed`, `go:embed`).
 - **Cloud Service** (`services/cloud`): un unico binario Go, _modular monolith_, con `--role=api|worker|all`. Il ruolo `api` serve la REST (`/api/v1`), il gRPC `NotifyService` e il fallback SSE (`GET /api/v1/events`); il ruolo `worker` esegue i job (GC dei blob, upload scaduti, retention, compattazione, purge, riconciliazione delle quote, snapshot, export ZIP). Usa PostgreSQL, uno storage S3-compatibile e Keycloak, rispetto al quale è solo _resource server_: valida i JWT (JWKS, `iss`, `aud=memobrain-api`) e controlla lo stato dell'utente nel proprio database. I gruppi esistono solo nel database del cloud (D-05).

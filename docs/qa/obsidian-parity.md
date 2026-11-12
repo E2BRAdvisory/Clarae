@@ -20,8 +20,8 @@ Segnare `[x]` con data e sistema operativo.
 
 ## Editor
 
-- [ ] Live Preview: heading, grassetto/corsivo/barrato/evidenziato, codice inline e blocchi, citazioni, liste, task (checkbox cliccabile), tabelle, footnote, tag, commenti `%%`.
-- [ ] La sintassi riappare sulla riga del cursore; frontmatter nascosto e mostrato in Properties.
+- [ ] Live (editor WYSIWYG Milkdown; Live Preview in Obsidian): heading, grassetto/corsivo/barrato/evidenziato, codice inline e blocchi, citazioni, liste, task (checkbox cliccabile), tabelle, footnote, tag, commenti `%%`.
+- [ ] Differenza voluta rispetto a Obsidian (ADR-0049): in Live i simboli Markdown non riappaiono sulla riga del cursore (la nota è WYSIWYG); riappaiono per wikilink, embed e commenti `%%` quando il cursore li tocca, e in Sorgente. Frontmatter nascosto e mostrato in Properties.
 - [ ] Callout (tutti i tipi, titolo personalizzato, `+`/`-` ripiegabili).
 - [ ] Math `$…$` e `$$…$$`; diagramma mermaid; errori di sintassi mostrati senza rompere la nota.
 - [ ] Embed: nota intera, `#heading`, `#^blocco`, immagine con `|300` e `|300x200`, PDF `#page=2`, audio, video; embed circolare → avviso.
@@ -29,7 +29,7 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Hotkey: ⌘B/I, ⌘K, ⌘⇧K, ⌘1…6, ⌘⏎ (task), ⌘E (reading), ⌘O, ⌘P, ⌘N, ⌘\ (split), ⌘W.
 - [ ] Incolla: URL su selezione → link; HTML → Markdown; immagine → allegato + `![[…]]`.
 - [ ] Modifica esterna mentre la nota è aperta: senza modifiche locali si aggiorna; con modifiche locali compare il banner Ricarica/Sovrascrivi.
-- [ ] Digitazione fluida (nessun lag percepibile) su una nota da ~1 MB in Live Preview.
+- [ ] Digitazione fluida (nessun lag percepibile) su una nota da ~1 MB: oltre 250.000 caratteri la nota si apre in Sorgente (con avviso), quindi la prova va fatta in Sorgente; in Live provare una nota di 200 kB (apertura attesa circa 2,5 s in Chromium headless, da confermare sulla webview reale).
 
 ## Reading view
 

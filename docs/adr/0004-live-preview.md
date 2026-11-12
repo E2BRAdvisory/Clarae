@@ -1,11 +1,13 @@
 # ADR-0004 — Architettura Live Preview (SPIKE-04)
 
-|                       |                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| **Stato**             | accettata                                                                               |
-| **Data**              | 2026-10-24                                                                              |
-| **Riferimenti spec**  | §2.2.1 (Editor), §2.7                                                                   |
-| **Devia dallo spec?** | in parte: HTML grezzo ridotto a un sottoinsieme sanificato; PDF via pdf.js (vedi sotto) |
+|                       |                                                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | superata (in parte) da [ADR-0049](0049-editor-live-milkdown.md) il 2026-11-12: Live è Milkdown e il CodeMirror Live Preview è rimosso; restano validi per Source e Reading i punti 6 e 7, e il ponte del punto 5 come interfaccia |
+| **Data**              | 2026-10-24                                                                                                                                                                                                                        |
+| **Riferimenti spec**  | §2.2.1 (Editor), §2.7                                                                                                                                                                                                             |
+| **Devia dallo spec?** | in parte: HTML grezzo ridotto a un sottoinsieme sanificato; PDF via pdf.js (vedi sotto)                                                                                                                                           |
+
+> **Superata in parte (2026-11-12, A-W9 di M16).** Il disegno dei punti 1–4 non esiste più nel codice: `livePreview.ts`, `blockWidgets.ts`, `widgets.ts`, `callouts.ts` e il `Compartment` di modalità sono stati rimossi. **Live è l'editor WYSIWYG Milkdown** ([ADR-0049](0049-editor-live-milkdown.md)); **Source resta CodeMirror 6**, ma come editor a modalità fissa (`editor/source/SourceEditor.tsx`), non più come la stessa vista di Live con un `Compartment`. Valgono ancora il punto 6 (tasti: in Source, `Prec.highest` che passa al registro dei comandi), il punto 7 (Reading) e, come interfaccia e non più come `Facet`, il punto 5 (`LivePreviewContext` in `editor/context.ts`, che `NoteView` passa all'editor come prop). Il testo qui sotto è la decisione originale e resta come storico; l'alternativa «editor ProseMirror/WYSIWYG» che scartava è quella che ADR-0049 adotta, con uno strato che conserva il sorgente a byte.
 
 ## Contesto
 

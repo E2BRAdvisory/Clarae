@@ -10,7 +10,7 @@ Suite Playwright sul mock dei binding Wails (`task e2e`, oppure `yarn workspace 
 - `apps/desktop/frontend/e2e/keyboard.spec.ts`: schede della barra laterale (roving tabindex, frecce, `Home`), albero dei file (una sola sosta, frecce/`Home`/`End`, espandi/chiudi, `Invio`, `F2`, menu con tasto Menu, ritorno del focus), schede dei documenti (frecce, `Canc`), palette come combobox.
 - Unit: `src/i18n/lang.test.ts` (`<html lang>` segue la lingua).
 
-**Contenuto di CodeMirror:** `.cm-content` e il canvas Excalidraw sono **esclusi** dalla scansione (il loro modello DOM non è sotto il nostro controllo); l'editor espone `role=textbox`, `aria-multiline` (forniti da CodeMirror) e l'etichetta tradotta "Editor della nota". Il comportamento reale con gli screen reader è nella checklist manuale.
+**Contenuto dell'editor:** `.cm-content` (Sorgente) e il canvas Excalidraw sono **esclusi** dalla scansione (il loro modello DOM non è sotto il nostro controllo); il Live di Milkdown (`.ProseMirror`) invece è scansionato, su una nota ricca, in tema chiaro e scuro (`a11y.spec`; per le liste vedi ADR-0049, «Stato dopo W8»); l'editor espone `role=textbox`, `aria-multiline` (forniti da CodeMirror) e l'etichetta tradotta "Editor della nota". Il comportamento reale con gli screen reader è nella checklist manuale.
 
 ### Esito misurato
 
@@ -54,7 +54,7 @@ Generale (tutti gli OS)
 - [ ] Albero dei file: annuncia nome, livello, "espanso/compresso" e posizione; `→`/`←` espande/chiude; `Invio` apre la nota; `F2` apre la richiesta di nome; menu da tasto Menu/`Maiusc+F10` navigabile.
 - [ ] Schede dei documenti: annunciate con il nome della nota; frecce e `Canc` funzionano; la nota attiva è chiara.
 - [ ] Editor: il campo è annunciato come "Editor della nota, modifica, più righe"; si legge riga per riga; i caratteri digitati e le righe sono annunciati; le scorciatoie di formattazione non confliggono con quelle del screen reader.
-- [ ] Live Preview: elenchi, titoli, link, callout e tabelle sono comprensibili; il passaggio alla modalità sorgente e lettura è annunciato.
+- [ ] Live (editor Milkdown, dal 2026-11-12 l'unico): elenchi (con il numero di voci), caselle dei task («Task: testo»), titoli, link, callout e tabelle sono comprensibili; la barra sulla selezione e il tooltip dei link hanno un nome e si annunciano; il menu `/` si annuncia; il «+» della maniglia ha un nome (la presa è nascosta ai lettori di schermo: usare `/` e `Alt+↑/↓`); il passaggio alla modalità sorgente e lettura è annunciato. **Non ancora provato con VoiceOver, NVDA e Orca** (seguito aperto di ADR-0049, A-W8).
 - [ ] Palette comandi e selettore rapido: all'apertura il campo è annunciato come "casella combinata"; spostando la selezione con le frecce si legge la voce; `Invio` esegue; `Esc` chiude e il focus torna all'editor.
 - [ ] Dialog (conferme, richieste di nome, errori): titolo annunciato, focus dentro, `Esc` chiude, il focus torna all'origine.
 - [ ] Stato del vault (footer della barra destra): i cambi di sincronizzazione (sincronizzato → in corso → offline/errore) sono annunciati senza rubare il focus; il badge del permesso (lettore/editor) è letto.
