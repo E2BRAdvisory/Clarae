@@ -27,6 +27,8 @@ legacy	web/src/workbench/storage.ts	memobrain-sqlite|fs/memobrain/data|LEGACY_FS
 legacy	web/src/workbench/storage.test.ts	memobrain-sqlite|fs/memobrain/data	tests of the adoption of the 1.3 storage set
 legacy	web/src/pages/Account.test.tsx	memobrain-sqlite	test of the removal of the 1.3 storage set
 legacy	docs/web-ui.md	`memobrain-sqlite`	documents the 1.3 storage set
+legacy	docs/web-ui.md	fs/memobrain/data	documents where the 1.3 storage set keeps the session and the mounts of the core, which it is adopted in place
+legacy	docs/user-guide/installazione.md	MemoBrain Notes|\.memobrain/|memobrain://	tells a user of 1.x which names the old version used (product, configuration folder, URL scheme); dropped in 2.0
 
 # Compatibility of the client with data of 1.x (M17 F2). One line per file and reason.
 legacy	apps/desktop/internal/*/keychain_native.go	"MemoBrain Notes( AI| vault keys)?"	service names under which 1.x filed the refresh token, the VMKs and the AI key in the OS keychain: read and moved to the new ones, dropped in 2.0

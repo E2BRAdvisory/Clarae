@@ -1,10 +1,10 @@
 # Guida utente
 
-Clarae notanda (nome provvisorio) è un'app per appunti e conoscenza personale che funziona **offline** su cartelle di file normali (`.md`, `.canvas`, `.base`, `.excalidraw`), compatibili con i vault di Obsidian. Il cloud è facoltativo: serve per sincronizzare più dispositivi e per condividere.
+Clarae notanda è un'app per appunti e conoscenza personale che funziona **offline** su cartelle di file normali (`.md`, `.canvas`, `.base`, `.excalidraw`), compatibili con i vault di Obsidian. Il cloud è facoltativo: serve per sincronizzare più dispositivi e per condividere.
 
 | Capitolo                                                        | Di cosa parla                                                                     |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [Installazione](installazione.md)                               | Scaricare e installare l'app su macOS, Windows, Linux.                            |
+| [Installazione](installazione.md)                               | Scaricare e installare l'app su macOS, Windows, Linux; aggiornare dalla 1.x.      |
 | [Il primo vault](primo-vault.md)                                | Aprire una cartella, l'interfaccia, creare le prime note.                         |
 | [Scrivere, link e proprietà](scrivere-link-proprieta.md)        | Modalità dell'editor, wikilink, backlink, tag, proprietà.                         |
 | [Ricerca](ricerca.md)                                           | Selettore rapido, ricerca nel vault, operatori, ricerche incorporate.             |

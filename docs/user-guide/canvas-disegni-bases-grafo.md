@@ -6,7 +6,7 @@ _Nuova lavagna_ crea un file `.canvas` (formato JSON Canvas, compatibile con Obs
 
 ## Disegni
 
-_Nuovo disegno_ crea un file `.excalidraw` (JSON standard in chiaro, apribile anche con excalidraw.com), modificabile con l'editor di disegno integrato (forme, frecce, testo, tratto libero, librerie). Funziona **offline**: gli asset sono inclusi nell'app. Dove nasce il file, come si chiama e come si apre (modifica, sola lettura, zen) si sceglie in _Impostazioni > Disegni_; lì si fissano anche i colori, il carattere e la dimensione predefiniti dei nuovi elementi e l'esportazione automatica. Le impostazioni stanno in `.clarae/drawing.json` e viaggiano con il vault.
+_Nuovo disegno_ crea un file `.excalidraw` (JSON standard in chiaro, apribile anche con excalidraw.com), modificabile con l'editor di disegno integrato (forme, frecce, testo, tratto libero, librerie). Funziona **offline**: gli asset sono inclusi nell'app. Dove nasce il file, come si chiama e come si apre (modifica, sola lettura, zen) si sceglie in _Impostazioni > Disegni_; lì si fissano anche i colori, il carattere e la dimensione predefiniti dei nuovi elementi e l'esportazione automatica. Le impostazioni stanno in `.clarae/drawing.json` e viaggiano con il vault (in un vault della 1.x collegato al cloud possono stare ancora nella cartella con il nome precedente: vedi [Aggiornare dalla 1.x](installazione.md#aggiornare-dalla-1x)). I disegni creati con la 1.x si aprono come prima: i dati dei vostri elementi (formule, frame, schede delle note) e le impostazioni del singolo disegno passano al nome nuovo solo quando li modificate o salvate il disegno, e un dispositivo con la 1.4 non riconosce più, su un disegno salvato dalla 1.5, le formule modificabili e l'ordine delle diapositive.
 
 ### Nelle note
 

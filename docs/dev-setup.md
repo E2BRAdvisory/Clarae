@@ -2,14 +2,14 @@
 
 ## Prerequisiti
 
-| Strumento | Versione       | Note                                                                                                                                                                                                                                              |
-| --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go        | 1.27.x         | `go.work` alla radice unisce i tre moduli; con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato                                                                                                                                          |
-| Wails CLI | v2.17.x        | `wails doctor` deve riportare "ready" (Xcode CLT su macOS, WebView2 su Windows, `webkit2gtk-4.1` su Linux). Installarlo con `task wails-cli`: la versione è quella di `apps/desktop/go.mod` e `gen-wails`/`dev-desktop` rifiutano una CLI diversa |
-| Node      | 24 LTS         | `.nvmrc`                                                                                                                                                                                                                                          |
-| Yarn      | 4.18.1         | via `corepack enable` (versione bloccata da `packageManager`); npm e pnpm sono bloccati dallo script `preinstall`                                                                                                                                 |
-| Docker    | con Compose v2 | stack di sviluppo (PostgreSQL, RustFS, Keycloak) e test con testcontainers                                                                                                                                                                        |
-| Task      | v3.54.x        | task runner (`Taskfile.yml`), pinnato in `tools/go.mod`: `cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task`. `task` elenca i task                                                                                            |
+| Strumento | Versione       | Note                                                                                                                                                                                                                                                                                                                                                    |
+| --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go        | 1.27.x         | `go.work` alla radice unisce i tre moduli; con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato                                                                                                                                                                                                                                                |
+| Wails CLI | v3.1.x         | `wails3`, solo per `task dev-desktop` (il watcher) e per la build Windows (risorse dell'exe e bootstrapper WebView2); la build e `task gen-wails` non la usano. Installarla con `task wails-cli`: la versione è quella di `apps/desktop/go.mod` e `task dev-desktop` rifiuta una CLI diversa; `task lint-wails-versions` controlla anche il runtime npm |
+| Node      | 24 LTS         | `.nvmrc`                                                                                                                                                                                                                                                                                                                                                |
+| Yarn      | 4.18.1         | via `corepack enable` (versione bloccata da `packageManager`); npm e pnpm sono bloccati dallo script `preinstall`                                                                                                                                                                                                                                       |
+| Docker    | con Compose v2 | stack di sviluppo (PostgreSQL, RustFS, Keycloak) e test con testcontainers                                                                                                                                                                                                                                                                              |
+| Task      | v3.54.x        | task runner (`Taskfile.yml`), pinnato in `tools/go.mod`: `cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task`. `task` elenca i task                                                                                                                                                                                                  |
 
 Tool Go (golangci-lint, buf, govulncheck, oapi-codegen, sqlc, goose, protoc-gen-go/grpc) si installano con:
 
@@ -22,7 +22,7 @@ task tools
 ```sh
 task stack-up        # PostgreSQL :5433, RustFS (S3) :9000/:9001, Keycloak :8080 (admin/admin)
 task dev-cloud       # API su 127.0.0.1:18081, gRPC su :18082, Web UI su :5174 (WEB=0 per non avviarla); variabili in deploy/docker/cloud.dev.env
-task dev-desktop     # app Wails con ricarica del frontend (esbuild, ricarica completa della pagina)
+task dev-desktop     # app Wails v3 con ricarica del frontend (esbuild su 127.0.0.1:5173, ricarica completa della pagina)
 ```
 
 `task dev-web` avvia solo la Web UI su :5174 con proxy di `/api` verso il cloud su :18081. Con `--role=worker` il cloud non ha il listener API: metriche e probe stanno su `METRICS_LISTEN_ADDR` (127.0.0.1:18083 in sviluppo).
@@ -61,16 +61,18 @@ task --list
 
 `task gen` esegue, nell'ordine, i generatori `task gen-*` (l'elenco dei file con le sorgenti è in [CONTRIBUTING.md, «File generati»](../CONTRIBUTING.md#file-generati-mai-a-mano)):
 
-| Generatore            | Da                                             | A                                                                                                               |
-| --------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `gen-features`        | `api/config-profile.schema.json`               | flag e default del Config Profile in Go (`shared/go/features`) e TypeScript (`@clarae/api-client/features`)     |
-| `gen-openapi`         | `api/openapi.yaml`                             | stub del server, client Go (`shared/go/apiclient`), client TypeScript (`packages/api-client`)                   |
-| `gen-proto`           | `api/proto`                                    | `shared/go/notifyv1`                                                                                            |
-| `gen-sqlc`            | `services/cloud/internal/db/queries`           | `services/cloud/internal/<modulo>/<modulo>db`                                                                   |
-| `gen-wails`           | i binding Go di `App.Services()`               | `packages/workbench/wailsjs` (non versionato) e il client dell'host del browser `web/src/workbench/core.gen.ts` |
-| `gen-events`          | `apps/desktop/internal/app/events_registry.go` | `packages/workbench/src/app/events.gen.ts`                                                                      |
-| `gen-capabilities`    | `apps/desktop/internal/app/capabilities.go`    | `packages/workbench/src/platform/capabilities.gen.ts`, `shared/parity/capabilities.gen.json`                    |
-| `gen-parity-features` | `shared/parity/features.yaml`                  | `FeatureId` (`packages/workbench/src/parity/features.gen.ts`) e `shared/go/parity/features_gen.go`              |
+| Generatore            | Da                                                                 | A                                                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gen-features`        | `api/config-profile.schema.json`                                   | flag e default del Config Profile in Go (`shared/go/features`) e TypeScript (`@clarae/api-client/features`)                                                                       |
+| `gen-openapi`         | `api/openapi.yaml`                                                 | stub del server, client Go (`shared/go/apiclient`), client TypeScript (`packages/api-client`)                                                                                     |
+| `gen-proto`           | `api/proto`                                                        | `shared/go/notifyv1`                                                                                                                                                              |
+| `gen-sqlc`            | `services/cloud/internal/db/queries`                               | `services/cloud/internal/<modulo>/<modulo>db`                                                                                                                                     |
+| `gen-wails`           | i binding Go di `App.Services()`                                   | `packages/workbench/wailsjs` (non versionato) e il client dell'host del browser `web/src/workbench/core.gen.ts`                                                                   |
+| `gen-events`          | `apps/desktop/internal/app/events_registry.go`                     | `packages/workbench/src/app/events.gen.ts`                                                                                                                                        |
+| `gen-capabilities`    | `apps/desktop/internal/app/capabilities.go`, `shared/go/pathrules` | `packages/workbench/src/platform/capabilities.gen.ts`, `shared/parity/capabilities.gen.json`, `packages/workbench/src/platform/vaultPaths.gen.ts` (nomi delle cartelle del vault) |
+| `gen-parity-features` | `shared/parity/features.yaml`                                      | `FeatureId` (`packages/workbench/src/parity/features.gen.ts`) e `shared/go/parity/features_gen.go`                                                                                |
+
+**Nome del prodotto e percorsi del vault (ADR-0052).** `task lint-brand` (primo passo di `task lint`, quindi di `task ci`) esegue `node --test 'scripts/rebrand/*.test.mjs'` e `node scripts/rebrand/check.mjs`: il vecchio nome del prodotto può comparire solo dove una riga di `scripts/rebrand/allowlist.tsv` lo ammette (`classe ⇥ glob ⇥ regex ⇥ motivo`; classi `frozen`, `legacy`, `fixture`, `history`, `external`, `tool`; il motivo di una riga `legacy` nomina la release che la toglie). Un'eccezione nuova si aggiunge solo se il codice o un documento deve citare il vecchio nome, con glob e regex stretti: una riga che non copre più nulla fa fallire la guardia, quindi quando un percorso legacy viene rimosso dal codice si toglie anche la riga. Un nome nuovo non serve mai un'eccezione. Un percorso di impostazioni o di database non si costruisce mai a mano: `vaultdir.DB` per `index.db` e `sync.db`, `vault.FS.ReadConfig` e `WriteConfig` per le impostazioni, `packages/workbench/src/platform/vaultPaths.ts` nella UI (dettagli in [desktop-web-sync.md](desktop-web-sync.md#cartella-di-configurazione-del-vault)).
 
 Fuori da `task gen`: le tabelle di [web-workbench-parity.md](web-workbench-parity.md) (`node scripts/parity.mjs`) e l'inventario degli endpoint di `docs/security/pentest-scope.md` (`node scripts/pentest-inventory.mjs`, `--check` per verificarlo).
 
@@ -82,19 +84,19 @@ Gli e2e del desktop girano in un browser normale: con `CLARAE_E2E=1` `mountWorkb
 
 Non c'è un servizio di CI ([ADR-0036](adr/0036-verifiche-locali-senza-ci.md)). **`task ci` va eseguito, verde, prima di ogni merge su `main` e prima di creare un tag di rilascio.** Esegue nell'ordine:
 
-| Passo         | Cosa                                                                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `lint`        | golangci-lint sui tre moduli Go (con le regole depguard dei moduli del cloud), ESLint, Prettier                                         |
-| `typecheck`   | `tsc` in tutti i pacchetti TypeScript                                                                                                   |
-| `vuln`        | govulncheck sui tre moduli Go                                                                                                           |
-| `wailsjs`     | genera i binding Wails se mancano                                                                                                       |
-| `test-go`     | `go test -race` (tag `webkit2_41` dove serve) con `CLARAE_REQUIRE_BINDINGS=1`: il test dispatcher/binding fallisce se i binding mancano |
-| `test-ts`     | Vitest in ogni pacchetto                                                                                                                |
-| `conformance` | fixture Markdown, merge e crittografia in Go e TypeScript                                                                               |
-| `test-wasm`   | test del core Go compilato in WebAssembly, sotto Node con sqlite-wasm                                                                   |
-| `test-core`   | le suite dei pannelli cloud su `CoreCloudPort` sopra il core WebAssembly, in Node, con un cloud finto validato su `api/openapi.yaml`    |
-| `parity`      | test di `scripts/parity/` e `node scripts/parity.mjs --check` (registro delle funzioni)                                                 |
-| `check-gen`   | fallisce se `task gen` cambia l'albero                                                                                                  |
+| Passo         | Cosa                                                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lint`        | `lint-brand` (il vecchio nome del prodotto solo dove `scripts/rebrand/allowlist.tsv` lo ammette), controllo delle versioni di Wails, golangci-lint sui tre moduli Go (con le regole depguard dei moduli del cloud), ESLint, Prettier |
+| `typecheck`   | `tsc` in tutti i pacchetti TypeScript                                                                                                                                                                                                |
+| `vuln`        | govulncheck sui tre moduli Go                                                                                                                                                                                                        |
+| `wailsjs`     | genera i binding Wails se mancano                                                                                                                                                                                                    |
+| `test-go`     | `go test -race` (tag `webkit2_41` dove serve) con `CLARAE_REQUIRE_BINDINGS=1`: il test dispatcher/binding fallisce se i binding mancano                                                                                              |
+| `test-ts`     | Vitest in ogni pacchetto                                                                                                                                                                                                             |
+| `conformance` | fixture Markdown, merge e crittografia in Go e TypeScript                                                                                                                                                                            |
+| `test-wasm`   | test del core Go compilato in WebAssembly, sotto Node con sqlite-wasm                                                                                                                                                                |
+| `test-core`   | le suite dei pannelli cloud su `CoreCloudPort` sopra il core WebAssembly, in Node, con un cloud finto validato su `api/openapi.yaml`                                                                                                 |
+| `parity`      | test di `scripts/parity/` e `node scripts/parity.mjs --check` (registro delle funzioni)                                                                                                                                              |
+| `check-gen`   | fallisce se `task gen` cambia l'albero                                                                                                                                                                                               |
 
 **Suite lente**, fuori da `task ci`: si eseguono quando si tocca l'area relativa e comunque prima di un rilascio.
 

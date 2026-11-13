@@ -90,12 +90,24 @@ Con il realm `memobrain` il servizio **mantiene il namespace `memobrain`** (`mem
 
 `METRICS_NAMESPACE` ammette lettere minuscole, cifre e `_`, senza cifra iniziale; un valore non valido fa fallire l'avvio.
 
+## Client desktop e cartella di configurazione dei vault
+
+Il cloud non aggiorna i client. Le build desktop pubblicate non hanno l'aggiornamento automatico: ogni utente installa la 1.5 a mano (passi per sistema operativo in [Aggiornare dalla 1.x](../user-guide/installazione.md#aggiornare-dalla-1x)), e un client 1.4.0 e uno 1.5 possono usare lo stesso vault cloud nello stesso periodo.
+
+- **Cartella di configurazione dei vault.** La 1.5 la chiama `.clarae/` (prima `.memobrain/`). All'apertura di un vault sposta nella nuova la parte locale (indice, stato di sincronizzazione, snapshot, layout), che non viaggia nel cloud. Le **impostazioni sincronizzate** (editor, scorciatoie, aspetto, template, …) di un vault **collegato** restano nella vecchia cartella, perché un client 1.4.0 dello stesso vault le legge e le scrive lì: spostarle subito gliele farebbe ricreare, con conflitti.
+- **Lo spostamento lo comanda il Config Profile**, con la chiave `features.config_dir_v2` (default `false` nella 1.5.0, vedi [la tabella delle chiavi](profili-quote-audit.md)). Acceso, il client sposta ogni impostazione sincronizzata nella cartella nuova come un normale spostamento di file (stesso id e stessa cronologia), a fine ciclo, solo per file senza modifiche locali, in modo ripristinabile dopo un'interruzione. **Accendetelo solo dopo che ogni dispositivo di ogni vault collegato ha la 1.5 o successiva**: un client 1.4.0 non vedrebbe più le impostazioni. Spegnerlo ferma gli spostamenti, e quelli fatti restano. Nella 1.6 il default diventa acceso.
+- **Un vault non collegato** sposta le sue impostazioni all'apertura; se poi si collega al cloud con la chiave spenta, il client le rimette nella cartella vecchia (un file già presente lì resta com'è).
+- **Cosa non entra nel cloud:** i client non scrivono mai in locale un percorso remoto che non sincronizzano (database, cache, layout del dispositivo): un `sync.db` caricato in un vault privato da un client vecchio viene ignorato.
+- **File dei vault:** i disegni (`.excalidraw`) e le presentazioni (`.marp`) scritti dalla 1.x si leggono sempre. La 1.5 scrive i nomi nuovi solo quando un file viene modificato, e un client 1.4.0 non li riconosce: su un disegno toccato dalla 1.5 non vede più le formule modificabili né l'ordine delle diapositive, su una presentazione mostra le slide escluse. Per questo conviene aggiornare tutti i dispositivi insieme.
+- **Vault privati (E2EE):** le etichette crittografiche non cambiano, quindi i vault esistenti si aprono con le stesse passphrase e chiavi di recupero.
+
 ## Variabili deprecate e rimozioni
 
 | Che cosa                                                                                        | Rimozione |
 | ----------------------------------------------------------------------------------------------- | --------- |
 | Immagine pubblicata anche come `memobrain-cloud`                                                | 1.6       |
 | Advisory lock con il nome `memobrain.*` (presi prima di quelli nuovi)                           | 1.6       |
+| Default `false` di `features.config_dir_v2` (diventa acceso)                                    | 1.6       |
 | Variabili `MEMOBRAIN_HOST`, `_SITE`, `_IMAGE`, `_VERSION`, `_ALLOW_PLACEHOLDER_SECRETS`         | 2.0       |
 | Default della 1.x per il realm `memobrain` (audience, client, bucket, namespace delle metriche) | 2.0       |
 | Ruolo admin `memobrain-admin` nel default di `OIDC_ADMIN_ROLES`                                 | 2.0       |

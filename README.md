@@ -29,6 +29,8 @@ chiedono conferma. Non c'è un installer per Windows arm64 (tolto nella 1.2.3) n
 l'aggiornamento automatico è disattivato in queste build: le nuove versioni si installano a mano. All'avvio si apre o si crea un vault: per la sincronizzazione inserire l'URL del server
 in _Impostazioni → Cloud_. Dettagli nella [guida utente](docs/user-guide/installazione.md).
 
+**Chi arriva da una versione 1.x** (il prodotto aveva un altro nome): la 1.5 è il rename a Clarae notanda e non ha l'aggiornamento automatico. Si installa a mano; al primo avvio l'app prende da sola cartella dati, sessione e chiavi dei vault, e i vault non cambiano. Per sistema operativo, cosa resta da rimuovere a mano (macOS, AppImage) e cosa conviene sapere: [Aggiornare dalla 1.x](docs/user-guide/installazione.md#aggiornare-dalla-1x) e le note della 1.5.0 nel [CHANGELOG](CHANGELOG.md).
+
 > **macOS Security Note**
 >
 > Esegui questo comando nel Terminale per rimuovere il flag di quarantena:
@@ -46,20 +48,20 @@ container multi-arch su GHCR, con la Web UI inclusa. Richiede PostgreSQL 15+, un
   ```
 - **Docker Compose** per installazioni piccole, con proxy TLS: [`deploy/compose`](deploy/compose).
 
-Procedura completa, segreti, configurazione e verifica nella [guida di amministrazione](docs/admin-guide/installazione.md).
+Procedura completa, segreti, configurazione e verifica nella [guida di amministrazione](docs/admin-guide/installazione.md). Per aggiornare un'installazione fatta con la 1.x (nomi, righe da aggiungere al `.env` di Compose, `nameOverride` di Helm, Keycloak, metriche): [migrazione a Clarae notanda](docs/admin-guide/migrazione-clarae.md).
 
 ## Ambiente di sviluppo
 
 ### Prerequisiti
 
-| Strumento | Versione       | Note                                                                                                                                       |
-| --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Go        | 1.27.x         | con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato se manca                                                                     |
-| Wails CLI | v2.17.x        | `task wails-cli` (versione letta da `apps/desktop/go.mod`); `wails doctor` deve risultare "ready" (Xcode CLT, WebView2 o `webkit2gtk-4.1`) |
-| Node      | 24 LTS         | vedi `.nvmrc`                                                                                                                              |
-| Yarn      | 4.18.1         | `corepack enable` (versione bloccata da `packageManager`; npm e pnpm sono bloccati)                                                        |
-| Docker    | con Compose v2 | solo per lo stack del cloud (PostgreSQL, RustFS, Keycloak)                                                                                 |
-| Task      | v3.54.x        | `cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task` (versione pinnata)                                                 |
+| Strumento | Versione       | Note                                                                                                                              |
+| --------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Go        | 1.27.x         | con `GOTOOLCHAIN=auto` (default) il toolchain viene scaricato se manca                                                            |
+| Wails CLI | v3.1.x         | `wails3`, solo per `task dev-desktop` e per la build Windows; `task wails-cli` la installa alla versione di `apps/desktop/go.mod` |
+| Node      | 24 LTS         | vedi `.nvmrc`                                                                                                                     |
+| Yarn      | 4.18.1         | `corepack enable` (versione bloccata da `packageManager`; npm e pnpm sono bloccati)                                               |
+| Docker    | con Compose v2 | solo per lo stack del cloud (PostgreSQL, RustFS, Keycloak)                                                                        |
+| Task      | v3.54.x        | `cd tools && GOWORK=off go install github.com/go-task/task/v3/cmd/task` (versione pinnata)                                        |
 
 ### Preparazione
 
@@ -120,7 +122,7 @@ piano di sviluppo in [docs/roadmap.md](docs/roadmap.md).
 
 | Percorso                       | Contenuto                                                                                                                                                                            |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/desktop`                 | client desktop Wails v2: core Go (`internal/`: vault, indice, link, sync, crittografia, binding), entry del frontend ed e2e                                                          |
+| `apps/desktop`                 | client desktop Wails v3: core Go (`internal/`: vault, indice, link, sync, crittografia, binding), entry del frontend ed e2e                                                          |
 | `apps/desktop/cmd/clarae-core` | lo stesso core Go compilato in WebAssembly per il workbench nel browser                                                                                                              |
 | `services/cloud`               | Cloud Service: binario `clarae-cloud`, moduli in `internal/<modulo>`, migrazioni, test d'integrazione, Web UI incorporata                                                            |
 | `web`                          | Web UI: console utente e amministrazione (`src/pages`) e host del workbench nel browser (`src/workbench`)                                                                            |

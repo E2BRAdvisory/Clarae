@@ -24,6 +24,8 @@ Suite Playwright sul mock dei binding Wails (`task e2e`, oppure `yarn workspace 
 
 Totale dopo le correzioni: **0 violazioni** (di qualunque impatto) in 20 scansioni (10 scenari × 2 temi).
 
+**Palette di Clarae notanda (1.5, ADR-0052).** I colori hanno una sola fonte, i token `--brand-*` di `packages/ui/src/tokens.css`, da cui derivano quelli del workbench (`packages/workbench/src/styles/tokens.css`: `--accent` per testo e riempimenti, `--accent-bright` per ciò che non è testo, `--accent-text`, `--text-muted`, `--text-faint`). Il Teal del marchio da solo non regge il testo (3,5:1 su bianco), per questo `--accent` ne usa una tonalità più scura. `packages/workbench/src/styles/tokens.contrast.test.ts` impone un contrasto di almeno 4,5:1 tra testo e superficie nei due temi; la tabella sopra è la misura axe fatta prima del cambio di palette e non è stata rifatta in questo passo.
+
 ## Interventi di accessibilità dell'app (non solo test)
 
 - **Albero dei file:** `role=tree`/`treeitem` con `aria-level`, `aria-expanded`, `aria-selected`; roving tabindex; frecce, `Home`/`End`, `→`/`←`, `Invio`/`Spazio`, `F2` (rinomina), `Canc` (cestino), tasto Menu / `Maiusc+F10` (menu contestuale).
