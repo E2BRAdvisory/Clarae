@@ -109,5 +109,6 @@ func (a *App) applyConfig() {
 	a.auth.SetManagedRedirectMode(auth.ParseRedirectMode(s))
 	a.sync.SetEnvelopeV2(envelopeV2Enabled(cur.Config))
 	a.sync.SetPathV2(pathV2Enabled(cur.Config))
+	a.sync.SetConfigDirV2(configDirV2Enabled(cur.Config))
 	a.applyLockTimeout()
 }

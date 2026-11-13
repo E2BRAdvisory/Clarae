@@ -99,6 +99,13 @@ func pathV2Enabled(cfg map[string]any) bool {
 	return flags.Enabled(cfg, flags.PathV2)
 }
 
+// configDirV2Enabled reads features.config_dir_v2, which lets the sync engine move the synchronized
+// settings of a linked vault from the former configuration folder to the current one (ADR-0052).
+// Off by default in 2.0.0: clients of 1.x sharing the vault still use the former folder.
+func configDirV2Enabled(cfg map[string]any) bool {
+	return flags.Enabled(cfg, flags.ConfigDirV2)
+}
+
 // envRedirectMode is the redirect mode forced from the environment
 // (CLARAE_AUTH_REDIRECT, used by the manual checklist); "" lets the
 // Config Profile decide.

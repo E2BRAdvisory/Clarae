@@ -70,7 +70,7 @@ func (t *TemplatesAPI) ReadSettings(vaultID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	c, err := ov.FS.ReadFile(pathrules.ConfigDir + "/" + dailySettingsFile)
+	c, err := ov.FS.ReadConfig(dailySettingsFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
@@ -89,7 +89,7 @@ func (t *TemplatesAPI) WriteSettings(vaultID, content string) error {
 	if !json.Valid([]byte(content)) {
 		return errors.New("invalid: content is not valid JSON")
 	}
-	_, err = ov.FS.WriteFile(pathrules.ConfigDir+"/"+dailySettingsFile, []byte(content), "", false)
+	_, err = ov.FS.WriteConfig(dailySettingsFile, []byte(content), "", false)
 	return bindingError(err)
 }
 

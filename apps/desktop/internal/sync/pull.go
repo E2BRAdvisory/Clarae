@@ -12,6 +12,7 @@ import (
 
 	"clarae/apps/desktop/internal/sync/transport"
 	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 	"clarae/shared/syncproto"
 	"clarae/shared/vaultcrypto"
 )
@@ -380,6 +381,9 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 		}
 		return false, e.quarantine(ctx, c.FileID, c.Rev, row, has, err)
 	}
+	if e.skipExcluded(c.FileID, path, c.Rev) {
+		return false, nil // counted as applied: the cursor moves on, nothing is written
+	}
 	// A readable revision supersedes a quarantined older one. Lifted before it
 	// is applied: should that fail, the cursor stays and the change comes again.
 	if row, err = e.liftQuarantine(ctx, row, has, c.FileID, c.Rev); err != nil {
@@ -412,6 +416,26 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 		e.addCandidate(c)
 		return false, nil
 	}
+}
+
+// skipExcluded reports whether the path the server gives a file is one that is never synchronized
+// (pathrules.IsExcluded: the databases, the caches and the layout of a device, staging files, OS
+// junk). Such a path is never written to disk: the cloud rejects it when it can read the path, but
+// in a private vault it cannot, and an older client (or any client of the account) can have put
+// there what this device keeps for itself, a sync.db in the first place. The change is taken as
+// applied, so the cursor moves past it; it is logged once per run and file.
+func (e *Engine) skipExcluded(fileID, path string, rev int) bool {
+	if !pathrules.IsExcluded(path, false) {
+		return false
+	}
+	if !e.excludedLogged[fileID] {
+		if e.excludedLogged == nil {
+			e.excludedLogged = map[string]bool{}
+		}
+		e.excludedLogged[fileID] = true
+		e.log.Warn().Str("file_id", fileID).Str("path", path).Int("rev", rev).Msg("sync: the server has a file at a path that is never synchronized: it is not written here")
+	}
+	return true
 }
 
 // quarantinedError is File.LastError of a file whose latest server entry is
@@ -527,6 +551,12 @@ func (e *Engine) retryQuarantine(ctx context.Context) (bool, error) {
 				return did, err
 			}
 			continue
+		}
+		if e.skipExcluded(it.FileID, p, it.Rev) {
+			if err := e.liftApplied(ctx, q.FileID, max(q.Rev, it.Rev)); err != nil {
+				return did, err
+			}
+			continue // not a path this device writes: nothing to retry
 		}
 		// Lifted only once applied: a failure leaves it for the next try.
 		if err := e.reconcileEntry(ctx, bootstrapAuthoritative, remoteFile{it, p}, byID, byPath); err != nil {
@@ -833,6 +863,9 @@ func (e *Engine) bootstrap(ctx context.Context, mode bootstrapMode) error {
 			}
 			unreadable[it.FileID] = true
 			continue
+		}
+		if e.skipExcluded(it.FileID, p, it.Rev) {
+			continue // listed, so never a deletion, but not written here
 		}
 		remote = append(remote, remoteFile{it, p})
 	}

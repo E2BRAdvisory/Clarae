@@ -49,6 +49,13 @@ export const Feature = {
   // before the cloud or set false until then. Turning it off stops the migration only: a vault
   // already seen in enc2 keeps enc2, and a fully migrated vault refuses enc1.
   PathV2: 'path_v2',
+  // Move the synchronized settings of a linked vault (editor, hotkeys, appearance, templates, ...)
+  // from the former configuration folder to the current one (ADR-0052), as an ordinary move that
+  // keeps the file ids and the history. Off by default in 2.0.0: clients of 1.x still read and write
+  // the former folder and would recreate every setting, so turn it on only after every device of the
+  // vault is updated. Turning it off stops the move only: a setting already moved stays where it is,
+  // and the client reads both folders.
+  ConfigDirV2: 'config_dir_v2',
 } as const;
 
 /** A flag of the schema. */
@@ -72,6 +79,7 @@ export const FEATURES: readonly Feature[] = [
   Feature.DrawingActions,
   Feature.EnvelopeV2,
   Feature.PathV2,
+  Feature.ConfigDirV2,
 ];
 
 /** The value of each flag when no profile sets it. */
@@ -92,4 +100,5 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.DrawingActions]: true,
   [Feature.EnvelopeV2]: true,
   [Feature.PathV2]: true,
+  [Feature.ConfigDirV2]: false,
 };

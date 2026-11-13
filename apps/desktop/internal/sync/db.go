@@ -156,6 +156,26 @@ func (d *DB) Files(ctx context.Context, states ...State) ([]File, error) {
 	return out, rows.Err()
 }
 
+// FilesUnder returns the rows whose path lies inside the folder dir (not dir itself), ordered by
+// path. It reads a range of the primary key, so it costs what it returns, not the size of the vault.
+func (d *DB) FilesUnder(ctx context.Context, dir string) ([]File, error) {
+	// "/" is followed by "0" in UTF-8: [dir/, dir0) holds exactly the paths below dir.
+	rows, err := d.db.QueryContext(ctx, `SELECT `+fileCols+` FROM sync_files WHERE path >= ? AND path < ? ORDER BY path`, dir+"/", dir+"0")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []File
+	for rows.Next() {
+		f, err := scanFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
 // PutFile inserts or replaces a row (keyed by file_id so a path change is an update).
 func (d *DB) PutFile(ctx context.Context, f File) error {
 	_, err := d.db.ExecContext(ctx, `

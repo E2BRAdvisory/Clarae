@@ -52,6 +52,11 @@ type FS struct {
 	// a stripe by its case-folded NFC key, so names that collide on a
 	// case-insensitive file system (A.md, a.md) share a stripe.
 	stripes [lockStripes]sync.Mutex
+
+	// cfgMu keeps the reads and writes of the settings files apart from their move between the
+	// configuration folders (config.go). cfgPolicy tells where a new settings file goes.
+	cfgMu     sync.RWMutex
+	cfgPolicy atomic.Pointer[func() bool]
 }
 
 // lockStripes is the number of per-path mutexes; unrelated paths sharing a
@@ -217,7 +222,7 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 	if err != nil {
 		return Content{}, err
 	}
-	c, err := f.writeFile(abs, normalized, data, expectedHash, create)
+	c, err := f.writeFile(abs, normalized, data, expectedHash, create, false)
 	if err != nil {
 		return Content{}, err
 	}
@@ -225,7 +230,10 @@ func (f *FS) WriteFile(rel string, data []byte, expectedHash string, create bool
 	return c, nil
 }
 
-func (f *FS) writeFile(abs, normalized string, data []byte, expectedHash string, create bool) (Content, error) {
+// writeFile is WriteFile on a resolved path. mustExist makes a missing file an ErrHashMismatch
+// like a missing file with an expectedHash, for an overwrite that must not create the file
+// (WriteConfig: it was found at this path and may have been moved since).
+func (f *FS) writeFile(abs, normalized string, data []byte, expectedHash string, create, mustExist bool) (Content, error) {
 	unlock := f.lockPath(normalized)
 	defer unlock()
 	perm := fs.FileMode(0o644)
@@ -248,7 +256,7 @@ func (f *FS) writeFile(abs, normalized string, data []byte, expectedHash string,
 		perm = st.Mode().Perm() // keep the permissions the user gave the file
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return Content{}, err
-	} else if expectedHash != "" && !create {
+	} else if (expectedHash != "" || mustExist) && !create {
 		// Caller expected an existing file: it was deleted meanwhile.
 		return Content{}, ErrHashMismatch
 	}

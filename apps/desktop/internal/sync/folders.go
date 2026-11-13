@@ -509,8 +509,8 @@ func (e *Engine) applyFolderMove(ctx context.Context, items []transport.Change) 
 			break
 		}
 		path, err := e.clearPath(ctx, c.FileID, c.Path)
-		if err != nil {
-			break // applied on its own, which handles the failure
+		if err != nil || pathrules.IsExcluded(path, false) {
+			break // applied on its own, which handles the failure (and the paths never written)
 		}
 		cs := renameCandidates(row.Path, path)
 		if len(run) > 0 {

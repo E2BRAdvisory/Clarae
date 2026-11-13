@@ -390,13 +390,15 @@ func (a *App) doOpenVault(abs, id string) (VaultInfo, error) {
 	// is not linked to the cloud has no other client to stay compatible with: its settings move too,
 	// before anything else can touch them (the vault is not registered yet). A linked one keeps them
 	// where they are until the sync engine moves them (features.config_dir_v2).
+	linkedAtOpen := true // unknown: the safe side, new settings go where 1.x clients read them
 	if linked, err := syncpkg.IsLinked(a.ctx, fsys.Root()); err != nil {
 		a.logger.Warn().Err(err).Str("vault", abs).Msg("cannot tell whether the vault is linked; its settings stay where they are")
-	} else if !linked {
+	} else if linkedAtOpen = linked; !linked {
 		if err := vaultdir.AdoptSettings(fsys.Root()); err != nil {
 			a.logger.Warn().Err(err).Str("vault", abs).Msg("cannot move the settings of the vault to the current folder")
 		}
 	}
+	fsys.SetConfigPolicy(func() bool { return a.sync.ConfigInLegacy(id, linkedAtOpen) })
 	indexPath, err := vaultdir.DB(fsys.Root(), "index.db")
 	if err != nil {
 		return VaultInfo{}, err

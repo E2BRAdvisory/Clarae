@@ -103,6 +103,9 @@ type Config struct {
 	// least time between two batches (0: the defaults).
 	PathMigrationBatch   int
 	PathMigrationSpacing time.Duration
+	// ConfigDirV2 reports whether the synchronized settings of the vault are to be moved from the
+	// former configuration folder to the current one (features.config_dir_v2, nil: no).
+	ConfigDirV2 func() bool
 	// Transfers is how many blobs a cycle downloads or uploads at once
 	// (0: DefaultTransfers, 1: one at a time). The changes are applied in
 	// their order whatever it is (transfers.go).
@@ -144,6 +147,11 @@ type Engine struct {
 	stop error
 	// active is true when the last cycle found something to do.
 	active bool
+	// configNext is the earliest time of the next pass of the move of the settings (configmigrate.go,
+	// under e.run); excludedLogged remembers the files whose remote path is local-only, logged once
+	// per run (skipExcluded, under e.run).
+	configNext     time.Time
+	excludedLogged map[string]bool
 	// tmpCleaned: stale atomic-write staging files were removed (once per run, under e.run).
 	tmpCleaned bool
 	// quarantineChecked: the quarantined entries were read again in this run
@@ -363,6 +371,7 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 			// Nothing else to do: one throttled batch of the path token
 			// migration (it never fails the cycle).
 			e.migratePaths(ctx)
+			e.migrateConfigDir(ctx)
 			return resolveErr
 		}
 		e.mu.Lock()

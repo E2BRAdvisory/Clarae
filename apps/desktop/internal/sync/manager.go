@@ -145,6 +145,28 @@ func (m *Manager) SetEnvelopeV2(on bool) { m.crypto.SetEnvelopeV2(on) }
 // the flag.
 func (m *Manager) SetPathV2(on bool) { m.crypto.SetPathV2(on) }
 
+// SetConfigDirV2 switches the move of the synchronized settings of a linked vault from the former
+// configuration folder to the current one (ADR-0052, features.config_dir_v2, off by default in
+// 2.0.0). The engines run the move at the end of an idle cycle; with the flag off a new settings
+// file of a linked vault is still created in the former folder, where 1.x clients read it.
+func (m *Manager) SetConfigDirV2(on bool) { m.configDirV2.Store(on) }
+
+// ConfigInLegacy tells where a settings file that exists in neither configuration folder of the
+// vault is created: true for the former folder, while the vault is linked and the move is off
+// (vault.FS.SetConfigPolicy). linkedAtOpen is the answer for a vault the manager does not know
+// yet, which is still being opened.
+func (m *Manager) ConfigInLegacy(localID string, linkedAtOpen bool) bool {
+	if m.configDirV2.Load() {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if mv, ok := m.vaults[localID]; ok {
+		return mv.cloudID != ""
+	}
+	return linkedAtOpen
+}
+
 // idleLockInterval is how often idle private vaults are looked for.
 const idleLockInterval = 30 * time.Second
 
@@ -194,6 +216,8 @@ type Manager struct {
 	managedLocked atomic.Bool
 	// maxFile is the upload size limit from the distributed configuration (0 = default).
 	maxFile atomic.Int64
+	// configDirV2 is features.config_dir_v2 (SetConfigDirV2).
+	configDirV2 atomic.Bool
 	// remoteFor builds the server side of an engine (tests replace it; nil = the session's client).
 	remoteFor func(ref string) Remote
 	// reactivating serializes the rebuild of the engines after the session's
@@ -436,7 +460,7 @@ func (m *Manager) activate(ctx context.Context, mv *managed) error {
 	}
 	cfg := Config{
 		LocalID: mv.localID, FS: mv.fs, DB: mv.db, Remote: m.remote(transport.Ref(cloud, mount.Scope)),
-		ReadOnly: isMount && mount.Permission == PermViewer,
+		ReadOnly: isMount && mount.Permission == PermViewer, ConfigDirV2: m.configDirV2.Load,
 		DeviceID: deviceID, DeviceName: name, UserID: userID, Logger: m.log.With().Str("vault", mv.localID).Logger(),
 		OnStatus:     func(s Status) { EventStatus.Send(m.emit, m.view(s)) },
 		OnConflict:   func(c Conflict) { EventConflict.Send(m.emit, ConflictEvent{VaultID: mv.localID, Conflict: c}) },

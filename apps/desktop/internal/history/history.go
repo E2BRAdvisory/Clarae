@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"sync"
@@ -94,7 +93,8 @@ func (s Settings) Normalize() Settings {
 	}
 }
 
-const settingsFile = pathrules.ConfigDir + "/history.json"
+// settingsFile is a settings file of the vault: vault.FS.ReadConfig and WriteConfig know where it is.
+const settingsFile = "history.json"
 
 // Errors.
 var (
@@ -142,16 +142,17 @@ func New(o Options) *History {
 	if h.readOnly == nil {
 		h.readOnly = func() bool { return false }
 	}
-	h.settings = LoadSettings(h.root)
+	h.settings = LoadSettings(h.fs)
 	return h
 }
 
-// LoadSettings reads .clarae/history.json (defaults when absent or invalid).
-func LoadSettings(root string) Settings {
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(settingsFile)))
+// LoadSettings reads history.json from the configuration folder of the vault (defaults when absent
+// or invalid).
+func LoadSettings(f *vault.FS) Settings {
+	c, err := f.ReadConfig(settingsFile)
 	var s Settings
 	if err == nil {
-		_ = json.Unmarshal(data, &s)
+		_ = json.Unmarshal(c.Data, &s)
 	}
 	return s.Normalize()
 }
@@ -170,7 +171,7 @@ func (h *History) SetSettings(s Settings) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	if err := writeAtomic(filepath.Join(h.root, filepath.FromSlash(settingsFile)), append(data, '\n')); err != nil {
+	if _, err := h.fs.WriteConfig(settingsFile, append(data, '\n'), "", false); err != nil {
 		return Settings{}, err
 	}
 	h.mu.Lock()

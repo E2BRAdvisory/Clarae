@@ -16,11 +16,12 @@ import (
 
 	"clarae/apps/desktop/internal/properties"
 	"clarae/apps/desktop/internal/vault"
-	"clarae/shared/pathrules"
 )
 
-// vaultConfigFiles is the allow-list of settings files under .clarae/ that the
-// frontend may read and write (§3.4.6). Anything else is refused.
+// vaultConfigFiles is the allow-list of settings files in the configuration folder that the
+// frontend may read and write (§3.4.6). Anything else is refused. The files are found and written
+// through vault.FS.ReadConfig and WriteConfig: where one lives depends on the folder name of the
+// vault (ADR-0052).
 var vaultConfigFiles = map[string]bool{
 	"editor.json": true, "appearance.json": true, "hotkeys.json": true, "types.json": true,
 	"workspace.json": true, "workspaces.json": true, "bookmarks.json": true,
@@ -39,7 +40,7 @@ func (v *VaultAPI) ReadConfig(vaultID, name string) (string, error) {
 	if !vaultConfigFiles[name] {
 		return "", fmt.Errorf("invalid-path: %q is not a vault setting", name)
 	}
-	c, err := ov.FS.ReadFile(pathrules.ConfigDir + "/" + name)
+	c, err := ov.FS.ReadConfig(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
@@ -67,7 +68,7 @@ func (v *VaultAPI) WriteConfig(vaultID, name, content string) error {
 			return err
 		}
 	}
-	_, err = ov.FS.WriteFile(pathrules.ConfigDir+"/"+name, []byte(content), "", false)
+	_, err = ov.FS.WriteConfig(name, []byte(content), "", false)
 	return bindingError(err)
 }
 
@@ -203,7 +204,7 @@ type PropertyKey struct {
 }
 
 func (p *PropertiesAPI) schema(ov *openVault) properties.Schema {
-	c, err := ov.FS.ReadFile(pathrules.ConfigDir + "/types.json")
+	c, err := ov.FS.ReadConfig("types.json")
 	if err != nil {
 		return properties.Schema{}
 	}
@@ -281,13 +282,13 @@ func (p *PropertiesAPI) SetType(vaultID, key, kind string) error {
 	// types.json is a synced setting: the write is tied to the content it was computed from, and
 	// when another write (a concurrent SetType, a sync pull) got in between, the single key is
 	// applied again to the new content instead of overwriting it.
-	const typesFile = pathrules.ConfigDir + "/types.json"
+	const typesFile = "types.json"
 	p.typesMu.Lock()
 	defer p.typesMu.Unlock()
 	for attempt := 0; ; attempt++ {
 		var expected string
 		schema := properties.Schema{}
-		cur, err := ov.FS.ReadFile(typesFile)
+		cur, err := ov.FS.ReadConfig(typesFile)
 		switch {
 		case err == nil:
 			expected = cur.Hash
@@ -310,7 +311,7 @@ func (p *PropertiesAPI) SetType(vaultID, key, kind string) error {
 		if err != nil {
 			return err
 		}
-		_, err = ov.FS.WriteFile(typesFile, data, expected, expected == "")
+		_, err = ov.FS.WriteConfig(typesFile, data, expected, expected == "")
 		if (errors.Is(err, vault.ErrHashMismatch) || errors.Is(err, vault.ErrExists)) && attempt < setTypeAttempts-1 {
 			continue
 		}
