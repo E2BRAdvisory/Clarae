@@ -242,7 +242,7 @@ func TestHashMismatchAndOversizeArtifact(t *testing.T) {
 	if _, err := svc.Check(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	s.payload = []byte(strings.Repeat("evil-binary!!!!!", 100)) // same size, other content
+	s.payload = []byte(strings.Repeat("evil-binary!!", 100)) // same size, other content
 	if _, err := svc.Download(context.Background()); !errors.Is(err, ErrHashMismatch) {
 		t.Fatalf("hash mismatch: %v", err)
 	}

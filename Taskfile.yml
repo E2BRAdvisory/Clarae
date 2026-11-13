@@ -138,6 +138,7 @@ tasks:
   lint:
     desc: Lint everything
     cmds:
+      - task: lint-brand
       - task: lint-wails-versions
       - task: lint-go
       - task: lint-ts
