@@ -10,5 +10,6 @@ Categories=Office;Utility;TextEditor;
 Keywords=notes;markdown;knowledge;vault;
 StartupWMClass=clarae
 # clarae:// links (open a note, OIDC login callback): the second instance receives the URL in argv
-# and forwards it to the running one (ADR-0001).
-MimeType=x-scheme-handler/clarae;
+# and forwards it to the running one (ADR-0001). memobrain:// is the scheme of 1.x: the links already
+# written in notes and the redirect URIs registered in existing realms keep working (dropped in 3.0).
+MimeType=x-scheme-handler/clarae;x-scheme-handler/memobrain;

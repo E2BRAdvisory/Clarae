@@ -70,6 +70,10 @@ func ParseRedirectMode(v string) RedirectMode {
 // SchemeRedirectURI is the custom-scheme callback registered in Keycloak.
 const SchemeRedirectURI = "clarae://auth/callback"
 
+// LegacySchemeRedirectURI is the callback that the realms made for 1.x have registered: an
+// identity provider that rejects SchemeRedirectURI is tried with it (dropped in 3.0).
+const LegacySchemeRedirectURI = "memobrain://auth/callback"
+
 // Profile is the signed-in user as seen by the client.
 type Profile struct {
 	UserID      string `json:"userId"`

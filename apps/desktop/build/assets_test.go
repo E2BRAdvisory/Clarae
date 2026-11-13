@@ -133,6 +133,8 @@ func TestRenderedIdentifiers(t *testing.T) {
 		// The binary is built for macOS 13 (Go 1.27 itself needs it): Finder must say so instead of letting dyld fail.
 		`<key>LSMinimumSystemVersion</key>\s*<string>13\.0\.0</string>`,
 		`<key>CFBundleURLSchemes</key>\s*<array>\s*<string>clarae</string>`,
+		// The scheme of 1.x is registered too: links in notes and the redirect URI of existing realms.
+		`<key>CFBundleURLSchemes</key>\s*<array>\s*<string>memobrain</string>`,
 	} {
 		if !regexp.MustCompile(want).MatchString(plist) {
 			t.Errorf("Info.plist: %s not found", want)
@@ -152,6 +154,8 @@ func TestRenderedIdentifiers(t *testing.T) {
 		`!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINST_KEY_NAME}"`,
 		`!insertmacro CUSTOM_PROTOCOL_ASSOCIATE "clarae"`,
 		`!insertmacro CUSTOM_PROTOCOL_UNASSOCIATE "clarae"`,
+		`!insertmacro CUSTOM_PROTOCOL_ASSOCIATE "memobrain"`,
+		`!insertmacro CUSTOM_PROTOCOL_UNASSOCIATE "memobrain"`,
 		`WriteRegStr SHELL_CONTEXT "Software\Classes\${PROTOCOL}\shell\open\command" "" "${COMMAND}"`,
 	} {
 		if !strings.Contains(nsh, want) {
@@ -239,5 +243,38 @@ func TestRenderRefusesWithoutVersionAndKeepsTheTemplate(t *testing.T) {
 	}
 	if string(after) != content {
 		t.Errorf("the template was changed by a failed render: %q", after)
+	}
+}
+
+// TestLegacyURLSchemeIsRegistered: the links that 1.x wrote in notes (memobrain://open?...) and the
+// redirect URI that the realms made for 1.x have registered (memobrain://auth/callback) reach the new
+// application, on every platform: both schemes are in the plist of the release and of the dev build, in the
+// registry of the installer, and in the MIME types of the .desktop file. The Go side accepts both
+// (platform.LegacySchemes). Dropped in 3.0.
+func TestLegacyURLSchemeIsRegistered(t *testing.T) {
+	for _, tpl := range []string{"darwin/Info.plist", "darwin/Info.dev.plist"} {
+		plist, err := render(t, tpl, "-version", version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, scheme := range []string{"clarae", "memobrain"} {
+			if !regexp.MustCompile(`<key>CFBundleURLSchemes</key>\s*<array>\s*<string>` + scheme + `</string>`).MatchString(plist) {
+				t.Errorf("%s: scheme %s is not registered", tpl, scheme)
+			}
+		}
+	}
+
+	raw, err := os.ReadFile(filepath.Join(repoRoot(), "apps", "desktop", "build", "linux", "clarae.desktop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mime string
+	for _, line := range strings.Split(string(raw), "\n") {
+		if v, ok := strings.CutPrefix(line, "MimeType="); ok {
+			mime = v
+		}
+	}
+	if mime != "x-scheme-handler/clarae;x-scheme-handler/memobrain;" {
+		t.Errorf("clarae.desktop: MimeType = %q", mime)
 	}
 }

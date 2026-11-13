@@ -12,6 +12,11 @@
         "scheme": "clarae",
         "description": "Clarae notanda URL scheme (open notes, OIDC callback)",
         "role": "Editor"
+      },
+      {
+        "scheme": "memobrain",
+        "description": "Clarae notanda URL scheme of 1.x (links in notes, OIDC callback of existing realms)",
+        "role": "Editor"
       }
     ]
   },

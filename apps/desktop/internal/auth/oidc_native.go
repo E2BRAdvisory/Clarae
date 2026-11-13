@@ -81,7 +81,7 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 		}
 	}
 	if att.redirectURI == "" {
-		att.redirectURI = SchemeRedirectURI
+		att.redirectURI = s.schemeRedirectURI(ctx, cfg)
 	}
 	cfg.RedirectURL = att.redirectURI
 
@@ -140,6 +140,25 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 		return fmt.Errorf("store refresh token: %w", err)
 	}
 	return s.completeSession(ctx)
+}
+
+// schemeRedirectURI picks the custom-scheme redirect URI: SchemeRedirectURI, or, when the identity
+// provider rejects it and accepts the one of 1.x, LegacySchemeRedirectURI. A realm made for 1.x
+// has only the old one registered, and the administrator has nothing to change for the new
+// client to sign in. When both are rejected, or the provider cannot be asked, the current one
+// stays: the failure is then the realm's, and the page of the provider says so.
+func (s *Service) schemeRedirectURI(ctx context.Context, cfg *oauth2.Config) string {
+	probe := *cfg
+	probe.RedirectURL = SchemeRedirectURI
+	if !s.redirectRejected(ctx, &probe) {
+		return SchemeRedirectURI
+	}
+	probe.RedirectURL = LegacySchemeRedirectURI
+	if s.redirectRejected(ctx, &probe) {
+		return SchemeRedirectURI
+	}
+	s.logger.Warn().Msg("the identity provider does not know the redirect URI of this version, using the one of the previous version")
+	return LegacySchemeRedirectURI
 }
 
 // redirectRejected asks the authorization endpoint, without a browser,

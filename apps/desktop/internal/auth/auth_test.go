@@ -32,6 +32,10 @@ type fakeIdP struct {
 	// rejectLoopback answers loopback redirect URIs like Keycloak answers an
 	// unregistered one: a 400 error page, no redirect.
 	rejectLoopback atomic.Bool
+	// rejectURI is the set of redirect URIs that the realm has not registered (same answer).
+	rejectURI sync.Map
+	// authRequests counts the requests to the authorization endpoint (the probes included).
+	authRequests atomic.Int32
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -49,11 +53,13 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"keys":[]}`)) })
 	mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		f.authRequests.Add(1)
 		if q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {
 			http.Error(w, "pkce required", http.StatusBadRequest)
 			return
 		}
-		if f.rejectLoopback.Load() && strings.HasPrefix(q.Get("redirect_uri"), "http://127.0.0.1") {
+		_, unregistered := f.rejectURI.Load(q.Get("redirect_uri"))
+		if unregistered || f.rejectLoopback.Load() && strings.HasPrefix(q.Get("redirect_uri"), "http://127.0.0.1") {
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`<html><body><p id="kc-error-message">Invalid parameter: redirect_uri</p></body></html>`))
