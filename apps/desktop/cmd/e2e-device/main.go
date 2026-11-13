@@ -50,6 +50,7 @@ import (
 	"clarae/apps/desktop/internal/auth"
 	"clarae/apps/desktop/internal/crypto"
 	"clarae/apps/desktop/internal/rpc"
+	"clarae/shared/pathrules"
 )
 
 func main() {
@@ -309,7 +310,7 @@ func (h *host) routes(d *rpc.Dispatcher, quit chan struct{}) http.Handler {
 				return nil
 			}
 			if de.IsDir() {
-				if p != dir && (de.Name() == ".clarae" || de.Name() == ".trash") {
+				if p != dir && (pathrules.IsConfigPath(de.Name()) || de.Name() == pathrules.TrashDir) {
 					return filepath.SkipDir
 				}
 				return nil

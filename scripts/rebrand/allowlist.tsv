@@ -54,6 +54,9 @@ legacy	web/src/workbench/legacyNames.ts	memobrain	names the browser workbench us
 legacy	web/src/workbench/*.test.ts	memobrain	tests of the migration of a browser profile created by 1.x
 legacy	web/e2e/migration.spec.ts	memobrain	end-to-end test of the migration of a browser profile created by 1.x
 legacy	packages/workbench/src/drawing/ToolsPanel.tsx	memobrain\.drawing\.tools\.recent	localStorage key of the recent drawing tools of 1.x, read while the new key has no value: dropped in 3.0
+legacy	shared/go/pathrules/pathrules.go	"\.memobrain(-tmp-)?"	former names of the configuration folder and of the staging prefix of 1.x: dropped in 3.0
+legacy	shared/go/pathrules/pathrules_test.go	"\.memobrain(-tmp-)?"	pins the former names of the configuration folder and of the staging prefix of 1.x
+legacy	packages/workbench/src/platform/vaultPaths.gen.ts	'\.memobrain'	LEGACY_CONFIG_DIRS, generated from pathrules.LegacyConfigDirs: dropped in 3.0
 
 # Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
 legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 3.0

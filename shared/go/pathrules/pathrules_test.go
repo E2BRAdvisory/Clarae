@@ -166,6 +166,13 @@ func TestHasPrefixRebase(t *testing.T) {
 	}
 }
 
+// The former name of the configuration folder and the former staging prefix, spelled out: the test
+// pins them, and nothing else may change them without a migration (ADR-0052).
+const (
+	legacyDir = ".memobrain"
+	legacyTmp = ".memobrain-tmp-"
+)
+
 func TestIsExcluded(t *testing.T) {
 	tests := []struct {
 		path  string
@@ -196,10 +203,91 @@ func TestIsExcluded(t *testing.T) {
 		{".clarae/snapshots/2026/a.md", false, true},
 		{".clarae/cache", false, true},
 		{"Notes/.clarae/cache/x", false, false}, // only the vault-root .clarae is special
+		{".clarae/.clarae-tmp-123", false, true},
+		{"Notes/.clarae-tmp-123", false, true},
+		{"Notes/" + legacyTmp + "123", false, true}, // a leftover of a 1.4.0 crash
+		{"Notes/.clarae-tmpfile.md", false, false},
+	}
+	// The rules of the configuration folder hold under its former names: the synchronized settings
+	// are kept, everything local is excluded.
+	for _, legacy := range []string{legacyDir} {
+		for rel, want := range map[string]bool{
+			"editor.json":               false,
+			"templates/daily.md":        false,
+			"workspace.json":            true,
+			"workspaces.json":           true,
+			"index.db":                  true,
+			"sync.db":                   true,
+			"sync.db-wal":               true,
+			"sync.db-shm":               true,
+			"app.db-journal":            true,
+			"cache/drawings/abc.svg":    true,
+			"cache":                     true,
+			"snapshots/2026/a.md":       true,
+			"snapshots":                 true,
+			"cache.json":                false,
+			"nested/sync.db":            false,
+			"nested/workspace.json":     false,
+			"templates/.DS_Store":       true,
+			"templates/.legacy-tmp-x":   false,
+			legacyTmp + "x":             true,
+			"nested/" + legacyTmp + "x": true,
+		} {
+			p := legacy + "/" + rel
+			tests = append(tests, struct {
+				path  string
+				trash bool
+				want  bool
+			}{p, false, want})
+		}
 	}
 	for _, tt := range tests {
 		if got := IsExcluded(tt.path, tt.trash); got != tt.want {
 			t.Errorf("IsExcluded(%q, trash=%v) = %v want %v", tt.path, tt.trash, got, tt.want)
+		}
+	}
+}
+
+func TestConfigNames(t *testing.T) {
+	if ConfigDir != ".clarae" || TmpPrefix != ".clarae-tmp-" {
+		t.Fatalf("names changed: %q %q", ConfigDir, TmpPrefix)
+	}
+	if len(LegacyConfigDirs) != 1 || LegacyConfigDirs[0] != legacyDir || LegacyConfigDir != legacyDir || LegacyTmpPrefix != legacyTmp {
+		t.Fatalf("legacy names changed: %v %q", LegacyConfigDirs, LegacyTmpPrefix)
+	}
+	tests := []struct {
+		path   string
+		config bool
+		name   string
+		rel    bool
+	}{
+		{".clarae", true, "", false},
+		{".clarae/editor.json", true, "editor.json", true},
+		{".clarae/templates/daily.md", true, "templates/daily.md", true},
+		{legacyDir, true, "", false},
+		{legacyDir + "/editor.json", true, "editor.json", true},
+		{legacyDir + "/templates/daily.md", true, "templates/daily.md", true},
+		{".clarae-tmp-1", false, "", false},
+		{".clarae2/editor.json", false, "", false},
+		{legacyDir + "x/editor.json", false, "", false},
+		{"Notes/.clarae/editor.json", false, "", false},
+		{"Notes/" + legacyDir + "/editor.json", false, "", false},
+		{".trash/a.md", false, "", false},
+	}
+	for _, tt := range tests {
+		if got := IsConfigPath(tt.path); got != tt.config {
+			t.Errorf("IsConfigPath(%q) = %v want %v", tt.path, got, tt.config)
+		}
+		if name, ok := ConfigRel(tt.path); name != tt.name || ok != tt.rel {
+			t.Errorf("ConfigRel(%q) = %q,%v want %q,%v", tt.path, name, ok, tt.name, tt.rel)
+		}
+	}
+	for base, want := range map[string]bool{
+		".clarae-tmp-1": true, ".clarae-tmp-": true, legacyTmp + "abc": true,
+		".clarae-tmp": false, "clarae-tmp-1": false, "note.md": false,
+	} {
+		if got := IsTmpName(base); got != want {
+			t.Errorf("IsTmpName(%q) = %v want %v", base, got, want)
 		}
 	}
 }

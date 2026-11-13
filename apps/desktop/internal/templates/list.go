@@ -72,7 +72,7 @@ func List(fsys *vault.FS, folder, source string, allNotes bool) ([]Template, err
 		if e.IsDir || !strings.EqualFold(path.Ext(e.Path), ".md") {
 			return nil
 		}
-		if pathrules.HasPrefix(e.Path, pathrules.TrashDir) || pathrules.HasPrefix(e.Path, pathrules.ConfigDir) {
+		if pathrules.HasPrefix(e.Path, pathrules.TrashDir) || pathrules.IsConfigPath(e.Path) {
 			return nil
 		}
 		if prefix != "" && !pathrules.HasPrefix(e.Path, prefix) {

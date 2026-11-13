@@ -43,7 +43,7 @@ const (
 
 // KindOf classifies a normalized clear-text path.
 func KindOf(path string) FileKind {
-	if pathrules.HasPrefix(path, pathrules.ConfigDir) {
+	if pathrules.IsConfigPath(path) {
 		return KindConfig
 	}
 	switch pathrules.Ext(path) {

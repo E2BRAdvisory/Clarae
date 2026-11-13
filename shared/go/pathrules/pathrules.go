@@ -231,13 +231,66 @@ func Rebase(path, from, to string) (string, bool) {
 // ConfigDir is the per-vault configuration folder (the Obsidian ".obsidian" analogue).
 const ConfigDir = ".clarae"
 
+// LegacyConfigDir is the name the folder had up to 1.4.0 (ADR-0052). A vault created by a 1.x client
+// has it, and a vault shared with a 1.x client keeps it for the synchronized settings until the
+// features.config_dir_v2 flag moves them: every rule that concerns the configuration folder holds
+// for both names.
+const LegacyConfigDir = ".memobrain"
+
+// LegacyConfigDirs lists the former names of ConfigDir, most recent first.
+var LegacyConfigDirs = []string{LegacyConfigDir}
+
 // TrashDir is the optional in-vault trash folder.
 const TrashDir = ".trash"
+
+// TmpPrefix starts the name of the staging file of an atomic write (vault.WriteFile, history
+// snapshots); a crash can leave one behind. LegacyTmpPrefix is the prefix 1.4.0 used: such a
+// leftover is still excluded and cleaned up.
+const (
+	TmpPrefix       = ".clarae-tmp-"
+	LegacyTmpPrefix = ".memobrain-tmp-"
+)
+
+// IsTmpName reports whether a base name is the staging file of an atomic write, under either
+// prefix.
+func IsTmpName(base string) bool {
+	return strings.HasPrefix(base, TmpPrefix) || strings.HasPrefix(base, LegacyTmpPrefix)
+}
+
+// configRoot returns the configuration folder (ConfigDir or a legacy name) that p lies in or
+// equals, "" when p is outside both. Only the vault-root folders count.
+func configRoot(p string) string {
+	if HasPrefix(p, ConfigDir) {
+		return ConfigDir
+	}
+	for _, d := range LegacyConfigDirs {
+		if HasPrefix(p, d) {
+			return d
+		}
+	}
+	return ""
+}
+
+// IsConfigPath reports whether a normalized path is the configuration folder, under any of its
+// names, or lies inside it.
+func IsConfigPath(p string) bool { return configRoot(p) != "" }
+
+// ConfigRel splits a normalized path inside the configuration folder, under any of its names, from
+// that folder: the settings file of the current and of the former folder both give "editor.json". ok is
+// false for a path outside the folder and for the folder itself.
+func ConfigRel(p string) (name string, ok bool) {
+	dir := configRoot(p)
+	if dir == "" || len(p) == len(dir) {
+		return "", false
+	}
+	return p[len(dir)+1:], true
+}
 
 // IsExcluded reports whether a normalized path must never be synchronized
 // (§3.4.2): OS junk files, temporary files, device-specific workspace layout,
 // caches, snapshots and local databases. When excludeTrash is true the
-// in-vault trash folder is excluded as well.
+// in-vault trash folder is excluded as well. The rules of the configuration
+// folder hold under its former names too.
 func IsExcluded(normalized string, excludeTrash bool) bool {
 	dir, base := Split(normalized)
 	switch base {
@@ -249,23 +302,24 @@ func IsExcluded(normalized string, excludeTrash bool) bool {
 	}
 	// Staging files of atomic writes (vault.WriteFile): a crash can leave one behind
 	// and it must never be synchronized, indexed or listed.
-	if strings.HasPrefix(base, ".clarae-tmp-") {
+	if IsTmpName(base) {
 		return true
 	}
 	if excludeTrash && (normalized == TrashDir || strings.HasPrefix(normalized, TrashDir+"/")) {
 		return true
 	}
-	if !HasPrefix(normalized, ConfigDir) {
+	cfg := configRoot(normalized)
+	if cfg == "" {
 		return false
 	}
-	// Inside .clarae/: only user settings are synchronized (§3.4.6); everything
+	// Inside the configuration folder: only user settings are synchronized (§3.4.6); everything
 	// device-specific or derived stays local.
 	for _, local := range []string{"cache", "snapshots"} {
-		if HasPrefix(normalized, ConfigDir+"/"+local) {
+		if HasPrefix(normalized, cfg+"/"+local) {
 			return true
 		}
 	}
-	if dir == ConfigDir {
+	if dir == cfg {
 		switch {
 		case strings.HasPrefix(base, "workspace") && strings.HasSuffix(base, ".json"):
 			return true

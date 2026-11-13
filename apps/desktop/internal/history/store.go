@@ -76,7 +76,7 @@ func writeAtomic(abs string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".clarae-tmp-*")
+	tmp, err := os.CreateTemp(dir, pathrules.TmpPrefix+"*")
 	if err != nil {
 		return err
 	}

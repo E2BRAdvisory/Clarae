@@ -362,7 +362,7 @@ func writeAtomic(abs string, data []byte, perm fs.FileMode, noReplace bool) erro
 // stageTemp creates a staging file in dir, fills it with fill, fsyncs it and
 // gives it mode perm. It returns the staging file name; on error nothing is left.
 func stageTemp(dir string, perm fs.FileMode, fill func(w io.Writer) error) (string, error) {
-	tmp, err := os.CreateTemp(dir, tmpPrefix+"*")
+	tmp, err := os.CreateTemp(dir, pathrules.TmpPrefix+"*")
 	if err != nil {
 		return "", err
 	}
@@ -420,10 +420,8 @@ func publishTemp(tmpName, abs string, noReplace bool) error {
 	return syncDir(dir)
 }
 
-// tmpPrefix names the staging files of atomic writes.
-const tmpPrefix = ".clarae-tmp-"
-
-// CleanStaleTemp removes staging files left by a crashed write. Only files
+// CleanStaleTemp removes staging files left by a crashed write, under the current and the 1.4.0
+// prefix (pathrules.IsTmpName). Only files
 // older than olderThan are removed, so a write in progress is never touched.
 // It returns the number of files removed.
 func (f *FS) CleanStaleTemp(olderThan time.Duration) (int, error) {
@@ -433,7 +431,7 @@ func (f *FS) CleanStaleTemp(olderThan time.Duration) (int, error) {
 		if err != nil {
 			return nil //nolint:nilerr // best effort: unreadable folders are skipped
 		}
-		if d.IsDir() || !strings.HasPrefix(d.Name(), tmpPrefix) {
+		if d.IsDir() || !pathrules.IsTmpName(d.Name()) {
 			return nil
 		}
 		if info, ierr := d.Info(); ierr == nil && info.ModTime().Before(cutoff) {

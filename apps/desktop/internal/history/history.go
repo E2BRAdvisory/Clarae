@@ -238,7 +238,7 @@ func eligiblePath(p string) bool {
 	if err != nil || n != p {
 		return false
 	}
-	return !pathrules.HasPrefix(n, pathrules.ConfigDir) && !pathrules.IsExcluded(n, true)
+	return !pathrules.IsConfigPath(n) && !pathrules.IsExcluded(n, true)
 }
 
 func (h *History) lastOfLocked(path string) time.Time {

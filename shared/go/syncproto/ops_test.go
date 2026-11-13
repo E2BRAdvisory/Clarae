@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"clarae/shared/pathrules"
 )
 
 const hash = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
@@ -84,6 +86,11 @@ func TestKindOf(t *testing.T) {
 		".clarae/templates/daily.md": KindConfig,
 		"README":                     KindOther,
 		"data.csv":                   KindOther,
+	}
+	// Under a former name of the configuration folder (ADR-0052) a file is a setting just the same.
+	for _, d := range pathrules.LegacyConfigDirs {
+		tests[d+"/editor.json"] = KindConfig
+		tests[d+"/templates/daily.md"] = KindConfig
 	}
 	for p, want := range tests {
 		if got := KindOf(p); got != want {

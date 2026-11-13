@@ -244,7 +244,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		return
 	}
 	rel = filepath.ToSlash(rel)
-	if _, base := pathrules.Split(rel); strings.HasPrefix(base, ".clarae-tmp-") {
+	if _, base := pathrules.Split(rel); pathrules.IsTmpName(base) {
 		return // our own atomic-write temporaries
 	}
 	normalized, err := pathrules.Normalize(rel)
@@ -275,7 +275,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 func (w *Watcher) Notify(paths []string) {
 	var keep []string
 	for _, p := range paths {
-		if _, base := pathrules.Split(p); strings.HasPrefix(base, ".clarae-tmp-") {
+		if _, base := pathrules.Split(p); pathrules.IsTmpName(base) {
 			continue
 		}
 		if n, err := pathrules.Normalize(p); err == nil && !pathrules.IsExcluded(n, false) {

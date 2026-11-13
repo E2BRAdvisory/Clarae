@@ -107,7 +107,7 @@ func TestWriteAtomicCrashAtEveryStep(t *testing.T) {
 					t.Fatal(err)
 				}
 				for _, e := range entries {
-					if strings.HasPrefix(e.Name, tmpPrefix) || pathrules.IsExcluded(e.Path, true) {
+					if strings.HasPrefix(e.Name, pathrules.TmpPrefix) || pathrules.IsExcluded(e.Path, true) {
 						t.Fatalf("stale staging file is visible to the app: %s", e.Path)
 					}
 				}
@@ -138,9 +138,37 @@ func TestWriteAtomicCrashAtEveryStep(t *testing.T) {
 	}
 }
 
+// A staging file of 1.4.0 (ADR-0052) is cleaned like a current one, and a fresh one is spared.
+func TestCleanStaleTempLegacyPrefix(t *testing.T) {
+	fs := newTestFS(t)
+	old := filepath.Join(fs.Root(), pathrules.LegacyTmpPrefix+"crashed")
+	fresh := filepath.Join(fs.Root(), pathrules.LegacyTmpPrefix+"inflight")
+	for _, p := range []string{old, fresh} {
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(old, past, past); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := fs.CleanStaleTemp(time.Minute); err != nil || n != 1 {
+		t.Fatalf("CleanStaleTemp removed %d (err=%v), want 1", n, err)
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("the old staging file survived: %v", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("the fresh staging file was removed: %v", err)
+	}
+	if entries, err := fs.ListTree(); err != nil || len(entries) != 0 {
+		t.Fatalf("a staging file is visible to the app: %v %v", entries, err)
+	}
+}
+
 func TestCleanStaleTempSparesRecentFiles(t *testing.T) {
 	fs := newTestFS(t)
-	p := filepath.Join(fs.Root(), tmpPrefix+"inflight")
+	p := filepath.Join(fs.Root(), pathrules.TmpPrefix+"inflight")
 	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +188,7 @@ func tmpFiles(t *testing.T, dir string) []string {
 	}
 	var out []string
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), tmpPrefix) {
+		if strings.HasPrefix(e.Name(), pathrules.TmpPrefix) {
 			out = append(out, e.Name())
 		}
 	}
