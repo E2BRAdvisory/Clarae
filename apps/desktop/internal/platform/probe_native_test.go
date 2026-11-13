@@ -165,7 +165,7 @@ func holdDatabase(path string) {
 // of SQLite between processes are the ones of the OS, those inside a process are its own.
 func TestQuiesceDatabaseWithAnotherProcess(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "app.db")
-	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd := exec.Command(os.Args[0], "-test.run=^$") //nolint:gosec // this test binary, run again as the helper
 	cmd.Env = append(os.Environ(), helperEnv+"="+path)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

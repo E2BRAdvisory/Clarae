@@ -95,7 +95,7 @@ func relativeTo(path, dir string) (string, bool) {
 		return "", false
 	}
 	head := path[:len(prefix)]
-	if head != prefix && !(runtime.GOOS == "windows" && strings.EqualFold(head, prefix)) {
+	if head != prefix && (runtime.GOOS != "windows" || !strings.EqualFold(head, prefix)) {
 		return "", false
 	}
 	return path[len(prefix):], true
