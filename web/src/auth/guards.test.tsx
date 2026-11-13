@@ -68,6 +68,23 @@ describe('role guard', () => {
     expect(screen.getByRole('link', { name: 'Administration' })).toBeInTheDocument();
   });
 
+  it('accepts the admin role of a realm made for 1.x when /me cannot be read', async () => {
+    // The fallback is the token's realm roles: a realm imported by 1.x only has memobrain-admin.
+    renderApp({
+      path: '/admin',
+      routes: {
+        ...usage,
+        // A 4xx is not retried (a 5xx would be, twice, with a delay): /me is simply not readable.
+        'GET /me': new Response(null, { status: 404 }),
+        'GET /admin/storage/overview': new Response(null, { status: 500 }),
+      },
+      user: { roles: ['memobrain-admin'] },
+    });
+    expect(
+      await screen.findByRole('navigation', { name: 'Administration sections' }),
+    ).toBeInTheDocument();
+  });
+
   it('follows the role of /me, not the realm role of an older token (ADR-0041)', async () => {
     // Demoted from the console: the token still has the realm role until it is renewed.
     renderApp({

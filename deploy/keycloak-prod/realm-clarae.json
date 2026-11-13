@@ -1,5 +1,5 @@
 {
-  "realm": "clarae",
+  "realm": "${KC_REALM:clarae}",
   "displayName": "Clarae notanda",
   "enabled": true,
   "sslRequired": "external",
@@ -249,11 +249,16 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://127.0.0.1/*", "http://localhost/*", "clarae://auth/callback"],
+      "redirectUris": [
+        "http://127.0.0.1/*",
+        "http://localhost/*",
+        "clarae://auth/callback",
+        "memobrain://auth/callback"
+      ],
       "webOrigins": ["+"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "clarae://auth/logout##http://127.0.0.1/*",
+        "post.logout.redirect.uris": "clarae://auth/logout##memobrain://auth/logout##http://127.0.0.1/*",
         "use.refresh.tokens": "true"
       },
       "defaultClientScopes": [

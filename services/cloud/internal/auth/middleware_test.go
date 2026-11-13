@@ -81,7 +81,7 @@ func TestMiddlewareCachesThePrincipalForTheTTL(t *testing.T) {
 func TestMiddlewareInvalidateAppliesARoleChangeAtOnce(t *testing.T) {
 	m, p, iss := newTestMiddleware(t, time.Hour)
 	ctx := context.Background()
-	tok := iss.Token(t, authtest.TokenOptions{Subject: "ada", Roles: []string{RealmRoleAdmin}})
+	tok := iss.Token(t, authtest.TokenOptions{Subject: "ada", Roles: []string{"clarae-admin"}})
 	p.set(RoleAdmin, nil)
 	if pr, err := m.Authenticate(ctx, tok); err != nil || !pr.IsAdmin() {
 		t.Fatalf("%+v %v", pr, err)

@@ -52,10 +52,23 @@ type App struct {
 	Exports     *export.Service
 }
 
+// Option adjusts how New wires the modules.
+type Option func(*options)
+
+type options struct{ adminRoles []string }
+
+// WithAdminRoles sets the realm roles that make a user an administrator (OIDC_ADMIN_ROLES);
+// the default is auth.DefaultAdminRoles.
+func WithAdminRoles(roles []string) Option { return func(o *options) { o.adminRoles = roles } }
+
 // New wires the modules.
-func New(d *db.DB, store storage.BlobStore, log zerolog.Logger) *App {
+func New(d *db.DB, store storage.BlobStore, log zerolog.Logger, opts ...Option) *App {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	a := &App{DB: d, Store: store, Log: log, Keycloak: keycloak.Disabled{}, ExportStore: store}
-	a.Users = users.NewService(d)
+	a.Users = users.NewService(d, o.adminRoles)
 	// Every module that serves vault content asks the sharing module whether the caller may.
 	a.Sharing = sharing.NewService(d)
 	a.Config = configprofiles.NewService(d)

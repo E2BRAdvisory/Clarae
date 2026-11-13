@@ -4,7 +4,7 @@ import { unwrap, type Schemas } from '@clarae/api-client';
 import { Feature } from '@clarae/api-client/features';
 import { cloudKeys, RestCloudPort, useFeature } from '@clarae/cloud-features';
 import { useAuth } from '../auth/AuthProvider';
-import { ADMIN_ROLE } from '../auth/types';
+import { ADMIN_ROLES } from '../auth/types';
 import { useApi } from './context';
 
 export type Share = Schemas['Share'];
@@ -36,7 +36,7 @@ export function useAdminAccess(): { isAdmin: boolean; pending: boolean } {
   const { user } = useAuth();
   if (me.data) return { isAdmin: me.data.role === 'admin', pending: false };
   if (me.isPending) return { isAdmin: false, pending: true };
-  return { isAdmin: user?.roles.includes(ADMIN_ROLE) ?? false, pending: false };
+  return { isAdmin: user?.roles.some((r) => ADMIN_ROLES.includes(r)) ?? false, pending: false };
 }
 
 /** A port over the API for reading (its cache is shared with useCloudPort's: same port id). */

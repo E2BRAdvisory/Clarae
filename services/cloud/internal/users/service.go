@@ -31,10 +31,18 @@ const SettingDefaultQuota = "storage.default_quota_bytes"
 // Service implements the users module.
 type Service struct {
 	db *db.DB
+	// adminRoles are the realm roles that map to the admin role (OIDC_ADMIN_ROLES).
+	adminRoles []string
 }
 
-// NewService binds the module to the database.
-func NewService(d *db.DB) *Service { return &Service{db: d} }
+// NewService binds the module to the database. adminRoles are the realm roles that make a
+// user an administrator; empty means auth.DefaultAdminRoles.
+func NewService(d *db.DB, adminRoles []string) *Service {
+	if len(adminRoles) == 0 {
+		adminRoles = auth.DefaultAdminRoles
+	}
+	return &Service{db: d, adminRoles: adminRoles}
+}
 
 var _ auth.Provisioner = (*Service)(nil)
 
@@ -63,7 +71,7 @@ func (s *Service) Provision(ctx context.Context, c auth.Claims) (auth.Principal,
 	if c.Name != "" {
 		displayName = &c.Name
 	}
-	tokenRole := string(auth.RoleFromRealmRoles(c.RealmRoles))
+	tokenRole := string(auth.RoleFromRealmRoles(c.RealmRoles, s.adminRoles))
 
 	cur, err := q.GetUserBySub(ctx, c.Subject)
 	switch {

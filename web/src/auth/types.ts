@@ -26,5 +26,10 @@ export interface AuthService {
   onUserChange(cb: (user: AuthUser | null) => void): () => void;
 }
 
-/** Realm role that unlocks the administration area. */
+/**
+ * Realm roles that unlock the administration area: the role of a realm made for 1.x as well as
+ * the new one (the cloud's OIDC_ADMIN_ROLES default). Only the fallback of useAdminAccess: the
+ * server decides (users.role).
+ */
 export const ADMIN_ROLE = 'clarae-admin';
+export const ADMIN_ROLES: readonly string[] = [ADMIN_ROLE, 'memobrain-admin'];

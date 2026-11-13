@@ -31,7 +31,7 @@ func TestVerifier(t *testing.T) {
 		if c.PreferredUsername != "ada" || c.Name != "Ada Admin" || c.AuthorizedParty != "clarae-desktop" {
 			t.Fatalf("unexpected claims %+v", c)
 		}
-		if RoleFromRealmRoles(c.RealmRoles) != RoleAdmin {
+		if RoleFromRealmRoles(c.RealmRoles, DefaultAdminRoles) != RoleAdmin {
 			t.Fatal("expected admin role")
 		}
 	})

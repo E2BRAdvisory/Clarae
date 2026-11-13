@@ -56,6 +56,20 @@ func run(role config.Role) error {
 	}
 	logger := newLogger(cfg.LogLevel)
 	logger.Info().Str("version", Version).Str("role", string(cfg.Role)).Msg("starting")
+	// The names that default from the realm (see config.nameDefaults), so that a mismatch with the identity
+	// provider or the object store shows in the first lines of the log.
+	logger.Info().Str("realm", cfg.Keycloak.Realm).Str("audience", cfg.OIDC.Audience).Strs("allowed_azp", cfg.OIDC.AllowedAZP).
+		Strs("admin_roles", cfg.OIDC.AdminRoles).Str("admin_client", cfg.Keycloak.ClientID).
+		Str("blobs_bucket", cfg.S3.BucketBlobs).Str("exports_bucket", cfg.S3.BucketExports).
+		Str("metrics_namespace", cfg.MetricsNamespace).Bool("legacy_names", cfg.LegacyNames).Msg("names in use")
+	if cfg.LegacyNames {
+		// Not an error: nothing has to change until the realm is renamed on purpose.
+		logger.Warn().Str("issuer", cfg.OIDC.Issuer).Msg("the OIDC realm is the one of a 1.x installation: " +
+			"the names of 1.x are the defaults (audience, OIDC clients, buckets, metrics namespace) and are supported until 3.0")
+	}
+	for _, d := range cfg.Deprecations {
+		logger.Warn().Msg(d)
+	}
 
 	signalled, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -122,11 +136,12 @@ func run(role config.Role) error {
 	if err != nil {
 		return fail(err)
 	}
-	application := app.New(database, store, logger)
+	application := app.New(database, store, logger, app.WithAdminRoles(cfg.OIDC.AdminRoles))
 	if cfg.S3.Endpoint != "" {
 		exportStore, err := storage.NewS3(ctx, storage.S3Options{
 			Endpoint: cfg.S3.Endpoint, AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey, Region: cfg.S3.Region,
 			Bucket: cfg.S3.BucketExports, UsePathStyle: cfg.S3.UsePathStyle, PublicEndpoint: cfg.S3.PublicEndpoint,
+			LegacyBucket: cfg.S3.LegacyBucketExports, BucketSetting: "S3_BUCKET_EXPORTS",
 		})
 		if err != nil {
 			return fail(err)
@@ -135,6 +150,7 @@ func run(role config.Role) error {
 	}
 	application.Keycloak = keycloak.New(keycloak.Config{
 		BaseURL: cfg.Keycloak.BaseURL, Realm: cfg.Keycloak.Realm, ClientID: cfg.Keycloak.ClientID, ClientSecret: cfg.Keycloak.ClientSecret,
+		AdminRoles: cfg.OIDC.AdminRoles,
 	})
 
 	if cfg.ServesAPI() {
@@ -295,6 +311,7 @@ func openStore(ctx context.Context, cfg config.Config) (storage.BlobStore, error
 		return storage.NewS3(ctx, storage.S3Options{
 			Endpoint: cfg.S3.Endpoint, AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey,
 			Region: cfg.S3.Region, Bucket: cfg.S3.BucketBlobs, UsePathStyle: cfg.S3.UsePathStyle,
+			LegacyBucket: cfg.S3.LegacyBucketBlobs, BucketSetting: "S3_BUCKET_BLOBS",
 		})
 	}
 	return storage.NewFS(cfg.StorageDir)

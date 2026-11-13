@@ -24,6 +24,54 @@ type S3Options struct {
 	// PublicEndpoint is the address clients reach the store at; when set, PresignGet
 	// signs URLs for it (the internal endpoint is often not reachable from outside).
 	PublicEndpoint string
+	// LegacyBucket is the name the same bucket had in an installation made for 1.x. The caller
+	// sets it only when Bucket is a default (not an explicit S3_BUCKET_* setting): if Bucket does
+	// not exist but LegacyBucket does, NewS3 refuses to start (ErrLegacyBucket) instead of
+	// creating an empty bucket next to the one that holds the data, which would make every
+	// stored blob look missing.
+	LegacyBucket string
+	// BucketSetting names the environment variable that sets Bucket (for the error message).
+	BucketSetting string
+}
+
+// ErrLegacyBucket means the default bucket is missing while the bucket of a 1.x installation exists.
+var ErrLegacyBucket = errors.New("s3: the default bucket does not exist but the bucket of an installation made before 2.0 does")
+
+// bucketAPI is the part of the S3 client that ensureBucket needs (a fake in tests).
+type bucketAPI interface {
+	BucketExists(ctx context.Context, name string) (bool, error)
+	MakeBucket(ctx context.Context, name string, opts minio.MakeBucketOptions) error
+}
+
+// ensureBucket creates o.Bucket when it does not exist, unless that would hide the data of a
+// 1.x installation (see S3Options.LegacyBucket).
+func ensureBucket(ctx context.Context, c bucketAPI, o S3Options) error {
+	ok, err := c.BucketExists(ctx, o.Bucket)
+	if err != nil {
+		return fmt.Errorf("s3: check bucket %q: %w", o.Bucket, err)
+	}
+	if ok {
+		return nil
+	}
+	if o.LegacyBucket != "" && o.LegacyBucket != o.Bucket {
+		legacy, err := c.BucketExists(ctx, o.LegacyBucket)
+		if err != nil {
+			return fmt.Errorf("s3: check bucket %q: %w", o.LegacyBucket, err)
+		}
+		if legacy {
+			setting := o.BucketSetting
+			if setting == "" {
+				setting = "the bucket setting"
+			}
+			return fmt.Errorf("%w: %q is missing and %q exists; set %s=%s to keep using it "+
+				"(or move its content to %q on purpose): starting would create an empty %q and every stored blob would look missing",
+				ErrLegacyBucket, o.Bucket, o.LegacyBucket, setting, o.LegacyBucket, o.Bucket, o.Bucket)
+		}
+	}
+	if err := c.MakeBucket(ctx, o.Bucket, minio.MakeBucketOptions{Region: o.Region}); err != nil {
+		return fmt.Errorf("s3: create bucket %q: %w", o.Bucket, err)
+	}
+	return nil
 }
 
 // S3 is a BlobStore on an S3-compatible bucket.
@@ -65,14 +113,8 @@ func NewS3(ctx context.Context, o S3Options) (*S3, error) {
 			return nil, err
 		}
 	}
-	ok, err := c.BucketExists(ctx, o.Bucket)
-	if err != nil {
-		return nil, fmt.Errorf("s3: check bucket %q: %w", o.Bucket, err)
-	}
-	if !ok {
-		if err := c.MakeBucket(ctx, o.Bucket, minio.MakeBucketOptions{Region: o.Region}); err != nil {
-			return nil, fmt.Errorf("s3: create bucket %q: %w", o.Bucket, err)
-		}
+	if err := ensureBucket(ctx, c, o); err != nil {
+		return nil, err
 	}
 	return s, nil
 }

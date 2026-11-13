@@ -15,9 +15,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"clarae/services/cloud/internal/auth"
 )
 
 // Errors returned by the client.
@@ -29,9 +32,6 @@ var (
 	// ErrDisabled means no Keycloak is configured (standalone installations).
 	ErrDisabled = errors.New("keycloak: admin client not configured")
 )
-
-// AdminRole is the realm role that makes a user an administrator.
-const AdminRole = "clarae-admin"
 
 // UserSpec describes a user to create.
 type UserSpec struct {
@@ -72,6 +72,10 @@ type Config struct {
 	Realm        string
 	ClientID     string
 	ClientSecret string
+	// AdminRoles are the realm roles that make a user an administrator (OIDC_ADMIN_ROLES), in
+	// order of preference: SetAdmin grants the first one the realm has and revokes every one
+	// the user holds. Empty means auth.DefaultAdminRoles.
+	AdminRoles []string
 }
 
 // Enabled reports whether the configuration is usable.
@@ -93,6 +97,9 @@ func New(cfg Config) Admin {
 		return Disabled{}
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
+	if len(cfg.AdminRoles) == 0 {
+		cfg.AdminRoles = auth.DefaultAdminRoles
+	}
 	return &Client{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second}}
 }
 
@@ -291,9 +298,12 @@ func (c *Client) RequirePasswordReset(ctx context.Context, sub string) (bool, er
 	return err == nil, nil
 }
 
-// SetAdmin grants or removes the clarae-admin realm role. The role is looked up through the
-// user's own role mappings (available / current) rather than GET /roles/{name}: that way the
-// service account needs only manage-users, not view-realm.
+// SetAdmin grants or removes the administrator realm role. The realm may have the role of 1.x
+// (memobrain-admin), the new one (clarae-admin) or both (Config.AdminRoles): granting assigns the
+// first of them the realm has, revoking removes every one the user holds, so that a demoted
+// administrator does not keep the other name. The roles are looked up through the user's own
+// role mappings (available / current) rather than GET /roles/{name}: that way the service
+// account needs only manage-users, not view-realm.
 func (c *Client) SetAdmin(ctx context.Context, sub string, admin bool) error {
 	type role struct {
 		ID   string `json:"id"`
@@ -308,23 +318,33 @@ func (c *Client) SetAdmin(ctx context.Context, sub string, admin bool) error {
 	if err := c.call(ctx, http.MethodGet, source, nil, &roles); err != nil {
 		return err
 	}
-	for _, r := range roles {
-		if r.Name == AdminRole {
-			return c.call(ctx, method, list, []role{r}, nil)
+	var matching []role
+	for _, name := range c.cfg.AdminRoles {
+		for _, r := range roles {
+			if r.Name == name {
+				matching = append(matching, r)
+				break
+			}
 		}
 	}
+	if len(matching) > 0 {
+		if admin {
+			matching = matching[:1]
+		}
+		return c.call(ctx, method, list, matching, nil)
+	}
 	if admin {
-		// Not among the available roles: either the user has it already or the realm has no such role.
+		// Not among the available roles: either the user has one already or the realm has none of them.
 		var current []role
 		if err := c.call(ctx, http.MethodGet, list, nil, &current); err != nil {
 			return err
 		}
 		for _, r := range current {
-			if r.Name == AdminRole {
+			if slices.Contains(c.cfg.AdminRoles, r.Name) {
 				return nil
 			}
 		}
-		return fmt.Errorf("keycloak: realm role %q does not exist", AdminRole)
+		return fmt.Errorf("keycloak: none of the realm roles %v exists", c.cfg.AdminRoles)
 	}
 	return nil // not granted: nothing to revoke
 }

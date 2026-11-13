@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,16 +17,17 @@ const (
 	RoleUser  Role = "user"
 )
 
-// Realm role names in Keycloak (§3.3.1).
-const (
-	RealmRoleAdmin = "clarae-admin"
-	RealmRoleUser  = "clarae-user"
-)
+// DefaultAdminRoles are the realm roles that make a user an administrator when nothing is
+// configured (OIDC_ADMIN_ROLES): the role of the realm of a new installation and the one of
+// the realm of 1.x, so that both keep working (the second is dropped in 3.0).
+// internal/config holds the same list as the default of OIDC_ADMIN_ROLES.
+var DefaultAdminRoles = []string{"clarae-admin", "memobrain-admin"}
 
-// RoleFromRealmRoles maps Keycloak realm roles to the application role.
-func RoleFromRealmRoles(roles []string) Role {
+// RoleFromRealmRoles maps Keycloak realm roles to the application role: admin when roles
+// holds any of adminRoles, otherwise user.
+func RoleFromRealmRoles(roles, adminRoles []string) Role {
 	for _, r := range roles {
-		if r == RealmRoleAdmin {
+		if slices.Contains(adminRoles, r) {
 			return RoleAdmin
 		}
 	}

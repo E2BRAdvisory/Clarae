@@ -49,6 +49,18 @@ legacy	apps/desktop/build/installer_legacy_test.go	*	tests of the removal of the
 
 # Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
 legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 3.0
+legacy	services/cloud/internal/config/config.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	names of 1.x: defaults for the realm memobrain (nameDefaults), the old admin role, the old placeholder variable; dropped in 3.0
+legacy	services/cloud/internal/config/names_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the compatibility of the names of 1.x; dropped in 3.0
+legacy	services/cloud/internal/auth/principal.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	the admin realm role of 1.x (memobrain-admin) is a default of OIDC_ADMIN_ROLES; dropped in 3.0
+legacy	services/cloud/internal/auth/principal_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the admin realm role of 1.x; dropped in 3.0
+legacy	services/cloud/internal/keycloak/client.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	SetAdmin grants and revokes the admin realm role of 1.x; dropped in 3.0
+legacy	services/cloud/internal/keycloak/setadmin_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of SetAdmin on a realm made for 1.x; dropped in 3.0
+legacy	web/src/auth/types.ts	memobrain-admin	fallback of the admin check: the realm role of 1.x; dropped in 3.0
+legacy	web/src/auth/guards.test.tsx	memobrain-admin	test of the realm role of 1.x; dropped in 3.0
+legacy	deploy/keycloak/realm-clarae.json	memobrain://auth/(callback|logout)	redirect URIs of the desktop clients 1.4.0 (and the fallback of the new client); dropped in 3.0
+legacy	deploy/keycloak-prod/realm-clarae.json	memobrain://auth/(callback|logout)	redirect URIs of the desktop clients 1.4.0 (and the fallback of the new client); dropped in 3.0
+legacy	services/cloud/internal/storage/s3_bucket_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the refusal to start over the bucket of 1.x; dropped in 3.0
+legacy	docs/admin-guide/configurazione.md	memobrain|MEMOBRAIN	documents the names of 1.x kept as defaults for the realm memobrain; dropped in 3.0
 
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures
