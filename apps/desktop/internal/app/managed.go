@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"clarae/apps/desktop/internal/auth"
 	"clarae/apps/desktop/internal/history"
 	flags "clarae/shared/features"
@@ -100,8 +102,8 @@ func pathV2Enabled(cfg map[string]any) bool {
 // envRedirectMode is the redirect mode forced from the environment
 // (CLARAE_AUTH_REDIRECT, used by the manual checklist); "" lets the
 // Config Profile decide.
-func envRedirectMode() auth.RedirectMode {
-	return auth.ParseRedirectMode(os.Getenv("CLARAE_AUTH_REDIRECT"))
+func envRedirectMode(logger zerolog.Logger) auth.RedirectMode {
+	return auth.ParseRedirectMode(envValue(logger, "AUTH_REDIRECT"))
 }
 
 // snapshotBeforeOverwrite keeps the local content a sync merge is about to

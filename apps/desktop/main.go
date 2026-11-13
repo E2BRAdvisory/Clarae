@@ -4,6 +4,7 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -50,14 +51,26 @@ func run() int {
 		}
 	}
 
-	if *dataDirFlag != "" {
-		_ = os.Setenv(platform.DataDirEnv, *dataDirFlag)
+	// The data directory of 1.x is moved to the one of this name on the first start (ADR-0052). When that cannot be done safely, the user is told, and nothing starts:
+	// working on a second folder would split the data in two.
+	dd, err := platform.ResolveDataDir(*dataDirFlag)
+	var legacyErr *platform.LegacyDataDirError
+	if errors.As(err, &legacyErr) {
+		fmt.Fprintln(os.Stderr, "clarae:", legacyErr)
+		shell.ShowStartupError(appName, appName, legacyErr.UserMessage())
+		return 1
 	}
-	dataDir, err := platform.DataDir()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "clarae: data dir:", err)
 		return 1
 	}
+	dataDir := dd.Dir
+	notes := dd.Notes
+	if runtime.GOOS == "windows" && !dd.Explicit {
+		// Before the web view starts: its profile is moved from where 1.x had it.
+		notes = append(notes, platform.AdoptLegacyWebViewData(dataDir, os.Getenv("APPDATA"))...)
+	}
+	notes = append(notes, platform.LegacyInstallNotes(runtime.GOOS)...)
 	logger, closer, err := telemetry.NewLogger(dataDir, *logLevel, Version == "dev")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "clarae: logger:", err)
@@ -65,6 +78,13 @@ func run() int {
 	}
 	defer func() { _ = closer.Close() }()
 	telemetry.RouteSlog(logger)
+	for _, n := range notes {
+		if n.Warn {
+			logger.Warn().Msg(n.Msg)
+		} else {
+			logger.Info().Msg(n.Msg)
+		}
+	}
 
 	distFS, err := fs.Sub(assets, "frontend/dist")
 	if err != nil {
@@ -79,7 +99,7 @@ func run() int {
 	var lc *shell.Lifecycle
 	guard, guardWindow := shell.NewWailsCloseGuard(func() { lc.ArmWatchdog() })
 	host := shell.NewHost()
-	a := app.New(app.Options{DataDir: dataDir, Logger: logger, Version: Version, Host: host})
+	a := app.New(app.Options{DataDir: dataDir, LegacyDataDir: dd.LegacyDir, Logger: logger, Version: Version, Host: host})
 	lc = shell.NewLifecycle(a, guard)
 
 	dispatcher := rpc.New()
@@ -115,7 +135,10 @@ func run() int {
 		OnShutdown:     lc.Stop,
 		SingleInstance: singleInstanceOptions(dataDir, a.OnSecondInstance),
 		Mac:            application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
-		Linux:          application.LinuxOptions{ProgramName: "clarae"}, // the icon in the dock (StartupWMClass)
+		// The profile of the web view lives in the data directory, not in %AppData%\<name of the
+		// executable>: its storage does not depend on the name of the file (ADR-0052).
+		Windows: application.WindowsOptions{WebviewUserDataPath: platform.WebViewDataDir(dataDir)},
+		Linux:   application.LinuxOptions{ProgramName: "clarae"}, // the icon in the dock (StartupWMClass)
 	})
 	guardWindow.Bind(wa)
 

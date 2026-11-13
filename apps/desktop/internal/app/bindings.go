@@ -406,7 +406,7 @@ func (s *SettingsAPI) Info() map[string]string {
 		"version":  s.app.opts.Version,
 		"dataDir":  s.app.opts.DataDir,
 		// Convenience for development: CLARAE_DEFAULT_SERVER_URL prefills the sign-in form.
-		"defaultServer": os.Getenv("CLARAE_DEFAULT_SERVER_URL"),
+		"defaultServer": envValue(s.app.logger, "DEFAULT_SERVER_URL"),
 	}
 }
 

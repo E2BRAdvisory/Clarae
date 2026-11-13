@@ -8,7 +8,6 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 
 	"clarae/apps/desktop/internal/events"
@@ -34,7 +33,7 @@ func (a *App) updaterService() (*updater.Service, error) {
 		return a.updates.svc, nil
 	}
 	reason := ""
-	if os.Getenv("CLARAE_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
+	if envValue(a.logger, "UPDATES") == "off" { // enterprise switch (managed images, offline sites)
 		reason = "updates are disabled by the administrator"
 	}
 	svc, err := updater.New(updater.Options{

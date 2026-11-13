@@ -3,9 +3,7 @@
 package ai
 
 import (
-	"errors"
-
-	"github.com/zalando/go-keyring"
+	"clarae/apps/desktop/internal/ossecret"
 )
 
 // DefaultSecrets keeps the key of the provider in the OS keychain (macOS Keychain, Windows
@@ -18,22 +16,25 @@ const (
 	keychainAccount = "provider-key"
 )
 
-type keychain struct{}
+// legacyKeychainServices are the service names of 1.x: the key is read from them and moved to the
+// current one (dropped in 3.0).
+var legacyKeychainServices = []string{"MemoBrain Notes AI"}
 
-func (keychain) Set(key string) error { return keyring.Set(keychainService, keychainAccount, key) }
+// keychain is the key of the provider in the OS keychain; backend replaces it (tests).
+type keychain struct{ backend ossecret.Backend }
 
-func (keychain) Get() (string, error) {
-	v, err := keyring.Get(keychainService, keychainAccount)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return "", nil
+func (k keychain) store() ossecret.Store {
+	b := k.backend
+	if b == nil {
+		b = ossecret.OS{}
 	}
-	return v, err
+	return ossecret.Store{Backend: b, Service: keychainService, Legacy: legacyKeychainServices}
 }
 
-func (keychain) Delete() error {
-	err := keyring.Delete(keychainService, keychainAccount)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return nil
-	}
-	return err
-}
+func (k keychain) Set(key string) error { return k.store().Set(keychainAccount, key) }
+
+func (k keychain) Get() (string, error) { return k.store().Get(keychainAccount) }
+
+// Delete removes the key from the current service and from the one of 1.x, which would bring it
+// back at the next Get.
+func (k keychain) Delete() error { return k.store().Delete(keychainAccount) }

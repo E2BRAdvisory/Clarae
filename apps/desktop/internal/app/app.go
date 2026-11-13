@@ -38,6 +38,10 @@ type Options struct {
 	DataDir string
 	Logger  zerolog.Logger
 	Version string
+	// LegacyDataDir is the data directory of 1.x next to DataDir ("" = none, or DataDir was asked
+	// for explicitly). What the application database remembers inside it was moved with it, and
+	// Startup points it at DataDir (ADR-0052).
+	LegacyDataDir string
 	// KeyStore keeps the keys of private vaults (nil = OS keychain).
 	KeyStore crypto.KeyStore
 	// Host connects the application to its environment: the Wails window of internal/shell on the
@@ -117,7 +121,7 @@ func New(opts Options) *App {
 		DataDir:      opts.DataDir,
 		Logger:       opts.Logger.With().Str("module", "auth").Logger(),
 		AppVersion:   opts.Version,
-		RedirectMode: envRedirectMode(), // "" = from the Config Profile, else auto; "scheme" forces the fallback (checklist)
+		RedirectMode: envRedirectMode(opts.Logger), // "" = from the Config Profile, else auto; "scheme" forces the fallback (checklist)
 		OpenURL: func(u string) error {
 			ctx := a.appContext()
 			if ctx == nil {
@@ -180,6 +184,7 @@ func (a *App) Startup(ctx context.Context) {
 		return
 	}
 	a.appDB = db
+	a.adoptLegacyDataDir(ctx)
 	a.config = config.New(db)
 	if st := a.auth.State(); st.ServerURL != "" {
 		a.config.Load(ctx, st.ServerURL) // the last valid configuration applies from the first moment, offline included
