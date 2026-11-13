@@ -62,15 +62,24 @@ if [ "$MODE" = "--release" ]; then
   sh "$ROOT/scripts/release/check-editor-switches.sh"
 fi
 
-UPDATER_PKG=memobrain/apps/desktop/internal/updater
+need go
+DESKTOP="$ROOT/apps/desktop"
+# The import path is asked to the toolchain, never spelled here: the linker ignores -X on a package that does not
+# exist, so a stale path would build a release that trusts the development update key without any error.
+UPDATER_PKG="$(cd "$DESKTOP" && go list ./internal/updater)"
+[ -n "$UPDATER_PKG" ] || die "go list did not find the updater package in $DESKTOP"
 UPDATER_FLAGS=""
 UNSIGNED_UPDATES=0
+PROBE_PUBLIC_KEY=""
+PROBE_DISABLED=""
 if [ -n "${UPDATE_PUBLIC_KEY:-}" ]; then
   UPDATER_FLAGS="-X $UPDATER_PKG.PublicKeyB64=$UPDATE_PUBLIC_KEY"
+  PROBE_PUBLIC_KEY="$UPDATE_PUBLIC_KEY"
 elif [ "${ALLOW_UNSIGNED_UPDATES:-}" = "1" ]; then
   UNSIGNED_UPDATES=1
   warn "UPDATE_PUBLIC_KEY not set: the updater is compiled out of this build (ALLOW_UNSIGNED_UPDATES=1)"
   UPDATER_FLAGS="-X $UPDATER_PKG.DisabledByBuild=1"
+  PROBE_DISABLED=1
 elif [ "$MODE" = "--release" ]; then
   die "UPDATE_PUBLIC_KEY is not set: refusing to build a release with the development update key (docs/release/secrets.md)"
 else
@@ -82,8 +91,17 @@ elif [ "$MODE" = "--release" ] && [ "$UNSIGNED_UPDATES" = "0" ]; then
   die "UPDATE_BASE_URL is not set (public URL of the update channel)"
 fi
 
-need go
-DESKTOP="$ROOT/apps/desktop"
+# The flags are checked where they land (internal/updater/ldflags_test.go) before anything is compiled with them.
+# -v and the grep: a probe that was skipped or not found must not count as a pass.
+if [ -n "$UPDATER_FLAGS" ]; then
+  log "checking that the updater flags reach $UPDATER_PKG"
+  PROBE_OUT="$(cd "$DESKTOP" && env UPDATER_PROBE=1 UPDATER_EXPECT_PUBLIC_KEY="$PROBE_PUBLIC_KEY" \
+    UPDATER_EXPECT_DISABLED="$PROBE_DISABLED" ${UPDATE_BASE_URL:+UPDATER_EXPECT_BASE_URL="$UPDATE_BASE_URL"} \
+    go test -count=1 -v -run '^TestLdflagsProbe$' -ldflags "$UPDATER_FLAGS" ./internal/updater 2>&1)" \
+    && printf '%s\n' "$PROBE_OUT" | grep -q -- '^--- PASS: TestLdflagsProbe' \
+    || { printf '%s\n' "$PROBE_OUT" >&2; die "the updater flags did not reach $UPDATER_PKG (internal/updater/ldflags_test.go)"; }
+fi
+
 BUILD_DIR="$DESKTOP/build"
 BIN_DIR="$BUILD_DIR/bin"
 PROJECT="$BUILD_DIR/project.json"
