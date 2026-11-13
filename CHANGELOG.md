@@ -4,6 +4,23 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [1.5.1] - 2026-11-13
+
+**È la prima versione pubblicata di Clarae notanda.** La 1.5.0 è stata etichettata ma non pubblicata: la build dell'immagine del cloud e la pubblicazione del chart Helm si sono fermate, quindi non esistono né l'immagine né il chart né la release 1.5.0. La 1.5.1 contiene tutto ciò che descrive la sezione 1.5.0 qui sotto, **comprese le note di compatibilità per chi arriva dalla 1.x**, da leggere prima di aggiornare ([CHANGELOG, sezione 1.5.0](https://github.com/E2BRAdvisory/MemoBrain/blob/v1.5.1/CHANGELOG.md#150---2026-11-13); per gli amministratori [la guida di migrazione](https://github.com/E2BRAdvisory/MemoBrain/blob/v1.5.1/docs/admin-guide/migrazione-clarae.md)). Dove quella sezione e le guide dicono «1.5.0» per l'immagine, il chart e gli installer, la versione da usare è la 1.5.1.
+
+### Correzioni
+
+- **Immagine del cloud:** la build si fermava sul budget del bundle della console web, a 704 kB contro un limite di 700 (ADR-0020). La pagina dei Config Profile importava l'intero schema JSON per leggerne i nomi delle sezioni; ora li prende dall'elenco generato dallo stesso schema (`CONFIG_SECTIONS` in `@clarae/api-client/features`) e la console torna a 697 kB. Il comportamento della pagina non cambia.
+- **Chart Helm:** la pubblicazione su GHCR falliva con «failed to perform "Tag" on destination: not found». Helm 4 carica il manifest per digest e lo rilegge per applicare il tag, e GHCR può rispondere 404 a un manifest appena accettato, soprattutto per un pacchetto che non esisteva ancora (`charts/clarae`). Il workflow di release ritenta il push fino a cinque volte; ciò che è già caricato non viene rimandato.
+
+### Build e sviluppo
+
+- **`task ci` costruisce la Web UI per la produzione** (nuovo task `web-budget`, in `.dev/web-budget`): i budget del bundle erano controllati solo dalla build dell'immagine, cioè dal workflow di release.
+
+### Contratti
+
+- `api/openapi.yaml`: versione 1.5.1, nessuna operazione cambiata.
+
 ## [1.5.0] - 2026-11-13
 
 Il prodotto cambia nome: da MemoBrain Notes a **Clarae notanda** (milestone M17, [roadmap](docs/roadmap.md) §13-decies, ADR-0052). Cambiano il nome, il payoff («Your knowledge, carefully preserved in its clarity.»), il marchio e la palette (Deep Navy `#102B3A`, Teal `#159992`, Mint `#72C9BD`, Mist `#E9F0EF`, White `#FFFFFF`) di app desktop, workbench web e console. **Le funzionalità, il protocollo di sync e le operazioni delle API non cambiano.** I dati esistenti passano da soli ai nomi nuovi e nessun vault, sessione o chiave di un vault privato va perso; un client 1.4.0 e un cloud già installato continuano a funzionare. Le etichette crittografiche dei vault E2EE restano quelle di prima: i vault privati esistenti si aprono come sempre. L'ADR-0052 è in stato proposta e devia da `Specifications.md` (nome del prodotto, cartella di configurazione, schema URL, realm e client OIDC, gRPC, chiave Excalidraw), che il proprietario deve aggiornare a partire dall'elenco nell'ADR. **Alcune prove su macchine reali non sono state fatte** (installer Windows sopra una 1.x, dialogo «chiudi la vecchia app», dati del WebView su macOS e Linux, prove manuali con client 1.4.0 veri): sono elencate in fondo a _Compatibilità_.

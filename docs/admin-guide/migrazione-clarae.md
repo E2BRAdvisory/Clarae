@@ -38,7 +38,7 @@ Il codice 1.5 **non** richiede migrazioni del database (nessuna migrazione nuova
 
    Se nel `.env` della 1.x avevate già un `COMPOSE_PROJECT_NAME` diverso, tenete quello: il nome del progetto prefissa i volumi (`<progetto>_pgdata`, `<progetto>_s3data`) e un altro nome ne creerebbe di vuoti (`docker volume ls` mostra quelli esistenti). Utente e database di PostgreSQL sono fissati alla creazione del volume.
 
-3. **Immagine e versione.** Con `MEMOBRAIN_IMAGE` e `MEMOBRAIN_VERSION` nel `.env` basta cambiare `MEMOBRAIN_VERSION` a `1.5.0`: la 1.5 è pubblicata anche come `memobrain-cloud`. Prima della 1.6 passate ai nomi nuovi: `CLARAE_IMAGE=ghcr.io/<owner>/clarae-cloud` e `CLARAE_VERSION=1.5.0` (`CLARAE_*` vince su `MEMOBRAIN_*`). Lo stesso vale per `MEMOBRAIN_HOST` → `CLARAE_HOST` e `MEMOBRAIN_SITE` → `CLARAE_SITE`.
+3. **Immagine e versione.** Con `MEMOBRAIN_IMAGE` e `MEMOBRAIN_VERSION` nel `.env` basta cambiare `MEMOBRAIN_VERSION` a `1.5.1` (la 1.5.0 non è stata pubblicata): la 1.5 è pubblicata anche come `memobrain-cloud`. Prima della 1.6 passate ai nomi nuovi: `CLARAE_IMAGE=ghcr.io/<owner>/clarae-cloud` e `CLARAE_VERSION=1.5.1` (`CLARAE_*` vince su `MEMOBRAIN_*`). Lo stesso vale per `MEMOBRAIN_HOST` → `CLARAE_HOST` e `MEMOBRAIN_SITE` → `CLARAE_SITE`.
 4. **Non cambiate** `KC_REALM`, i bucket, i segreti, i volumi. Con `KC_REALM=memobrain` il servizio usa da solo audience, client e bucket della 1.x, e il namespace delle metriche `memobrain`: non serve impostare altro.
 5. `docker compose config -q`, poi `docker compose pull && docker compose up -d`.
 
@@ -56,8 +56,8 @@ nameOverride: memobrain
 ```
 
 ```sh
-helm upgrade <release> oci://ghcr.io/<owner>/charts/clarae --version 1.5.0 -f values.yaml --dry-run   # i nomi degli oggetti sono quelli di prima
-helm upgrade <release> oci://ghcr.io/<owner>/charts/clarae --version 1.5.0 -f values.yaml
+helm upgrade <release> oci://ghcr.io/<owner>/charts/clarae --version 1.5.1 -f values.yaml --dry-run   # i nomi degli oggetti sono quelli di prima
+helm upgrade <release> oci://ghcr.io/<owner>/charts/clarae --version 1.5.1 -f values.yaml
 ```
 
 Con `nameOverride: memobrain` gli oggetti restano `<release>-memobrain`, `<release>-memobrain-api`, `<release>-memobrain-worker`, `<release>-memobrain-grpc` e le etichette `app.kubernetes.io/name: memobrain`, come nella 1.x (`task helm-check` verifica questo rendering con `ci/values-legacy.yaml`). `fullnameOverride`, se lo volete, sostituisce l'intero nome `<release>-<nome>`.

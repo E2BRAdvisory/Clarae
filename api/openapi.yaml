@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Clarae notanda Cloud API
-  version: 1.5.0
+  version: 1.5.1
   description: |
     REST contract of the Clarae notanda Cloud Service (Specifications.md §3.1, §3.5).
     This file is the single source of truth: the Go server stubs (strict server and
