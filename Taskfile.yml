@@ -332,6 +332,7 @@ tasks:
       - task: conformance
       - task: test-wasm
       - task: test-core
+      - task: web-budget
       - task: parity
       - task: check-gen
 
@@ -421,6 +422,14 @@ tasks:
       - sh scripts/release/check-dist.sh {{.WEB_DIR}}/dist
       - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
       - cp -R {{.WEB_DIR}}/dist/. {{.WEBEMBED}}/dist/
+
+  # The image build of a release runs this same build and stops on a budget: `task ci` must see it first (the
+  # console of 1.5.0 was 4 kB over, found only by the release workflow, and 1.5.0 was never published).
+  web-budget:
+    desc: Production build of the Web UI into .dev/web-budget (git-ignored scratch), to hold the bundle budgets (ADR-0020)
+    deps: [wasm-core, wailsjs]
+    cmds:
+      - CLARAE_DIST={{.ROOT_DIR}}/.dev/web-budget/dist CLARAE_VERSION={{.VERSION}} yarn workspace @clarae/web exec node scripts/esbuild.mjs build
 
   web-clean:
     desc: Drop the embedded Web UI build and restore the tracked placeholder index.html
