@@ -58,6 +58,29 @@ describe('latexPatch', () => {
     await expect(latexPatch('  ', { center, color: '#000000' })).rejects.toThrow();
   });
 
+  it('reads a formula of a 1.x file and rewrites it under the new key only', async () => {
+    const legacy: SceneElement = {
+      id: 'f',
+      type: 'image',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 40,
+      version: 3,
+      versionNonce: 1,
+      customData: {
+        other: 1,
+        memobrain: { kind: 'latex', latex: 'x^2', w0: 50, color: '#112233' },
+      },
+    };
+    expect(latexOf(legacy)).toEqual({ kind: 'latex', latex: 'x^2', w0: 50, color: '#112233' });
+    const edit = await latexPatch('y^2', { center, existing: legacy });
+    const after = applyPatch([legacy], edit, () => 1, 1)[0]!;
+    expect(latexOf(after)?.latex).toBe('y^2');
+    expect(after.customData).toMatchObject({ other: 1, clarae: { kind: 'latex', latex: 'y^2' } });
+    expect(after.customData).not.toHaveProperty('memobrain');
+  });
+
   it('latexOf only recognises formulas', () => {
     expect(latexOf(undefined)).toBeNull();
     expect(latexOf({ id: 'a', type: 'image', version: 1, versionNonce: 1 })).toBeNull();

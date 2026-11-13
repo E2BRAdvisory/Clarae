@@ -2,6 +2,7 @@
 // `customData.clarae.slide` number when frames have one, else the frame names read as
 // "natural" text (Slide 2 before Slide 10), else their position on the board (rows, then columns).
 import type { SceneElement } from './actions/types';
+import { elementMeta, withElementMeta } from './meta';
 
 export interface Slide {
   id: string;
@@ -15,8 +16,7 @@ export interface Slide {
 }
 
 type Meta = Record<string, unknown>;
-const metaOf = (e: SceneElement): Meta =>
-  (e.customData as { clarae?: Meta } | undefined)?.clarae ?? {};
+const metaOf = (e: SceneElement): Meta => elementMeta(e) ?? {};
 
 /**
  * The property changes that set (or, with `undefined`, clear) keys of a frame's `clarae`
@@ -31,7 +31,8 @@ export function slideMetaUpdate(
     if (v === undefined || v === '' || v === false) delete clarae[k];
     else clarae[k] = v;
   }
-  return { customData: { ...(e.customData as Meta | undefined), clarae } };
+  // The frame is rewritten anyway: its metadata moves to the current key.
+  return { customData: withElementMeta(e.customData, clarae) };
 }
 
 /** Patch that numbers the frames 1..n in the given order (only those whose number changes). */
@@ -53,13 +54,13 @@ export const playable = (slides: readonly Slide[]): Slide[] => slides.filter((s)
 
 /** The presenter notes stored on a frame. */
 export const slideNotes = (e: SceneElement): string => {
-  const mb = (e.customData as { clarae?: { notes?: unknown } } | undefined)?.clarae;
-  return typeof mb?.notes === 'string' ? mb.notes : '';
+  const notes = elementMeta(e)?.['notes'];
+  return typeof notes === 'string' ? notes : '';
 };
 
 const slideNumber = (e: SceneElement): number | null => {
-  const mb = (e.customData as { clarae?: { slide?: unknown } } | undefined)?.clarae;
-  return typeof mb?.slide === 'number' && Number.isFinite(mb.slide) ? mb.slide : null;
+  const n = elementMeta(e)?.['slide'];
+  return typeof n === 'number' && Number.isFinite(n) ? n : null;
 };
 
 export function slidesOf(elements: readonly SceneElement[]): Slide[] {

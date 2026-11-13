@@ -1,0 +1,20 @@
+{
+ "type": "excalidraw",
+ "elements": [
+  {
+   "id": "a",
+   "type": "rectangle",
+   "version": 2,
+   "versionNonce": 1,
+   "isDeleted": false,
+   "x": 5
+  }
+ ],
+ "files": {},
+ "memobrain": {
+  "autoExport": "png"
+ },
+ "clarae": {
+  "autoExport": "both"
+ }
+}

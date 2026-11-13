@@ -6,6 +6,7 @@ import { baseElement } from '../actions/factory';
 import { newId } from '../actions/ids';
 import type { SceneElement, ScenePatch } from '../actions/types';
 import { contentId } from '../latex/tex2svg';
+import { withElementMeta } from '../meta';
 import { stripFrontmatter } from '../../reading/sections';
 
 /** The image types Excalidraw can hold in `files`. */
@@ -60,7 +61,7 @@ export function imagePatch(
       status: 'saved',
       fileId,
       scale: [1, 1],
-      customData: { clarae: { kind, path: img.path } },
+      customData: withElementMeta(undefined, { kind, path: img.path }),
     },
   );
   return {
@@ -139,7 +140,7 @@ export function noteCardPatch(
       roundness: { type: 3 },
       link: noteLink(path),
       boundElements: [{ id: textId, type: 'text' }],
-      customData: { clarae: { kind: 'note', path } },
+      customData: withElementMeta(undefined, { kind: 'note', path }),
     },
   );
   const text = baseElement(

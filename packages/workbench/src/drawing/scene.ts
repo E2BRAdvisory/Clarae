@@ -1,5 +1,6 @@
 // Pure helpers for Excalidraw files (.excalidraw is plain JSON). Nothing here imports
 // Excalidraw itself, so the helpers are cheap to load and easy to test.
+import { normalizeFileExtra } from './meta';
 
 /** Above this size the editor warns (§M3-WP1): the file is rewritten whole on every save. */
 export const DRAWING_WARN_BYTES = 10 * 1024 * 1024;
@@ -43,7 +44,10 @@ export function parseScene(text: string): RawScene {
     elements: o['elements'] as Record<string, unknown>[],
     appState: obj(o['appState']),
     files: obj(o['files']),
-    extra: Object.fromEntries(Object.entries(o).filter(([k]) => !KNOWN_ROOT_KEYS.includes(k))),
+    // The settings of a 1.x file are read from its legacy key; saving writes the new one only.
+    extra: normalizeFileExtra(
+      Object.fromEntries(Object.entries(o).filter(([k]) => !KNOWN_ROOT_KEYS.includes(k))),
+    ),
   };
 }
 

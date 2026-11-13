@@ -4,6 +4,7 @@
 // untouched.
 import type { SceneElement, ScenePatch } from '../actions/types';
 import { newId } from '../actions/ids';
+import { elementMeta, withElementMeta } from '../meta';
 import { contentId, svgDataUrl, texToSvg } from './tex2svg';
 
 export const LATEX_KIND = 'latex';
@@ -20,7 +21,7 @@ export interface LatexMeta {
 
 /** The formula source of an element, or null when it is not a formula. */
 export function latexOf(e: SceneElement | undefined): LatexMeta | null {
-  const meta = (e?.customData as { clarae?: Partial<LatexMeta> } | undefined)?.clarae;
+  const meta = elementMeta(e) as Partial<LatexMeta> | undefined;
   return meta?.kind === LATEX_KIND && typeof meta.latex === 'string'
     ? {
         kind: LATEX_KIND,
@@ -62,7 +63,7 @@ export async function latexPatch(
           fileId,
           width: r.width * scale,
           height: r.height * scale,
-          customData: { ...(o.existing.customData as object), clarae: meta },
+          customData: withElementMeta(o.existing.customData, { ...meta }),
         },
       },
       files,
@@ -98,7 +99,7 @@ export async function latexPatch(
         isDeleted: false,
         version: 1,
         versionNonce: Math.floor(Math.random() * 2 ** 31),
-        customData: { clarae: meta },
+        customData: withElementMeta(undefined, { ...meta }),
       },
     ],
     files,

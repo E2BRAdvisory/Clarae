@@ -97,6 +97,16 @@ describe('reset-latex-size', () => {
     expect(patch.update!.f).toEqual({ width: 50, height: 20 });
   });
 
+  it('recognises a formula written by 1.x', () => {
+    const legacy = el('f', 'image', {
+      width: 150,
+      height: 60,
+      customData: { memobrain: { kind: 'latex', latex: 'x', w0: 50, color: '#000' } },
+    });
+    const patch = resetLatexSize.run({ elements: [legacy], selected: ['f'] });
+    expect(patch.update!.f).toEqual({ width: 50, height: 20 });
+  });
+
   it('leaves formulas at their size, other images and unselected ones alone', () => {
     expect(resetLatexSize.run({ elements: [formula(50, 20)], selected: ['f'] }).update).toEqual({});
     expect(resetLatexSize.run({ elements: [el('i', 'image')], selected: ['i'] }).update).toEqual(

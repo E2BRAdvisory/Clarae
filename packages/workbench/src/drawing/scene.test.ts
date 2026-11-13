@@ -37,6 +37,28 @@ describe('drawing helpers', () => {
     expect(parseScene(EMPTY_DRAWING).extra).toEqual({});
   });
 
+  it('reads the settings of a 1.x file and saves them under the new key only', () => {
+    const base = {
+      type: 'excalidraw',
+      version: 2,
+      source: 'x',
+      elements: [],
+      appState: {},
+      files: {},
+    };
+    const s = parseScene(JSON.stringify({ ...base, memobrain: { autoExport: 'png' }, other: 1 }));
+    expect(s.extra).toEqual({ clarae: { autoExport: 'png' }, other: 1 });
+    // a file that went through a merge can have both: the new key wins, the rest is kept
+    const both = parseScene(
+      JSON.stringify({
+        ...base,
+        memobrain: { autoExport: 'png', slideLoop: 'true' },
+        clarae: { autoExport: 'svg' },
+      }),
+    );
+    expect(both.extra).toEqual({ clarae: { autoExport: 'svg', slideLoop: 'true' } });
+  });
+
   it('keeps elements, app state and files', () => {
     const s = parseScene(
       JSON.stringify({

@@ -7,6 +7,7 @@ import { useAppStore } from '../../state/store';
 import { dialog } from '../../ui/dialogs';
 import { getSceneController } from '../actions/active';
 import { selectedElements, type SceneElement } from '../actions/types';
+import { elementMeta, withElementMeta } from '../meta';
 import { folderOf } from '../scene';
 import { deconstruct } from './deconstruct';
 import { noteCardPatch, noteExcerpt, wrapLines } from './insert';
@@ -69,8 +70,8 @@ export function refreshedLabel(path: string, markdown: string): string {
 }
 
 const cardPath = (e: SceneElement): string | null => {
-  const m = (e.customData as { clarae?: { kind?: string; path?: string } } | undefined)?.clarae;
-  return m?.kind === 'note' && typeof m.path === 'string' ? m.path : null;
+  const m = elementMeta(e);
+  return m?.['kind'] === 'note' && typeof m['path'] === 'string' ? m['path'] : null;
 };
 
 /** "Update the selected note cards from their notes". */
@@ -128,21 +129,15 @@ export function setSlideNotes(): Promise<void> {
     const frames = selectedElements(c.context()).filter((e) => e.type === 'frame');
     if (frames.length !== 1) return dialog.alert(t('notesTitle'), t('notesPickFrame'));
     const frame = frames[0] as SceneElement;
-    const mb = (frame.customData as { clarae?: Record<string, unknown> } | undefined)?.clarae;
-    const raw = await dialog.prompt(t('notesTitle'), typeof mb?.notes === 'string' ? mb.notes : '');
+    const mb = elementMeta(frame);
+    const raw = await dialog.prompt(
+      t('notesTitle'),
+      typeof mb?.['notes'] === 'string' ? mb['notes'] : '',
+    );
     if (raw === null) return;
     const rest = { ...mb };
     delete rest['notes'];
-    const clarae = raw.trim() ? { ...rest, notes: raw.trim() } : rest;
-    c.apply({
-      update: {
-        [frame.id]: {
-          customData: {
-            ...(frame.customData as Record<string, unknown> | undefined),
-            clarae,
-          },
-        },
-      },
-    });
+    const meta = raw.trim() ? { ...rest, notes: raw.trim() } : rest;
+    c.apply({ update: { [frame.id]: { customData: withElementMeta(frame.customData, meta) } } });
   });
 }

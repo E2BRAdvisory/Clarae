@@ -46,6 +46,7 @@ import {
 import type { SceneController, ToolKind } from './actions/active';
 import { dropVaultFile } from './embed/commands';
 import { latexOf, latexPatch } from './latex/insert';
+import { fileSettingsOf, normalizeFileExtra, withFileSetting } from './meta';
 import { mermaidPatch, parseMermaid } from './mermaid/insert';
 import { TextToolDialog } from './TextToolDialog';
 import { DescribeDialog } from './DescribeDialog';
@@ -199,8 +200,10 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     files: Parameters<typeof serializeAsJSON>[2],
   ): string => {
     const json = serializeAsJSON(elements as never, appState, files, 'local');
-    if (Object.keys(extra.current).length === 0) return json;
-    return JSON.stringify({ ...(JSON.parse(json) as object), ...extra.current }, null, 2);
+    // The settings are written under the current key only (a 1.x file keeps its legacy one until now).
+    const rest = normalizeFileExtra(extra.current);
+    if (Object.keys(rest).length === 0) return json;
+    return JSON.stringify({ ...(JSON.parse(json) as object), ...rest }, null, 2);
   };
 
   const onChange = useCallback(
@@ -304,7 +307,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     (fromId?: string) => {
       startEvent.current = window.event ?? null;
       if (excalidraw) {
-        const mb = (extra.current['clarae'] as Record<string, unknown> | undefined) ?? {};
+        const mb = fileSettingsOf(extra.current);
         setSlideOpts({
           loop: mb['slideLoop'] === 'true',
           numbers: mb['slideNumbers'] !== 'false',
@@ -413,15 +416,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       },
       files: () => excalidraw.getFiles(),
       setFileSetting: (key, value) => {
-        const mb = {
-          ...((extra.current['clarae'] as Record<string, unknown> | undefined) ?? {}),
-        };
-        if (value === null) delete mb[key];
-        else mb[key] = value;
-        const next = { ...extra.current };
-        if (Object.keys(mb).length) next['clarae'] = mb;
-        else delete next['clarae'];
-        extra.current = next;
+        extra.current = withFileSetting(extra.current, key, value);
         // Persist now: the setting lives in the file.
         docRef.current.edit(
           serialize(
@@ -451,9 +446,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         return items.length;
       },
       startSlideshow: (fromId) => startPresent(fromId),
-      fileSettings: () => ({
-        ...((extra.current['clarae'] as Record<string, unknown> | undefined) ?? {}),
-      }),
+      fileSettings: () => fileSettingsOf(extra.current),
       showFrame: (id) => {
         const frame = excalidraw.getSceneElements().find((e) => e.id === id);
         if (frame) excalidraw.setViewport({ target: frame, fit: 'contain', animation: true });
@@ -800,7 +793,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     }
     const cfg = useDrawingSettings.getState().settings;
     // A drawing can override the vault's auto-export choice (stored in the file itself).
-    const own = (extra.current['clarae'] as { autoExport?: unknown } | undefined)?.autoExport;
+    const own = fileSettingsOf(extra.current)['autoExport'];
     const mode =
       own === 'none' || own === 'png' || own === 'svg' || own === 'both' ? own : cfg.autoExport;
     const plan = autoExportPlan(mode, cfg.autoExportTheme);

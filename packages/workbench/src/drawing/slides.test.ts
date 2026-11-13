@@ -55,6 +55,43 @@ describe('slidesOf', () => {
   });
 });
 
+describe('frames of a 1.x file', () => {
+  // `memobrain` is the key 1.x wrote; it is read, and replaced when a tool rewrites the frame.
+  const old = (meta: object) => ({ customData: { memobrain: meta } });
+
+  it('reads notes, numbers and the hidden flag from the legacy key', () => {
+    const els = [
+      frame('b', 'B', 0, 0, old({ slide: 2, notes: 'two', slideHidden: true })),
+      frame('a', 'A', 0, 0, old({ slide: 1 })),
+    ];
+    expect(slidesOf(els)).toEqual([
+      { id: 'a', name: 'A', notes: '', included: true, version: 1 },
+      { id: 'b', name: 'B', notes: 'two', included: false, version: 1 },
+    ]);
+  });
+
+  it('moves the metadata to the new key when a tool rewrites the frame', () => {
+    const f = frame('a', 'A', 0, 0, { customData: { other: 1, memobrain: { notes: 'n' } } });
+    expect(slideMetaUpdate(f, { slide: 3 })).toEqual({
+      customData: { other: 1, clarae: { notes: 'n', slide: 3 } },
+    });
+  });
+
+  it('numbers a legacy frame under the new key only, and leaves frames in place when unchanged', () => {
+    const els = [frame('a', 'A', 0, 0, old({ slide: 1 })), frame('b', 'B', 0, 0)];
+    expect(reorderUpdate(els, ['a', 'b'])).toEqual({
+      b: { customData: { clarae: { slide: 2 } } },
+    });
+  });
+
+  it('prefers the new key on a frame that has both', () => {
+    const f = frame('a', 'A', 0, 0, {
+      customData: { memobrain: { notes: 'old' }, clarae: { notes: 'new' } },
+    });
+    expect(slidesOf([f])[0]?.notes).toBe('new');
+  });
+});
+
 describe('navigation', () => {
   it('clamps at both ends', () => {
     expect(moveSlide(0, -1, 3)).toBe(0);
