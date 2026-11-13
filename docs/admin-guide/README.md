@@ -2,15 +2,16 @@
 
 Per chi installa, configura e gestisce il **Cloud Service** (API, worker, Web UI incorporata), PostgreSQL, l'archivio S3-compatibile e Keycloak. Il prodotto si chiama "Clarae notanda"; nei manifest e nei comandi compare come `clarae`.
 
-| Argomento                                       | Contenuto                                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [Installazione](installazione.md)               | Architettura, prerequisiti, Helm, compose di sviluppo, primo avvio e verifica.                   |
-| [Keycloak](keycloak.md)                         | Realm, client, ruoli, service account con i ruoli minimi (ADR-0012), ruolo `clarae-admin`.       |
-| [Configurazione](configurazione.md)             | Riferimento di **tutte** le variabili d'ambiente (verificato da un test) e impostazioni runtime. |
-| [Profili, quote, audit](profili-quote-audit.md) | Gruppi, config profile distribuiti ai client, limiti di archiviazione, registro di audit.        |
-| [Backup e upgrade](backup-upgrade.md)           | Cosa salvare, ripristino, aggiornamenti con migrazioni, rollback.                                |
-| [Monitoraggio](monitoraggio.md)                 | Metriche Prometheus, dashboard Grafana, regole di alerting, log.                                 |
-| [Runbook](runbook.md)                           | Sintomo → verifica → rimedio: login, sync, quota, sospensioni, export, database, S3.             |
+| Argomento                                           | Contenuto                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Installazione](installazione.md)                   | Architettura, prerequisiti, Helm, compose di sviluppo, primo avvio e verifica.                   |
+| [Keycloak](keycloak.md)                             | Realm, client, ruoli, service account con i ruoli minimi (ADR-0012), ruolo `clarae-admin`.       |
+| [Configurazione](configurazione.md)                 | Riferimento di **tutte** le variabili d'ambiente (verificato da un test) e impostazioni runtime. |
+| [Profili, quote, audit](profili-quote-audit.md)     | Gruppi, config profile distribuiti ai client, limiti di archiviazione, registro di audit.        |
+| [Backup e upgrade](backup-upgrade.md)               | Cosa salvare, ripristino, aggiornamenti con migrazioni, rollback.                                |
+| [Monitoraggio](monitoraggio.md)                     | Metriche Prometheus, dashboard Grafana, regole di alerting, log.                                 |
+| [Runbook](runbook.md)                               | Sintomo → verifica → rimedio: login, sync, quota, sospensioni, export, database, S3.             |
+| [Migrazione a Clarae notanda](migrazione-clarae.md) | Aggiornare dalla 1.x: nomi vecchi e nuovi, Compose, Helm, Keycloak, metriche, rollback.          |
 
 Documenti collegati: `docs/runbook/` (procedure operative dettagliate: backup e ripristino), `docs/security/` (progetto crittografico, ambito pen test, conservazione dei dati), `docs/release/` (versioni, distribuzione, segreti di firma), `docs/adr/README.md` (decisioni architetturali).
 

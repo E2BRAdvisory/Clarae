@@ -81,6 +81,7 @@ legacy	deploy/helm/clarae/ci/values-legacy.yaml	memobrain|Memobrain|MemoBrain|ME
 legacy	deploy/helm/clarae/values.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents nameOverride: memobrain and the legacy gRPC path; dropped in 3.0
 legacy	deploy/helm/clarae/templates/_helpers.tpl	memobrain|Memobrain|MemoBrain|MEMOBRAIN	nameOverride of the in-place upgrade and the old placeholder variable; dropped in 3.0
 legacy	deploy/helm/clarae/templates/ingress.yaml	memobrain\.v1	routes the legacy gRPC service memobrain.v1; dropped in 3.0
+legacy	docs/admin-guide/migrazione-clarae.md	*	guide to the upgrade from 1.x: it names the old identifiers on purpose; dropped in 3.0
 
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures
