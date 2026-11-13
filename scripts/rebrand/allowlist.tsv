@@ -28,6 +28,11 @@ legacy	web/src/workbench/storage.test.ts	memobrain-sqlite|fs/memobrain/data	test
 legacy	web/src/pages/Account.test.tsx	memobrain-sqlite	test of the removal of the 1.3 storage set
 legacy	docs/web-ui.md	`memobrain-sqlite`	documents the 1.3 storage set
 
+# Compatibility of the client with data of 1.x (M17 F2). One line per file and reason.
+
+# Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
+legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 3.0
+
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures
 fixture	shared/conformance/merge/excalidraw-memobrain-settings-key/**	*	fixture of the top-level settings key of 1.x drawings
