@@ -61,6 +61,11 @@ legacy	deploy/keycloak/realm-clarae.json	memobrain://auth/(callback|logout)	redi
 legacy	deploy/keycloak-prod/realm-clarae.json	memobrain://auth/(callback|logout)	redirect URIs of the desktop clients 1.4.0 (and the fallback of the new client); dropped in 3.0
 legacy	services/cloud/internal/storage/s3_bucket_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the refusal to start over the bucket of 1.x; dropped in 3.0
 legacy	docs/admin-guide/configurazione.md	memobrain|MEMOBRAIN	documents the names of 1.x kept as defaults for the realm memobrain; dropped in 3.0
+legacy	api/proto/memobrain/v1/notify.proto	*	legacy proto memobrain.v1 served for the desktop clients 1.4.0 (buf ties the directory to the package); dropped in 3.0
+legacy	shared/go/notifyv1legacy/**	*	Go code generated from the legacy proto memobrain.v1; dropped in 3.0
+legacy	services/cloud/internal/grpcserver/legacy.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	the memobrain.v1 service served from the same handler; dropped in 3.0
+legacy	services/cloud/internal/grpcserver/legacy_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the memobrain.v1 service; dropped in 3.0
+legacy	services/cloud/internal/grpcserver/server.go	memobrain\.v1	registers the memobrain.v1 service next to clarae.v1; dropped in 3.0
 
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures

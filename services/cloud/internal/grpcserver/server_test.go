@@ -97,6 +97,7 @@ type harness struct {
 	hub    *notify.Hub
 	issuer *authtest.Issuer
 	cli    notifyv1.NotifyServiceClient
+	conn   *grpc.ClientConn
 }
 
 func newHarness(t *testing.T, prov auth.Provisioner, replay []notify.Event, maxStreams int, opts ...Option) *harness {
@@ -119,7 +120,7 @@ func newHarness(t *testing.T, prov auth.Provisioner, replay []notify.Event, maxS
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return &harness{srv: srv, hub: hub, issuer: iss, cli: notifyv1.NewNotifyServiceClient(conn)}
+	return &harness{srv: srv, hub: hub, issuer: iss, cli: notifyv1.NewNotifyServiceClient(conn), conn: conn}
 }
 
 func (h *harness) subscribe(t *testing.T, ctx context.Context, subject string) notifyv1.NotifyService_SubscribeClient {

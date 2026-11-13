@@ -2,6 +2,10 @@
 // HTTP token path; each stream is a subscriber of the notify hub and stays
 // open until the client disconnects, the token expires, the account is
 // suspended or the server shuts down.
+//
+// The service is registered twice: as clarae.v1.NotifyService and, for the desktop
+// clients 1.4.0 and earlier, as memobrain.v1.NotifyService (legacy.go). Both are the
+// same handler: the legacy one only converts the messages.
 package grpcserver
 
 import (
@@ -122,7 +126,9 @@ func New(authn *auth.Middleware, hub Hub, opts ...Option) *Server {
 		}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
 	)
-	notifyv1.RegisterNotifyServiceServer(srv.Server, &notifyServer{hub: hub, done: srv.done})
+	handler := &notifyServer{hub: hub, done: srv.done}
+	notifyv1.RegisterNotifyServiceServer(srv.Server, handler)
+	registerLegacy(srv.Server, handler)
 	return srv
 }
 
@@ -153,7 +159,13 @@ type notifyServer struct {
 // first replaying every vault that is ahead of the client's known_seq. The
 // stream ends with UNAUTHENTICATED once the token used to open it expires.
 func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.ServerStreamingServer[notifyv1.Event]) error {
-	ctx := stream.Context()
+	return n.serve(stream.Context(), req.GetKnownSeq(), req.GetConfigVersion(), stream.Send)
+}
+
+// serve is the stream of both services: send delivers one event to the client in the
+// message type of the service it called.
+func (n *notifyServer) serve(clientCtx context.Context, knownSeq map[string]int64, configVersion int32, send func(*notifyv1.Event) error) error {
+	ctx := clientCtx
 	p, ok := auth.PrincipalFrom(ctx)
 	if !ok {
 		return status.Error(codes.Unauthenticated, "no principal")
@@ -179,7 +191,7 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 		return status.Error(codes.ResourceExhausted, err.Error())
 	}
 	defer n.hub.Unsubscribe(sub)
-	if err := n.hub.Replay(ctx, sub, req.GetKnownSeq(), int64(req.GetConfigVersion())); err != nil {
+	if err := n.hub.Replay(ctx, sub, knownSeq, int64(configVersion)); err != nil {
 		return status.Error(codes.Internal, "replay failed")
 	}
 	for {
@@ -190,7 +202,7 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 				return status.Error(codes.Unavailable, "server shutting down")
 			default:
 			}
-			if stream.Context().Err() != nil {
+			if clientCtx.Err() != nil {
 				return nil // the client went away
 			}
 			return status.Error(codes.Unauthenticated, "token expired")
@@ -207,7 +219,7 @@ func (n *notifyServer) Subscribe(req *notifyv1.SubscribeRequest, stream grpc.Ser
 			default:
 				msg = &notifyv1.Event{Payload: &notifyv1.Event_VaultChanged{VaultChanged: &notifyv1.VaultChanged{VaultId: ev.VaultID.String(), Seq: ev.Seq}}}
 			}
-			if err := stream.Send(msg); err != nil {
+			if err := send(msg); err != nil {
 				return err
 			}
 			if notify.EndsStream(ev) {
