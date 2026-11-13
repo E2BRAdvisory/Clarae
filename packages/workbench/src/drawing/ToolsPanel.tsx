@@ -12,17 +12,21 @@ import { Icon } from '../shell/icons';
 
 const RECENT_MAX = 6;
 const recentKey = (vaultId: string): string => `clarae.drawing.tools.recent.${vaultId}`;
+/** The key of 1.x: read while the current one has no value yet, never written (dropped in 3.0). */
+const legacyRecentKey = (vaultId: string): string => `memobrain.drawing.tools.recent.${vaultId}`;
 
-function loadRecent(vaultId: string): string[] {
+export function loadRecent(vaultId: string): string[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(recentKey(vaultId)) ?? '[]') as unknown;
+    const stored =
+      localStorage.getItem(recentKey(vaultId)) ?? localStorage.getItem(legacyRecentKey(vaultId));
+    const raw = JSON.parse(stored ?? '[]') as unknown;
     return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
   } catch {
     return [];
   }
 }
 
-function saveRecent(vaultId: string, id: string, current: string[]): void {
+export function saveRecent(vaultId: string, id: string, current: string[]): void {
   try {
     const next = [id, ...current.filter((x) => x !== id)].slice(0, RECENT_MAX);
     localStorage.setItem(recentKey(vaultId), JSON.stringify(next));

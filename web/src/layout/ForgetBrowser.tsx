@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Dialog } from '@clarae/ui';
 import {
@@ -8,7 +8,7 @@ import {
   type UnsyncedCopy,
 } from '../workbench/forget';
 import { unsyncedVaults } from '../workbench/markers';
-import { accountKey } from '../workbench/storage';
+import { accountKeys } from '../workbench/storage';
 
 type Pending = UnsyncedCopy;
 
@@ -46,10 +46,12 @@ export function useForgetBrowser(o: ForgetBrowserOptions): {
 } {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>({ kind: 'idle' });
+  // The account's key in 1.4: what a profile of 1.4 holds for it is counted and removed too.
+  const legacyAccount = useRef<string | undefined>(undefined);
 
   /** Lists the copies with changes; true when one was not accepted yet (the user is asked). */
   const confirm = (account: string, accepted: string[]): boolean => {
-    const vaults = unsyncedVaults(account);
+    const vaults = unsyncedVaults(account, legacyAccount.current);
     if (vaults.every((v) => accepted.includes(v.id))) return false;
     setStep({ kind: 'confirm', account, vaults });
     return true;
@@ -78,17 +80,26 @@ export function useForgetBrowser(o: ForgetBrowserOptions): {
   const run = (account: string, accepted: string[]): void => {
     if (confirm(account, accepted)) return;
     setStep({ kind: 'working' });
-    forgetThisBrowser(account).then((r) => finish(account, r, false, accepted), fail);
+    forgetThisBrowser(account, legacyAccount.current).then(
+      (r) => finish(account, r, false, accepted),
+      fail,
+    );
   };
   const closeTabAndRetry = (account: string, accepted: string[]): void => {
     setStep({ kind: 'waiting', account });
-    forgetAfterLeave(account, { accepted }).then((r) => finish(account, r, true, accepted), fail);
+    forgetAfterLeave(account, {
+      accepted,
+      ...(legacyAccount.current ? { legacyAccount: legacyAccount.current } : {}),
+    }).then((r) => finish(account, r, true, accepted), fail);
   };
   const start = (): void => {
     const subject = o.subject;
     if (!subject) return o.onDone(); // nobody signed in: nothing of theirs to remove
     setStep({ kind: 'working' });
-    accountKey({ server: location.origin, subject }).then((account) => run(account, []), fail);
+    accountKeys({ server: location.origin, subject }).then(({ key, legacyKey }) => {
+      legacyAccount.current = legacyKey;
+      run(key, []);
+    }, fail);
   };
   const cancel = (): void => setStep({ kind: 'idle' });
 

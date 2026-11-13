@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@clarae/ui';
 import type { LeaveResult as ForgetResult } from '../workbench/forget';
 import { updateMarker } from '../workbench/markers';
-import { accountKey } from '../workbench/storage';
+import { accountKey, legacyAccountKey } from '../workbench/storage';
 import { useForgetBrowser } from './ForgetBrowser';
 
 const forget = vi.hoisted(() => ({
@@ -13,12 +13,14 @@ const forget = vi.hoisted(() => ({
   calls: 0,
   leaveCalls: 0,
   accounts: [] as string[],
+  oldKeys: [] as (string | undefined)[],
 }));
 
 vi.mock('../workbench/forget', () => ({
-  forgetThisBrowser: (account: string) => {
+  forgetThisBrowser: (account: string, oldKey?: string) => {
     forget.calls++;
     forget.accounts.push(account);
+    forget.oldKeys.push(oldKey);
     return Promise.resolve(forget.results.shift() ?? { removed: true, busy: false });
   },
   forgetAfterLeave: (account: string) => {
@@ -61,6 +63,7 @@ beforeEach(async () => {
   other = await accountKey({ server: location.origin, subject: 'bob' });
   localStorage.clear();
   forget.accounts = [];
+  forget.oldKeys = [];
   forget.results = [];
   forget.afterLeave = [];
   forget.calls = 0;
@@ -102,6 +105,15 @@ describe('forgetting this browser from the console', () => {
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
     expect(forget.calls).toBe(1);
     expect(forget.accounts).toEqual([account]);
+  });
+
+  it('also removes what 1.4 kept for the account, under its old key', async () => {
+    const old = await legacyAccountKey({ server: location.origin, subject: 'alice' });
+    expect(old).not.toBe(account);
+    const { onDone, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(forget.oldKeys).toEqual([old]);
   });
 
   it("acts on the signed-in account only: another account's changes are not listed", async () => {

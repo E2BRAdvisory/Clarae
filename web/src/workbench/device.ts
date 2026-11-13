@@ -9,6 +9,9 @@
 // until the account it belongs to takes it over (the core checks the account before using it).
 // Used by the core's worker (host functions loadDevice/saveDevice, internal/app/host_web.go) and by
 // the console (thisBrowserDevice, forgetThisBrowserDevice). Same origin, same database.
+// Up to 1.4 the database had another name (legacyNames.ts): the first access of a page copies its
+// registrations to the current one and deletes the old database (migrateLegacyDatabase).
+import { LEGACY_DEVICE_DB } from './legacyNames';
 
 const DB = 'clarae-device';
 const VERSION = 2;
@@ -36,9 +39,9 @@ interface LegacyRow extends BrowserDevice {
   savedAt?: string;
 }
 
-function open(): Promise<IDBDatabase> {
+function open(name: string = DB): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, VERSION);
+    const req = indexedDB.open(name, VERSION);
     req.onupgradeneeded = (ev) => {
       const db = req.result;
       const tx = req.transaction as IDBTransaction;
@@ -64,11 +67,107 @@ function open(): Promise<IDBDatabase> {
   });
 }
 
+/** Whether a database exists, without creating it (opening an unknown name would). */
+async function databaseExists(name: string): Promise<boolean> {
+  if (typeof indexedDB.databases === 'function') {
+    try {
+      return (await indexedDB.databases()).some((d) => d.name === name);
+    } catch {
+      /* fall through to opening it */
+    }
+  }
+  return new Promise<boolean>((resolve) => {
+    const req = indexedDB.open(name);
+    let existed = true;
+    req.onupgradeneeded = () => {
+      existed = false; // it did not exist: the abort leaves nothing behind
+      req.transaction?.abort();
+    };
+    req.onsuccess = () => {
+      req.result.close();
+      resolve(existed);
+    };
+    req.onerror = () => resolve(false);
+    req.onblocked = () => resolve(true);
+  });
+}
+
+/** Puts `rows` into `store` of `db`, except those whose key is already there (the new database wins). */
+function putMissing(
+  db: IDBDatabase,
+  store: string,
+  rows: unknown[],
+  key: (r: never) => IDBValidKey,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([store], 'readwrite');
+    const os = tx.objectStore(store);
+    for (const row of rows) {
+      const got = os.get(key(row as never));
+      got.onsuccess = () => {
+        if (got.result === undefined) os.put(row);
+      };
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('device database error'));
+    tx.onabort = () => reject(tx.error ?? new Error('device database transaction aborted'));
+  });
+}
+
+async function readAll(db: IDBDatabase, store: string): Promise<unknown[]> {
+  if (!db.objectStoreNames.contains(store)) return [];
+  return new Promise<unknown[]>((resolve, reject) => {
+    const req = db.transaction([store], 'readonly').objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result as unknown[]);
+    req.onerror = () => reject(req.error ?? new Error('device database error'));
+  });
+}
+
+/**
+ * Copies the registrations of the database of 1.4 to the current one (what the current one already
+ * has stays), then deletes the old database. Safe to repeat: after an interruption between the two
+ * steps the copy is a no-op and the deletion is done. A page memoizes it; a failure is retried at the
+ * next access, and the registrations stay readable only in the old database until then (the
+ * workbench registers a new device in that case, nothing else is lost).
+ */
+let migration: Promise<void> | null = null;
+function migrateLegacyDatabase(): Promise<void> {
+  migration ??= (async () => {
+    if (!(await databaseExists(LEGACY_DEVICE_DB))) return;
+    const old = await open(LEGACY_DEVICE_DB);
+    let rows: unknown[];
+    let legacyRows: unknown[];
+    try {
+      rows = await readAll(old, STORE);
+      legacyRows = await readAll(old, LEGACY);
+    } finally {
+      old.close();
+    }
+    const db = await open();
+    try {
+      await putMissing(db, STORE, rows, (r: Row) => [r.server, r.account]);
+      await putMissing(db, LEGACY, legacyRows, (r: LegacyRow) => r.server);
+    } finally {
+      db.close();
+    }
+    await new Promise<void>((resolve) => {
+      const del = indexedDB.deleteDatabase(LEGACY_DEVICE_DB);
+      // Blocked by a connection of another tab: the deletion completes when it closes.
+      del.onsuccess = del.onerror = del.onblocked = () => resolve();
+    });
+  })().catch((e: unknown) => {
+    migration = null;
+    console.warn('clarae: could not take the device registration to the new database:', e);
+  });
+  return migration;
+}
+
 async function run<T>(
   stores: string[],
   mode: IDBTransactionMode,
   body: (tx: IDBTransaction) => IDBRequest<T> | undefined,
 ): Promise<T | undefined> {
+  await migrateLegacyDatabase();
   const db = await open();
   try {
     return await new Promise<T | undefined>((resolve, reject) => {

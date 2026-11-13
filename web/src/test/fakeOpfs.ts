@@ -4,32 +4,54 @@
 
 type Node = FakeDir | FakeFile;
 
+/** What the fake browser can do; tests change it between steps. */
+export interface FakeOpfsOptions {
+  /** Whether `FileSystemHandle.move` works on folders (it does not in every browser). */
+  move: boolean;
+  /** Number of file writes still allowed before one fails with QuotaExceededError; null: no limit. */
+  writesLeft: number | null;
+}
+
 function domError(name: string): Error {
   const e = new Error(name);
   e.name = name;
   return e;
 }
 
+type Blobish = string | { text(): Promise<string> };
+
 class FakeFile {
   readonly kind = 'file';
   constructor(
     readonly name: string,
     public text = '',
+    private readonly opts: FakeOpfsOptions = { move: false, writesLeft: null },
   ) {}
-  getFile(): Promise<{ text(): Promise<string> }> {
-    return Promise.resolve({ text: () => Promise.resolve(this.text) });
+  getFile(): Promise<{ text(): Promise<string>; size: number }> {
+    return Promise.resolve({
+      text: () => Promise.resolve(this.text),
+      size: new TextEncoder().encode(this.text).length,
+    });
   }
-  createWritable(): Promise<{ write(d: string): Promise<void>; close(): Promise<void> }> {
+  createWritable(): Promise<{
+    write(d: Blobish): Promise<void>;
+    close(): Promise<void>;
+    abort(): Promise<void>;
+  }> {
     let buf = '';
     return Promise.resolve({
-      write: (d: string) => {
-        buf += d;
-        return Promise.resolve();
+      write: async (d: Blobish) => {
+        buf += typeof d === 'string' ? d : await d.text();
       },
       close: () => {
+        if (this.opts.writesLeft !== null) {
+          if (this.opts.writesLeft <= 0) return Promise.reject(domError('QuotaExceededError'));
+          this.opts.writesLeft--;
+        }
         this.text = buf;
         return Promise.resolve();
       },
+      abort: () => Promise.resolve(),
     });
   }
 }
@@ -37,9 +59,11 @@ class FakeFile {
 export class FakeDir {
   readonly kind = 'directory';
   readonly children = new Map<string, Node>();
+  private parent: FakeDir | null = null;
   constructor(
-    readonly name: string,
+    public name: string,
     private readonly busy: Set<FakeDir> = new Set(),
+    readonly opts: FakeOpfsOptions = { move: false, writesLeft: null },
   ) {}
 
   getDirectoryHandle(name: string, o: { create?: boolean } = {}): Promise<FakeDir> {
@@ -47,7 +71,8 @@ export class FakeDir {
     if (c instanceof FakeDir) return Promise.resolve(c);
     if (c) return Promise.reject(domError('TypeMismatchError'));
     if (!o.create) return Promise.reject(domError('NotFoundError'));
-    const d = new FakeDir(name, this.busy);
+    const d = new FakeDir(name, this.busy, this.opts);
+    d.parent = this;
     this.children.set(name, d);
     return Promise.resolve(d);
   }
@@ -57,7 +82,7 @@ export class FakeDir {
     if (c instanceof FakeFile) return Promise.resolve(c);
     if (c) return Promise.reject(domError('TypeMismatchError'));
     if (!o.create) return Promise.reject(domError('NotFoundError'));
-    const f = new FakeFile(name);
+    const f = new FakeFile(name, '', this.opts);
     this.children.set(name, f);
     return Promise.resolve(f);
   }
@@ -71,6 +96,18 @@ export class FakeDir {
       if (c.holdsBusy()) return Promise.reject(domError('NoModificationAllowedError'));
     }
     this.children.delete(name);
+    return Promise.resolve();
+  }
+
+  /** `FileSystemHandle.move` for a folder: one atomic step, where the fake browser has it. */
+  move(dest: FakeDir, name: string): Promise<void> {
+    if (!this.opts.move || !this.parent) return Promise.reject(domError('NotSupportedError'));
+    if (this.holdsBusy()) return Promise.reject(domError('NoModificationAllowedError'));
+    if (dest.children.has(name)) return Promise.reject(domError('InvalidModificationError'));
+    this.parent.children.delete(this.name);
+    this.name = name;
+    this.parent = dest;
+    dest.children.set(name, this);
     return Promise.resolve();
   }
 
@@ -104,6 +141,14 @@ export class FakeDir {
     (await dir.getFileHandle(parts[parts.length - 1] as string, { create: true })).text = text;
   }
 
+  /** The text of the file at a path, or null. */
+  read(path: string): string | null {
+    const [head, ...rest] = path.split('/').filter(Boolean);
+    const c = head === undefined ? undefined : this.children.get(head);
+    if (c instanceof FakeFile) return rest.length === 0 ? c.text : null;
+    return c instanceof FakeDir && rest.length > 0 ? c.read(rest.join('/')) : null;
+  }
+
   /** The names at the root of this folder, sorted. */
   names(): string[] {
     return [...this.children.keys()].sort();
@@ -121,8 +166,13 @@ export class FakeDir {
 }
 
 /** Installs a fresh fake OPFS as navigator.storage; returns its root and the function that removes it. */
-export function installFakeOpfs(): { root: FakeDir; restore: () => void } {
-  const root = new FakeDir('');
+export function installFakeOpfs(): {
+  root: FakeDir;
+  options: FakeOpfsOptions;
+  restore: () => void;
+} {
+  const options: FakeOpfsOptions = { move: false, writesLeft: null };
+  const root = new FakeDir('', new Set(), options);
   const nav = navigator as unknown as { storage?: unknown };
   const had = Object.getOwnPropertyDescriptor(nav, 'storage');
   Object.defineProperty(nav, 'storage', {
@@ -131,6 +181,7 @@ export function installFakeOpfs(): { root: FakeDir; restore: () => void } {
   });
   return {
     root,
+    options,
     restore: () => {
       if (had) Object.defineProperty(nav, 'storage', had);
       else delete nav.storage;

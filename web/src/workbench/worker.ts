@@ -13,6 +13,7 @@ import {
   type SqliteStatement,
 } from '@clarae/sqlite-bridge';
 import { loadDevice, saveDevice } from './device';
+import { LEGACY_SCRATCH_DIRS } from './legacyNames';
 import { installOpfsFs, segments, UNLINKED_DIR, type OpfsFs } from './opfs-fs';
 import type {
   AssetRef,
@@ -318,8 +319,16 @@ async function startGo(assets: CoreAssets, config: CoreConfig): Promise<void> {
 
 // ---- messages ---------------------------------------------------------------------------------------
 
-/** Scratch folders of the host (webHost.SaveFile, pickFile) and of the fs shim. */
-const SCRATCH = ['/tmp/clarae-downloads', '/tmp/clarae-uploads', UNLINKED_DIR];
+/**
+ * Scratch folders of the host (webHost.SaveFile, pickFile) and of the fs shim. The ones of 1.4 stay
+ * in the list: a page of 1.4 closed mid-way may have left clear text of a private vault there.
+ */
+const SCRATCH = [
+  '/tmp/clarae-downloads',
+  '/tmp/clarae-uploads',
+  ...LEGACY_SCRATCH_DIRS,
+  UNLINKED_DIR,
+];
 
 async function init(assets: CoreAssets, config: CoreConfig): Promise<void> {
   // Only the signed-in account's storage is opened (storage.ts): never a default shared by accounts.

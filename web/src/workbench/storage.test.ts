@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeOpfs, type FakeDir } from '../test/fakeOpfs';
-import { MARKERS_KEY, readLegacyMarkers, readMarkers, updateMarker } from './markers';
+import { LEGACY_MARKERS_KEY } from './legacyNames';
+import { readLegacyMarkers, readMarkers, updateMarker } from './markers';
 import {
   LEGACY_OWNER_FILE,
   accountKey,
@@ -103,7 +104,7 @@ describe('account storage in OPFS', () => {
     for (const f of folders) await root.write(`fs/vaults/${f}/Note.md`, 'clear text');
     await root.mkdir('memobrain-sqlite/.opaque');
     localStorage.setItem(
-      MARKERS_KEY,
+      LEGACY_MARKERS_KEY,
       JSON.stringify(Object.fromEntries(folders.map((f) => [f, marker(`/vaults/${f}`, 1)]))),
     );
   }
@@ -195,9 +196,9 @@ describe('account storage in OPFS', () => {
   });
 
   it('forgets the markers of an earlier version whose copies are gone', async () => {
-    localStorage.setItem(MARKERS_KEY, JSON.stringify({ v1: marker('/vaults/v1') }));
+    localStorage.setItem(LEGACY_MARKERS_KEY, JSON.stringify({ v1: marker('/vaults/v1') }));
     expect(await adopt(A, { userId: 'u-alice' }).run()).toBe('none');
-    expect(localStorage.getItem(MARKERS_KEY)).toBeNull();
+    expect(localStorage.getItem(LEGACY_MARKERS_KEY)).toBeNull();
   });
 
   it('removes the storage of one account and nothing else', async () => {
@@ -240,6 +241,6 @@ describe('account storage in OPFS', () => {
     expect(await unownedLegacyPresent()).toBe(true);
     expect(await removeUnownedLegacy()).toEqual({ removed: true, busy: false });
     expect(root.names()).toEqual([]);
-    expect(localStorage.getItem(MARKERS_KEY)).toBeNull();
+    expect(localStorage.getItem(LEGACY_MARKERS_KEY)).toBeNull();
   });
 });

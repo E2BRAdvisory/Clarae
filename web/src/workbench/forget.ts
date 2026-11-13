@@ -8,7 +8,13 @@
  * It runs on the console page, where no worker holds the files. When a workbench tab of the account is
  * open elsewhere its handles keep the files locked and nothing is removed: `busy` says so, and the
  * caller can tell the user.
+ *
+ * During a deploy a tab of 1.4 may still be open next to this one. It knows the lock and the channel
+ * by their old names (legacyNames.ts) and the account by its old key, so a workbench page holds both
+ * locks, the requests to leave go out on both channels (each in the key its listener compares), and
+ * what the account holds under the old names is removed with the rest (`legacyAccount`).
  */
+import { LEGACY_WORKBENCH_CHANNEL, LEGACY_WORKBENCH_LOCK } from './legacyNames';
 import { unsyncedVaults, type VaultMarker } from './markers';
 import { removeAccountStorage, type RemoveResult } from './storage';
 
@@ -24,23 +30,59 @@ export type UnsyncedCopy = VaultMarker & { id: string };
 export const WORKBENCH_LOCK = 'clarae-workbench';
 
 /**
- * Whether a workbench page is open in this browser (any account). Unknown (no Web Locks) counts as
- * open: callers then wait instead of trusting markers a page may still be updating.
+ * Every lock a workbench page holds, in the order it takes them: the one of 1.4 first, so a 1.4 tab
+ * and this page never both open the exclusive handles of OPFS.
+ */
+export const WORKBENCH_LOCKS: readonly string[] = [LEGACY_WORKBENCH_LOCK, WORKBENCH_LOCK];
+
+/**
+ * One attempt at taking every workbench lock (without waiting for any): true when this page now holds
+ * them all, for as long as it lives. When one is taken by another page, the ones already got are
+ * released and the result is false.
+ */
+export async function tryTakeWorkbenchLocks(locks: LockManager): Promise<boolean> {
+  const releases: (() => void)[] = [];
+  for (const name of WORKBENCH_LOCKS) {
+    const release = await new Promise<(() => void) | null>((resolve) => {
+      void locks.request(name, { ifAvailable: true }, (lock) => {
+        if (!lock) {
+          resolve(null);
+          return undefined;
+        }
+        // Holding the lock means not settling: it is released when the page goes away (or on `release`).
+        return new Promise<void>((done) => resolve(() => done()));
+      });
+    });
+    if (!release) {
+      releases.forEach((r) => r());
+      return false;
+    }
+    releases.push(release);
+  }
+  return true;
+}
+
+/**
+ * Whether a workbench page is open in this browser (any account, any version). Unknown (no Web
+ * Locks) counts as open: callers then wait instead of trusting markers a page may still be updating.
  */
 export async function workbenchPageOpen(): Promise<boolean> {
   const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
   if (!locks?.query) return true;
   try {
     const state = await locks.query();
-    return (state.held ?? []).some((l) => l.name === WORKBENCH_LOCK);
+    return (state.held ?? []).some((l) => l.name !== undefined && WORKBENCH_LOCKS.includes(l.name));
   } catch {
     return true;
   }
 }
 
-/** Removes the storage and the markers of the account `account` (storage.ts accountKey). */
-export function forgetThisBrowser(account: string): Promise<ForgetResult> {
-  return removeAccountStorage(account);
+/**
+ * Removes the storage and the markers of the account `account` (storage.ts accountKey), and what it
+ * holds under `legacyAccount`, its key in 1.4 (storage.ts legacyAccountKey).
+ */
+export function forgetThisBrowser(account: string, legacyAccount?: string): Promise<ForgetResult> {
+  return removeAccountStorage(account, legacyAccount);
 }
 
 /** The channel between the console and a workbench tab of the same browser. */
@@ -48,8 +90,13 @@ export const WORKBENCH_CHANNEL = 'clarae-workbench';
 
 export interface LeaveRequest {
   type: 'leave';
-  /** The account whose workbench must leave: a tab of another account ignores the request. */
+  /**
+   * The account whose workbench must leave: a tab of another account ignores the request. On the
+   * channel of 1.4 it is the account's key in 1.4, the one a 1.4 tab compares.
+   */
   account: string;
+  /** Set on the copy sent to the channel of 1.4: a page of this version already got the other copy. */
+  copy?: true;
   /**
    * Leave without uploading or keeping anything (the account was deleted: nothing can be uploaded
    * any more, and the copies must go): the tab stops its engine at once.
@@ -62,28 +109,51 @@ export interface LeaveRequest {
  * then go back to the console; or stop at once with `discard`), which releases the files so they can
  * be removed. Nothing happens without such a tab.
  */
-export function askWorkbenchToLeave(account: string, discard = false): void {
+export function askWorkbenchToLeave(
+  account: string,
+  discard = false,
+  legacyAccount?: string,
+): void {
   if (typeof BroadcastChannel === 'undefined') return;
-  const ch = new BroadcastChannel(WORKBENCH_CHANNEL);
-  ch.postMessage({
-    type: 'leave',
-    account,
-    ...(discard ? { discard } : {}),
-  } satisfies LeaveRequest);
-  ch.close();
+  const send = (name: string, request: LeaveRequest): void => {
+    const ch = new BroadcastChannel(name);
+    ch.postMessage(request);
+    ch.close();
+  };
+  const rest = discard ? { discard } : {};
+  send(WORKBENCH_CHANNEL, { type: 'leave', account, ...rest });
+  // A tab of 1.4 listens on its own channel, for its own key of the account.
+  if (legacyAccount)
+    send(LEGACY_WORKBENCH_CHANNEL, { type: 'leave', account: legacyAccount, copy: true, ...rest });
 }
 
 /**
- * The workbench side of askWorkbenchToLeave, for the tab of `account`; returns the function that stops
- * listening.
+ * The workbench side of askWorkbenchToLeave, for the tab of `account` (`legacyAccount`: its key in 1.4);
+ * returns the function that stops listening. It listens on the channel of 1.4 too, for a console of 1.4
+ * that is still open (one of this version sends the same request on both channels: the copy on the
+ * old one is skipped).
  */
-export function onLeaveRequest(account: string, cb: (discard: boolean) => void): () => void {
+export function onLeaveRequest(
+  account: string,
+  cb: (discard: boolean) => void,
+  legacyAccount?: string,
+): () => void {
   if (typeof BroadcastChannel === 'undefined') return () => undefined;
-  const ch = new BroadcastChannel(WORKBENCH_CHANNEL);
-  ch.onmessage = (ev: MessageEvent<LeaveRequest>) => {
-    if (ev.data?.type === 'leave' && ev.data.account === account) cb(ev.data.discard === true);
+  const listen = (name: string, mine: string | undefined, old: boolean): BroadcastChannel => {
+    const ch = new BroadcastChannel(name);
+    ch.onmessage = (ev: MessageEvent<LeaveRequest>) => {
+      const d = ev.data;
+      if (d?.type !== 'leave' || mine === undefined || d.account !== mine) return;
+      if (old && d.copy) return;
+      cb(d.discard === true);
+    };
+    return ch;
   };
-  return () => ch.close();
+  const channels = [
+    listen(WORKBENCH_CHANNEL, account, false),
+    listen(LEGACY_WORKBENCH_CHANNEL, legacyAccount, true),
+  ];
+  return () => channels.forEach((c) => c.close());
 }
 
 export interface LeaveOptions {
@@ -96,9 +166,11 @@ export interface LeaveOptions {
    * the removal. Any other copy with changes does.
    */
   accepted?: readonly string[];
-  forget?: (account: string) => Promise<ForgetResult>;
-  /** The copies with changes not uploaded (default: the account's markers). */
-  unsynced?: (account: string) => UnsyncedCopy[];
+  /** The account's key in 1.4: what it holds under the old names is removed and counted too. */
+  legacyAccount?: string;
+  forget?: (account: string, legacyAccount?: string) => Promise<ForgetResult>;
+  /** The copies with changes not uploaded (default: the account's markers, the old ones included). */
+  unsynced?: (account: string, legacyAccount?: string) => UnsyncedCopy[];
   /** Whether a workbench page is still open (default: its Web Lock, workbenchPageOpen). */
   pageOpen?: () => Promise<boolean>;
 }
@@ -128,12 +200,12 @@ export async function forgetAfterLeave(
     pageOpen = workbenchPageOpen,
   } = o;
   const accepted = new Set(o.accepted ?? []);
-  askWorkbenchToLeave(account, o.discard);
+  askWorkbenchToLeave(account, o.discard, o.legacyAccount);
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     await new Promise((r) => setTimeout(r, intervalMs));
     if (!o.discard) {
-      const left = unsynced(account).filter((v) => !accepted.has(v.id));
+      const left = unsynced(account, o.legacyAccount).filter((v) => !accepted.has(v.id));
       if (left.length > 0) {
         const open = await pageOpen().catch(() => true);
         // The page is gone: what its markers say is final, and the user decides.
@@ -142,7 +214,7 @@ export async function forgetAfterLeave(
         continue; // still uploading, or keeping them: wait
       }
     }
-    const r = await forget(account);
+    const r = await forget(account, o.legacyAccount);
     if (!r.busy || Date.now() >= deadline) return r;
   }
 }
@@ -158,7 +230,7 @@ export async function discardAccountStorage(
 ): Promise<boolean> {
   try {
     const forget = o.forget ?? forgetThisBrowser;
-    const first = await forget(account);
+    const first = await forget(account, o.legacyAccount);
     if (!first.busy) return first.removed;
     const r = await forgetAfterLeave(account, { timeoutMs: 10_000, ...o, discard: true });
     return r.removed;

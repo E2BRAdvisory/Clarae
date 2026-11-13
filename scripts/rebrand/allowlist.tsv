@@ -50,6 +50,10 @@ legacy	packages/workbench/src/drawing/meta.ts	memobrain	Excalidraw metadata key 
 legacy	packages/workbench/src/drawing/**/*.test.ts	memobrain	tests of the reading of drawings in the 1.x format
 legacy	packages/workbench/src/marp/slides.ts	memobrain	hidden-slide marker and frontmatter keys (memobrain-loop, memobrain-notes) of 1.x presentations, read as long as 1.x files exist
 legacy	packages/workbench/src/marp/*.test.ts	memobrain	tests of the reading of presentations in the 1.x format
+legacy	web/src/workbench/legacyNames.ts	memobrain	names the browser workbench used up to 1.4 (account key salt, data folder, IndexedDB, markers, Web Lock, channel, scratch folders, preferences), read or spoken to for tabs and profiles of 1.x: dropped in 3.0
+legacy	web/src/workbench/*.test.ts	memobrain	tests of the migration of a browser profile created by 1.x
+legacy	web/e2e/migration.spec.ts	memobrain	end-to-end test of the migration of a browser profile created by 1.x
+legacy	packages/workbench/src/drawing/ToolsPanel.tsx	memobrain\.drawing\.tools\.recent	localStorage key of the recent drawing tools of 1.x, read while the new key has no value: dropped in 3.0
 
 # Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
 legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 3.0

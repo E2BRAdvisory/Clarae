@@ -12,7 +12,7 @@ import { downloadBlob } from '../export/download';
 import { useForgetBrowser } from '../layout/ForgetBrowser';
 import { forgetThisBrowserDevice } from '../workbench/device';
 import { discardAccountStorage } from '../workbench/forget';
-import { accountKey, removeUnownedLegacy, unownedLegacyPresent } from '../workbench/storage';
+import { accountKeys, removeUnownedLegacy, unownedLegacyPresent } from '../workbench/storage';
 
 /**
  * The copies an earlier version kept without an account (storage.ts): nobody can be shown to own
@@ -126,8 +126,8 @@ export function AccountPage() {
   const forgetDeletedAccount = async (): Promise<void> => {
     const subject = user?.sub;
     if (!subject) return;
-    const account = await accountKey({ server: location.origin, subject });
-    await discardAccountStorage(account);
+    const { key, legacyKey } = await accountKeys({ server: location.origin, subject });
+    await discardAccountStorage(key, { legacyAccount: legacyKey });
     await forgetThisBrowserDevice(subject, me.data?.id);
   };
 

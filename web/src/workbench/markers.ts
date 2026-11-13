@@ -8,16 +8,23 @@
  * It exists so nothing that was not uploaded yet is deleted silently (D-04): signing out and "forget this
  * browser" ask first when a marker says a copy holds changes, and the start-up sweep that removes the
  * clear text of private vaults left behind by a closed tab (ADR-0029 §6) skips those copies.
+ *
+ * Up to 1.4 the markers had another name (legacyNames.ts): `<name>@<account key of then>`, and bare up
+ * to 1.3. Where the caller knows the account's old key, the old and the new markers are read together
+ * (a copy with changes not uploaded must not look clean because its marker was not moved yet), writes go
+ * to the new key, and the old one is removed only once the new one is written (migrateMarkers).
  */
+import { LEGACY_MARKERS_KEY } from './legacyNames';
 
-/**
- * The localStorage key of the markers of versions up to 1.3, which had no account (storage.ts): read
- * only to adopt or delete the copies they describe.
- */
+/** The localStorage key of the markers: `<this>@<account key>` (`account` is storage.ts accountKey). */
 export const MARKERS_KEY = 'clarae.workbench.vaults';
 
-/** The localStorage key of an account's markers (`account` is storage.ts accountKey). */
+/** The localStorage key of an account's markers. */
 export const markersKey = (account: string): string => `${MARKERS_KEY}@${account}`;
+
+/** The key of the markers of an account in 1.4 (`legacyAccount` is storage.ts legacyAccountKey). */
+export const legacyMarkersKey = (legacyAccount: string): string =>
+  `${LEGACY_MARKERS_KEY}@${legacyAccount}`;
 
 export interface VaultMarker {
   /** Display name, for the confirmation lists. */
@@ -68,20 +75,58 @@ function read(key: string): Markers {
   }
 }
 
-function write(key: string, m: Markers): void {
+/** Writes a set of markers; false when the browser refused (quota, blocked storage). */
+function write(key: string, m: Markers): boolean {
   const s = storage();
-  if (!s) return;
+  if (!s) return false;
   try {
     if (Object.keys(m).length === 0) s.removeItem(key);
     else s.setItem(key, JSON.stringify(m));
+    return true;
   } catch {
     // quota exceeded or storage blocked: the marker is a safety net, the copy itself is intact
+    return false;
   }
 }
 
-/** The markers of an account. */
-export function readMarkers(account: string): Markers {
-  return read(markersKey(account));
+/**
+ * Two markers of the same vault: the one that says there are changes not uploaded (the later of
+ * them when both do), else the later one.
+ */
+function pick(a: VaultMarker, b: VaultMarker): VaultMarker {
+  if (unsynced(a) !== unsynced(b)) return unsynced(a) ? a : b;
+  return b.updatedAt >= a.updatedAt ? b : a;
+}
+
+/** The markers of an old key and a new one together, vault by vault (see pick). */
+function union(old: Markers, current: Markers): Markers {
+  const out: Markers = { ...old };
+  for (const [id, m] of Object.entries(current)) out[id] = out[id] ? pick(out[id], m) : m;
+  return out;
+}
+
+/**
+ * The markers of an account. With `legacyAccount` (its key in 1.4) the markers 1.4 left under that
+ * key count too: for the checks that decide whether something may be removed.
+ */
+export function readMarkers(account: string, legacyAccount?: string): Markers {
+  const current = read(markersKey(account));
+  return legacyAccount ? union(read(legacyMarkersKey(legacyAccount)), current) : current;
+}
+
+/**
+ * Moves the markers 1.4 left for the account to the new key: written there first, the old key
+ * removed only when the new one reads back with every vault. A refusal of the browser keeps the old
+ * key (reading both keeps working).
+ */
+export function migrateMarkers(account: string, legacyAccount: string): void {
+  const s = storage();
+  const old = read(legacyMarkersKey(legacyAccount));
+  if (!s || Object.keys(old).length === 0) return;
+  const merged = union(old, read(markersKey(account)));
+  if (!write(markersKey(account), merged)) return;
+  const back = read(markersKey(account));
+  if (Object.keys(merged).every((id) => id in back)) s.removeItem(legacyMarkersKey(legacyAccount));
 }
 
 /** Creates or updates the marker of a vault; fields not given keep their value (or a clean default). */
@@ -116,17 +161,19 @@ export function removeMarker(account: string, id: string): void {
   write(markersKey(account), all);
 }
 
-export function clearMarkers(account: string): void {
+/** Removes the markers of an account (and, given its key in 1.4, the ones 1.4 left). */
+export function clearMarkers(account: string, legacyAccount?: string): void {
   write(markersKey(account), {});
+  if (legacyAccount) write(legacyMarkersKey(legacyAccount), {});
 }
 
 /** The markers of versions up to 1.3 (no account). */
 export function readLegacyMarkers(): Markers {
-  return read(MARKERS_KEY);
+  return read(LEGACY_MARKERS_KEY);
 }
 
 export function clearLegacyMarkers(): void {
-  write(MARKERS_KEY, {});
+  write(LEGACY_MARKERS_KEY, {});
 }
 
 /** The account adopted the copies of an earlier version (storage.ts): their markers become its own. */
@@ -141,8 +188,11 @@ export function adoptLegacyMarkers(account: string): void {
 export const unsynced = (m: VaultMarker): boolean => m.pending > 0 || m.conflicts > 0 || m.dirty;
 
 /** The copies of an account that hold changes not uploaded yet, for the confirmations of the console. */
-export function unsyncedVaults(account: string): (VaultMarker & { id: string })[] {
-  return Object.entries(readMarkers(account))
+export function unsyncedVaults(
+  account: string,
+  legacyAccount?: string,
+): (VaultMarker & { id: string })[] {
+  return Object.entries(readMarkers(account, legacyAccount))
     .filter(([, m]) => unsynced(m))
     .map(([id, m]) => ({ id, ...m }));
 }

@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import { withCommon } from '@clarae/ui/i18n';
 import en from './en.json';
 import it from './it.json';
+import { LEGACY_LANG_KEY } from '../workbench/legacyNames';
 
 export const supportedLanguages = ['en', 'it'] as const;
 export type Language = (typeof supportedLanguages)[number];
@@ -16,7 +17,8 @@ export function isLanguage(value: unknown): value is Language {
 /** Saved choice first, then the browser language (Italian or English). */
 export function detectLanguage(): Language {
   try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved =
+      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_LANG_KEY);
     if (isLanguage(saved)) return saved;
   } catch {
     /* storage unavailable: fall through */

@@ -25,9 +25,18 @@ import { VAULTS_DIR, folderOf, runCreation, type Creation, type MountCreate } fr
 import { legacyDeviceUser } from './device';
 import { onLeaveRequest } from './forget';
 import { createVaultGuard, needsGate, type VaultGuard } from './guard';
-import { readMarkers, removeMarker, sweepPrivateCopies } from './markers';
+import { migrateMarkers, readMarkers, removeMarker, sweepPrivateCopies } from './markers';
 import { workbenchHref } from '../shared/routes';
-import { LOCAL_SUBJECT, accountKey, adoptLegacyCopies, storageOf, type CloudView } from './storage';
+import {
+  DATA_DIR,
+  LOCAL_SUBJECT,
+  accountKeys,
+  adoptLegacyCopies,
+  migrateAccountStorage,
+  migrateDataFolder,
+  storageOf,
+  type CloudView,
+} from './storage';
 import { showFatal, showUnlockGate } from './overlay';
 import type { CoreAssets } from './protocol';
 
@@ -302,7 +311,12 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   if (!signedIn && !o.localOnly) throw new Error('signed out');
   const server = location.origin;
   const subject = signedIn?.sub ?? LOCAL_SUBJECT;
-  const account = await accountKey({ server, subject });
+  const { key: account, legacyKey } = await accountKeys({ server, subject });
+  // What a profile used with 1.4 holds under the old names goes to the new ones now: this page holds
+  // the workbench locks (main.tsx) and the core has not started, so nothing has the files open. An
+  // interruption is resumed here at the next start; a failure stops the launch with the old data intact.
+  await migrateAccountStorage(account, legacyKey);
+  migrateMarkers(account, legacyKey);
   if (!o.localOnly && signedIn) {
     const adoption = await adoptLegacyCopies({
       key: account,
@@ -316,6 +330,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       );
   }
   const storage = await storageOf(account);
+  await migrateDataFolder(storage); // after the adoption: an adopted set has a data folder too
 
   let redirecting = false;
   let switched = false;
@@ -354,7 +369,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   const core = await startCore({
     assets: o.assets,
     config: {
-      dataDir: '/clarae/data',
+      dataDir: DATA_DIR,
       version: o.version,
       logLevel: 'warn',
       ...(o.fsTrace ? { fsTrace: true } : {}),
@@ -515,11 +530,15 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   // tab to leave: it uploads, locks and removes what it can, and releases the files. After the account
   // was deleted nothing can be uploaded: the engine stops at once (`discard`). Requests about another
   // account's copies are not for this tab.
-  onLeaveRequest(account, (discard) => {
-    if (!discard) return void backToConsole();
-    core.terminate();
-    goToConsole();
-  });
+  onLeaveRequest(
+    account,
+    (discard) => {
+      if (!discard) return void backToConsole();
+      core.terminate();
+      goToConsole();
+    },
+    legacyKey, // a console of 1.4 left open asks in its own key
+  );
 
   o.progress('ui');
   const vaultGuard = guard;

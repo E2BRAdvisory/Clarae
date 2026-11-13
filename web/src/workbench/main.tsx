@@ -5,7 +5,7 @@ import { createOidcAuth } from '../auth/oidc';
 import { workbenchVaultId } from '../shared/routes';
 import type { AuthService } from '../auth/types';
 import { parseCreation } from './create';
-import { WORKBENCH_LOCK } from './forget';
+import { tryTakeWorkbenchLocks } from './forget';
 import { CANCELLED, DISABLED, launchWorkbench } from './launch';
 import type { CoreAssets } from './protocol';
 import { message, STEP_MESSAGE } from './strings';
@@ -36,17 +36,14 @@ function show(text: string, opts: { error?: boolean; back?: boolean; retry?: boo
   }
 }
 
-/** One workbench per browser: its files and databases are held exclusively (OPFS synchronous handles). */
+/**
+ * One workbench per browser: its files and databases are held exclusively (OPFS synchronous handles).
+ * The page takes the lock of 1.4 as well as its own (forget.ts WORKBENCH_LOCKS), so a 1.4 tab left
+ * open across an update and this page are never both running.
+ */
 async function takeLock(): Promise<boolean> {
   if (!navigator.locks) return true;
-  const attempt = (): Promise<boolean> =>
-    new Promise((resolve) => {
-      void navigator.locks.request(WORKBENCH_LOCK, { ifAvailable: true }, (lock) => {
-        resolve(lock !== null);
-        // Holding the lock means never settling: it is released when the page goes away.
-        return lock ? new Promise<void>(() => undefined) : undefined;
-      });
-    });
+  const attempt = (): Promise<boolean> => tryTakeWorkbenchLocks(navigator.locks);
   // The workbench page this one replaces (opening a mount from Settings › Sharing, a reload) may
   // still be releasing it for a moment; another tab keeps it.
   for (let i = 0; i < 8; i++) {
