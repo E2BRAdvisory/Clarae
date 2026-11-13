@@ -40,6 +40,8 @@ type Key struct {
 type Schema struct {
 	Flags []Flag
 	Keys  []Key
+	// Sections are the top-level keys a profile may have, in schema order.
+	Sections []string
 	// Defaults are the product defaults: every "default" keyword, nested by section.
 	Defaults map[string]map[string]any
 	// sections keeps the order of the sections that have defaults.
@@ -126,6 +128,7 @@ func Parse(raw []byte) (*Schema, error) {
 	}
 	s := &Schema{Defaults: map[string]map[string]any{}}
 	for _, section := range props.keys {
+		s.Sections = append(s.Sections, section)
 		sec, err := props.object(section)
 		if err != nil {
 			return nil, err
@@ -296,7 +299,11 @@ func TS(s *Schema) []byte {
 	for _, f := range s.Flags {
 		fmt.Fprintf(&b, "  [Feature.%s]: %t,\n", f.Ident(), f.Default)
 	}
-	b.WriteString("};\n")
+	b.WriteString("};\n\n/** The sections of a Config Profile: the top-level keys the schema allows, in schema order. */\nexport const CONFIG_SECTIONS: readonly string[] = [\n")
+	for _, section := range s.Sections {
+		fmt.Fprintf(&b, "  '%s',\n", section)
+	}
+	b.WriteString("];\n")
 	return []byte(b.String())
 }
 

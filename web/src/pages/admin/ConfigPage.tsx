@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@clarae/api-client';
+import { CONFIG_SECTIONS } from '@clarae/api-client/features';
 import { Badge, Button, Card, Dialog, InlineError, TextField, useToast } from '@clarae/ui';
 import {
   useDeleteProfile,
@@ -18,12 +19,13 @@ import {
 import { formatDate } from '../../format';
 import { QueryState } from '../QueryState';
 import { adminError } from './adminError';
-import configSchema from '../../../../api/config-profile.schema.json';
 
-/** Top-level keys the profile schema allows (api/config-profile.schema.json). */
-export const SCHEMA_KEYS: string[] = Object.keys(
-  (configSchema as { properties: Record<string, unknown> }).properties,
-);
+/**
+ * Top-level keys the profile schema allows (api/config-profile.schema.json). They come generated
+ * from the schema, not from the schema itself: importing the JSON put its 7 kB of descriptions in the
+ * console bundle for the sake of eleven names (bundle budget, ADR-0020).
+ */
+export const SCHEMA_KEYS: string[] = [...CONFIG_SECTIONS];
 
 export type ConfigIssue =
   { kind: 'syntax'; message: string } | { kind: 'notObject' } | { kind: 'unknownKey'; key: string };

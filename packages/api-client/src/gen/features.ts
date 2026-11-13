@@ -102,3 +102,18 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.PathV2]: true,
   [Feature.ConfigDirV2]: false,
 };
+
+/** The sections of a Config Profile: the top-level keys the schema allows, in schema order. */
+export const CONFIG_SECTIONS: readonly string[] = [
+  'features',
+  'editor',
+  'appearance',
+  'hotkeys',
+  'sync',
+  'attachments',
+  'daily_notes',
+  'templates',
+  'servers',
+  'auth',
+  'security',
+];
