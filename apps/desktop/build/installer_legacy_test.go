@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// The installers of 2.0 replace the application of 1.x (ADR-0052): another product name, so another
+// The installers of 1.5 replace the application of 1.x (ADR-0052): another product name, so another
 // Uninstall key, install folder, executable, shortcuts and, on Linux, package name. Nothing of the
 // user's is in them (the data directory, the keychain and the web view profile are taken over by the
 // application at its first start), so the old application is removed and not migrated.

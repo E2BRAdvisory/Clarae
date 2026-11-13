@@ -11,7 +11,7 @@ const Scheme = "clarae"
 
 // LegacySchemes are the schemes of earlier versions, registered next to Scheme and accepted as
 // well: the links already written in notes (open?vault=…) and the redirect URIs registered in the
-// realms of existing installations still reach the application. Dropped in 3.0.
+// realms of existing installations still reach the application. Dropped in 2.0.
 var LegacySchemes = []string{"memobrain"}
 
 // isScheme reports whether s is the scheme of the product or one of the legacy ones.

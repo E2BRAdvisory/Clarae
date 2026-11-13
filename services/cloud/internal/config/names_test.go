@@ -210,7 +210,7 @@ func TestPlaceholderEscapeHatchUnderTheOldName(t *testing.T) {
 		t.Fatalf("old name: allow %v, err %v", c.AllowPlaceholderSecrets, err)
 	}
 	if len(c.Deprecations) != 1 || !strings.Contains(c.Deprecations[0], "MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS") ||
-		!strings.Contains(c.Deprecations[0], "CLARAE_ALLOW_PLACEHOLDER_SECRETS") || !strings.Contains(c.Deprecations[0], "3.0") {
+		!strings.Contains(c.Deprecations[0], "CLARAE_ALLOW_PLACEHOLDER_SECRETS") || !strings.Contains(c.Deprecations[0], "2.0") {
 		t.Fatalf("Deprecations = %q", c.Deprecations)
 	}
 

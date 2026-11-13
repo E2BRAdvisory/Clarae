@@ -147,7 +147,7 @@ func (m *Manager) SetPathV2(on bool) { m.crypto.SetPathV2(on) }
 
 // SetConfigDirV2 switches the move of the synchronized settings of a linked vault from the former
 // configuration folder to the current one (ADR-0052, features.config_dir_v2, off by default in
-// 2.0.0). The engines run the move at the end of an idle cycle; with the flag off a new settings
+// 1.5.0). The engines run the move at the end of an idle cycle; with the flag off a new settings
 // file of a linked vault is still created in the former folder, where 1.x clients read it.
 func (m *Manager) SetConfigDirV2(on bool) { m.configDirV2.Store(on) }
 

@@ -89,7 +89,7 @@ topologySpreadConstraints:
 {{/*
 Fails the render when the chart would create the Secret (no existingSecret, no externalSecret) with an empty
 required value, or with a placeholder of the templates (change-me, change-me-too, changeme) unless
-config.CLARAE_ALLOW_PLACEHOLDER_SECRETS (or its name of 1.x, MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS, dropped in 3.0)
+config.CLARAE_ALLOW_PLACEHOLDER_SECRETS (or its name of 1.x, MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS, dropped in 2.0)
 is "1"/"true" (the service applies the same rule at start).
 */}}
 {{- define "clarae.checkSecretValues" -}}

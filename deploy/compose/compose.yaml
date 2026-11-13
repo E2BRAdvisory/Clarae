@@ -7,17 +7,17 @@
 # Production notes: PostgreSQL and the object store hold all the data (volumes pgdata, s3data):
 # back them up (README, "Backup"). Only the reverse proxy publishes ports.
 #
-# Installations made before 2.0 (product name MemoBrain Notes): keep their names. COMPOSE_PROJECT_NAME,
+# Installations made before 1.5 (product name MemoBrain Notes): keep their names. COMPOSE_PROJECT_NAME,
 # POSTGRES_USER, POSTGRES_DB and KC_REALM have no default on purpose: the project name prefixes the
 # volumes (another name starts with an empty pgdata), the user and database names are fixed when the
 # volume is initialised, and KC_REALM is the realm Keycloak imports (another name makes a second, empty
 # realm). Set them to what the installation was created with (memobrain-onprem, memobrain, memobrain,
 # memobrain): docs/admin-guide/migrazione-clarae.md. The CLARAE_* variables of the .env also still
-# accept their MEMOBRAIN_* name of 1.x (dropped in 3.0): CLARAE_x wins when both are set.
-name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in .env (clarae-onprem for a new installation, memobrain-onprem for one created before 2.0, whose volumes another name would not find)}
+# accept their MEMOBRAIN_* name of 1.x (dropped in 2.0): CLARAE_x wins when both are set.
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in .env (clarae-onprem for a new installation, memobrain-onprem for one created before 1.5, whose volumes another name would not find)}
 
 x-cloud-env: &cloud-env
-  DATABASE_URL: postgres://${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 2.0)}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 2.0)}?sslmode=disable
+  DATABASE_URL: postgres://${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 1.5)}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 1.5)}?sslmode=disable
   S3_ENDPOINT: http://s3:9000
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
   S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
@@ -26,7 +26,7 @@ x-cloud-env: &cloud-env
   S3_BUCKET_BLOBS: ${S3_BUCKET_BLOBS:-}
   S3_BUCKET_EXPORTS: ${S3_BUCKET_EXPORTS:-}
   S3_USE_PATH_STYLE: 'true'
-  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/${KC_REALM:?set KC_REALM in .env (clarae, or memobrain for an installation created before 2.0)}
+  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/${KC_REALM:?set KC_REALM in .env (clarae, or memobrain for an installation created before 1.5)}
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
   OIDC_ALLOWED_AZP: ${OIDC_ALLOWED_AZP:-}
   OIDC_DESKTOP_CLIENT_ID: ${OIDC_DESKTOP_CLIENT_ID:-}
@@ -163,9 +163,9 @@ services:
     image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 2.0)}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 1.5)}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 2.0)}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 1.5)}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -231,7 +231,7 @@ services:
         ensure() {
           exists "$$1" && return 0
           if [ "$$3" = 0 ] && [ "$$1" != "$$4" ] && exists "$$4"; then
-            echo "s3-init: bucket $$1 does not exist but $$4 (an installation created before 2.0) does: set $$2=$$4 in .env" >&2
+            echo "s3-init: bucket $$1 does not exist but $$4 (an installation created before 1.5) does: set $$2=$$4 in .env" >&2
             exit 1
           fi
           aws --endpoint-url "$$ep" s3 mb "s3://$$1"
@@ -265,7 +265,7 @@ services:
     volumes:
       # First start only: creates the realm KC_REALM (default clarae: clients clarae-desktop, clarae-web,
       # clarae-admin-svc, roles). An existing realm is never touched: Keycloak skips an import whose realm
-      # exists, which is why an installation made before 2.0 must set KC_REALM=memobrain (a different name would
+      # exists, which is why an installation made before 1.5 must set KC_REALM=memobrain (a different name would
       # create a second, empty realm next to it). Production variant of deploy/keycloak: no test users, secret and
       # web origin from the environment.
       - ../keycloak-prod:/opt/keycloak/data/import:ro
@@ -289,8 +289,8 @@ services:
     image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 2.0)}
-      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 2.0)}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 1.5)}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 1.5)}
     volumes:
       - ./backups:/backups
     entrypoint: >

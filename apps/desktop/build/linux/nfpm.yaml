@@ -19,7 +19,7 @@ depends:
 # The package of 1.x had another name and installed /usr/bin/<its name>, its .desktop file and its icons:
 # installing this one removes it (dpkg Replaces + Conflicts), and neither of the two stays next to the other.
 # The data of the user is not in the package: the application takes over the data directory at its first start.
-# Dropped in 3.0.
+# Dropped in 2.0.
 replaces:
   - memobrain
 conflicts:

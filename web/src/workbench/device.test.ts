@@ -4,7 +4,7 @@ import type * as DeviceNs from './device';
 import { LEGACY_DEVICE_DB } from './legacyNames';
 
 // The registration of the browser as a device lives in IndexedDB. 1.4 kept it in a database under the
-// product's former name: the first access of 2.0 copies it to the current one and deletes the old.
+// product's former name: the first access of 1.5 copies it to the current one and deletes the old.
 
 const SERVER = 'https://notes.example';
 const NEW_DB = 'clarae-device';

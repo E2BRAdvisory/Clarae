@@ -2,7 +2,7 @@
  * Moves a folder of the browser's Origin Private File System to a new name, so that an interruption
  * (a closed tab, a crash, a full disk) can never leave two copies that disagree and never loses the
  * original. The workbench uses it to take the storage a 1.x profile holds under the old names to
- * the names of 2.0 (storage.ts migrateAccountStorage); it runs on the workbench page, under the
+ * the names of 1.5 (storage.ts migrateAccountStorage); it runs on the workbench page, under the
  * workbench Web Locks, before the core starts, so nothing holds the files.
  *
  * Browsers that can move a folder (`FileSystemHandle.move`) do it in one step. The others get a

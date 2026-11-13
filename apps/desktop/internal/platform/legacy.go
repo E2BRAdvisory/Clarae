@@ -8,7 +8,7 @@ import (
 // legacyWebViewDirNames are the profile folders that WebView2 made for the executable of 1.x under
 // %AppData%: they are named after the file. The installer put it there as "<product name>.exe"
 // (PRODUCT_EXECUTABLE of the NSIS template, from the name in project.json); a build run from the
-// output directory has the name of the output file. Dropped in 3.0.
+// output directory has the name of the output file. Dropped in 2.0.
 var legacyWebViewDirNames = []string{legacyProductName + ".exe", "memobrain.exe"}
 
 // WebViewDataDir is where the WebView2 profile of the application lives on Windows: inside the data

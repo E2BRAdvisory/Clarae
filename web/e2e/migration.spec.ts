@@ -1,7 +1,7 @@
 import * as esbuild from 'esbuild';
 import { expect, test } from '@playwright/test';
 
-// A browser profile used with 1.4 holds its data under the names of the former product. 2.0 takes it
+// A browser profile used with 1.4 holds its data under the names of the former product. 1.5 takes it
 // to the new names before the core starts (web/src/workbench/storage.ts, device.ts). The unit tests
 // run on fakes; this one runs the same code against the real Origin Private File System and
 // IndexedDB of Chromium: the folder move where the browser offers it, and the copy where it does not.

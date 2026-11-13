@@ -175,9 +175,9 @@ export async function storageOf(key: string): Promise<AccountStorage> {
   return (await readLegacyOwner()) === key ? LEGACY_STORAGE : namespacedStorage(key);
 }
 
-// ---- taking a profile of 1.4 to the names of 2.0 -------------------------------------------------
+// ---- taking a profile of 1.4 to the names of 1.5 -------------------------------------------------
 
-/** The core's data folder inside the core's file system, as a profile that starts with 2.0 has it. */
+/** The core's data folder inside the core's file system, as a profile that starts with 1.5 has it. */
 export const DATA_ROOT = 'clarae';
 export const DATA_DIR = `/${DATA_ROOT}/data`;
 /** The same folder as 1.4 named it: a profile that has one keeps it (dataDirOf). */

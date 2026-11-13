@@ -14,8 +14,8 @@ import (
 	"clarae/services/cloud/internal/db"
 )
 
-// During a rolling upgrade pods of 1.4 and of 2.0 share the database (ADR-0052, M17 B4). A pod of 1.4
-// takes the per-blob lock under the name "memobrain.blob:<hash>"; 2.0 takes that one first and then
+// During a rolling upgrade pods of 1.4 and of 1.5 share the database (ADR-0052, M17 B4). A pod of 1.4
+// takes the per-blob lock under the name "memobrain.blob:<hash>"; 1.5 takes that one first and then
 // "clarae.blob:<hash>". These tests act as the pod of 1.4 with the SQL it ran.
 const lockAsPod14 = `SELECT pg_advisory_xact_lock(hashtextextended('memobrain.blob:' || $1::text, 0))`
 

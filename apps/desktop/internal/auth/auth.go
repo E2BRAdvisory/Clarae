@@ -71,7 +71,7 @@ func ParseRedirectMode(v string) RedirectMode {
 const SchemeRedirectURI = "clarae://auth/callback"
 
 // LegacySchemeRedirectURI is the callback that the realms made for 1.x have registered: an
-// identity provider that rejects SchemeRedirectURI is tried with it (dropped in 3.0).
+// identity provider that rejects SchemeRedirectURI is tried with it (dropped in 2.0).
 const LegacySchemeRedirectURI = "memobrain://auth/callback"
 
 // Profile is the signed-in user as seen by the client.

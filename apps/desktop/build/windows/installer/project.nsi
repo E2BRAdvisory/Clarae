@@ -91,7 +91,7 @@ FunctionEnd
 ## directory too is moved then, nothing of it is touched here). What is removed is what the old installer wrote and
 ## nothing else: the executable and uninstall.exe in the folder the key points at (the folder only if it is empty
 ## afterwards), the two shortcuts and the key. The protocol class of 1.x is registered again by the new one (both
-## schemes are in project.json). A running old application is asked to be closed. Dropped in 3.0.
+## schemes are in project.json). A running old application is asked to be closed. Dropped in 2.0.
 !define LEGACY_PRODUCT "MemoBrain Notes"
 !define LEGACY_EXECUTABLE "${LEGACY_PRODUCT}.exe"
 !define LEGACY_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\E2BR-Advisory SaglMemoBrain Notes"

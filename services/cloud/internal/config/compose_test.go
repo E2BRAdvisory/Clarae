@@ -24,7 +24,7 @@ func readCompose(t *testing.T) string {
 
 // The settings that fix the identity of an installation (volumes, database, realm) must have no
 // default in the Compose file: a default of the new name would start an installation made before
-// 2.0 on empty volumes and a second realm (ADR-0052, M17 B4). The names the binary derives from the
+// 1.5 on empty volumes and a second realm (ADR-0052, M17 B4). The names the binary derives from the
 // realm must pass through empty, so that the binary decides; the variables renamed by the rebrand
 // keep their 1.x name as a fallback.
 func TestComposeKeepsTheIdentityOfAnInstallationExplicit(t *testing.T) {

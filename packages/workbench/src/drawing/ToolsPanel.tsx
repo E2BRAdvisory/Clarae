@@ -12,7 +12,7 @@ import { Icon } from '../shell/icons';
 
 const RECENT_MAX = 6;
 const recentKey = (vaultId: string): string => `clarae.drawing.tools.recent.${vaultId}`;
-/** The key of 1.x: read while the current one has no value yet, never written (dropped in 3.0). */
+/** The key of 1.x: read while the current one has no value yet, never written (dropped in 2.0). */
 const legacyRecentKey = (vaultId: string): string => `memobrain.drawing.tools.recent.${vaultId}`;
 
 export function loadRecent(vaultId: string): string[] {

@@ -3,5 +3,5 @@
 // from api/proto/memobrain/v1/notify.proto. notify.pb.go and notify_grpc.pb.go are generated:
 // change the .proto and regenerate. It is the same wire format as package notifyv1; the cloud
 // serves both from one handler (services/cloud/internal/grpcserver/legacy.go) so that a 1.4.0
-// client keeps its gRPC stream against a cloud of 2.0 (ADR-0052). Dropped in 3.0 with the proto.
+// client keeps its gRPC stream against a cloud of 1.5 (ADR-0052). Dropped in 2.0 with the proto.
 package notifyv1legacy

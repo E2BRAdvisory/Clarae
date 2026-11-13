@@ -19,7 +19,7 @@ const (
 
 // DefaultAdminRoles are the realm roles that make a user an administrator when nothing is
 // configured (OIDC_ADMIN_ROLES): the role of the realm of a new installation and the one of
-// the realm of 1.x, so that both keep working (the second is dropped in 3.0).
+// the realm of 1.x, so that both keep working (the second is dropped in 2.0).
 // internal/config holds the same list as the default of OIDC_ADMIN_ROLES.
 var DefaultAdminRoles = []string{"clarae-admin", "memobrain-admin"}
 

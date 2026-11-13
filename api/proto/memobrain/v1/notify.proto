@@ -1,10 +1,10 @@
 // LEGACY copy of the notification stream (package memobrain.v1), kept so that the desktop
 // clients 1.4.0 and earlier, which call /memobrain.v1.NotifyService/Subscribe, keep their
-// stream against a cloud of 2.0 or later (ADR-0052, M17 B2). The messages are identical to
+// stream against a cloud of 1.5 or later (ADR-0052, M17 B2). The messages are identical to
 // api/proto/clarae/v1/notify.proto, the current contract: change that file first and keep the
 // two in step while this one exists. The server registers both services on the same handler
 // (services/cloud/internal/grpcserver). The directory stays memobrain/v1 because buf lint
-// (STANDARD) ties the directory to the package. Dropped in 3.0.
+// (STANDARD) ties the directory to the package. Dropped in 2.0.
 syntax = "proto3";
 
 package memobrain.v1;

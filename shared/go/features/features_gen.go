@@ -72,7 +72,7 @@ const (
 
 	// ConfigDirV2: Move the synchronized settings of a linked vault (editor, hotkeys, appearance,
 	// templates, ...) from the former configuration folder to the current one (ADR-0052), as an
-	// ordinary move that keeps the file ids and the history. Off by default in 2.0.0: clients of 1.x
+	// ordinary move that keeps the file ids and the history. Off by default in 1.5.0: clients of 1.x
 	// still read and write the former folder and would recreate every setting, so turn it on only
 	// after every device of the vault is updated. Turning it off stops the move only: a setting
 	// already moved stays where it is, and the client reads both folders.
@@ -139,7 +139,7 @@ var Descriptions = map[string]string{
 	DrawingActions:    "Scene actions of the drawing tools panel (only while drawings is on).",
 	EnvelopeV2:        "Write private-vault key envelopes in format v2, bound to the vault and kind (ADR-0034); an unlock upgrades a v1 envelope to v2. On by default since 1.3.0: desktop 1.2.4 and earlier cannot open a v2 envelope, so update every desktop before the cloud or set false until then. Turning it off stops new upgrades only: a client that has seen a v2 envelope of a kind never writes v1 again.",
 	PathV2:            "Write the encrypted path tokens of private vaults in format v2 (enc2), bound to the file id, and migrate the remaining enc1 tokens in the background while a vault is unlocked (ADR-0042). On by default since 1.3.0: desktop 1.2.4 and earlier cannot read enc2 paths, so update every desktop before the cloud or set false until then. Turning it off stops the migration only: a vault already seen in enc2 keeps enc2, and a fully migrated vault refuses enc1.",
-	ConfigDirV2:       "Move the synchronized settings of a linked vault (editor, hotkeys, appearance, templates, ...) from the former configuration folder to the current one (ADR-0052), as an ordinary move that keeps the file ids and the history. Off by default in 2.0.0: clients of 1.x still read and write the former folder and would recreate every setting, so turn it on only after every device of the vault is updated. Turning it off stops the move only: a setting already moved stays where it is, and the client reads both folders.",
+	ConfigDirV2:       "Move the synchronized settings of a linked vault (editor, hotkeys, appearance, templates, ...) from the former configuration folder to the current one (ADR-0052), as an ordinary move that keeps the file ids and the history. Off by default in 1.5.0: clients of 1.x still read and write the former folder and would recreate every setting, so turn it on only after every device of the vault is updated. Turning it off stops the move only: a setting already moved stays where it is, and the client reads both folders.",
 }
 
 // productDefaults builds the product defaults: every "default" keyword of the schema.

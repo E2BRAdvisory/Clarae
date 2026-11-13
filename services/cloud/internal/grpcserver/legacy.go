@@ -12,13 +12,13 @@ import (
 	"clarae/shared/notifyv1legacy"
 )
 
-// The desktop clients 1.4.0 and earlier call /memobrain.v1.NotifyService/Subscribe. Since 2.0 the
+// The desktop clients 1.4.0 and earlier call /memobrain.v1.NotifyService/Subscribe. Since 1.5 the
 // service is clarae.v1.NotifyService, but a cloud that answered UNIMPLEMENTED to those clients
 // would push them back to the SSE fallback for no reason. Both services run the same handler
 // (notifyServer.serve: authentication, replay, ordering, rate limits and shutdown are shared);
 // this adapter only converts the messages. The two protos are the same wire format by
 // construction (api/proto/memobrain/v1 is a copy of api/proto/clarae/v1) and a test compares
-// their descriptors. Dropped in 3.0 together with the legacy proto.
+// their descriptors. Dropped in 2.0 together with the legacy proto.
 
 func registerLegacy(s *grpc.Server, n *notifyServer) {
 	notifyv1legacy.RegisterNotifyServiceServer(s, &legacyNotifyServer{n: n})

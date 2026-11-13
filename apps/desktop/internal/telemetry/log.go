@@ -41,13 +41,13 @@ func NewLogger(dataDir, level string, console bool) (zerolog.Logger, io.Closer, 
 }
 
 // legacyLogPrefix is the name of the logs of 1.x: <prefix>.log, and the rotated backups
-// <prefix>-<time>.log[.gz]. Dropped in 3.0.
+// <prefix>-<time>.log[.gz]. Dropped in 2.0.
 const legacyLogPrefix = "memobrain"
 
 // adoptLegacyLogs renames the logs of 1.x to the names the logger rotates now, so that the history carries on
 // and the old files age out with the new ones, instead of staying for good. A destination that
 // exists is left alone, and nothing is overwritten. Best effort: a log is not worth stopping for.
-// Dropped in 3.0.
+// Dropped in 2.0.
 func adoptLegacyLogs(logs string) {
 	entries, err := os.ReadDir(logs)
 	if err != nil {

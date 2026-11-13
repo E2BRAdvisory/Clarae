@@ -17,7 +17,7 @@ const (
 )
 
 // legacyKeychainServices are the service names of 1.x: the key is read from them and moved to the
-// current one (dropped in 3.0).
+// current one (dropped in 2.0).
 var legacyKeychainServices = []string{"MemoBrain Notes AI"}
 
 // keychain is the key of the provider in the OS keychain; backend replaces it (tests).

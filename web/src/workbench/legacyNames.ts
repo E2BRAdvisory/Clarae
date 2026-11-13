@@ -1,10 +1,10 @@
 /**
  * The names the browser workbench used up to 1.4 (before the rebrand, ADR-0052) for what it keeps
  * in the browser. A profile used with 1.x holds its data under these names, and a 1.4 tab may
- * still be open during a deploy, so 2.0 reads them (migrating what it must, never writing them)
+ * still be open during a deploy, so 1.5 reads them (migrating what it must, never writing them)
  * and speaks them on the lock and the channel a 1.4 tab listens to. This is the only place that
  * names them, apart from the unnamed set of 1.3 and earlier (storage.ts LEGACY_FS, LEGACY_SQLITE),
- * which is adopted in place and keeps its folders. Dropped in 3.0.
+ * which is adopted in place and keeps its folders. Dropped in 2.0.
  *
  * Changing one of these strings makes the data of an existing profile unreachable: legacyNames.test.ts
  * pins them.

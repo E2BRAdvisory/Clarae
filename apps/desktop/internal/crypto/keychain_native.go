@@ -13,7 +13,7 @@ const keychainService = "Clarae notanda vault keys"
 
 // legacyKeychainServices are the service names of 1.x: the VMKs are read from them and moved to
 // the current one, so that a private vault opens after the update with no recovery key typed
-// (dropped in 3.0).
+// (dropped in 2.0).
 var legacyKeychainServices = []string{"MemoBrain Notes vault keys"}
 
 // KeychainStore uses the OS keychain (macOS Keychain, Windows Credential

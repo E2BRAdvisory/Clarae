@@ -25,7 +25,7 @@ INSERT INTO blobs (hash, size, storage_key) VALUES ($1, $2, $3) ON CONFLICT (has
 -- lock a row is inserted only once its object is verified, and the collector
 -- deletes an object only when no row exists (see ingestFile and LockObject).
 -- The key is "<prefix>blob:<hash>": the caller takes the one of 1.x and then the current one
--- (db.AdvisoryLockKeys), so that pods of 1.4 and of 2.0 exclude each other during an upgrade.
+-- (db.AdvisoryLockKeys), so that pods of 1.4 and of 1.5 exclude each other during an upgrade.
 SELECT pg_advisory_xact_lock(hashtextextended(sqlc.arg(key)::text, 0));
 
 -- name: RenewUnreferencedBlob :exec

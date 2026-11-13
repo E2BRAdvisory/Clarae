@@ -35,7 +35,7 @@ type S3Options struct {
 }
 
 // ErrLegacyBucket means the default bucket is missing while the bucket of a 1.x installation exists.
-var ErrLegacyBucket = errors.New("s3: the default bucket does not exist but the bucket of an installation made before 2.0 does")
+var ErrLegacyBucket = errors.New("s3: the default bucket does not exist but the bucket of an installation made before 1.5 does")
 
 // bucketAPI is the part of the S3 client that ensureBucket needs (a fake in tests).
 type bucketAPI interface {

@@ -142,7 +142,7 @@ config:
 # The Secret must hold DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, KC_ADMIN_CLIENT_SECRET. With option 3 the
 # render fails while one is empty or a placeholder (change-me...), and so does the service at start;
 # config.CLARAE_ALLOW_PLACEHOLDER_SECRETS: '1' lifts the placeholder check (throwaway tests only; its name of 1.x,
-# MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS, still works until 3.0).
+# MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS, still works until 2.0).
 secret:
   existingSecret: ''
   values:
@@ -188,7 +188,7 @@ ingress:
     path: /clarae.v1.NotifyService # gRPC services are routed by /<package>.<Service>
     # The service of 1.x (package memobrain.v1), still called by the desktop clients 1.4.0 and earlier: the
     # cloud serves it from the same handler. Routed too in mode: path (mode: host sends every path to the
-    # service); empty = not routed. Dropped in 3.0.
+    # service); empty = not routed. Dropped in 2.0.
     legacyPath: /memobrain.v1.NotifyService
     # Long-lived server-streaming RPC: keep the connection open (seconds).
     streamTimeoutSeconds: 3600

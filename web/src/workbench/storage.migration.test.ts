@@ -15,7 +15,7 @@ import {
   storageOf,
 } from './storage';
 
-// A browser profile that was used with 1.4 and is opened by 2.0 for the first time: everything the
+// A browser profile that was used with 1.4 and is opened by 1.5 for the first time: everything the
 // account had under the old names must be there under the new ones, and nothing may be lost, however
 // the migration is interrupted (D-04: no silent loss of changes not uploaded yet).
 
@@ -126,10 +126,10 @@ describe('a profile created by 1.4', () => {
 
   it('keeps the old folder when the account already has storage of its own under the new key', async () => {
     const { key, legacyKey, at, next } = await profile();
-    await root.write(`${next}/fs/vaults/v9/Note.md`, 'created by 2.0');
+    await root.write(`${next}/fs/vaults/v9/Note.md`, 'created by 1.5');
     expect(await migrateAccountStorage(key, legacyKey)).toBe('kept');
     expect(root.has(`${at}/fs/vaults/v1/Note.md`)).toBe(true);
-    expect(root.read(`${next}/fs/vaults/v9/Note.md`)).toBe('created by 2.0');
+    expect(root.read(`${next}/fs/vaults/v9/Note.md`)).toBe('created by 1.5');
   });
 
   it('follows the record of an adopted 1.3 set to the new key, and keeps its data folder', async () => {

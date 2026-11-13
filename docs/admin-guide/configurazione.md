@@ -42,7 +42,7 @@ Un valore che non si interpreta non viene mai sostituito in silenzio dal default
 
 ### Nomi di default: la famiglia dell'issuer
 
-Le installazioni create prima della 2.0 hanno un realm `memobrain`, con i client, l'audience e i bucket che portano il vecchio nome. Per non rompere né i client 1.4.0 né i blob già archiviati, i default che contengono il nome del prodotto **seguono l'issuer**: se `OIDC_ISSUER` termina con `/realms/memobrain` valgono i nomi della 1.x (`memobrain-api`, `memobrain-desktop`, `memobrain-web`, `memobrain-admin-svc`, `memobrain-blobs`, `memobrain-exports`, namespace delle metriche `memobrain`), per qualunque altro issuer quelli nuovi (`clarae-…`). Il default di `KC_REALM` è il realm indicato dall'issuer. Una variabile impostata esplicitamente vince sempre. All'avvio un realm della 1.x viene segnalato con un warning; i nomi della 1.x sono supportati fino alla 3.0 (vedi [migrazione a Clarae notanda](migrazione-clarae.md)).
+Le installazioni create prima della 1.5 hanno un realm `memobrain`, con i client, l'audience e i bucket che portano il vecchio nome. Per non rompere né i client 1.4.0 né i blob già archiviati, i default che contengono il nome del prodotto **seguono l'issuer**: se `OIDC_ISSUER` termina con `/realms/memobrain` valgono i nomi della 1.x (`memobrain-api`, `memobrain-desktop`, `memobrain-web`, `memobrain-admin-svc`, `memobrain-blobs`, `memobrain-exports`, namespace delle metriche `memobrain`), per qualunque altro issuer quelli nuovi (`clarae-…`). Il default di `KC_REALM` è il realm indicato dall'issuer. Una variabile impostata esplicitamente vince sempre. All'avvio un realm della 1.x viene segnalato con un warning; i nomi della 1.x sono supportati fino alla 2.0 (vedi [migrazione a Clarae notanda](migrazione-clarae.md)).
 
 Il ruolo `worker` non richiede `OIDC_ISSUER`, ma senza di esso i default sono quelli nuovi: su un'installazione della 1.x passargli lo stesso `OIDC_ISSUER` dell'API (o i nomi dei bucket espliciti).
 
@@ -87,7 +87,7 @@ All'avvio il servizio rifiuta di partire se un segreto vale ancora uno dei segna
 
 | Variabile                          | Default | Obbl. | Descrizione                                                                                                                                                                                                                                                               |
 | ---------------------------------- | ------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLARAE_ALLOW_PLACEHOLDER_SECRETS` | `false` | no    | `1`/`true` disattiva il controllo (servizio e `preflight` del compose). Solo per prove usa e getta: **mai in produzione**. Il nome della 1.x `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` vale ancora se il nuovo non è impostato, con un warning all'avvio (rimosso nella 3.0). |
+| `CLARAE_ALLOW_PLACEHOLDER_SECRETS` | `false` | no    | `1`/`true` disattiva il controllo (servizio e `preflight` del compose). Solo per prove usa e getta: **mai in produzione**. Il nome della 1.x `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` vale ancora se il nuovo non è impostato, con un warning all'avvio (rimosso nella 2.0). |
 
 ### Metriche
 

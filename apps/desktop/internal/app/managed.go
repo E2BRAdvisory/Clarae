@@ -101,7 +101,7 @@ func pathV2Enabled(cfg map[string]any) bool {
 
 // configDirV2Enabled reads features.config_dir_v2, which lets the sync engine move the synchronized
 // settings of a linked vault from the former configuration folder to the current one (ADR-0052).
-// Off by default in 2.0.0: clients of 1.x sharing the vault still use the former folder.
+// Off by default in 1.5.0: clients of 1.x sharing the vault still use the former folder.
 func configDirV2Enabled(cfg map[string]any) bool {
 	return flags.Enabled(cfg, flags.ConfigDirV2)
 }

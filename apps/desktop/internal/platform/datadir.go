@@ -26,7 +26,7 @@ const DataDirEnvName = "DATA_DIR"
 const (
 	appDirName = "Clarae notanda"
 	// legacyProductName is the name of the product up to 1.x, which is also the name of its data
-	// directory, a sibling of the current one (dropped in 3.0).
+	// directory, a sibling of the current one (dropped in 2.0).
 	legacyProductName = "MemoBrain Notes"
 	legacyAppDirName  = legacyProductName
 	appDatabaseName   = "app.db"

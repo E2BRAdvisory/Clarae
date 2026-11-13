@@ -250,7 +250,7 @@ func TestRenderRefusesWithoutVersionAndKeepsTheTemplate(t *testing.T) {
 // redirect URI that the realms made for 1.x have registered (memobrain://auth/callback) reach the new
 // application, on every platform: both schemes are in the plist of the release and of the dev build, in the
 // registry of the installer, and in the MIME types of the .desktop file. The Go side accepts both
-// (platform.LegacySchemes). Dropped in 3.0.
+// (platform.LegacySchemes). Dropped in 2.0.
 func TestLegacyURLSchemeIsRegistered(t *testing.T) {
 	for _, tpl := range []string{"darwin/Info.plist", "darwin/Info.dev.plist"} {
 		plist, err := render(t, tpl, "-version", version)

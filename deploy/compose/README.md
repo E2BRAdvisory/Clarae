@@ -12,7 +12,7 @@ Stack per un singolo host: reverse proxy Caddy (TLS automatico, HTTP/2 per gRPC)
 
 ## Primo avvio
 
-1. `cp .env.example .env` e modificarlo: nomi host, `CLARAE_VERSION`, e **tutti i segreti** (`openssl rand -base64 24 | tr -d '=+/'`). `.env` non va committato. Finché un segreto vale ancora il segnaposto di `.env.example` (`change-me`, `change-me-too`) il servizio one-shot `preflight` termina con errore e PostgreSQL, S3 e Keycloak non partono (`docker compose logs preflight` elenca le variabili da cambiare); anche il Cloud Service rifiuta di avviarsi. `CLARAE_ALLOW_PLACEHOLDER_SECRETS=1` salta entrambi i controlli: solo per prove usa e getta. `COMPOSE_PROJECT_NAME`, `POSTGRES_USER`, `POSTGRES_DB` e `KC_REALM` non hanno un default: l'`.env.example` ha i valori di un'installazione nuova (`clarae-onprem`, `clarae`, `clarae`, `clarae`), un'installazione creata prima della 2.0 deve tenere i propri (vedi [Installazioni create prima della 2.0](#installazioni-create-prima-della-20)).
+1. `cp .env.example .env` e modificarlo: nomi host, `CLARAE_VERSION`, e **tutti i segreti** (`openssl rand -base64 24 | tr -d '=+/'`). `.env` non va committato. Finché un segreto vale ancora il segnaposto di `.env.example` (`change-me`, `change-me-too`) il servizio one-shot `preflight` termina con errore e PostgreSQL, S3 e Keycloak non partono (`docker compose logs preflight` elenca le variabili da cambiare); anche il Cloud Service rifiuta di avviarsi. `CLARAE_ALLOW_PLACEHOLDER_SECRETS=1` salta entrambi i controlli: solo per prove usa e getta. `COMPOSE_PROJECT_NAME`, `POSTGRES_USER`, `POSTGRES_DB` e `KC_REALM` non hanno un default: l'`.env.example` ha i valori di un'installazione nuova (`clarae-onprem`, `clarae`, `clarae`, `clarae`), un'installazione creata prima della 1.5 deve tenere i propri (vedi [Installazioni create prima della 1.5](#installazioni-create-prima-della-20)).
 2. `docker compose config -q` per controllare che non manchi nessuna variabile obbligatoria.
 3. `docker compose up -d`. L'ordine è garantito dai healthcheck: PostgreSQL (crea anche il database `keycloak` solo al primo avvio con volume vuoto), S3 e creazione bucket, Keycloak, poi API, worker e proxy. Il Cloud Service applica le migrazioni DB all'avvio di `cloud-api`: nel frattempo, e finché Keycloak non risponde, `/api/v1/healthz` risponde già 200 mentre `/api/v1/readyz` e le altre API rispondono 503 (il proxy non inoltra traffico). `cloud-worker` attende da solo che lo schema sia aggiornato prima di eseguire i job.
 4. Verifica: `curl https://clarae.example.com/api/v1/readyz` deve rispondere `{"status":"ok",...}`. Tramite il proxy la risposta non riporta il dettaglio per dipendenza; per vederlo: `docker compose exec proxy wget -qO- http://cloud-api:18081/api/v1/readyz` (`database` e `storage` a `ok`). Il worker: `docker compose exec proxy wget -qO- http://cloud-worker:18083/healthz`.
@@ -50,7 +50,7 @@ Nelle impostazioni Cloud del client inserire `https://clarae.example.com`. Lo st
 
 Nota per chi aggiorna un'installazione esistente a questa versione del compose: la `/tmp` di `cloud-api` è ora un tmpfs limitato (`API_TMP_SIZE`, default `2g`: la RAM effettivamente usata è solo quella occupata dagli upload in corso) e quella di `cloud-worker` è il nuovo volume `worker_tmp` su disco (prima entrambe erano tmpfs senza limite, cioè fino a metà della RAM). `docker compose up -d` crea il volume da solo; non contiene dati da salvare e può essere eliminato con `docker volume rm <progetto>_worker_tmp` a stack fermo. Lo spazio libero sul disco di Docker deve bastare per l'archivio di export del vault più grande.
 
-## Installazioni create prima della 2.0
+## Installazioni create prima della 1.5
 
 Il prodotto si chiamava «MemoBrain Notes» e i nomi di un'installazione già in esercizio non cambiano da soli. Con l'`.env` della 1.x, che non ha le quattro variabili di identità, `docker compose` rifiuta di partire (`COMPOSE_PROJECT_NAME`, `POSTGRES_USER`, `POSTGRES_DB`, `KC_REALM` sono obbligatorie), invece di avviare uno stack vuoto:
 
@@ -63,7 +63,7 @@ KC_REALM=memobrain
 
 - Il nome del progetto prefissa i volumi (`memobrain-onprem_pgdata`): un altro nome ne creerebbe di vuoti.
 - Con `KC_REALM=memobrain` il Cloud Service mantiene da solo audience, client, bucket (`memobrain-blobs`, `memobrain-exports`) e namespace delle metriche della 1.x; non serve impostare altro. Se il realm è nuovo (`clarae`) ma i dati sono nei bucket della 1.x, `s3-init` e il servizio rifiutano di partire e dicono di impostare `S3_BUCKET_BLOBS=memobrain-blobs` (e `S3_BUCKET_EXPORTS=memobrain-exports`).
-- Le variabili `MEMOBRAIN_HOST`, `MEMOBRAIN_SITE`, `MEMOBRAIN_IMAGE`, `MEMOBRAIN_VERSION`, `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` valgono ancora se la `CLARAE_*` corrispondente non è impostata (rimosse nella 3.0).
+- Le variabili `MEMOBRAIN_HOST`, `MEMOBRAIN_SITE`, `MEMOBRAIN_IMAGE`, `MEMOBRAIN_VERSION`, `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` valgono ancora se la `CLARAE_*` corrispondente non è impostata (rimosse nella 2.0).
 
 La procedura completa, con Helm, Keycloak e metriche, è in [`docs/admin-guide/migrazione-clarae.md`](../../docs/admin-guide/migrazione-clarae.md).
 

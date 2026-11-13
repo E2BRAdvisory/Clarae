@@ -18,7 +18,7 @@ type KeychainStore struct{ Backend ossecret.Backend }
 const keychainService = "Clarae notanda"
 
 // legacyKeychainServices are the service names of 1.x: the refresh tokens are read from them and
-// moved to the current one (dropped in 3.0).
+// moved to the current one (dropped in 2.0).
 var legacyKeychainServices = []string{"MemoBrain Notes"}
 
 func (k KeychainStore) store() ossecret.Store {

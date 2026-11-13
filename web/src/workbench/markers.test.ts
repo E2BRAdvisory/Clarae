@@ -144,7 +144,7 @@ describe('markers of a profile used with 1.4', () => {
     updatedAt,
   });
 
-  it('keeps the names that 1.4 and 1.3 wrote, and the one 2.0 writes', () => {
+  it('keeps the names that 1.4 and 1.3 wrote, and the one 1.5 writes', () => {
     expect(MARKERS_KEY).toBe('clarae.workbench.vaults');
     expect(legacyMarkersKey(OLD)).toBe('memobrain.workbench.vaults@a-alice-1-4');
     expect(LEGACY_MARKERS_KEY).toBe('memobrain.workbench.vaults');
