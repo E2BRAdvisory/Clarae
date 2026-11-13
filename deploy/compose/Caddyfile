@@ -42,7 +42,7 @@
 	}
 }
 
-# Keycloak. The clients need only the realm "clarae" (/realms/clarae/...: OIDC endpoints, login and
+# Keycloak. The clients need only the realm of the installation (KC_REALM: /realms/<realm>/...: OIDC endpoints, login and
 # account pages) and the theme assets (/resources/...). The administration console and its REST API (/admin)
 # and the realm "master" (where the server administrator logs in) answer 403 unless the client address is in
 # KEYCLOAK_ADMIN_FROM (space separated CIDRs; the default 127.0.0.1/32 matches no external client). The cloud

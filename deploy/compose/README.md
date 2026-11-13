@@ -12,17 +12,18 @@ Stack per un singolo host: reverse proxy Caddy (TLS automatico, HTTP/2 per gRPC)
 
 ## Primo avvio
 
-1. `cp .env.example .env` e modificarlo: nomi host, `CLARAE_VERSION`, e **tutti i segreti** (`openssl rand -base64 24 | tr -d '=+/'`). `.env` non va committato. Finché un segreto vale ancora il segnaposto di `.env.example` (`change-me`, `change-me-too`) il servizio one-shot `preflight` termina con errore e PostgreSQL, S3 e Keycloak non partono (`docker compose logs preflight` elenca le variabili da cambiare); anche il Cloud Service rifiuta di avviarsi. `CLARAE_ALLOW_PLACEHOLDER_SECRETS=1` salta entrambi i controlli: solo per prove usa e getta.
+1. `cp .env.example .env` e modificarlo: nomi host, `CLARAE_VERSION`, e **tutti i segreti** (`openssl rand -base64 24 | tr -d '=+/'`). `.env` non va committato. Finché un segreto vale ancora il segnaposto di `.env.example` (`change-me`, `change-me-too`) il servizio one-shot `preflight` termina con errore e PostgreSQL, S3 e Keycloak non partono (`docker compose logs preflight` elenca le variabili da cambiare); anche il Cloud Service rifiuta di avviarsi. `CLARAE_ALLOW_PLACEHOLDER_SECRETS=1` salta entrambi i controlli: solo per prove usa e getta. `COMPOSE_PROJECT_NAME`, `POSTGRES_USER`, `POSTGRES_DB` e `KC_REALM` non hanno un default: l'`.env.example` ha i valori di un'installazione nuova (`clarae-onprem`, `clarae`, `clarae`, `clarae`), un'installazione creata prima della 2.0 deve tenere i propri (vedi [Installazioni create prima della 2.0](#installazioni-create-prima-della-20)).
 2. `docker compose config -q` per controllare che non manchi nessuna variabile obbligatoria.
 3. `docker compose up -d`. L'ordine è garantito dai healthcheck: PostgreSQL (crea anche il database `keycloak` solo al primo avvio con volume vuoto), S3 e creazione bucket, Keycloak, poi API, worker e proxy. Il Cloud Service applica le migrazioni DB all'avvio di `cloud-api`: nel frattempo, e finché Keycloak non risponde, `/api/v1/healthz` risponde già 200 mentre `/api/v1/readyz` e le altre API rispondono 503 (il proxy non inoltra traffico). `cloud-worker` attende da solo che lo schema sia aggiornato prima di eseguire i job.
 4. Verifica: `curl https://clarae.example.com/api/v1/readyz` deve rispondere `{"status":"ok",...}`. Tramite il proxy la risposta non riporta il dettaglio per dipendenza; per vederlo: `docker compose exec proxy wget -qO- http://cloud-api:18081/api/v1/readyz` (`database` e `storage` a `ok`). Il worker: `docker compose exec proxy wget -qO- http://cloud-worker:18083/healthz`.
 
 ### Keycloak: realm, utente admin, client
 
-- Al primo avvio Keycloak importa il realm `clarae` da `deploy/keycloak/realm-clarae.json` (client `clarae-desktop`, `clarae-web`, `clarae-admin-svc`, ruoli). L'utente amministratore del **server Keycloak** è `KC_BOOTSTRAP_ADMIN_*` (console su `https://auth.example.com/admin`). La console e il realm `master` **non sono pubblici**: il proxy risponde `403` a meno che l'IP del client sia in `KEYCLOAK_ADMIN_FROM` (CIDR separati da spazio, per esempio la VPN degli amministratori). Per il primo avvio impostarla in `.env`, `docker compose up -d proxy`, configurare il realm, poi rimuoverla e ripetere il comando (dettagli in `docs/admin-guide/keycloak.md`). I client usano solo `/realms/clarae/...` e `/resources/...`, che restano pubblici.
+- Al primo avvio Keycloak importa il realm `KC_REALM` (default dell'`.env.example`: `clarae`) da `deploy/keycloak-prod/realm-clarae.json` (client `clarae-desktop`, `clarae-web`, `clarae-admin-svc`, ruoli). L'utente amministratore del **server Keycloak** è `KC_BOOTSTRAP_ADMIN_*` (console su `https://auth.example.com/admin`). La console e il realm `master` **non sono pubblici**: il proxy risponde `403` a meno che l'IP del client sia in `KEYCLOAK_ADMIN_FROM` (CIDR separati da spazio, per esempio la VPN degli amministratori). Per il primo avvio impostarla in `.env`, `docker compose up -d proxy`, configurare il realm, poi rimuoverla e ripetere il comando (dettagli in `docs/admin-guide/keycloak.md`). I client usano solo `/realms/<realm>/...` e `/resources/...`, che restano pubblici.
 - Questo stack importa il realm di **produzione** `deploy/keycloak-prod/realm-clarae.json`: nessun utente di prova (il realm di sviluppo `deploy/keycloak/` resta per `task stack-up` e k3d), il secret di `clarae-admin-svc` è `KC_ADMIN_CLIENT_SECRET` del `.env` e l'origine della Web UI è `WEB_UI_ORIGIN`, sostituiti da Keycloak all'import. Creare i veri utenti (o federare l'IdP aziendale) dalla console. Se cambiano le definizioni in `deploy/keycloak/`, riportarle nella variante di produzione (stessi client e ruoli).
 - Il primo amministratore **Clarae notanda** è l'utente a cui si assegna il ruolo di realm `clarae-admin` (gli utenti normali hanno `clarae-user`): assegnarlo dalla console Keycloak, poi accedere alla Web UI. Non eliminare l'utente di servizio `service-account-clarae-admin-svc`.
-- Il realm si importa solo su database vuoto: modifiche successive al file JSON non hanno effetto, si fanno dalla console.
+- Il realm si importa solo se non esiste già: Keycloak salta un import il cui realm è presente, e modifiche successive al file JSON non hanno effetto (si fanno dalla console). Per questo `KC_REALM` deve avere il nome del realm esistente: con un altro nome `--import-realm` creerebbe un secondo realm, vuoto, accanto al primo.
+- Il client desktop del realm nuovo accetta sia `clarae://auth/callback` sia `memobrain://auth/callback` (i client 1.4.0 e il ripiego del client nuovo).
 
 ### Desktop
 
@@ -38,7 +39,7 @@ Nelle impostazioni Cloud del client inserire `https://clarae.example.com`. Lo st
 
 ## Backup
 
-- Dump logico: `docker compose --profile backup run --rm pg-backup` scrive `backups/clarae-<data>.dump` (formato custom, `pg_restore`). Il comando salva solo il database `clarae`; per Keycloak ripetere con `pg_dump ... keycloak` o salvare il volume `pgdata`.
+- Dump logico: `docker compose --profile backup run --rm pg-backup` scrive `backups/<POSTGRES_DB>-<data>.dump` (formato custom, `pg_restore`). Il comando salva solo il database `POSTGRES_DB`; per Keycloak ripetere con `pg_dump ... keycloak` o salvare il volume `pgdata`.
 - Per un RPO basso usare archiviazione WAL / PITR di PostgreSQL (runbook nella guida amministratore, WP4) e la replica o lo snapshot del bucket S3.
 - Un backup è valido solo se il ripristino è stato provato.
 
@@ -48,6 +49,23 @@ Nelle impostazioni Cloud del client inserire `https://clarae.example.com`. Lo st
 2. `docker compose pull && docker compose up -d`. Le migrazioni sono in avanti: **il rollback dell'immagine dopo una migrazione richiede il ripristino del backup**, quindi fare un dump prima.
 
 Nota per chi aggiorna un'installazione esistente a questa versione del compose: la `/tmp` di `cloud-api` è ora un tmpfs limitato (`API_TMP_SIZE`, default `2g`: la RAM effettivamente usata è solo quella occupata dagli upload in corso) e quella di `cloud-worker` è il nuovo volume `worker_tmp` su disco (prima entrambe erano tmpfs senza limite, cioè fino a metà della RAM). `docker compose up -d` crea il volume da solo; non contiene dati da salvare e può essere eliminato con `docker volume rm <progetto>_worker_tmp` a stack fermo. Lo spazio libero sul disco di Docker deve bastare per l'archivio di export del vault più grande.
+
+## Installazioni create prima della 2.0
+
+Il prodotto si chiamava «MemoBrain Notes» e i nomi di un'installazione già in esercizio non cambiano da soli. Con l'`.env` della 1.x, che non ha le quattro variabili di identità, `docker compose` rifiuta di partire (`COMPOSE_PROJECT_NAME`, `POSTGRES_USER`, `POSTGRES_DB`, `KC_REALM` sono obbligatorie), invece di avviare uno stack vuoto:
+
+```sh
+COMPOSE_PROJECT_NAME=memobrain-onprem
+POSTGRES_USER=memobrain
+POSTGRES_DB=memobrain
+KC_REALM=memobrain
+```
+
+- Il nome del progetto prefissa i volumi (`memobrain-onprem_pgdata`): un altro nome ne creerebbe di vuoti.
+- Con `KC_REALM=memobrain` il Cloud Service mantiene da solo audience, client, bucket (`memobrain-blobs`, `memobrain-exports`) e namespace delle metriche della 1.x; non serve impostare altro. Se il realm è nuovo (`clarae`) ma i dati sono nei bucket della 1.x, `s3-init` e il servizio rifiutano di partire e dicono di impostare `S3_BUCKET_BLOBS=memobrain-blobs` (e `S3_BUCKET_EXPORTS=memobrain-exports`).
+- Le variabili `MEMOBRAIN_HOST`, `MEMOBRAIN_SITE`, `MEMOBRAIN_IMAGE`, `MEMOBRAIN_VERSION`, `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` valgono ancora se la `CLARAE_*` corrispondente non è impostata (rimosse nella 3.0).
+
+La procedura completa, con Helm, Keycloak e metriche, è in [`docs/admin-guide/migrazione-clarae.md`](../../docs/admin-guide/migrazione-clarae.md).
 
 ## Hardening già applicato
 

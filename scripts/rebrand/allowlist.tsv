@@ -66,6 +66,10 @@ legacy	shared/go/notifyv1legacy/**	*	Go code generated from the legacy proto mem
 legacy	services/cloud/internal/grpcserver/legacy.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	the memobrain.v1 service served from the same handler; dropped in 3.0
 legacy	services/cloud/internal/grpcserver/legacy_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the memobrain.v1 service; dropped in 3.0
 legacy	services/cloud/internal/grpcserver/server.go	memobrain\.v1	registers the memobrain.v1 service next to clarae.v1; dropped in 3.0
+legacy	deploy/compose/compose.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	the .env of 1.x: MEMOBRAIN_* variables as fallback, identity of an installation made before 2.0, buckets of 1.x in s3-init; dropped in 3.0
+legacy	deploy/compose/.env.example	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents the identity of an installation made before 2.0 and the MEMOBRAIN_* fallbacks; dropped in 3.0
+legacy	deploy/compose/README.md	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents the upgrade of an installation made before 2.0; dropped in 3.0
+legacy	services/cloud/internal/config/compose_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the compose file for installations made before 2.0; dropped in 3.0
 
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures

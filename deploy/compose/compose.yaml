@@ -6,23 +6,38 @@
 #
 # Production notes: PostgreSQL and the object store hold all the data (volumes pgdata, s3data):
 # back them up (README, "Backup"). Only the reverse proxy publishes ports.
-name: ${COMPOSE_PROJECT_NAME:-clarae-onprem}
+#
+# Installations made before 2.0 (product name MemoBrain Notes): keep their names. COMPOSE_PROJECT_NAME,
+# POSTGRES_USER, POSTGRES_DB and KC_REALM have no default on purpose: the project name prefixes the
+# volumes (another name starts with an empty pgdata), the user and database names are fixed when the
+# volume is initialised, and KC_REALM is the realm Keycloak imports (another name makes a second, empty
+# realm). Set them to what the installation was created with (memobrain-onprem, memobrain, memobrain,
+# memobrain): docs/admin-guide/migrazione-clarae.md. The CLARAE_* variables of the .env also still
+# accept their MEMOBRAIN_* name of 1.x (dropped in 3.0): CLARAE_x wins when both are set.
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in .env (clarae-onprem for a new installation, memobrain-onprem for one created before 2.0, whose volumes another name would not find)}
 
 x-cloud-env: &cloud-env
-  DATABASE_URL: postgres://clarae:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/clarae?sslmode=disable
+  DATABASE_URL: postgres://${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 2.0)}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 2.0)}?sslmode=disable
   S3_ENDPOINT: http://s3:9000
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
   S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
-  S3_BUCKET_BLOBS: clarae-blobs
-  S3_BUCKET_EXPORTS: clarae-exports
+  # Names that carry the product name: empty lets the binary decide from the realm (a realm called memobrain
+  # is an installation made for 1.x and keeps memobrain-*, any other gets clarae-*); a value set in .env wins.
+  S3_BUCKET_BLOBS: ${S3_BUCKET_BLOBS:-}
+  S3_BUCKET_EXPORTS: ${S3_BUCKET_EXPORTS:-}
   S3_USE_PATH_STYLE: 'true'
-  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/clarae
-  OIDC_AUDIENCE: clarae-api
+  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/${KC_REALM:?set KC_REALM in .env (clarae, or memobrain for an installation created before 2.0)}
+  OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+  OIDC_ALLOWED_AZP: ${OIDC_ALLOWED_AZP:-}
+  OIDC_DESKTOP_CLIENT_ID: ${OIDC_DESKTOP_CLIENT_ID:-}
+  OIDC_WEB_CLIENT_ID: ${OIDC_WEB_CLIENT_ID:-}
+  OIDC_ADMIN_ROLES: ${OIDC_ADMIN_ROLES:-}
+  METRICS_NAMESPACE: ${METRICS_NAMESPACE:-}
   KC_ADMIN_BASE_URL: http://keycloak:8080
-  KC_REALM: clarae
-  KC_ADMIN_CLIENT_ID: clarae-admin-svc
+  KC_REALM: ${KC_REALM}
+  KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID:-}
   KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
-  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${CLARAE_HOST:?set CLARAE_HOST in .env}
+  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${CLARAE_HOST:-${MEMOBRAIN_HOST:?set CLARAE_HOST in .env}}
   PUBLIC_GRPC_ADDR: ${NOTIFY_HOST:?set NOTIFY_HOST in .env}:${PUBLIC_GRPC_PORT:-443}
   LISTEN_ADDR: 0.0.0.0:18081
   GRPC_LISTEN_ADDR: 0.0.0.0:18082
@@ -32,7 +47,7 @@ x-cloud-env: &cloud-env
   # so the bridge ranges can be trusted: without this all users would share one per-IP rate-limit bucket.
   TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
   # The service refuses to start while a secret is still a placeholder of .env.example; "1" allows it (tests only).
-  CLARAE_ALLOW_PLACEHOLDER_SECRETS: ${CLARAE_ALLOW_PLACEHOLDER_SECRETS:-}
+  CLARAE_ALLOW_PLACEHOLDER_SECRETS: ${CLARAE_ALLOW_PLACEHOLDER_SECRETS:-${MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS:-}}
 
 services:
   # One-shot check before anything stores a secret: every password and key of .env must have been replaced
@@ -45,7 +60,7 @@ services:
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     environment:
-      CLARAE_ALLOW_PLACEHOLDER_SECRETS: ${CLARAE_ALLOW_PLACEHOLDER_SECRETS:-}
+      CLARAE_ALLOW_PLACEHOLDER_SECRETS: ${CLARAE_ALLOW_PLACEHOLDER_SECRETS:-${MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS:-}}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD in .env}
@@ -79,7 +94,7 @@ services:
       - '${HTTPS_PORT:-443}:443'
       - '${HTTPS_PORT:-443}:443/udp' # HTTP/3
     environment:
-      CLARAE_SITE: ${CLARAE_SITE:-${CLARAE_HOST}}
+      CLARAE_SITE: ${CLARAE_SITE:-${MEMOBRAIN_SITE:-${CLARAE_HOST:-${MEMOBRAIN_HOST}}}}
       NOTIFY_SITE: ${NOTIFY_SITE:-${NOTIFY_HOST}}
       AUTH_SITE: ${AUTH_SITE:-${AUTH_HOST}}
       CADDY_GLOBAL: ${CADDY_GLOBAL:-}
@@ -95,7 +110,7 @@ services:
         # Containers reach the public names through the proxy (the cloud validates tokens against the issuer URL).
         aliases:
           - ${AUTH_HOST}
-          - ${CLARAE_HOST}
+          - ${CLARAE_HOST:-${MEMOBRAIN_HOST}}
     depends_on:
       cloud-api:
         condition: service_started
@@ -103,7 +118,7 @@ services:
         condition: service_healthy
 
   cloud-api:
-    image: ${CLARAE_IMAGE:-ghcr.io/e2br/clarae-cloud}:${CLARAE_VERSION:?set CLARAE_VERSION in .env}
+    image: ${CLARAE_IMAGE:-${MEMOBRAIN_IMAGE:-ghcr.io/e2br/clarae-cloud}}:${CLARAE_VERSION:-${MEMOBRAIN_VERSION:?set CLARAE_VERSION in .env}}
     restart: unless-stopped
     command: ['--role=api']
     environment: *cloud-env
@@ -126,7 +141,7 @@ services:
     expose: ['18081', '18082']
 
   cloud-worker:
-    image: ${CLARAE_IMAGE:-ghcr.io/e2br/clarae-cloud}:${CLARAE_VERSION}
+    image: ${CLARAE_IMAGE:-${MEMOBRAIN_IMAGE:-ghcr.io/e2br/clarae-cloud}}:${CLARAE_VERSION:-${MEMOBRAIN_VERSION}}
     restart: unless-stopped
     command: ['--role=worker']
     environment: *cloud-env
@@ -148,9 +163,9 @@ services:
     image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     restart: unless-stopped
     environment:
-      POSTGRES_USER: clarae
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 2.0)}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: clarae
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 2.0)}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -158,7 +173,8 @@ services:
     depends_on:
       preflight: { condition: service_completed_successfully }
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U clarae -d clarae']
+      # $$: expanded by the shell of the container, from the variables above.
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -196,13 +212,35 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
       AWS_DEFAULT_REGION: us-east-1
       AWS_EC2_METADATA_DISABLED: 'true'
-    entrypoint: >
-      /bin/sh -c "
-        for b in clarae-blobs clarae-exports; do
-          aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $$b >/dev/null 2>&1 ||
-          aws --endpoint-url http://s3:9000 s3 mb s3://$$b;
-        done && echo buckets ready
-      "
+      KC_REALM: ${KC_REALM}
+      S3_BUCKET_BLOBS: ${S3_BUCKET_BLOBS:-}
+      S3_BUCKET_EXPORTS: ${S3_BUCKET_EXPORTS:-}
+    # The buckets the cloud will use, under the same rule as the binary (internal/config nameDefaults): a
+    # setting of .env wins, otherwise memobrain-* for the realm "memobrain" (made for 1.x) and clarae-*.
+    # A default bucket that does not exist while the one of 1.x does is an error, not a new empty bucket:
+    # the cloud refuses to start in that case too, and every stored blob would look missing.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        fam=clarae
+        [ "$$KC_REALM" = memobrain ] && fam=memobrain
+        ep=http://s3:9000
+        exists() { aws --endpoint-url "$$ep" s3api head-bucket --bucket "$$1" >/dev/null 2>&1; }
+        # ensure <bucket> <setting> <explicit: 1|0> <name in 1.x>
+        ensure() {
+          exists "$$1" && return 0
+          if [ "$$3" = 0 ] && [ "$$1" != "$$4" ] && exists "$$4"; then
+            echo "s3-init: bucket $$1 does not exist but $$4 (an installation created before 2.0) does: set $$2=$$4 in .env" >&2
+            exit 1
+          fi
+          aws --endpoint-url "$$ep" s3 mb "s3://$$1"
+        }
+        blobs="$${S3_BUCKET_BLOBS:-$$fam-blobs}"
+        exports="$${S3_BUCKET_EXPORTS:-$$fam-exports}"
+        ensure "$$blobs" S3_BUCKET_BLOBS "$$([ -n "$$S3_BUCKET_BLOBS" ] && echo 1 || echo 0)" memobrain-blobs
+        ensure "$$exports" S3_BUCKET_EXPORTS "$$([ -n "$$S3_BUCKET_EXPORTS" ] && echo 1 || echo 0)" memobrain-exports
+        echo buckets ready
     restart: 'no'
 
   keycloak:
@@ -222,10 +260,14 @@ services:
       KC_HEALTH_ENABLED: 'true'
       # Substituted into the imported realm (deploy/keycloak-prod): no secret or origin lives in the file.
       KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
-      WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${CLARAE_HOST:?set CLARAE_HOST in .env}
+      WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${CLARAE_HOST:-${MEMOBRAIN_HOST:?set CLARAE_HOST in .env}}
+      KC_REALM: ${KC_REALM}
     volumes:
-      # First start only: creates the realm "clarae" (clients clarae-desktop, clarae-web, clarae-admin-svc,
-      # roles). Production variant of deploy/keycloak: no test users, secret and web origin from the environment.
+      # First start only: creates the realm KC_REALM (default clarae: clients clarae-desktop, clarae-web,
+      # clarae-admin-svc, roles). An existing realm is never touched: Keycloak skips an import whose realm
+      # exists, which is why an installation made before 2.0 must set KC_REALM=memobrain (a different name would
+      # create a second, empty realm next to it). Production variant of deploy/keycloak: no test users, secret and
+      # web origin from the environment.
       - ../keycloak-prod:/opt/keycloak/data/import:ro
     depends_on:
       preflight: { condition: service_completed_successfully }
@@ -247,10 +289,12 @@ services:
     image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env (clarae, or memobrain for an installation created before 2.0)}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env (clarae, or memobrain for an installation created before 2.0)}
     volumes:
       - ./backups:/backups
     entrypoint: >
-      /bin/sh -c "pg_dump -h postgres -U clarae -Fc clarae > /backups/clarae-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
+      /bin/sh -c "pg_dump -h postgres -U $$POSTGRES_USER -Fc $$POSTGRES_DB > /backups/$$POSTGRES_DB-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
     depends_on:
       postgres: { condition: service_healthy }
 
