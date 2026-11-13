@@ -19,8 +19,8 @@ type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** The element's metadata: the new key, else the legacy one; undefined when it has none. */
-export function elementMeta(e: { customData?: unknown } | undefined | null): Rec | undefined {
-  const cd = e?.customData;
+export function elementMeta(e: object | undefined | null): Rec | undefined {
+  const cd = (e as { customData?: unknown } | undefined | null)?.customData;
   if (!isRec(cd)) return undefined;
   const own = cd[META_KEY];
   if (isRec(own)) return own;
