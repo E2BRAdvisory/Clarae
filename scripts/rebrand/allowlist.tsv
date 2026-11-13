@@ -43,6 +43,9 @@ legacy	apps/desktop/internal/auth/auth.go	"memobrain://auth/callback"	redirect U
 legacy	apps/desktop/build/project.json	"scheme": "memobrain"	second URL scheme registered by the installers (plist, registry): links of 1.x and the redirect URI of existing realms; dropped in 3.0
 legacy	apps/desktop/build/linux/clarae.desktop	memobrain://|x-scheme-handler/memobrain	MIME type of the URL scheme of 1.x, registered next to the current one: dropped in 3.0
 legacy	apps/desktop/build/assets_test.go	\bmemobrain(://|</string>|;|")	assertions on the registration of the URL scheme of 1.x: dropped in 3.0
+legacy	apps/desktop/build/windows/installer/project.nsi	^!define LEGACY_(PRODUCT|UNINST_KEY) ".*"$	product name and Uninstall key of the 1.x installer: the new installer removes that installation by hand (never runs its uninstaller); dropped in 3.0
+legacy	apps/desktop/build/linux/nfpm.yaml	^  - memobrain$	package name of 1.x: replaces and conflicts, so installing the new .deb removes it; dropped in 3.0
+legacy	apps/desktop/build/installer_legacy_test.go	*	tests of the removal of the 1.x installation by the installers (the whole file is about it): dropped in 3.0
 
 # Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
 legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 3.0

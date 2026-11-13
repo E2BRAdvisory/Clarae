@@ -16,6 +16,14 @@ license: Proprietary
 depends:
   - libgtk-3-0
   - libwebkit2gtk-4.1-0
+# The package of 1.x had another name and installed /usr/bin/<its name>, its .desktop file and its icons:
+# installing this one removes it (dpkg Replaces + Conflicts), and neither of the two stays next to the other.
+# The data of the user is not in the package: the application takes over the data directory at its first start.
+# Dropped in 3.0.
+replaces:
+  - memobrain
+conflicts:
+  - memobrain
 contents:
   - src: ${STAGE}/clarae
     dst: /usr/bin/clarae

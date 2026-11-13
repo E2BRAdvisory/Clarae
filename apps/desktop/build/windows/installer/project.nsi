@@ -85,8 +85,48 @@ Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
 
+## The application replaces the one of 1.x, which had another product name and so another Uninstall key, install
+## folder, executable and shortcuts (ADR-0052). It is removed here, by hand, and its uninstaller is NOT run: that one
+## deletes the WebView2 profile of the old application, which the new one adopts at its first start (the data
+## directory too is moved then, nothing of it is touched here). What is removed is what the old installer wrote and
+## nothing else: the executable and uninstall.exe in the folder the key points at (the folder only if it is empty
+## afterwards), the two shortcuts and the key. The protocol class of 1.x is registered again by the new one (both
+## schemes are in project.json). A running old application is asked to be closed. Dropped in 3.0.
+!define LEGACY_PRODUCT "MemoBrain Notes"
+!define LEGACY_EXECUTABLE "${LEGACY_PRODUCT}.exe"
+!define LEGACY_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\E2BR-Advisory SaglMemoBrain Notes"
+
+!macro clarae.removeLegacyInstall
+    SetRegView 64
+    ReadRegStr $R0 HKLM "${LEGACY_UNINST_KEY}" "DisplayIcon" # "<install folder>\<executable>", written by wails.writeUninstaller
+    StrCmp $R0 "" legacyShortcuts
+    ${GetParent} $R0 $R1
+    IfFileExists "$R1\${LEGACY_EXECUTABLE}" legacyFiles legacyKey
+    legacyFiles:
+        ClearErrors
+        Delete "$R1\${LEGACY_EXECUTABLE}"
+        IfErrors legacyBusy legacyUninstaller
+    legacyBusy:
+        IfSilent legacyAbort legacyAsk
+    legacyAsk:
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${LEGACY_PRODUCT} is running and has to be replaced. Close it and retry." IDRETRY legacyFiles
+    legacyAbort:
+        SetErrorLevel 5
+        Abort
+    legacyUninstaller:
+        Delete "$R1\uninstall.exe"
+        RMDir "$R1" # only if nothing else is in it: the folder is not removed with its content
+    legacyKey:
+        DeleteRegKey HKLM "${LEGACY_UNINST_KEY}"
+    legacyShortcuts:
+        Delete "$SMPROGRAMS\${LEGACY_PRODUCT}.lnk"
+        Delete "$DESKTOP\${LEGACY_PRODUCT}.lnk"
+!macroend
+
 Section
     !insertmacro wails.setShellContext
+
+    !insertmacro clarae.removeLegacyInstall
 
     !insertmacro wails.webview2runtime
 
