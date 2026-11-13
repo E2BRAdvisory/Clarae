@@ -1,0 +1,47 @@
+# Where the old product name may still appear after the rebrand to "Clarae notanda" (ADR-0052).
+# Checked by scripts/rebrand/check.mjs (task lint-brand): an occurrence that no line here covers
+# fails, and so does a line that no longer covers anything: this list can only get shorter.
+#
+# class <TAB> glob <TAB> regex <TAB> reason
+#   glob   path from the repository root; ** crosses directories
+#   regex  JavaScript, case-sensitive, matched on one line: the old name is allowed inside a match.
+#          * allows the whole file and its path
+#   class  frozen   never renamed: changing it breaks existing data
+#          legacy   compatibility with data and clients of 1.x; the reason names the release that drops it
+#          fixture  test data in the format 1.x wrote
+#          history  records of the time: not rewritten
+#          external a name that is not ours to change here
+#          tool     the rename tool itself
+
+tool	scripts/rebrand/**	*	the rename rules, the guard and their tests name what they look for
+
+# The HKDF info strings and the AAD prefixes are input of the key derivation and of the
+# authenticated encryption of every existing E2EE vault: another value makes them undecryptable.
+frozen	shared/go/vaultcrypto/**	memobrain/v[12]/(path-enc|path-key|file|recovery-kek|recovery-checksum|envelope|path)\b	HKDF info and AAD of existing E2EE vaults
+frozen	packages/vaultcrypto-web/src/**	memobrain/v[12]/(path-enc|path-key|file|recovery-kek|recovery-checksum|envelope|path)\b	HKDF info and AAD of existing E2EE vaults (browser side)
+frozen	docs/security/crypto-design.md	memobrain/v[12]/(path-enc|path-key|file|recovery-kek|recovery-checksum|envelope|path)\b	documents the frozen HKDF info and AAD
+
+# The unnamed storage set of the web workbench up to 1.3: adopted in place by an account, never moved
+# (web/src/workbench/storage.ts), so its folder names are still the live storage of that account.
+legacy	web/src/workbench/storage.ts	memobrain-sqlite|fs/memobrain/data|LEGACY_FS, 'memobrain', 'data'	OPFS folders of the web workbench up to 1.3, adopted in place: kept while such a profile may exist
+legacy	web/src/workbench/storage.test.ts	memobrain-sqlite|fs/memobrain/data	tests of the adoption of the 1.3 storage set
+legacy	web/src/pages/Account.test.tsx	memobrain-sqlite	test of the removal of the 1.3 storage set
+legacy	docs/web-ui.md	`memobrain-sqlite`	documents the 1.3 storage set
+
+# Files in the format 1.x wrote: the merge must keep handling them as they are.
+fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures
+fixture	shared/conformance/merge/excalidraw-memobrain-settings-key/**	*	fixture of the top-level settings key of 1.x drawings
+
+# Records: they say what was true when they were written.
+history	Specifications.md	*	the specification is updated by its owner from ADR-0052
+history	CHANGELOG.md	*	release notes up to 1.4.0, and the notes of the rename
+history	docs/adr/**	*	decision records 0001-0051 and the record of the rename (0052)
+history	docs/qa/m*-*.md	*	QA records of past milestones
+history	docs/release/rebrand-inventory.md	*	record of the previous rename
+history	docs/release/v1.0.0-checklist.md	*	checklist of the 1.0.0 release
+history	docs/spec-v1.2-proposta.md	*	proposal of the 1.2 specification
+history	docs/roadmap.md	^\| F[0-6] .*$|^.*«Clarae notanda».*$	the M17 section states the old and the new names side by side
+
+# The GitHub repository has not been renamed.
+external	README.md	github\.com[:/]E2BR/MemoBrain(\.git && cd MemoBrain)?	URL and folder of the repository
+external	apps/desktop/build/linux/nfpm.yaml	github\.com/E2BR/MemoBrain	URL of the repository

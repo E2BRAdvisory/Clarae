@@ -19,8 +19,8 @@ import (
 )
 
 // goldenModule is the module path as the golden holds it (testdata/regen-golden.sh), in the form a generic type
-// argument is written in: the name of such a type carries the import path of its package, which changes with
-// `task rename-module`. It is not spelled as a path on purpose: rename-module rewrites paths, not this.
+// argument is written in: the name of such a type carries the import path of its package, which changes when
+// the module is renamed. The golden holds this fixed name whatever the module is called.
 const goldenModule = "memobrain_apps_desktop"
 
 // fixtureSuffix is the import path of the fixture package inside the module.

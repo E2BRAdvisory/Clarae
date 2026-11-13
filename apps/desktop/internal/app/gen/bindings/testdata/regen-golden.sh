@@ -9,7 +9,7 @@
 #
 # The module path comes from apps/desktop/go.mod (the type arguments of a generic name carry the import path
 # of their package); it is written to the golden as memobrain_apps_desktop whatever the module is called,
-# so that `task rename-module` does not invalidate the golden (generate_test.go does the same).
+# so that renaming the module does not invalidate the golden (generate_test.go does the same).
 #
 #   internal/app/gen/bindings/testdata/regen-golden.sh
 set -euo pipefail

@@ -21,7 +21,7 @@ set -euo pipefail
 VERSION="${1:-}"; REQUIRE="${2:-}"
 [ -n "$VERSION" ] || die "usage: $0 <version> [--require-signing]"
 VERSION="${VERSION#v}"
-# The exact bundle, not "the first .app": build/bin may still hold one left by an older build (the Wails v2 CLI named it "memobrain.app").
+# The exact bundle, not "the first .app": build/bin may still hold one left by an older build (the Wails v2 CLI named it after the output file, not after the product).
 NAME="$(GOWORK=off go run "$ROOT/scripts/release/render-assets.go" -project "$ROOT/apps/desktop/build/project.json" -field name)"
 APP="$ROOT/apps/desktop/build/bin/$NAME.app"
 ENTITLEMENTS="$ROOT/apps/desktop/build/darwin/entitlements.plist"

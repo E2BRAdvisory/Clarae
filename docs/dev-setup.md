@@ -194,4 +194,4 @@ Per un flag nuovo: aggiungilo allo schema con default e descrizione, `task gen`,
 
 ## Struttura
 
-Mappa del repository nel [README](../README.md#struttura-del-repository), componenti e contratti in [architecture.md](architecture.md), regole di contribuzione in [CONTRIBUTING.md](../CONTRIBUTING.md). Il module path Go è locale (`memobrain/…`); quando l'hosting sarà deciso: `task rename-module NEW=github.com/org/memobrain`.
+Mappa del repository nel [README](../README.md#struttura-del-repository), componenti e contratti in [architecture.md](architecture.md), regole di contribuzione in [CONTRIBUTING.md](../CONTRIBUTING.md). Il module path Go è locale (`memobrain/…`).

@@ -159,6 +159,14 @@ tasks:
     cmds:
       - scripts/install-wails.sh --check-pins
 
+  # The product is "Clarae notanda" (ADR-0052): the old name may appear only where scripts/rebrand/allowlist.tsv says.
+  lint-brand:
+    desc: The old product name appears only where scripts/rebrand/allowlist.tsv allows it (ADR-0052)
+    silent: true
+    cmds:
+      - node --test 'scripts/rebrand/*.test.mjs'
+      - node scripts/rebrand/check.mjs
+
   lint-go:
     desc: golangci-lint on all Go modules
     silent: true
@@ -479,19 +487,6 @@ tasks:
       # --release: no build switch or MEMOBRAIN_DIST in the environment, no collaboration code and no binding mock in the built UI
       # (check-editor-switches.sh, check-dist.sh), no development update key. What it builds is what is shipped.
       - bash scripts/release/build-desktop.sh {{.OS}} {{.V}} --release
-
-  ## ---- maintenance -----------------------------------------------------------
-
-  rename-module:
-    desc: 'Rename the Go module path placeholder: task rename-module NEW=github.com/org/memobrain'
-    silent: true
-    requires:
-      vars: [NEW]
-    cmds:
-      - |
-        git ls-files -z -- '*.go' 'go.mod' 'go.work' '*.yaml' '*.yml' '*.md' 'Taskfile.yml' \
-          | xargs -0 perl -pi -e 's{(?<![\w./-])memobrain/(apps|services|shared)\b}{{"{"}}{{.NEW}}/$1{{"}"}}g'
-      - 'echo "Module paths renamed to {{.NEW}}/...; run: go work sync && task gen"'
 
   ## ---- performance (M7-WP1; see docs/perf/README.md) ------------------------
 
