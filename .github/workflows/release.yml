@@ -103,7 +103,16 @@ jobs:
           sed -i "s#ghcr.io/e2br/clarae-cloud#ghcr.io/${owner}/clarae-cloud#" "$work/clarae/values.yaml"
           helm package "$work/clarae" --version "$version" --app-version "$version" -d "$work"
           echo "$TOKEN" | helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
-          helm push "$work/clarae-${version}.tgz" "oci://ghcr.io/${owner}/charts"
+          # Helm 4 uploads the manifest by digest and reads it back to set the version tag, and GHCR can answer 404
+          # for a manifest it has just accepted, above all for a package that did not exist ("failed to perform
+          # Tag on destination: not found"). The push is idempotent: what is already there is not uploaded again.
+          for attempt in 1 2 3 4 5; do
+            if helm push "$work/clarae-${version}.tgz" "oci://ghcr.io/${owner}/charts"; then exit 0; fi
+            echo "::warning::helm push failed (attempt ${attempt} of 5)"
+            sleep $((attempt * 10))
+          done
+          echo "::error::the chart could not be pushed to ghcr.io/${owner}/charts"
+          exit 1
 
   desktop:
     name: Desktop ${{ matrix.id }}
