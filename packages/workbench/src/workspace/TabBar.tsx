@@ -7,6 +7,7 @@ import { graphTitle, isGraphPath } from '../graph/paths';
 import { useRecovery } from '../recovery/store';
 import { Icon } from '../shell/icons';
 import type { Pane, Tab } from './layout';
+import { DRAG_TAB } from '../util/dragTypes';
 
 /** Whether closing would remove at least one of these tabs (locked ones stay). */
 const closable = (tabs: Tab[]): boolean => tabs.some((x) => !x.pinned);
@@ -60,10 +61,10 @@ export function TabBar({ pane }: { pane: Pane }) {
       className="tabbar"
       onMouseDown={() => focusPane(pane.id)}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('application/x-clarae-tab')) e.preventDefault();
+        if (e.dataTransfer.types.includes(DRAG_TAB)) e.preventDefault();
       }}
       onDrop={(e) => {
-        const id = e.dataTransfer.getData('application/x-clarae-tab');
+        const id = e.dataTransfer.getData(DRAG_TAB);
         if (id) moveTabTo(id, pane.id);
         setOver(null);
       }}
@@ -76,16 +77,16 @@ export function TabBar({ pane }: { pane: Pane }) {
             className={`tab ${pane.active === tab.id ? 'active' : ''} ${over === i ? 'over' : ''} ${tab.pinned ? 'pinned' : ''}`}
             draggable
             title={tab.path}
-            onDragStart={(e) => e.dataTransfer.setData('application/x-clarae-tab', tab.id)}
+            onDragStart={(e) => e.dataTransfer.setData(DRAG_TAB, tab.id)}
             onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes('application/x-clarae-tab')) return;
+              if (!e.dataTransfer.types.includes(DRAG_TAB)) return;
               e.preventDefault();
               e.stopPropagation();
               setOver(i);
             }}
             onDragLeave={() => setOver(null)}
             onDrop={(e) => {
-              const id = e.dataTransfer.getData('application/x-clarae-tab');
+              const id = e.dataTransfer.getData(DRAG_TAB);
               e.stopPropagation();
               setOver(null);
               if (id) moveTabTo(id, pane.id, i);

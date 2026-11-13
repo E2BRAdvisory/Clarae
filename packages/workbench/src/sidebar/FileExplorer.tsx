@@ -21,6 +21,7 @@ import { dialog } from '../ui/dialogs';
 import { useExpanded } from './expanded';
 import { classify, openTarget, type EmbedKind } from '../embeds/media';
 import { Icon, type IconName } from '../shell/icons';
+import { DRAG_PATH } from '../util/dragTypes';
 
 interface TreeNode {
   entry: Entry;
@@ -425,9 +426,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           className={`node ${entry.isDir ? 'folder' : 'file'} ${activePath === entry.path ? 'active' : ''} ${dropTarget === entry.path ? 'drop' : ''}`}
           style={{ paddingLeft: 8 + depth * 14, height: ROW_HEIGHT, boxSizing: 'border-box' }}
           draggable={!readOnly}
-          onDragStart={(e) => e.dataTransfer.setData('application/x-clarae-path', entry.path)}
+          onDragStart={(e) => e.dataTransfer.setData(DRAG_PATH, entry.path)}
           onDragOver={(e) => {
-            if (!entry.isDir || !e.dataTransfer.types.includes('application/x-clarae-path')) return;
+            if (!entry.isDir || !e.dataTransfer.types.includes(DRAG_PATH)) return;
             e.preventDefault();
             setDropTarget(entry.path);
           }}
@@ -435,7 +436,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           onDrop={(e) => {
             e.preventDefault();
             setDropTarget(null);
-            const from = e.dataTransfer.getData('application/x-clarae-path');
+            const from = e.dataTransfer.getData(DRAG_PATH);
             if (from && entry.isDir) void move(from, entry.path);
           }}
           onClick={(e) =>
@@ -509,14 +510,14 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           });
         }}
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('application/x-clarae-path')) {
+          if (e.dataTransfer.types.includes(DRAG_PATH)) {
             e.preventDefault();
             setDropTarget('');
           }
         }}
         onDragLeave={() => setDropTarget(null)}
         onDrop={(e) => {
-          const from = e.dataTransfer.getData('application/x-clarae-path');
+          const from = e.dataTransfer.getData(DRAG_PATH);
           setDropTarget(null);
           if (from) void move(from, '');
         }}

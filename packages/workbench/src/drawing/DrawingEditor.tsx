@@ -65,6 +65,7 @@ import {
   sceneSignature,
   type RawScene,
 } from './scene';
+import { DRAG_PATH } from '../util/dragTypes';
 
 const AUTOSAVE_MS = 2000;
 /** App commands Excalidraw must not swallow while it has the focus. */
@@ -566,7 +567,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // A file dragged from the file explorer: images and notes are added where it is dropped.
   const onCanvasDrop = useCallback(
     (e: React.DragEvent) => {
-      const dropped = e.dataTransfer.getData('application/x-clarae-path');
+      const dropped = e.dataTransfer.getData(DRAG_PATH);
       if (!excalidraw || !dropped) return;
       e.preventDefault();
       e.stopPropagation();
@@ -583,7 +584,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     [excalidraw, path],
   );
   const onCanvasDragOver = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('application/x-clarae-path')) return;
+    if (!e.dataTransfer.types.includes(DRAG_PATH)) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'copy';

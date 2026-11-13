@@ -18,8 +18,7 @@ import {
 import { Icon, type IconName } from '../shell/icons';
 import { bookmarksReadOnly, useBookmarks } from './store';
 import './bookmarks.css';
-
-const DRAG_TYPE = 'application/x-clarae-bookmark';
+import { DRAG_BOOKMARK } from '../util/dragTypes';
 
 type Drop = { key: string; zone: 'before' | 'after' | 'into' } | null;
 
@@ -128,7 +127,7 @@ export function BookmarksPanel({ vaultId }: { vaultId: string }) {
     e.preventDefault();
     e.stopPropagation();
     setDrop(null);
-    const raw = e.dataTransfer.getData(DRAG_TYPE);
+    const raw = e.dataTransfer.getData(DRAG_BOOKMARK);
     if (!raw || readOnly) return;
     const from = raw.split('.').map(Number);
     const parent = path.slice(0, -1);
@@ -157,10 +156,10 @@ export function BookmarksPanel({ vaultId }: { vaultId: string }) {
             style={{ paddingLeft: 8 + depth * 14 }}
             title={missing ? t('bookmarks.missing', { path: item.path }) : label}
             draggable={!readOnly}
-            onDragStart={(e) => e.dataTransfer.setData(DRAG_TYPE, key)}
+            onDragStart={(e) => e.dataTransfer.setData(DRAG_BOOKMARK, key)}
             onDragEnd={() => setDrop(null)}
             onDragOver={(e) => {
-              if (readOnly || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
+              if (readOnly || !e.dataTransfer.types.includes(DRAG_BOOKMARK)) return;
               e.preventDefault();
               e.stopPropagation();
               const r = e.currentTarget.getBoundingClientRect();
@@ -224,10 +223,10 @@ export function BookmarksPanel({ vaultId }: { vaultId: string }) {
         // An empty tree would have no treeitem (only the hint): it is a plain region then.
         {...(items.length > 0 ? { role: 'tree', 'aria-label': t('bookmarks.title') } : {})}
         onDragOver={(e) => {
-          if (!readOnly && e.dataTransfer.types.includes(DRAG_TYPE)) e.preventDefault();
+          if (!readOnly && e.dataTransfer.types.includes(DRAG_BOOKMARK)) e.preventDefault();
         }}
         onDrop={(e) => {
-          const raw = e.dataTransfer.getData(DRAG_TYPE);
+          const raw = e.dataTransfer.getData(DRAG_BOOKMARK);
           setDrop(null);
           if (raw && !readOnly) update((list) => moveItem(list, raw.split('.').map(Number), []));
         }}
