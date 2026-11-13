@@ -324,3 +324,70 @@ func TestNoRawSQLOnTablesOutsideQueryFiles(t *testing.T) {
 		}
 	}
 }
+
+var (
+	depguardPkg   = regexp.MustCompile(`(?m)^\s*- pkg: '([^']+)'`)
+	localPrefixes = regexp.MustCompile(`(?m)^\s*local-prefixes:\s*\n\s*- (\S+)`)
+)
+
+// TestDepguardPackagesExist ties the depguard rules of .golangci.yml to the
+// code. depguard compares import paths as strings: a rule on a package that no
+// longer exists (the module was renamed, a query package moved) denies nothing
+// and reports nothing, so the module boundaries would stop being enforced
+// without any sign. Every internal package a rule names must exist under this
+// module, and every generated query package must have its rule.
+func TestDepguardPackagesExist(t *testing.T) {
+	gomod, err := os.ReadFile("../../go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, _, _ := strings.Cut(string(gomod), "\n")
+	module, ok := strings.CutPrefix(strings.TrimSpace(line), "module ")
+	if !ok {
+		t.Fatalf("go.mod does not start with a module line: %q", line)
+	}
+	raw, err := os.ReadFile("../../../../.golangci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := string(raw)
+
+	denied := map[string]bool{}
+	for _, m := range depguardPkg.FindAllStringSubmatch(cfg, -1) {
+		pkg := m[1]
+		if !strings.Contains(pkg, "/internal/") {
+			continue // a third-party package
+		}
+		rel, ok := strings.CutPrefix(pkg, module+"/")
+		if !ok {
+			t.Errorf(".golangci.yml: depguard denies %s, which is not under the module %s: the rule matches nothing", pkg, module)
+			continue
+		}
+		if st, err := os.Stat(filepath.Join("../..", filepath.FromSlash(rel))); err != nil || !st.IsDir() {
+			t.Errorf(".golangci.yml: depguard denies %s, which is not a package of this module: the rule matches nothing", pkg)
+		}
+		denied[pkg] = true
+	}
+
+	dirs, err := filepath.Glob("../*/*db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dirs) == 0 {
+		t.Fatal("no generated query package found under internal/")
+	}
+	for _, dir := range dirs {
+		mod := filepath.Base(filepath.Dir(dir))
+		if filepath.Base(dir) != mod+"db" {
+			continue
+		}
+		if pkg := module + "/internal/" + mod + "/" + mod + "db"; !denied[pkg] {
+			t.Errorf(".golangci.yml has no depguard rule for %s: any module could import the queries of %s", pkg, mod)
+		}
+	}
+
+	m := localPrefixes.FindStringSubmatch(cfg)
+	if want, _, _ := strings.Cut(module, "/"); m == nil || m[1] != want {
+		t.Errorf(".golangci.yml: goimports local-prefixes must be %q, the first element of the module path, got %v", want, m)
+	}
+}
