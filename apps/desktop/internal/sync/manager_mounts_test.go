@@ -26,6 +26,7 @@ import (
 
 	"clarae/apps/desktop/internal/sync/transport"
 	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 	"clarae/shared/syncproto"
 )
 
@@ -458,6 +459,64 @@ func TestReconcileMountsReportsAFailedMountAndHandlesTheOthers(t *testing.T) {
 	// No mounts directory yet: nothing to do, no error.
 	if n, err := m.ReconcileMounts(ctx, filepath.Join(mountsDir, "missing")); n != 0 || err != nil {
 		t.Fatalf("missing directory: %d, %v", n, err)
+	}
+}
+
+// A mount folder that 1.x made keeps its link in the former configuration folder, and the folder
+// is not open: every function that reads the link of a closed folder must find it there, and move
+// it, instead of taking the folder for "not a mount" (and creating an empty link beside it).
+func TestMountOfOneXIsStillAMount(t *testing.T) {
+	if runtime.GOOS == "js" {
+		t.Skip("the browser core keeps sync.db in sqlite-wasm: a key, not a file to rename")
+	}
+	ctx := context.Background()
+	_, sess := newAccountCloud(t) // no live share: a mount that is found is a revoked one
+	m := NewManager(sess, nil, zerolog.Nop(), nil)
+	mountsDir := t.TempDir()
+	dir := filepath.Join(mountsDir, mountShareA)
+	mountAt(t, dir, mountShareA, lifeOwner)
+	if err := os.Rename(filepath.Join(dir, pathrules.ConfigDir), filepath.Join(dir, pathrules.LegacyConfigDirs[0])); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, pathrules.LegacyConfigDirs[0], "editor.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mm, ok, err := ReadMount(ctx, dir)
+	if err != nil || !ok || mm.ShareID != mountShareA || mm.Name != "Team" {
+		t.Fatalf("ReadMount = %+v, %v, %v: the mount of 1.x is not recognized", mm, ok, err)
+	}
+	if name := ReadVaultName(ctx, dir); name != "Team" {
+		t.Fatalf("ReadVaultName = %q", name)
+	}
+	if linked, err := IsLinked(ctx, dir); err != nil || !linked {
+		t.Fatalf("IsLinked = %v, %v", linked, err)
+	}
+	// The link moved with its folder; the settings of the folder did not.
+	if _, err := os.Stat(filepath.Join(dir, pathrules.ConfigDir, "sync.db")); err != nil {
+		t.Fatalf("sync.db is not in the current folder: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, pathrules.LegacyConfigDirs[0], "sync.db")); !os.IsNotExist(err) {
+		t.Fatalf("sync.db is still in the former folder: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, pathrules.LegacyConfigDirs[0], "editor.json")); err != nil {
+		t.Fatalf("a setting was moved by the move of the local part: %v", err)
+	}
+	// The reconcile sees the mount (and its share gone), and edits the moved database.
+	n, err := m.ReconcileMounts(ctx, mountsDir)
+	if err != nil || n != 1 || !revoked(t, dir) {
+		t.Fatalf("ReconcileMounts = %d, %v; revoked = %v", n, err, revoked(t, dir))
+	}
+	states, err := m.Mounts(ctx, mountsDir)
+	if err != nil || len(states) != 1 || states[0].ShareID != mountShareA || !states[0].Revoked {
+		t.Fatalf("Mounts = %+v, %v", states, err)
+	}
+	// Forgetting works on the same database.
+	if err := ForgetMount(ctx, dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := ReadMount(ctx, dir); ok {
+		t.Fatal("the folder is still a mount after ForgetMount")
 	}
 }
 

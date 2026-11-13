@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
-	"path/filepath"
 	stdsync "sync"
 	"sync/atomic"
 	"time"
@@ -19,7 +18,6 @@ import (
 	"clarae/apps/desktop/internal/store"
 	"clarae/apps/desktop/internal/sync/transport"
 	"clarae/apps/desktop/internal/vault"
-	"clarae/shared/pathrules"
 	"clarae/shared/syncproto"
 )
 
@@ -370,7 +368,11 @@ func (r sessionRemote) FolderShareRoots(ctx context.Context) ([]string, error) {
 // Attach opens the vault's sync state and, when the vault is linked and the
 // user is signed in, starts synchronizing it.
 func (m *Manager) Attach(ctx context.Context, localID string, fs *vault.FS) error {
-	sdb, err := store.Open(ctx, filepath.Join(fs.Root(), pathrules.ConfigDir, "sync.db"), store.KindSync)
+	path, err := syncDBPath(fs.Root())
+	if err != nil {
+		return err
+	}
+	sdb, err := store.Open(ctx, path, store.KindSync)
 	if err != nil {
 		return err
 	}

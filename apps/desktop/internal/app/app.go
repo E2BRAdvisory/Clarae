@@ -29,8 +29,8 @@ import (
 	syncpkg "clarae/apps/desktop/internal/sync"
 	"clarae/apps/desktop/internal/sync/transport"
 	"clarae/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/vaultdir"
 	"clarae/apps/desktop/internal/watcher"
-	"clarae/shared/pathrules"
 )
 
 // Options configure the application.
@@ -386,7 +386,21 @@ func (a *App) doOpenVault(abs, id string) (VaultInfo, error) {
 	if err != nil {
 		return VaultInfo{}, err
 	}
-	indexPath := filepath.Join(fsys.Root(), pathrules.ConfigDir, "index.db")
+	// The local part of a configuration folder of 1.x moves first, whatever opens next. A vault that
+	// is not linked to the cloud has no other client to stay compatible with: its settings move too,
+	// before anything else can touch them (the vault is not registered yet). A linked one keeps them
+	// where they are until the sync engine moves them (features.config_dir_v2).
+	if linked, err := syncpkg.IsLinked(a.ctx, fsys.Root()); err != nil {
+		a.logger.Warn().Err(err).Str("vault", abs).Msg("cannot tell whether the vault is linked; its settings stay where they are")
+	} else if !linked {
+		if err := vaultdir.AdoptSettings(fsys.Root()); err != nil {
+			a.logger.Warn().Err(err).Str("vault", abs).Msg("cannot move the settings of the vault to the current folder")
+		}
+	}
+	indexPath, err := vaultdir.DB(fsys.Root(), "index.db")
+	if err != nil {
+		return VaultInfo{}, err
+	}
 	indexDB, err := store.Open(a.ctx, indexPath, store.KindIndex)
 	if err != nil {
 		return VaultInfo{}, err

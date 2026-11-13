@@ -3,10 +3,26 @@
 package store
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"clarae/apps/desktop/internal/sqlitejs"
+	"clarae/shared/pathrules"
 )
+
+// prepareDir creates the folder of a database. A database of the browser core is a name in
+// sqlite-wasm's pool, not a file, so the folder only has to exist for what else the core keeps in
+// it; the one that must not be created is a former configuration folder: a profile of 1.x keeps
+// its databases under that key (vaultdir.DB), and an empty folder of that name would end up in
+// the ZIP of the vault.
+func prepareDir(dir string) error {
+	if slices.Contains(pathrules.LegacyConfigDirs, filepath.Base(dir)) {
+		return nil
+	}
+	return os.MkdirAll(dir, 0o700)
+}
 
 // Exists reports whether a database is stored under path (in sqlite-wasm's VFS, not in the file
 // system the os package sees).

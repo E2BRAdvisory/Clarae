@@ -3,14 +3,12 @@ package sync
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"clarae/apps/desktop/internal/events"
 	"clarae/apps/desktop/internal/store"
 	"clarae/apps/desktop/internal/sync/transport"
-	"clarae/shared/pathrules"
+	"clarae/apps/desktop/internal/vaultdir"
 )
 
 // A mount is a share received from another user (§2.6.4): a folder of its own on this
@@ -81,8 +79,16 @@ func MountOf(m transport.Mount) MountMeta {
 	}
 }
 
+// syncDBPath is the path of the sync.db of a folder, open or not: vaultdir.DB first moves a database
+// of 1.x out of the former configuration folder, so that a mount made by 1.x is still a mount.
+func syncDBPath(root string) (string, error) { return vaultdir.DB(root, "sync.db") }
+
 func openSyncDB(ctx context.Context, root string) (*DB, func(), error) {
-	sdb, err := store.Open(ctx, filepath.Join(root, pathrules.ConfigDir, "sync.db"), store.KindSync)
+	path, err := syncDBPath(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	sdb, err := store.Open(ctx, path, store.KindSync)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,9 +99,6 @@ func openSyncDB(ctx context.Context, root string) (*DB, func(), error) {
 // of an existing one (name and level can change while the share lives). The vault is not
 // open: the application opens the folder like any vault, and Attach starts the sync.
 func PrepareMount(ctx context.Context, root string, m MountMeta, info SessionInfo) error {
-	if err := os.MkdirAll(filepath.Join(root, pathrules.ConfigDir), 0o755); err != nil {
-		return err
-	}
 	db, closeDB, err := openSyncDB(ctx, root)
 	if err != nil {
 		return err
@@ -123,7 +126,11 @@ func PrepareMount(ctx context.Context, root string, m MountMeta, info SessionInf
 
 // ReadMount reads the link of a mount folder; ok is false when the folder is not a mount.
 func ReadMount(ctx context.Context, root string) (m MountMeta, ok bool, err error) {
-	if exists, err := store.Exists(filepath.Join(root, pathrules.ConfigDir, "sync.db")); err != nil {
+	path, err := syncDBPath(root)
+	if err != nil {
+		return MountMeta{}, false, err
+	}
+	if exists, err := store.Exists(path); err != nil {
 		return MountMeta{}, false, err
 	} else if !exists {
 		return MountMeta{}, false, nil
@@ -149,10 +156,33 @@ func readMountMeta(ctx context.Context, db *DB) (MountMeta, bool, error) {
 	}, true, nil
 }
 
+// IsLinked reports whether the sync.db of a folder, open or not, records a link to a cloud vault
+// (a vault of the account or a mount). A folder with no sync.db is not linked.
+func IsLinked(ctx context.Context, root string) (bool, error) {
+	path, err := syncDBPath(root)
+	if err != nil {
+		return false, err
+	}
+	if exists, err := store.Exists(path); err != nil || !exists {
+		return false, err
+	}
+	db, closeDB, err := openSyncDB(ctx, root)
+	if err != nil {
+		return false, err
+	}
+	defer closeDB()
+	cloud, err := db.Meta(ctx, MetaCloudVault)
+	return cloud != "", err
+}
+
 // ReadVaultName returns the name of the cloud vault a folder is linked to, or "" when it is not linked.
 // The browser names its folders by cloud vault id, so the UI shows this name instead (ADR-0029).
 func ReadVaultName(ctx context.Context, root string) string {
-	if exists, err := store.Exists(filepath.Join(root, pathrules.ConfigDir, "sync.db")); err != nil || !exists {
+	path, err := syncDBPath(root)
+	if err != nil {
+		return ""
+	}
+	if exists, err := store.Exists(path); err != nil || !exists {
 		return ""
 	}
 	db, closeDB, err := openSyncDB(ctx, root)
@@ -284,7 +314,11 @@ func (m *Manager) shareGone(ctx context.Context, mv *managed) bool {
 // ordinary folder (the "keep a detached copy" choice; the application then moves the folder out of
 // the mounts directory).
 func ForgetMount(ctx context.Context, root string) error {
-	sdb, err := store.Open(ctx, filepath.Join(root, pathrules.ConfigDir, "sync.db"), store.KindSync)
+	path, err := syncDBPath(root)
+	if err != nil {
+		return err
+	}
+	sdb, err := store.Open(ctx, path, store.KindSync)
 	if err != nil {
 		return err
 	}

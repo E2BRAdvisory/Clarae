@@ -5,6 +5,9 @@
 //   - app.db   (data dir)        recent vaults, application preferences
 //   - index.db (<vault>/.clarae/) derived search index, rebuildable at any time
 //   - sync.db  (<vault>/.clarae/) synchronization state (M2)
+//
+// The path of a vault's databases is built by internal/vaultdir (DB), which first moves the
+// databases of a vault created by 1.x out of its former folder.
 package store
 
 import (
@@ -15,7 +18,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -35,10 +37,11 @@ const (
 	KindSync  Kind = "sync"
 )
 
-// Open opens (creating if needed) the SQLite file at path, enables WAL and
+// Open opens (creating if needed) the SQLite file at path (the path of a vault's databases comes
+// from vaultdir.DB), enables WAL and
 // foreign keys, and migrates it to the latest schema of its kind.
 func Open(ctx context.Context, path string, kind Kind) (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := prepareDir(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
 	dsn, err := fileURI(path, url.Values{

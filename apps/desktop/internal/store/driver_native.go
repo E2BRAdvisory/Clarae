@@ -10,6 +10,9 @@ import (
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
 
+// prepareDir creates the folder of a database.
+func prepareDir(dir string) error { return os.MkdirAll(dir, 0o700) }
+
 // Exists reports whether the database file at path exists.
 func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
