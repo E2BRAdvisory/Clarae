@@ -155,9 +155,27 @@ func (s *Service) checkSums(ctx context.Context, tx db.DBTX, v access.Vault, siz
 	return nil
 }
 
-// lockOwner serializes the quota checks of one owner until tx ends.
+// lockOwner serializes the quota checks of one owner until tx ends. It takes the lock under the name
+// of 1.x and then under the current one (db.AdvisoryLockKeys): a pod of 1.4 only knows the first.
 func lockOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) error {
-	return blobsdb.New(tx).LockOwnerUploads(ctx, "clarae.uploads:"+ownerID.String())
+	q := blobsdb.New(tx)
+	for _, key := range db.AdvisoryLockKeys("uploads", ownerID.String()) {
+		if err := q.LockOwnerUploads(ctx, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// lockBlob takes the per-hash lock of the publication of a blob until tx ends, under the name of 1.x
+// and then under the current one (db.AdvisoryLockKeys).
+func lockBlob(ctx context.Context, q *blobsdb.Queries, hash string) error {
+	for _, key := range db.AdvisoryLockKeys("blob", hash) {
+		if err := q.LockBlobHash(ctx, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Store exposes the object store to modules that stream blobs (revisions).
@@ -316,7 +334,7 @@ func (s *Service) ingestOnce(ctx context.Context, v access.Vault, hash, path str
 	}
 	return s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := blobsdb.New(tx)
-		if err := q.LockBlobHash(ctx, hash); err != nil {
+		if err := lockBlob(ctx, q, hash); err != nil {
 			return err
 		}
 		if !stored {
@@ -380,7 +398,7 @@ func isForeignKeyViolation(err error) bool {
 // lock is released when it ends).
 func LockObject(ctx context.Context, tx db.DBTX, hash string) (rowExists bool, err error) {
 	q := blobsdb.New(tx)
-	if err := q.LockBlobHash(ctx, hash); err != nil {
+	if err := lockBlob(ctx, q, hash); err != nil {
 		return false, err
 	}
 	if _, err := q.GetBlob(ctx, hash); errors.Is(err, pgx.ErrNoRows) {

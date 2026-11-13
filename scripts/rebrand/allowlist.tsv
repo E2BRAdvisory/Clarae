@@ -70,6 +70,11 @@ legacy	deploy/compose/compose.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	the .
 legacy	deploy/compose/.env.example	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents the identity of an installation made before 2.0 and the MEMOBRAIN_* fallbacks; dropped in 3.0
 legacy	deploy/compose/README.md	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents the upgrade of an installation made before 2.0; dropped in 3.0
 legacy	services/cloud/internal/config/compose_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the compose file for installations made before 2.0; dropped in 3.0
+legacy	services/cloud/internal/db/locks.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	advisory lock names of 1.x, taken before the new ones during a rolling upgrade; dropped in 2.1
+legacy	services/cloud/internal/db/locks_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the advisory lock names of 1.x; dropped in 2.1
+legacy	services/cloud/test/integration/advisory_lock_compat_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	acts as a pod of 1.4 holding the advisory lock of 1.x; dropped in 2.1
+legacy	services/cloud/internal/observability/namespace.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	metrics namespace of 1.x for the realm memobrain; dropped in 3.0
+legacy	services/cloud/internal/observability/namespace_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the metrics namespace of 1.x; dropped in 3.0
 
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures

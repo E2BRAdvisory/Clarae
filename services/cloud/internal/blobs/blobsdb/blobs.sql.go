@@ -446,15 +446,17 @@ func (q *Queries) ListVaultBlobsAmong(ctx context.Context, arg ListVaultBlobsAmo
 }
 
 const lockBlobHash = `-- name: LockBlobHash :exec
-SELECT pg_advisory_xact_lock(hashtextextended('clarae.blob:' || $1::text, 0))
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
 `
 
 // Serializes, per hash, the publication of a blob row with the deletion of
 // its object by the garbage collector until the transaction ends: under this
 // lock a row is inserted only once its object is verified, and the collector
 // deletes an object only when no row exists (see ingestFile and LockObject).
-func (q *Queries) LockBlobHash(ctx context.Context, hash string) error {
-	_, err := q.db.Exec(ctx, lockBlobHash, hash)
+// The key is "<prefix>blob:<hash>": the caller takes the one of 1.x and then the current one
+// (db.AdvisoryLockKeys), so that pods of 1.4 and of 2.0 exclude each other during an upgrade.
+func (q *Queries) LockBlobHash(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, lockBlobHash, key)
 	return err
 }
 

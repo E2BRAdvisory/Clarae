@@ -276,8 +276,11 @@ func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb
 	var j exportdb.ExportJob
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := exportdb.New(tx)
-		if err := q.LockExportRequests(ctx, "clarae.exports:"+user.String()); err != nil {
-			return err
+		// The name of 1.x first, then the current one (db.AdvisoryLockKeys): a pod of 1.4 only knows the first.
+		for _, key := range db.AdvisoryLockKeys("exports", user.String()) {
+			if err := q.LockExportRequests(ctx, key); err != nil {
+				return err
+			}
 		}
 		var err error
 		j, err = q.GetActiveExportJobOfVault(ctx, v.ID)

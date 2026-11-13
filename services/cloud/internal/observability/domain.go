@@ -13,36 +13,36 @@ import (
 // has a small closed value set (cardinality stays bounded).
 var (
 	syncCommits = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "clarae", Subsystem: "sync", Name: "commits_total",
+		Namespace: namespace, Subsystem: "sync", Name: "commits_total",
 		Help: "Sync commit requests by outcome (ok = processed, error = failed as a whole).",
 	}, []string{"outcome"})
 	syncOps = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "clarae", Subsystem: "sync", Name: "ops_total",
+		Namespace: namespace, Subsystem: "sync", Name: "ops_total",
 		Help: "Sync operations by result status (accepted, conflict, rejected).",
 	}, []string{"status"})
 	syncCommitFallbacks = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "clarae", Subsystem: "sync", Name: "commit_fallbacks_total",
+		Namespace: namespace, Subsystem: "sync", Name: "commit_fallbacks_total",
 		Help: "Commit batches replayed one operation per transaction after losing a race, by reason (unique, quota, serialization, deadlock, other).",
 	}, []string{"reason"})
 	streams = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "clarae", Subsystem: "notify", Name: "streams_active",
+		Namespace: namespace, Subsystem: "notify", Name: "streams_active",
 		Help: "Open notification streams (gRPC and SSE) on this process.",
 	})
 	jobRuns = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "clarae", Subsystem: "jobs", Name: "runs_total",
+		Namespace: namespace, Subsystem: "jobs", Name: "runs_total",
 		Help: "Background job runs by job and result (ok, error).",
 	}, []string{"job", "result"})
 	jobDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "clarae", Subsystem: "jobs", Name: "run_duration_seconds",
+		Namespace: namespace, Subsystem: "jobs", Name: "run_duration_seconds",
 		Help:    "Background job run time by job.",
 		Buckets: []float64{.1, .5, 1, 5, 15, 60, 300, 900, 3600},
 	}, []string{"job"})
 	jobItemFailures = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "clarae", Subsystem: "jobs", Name: "item_failures_total",
+		Namespace: namespace, Subsystem: "jobs", Name: "item_failures_total",
 		Help: "Items a background job skipped after an error (it went on with the others), by job.",
 	}, []string{"job"})
 	jobLastSuccess = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "clarae", Subsystem: "jobs", Name: "last_success_timestamp_seconds",
+		Namespace: namespace, Subsystem: "jobs", Name: "last_success_timestamp_seconds",
 		Help: "Unix time of the last successful run of each job.",
 	}, []string{"job"})
 )
