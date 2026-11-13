@@ -212,47 +212,152 @@ func (f *FS) MoveConfig(fromRel, expectedHash string) (toRel string, moved bool,
 		return "", false, nil
 	}
 	toRel = pathrules.ConfigDir + "/" + name
+	moved, err = f.moveConfigLocked(from, toRel, expectedHash)
+	if err != nil || !moved {
+		return "", false, err
+	}
+	f.changed(from, toRel) // outside the locks: the callback may call back into the FS
+	return toRel, true, nil
+}
+
+func (f *FS) moveConfigLocked(from, toRel, expectedHash string) (bool, error) {
 	f.cfgMu.Lock()
 	defer f.cfgMu.Unlock()
 	fromAbs, _, err := f.Resolve(from)
 	if err != nil {
-		return "", false, err
+		return false, err
 	}
 	toAbs, _, err := f.Resolve(toRel)
 	if err != nil {
-		return "", false, err
+		return false, err
 	}
 	if st, err := os.Lstat(fromAbs); errors.Is(err, fs.ErrNotExist) || (err == nil && !st.Mode().IsRegular()) {
-		return "", false, nil
+		return false, nil
 	} else if err != nil {
-		return "", false, err
+		return false, err
 	}
 	if _, err := os.Lstat(toAbs); err == nil {
-		return "", false, nil
+		return false, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return "", false, err
+		return false, err
 	}
 	if expectedHash != "" {
 		h, _, err := f.HashFile(from)
 		if err != nil {
-			return "", false, err
+			return false, err
 		}
 		if h != expectedHash {
-			return "", false, ErrHashMismatch
+			return false, ErrHashMismatch
 		}
 	}
-	if err := f.Rename(from, toRel); err != nil {
+	if err := f.rename(fromAbs, toAbs); err != nil {
 		if errors.Is(err, ErrExists) || errors.Is(err, fs.ErrNotExist) {
-			return "", false, nil // somebody else got there first: nothing was overwritten
+			return false, nil // somebody else got there first: nothing was overwritten
 		}
-		return "", false, err
+		return false, err
 	}
-	// The folders the file leaves behind go when empty (os.Remove refuses any other).
-	root := filepath.Join(f.root, filepath.FromSlash(strings.SplitN(from, "/", 2)[0]))
-	for dir := filepath.Dir(fromAbs); strings.HasPrefix(dir, root); dir = filepath.Dir(dir) {
+	removeEmptyDirs(filepath.Dir(fromAbs), filepath.Join(f.root, filepath.FromSlash(strings.SplitN(from, "/", 2)[0])))
+	return true, nil
+}
+
+// removeEmptyDirs removes dir and its parents up to root (included) while they are empty
+// (os.Remove refuses any other).
+func removeEmptyDirs(dir, root string) {
+	for strings.HasPrefix(dir, root) {
 		if os.Remove(dir) != nil {
-			break
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+
+// ShelveConfig moves the settings of the current configuration folder that sync to the former
+// folder, for a vault that has just been linked to the cloud while clients of 1.x may share it
+// (features.config_dir_v2 off): a vault that was not linked adopted its settings into the current
+// folder (vaultdir.AdoptSettings), and a 1.x client of the cloud vault would neither read them nor
+// leave them alone. A file the former folder already has stays where it is. What never syncs does
+// not move. It returns the number of files moved; folders left empty go.
+func (f *FS) ShelveConfig() (int, error) {
+	moves, err := f.shelveLocked()
+	for _, m := range moves {
+		f.changed(m[0], m[1]) // outside the locks: the callback may call back into the FS
+	}
+	return len(moves), err
+}
+
+// shelveLocked moves the files and returns the (from, to) pairs it moved.
+func (f *FS) shelveLocked() (moves [][2]string, err error) {
+	f.cfgMu.Lock()
+	defer f.cfgMu.Unlock()
+	root, err := f.configRoot()
+	if err != nil || root == "" {
+		return nil, err
+	}
+	var names []string
+	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || p == root {
+			return err
+		}
+		rel, rerr := filepath.Rel(root, p)
+		if rerr != nil {
+			return rerr
+		}
+		name := filepath.ToSlash(rel)
+		if localOnly(name) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Type().IsRegular() {
+			names = append(names, name)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range names {
+		from := pathrules.ConfigDir + "/" + name
+		to := pathrules.LegacyConfigDirs[0] + "/" + name
+		fromAbs, _, rerr := f.Resolve(from)
+		if rerr != nil {
+			return moves, rerr
+		}
+		toAbs, _, rerr := f.Resolve(to)
+		if rerr != nil {
+			return moves, rerr
+		}
+		if _, lerr := os.Lstat(toAbs); lerr == nil {
+			continue // the former folder has it: it wins, nothing is overwritten
+		} else if !errors.Is(lerr, fs.ErrNotExist) {
+			return moves, lerr
+		}
+		if rerr := f.rename(fromAbs, toAbs); rerr != nil {
+			if errors.Is(rerr, ErrExists) || errors.Is(rerr, fs.ErrNotExist) {
+				continue
+			}
+			return moves, rerr
+		}
+		moves = append(moves, [2]string{from, to})
+		if dir := filepath.Dir(fromAbs); dir != root {
+			removeEmptyDirs(dir, root+string(filepath.Separator))
 		}
 	}
-	return toRel, true, nil
+	return moves, nil
+}
+
+// configRoot is the absolute current configuration folder, "" when the vault has none.
+func (f *FS) configRoot() (string, error) {
+	abs, _, err := f.Resolve(pathrules.ConfigDir)
+	if err != nil {
+		return "", err
+	}
+	if st, err := os.Lstat(abs); err != nil || !st.IsDir() {
+		if err == nil || errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	return abs, nil
 }

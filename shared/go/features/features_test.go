@@ -46,7 +46,9 @@ func TestEveryFlagHasADefault(t *testing.T) {
 	// and ADR-0042 are on by default since release N+1.
 	// ai and collab (ADR-0050) are functions not offered yet that the code already reads: a flag the
 	// schema did not declare would be on, so both must stay declared and off.
-	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.Ai, features.Collab}
+	// config_dir_v2 (ADR-0052) moves the synchronized settings of linked vaults to the new configuration
+	// folder: off until every device of a vault runs 2.x.
+	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.Ai, features.Collab, features.ConfigDirV2}
 	for _, k := range features.Known {
 		want := true
 		for _, o := range off {

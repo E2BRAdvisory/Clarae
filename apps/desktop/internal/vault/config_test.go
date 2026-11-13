@@ -304,3 +304,38 @@ func TestReadConfigDuringAMove(t *testing.T) {
 	}()
 	wg.Wait()
 }
+
+func TestShelveConfig(t *testing.T) {
+	fs := newTestFS(t)
+	put(t, fs, cfgCurrent+"/editor.json", "mine")
+	put(t, fs, cfgCurrent+"/templates/sub/daily.md", "# daily")
+	put(t, fs, cfgCurrent+"/hotkeys.json", "{current}")
+	put(t, fs, cfgLegacy+"/hotkeys.json", "{legacy}") // the former folder wins
+	put(t, fs, cfgCurrent+"/workspace.json", "layout")
+	put(t, fs, cfgCurrent+"/sync.db", "db")
+	put(t, fs, cfgCurrent+"/cache/drawings/a.svg", "<svg>")
+
+	n, err := fs.ShelveConfig()
+	if err != nil || n != 2 {
+		t.Fatalf("ShelveConfig = %d, %v; want 2", n, err)
+	}
+	if content(t, fs, cfgLegacy+"/editor.json") != "mine" || content(t, fs, cfgLegacy+"/templates/sub/daily.md") != "# daily" {
+		t.Fatal("the settings did not move")
+	}
+	if has(fs, cfgCurrent+"/editor.json") || has(fs, cfgCurrent+"/templates") {
+		t.Fatal("a moved file or its emptied folder is still in the current folder")
+	}
+	if content(t, fs, cfgLegacy+"/hotkeys.json") != "{legacy}" || content(t, fs, cfgCurrent+"/hotkeys.json") != "{current}" {
+		t.Fatal("a file of the former folder was overwritten, or its twin lost")
+	}
+	for _, rel := range []string{"workspace.json", "sync.db", "cache/drawings/a.svg"} {
+		if !has(fs, cfgCurrent+"/"+rel) || has(fs, cfgLegacy+"/"+rel) {
+			t.Errorf("%s, which never syncs, moved", rel)
+		}
+	}
+	// Nothing to do on a vault with no configuration folder.
+	empty := newTestFS(t)
+	if n, err := empty.ShelveConfig(); n != 0 || err != nil {
+		t.Fatalf("empty vault: %d %v", n, err)
+	}
+}

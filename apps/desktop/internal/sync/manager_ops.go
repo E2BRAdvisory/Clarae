@@ -208,6 +208,7 @@ func (m *Manager) Link(ctx context.Context, localID, name, kind, passphrase stri
 			res.Warning = WarnKeychainUnavailable
 		}
 	}
+	m.shelveSettings(mv)
 	if err := m.saveLink(ctx, mv, v, info); err != nil {
 		if kind == "private" {
 			_ = m.crypto.Forget(res.CloudVaultID)
@@ -284,6 +285,7 @@ func (m *Manager) LinkExisting(ctx context.Context, localID, cloudVaultID string
 	if err != nil {
 		return err
 	}
+	m.shelveSettings(mv)
 	if err := m.saveLink(ctx, mv, v, info); err != nil {
 		return err
 	}
@@ -292,6 +294,21 @@ func (m *Manager) LinkExisting(ctx context.Context, localID, cloudVaultID string
 	}
 	m.kickNow(mv)
 	return nil
+}
+
+// shelveSettings puts the settings of a vault that is about to be linked where the clients of 1.x
+// sharing the cloud vault read them, unless the move to the current folder is on (see
+// vault.FS.ShelveConfig). A failure is only logged: the settings stay readable where they are.
+func (m *Manager) shelveSettings(mv *managed) {
+	if m.configDirV2.Load() {
+		return
+	}
+	n, err := mv.fs.ShelveConfig()
+	if err != nil {
+		m.log.Warn().Err(err).Str("vault", mv.localID).Msg("sync: cannot move the settings to the folder clients of 1.x read")
+	} else if n > 0 {
+		m.log.Info().Int("files", n).Str("vault", mv.localID).Msg("sync: settings of the vault moved to the folder clients of 1.x read")
+	}
 }
 
 // Unlink disconnects the vault: local files stay, the server copy is untouched,
