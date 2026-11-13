@@ -2,7 +2,7 @@
 Type=Application
 Name=Clarae notanda
 GenericName=Notes and knowledge base
-Comment=Local-first notes and knowledge base
+Comment=Your knowledge, carefully preserved in its clarity.
 Exec=clarae %U
 Icon=clarae
 Terminal=false

@@ -49,7 +49,7 @@ sha256sum -c SHA256SUMS
 - Nomi degli artefatti (invariati rispetto a Wails v2; li leggono `release.yml`, i pacchetti e l'updater): `clarae-<versione>-darwin-universal.dmg` (contiene `Clarae notanda.app`), `clarae-<versione>-windows-<arch>.exe` (installer NSIS `clarae-<arch>-installer.exe`, che installa `Clarae notanda.exe`), `clarae-<versione>-linux-<arch>.deb` e `.AppImage`. `LSMinimumSystemVersion` dell'`Info.plist` è 13.0.0, il minimo di Go 1.27.
 - Immagine cloud: `task docker-build` (architettura locale) e `task docker-push` (multi-arch, richiede `docker login` e un builder buildx).
 - `scripts/release/package-linux.sh` richiede `nfpm` e `appimagetool` su Linux.
-- Icone: generate da `assets/logo.png` con `scripts/brand/gen-brand-assets.py` (vedi `assets/brand/README.md`). `build-desktop-bin.sh` copia `build/darwin/icon.icns` in `Contents/Resources/iconfile.icns` e passa `build/windows/icon.ico` a `wails3 generate syso`; il pacchetto Linux prende `build/linux/clarae.{png,svg}`.
+- Icone: generate dagli SVG di `assets/brand/` con `scripts/brand/gen-brand-assets.py` (vedi `assets/brand/README.md`). `build-desktop-bin.sh` copia `build/darwin/icon.icns` in `Contents/Resources/iconfile.icns` e passa `build/windows/icon.ico` a `wails3 generate syso`; il pacchetto Linux prende `build/linux/clarae.{png,svg}`.
 
 ## Da riattivare
 

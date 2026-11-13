@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme-banner.png" alt="Clarae notanda — Local-first notes and knowledge base" width="100%" />
+  <img src="assets/readme-banner.png" alt="Clarae notanda — Your knowledge, carefully preserved in its clarity." width="100%" />
 </p>
 
 **Clarae notanda** è un'app di knowledge management _local-first_. Le note sono file Markdown ordinari in una cartella (il _vault_), compatibile con i vault di Obsidian: l'app funziona completamente offline e il cloud è facoltativo.

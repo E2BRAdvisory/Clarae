@@ -101,7 +101,7 @@ func run() int {
 
 	wa := application.New(application.Options{
 		Name:        appName,
-		Description: "Local-first notes and knowledge base\nVersion " + Version,
+		Description: "Your knowledge, carefully preserved in its clarity.\nVersion " + Version,
 		// Wails logs at debug level the arguments and the result of every binding call, passphrases
 		// included: its logger has a floor at Warn, whatever --log-level says (E4).
 		Logger:   telemetry.UIRuntimeLogger(logger),

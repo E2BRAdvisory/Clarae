@@ -6,7 +6,7 @@
     "productName": "Clarae notanda",
     "productIdentifier": "dev.clarae.desktop",
     "copyright": "Copyright © 2026",
-    "comments": "Local-first notes and knowledge base",
+    "comments": "Your knowledge, carefully preserved in its clarity.",
     "protocols": [
       {
         "scheme": "clarae",

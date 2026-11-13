@@ -1,12 +1,12 @@
 {
   "name": "Clarae notanda",
   "short_name": "Clarae",
-  "description": "Local-first notes and knowledge base",
+  "description": "Your knowledge, carefully preserved in its clarity.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "theme_color": "#111624",
-  "background_color": "#0d121e",
+  "theme_color": "#102B3A",
+  "background_color": "#102B3A",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

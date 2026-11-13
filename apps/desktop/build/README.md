@@ -9,7 +9,8 @@ Risorse e configurazione per compilare l'app desktop (Wails v3, ADR-0051). Il bi
   esbuild su `127.0.0.1:5173`, ricompila il binario a ogni modifica dei `.go` e lo riavvia.
 - `bin/` — output (ignorato da git): su macOS `Clarae notanda.app` universale, su Windows `clarae.exe`, su Linux
   `clarae`; in sviluppo `clarae-dev` (su macOS `clarae.dev.app`).
-- `appicon.png` — sorgente delle icone.
+- `appicon.png` — icona macOS a 1024 px, generata come le altre da `scripts/brand/gen-brand-assets.py`
+  (`assets/brand/README.md`); la build usa `darwin/icon.icns` e `windows/icon.ico`.
 
 ## macOS (`darwin/`)
 

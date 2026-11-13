@@ -9,7 +9,7 @@ section: utils
 priority: optional
 maintainer: Clarae notanda <efrem.ropelato@e2br-advisory.ch>
 description: |
-  Local-first notes and knowledge base.
+  Your knowledge, carefully preserved in its clarity.
   Notes are ordinary Markdown files; optional cloud sync with end-to-end encryption.
 homepage: https://github.com/E2BR/MemoBrain
 license: Proprietary
