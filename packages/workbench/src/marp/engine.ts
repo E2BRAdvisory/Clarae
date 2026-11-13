@@ -5,6 +5,7 @@
 import { Marp } from '@marp-team/marp-core';
 import katexPlugin from '@marp-team/marp-core/plugins/katex';
 import { safeDecodeURI } from '../util/uri';
+import { HIDDEN_RE } from './slides';
 import { sanitizeMarpCss, sanitizeMarpHtml, splitDeclarations } from './sanitize';
 
 /**
@@ -94,7 +95,7 @@ export function embedsToImages(source: string): string {
 }
 
 /** The marker comment that leaves a slide out of the presentation and its exports. */
-export const HIDDEN_COMMENT = /^clarae:\s*hidden$/i;
+export const HIDDEN_COMMENT = HIDDEN_RE;
 
 const URL_IN_CSS = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
 

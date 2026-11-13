@@ -41,6 +41,15 @@ describe('Marp rendering', () => {
     expect(deck.hidden).toEqual([false, true]);
   });
 
+  it('leaves out a slide marked by 1.x, and keeps the marker out of the notes', async () => {
+    const deck = await renderDeck(
+      '# A\n\n<!-- memobrain: hidden -->\n<!-- say hi -->\n\n---\n\n# B\n',
+      vault,
+    );
+    expect(deck.hidden).toEqual([true, false]);
+    expect(deck.notes).toEqual(['say hi', '']);
+  });
+
   it('shows the pictures of the vault and nothing from the network', async () => {
     const deck = await renderDeck(
       `${DECK}\n---\n\n![](https://example.com/x.png)\n\n![bg](https://example.com/y.png)\n`,

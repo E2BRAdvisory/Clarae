@@ -48,6 +48,8 @@ legacy	apps/desktop/build/linux/nfpm.yaml	^  - memobrain$	package name of 1.x: r
 legacy	apps/desktop/build/installer_legacy_test.go	*	tests of the removal of the 1.x installation by the installers (the whole file is about it): dropped in 3.0
 legacy	packages/workbench/src/drawing/meta.ts	memobrain	Excalidraw metadata key of 1.x (top level and customData), read as long as 1.x files exist
 legacy	packages/workbench/src/drawing/**/*.test.ts	memobrain	tests of the reading of drawings in the 1.x format
+legacy	packages/workbench/src/marp/slides.ts	memobrain	hidden-slide marker and frontmatter keys (memobrain-loop, memobrain-notes) of 1.x presentations, read as long as 1.x files exist
+legacy	packages/workbench/src/marp/*.test.ts	memobrain	tests of the reading of presentations in the 1.x format
 
 # Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
 legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 3.0

@@ -22,6 +22,8 @@ import {
   deckSlides,
   displayNote,
   frontmatterEdit,
+  LOOP_KEY,
+  NOTES_KEY,
   moveSlideEdit,
   notesEdit,
   setHiddenEdit,
@@ -316,7 +318,7 @@ export function MarpSlidesPanel({ vaultId, path }: { vaultId: string; path: stri
             <input
               type="checkbox"
               checked={settings.loop}
-              onChange={(e) => setKey('clarae-loop', e.target.checked ? true : null)}
+              onChange={(e) => setKey(LOOP_KEY, e.target.checked ? true : null)}
             />
             {t('drawing.slidePanel.slideLoop')}
           </label>
@@ -332,7 +334,7 @@ export function MarpSlidesPanel({ vaultId, path }: { vaultId: string; path: stri
             <input
               type="checkbox"
               checked={settings.notes}
-              onChange={(e) => setKey('clarae-notes', e.target.checked ? null : false)}
+              onChange={(e) => setKey(NOTES_KEY, e.target.checked ? null : false)}
             />
             {t('drawing.slidePanel.slideNotes')}
           </label>

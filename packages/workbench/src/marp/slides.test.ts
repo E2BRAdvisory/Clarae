@@ -238,6 +238,63 @@ describe('settings', () => {
   });
 });
 
+describe('a presentation written by 1.x', () => {
+  // 1.x wrote `memobrain: hidden` and the `memobrain-loop` / `memobrain-notes` frontmatter keys.
+  const OLD_MARK = '<!-- memobrain: hidden -->';
+  const OLD_FM = '---\nmarp: true\nmemobrain-loop: true\nmemobrain-notes: false\n---\n\n# A\n';
+
+  it('reads the old hidden marker, and writes the new one for a new exclusion', () => {
+    const src = `# A\n\n${OLD_MARK}\n\n---\n\n# B\n`;
+    const lines = linesOf(src);
+    expect(deckSlides(src, lines).map((s) => s.hidden)).toEqual([true, false]);
+    const out = apply(src, hiddenEdit(src, lines, 1, true));
+    expect(out).toContain('<!-- clarae: hidden -->');
+    expect(out).toContain(OLD_MARK); // the existing marker is not rewritten
+    expect(hiddenEdit(src, lines, 0, true)).toEqual([]); // already out
+  });
+
+  it('puts a slide back by removing the marker it has, whichever name', () => {
+    const src = `# A\n\n${OLD_MARK}\n\n---\n\n# B\n\n<!-- clarae: hidden -->\n`;
+    const out = apply(src, setHiddenEdit(src, linesOf(src), [0, 1], false));
+    expect(out).not.toMatch(/hidden/);
+    const both = `# A\n\n${OLD_MARK}\n<!-- clarae: hidden -->\n`;
+    expect(apply(both, hiddenEdit(both, [0], 0, false))).not.toMatch(/hidden/);
+  });
+
+  it('reads the loop and notes settings of the old keys', () => {
+    expect(deckSettings(OLD_FM)).toMatchObject({ loop: true, notes: false });
+  });
+
+  it('prefers the new key when a file has both', () => {
+    const fm = '---\nmarp: true\nclarae-loop: false\nmemobrain-loop: true\n---\n';
+    expect(deckSettings(fm).loop).toBe(false);
+  });
+
+  it('moves an old key to the new one in place, in one set of edits', () => {
+    const edits = frontmatterEdit(OLD_FM, 'clarae-loop', true);
+    const out = apply(OLD_FM, edits);
+    expect(out).toBe('---\nmarp: true\nclarae-loop: true\nmemobrain-notes: false\n---\n\n# A\n');
+    // one transaction: a single undo brings the file back
+    const state = EditorState.create({ doc: OLD_FM }).update({ changes: edits }).state;
+    expect(state.doc.toString()).toBe(out);
+  });
+
+  it('unticking removes the old key and does not leave the setting on', () => {
+    const out = apply(OLD_FM, frontmatterEdit(OLD_FM, 'clarae-loop', null));
+    expect(out).not.toContain('loop');
+    expect(deckSettings(out).loop).toBe(false);
+    const notes = apply(OLD_FM, frontmatterEdit(OLD_FM, 'clarae-notes', false));
+    expect(notes).toContain('clarae-notes: false');
+    expect(notes).not.toContain('memobrain-notes');
+  });
+
+  it('removes the old key next to a new one when the setting is written', () => {
+    const fm = '---\nmarp: true\nclarae-loop: false\nmemobrain-loop: true\n---\n';
+    const out = apply(fm, frontmatterEdit(fm, 'clarae-loop', true));
+    expect(out).toBe('---\nmarp: true\nclarae-loop: true\n---\n');
+  });
+});
+
 describe('what is a comment, as Marp reads it (ADR-0048)', () => {
   it('leaves a comment inside a code span or code block alone', () => {
     const src = '# HTML comments\n\nWrite `<!-- like this -->` in HTML.\n';

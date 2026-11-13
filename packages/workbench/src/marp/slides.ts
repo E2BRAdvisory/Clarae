@@ -7,7 +7,8 @@ import type { SourceEdit } from '../editor/types';
 
 /** The comment that leaves a slide out of the presentation and of its exports. */
 export const HIDDEN_MARKER = '<!-- clarae: hidden -->';
-const HIDDEN_RE = /^clarae:\s*hidden$/i;
+/** A hidden-slide marker as written now or by 1.x (existing markers are never rewritten). */
+export const HIDDEN_RE = /^(clarae|memobrain):\s*hidden$/i;
 
 /** A horizontal rule: the separator between two slides. */
 const SEPARATOR = /^ {0,3}([-*_])(?: *\1){2,} *$/;
@@ -536,13 +537,21 @@ export function moveSlideEdit(
   return [{ from, to: lineEnd(lay, b.end), insert }];
 }
 
+/** The frontmatter keys of the settings, and the keys 1.x wrote for them (read, never written). */
+export const LOOP_KEY = 'clarae-loop';
+export const NOTES_KEY = 'clarae-notes';
+const LEGACY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  [LOOP_KEY]: ['memobrain-loop'],
+  [NOTES_KEY]: ['memobrain-notes'],
+};
+
 /** The settings the presentation keeps in its frontmatter. */
 export interface DeckSettings {
   theme: string;
   paginate: boolean;
-  /** `clarae-loop`: start again after the last slide. */
+  /** `clarae-loop` (1.x: `memobrain-loop`): start again after the last slide. */
   loop: boolean;
-  /** `clarae-notes`: show the presenter notes while presenting (on unless set to false). */
+  /** `clarae-notes` (1.x: `memobrain-notes`): show the presenter notes (on unless set to false). */
   notes: boolean;
 }
 
@@ -558,20 +567,30 @@ export function readFrontmatter(source: string): Record<string, string> {
   return out;
 }
 
+/** A setting of the frontmatter: the current key, else the one of 1.x. */
+function setting(fm: Record<string, string>, key: string): string | undefined {
+  for (const k of [key, ...(LEGACY_KEYS[key] ?? [])]) if (fm[k] !== undefined) return fm[k];
+  return undefined;
+}
+
 export function deckSettings(source: string): DeckSettings {
   const fm = readFrontmatter(source);
   return {
     theme: fm['theme'] || 'default',
     paginate: fm['paginate'] === 'true',
-    loop: fm['clarae-loop'] === 'true',
-    notes: fm['clarae-notes'] !== 'false',
+    loop: setting(fm, LOOP_KEY) === 'true',
+    notes: setting(fm, NOTES_KEY) !== 'false',
   };
 }
 
 const yamlValue = (v: string | boolean | number): string =>
   typeof v === 'string' && !/^[\w.-]+$/.test(v) ? JSON.stringify(v) : String(v);
 
-/** Changes that set a frontmatter key (null removes it), creating the frontmatter when needed. */
+/**
+ * Changes that set a frontmatter key (null removes it), creating the frontmatter when needed. A
+ * setting that 1.x wrote under its old key moves to the current one in the same edit list: the
+ * old line is replaced (or removed), so one undo step restores both.
+ */
 export function frontmatterEdit(
   source: string,
   key: string,
@@ -584,15 +603,37 @@ export function frontmatterEdit(
     if (value === null) return [];
     return [{ from: 0, insert: `---\nmarp: true\n${row}\n---\n\n` }];
   }
-  const at = lay.lines.findIndex(
-    (l, i) => i > 0 && i < end && new RegExp(`^${key.replace(/[-]/g, '\\-')}\\s*:`).test(l),
-  );
+  const linesOf = (k: string): number[] => {
+    const re = new RegExp(`^${k.replace(/[-]/g, '\\-')}\\s*:`);
+    const out: number[] = [];
+    lay.lines.forEach((l, i) => {
+      if (i > 0 && i < end && re.test(l)) out.push(i);
+    });
+    return out;
+  };
+  const remove = (i: number): SourceEdit => ({
+    from: lay.offs[i] as number,
+    to: lay.offs[i + 1] as number,
+  });
+  const at = linesOf(key)[0] ?? -1;
+  const legacy = (LEGACY_KEYS[key] ?? []).flatMap(linesOf);
+  const edits: SourceEdit[] = [];
+  let placed = at >= 0;
   if (at >= 0) {
-    if (value === null) return [{ from: lay.offs[at] as number, to: lay.offs[at + 1] as number }];
-    return [{ from: lay.offs[at] as number, to: lineEnd(lay, at), insert: row }];
+    edits.push(
+      value === null
+        ? remove(at)
+        : { from: lay.offs[at] as number, to: lineEnd(lay, at), insert: row },
+    );
   }
-  if (value === null) return [];
-  return [{ from: lay.offs[end] as number, insert: `${row}\n` }];
+  for (const i of legacy) {
+    if (value !== null && !placed) {
+      edits.push({ from: lay.offs[i] as number, to: lineEnd(lay, i), insert: row });
+      placed = true;
+    } else edits.push(remove(i));
+  }
+  if (!placed && value !== null) edits.push({ from: lay.offs[end] as number, insert: `${row}\n` });
+  return edits;
 }
 
 /**
