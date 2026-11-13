@@ -24,11 +24,11 @@
 /* Page-level overlays (overlay.ts): they hide the workbench completely (a locked private vault must not
    stay readable underneath), so the background is opaque. */
 .page-overlay {
-  --overlay-bg: #f6f7fb;
+  --overlay-bg: #e9f0ef;
   --overlay-card: #ffffff;
-  --overlay-text: #1b1f2a;
-  --overlay-border: #d4d8e3;
-  --overlay-accent: #6d45d9;
+  --overlay-text: #102b3a;
+  --overlay-border: #c5d3d1;
+  --overlay-accent: #0b6964;
   --overlay-danger: #b3261e;
   position: fixed;
   inset: 0;
@@ -43,11 +43,11 @@
 }
 @media (prefers-color-scheme: dark) {
   .page-overlay {
-    --overlay-bg: #111624;
-    --overlay-card: #1b2133;
-    --overlay-text: #e6e8ef;
-    --overlay-border: #343c52;
-    --overlay-accent: #a58bf5;
+    --overlay-bg: #0b1f2a;
+    --overlay-card: #102b3a;
+    --overlay-text: #e9f0ef;
+    --overlay-border: #2a4a5a;
+    --overlay-accent: #72c9bd;
     --overlay-danger: #f2b8b5;
   }
 }

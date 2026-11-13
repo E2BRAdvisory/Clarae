@@ -20,7 +20,7 @@ const contrast = (a: string, b: string): number => {
 };
 
 // the surfaces of a code block: the page and the secondary background of tokens.css, per theme
-const SURFACES = { light: ['#ffffff', '#f5f5f7'], dark: ['#1e1e1e', '#252526'] } as const;
+const SURFACES = { light: ['#ffffff', '#e9f0ef'], dark: ['#0b1f2a', '#102b3a'] } as const;
 
 describe('the syntax colours of a code block', () => {
   const check = (palette: Palette, surfaces: readonly string[]) => {

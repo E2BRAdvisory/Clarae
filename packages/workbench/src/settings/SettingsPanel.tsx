@@ -1,10 +1,13 @@
+import { BrandMark } from '@clarae/ui';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, type AppSettings } from '../app/api';
 import { applyTheme, type Theme } from '../app/theme';
 import { initI18n } from '../i18n';
 import {
+  DEFAULT_ACCENT,
   applyAppearance,
+  customAccent,
   useSettings,
   type EditorSettings,
   type LinkFormat,
@@ -73,6 +76,12 @@ function Row({
 }
 
 /** The dotted configuration key of an editor setting. */
+/** The value of the accent colour input: the user's colour, or the default while none is picked. */
+function accentValue(accent: string): string {
+  const custom = customAccent(accent);
+  return custom && /^#[0-9a-fA-F]{6}$/.test(custom) ? custom : DEFAULT_ACCENT;
+}
+
 function editorCfg(field: keyof EditorSettings): string | undefined {
   const key = editorKeyOf(field);
   return key ? `editor.${key}` : undefined;
@@ -304,7 +313,7 @@ export function SettingsPanel() {
               <input
                 id="accent"
                 type="color"
-                value={/^#[0-9a-fA-F]{6}$/.test(appearance.accent) ? appearance.accent : '#6c5ce7'}
+                value={accentValue(appearance.accent)}
                 onChange={(e) => {
                   setAppearance({ accent: e.target.value });
                   applyAppearance({ ...appearance, accent: e.target.value });
@@ -377,6 +386,13 @@ export function SettingsPanel() {
       case 'about':
         return (
           <>
+            <div className="about-brand">
+              <BrandMark size={40} />
+              <div>
+                <div className="name">{t('app.name')}</div>
+                <div className="muted">{t('app.tagline')}</div>
+              </div>
+            </div>
             <Row label={t('settings.version')}>
               <span className="muted">{info['version'] ?? '—'}</span>
             </Row>

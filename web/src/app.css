@@ -4,10 +4,27 @@
   align-items: center;
   gap: 8px 20px;
   padding: 10px 16px;
-  background: var(--nd-surface);
-  border-bottom: 1px solid var(--nd-border);
+  background: var(--brand-navy);
+  border-bottom: 1px solid var(--brand-navy);
+  color: var(--brand-white);
+  /* Deep Navy in both themes: what sits on the band takes the dark values of the tokens. */
+  --nd-bg: var(--brand-navy-deep);
+  --nd-surface: var(--brand-navy);
+  --nd-surface-2: var(--brand-navy-raised);
+  --nd-text: var(--brand-white);
+  --nd-text-muted: #c3d2d6;
+  --nd-border: var(--brand-navy-line);
+  --nd-accent: var(--brand-mint);
+  --nd-accent-text: var(--brand-navy);
+  --nd-focus: var(--brand-mint);
+  --nd-mark-1: var(--brand-white);
+  --nd-mark-2: var(--brand-teal);
+  --nd-mark-3: var(--brand-mint);
 }
 .app__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.1rem;
 }
 .app__nav {

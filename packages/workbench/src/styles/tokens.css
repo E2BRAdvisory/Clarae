@@ -8,51 +8,64 @@
   --radius: 6px;
   --sidebar-width: 280px;
 
-  --accent: #6c5ce7;
-  --accent-contrast: #ffffff;
+  /* The accent in its three roles. --accent is the one that carries text: as a text colour on every
+     surface below and as a fill under --accent-contrast (4.5:1 both ways). --accent-bright is the
+     brand Teal, for marks that are not text (indicators, rules, the graph). A colour the user picks
+     (appearance.accent) replaces both, state/settings.ts applyAppearance. */
+  --accent: var(--brand-teal-ink);
+  --accent-bright: var(--brand-teal);
+  --accent-contrast: var(--brand-white);
   /* accent used as text colour (links): needs 4.5:1 on the page background */
-  --accent-text: #5b4bd6;
+  --accent-text: var(--brand-teal-ink);
 
-  --bg: #ffffff;
-  --bg-secondary: #f5f5f7;
-  --bg-hover: #ebebf0;
-  --bg-active: #e1e1ea;
-  --border: #dcdce3;
-  --text: #1d1d1f;
-  /* WCAG 1.4.3: muted and faint text reach 4.5:1 on every surface token below (axe-checked) */
-  --text-muted: #55555b;
-  --text-faint: #63636a;
+  --bg: var(--brand-white);
+  --bg-secondary: var(--brand-mist);
+  --bg-hover: var(--brand-mist-hover);
+  --bg-active: var(--brand-mist-active);
+  --border: var(--brand-mist-line);
+  --text: var(--brand-navy);
+  /* WCAG 1.4.3: muted and faint text reach 4.5:1 on every surface token below (tokens.contrast.test.ts) */
+  --text-muted: var(--brand-slate);
+  --text-faint: var(--brand-slate-soft);
   --danger: #d0342c;
   --success: #2e8b57;
-  --mark: #fff3a3;
+  --mark: #c4e8e2;
+  /* the title bar: Deep Navy in both themes */
+  --header-bg: var(--brand-navy);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #1e1e1e;
-    --bg-secondary: #252526;
-    --bg-hover: #2f2f32;
-    --bg-active: #3a3a3f;
-    --border: #3c3c42;
-    --text: #e6e6e6;
-    --text-muted: #b4b4ba;
-    --text-faint: #a4a4aa;
-    --accent-text: #a99ff7;
-    --mark: #6b5e1a;
+    --accent: var(--brand-mint);
+    --accent-bright: var(--brand-teal-bright);
+    --accent-contrast: var(--brand-navy);
+    --accent-text: var(--brand-mint-bright);
+    --bg: var(--brand-navy-deep);
+    --bg-secondary: var(--brand-navy);
+    --bg-hover: var(--brand-navy-raised);
+    --bg-active: var(--brand-navy-active);
+    --border: var(--brand-navy-line);
+    --text: var(--brand-mist);
+    --text-muted: var(--brand-fog);
+    --text-faint: var(--brand-fog-soft);
+    --mark: #1f5f5a;
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-hover: #2f2f32;
-  --bg-active: #3a3a3f;
-  --border: #3c3c42;
-  --text: #e6e6e6;
-  --text-muted: #b4b4ba;
-  --text-faint: #a4a4aa;
-  --accent-text: #a99ff7;
-  --mark: #6b5e1a;
+  --accent: var(--brand-mint);
+  --accent-bright: var(--brand-teal-bright);
+  --accent-contrast: var(--brand-navy);
+  --accent-text: var(--brand-mint-bright);
+  --bg: var(--brand-navy-deep);
+  --bg-secondary: var(--brand-navy);
+  --bg-hover: var(--brand-navy-raised);
+  --bg-active: var(--brand-navy-active);
+  --border: var(--brand-navy-line);
+  --text: var(--brand-mist);
+  --text-muted: var(--brand-fog);
+  --text-faint: var(--brand-fog-soft);
+  --mark: #1f5f5a;
 }
 
 /* The shared tokens of @clarae/ui (--nd-*, ADR-0043) with the workbench's values, so the nd-*
@@ -102,6 +115,8 @@ button:focus-visible,
 [role='tab']:focus-visible,
 [role='menuitem']:focus-visible,
 a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
 select:focus-visible,
 summary:focus-visible,
 [tabindex]:focus-visible {

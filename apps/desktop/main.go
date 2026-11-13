@@ -126,7 +126,7 @@ func run() int {
 		Height:           820,
 		MinWidth:         720,
 		MinHeight:        480,
-		BackgroundColour: application.NewRGB(30, 30, 30),
+		BackgroundColour: application.NewRGB(16, 43, 58), // Deep Navy, the colour of the title bar
 		// The drag and drop of files uses the DOM (the editor and Excalidraw read dataTransfer): the
 		// native file drop would take the drag from the web view.
 		EnableFileDrop:             false,

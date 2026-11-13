@@ -1,3 +1,4 @@
+import { BrandMark } from '@clarae/ui';
 import { useTranslation } from 'react-i18next';
 import { effectiveTheme, type Theme } from '../app/theme';
 import { commandTitle, runCommand } from '../commands/registry';
@@ -50,6 +51,7 @@ export function Header() {
           <HeaderButton command="search:vault" icon="search" />
         </div>
       )}
+      {!vault && <BrandMark size={20} />}
       <span className="title" title={vault?.path}>
         {vault ? vault.name : t('app.name')}
       </span>

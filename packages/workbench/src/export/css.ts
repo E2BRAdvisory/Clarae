@@ -4,11 +4,11 @@
 
 const LIGHT = `
   --bg: #ffffff; --text: #1d1d1f; --muted: #5f6368; --border: #d0d4d9; --code-bg: #f3f4f6;
-  --link: #4a3fc4; --mark: #fff3a3; --quote: #b8bcc4;
+  --link: #0b6964; --mark: #c4e8e2; --quote: #b8bcc4;
   --note: #2f6fdb; --warn: #c77700; --danger: #c62828; --ok: #2e7d32;`;
 const DARK = `
   --bg: #1b1c1f; --text: #e6e6e8; --muted: #a0a4ab; --border: #3a3d44; --code-bg: #26282d;
-  --link: #a79cff; --mark: #6b5e00; --quote: #555a63;
+  --link: #8ad6cb; --mark: #1f5f5a; --quote: #555a63;
   --note: #6ea2ff; --warn: #f0a63c; --danger: #ff7b72; --ok: #6fd07a;`;
 
 const RULES: [string, string][] = [

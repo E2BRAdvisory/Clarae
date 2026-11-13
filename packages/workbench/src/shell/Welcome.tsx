@@ -1,3 +1,4 @@
+import { BrandMark } from '@clarae/ui';
 import { useTranslation } from 'react-i18next';
 import { useCan, usePlatform } from '../platform';
 import { useRecentVaults } from '../state/queries';
@@ -13,6 +14,13 @@ export function Welcome({ onOpen }: { onOpen: (path: string) => Promise<void> })
   return (
     <main className="welcome">
       <div className="card">
+        <div className="brand">
+          <BrandMark size={48} />
+          <div>
+            <div className="name">{t('app.name')}</div>
+            <div className="tagline">{t('app.tagline')}</div>
+          </div>
+        </div>
         <h1>{t('welcome.title')}</h1>
         <p className="muted">{t(localFolders ? 'welcome.subtitle' : 'welcome.subtitleWeb')}</p>
         <ActionButton id="vault:open-folder" arg={onOpen} className="primary" />

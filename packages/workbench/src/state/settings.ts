@@ -78,8 +78,20 @@ export interface AppearanceSettings {
   statusBar: boolean;
 }
 
+/** The default accent, the brand Teal: with it the accent tokens of the theme apply (styles/tokens.css). */
+export const DEFAULT_ACCENT = '#159992';
+/** The default accent of 1.x: a vault that still stores it has no accent of its own. */
+const LEGACY_DEFAULT_ACCENTS = ['#6c5ce7'];
+
+/** The accent the user picked, or null when the setting holds a default (or is not a colour). */
+export function customAccent(accent: string): string | null {
+  if (!/^#[0-9a-fA-F]{3,8}$/.test(accent)) return null;
+  const a = accent.toLowerCase();
+  return a === DEFAULT_ACCENT || LEGACY_DEFAULT_ACCENTS.includes(a) ? null : accent;
+}
+
 export const defaultAppearance: AppearanceSettings = {
-  accent: '#6c5ce7',
+  accent: DEFAULT_ACCENT,
   fontFamily: '',
   zoom: 100,
   interfaceFontSize: 14,
@@ -319,10 +331,15 @@ useManaged.subscribe((m) => {
 /** Applies appearance settings to the document (CSS variables and zoom). */
 export function applyAppearance(a: AppearanceSettings): void {
   const root = document.documentElement;
-  root.style.setProperty(
-    '--accent',
-    /^#[0-9a-fA-F]{3,8}$/.test(a.accent) ? a.accent : defaultAppearance.accent,
-  );
+  // A colour of the user's replaces the accent in every role, with white on it as before; with a
+  // default the tokens of the theme stay (a text shade, a fill and the brand Teal for marks).
+  const custom = customAccent(a.accent);
+  for (const name of ['--accent', '--accent-bright']) {
+    if (custom) root.style.setProperty(name, custom);
+    else root.style.removeProperty(name);
+  }
+  if (custom) root.style.setProperty('--accent-contrast', '#ffffff');
+  else root.style.removeProperty('--accent-contrast');
   if (a.fontFamily.trim())
     root.style.setProperty('--font-ui', `${a.fontFamily.replace(/[;{}]/g, '')}, sans-serif`);
   else root.style.removeProperty('--font-ui');

@@ -19,10 +19,10 @@
   outline-offset: -1px;
 }
 .bookmarks .node.bookmark.drop-before {
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow: inset 0 2px 0 var(--accent-bright);
 }
 .bookmarks .node.bookmark.drop-after {
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent-bright);
 }
 .bookmarks .node.bookmark:focus-visible {
   outline: 2px solid var(--accent);

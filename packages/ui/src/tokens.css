@@ -1,12 +1,36 @@
 /* Design tokens of Clarae notanda (ADR-0043), shared by the console (styles.css) and the workbench
    (packages/workbench/src/style.css): the --nd-* custom properties the nd-* components are drawn
-   with. Here they have the console palette, light and dark: dark follows the OS unless
+   with, and the brand palette (--brand-*) every colour token derives from. Here they have the
+   console palette, light and dark: dark follows the OS unless
    data-theme="light" | "dark" is set on <html>, the same switch the workbench uses. A host with its
    own palette (the workbench) gives the colour tokens its values on <body>: the custom properties
    inherit from there to every element, so they win over these without selector games. No element
    or global rule here, only custom properties. */
 
 :root {
+  /* The brand palette of Clarae notanda (assets/brand/README.md). Tokens take their values from
+     it; the shades below are the same hues at the contrast a role needs (WCAG 1.4.3: Teal alone
+     is 3.5:1 on White, so text and filled controls use the deeper --brand-teal-ink). */
+  --brand-navy: #102b3a; /* identity, headers, text */
+  --brand-teal: #159992; /* accents and interactions */
+  --brand-mint: #72c9bd; /* highlights */
+  --brand-mist: #e9f0ef; /* surfaces and backgrounds */
+  --brand-white: #ffffff; /* spacing and contrast */
+  --brand-navy-deep: #0b1f2a;
+  --brand-navy-raised: #17384a;
+  --brand-navy-active: #1e4558;
+  --brand-navy-line: #2a4a5a;
+  --brand-teal-ink: #0b6964;
+  --brand-teal-bright: #2bb3ab;
+  --brand-mint-bright: #8ad6cb;
+  --brand-mist-hover: #dde8e6;
+  --brand-mist-active: #cfdedb;
+  --brand-mist-line: #c5d3d1;
+  --brand-slate: #3f5866;
+  --brand-slate-soft: #48606d;
+  --brand-fog: #a9bcc2;
+  --brand-fog-soft: #a3b6bd;
+
   /* shape, spacing and type */
   --nd-radius: 8px;
   --nd-gap: 16px;
@@ -20,60 +44,70 @@
   --nd-focus-offset: 2px;
 
   /* colours (light) */
-  --nd-bg: #f6f7f9;
-  --nd-surface: #ffffff;
-  --nd-surface-2: #eef0f4;
-  --nd-text: #1b1f27;
-  --nd-text-muted: #5a6372;
-  --nd-border: #d5d9e1;
-  --nd-accent: #2f5fd0;
-  --nd-accent-text: #ffffff;
+  --nd-bg: var(--brand-mist);
+  --nd-surface: var(--brand-white);
+  --nd-surface-2: var(--brand-mist-hover);
+  --nd-text: var(--brand-navy);
+  --nd-text-muted: var(--brand-slate-soft);
+  --nd-border: var(--brand-mist-line);
+  --nd-accent: var(--brand-teal-ink);
+  --nd-accent-text: var(--brand-white);
   --nd-danger: #b3261e;
   --nd-danger-bg: #fdecea;
-  --nd-ok: #1e7a46;
+  --nd-ok: #186a3b;
   --nd-ok-bg: #e5f5ec;
-  --nd-warn: #8a5a00;
+  --nd-warn: #7a5000;
   --nd-warn-bg: #fff3d6;
-  --nd-focus: #2f5fd0;
-  --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  --nd-focus: var(--brand-teal-ink);
+  --nd-shadow: 0 8px 28px rgb(16 43 58 / 0.18);
+  /* the three shapes of the mark (BrandMark): upper band, lower band, side */
+  --nd-mark-1: var(--brand-teal);
+  --nd-mark-2: var(--brand-navy);
+  --nd-mark-3: var(--brand-mint);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --nd-bg: #14171c;
-    --nd-surface: #1d2129;
-    --nd-surface-2: #272c36;
-    --nd-text: #e8ebf1;
-    --nd-text-muted: #a2abbb;
-    --nd-border: #3a4150;
-    --nd-accent: #7ea2ff;
-    --nd-accent-text: #0e1320;
+    --nd-bg: var(--brand-navy-deep);
+    --nd-surface: var(--brand-navy);
+    --nd-surface-2: var(--brand-navy-raised);
+    --nd-text: var(--brand-mist);
+    --nd-text-muted: var(--brand-fog);
+    --nd-border: var(--brand-navy-line);
+    --nd-accent: var(--brand-mint);
+    --nd-accent-text: var(--brand-navy);
     --nd-danger: #ff8a80;
     --nd-danger-bg: #3a1f1d;
     --nd-ok: #6fd69c;
-    --nd-ok-bg: #17301f;
+    --nd-ok-bg: #12342a;
     --nd-warn: #f2c35b;
     --nd-warn-bg: #3a2f14;
-    --nd-focus: #7ea2ff;
+    --nd-focus: var(--brand-mint);
     --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+    --nd-mark-1: var(--brand-white);
+    --nd-mark-2: var(--brand-teal);
+    --nd-mark-3: var(--brand-mint);
   }
 }
 
 :root[data-theme='dark'] {
-  --nd-bg: #14171c;
-  --nd-surface: #1d2129;
-  --nd-surface-2: #272c36;
-  --nd-text: #e8ebf1;
-  --nd-text-muted: #a2abbb;
-  --nd-border: #3a4150;
-  --nd-accent: #7ea2ff;
-  --nd-accent-text: #0e1320;
+  --nd-bg: var(--brand-navy-deep);
+  --nd-surface: var(--brand-navy);
+  --nd-surface-2: var(--brand-navy-raised);
+  --nd-text: var(--brand-mist);
+  --nd-text-muted: var(--brand-fog);
+  --nd-border: var(--brand-navy-line);
+  --nd-accent: var(--brand-mint);
+  --nd-accent-text: var(--brand-navy);
   --nd-danger: #ff8a80;
   --nd-danger-bg: #3a1f1d;
   --nd-ok: #6fd69c;
-  --nd-ok-bg: #17301f;
+  --nd-ok-bg: #12342a;
   --nd-warn: #f2c35b;
   --nd-warn-bg: #3a2f14;
-  --nd-focus: #7ea2ff;
+  --nd-focus: var(--brand-mint);
   --nd-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+  --nd-mark-1: var(--brand-white);
+  --nd-mark-2: var(--brand-teal);
+  --nd-mark-3: var(--brand-mint);
 }

@@ -148,7 +148,7 @@ mark[data-ofm='highlight'] {
   display: block;
   margin: 4px 0;
   padding: 4px 12px;
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--accent-bright);
   border-radius: 0 6px 6px 0;
   background: var(--bg-secondary);
 }

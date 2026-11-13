@@ -1,6 +1,7 @@
 {
   "app": {
     "name": "Clarae notanda",
+    "tagline": "Your knowledge, carefully preserved in its clarity.",
     "backToConsole": "Back to the console",
     "crash": {
       "shell": "Something went wrong and the app stopped.",

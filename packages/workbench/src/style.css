@@ -26,6 +26,8 @@ body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
   overflow: hidden;
+  /* native checkboxes, radios and ranges */
+  accent-color: var(--accent);
 }
 
 button,
@@ -88,9 +90,30 @@ select {
   align-items: center;
   gap: 8px;
   padding: 0 12px 0 80px; /* room for macOS traffic lights (hidden inset title bar) */
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--header-bg);
+  color: var(--brand-white);
   --wails-draggable: drag;
+  /* Deep Navy in both themes: what sits on the bar takes the dark values of the tokens. */
+  --text: var(--brand-white);
+  --text-muted: #c3d2d6;
+  --text-faint: var(--brand-fog);
+  --bg-secondary: var(--brand-navy-raised);
+  --bg-hover: var(--brand-navy-raised);
+  --bg-active: var(--brand-navy-active);
+  --border: var(--brand-navy-line);
+  --accent: var(--brand-mint);
+  --accent-bright: var(--brand-teal-bright);
+  --accent-contrast: var(--brand-navy);
+  --accent-text: var(--brand-mint-bright);
+  --danger: #ff8a80;
+  --success: #6fd69c;
+  --nd-mark-1: var(--brand-white);
+  --nd-mark-2: var(--brand-teal);
+  --nd-mark-3: var(--brand-mint);
+}
+.titlebar .brand-mark {
+  flex: none;
 }
 .titlebar .title {
   font-weight: 600;
@@ -169,7 +192,7 @@ button.icon[aria-pressed='true'] {
 }
 .sidebar .tabs button.active {
   color: var(--text);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent-bright);
 }
 .sidebar .toolbar {
   display: flex;
@@ -283,12 +306,38 @@ button.icon[aria-pressed='true'] {
   display: grid;
   place-items: center;
   user-select: none;
+  background: var(--bg-secondary);
 }
 .welcome .card {
-  width: 420px;
+  width: 468px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 24px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.welcome .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.welcome .brand .name,
+.about-brand .name {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.welcome .brand .tagline {
+  color: var(--text-muted);
+}
+.about-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 .welcome h1 {
   margin: 0;
@@ -447,7 +496,7 @@ button.icon[aria-pressed='true'] {
   left: -2px;
 }
 .sidebar-resizer:hover {
-  background: var(--accent);
+  background: var(--accent-bright);
   opacity: 0.4;
 }
 .pad {
@@ -514,7 +563,7 @@ button.icon[aria-pressed='true'] {
   cursor: row-resize;
 }
 .resizer:hover {
-  background: var(--accent);
+  background: var(--accent-bright);
   opacity: 0.4;
 }
 .pane {
@@ -563,10 +612,10 @@ button.icon[aria-pressed='true'] {
 .tab.active {
   background: var(--bg);
   color: var(--text);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent-bright);
 }
 .tab.over {
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent-bright);
 }
 .tab .tab-title {
   overflow: hidden;
@@ -1102,7 +1151,7 @@ button.record.active {
   margin-top: 6px;
 }
 .embed-note {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--accent-bright);
   padding: 4px 14px;
   margin: 8px 0;
   background: var(--bg-secondary);
@@ -1491,7 +1540,7 @@ textarea.merge {
   overflow: hidden;
   outline: none;
   touch-action: none;
-  background-color: var(--bg-primary);
+  background-color: var(--bg);
   background-image: radial-gradient(var(--border) 1px, transparent 1px);
   background-size: 24px 24px;
   user-select: none;
@@ -1507,7 +1556,7 @@ textarea.merge {
   box-sizing: border-box;
   border: 2px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-primary);
+  background: var(--bg);
   overflow: visible;
   display: flex;
   flex-direction: column;
@@ -1586,7 +1635,7 @@ textarea.merge {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--bg-primary);
+  background: var(--bg);
   border: 2px solid var(--accent);
   cursor: crosshair;
 }
@@ -1620,7 +1669,7 @@ textarea.merge {
   fill: var(--text-normal, currentColor);
   font-size: 13px;
   paint-order: stroke;
-  stroke: var(--bg-primary);
+  stroke: var(--bg);
   stroke-width: 4px;
   pointer-events: none;
 }
@@ -2095,7 +2144,7 @@ textarea.merge {
 }
 .slide-progress > div {
   height: 100%;
-  background: var(--accent);
+  background: var(--accent-bright);
   transition: width 0.2s;
 }
 .presenter-grid {

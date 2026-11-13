@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@clarae/ui';
+import { BrandMark, Button } from '@clarae/ui';
 import { useSharingAllowed } from '../api/cloud';
 import { useAdminAccess } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
@@ -36,7 +36,10 @@ export function Shell() {
         {t('shell.skip')}
       </a>
       <header className="app__header">
-        <strong className="app__brand">{t('app.name')}</strong>
+        <strong className="app__brand">
+          <BrandMark size={24} />
+          {t('app.name')}
+        </strong>
         <nav aria-label={t('nav.main')} className="app__nav">
           <NavLink to="/usage">{t('nav.usage')}</NavLink>
           <NavLink to="/vaults">{t('nav.vaults')}</NavLink>
