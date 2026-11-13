@@ -20,7 +20,7 @@ const deviceBundle = build('src/workbench/device.ts', 'Device');
 interface StorageModule {
   accountKeys(a: { server: string; subject: string }): Promise<{ key: string; legacyKey: string }>;
   migrateAccountStorage(key: string, legacyKey: string): Promise<string>;
-  migrateDataFolder(s: { fs: string }): Promise<string>;
+  dataDirOf(s: { fs: string }): Promise<string>;
   namespacedStorage(key: string): { fs: string };
 }
 interface DeviceModule {
@@ -78,7 +78,7 @@ test.describe('profile created by 1.4', () => {
         await put(`accounts/${legacyKey}/fs/vaults/v1/Note.md`, 'an edit the cloud has not seen');
         await put(`accounts/${legacyKey}/sqlite/.opaque-pool/0001`, 'x'.repeat(100_000));
         const moved = await S.migrateAccountStorage(key, legacyKey);
-        const data = await S.migrateDataFolder(S.namespacedStorage(key));
+        const data = await S.dataDirOf(S.namespacedStorage(key));
         const names: string[] = [];
         const accounts = await root.getDirectoryHandle('accounts');
         for await (const n of (accounts as unknown as { keys(): AsyncIterable<string> }).keys())
@@ -89,20 +89,20 @@ test.describe('profile created by 1.4', () => {
           names,
           key,
           note: await get(`accounts/${key}/fs/vaults/v1/Note.md`),
-          auth: await get(`accounts/${key}/fs/clarae/data/auth.json`),
+          auth: await get(`accounts/${key}/fs/memobrain/data/auth.json`),
           pool: (await get(`accounts/${key}/sqlite/.opaque-pool/0001`))?.length,
           oldGone: (await get(`accounts/${legacyKey}/fs/vaults/v1/Note.md`)) === null,
-          oldData: await get(`accounts/${key}/fs/memobrain/data/auth.json`),
+          newData: await get(`accounts/${key}/fs/clarae/data/auth.json`),
         };
       }, folderMove);
       expect(r).toMatchObject({
         moved: 'moved',
-        data: 'moved',
+        data: '/memobrain/data', // the core's data folder stays: the pool's databases are keyed by it
         note: 'an edit the cloud has not seen',
         auth: '{"session":"alice"}',
         pool: 100_000,
         oldGone: true,
-        oldData: null,
+        newData: null,
       });
       expect(r.names).toEqual([r.key]); // no old folder, no marker files left behind
     });

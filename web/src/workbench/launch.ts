@@ -28,12 +28,11 @@ import { createVaultGuard, needsGate, type VaultGuard } from './guard';
 import { migrateMarkers, readMarkers, removeMarker, sweepPrivateCopies } from './markers';
 import { workbenchHref } from '../shared/routes';
 import {
-  DATA_DIR,
+  dataDirOf,
   LOCAL_SUBJECT,
   accountKeys,
   adoptLegacyCopies,
   migrateAccountStorage,
-  migrateDataFolder,
   storageOf,
   type CloudView,
 } from './storage';
@@ -330,7 +329,8 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
       );
   }
   const storage = await storageOf(account);
-  await migrateDataFolder(storage); // after the adoption: an adopted set has a data folder too
+  // After the adoption: an adopted set has a data folder too. A profile of 1.4 keeps the one it has.
+  const dataDir = await dataDirOf(storage);
 
   let redirecting = false;
   let switched = false;
@@ -369,7 +369,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   const core = await startCore({
     assets: o.assets,
     config: {
-      dataDir: DATA_DIR,
+      dataDir,
       version: o.version,
       logLevel: 'warn',
       ...(o.fsTrace ? { fsTrace: true } : {}),

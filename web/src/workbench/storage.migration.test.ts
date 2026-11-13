@@ -3,11 +3,12 @@ import { installFakeOpfs, type FakeDir, type FakeOpfsOptions } from '../test/fak
 import { legacyMarkersKey, migrateMarkers, readMarkers, updateMarker } from './markers';
 import {
   DATA_DIR,
+  LEGACY_DATA_DIR,
   LEGACY_OWNER_FILE,
   LEGACY_STORAGE,
   accountKeys,
+  dataDirOf,
   migrateAccountStorage,
-  migrateDataFolder,
   namespacedStorage,
   readLegacyOwner,
   removeAccountStorage,
@@ -64,17 +65,18 @@ describe('a profile created by 1.4', () => {
       migrateMarkers(key, legacyKey);
       const s = await storageOf(key);
       expect(s).toEqual(namespacedStorage(key));
-      expect(await migrateDataFolder(s)).toBe('moved');
 
       // The account folder, the pool as it was (its contents are the core's), the vault copy.
       expect(root.has(`accounts/${legacyKey}`)).toBe(false);
       expect(root.read(`${next}/sqlite/.opaque-pool/0001`)).toBe('sqlite pool file');
       expect(root.read(`${next}/fs/vaults/v1/Note.md`)).toBe('an edit the cloud has not seen');
-      // The core's data folder under the new name, with its mounts.
-      expect(root.read(`${next}/fs/clarae/data/auth.json`)).toBe('{"session":"alice"}');
-      expect(root.read(`${next}/fs/clarae/data/mounts/s1/Shared.md`)).toBe('shared copy');
-      expect(root.has(`${next}/fs/memobrain`)).toBe(false);
-      expect(DATA_DIR).toBe('/clarae/data');
+      // The core's data folder stays where 1.4 put it, with its mounts, and the core is started on
+      // it: the databases of the pool are stored under paths that hold its name.
+      expect(await dataDirOf(s)).toBe(LEGACY_DATA_DIR);
+      expect(LEGACY_DATA_DIR).toBe('/memobrain/data');
+      expect(root.read(`${next}/fs/memobrain/data/auth.json`)).toBe('{"session":"alice"}');
+      expect(root.read(`${next}/fs/memobrain/data/mounts/s1/Shared.md`)).toBe('shared copy');
+      expect(root.has(`${next}/fs/clarae`)).toBe(false);
       // The marker, and what it says (changes pending), follow.
       expect(readMarkers(key)['v1']?.pending).toBe(2);
       expect(localStorage.getItem(legacyMarkersKey(legacyKey))).toBeNull();
@@ -99,24 +101,17 @@ describe('a profile created by 1.4', () => {
     expect(root.read(`${next}/sqlite/.opaque-pool/0001`)).toBe('sqlite pool file');
   });
 
-  it('resumes the move of the data folder too', async () => {
-    options.move = false;
-    const { key, legacyKey, next } = await profile();
-    await migrateAccountStorage(key, legacyKey);
-    options.writesLeft = 1; // the marker, then nothing
-    await expect(migrateDataFolder(namespacedStorage(key))).rejects.toThrow();
-    expect(root.read(`${next}/fs/memobrain/data/auth.json`)).toBe('{"session":"alice"}');
-    options.writesLeft = null;
-    expect(await migrateDataFolder(namespacedStorage(key))).toBe('moved');
-    expect(root.read(`${next}/fs/clarae/data/auth.json`)).toBe('{"session":"alice"}');
-    expect(root.has(`${next}/fs/memobrain`)).toBe(false);
-    expect(await migrateDataFolder(namespacedStorage(key))).toBe('none');
+  it('starts the core of a profile without a data folder on the current name', async () => {
+    const { key } = await accountKeys(ALICE);
+    expect(await dataDirOf(namespacedStorage(key))).toBe(DATA_DIR);
+    expect(DATA_DIR).toBe('/clarae/data');
+    await root.write(`accounts/${key}/fs/clarae/data/auth.json`, '{}');
+    expect(await dataDirOf(namespacedStorage(key))).toBe(DATA_DIR);
   });
 
   it('does nothing for an account the profile never had', async () => {
     const { key, legacyKey } = await accountKeys(ALICE);
     expect(await migrateAccountStorage(key, legacyKey)).toBe('none');
-    expect(await migrateDataFolder(namespacedStorage(key))).toBe('none');
     expect(root.names()).toEqual([]);
   });
 
@@ -137,7 +132,7 @@ describe('a profile created by 1.4', () => {
     expect(root.read(`${next}/fs/vaults/v9/Note.md`)).toBe('created by 2.0');
   });
 
-  it('follows the record of an adopted 1.3 set to the new key, and migrates its data folder', async () => {
+  it('follows the record of an adopted 1.3 set to the new key, and keeps its data folder', async () => {
     const { key, legacyKey } = await accountKeys(ALICE);
     await root.write(
       'fs/memobrain/data/auth.json',
@@ -151,10 +146,10 @@ describe('a profile created by 1.4', () => {
     expect(await migrateAccountStorage(key, legacyKey)).toBe('none');
     expect(await readLegacyOwner()).toBe(key);
     const s = await storageOf(key);
-    expect(s).toEqual(LEGACY_STORAGE); // still adopted: nothing is moved but the data folder
-    expect(await migrateDataFolder(s)).toBe('moved');
-    expect(root.has('fs/clarae/data/auth.json')).toBe(true);
-    expect(root.has('fs/memobrain')).toBe(false);
+    expect(s).toEqual(LEGACY_STORAGE); // still adopted: nothing is moved
+    expect(await dataDirOf(s)).toBe(LEGACY_DATA_DIR);
+    expect(root.has('fs/memobrain/data/auth.json')).toBe(true);
+    expect(root.has('fs/clarae')).toBe(false);
     expect(root.has('fs/vaults/v1/Note.md')).toBe(true);
     expect(root.has('memobrain-sqlite/.opaque')).toBe(true);
   });

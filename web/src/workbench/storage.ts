@@ -16,7 +16,7 @@
  *
  * Up to 1.4 the key was derived with another salt (the product's former name, legacyNames.ts), and
  * so were the data folder inside the account's file system and the markers. A profile used with 1.4
- * is taken to the new names before the core starts (migrateAccountStorage, migrateDataFolder), under
+ * is taken to the new names before the core starts (migrateAccountStorage), under
  * the workbench Web Locks; what cannot be moved is read under the old name (markers) or removed
  * together with the new (sign-out, "forget this browser").
  *
@@ -177,9 +177,11 @@ export async function storageOf(key: string): Promise<AccountStorage> {
 
 // ---- taking a profile of 1.4 to the names of 2.0 -------------------------------------------------
 
-/** The core's data folder inside the core's file system, as the core is told (launch.ts). */
+/** The core's data folder inside the core's file system, as a profile that starts with 2.0 has it. */
 export const DATA_ROOT = 'clarae';
 export const DATA_DIR = `/${DATA_ROOT}/data`;
+/** The same folder as 1.4 named it: a profile that has one keeps it (dataDirOf). */
+export const LEGACY_DATA_DIR = `/${LEGACY_DATA_ROOT}/data`;
 
 /**
  * Takes the storage a profile used with 1.4 holds under the account's old key to the new key:
@@ -199,27 +201,21 @@ export async function migrateAccountStorage(key: string, legacyKey: string): Pro
 }
 
 /**
- * Takes the core's data folder of the storage `s` from its name up to 1.4 to the current one
- * (`LEGACY_DATA_ROOT/data` to `DATA_ROOT/data` inside the storage's `fs`): the session, the mounts and the other state the
- * core keeps outside the vaults. Same guarantees as migrateAccountStorage; call it after the
- * account's folder and the adoption of an unnamed set are settled.
+ * The data folder the core of the storage `s` is started with (launch.ts): the one the profile
+ * already has, DATA_DIR for a profile that has none. A profile used with 1.4 keeps its folder under
+ * the name 1.4 gave it, and it is not moved: the core's databases are not files of this folder but
+ * entries of the SQLite pool, stored under the path the core opened them with (its own database
+ * `<data>/app.db`, the sync state of every mount under `<data>/mounts/`), and the pool cannot rename
+ * an entry. Moving the folder would start the core on a path where none of them is found: the
+ * mounts would lose their sync state and the changes not uploaded yet with it. The name is an
+ * internal path nobody sees, like the keys of the pool themselves (ADR-0052, class "legacy").
  */
-export async function migrateDataFolder(s: AccountStorage): Promise<MoveOutcome> {
+export async function dataDirOf(s: AccountStorage): Promise<string> {
   const root = await opfsRoot();
-  if (!root) return 'none';
+  if (!root) return DATA_DIR;
   const fs = await dirAt(root, s.fs.split('/'));
-  if (!fs) return 'none';
-  const oldRoot = await childDir(fs, LEGACY_DATA_ROOT);
-  const newRoot = await childDir(fs, DATA_ROOT);
-  if (!oldRoot) {
-    if (newRoot) await dropMoveMarkers(newRoot, 'data');
-    return 'none';
-  }
-  const target = newRoot ?? (await fs.getDirectoryHandle(DATA_ROOT, { create: true }));
-  const outcome = await moveFolder(oldRoot, 'data', target, 'data');
-  // The folder of the old name goes once it is empty (removing one that is not fails: it stays).
-  if (outcome !== 'kept') await fs.removeEntry(LEGACY_DATA_ROOT).catch(() => undefined);
-  return outcome;
+  if (fs && (await dirAt(fs, [LEGACY_DATA_ROOT, 'data']))) return LEGACY_DATA_DIR;
+  return DATA_DIR;
 }
 
 // ---- adopting the unnamed set ---------------------------------------------------------------------
