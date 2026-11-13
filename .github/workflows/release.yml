@@ -46,6 +46,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: |
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/clarae-cloud" >> "$GITHUB_ENV"
+          # 2.0 only: the same image under the name of 1.x, so that the Compose files and Helm values of an
+          # installation made for 1.x (repository ghcr.io/<owner>/memobrain-cloud) pull the upgrade without edits
+          # (ADR-0052). Dropped in 2.1: remove this line, the second `images:` entry below and its allowlist line.
+          echo "IMAGE_LEGACY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/memobrain-cloud" >> "$GITHUB_ENV"
           echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -56,7 +60,9 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.IMAGE }}
+          images: |
+            ${{ env.IMAGE }}
+            ${{ env.IMAGE_LEGACY }}
           # semver patterns skip the minor and latest tags on a prerelease.
           tags: |
             type=semver,pattern={{version}}
@@ -92,6 +98,8 @@ jobs:
           version="${GITHUB_REF_NAME#v}"; owner="${GITHUB_REPOSITORY_OWNER,,}"
           work="$(mktemp -d)"; cp -R deploy/helm/clarae "$work/clarae"
           # The repository default names the project's registry: point it at the image published by this run.
+          # Only the chart's own default (clarae-cloud) is rewritten: the name of 1.x lives in the values of the
+          # installations that upgrade, not in the chart, and is published next to it by the image job (2.0 only).
           sed -i "s#ghcr.io/e2br/clarae-cloud#ghcr.io/${owner}/clarae-cloud#" "$work/clarae/values.yaml"
           helm package "$work/clarae" --version "$version" --app-version "$version" -d "$work"
           echo "$TOKEN" | helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin

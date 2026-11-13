@@ -479,6 +479,16 @@ tasks:
       # The preStop sleep action exists from Kubernetes 1.30 only.
       - if helm template ci . -f ci/values-ha.yaml --kube-version 1.27.0 | grep -q 'sleep:'; then echo "preStop sleep rendered for Kubernetes 1.27" >&2; exit 1; fi
       - if ! helm template ci . -f ci/values-ha.yaml --kube-version 1.30.0 | grep -q 'sleep:'; then echo "preStop sleep missing for Kubernetes 1.30" >&2; exit 1; fi; echo "ok preStop sleep only on 1.30+"
+      # The names are part of the pod selector, which a Deployment cannot change: a new installation is named clarae,
+      # and the in-place upgrade of one made by the chart of 1.x (nameOverride: memobrain) keeps the names of 1.x.
+      - |
+        new=$(helm template ci . -f ci/values-ha.yaml --kube-version 1.30.0)
+        echo "$new" | grep -q 'app.kubernetes.io/name: clarae$' && echo "$new" | grep -q 'name: ci-clarae-api$' || { echo "a new installation is not named clarae" >&2; exit 1; }
+        if echo "$new" | grep -v 'memobrain.v1.NotifyService' | grep -q 'memobrain'; then echo "the default render mentions the name of 1.x" >&2; exit 1; fi
+        old=$(helm template ci . -f ci/values-legacy.yaml --kube-version 1.30.0)
+        echo "$old" | grep -q 'app.kubernetes.io/name: memobrain$' && echo "$old" | grep -q 'name: ci-memobrain-api$' && echo "$old" | grep -q 'name: ci-memobrain-worker$' || { echo "values-legacy.yaml no longer keeps the object names and selectors of 1.x" >&2; exit 1; }
+        if echo "$old" | grep -q 'app.kubernetes.io/name: clarae'; then echo "values-legacy.yaml renders the new name in a label" >&2; exit 1; fi
+        echo "ok names: clarae, and memobrain with nameOverride"
 
   release-desktop:
     desc: 'Installer build, release guards on (needs UPDATE_PUBLIC_KEY + UPDATE_BASE_URL, or ALLOW_UNSIGNED_UPDATES=1): task release-desktop OS=darwin|windows|linux V=1.0.0-rc.1'

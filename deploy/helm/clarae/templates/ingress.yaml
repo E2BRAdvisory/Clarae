@@ -55,4 +55,13 @@ spec:
               service:
                 name: {{ include "clarae.fullname" . }}
                 port: { name: grpc }
+          {{- if and (not $grpcOnOwnHost) .Values.ingress.grpc.legacyPath }}
+          # The desktop clients 1.4.0 and earlier call memobrain.v1.NotifyService (same handler).
+          - path: {{ .Values.ingress.grpc.legacyPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "clarae.fullname" . }}
+                port: { name: grpc }
+          {{- end }}
 {{- end }}

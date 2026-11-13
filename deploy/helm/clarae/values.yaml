@@ -2,6 +2,12 @@
 # point `config` and `secret` at them. Two Deployments run the same image: --role=api (HTTP + gRPC)
 # and --role=worker (background jobs).
 
+# Names. The pod selector holds the chart name and cannot change in an existing Deployment: an installation
+# made by the chart of 1.x (named memobrain) upgrades in place with nameOverride: memobrain, which keeps every
+# object name and selector as it was (docs/admin-guide/migrazione-clarae.md). Empty = the chart name, clarae.
+nameOverride: ''
+fullnameOverride: '' # replaces <release>-<name> as the name of the objects
+
 image:
   repository: ghcr.io/e2br/clarae-cloud # set to the registry of the release (release.yml publishes it)
   tag: '' # defaults to the chart appVersion; release builds set it to the git tag
@@ -107,21 +113,19 @@ worker:
   podAnnotations: {}
 
 # Non-secret configuration (environment variables of the binary; see deploy/docker/cloud.dev.env).
+# The names that carry the product name (audience, OIDC clients, realm, buckets, metrics namespace) are not
+# listed here: the binary derives them from the issuer (a realm called memobrain is an installation made for
+# 1.x and keeps its names; any other issuer gets clarae-*), and a variable set below always wins.
+# See docs/admin-guide/configurazione.md.
 config:
   OIDC_ISSUER: https://auth.example.com/realms/clarae
-  OIDC_AUDIENCE: clarae-api
-  OIDC_ALLOWED_AZP: clarae-desktop,clarae-web
   S3_ENDPOINT: https://s3.example.com
   S3_REGION: us-east-1
-  S3_BUCKET_BLOBS: clarae-blobs
-  S3_BUCKET_EXPORTS: clarae-exports
   S3_USE_PATH_STYLE: 'true'
   # Where browsers reach the object store: when set, export downloads use presigned URLs
   # (the bucket then needs a CORS rule for the Web UI origin); empty = served through the API.
   # S3_PUBLIC_ENDPOINT: https://s3.example.com
   KC_ADMIN_BASE_URL: https://auth.example.com
-  KC_REALM: clarae
-  KC_ADMIN_CLIENT_ID: clarae-admin-svc
   WEB_UI_ORIGIN: https://clarae.example.com
   # Address desktop clients use for the notification stream (gRPC needs TLS + HTTP/2 end to end).
   PUBLIC_GRPC_ADDR: notify.clarae.example.com:443
@@ -137,7 +141,8 @@ config:
 #   3. secret.values: the chart creates the Secret (development only: values end up in Helm history).
 # The Secret must hold DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, KC_ADMIN_CLIENT_SECRET. With option 3 the
 # render fails while one is empty or a placeholder (change-me...), and so does the service at start;
-# config.CLARAE_ALLOW_PLACEHOLDER_SECRETS: '1' lifts the placeholder check (throwaway tests only).
+# config.CLARAE_ALLOW_PLACEHOLDER_SECRETS: '1' lifts the placeholder check (throwaway tests only; its name of 1.x,
+# MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS, still works until 3.0).
 secret:
   existingSecret: ''
   values:
@@ -181,6 +186,10 @@ ingress:
     mode: host # host | path
     host: notify.clarae.example.com
     path: /clarae.v1.NotifyService # gRPC services are routed by /<package>.<Service>
+    # The service of 1.x (package memobrain.v1), still called by the desktop clients 1.4.0 and earlier: the
+    # cloud serves it from the same handler. Routed too in mode: path (mode: host sends every path to the
+    # service); empty = not routed. Dropped in 3.0.
+    legacyPath: /memobrain.v1.NotifyService
     # Long-lived server-streaming RPC: keep the connection open (seconds).
     streamTimeoutSeconds: 3600
     annotations: {} # extra annotations for the gRPC Ingress only

@@ -1,9 +1,19 @@
+{{/*
+The name is the chart name unless nameOverride says otherwise. It is part of the pod selector, which
+a Deployment cannot change after it exists: an installation made by the chart of 1.x (named memobrain)
+upgrades in place with --set nameOverride=memobrain (see docs/admin-guide/migrazione-clarae.md).
+*/}}
 {{- define "clarae.name" -}}
-{{- .Chart.Name -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* <release>-<name> (the names of the objects), or fullnameOverride verbatim. */}}
 {{- define "clarae.fullname" -}}
-{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name (include "clarae.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "clarae.labels" -}}
@@ -79,11 +89,14 @@ topologySpreadConstraints:
 {{/*
 Fails the render when the chart would create the Secret (no existingSecret, no externalSecret) with an empty
 required value, or with a placeholder of the templates (change-me, change-me-too, changeme) unless
-config.CLARAE_ALLOW_PLACEHOLDER_SECRETS is "1"/"true" (the service applies the same rule at start).
+config.CLARAE_ALLOW_PLACEHOLDER_SECRETS (or its name of 1.x, MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS, dropped in 3.0)
+is "1"/"true" (the service applies the same rule at start).
 */}}
 {{- define "clarae.checkSecretValues" -}}
 {{- $values := default (dict) .Values.secret.values -}}
-{{- $allow := has (lower (toString (default "" .Values.config.CLARAE_ALLOW_PLACEHOLDER_SECRETS))) (list "1" "true") -}}
+{{- $allowNew := lower (toString (default "" .Values.config.CLARAE_ALLOW_PLACEHOLDER_SECRETS)) -}}
+{{- $allowOld := lower (toString (default "" .Values.config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS)) -}}
+{{- $allow := or (has $allowNew (list "1" "true")) (and (not $allowNew) (has $allowOld (list "1" "true"))) -}}
 {{- $placeholders := list "change-me" "change-me-too" "changeme" -}}
 {{- range $key := list "DATABASE_URL" "S3_ACCESS_KEY" "S3_SECRET_KEY" "KC_ADMIN_CLIENT_SECRET" -}}
 {{- $v := trim (toString (default "" (get $values $key))) -}}

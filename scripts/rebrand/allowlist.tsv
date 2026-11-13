@@ -75,6 +75,12 @@ legacy	services/cloud/internal/db/locks_test.go	memobrain|Memobrain|MemoBrain|ME
 legacy	services/cloud/test/integration/advisory_lock_compat_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	acts as a pod of 1.4 holding the advisory lock of 1.x; dropped in 2.1
 legacy	services/cloud/internal/observability/namespace.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	metrics namespace of 1.x for the realm memobrain; dropped in 3.0
 legacy	services/cloud/internal/observability/namespace_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the metrics namespace of 1.x; dropped in 3.0
+legacy	.github/workflows/release.yml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	publishes the cloud image also under the name of 1.x; dropped in 2.1
+legacy	Taskfile.yml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	helm-check asserts that nameOverride: memobrain keeps the names and selectors of 1.x; dropped in 3.0
+legacy	deploy/helm/clarae/ci/values-legacy.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	values of an in-place upgrade of an installation made by the chart of 1.x; dropped in 3.0
+legacy	deploy/helm/clarae/values.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents nameOverride: memobrain and the legacy gRPC path; dropped in 3.0
+legacy	deploy/helm/clarae/templates/_helpers.tpl	memobrain|Memobrain|MemoBrain|MEMOBRAIN	nameOverride of the in-place upgrade and the old placeholder variable; dropped in 3.0
+legacy	deploy/helm/clarae/templates/ingress.yaml	memobrain\.v1	routes the legacy gRPC service memobrain.v1; dropped in 3.0
 
 # Files in the format 1.x wrote: the merge must keep handling them as they are.
 fixture	shared/conformance/merge/**/*.excalidraw	*	drawings as 1.x wrote them (key "memobrain"): merge fixtures

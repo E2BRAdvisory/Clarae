@@ -1,0 +1,11 @@
+# An installation made by the chart of 1.x (named memobrain), upgraded in place (ADR-0052, M17 B5): the
+# object names and the pod selectors, which a Deployment cannot change, stay as they were. task helm-check
+# asserts that this render still has them. The realm is the one of 1.x, so the binary also keeps the
+# audience, clients and buckets of 1.x without any setting.
+nameOverride: memobrain
+config:
+  OIDC_ISSUER: https://auth.example.com/realms/memobrain
+secret:
+  existingSecret: memobrain-prod
+ingress:
+  grpc: { mode: path }

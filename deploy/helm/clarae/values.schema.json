@@ -77,6 +77,8 @@
   },
   "required": ["image", "api", "worker", "config", "service"],
   "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
     "image": {
       "type": "object",
       "required": ["repository"],
@@ -169,6 +171,7 @@
             "mode": { "enum": ["host", "path"] },
             "host": { "type": "string" },
             "path": { "type": "string", "pattern": "^/" },
+            "legacyPath": { "type": "string", "pattern": "^(/.*)?$" },
             "streamTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "annotations": { "type": "object" }
           }
