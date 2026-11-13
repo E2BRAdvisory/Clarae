@@ -18,6 +18,7 @@ import (
 	"clarae/apps/desktop/internal/crypto"
 	syncpkg "clarae/apps/desktop/internal/sync"
 	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
 	"clarae/shared/pathrules"
 	"clarae/shared/syncproto"
 )
@@ -495,4 +496,68 @@ func TestMountFolderOfOneXStaysMounted(t *testing.T) {
 		_ = ada.m.SyncNow("ada-vault")
 		return received()
 	})
+}
+
+// A vault that was not linked has its settings in the new folder (it adopted them when it was
+// opened). Linked to the cloud with the move off, they go where clients of 1.x read them before the
+// first upload: the server never holds the new name.
+func TestLinkingPutsTheSettingsWhere1xReadsThem(t *testing.T) {
+	for _, kind := range []string{"shared", "private"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			env := newManagerEnv(t, "ada")
+			dir := filepath.Join(env.root, "vault")
+			if err := os.MkdirAll(filepath.Join(dir, newDir), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			fs, err := vault.NewFS(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, newDir, "editor.json"), []byte(`{"fontSize":15}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "Note.md"), []byte("# note\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := env.m.Attach(ctx, "v", fs); err != nil {
+				t.Fatal(err)
+			}
+			fs.SetConfigPolicy(func() bool { return env.m.ConfigInLegacy("v", false) })
+			pass := ""
+			if kind == "private" {
+				pass = "correct horse battery staple 42"
+			}
+			res, err := env.m.Link(ctx, "v", "shelf-"+kind+"-"+uuid.NewString()[:6], kind, pass)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := newClient(t, "ada")
+			eventually(t, "the vault to reach the server", func() bool {
+				_ = env.m.SyncNow("v")
+				tree, err := c.GetTree(ctx, res.CloudVaultID)
+				return err == nil && len(tree.Items) == 2
+			})
+			if _, err := os.Stat(filepath.Join(dir, oldDir, "editor.json")); err != nil {
+				t.Fatalf("the setting is not in the folder 1.x reads: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, newDir, "editor.json")); !os.IsNotExist(err) {
+				t.Fatalf("the setting is still in the new folder: %v", err)
+			}
+			if c, err := fs.ReadConfig("editor.json"); err != nil || string(c.Data) != `{"fontSize":15}` {
+				t.Fatalf("ReadConfig = %+v %v", c, err)
+			}
+			if kind == "shared" { // paths are readable on the server
+				tree, err := c.GetTree(ctx, res.CloudVaultID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, it := range tree.Items {
+					if pathrules.HasPrefix(it.Path, newDir) {
+						t.Errorf("the server holds %s", it.Path)
+					}
+				}
+			}
+		})
+	}
 }
