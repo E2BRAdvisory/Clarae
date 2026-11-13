@@ -2,7 +2,7 @@
 // is what the document has there, no more and no less. Text the user typed is text: written out, it
 // never becomes a link, a tag, a block id or a comment, and read again it is the same text.
 // Registered by src/test/conformance.test.ts (`task conformance`), where it is blocking.
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { makeComposer, type Composer } from '../fidelity/compose';

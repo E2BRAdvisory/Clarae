@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // DefaultFolder is the template folder when none is configured.

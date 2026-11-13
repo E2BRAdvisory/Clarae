@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 // ExtraInt returns the integer extension member key of the problem in err

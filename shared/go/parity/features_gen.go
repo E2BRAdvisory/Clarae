@@ -34,7 +34,7 @@ const (
 	// IndexRebuild: Ricostruzione dell'indice del vault
 	IndexRebuild FeatureID = "index.rebuild"
 
-	// SettingsVault: Configurazione del vault (.memobrain/)
+	// SettingsVault: Configurazione del vault (.clarae/)
 	SettingsVault FeatureID = "settings.vault"
 
 	// SyncLink: Collegamento di un vault locale a un vault cloud
@@ -133,7 +133,7 @@ const (
 	// WindowNative: Finestra nativa (schermo intero, link esterni nel browser di sistema)
 	WindowNative FeatureID = "window.native"
 
-	// Deeplink: Link memobrain://
+	// Deeplink: Link clarae://
 	Deeplink FeatureID = "deeplink"
 
 	// NoteCreate: Creazione di note e cartelle

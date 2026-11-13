@@ -1,5 +1,5 @@
 # Reverse proxy of the on-premise stack.
-# MEMOBRAIN_SITE / NOTIFY_SITE / AUTH_SITE are the site addresses (default: the host names, which makes
+# CLARAE_SITE / NOTIFY_SITE / AUTH_SITE are the site addresses (default: the host names, which makes
 # Caddy obtain public certificates automatically: ports 80/443 must be reachable and the DNS names
 # must point here). For an internal CA set CADDY_GLOBAL="local_certs" (clients must then trust that CA);
 # for a local test over plain HTTP use site addresses with the http:// prefix.
@@ -16,7 +16,7 @@
 	header @https ?Strict-Transport-Security "max-age=31536000"
 }
 
-{$MEMOBRAIN_SITE} {
+{$CLARAE_SITE} {
 	import hsts
 	request_body {
 		max_size 64MB
@@ -42,7 +42,7 @@
 	}
 }
 
-# Keycloak. The clients need only the realm "memobrain" (/realms/memobrain/...: OIDC endpoints, login and
+# Keycloak. The clients need only the realm "clarae" (/realms/clarae/...: OIDC endpoints, login and
 # account pages) and the theme assets (/resources/...). The administration console and its REST API (/admin)
 # and the realm "master" (where the server administrator logs in) answer 403 unless the client address is in
 # KEYCLOAK_ADMIN_FROM (space separated CIDRs; the default 127.0.0.1/32 matches no external client). The cloud

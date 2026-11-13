@@ -1,6 +1,6 @@
 // The Obsidian constructs and the raw nodes of the Markdown layer, one construct at a time: how the
 // file is read into the document (nodes, marks, raw), and that the file is what comes back.
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createLiveCore, type LiveCore } from '../headless';
 import { open, typeAfter } from '../testing/helpers';

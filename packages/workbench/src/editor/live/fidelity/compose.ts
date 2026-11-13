@@ -10,7 +10,7 @@
 import { Mark, type Node as PMNode } from '@milkdown/kit/prose/model';
 import { childrenOf, KINDS, type BlockTable, type Entry } from './table';
 import type { Style } from './style';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import { prepareSource } from '../../../reading/render';
 
 export interface ComposeOptions {

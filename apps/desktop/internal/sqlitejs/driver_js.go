@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	bridgeName = "__memobrainSQLite"
+	bridgeName = "__claraeSQLite"
 	fetchBatch = 256
 	maxSafeInt = 1 << 53 // integers beyond this cannot cross the boundary as a JS number
 )

@@ -95,9 +95,9 @@ Tutte queste azioni modificano il testo del file e si annullano con l'undo dell'
 
 ### Che cosa viene scritto nel file
 
-- **Slide escluse:** il commento `<!-- memobrain: hidden -->` dentro la slide. Un'esclusione vale solo in MemoBrain Notes: un client più vecchio o un altro strumento Marp mostra la slide e può leggere il commento come nota.
-- **Note del relatore:** commenti HTML nella slide, come vuole Marp (`<!-- testo della nota -->`). Un commento che contiene direttive di Marp (per esempio `theme: gaia`) è configurazione, non una nota; se si scrive una nota che sembra una direttiva, MemoBrain Notes vi inserisce un carattere invisibile perché Marp non la legga come tale. Un commento dentro un blocco di codice (recintato o rientrato) o tra apici inversi non è una nota e non viene toccato.
-- **Impostazioni:** il tema e i numeri di pagina sono le direttive `theme` e `paginate` del frontmatter; _Ricomincia alla fine_ e _Mostra le note del relatore_ sono le chiavi `memobrain-loop` (`true` per ripetere) e `memobrain-notes` (`false` per nasconderle; altrimenti sono visibili). Marp e i client precedenti le ignorano.
+- **Slide escluse:** il commento `<!-- clarae: hidden -->` dentro la slide. Un'esclusione vale solo in Clarae notanda: un client più vecchio o un altro strumento Marp mostra la slide e può leggere il commento come nota.
+- **Note del relatore:** commenti HTML nella slide, come vuole Marp (`<!-- testo della nota -->`). Un commento che contiene direttive di Marp (per esempio `theme: gaia`) è configurazione, non una nota; se si scrive una nota che sembra una direttiva, Clarae notanda vi inserisce un carattere invisibile perché Marp non la legga come tale. Un commento dentro un blocco di codice (recintato o rientrato) o tra apici inversi non è una nota e non viene toccato.
+- **Impostazioni:** il tema e i numeri di pagina sono le direttive `theme` e `paginate` del frontmatter; _Ricomincia alla fine_ e _Mostra le note del relatore_ sono le chiavi `clarae-loop` (`true` per ripetere) e `clarae-notes` (`false` per nasconderle; altrimenti sono visibili). Marp e i client precedenti le ignorano.
 
 ### Presentare
 

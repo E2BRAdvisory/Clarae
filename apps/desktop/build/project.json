@@ -1,16 +1,16 @@
 {
-  "name": "MemoBrain Notes",
-  "outputfilename": "memobrain",
+  "name": "Clarae notanda",
+  "outputfilename": "clarae",
   "info": {
     "companyName": "E2BR-Advisory Sagl",
-    "productName": "MemoBrain Notes",
-    "productIdentifier": "dev.memobrain.desktop",
+    "productName": "Clarae notanda",
+    "productIdentifier": "dev.clarae.desktop",
     "copyright": "Copyright © 2026",
     "comments": "Local-first notes and knowledge base",
     "protocols": [
       {
-        "scheme": "memobrain",
-        "description": "MemoBrain Notes URL scheme (open notes, OIDC callback)",
+        "scheme": "clarae",
+        "description": "Clarae notanda URL scheme (open notes, OIDC callback)",
         "role": "Editor"
       }
     ]

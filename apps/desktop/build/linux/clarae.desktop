@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Clarae notanda
+GenericName=Notes and knowledge base
+Comment=Local-first notes and knowledge base
+Exec=clarae %U
+Icon=clarae
+Terminal=false
+Categories=Office;Utility;TextEditor;
+Keywords=notes;markdown;knowledge;vault;
+StartupWMClass=clarae
+# clarae:// links (open a note, OIDC login callback): the second instance receives the URL in argv
+# and forwards it to the running one (ADR-0001).
+MimeType=x-scheme-handler/clarae;

@@ -100,7 +100,7 @@ async function openOnDesktop(
   await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Cloud', exact: true }).click();
-  await page.getByLabel('Server address').fill('https://memobrain.test');
+  await page.getByLabel('Server address').fill('https://clarae.test');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByText(/Signed in as/)).toBeVisible();
   await page.evaluate(
@@ -155,7 +155,7 @@ export const test = base.extend<{ cloud: Cloud }>({
         rest = await installCloudMock(context, { ...seed, ...(files ? { files } : {}) });
         // The page's account: the sign-in double of E2E builds (web/src/auth/e2e.ts).
         await context.addInitScript(() =>
-          sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
+          sessionStorage.setItem('clarae.e2e.user', JSON.stringify({ name: 'Alice' })),
         );
         return openOnWeb(page, opts);
       },

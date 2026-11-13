@@ -1,6 +1,6 @@
 // Figures shown in the Statistics tab. The calculations are pure; the panel supplies the data
 // (note text, file entry, local snapshots, cloud revisions, shares).
-import { extract, parseProperties, splitFrontmatter } from '@memobrain/markdown';
+import { extract, parseProperties, splitFrontmatter } from '@clarae/markdown';
 import type { RevisionInfo, Share, ShareGrant } from '../app/api';
 
 const countWords = (s: string): number => (s.match(/[\p{L}\p{N}]+/gu) ?? []).length;

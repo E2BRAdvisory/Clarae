@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
+	"clarae/shared/vaultcrypto"
 )
 
 // liveRemote is a scriptRemote whose tree and changelog follow the accepted

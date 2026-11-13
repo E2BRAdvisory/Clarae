@@ -2,7 +2,7 @@
 // Keeps the feature registry (shared/parity/features.yaml, ADR-0037) and the generated part of
 // docs/web-workbench-parity.md honest. Inputs:
 //  - the commands and the declarative actions of the UI (ADR-0045 §2), read at runtime: a
-//    dedicated Vitest file of @memobrain/workbench (src/commands/parity.test.ts) imports the two
+//    dedicated Vitest file of @clarae/workbench (src/commands/parity.test.ts) imports the two
 //    registries and evaluates each `requires` (and an action's `excludes`) with
 //    configurePlatform('desktop' | 'web'), then writes them with their `feature` as JSON (no regex
 //    on the source);
@@ -54,25 +54,25 @@ function fail(lines) {
 
 // ---- commands, from the registry at runtime ---------------------------------------------------
 function loadCommands() {
-  const dir = mkdtempSync(join(tmpdir(), 'memobrain-parity-'));
+  const dir = mkdtempSync(join(tmpdir(), 'clarae-parity-'));
   const out = join(dir, 'commands.json');
   try {
     const run = spawnSync(
       'yarn',
       [
         'workspace',
-        '@memobrain/workbench',
+        '@clarae/workbench',
         'exec',
         'vitest',
         'run',
         'src/commands/parity.test.ts',
         '--reporter=dot',
       ],
-      { cwd: root, env: { ...process.env, MEMOBRAIN_PARITY_OUT: out }, encoding: 'utf8' },
+      { cwd: root, env: { ...process.env, CLARAE_PARITY_OUT: out }, encoding: 'utf8' },
     );
     if (run.status !== 0 || !existsSync(out)) {
       fail([
-        'could not read the command registry (yarn workspace @memobrain/workbench exec vitest run src/commands/parity.test.ts):',
+        'could not read the command registry (yarn workspace @clarae/workbench exec vitest run src/commands/parity.test.ts):',
         run.error ? String(run.error) : '',
         run.stdout ?? '',
         run.stderr ?? '',

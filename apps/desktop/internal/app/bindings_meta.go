@@ -14,12 +14,12 @@ import (
 	"strings"
 	"sync"
 
-	"memobrain/apps/desktop/internal/properties"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/properties"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
-// vaultConfigFiles is the allow-list of settings files under .memobrain/ that the
+// vaultConfigFiles is the allow-list of settings files under .clarae/ that the
 // frontend may read and write (§3.4.6). Anything else is refused.
 var vaultConfigFiles = map[string]bool{
 	"editor.json": true, "appearance.json": true, "hotkeys.json": true, "types.json": true,
@@ -249,7 +249,7 @@ func (p *PropertiesAPI) Keys(vaultID string) ([]PropertyKey, error) {
 	return out, rows.Err()
 }
 
-// Schema returns the declared types (.memobrain/types.json).
+// Schema returns the declared types (.clarae/types.json).
 func (p *PropertiesAPI) Schema(vaultID string) (map[string]string, error) {
 	ov, err := p.app.vault(vaultID)
 	if err != nil {

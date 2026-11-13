@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"memobrain/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/parser"
 )
 
 // reserved keys keep their meaning (tags, aliases) and are editable like any other.

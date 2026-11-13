@@ -16,9 +16,9 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"golang.org/x/time/rate"
 
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // RequestLogger logs one line per request with the request id, status,

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://memobrain.example/schemas/config-profile.schema.json",
-  "title": "MemoBrain Notes Config Profile",
+  "$id": "https://clarae.example/schemas/config-profile.schema.json",
+  "title": "Clarae notanda Config Profile",
   "description": "Configuration distributed by the cloud service (§2.6.6). A profile sets any subset of these keys; keys listed in locked_keys cannot be overridden by the user.",
   "type": "object",
   "additionalProperties": false,

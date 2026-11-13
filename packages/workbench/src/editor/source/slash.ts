@@ -11,7 +11,7 @@ import type {
   CompletionSource,
 } from '@codemirror/autocomplete';
 import type { EditorState } from '@codemirror/state';
-import { splitFrontmatter } from '@memobrain/markdown';
+import { splitFrontmatter } from '@clarae/markdown';
 import { codeMirrorHandle } from './CodeMirrorAdapter';
 import {
   filterItems,

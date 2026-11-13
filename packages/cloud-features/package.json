@@ -1,5 +1,5 @@
 {
-  "name": "@memobrain/cloud-features",
+  "name": "@clarae/cloud-features",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -21,8 +21,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@memobrain/api-client": "workspace:*",
-    "@memobrain/ui": "workspace:*"
+    "@clarae/api-client": "workspace:*",
+    "@clarae/ui": "workspace:*"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.104.5",

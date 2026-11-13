@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"memobrain/shared/conformance"
+	"clarae/shared/conformance"
 )
 
 // TestSlidesConformance runs every shared slides fixture through the parser; the TypeScript

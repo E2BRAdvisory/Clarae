@@ -11,7 +11,7 @@
  * and device registration. The copies an earlier version kept for everyone are adopted only by the
  * account shown to own them all, and never opened otherwise.
  */
-import { Feature, featureEnabled } from '@memobrain/api-client/features';
+import { Feature, featureEnabled } from '@clarae/api-client/features';
 import type { AuthService } from '../auth/types';
 import {
   CoreTimeoutError,
@@ -312,7 +312,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     });
     if (adoption === 'unproven' || adoption === 'kept')
       console.info(
-        'memobrain: the vault copies of an earlier version stay unopened (they cannot be shown to belong to this account)',
+        'clarae: the vault copies of an earlier version stay unopened (they cannot be shown to belong to this account)',
       );
   }
   const storage = await storageOf(account);
@@ -354,7 +354,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
   const core = await startCore({
     assets: o.assets,
     config: {
-      dataDir: '/memobrain/data',
+      dataDir: '/clarae/data',
       version: o.version,
       logLevel: 'warn',
       ...(o.fsTrace ? { fsTrace: true } : {}),
@@ -534,7 +534,7 @@ export async function launchWorkbench(o: LaunchOptions): Promise<Launched> {
     })) ?? null;
   // Over the workbench, so staying leaves the copy open to export what it holds.
   if (gone) vaultGuard?.offerRemoval();
-  if (import.meta.env.MEMOBRAIN_E2E) {
+  if (import.meta.env.CLARAE_E2E) {
     // Playwright drives the core, the worker (to simulate its failure) and the leave path directly.
     Object.assign(window, {
       __core: core,

@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/vault"
 )
 
 // renameCandidates selects, from the index, the notes and drawings a rename

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '@memobrain/api-client';
+import { ApiError } from '@clarae/api-client';
 import { problem, mockApi } from '../test/utils';
 import {
   ExportJobError,

@@ -8,8 +8,8 @@ import (
 func TestFileURI(t *testing.T) {
 	q := url.Values{"_pragma": []string{"foreign_keys(ON)"}}
 	tests := []struct{ path, want string }{
-		{"/v/.memobrain/index.db", "file:///v/.memobrain/index.db?_pragma=foreign_keys%28ON%29"},
-		{"/Users/x/Progetti #1/.memobrain/sync.db", "file:///Users/x/Progetti%20%231/.memobrain/sync.db?_pragma=foreign_keys%28ON%29"},
+		{"/v/.clarae/index.db", "file:///v/.clarae/index.db?_pragma=foreign_keys%28ON%29"},
+		{"/Users/x/Progetti #1/.clarae/sync.db", "file:///Users/x/Progetti%20%231/.clarae/sync.db?_pragma=foreign_keys%28ON%29"},
 		{"/v/a?b/100%25/è.db", "file:///v/a%3Fb/100%2525/%C3%A8.db?_pragma=foreign_keys%28ON%29"},
 	}
 	for _, tt := range tests {
@@ -40,9 +40,9 @@ func TestSlashURIDriveLetter(t *testing.T) {
 
 func TestLegacyURIPath(t *testing.T) {
 	tests := []struct{ path, want string }{
-		{"/v/.memobrain/index.db", "/v/.memobrain/index.db"},
-		{"/Users/x/Progetti #1/.memobrain/index.db", "/Users/x/Progetti "},
-		{"/Users/x/a?b/.memobrain/sync.db", "/Users/x/a"},
+		{"/v/.clarae/index.db", "/v/.clarae/index.db"},
+		{"/Users/x/Progetti #1/.clarae/index.db", "/Users/x/Progetti "},
+		{"/Users/x/a?b/.clarae/sync.db", "/Users/x/a"},
 		{"/v/100%25 done/x.db", "/v/100% done/x.db"},
 		{"/v/%e2%82%ac/x.db", "/v/€/x.db"},
 		{"/v/100%/x%2/y%zz.db", "/v/100%/x%2/y%zz.db"}, // not an escape: kept verbatim

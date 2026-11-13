@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Clarae notanda</title>
+  <defs>
+    <linearGradient id="mb-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e2534"/><stop offset="1" stop-color="#111624"/>
+    </linearGradient>
+    <linearGradient id="mb-cyan" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#22e5f0"/><stop offset="1" stop-color="#38a6f5"/>
+    </linearGradient>
+    <linearGradient id="mb-violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9f7aea"/><stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <radialGradient id="mb-halo" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#6d5dfc" stop-opacity=".28"/><stop offset="1" stop-color="#6d5dfc" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="mb-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" rx="222" fill="url(#mb-tile)"/>
+  <rect x="6" y="6" width="1012" height="1012" rx="216" fill="none" stroke="#3b4456" stroke-width="12"/>
+  <g transform="translate(-129 -129) scale(1.252)">
+    <circle cx="640" cy="512" r="250" fill="url(#mb-halo)"/>
+    <g filter="url(#mb-glow)">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke="url(#mb-cyan)" stroke-width="14">
+        <path d="M497 262 L472 240 H398 L377 260 V302 H333 L302 332 V376 L272 402 V446 L247 471 V561 L272 586 V622 L292 642 V690 L357 722 L397 782 H472 L497 758 Z"/>
+        <path d="M377 260 V302" />
+        <path d="M357 722 V700" />
+      </g>
+      <g stroke="url(#mb-cyan)" stroke-width="13">
+        <path d="M418 290 H466 M340 330 H362 M392 330 H466 M300 368 H408 M432 368 H466 M300 406 H382 M406 406 H466 M290 446 H330 M372 446 H392 M412 446 H466 M280 485 H330 M354 485 H466 M280 522 H310 M340 522 H404 M428 522 H466 M280 560 H386 M410 560 H466 M336 597 H406 M432 597 H466 M300 632 H380 M402 632 H466 M318 666 H350 M372 666 H466 M390 702 H466 M418 738 H466"/>
+      </g>
+      <g stroke="url(#mb-violet)" stroke-width="11">
+        <path d="M526 262 C546 232 594 228 616 250 C644 226 692 236 706 272 C746 280 766 318 752 352 C786 378 790 428 766 452 C794 484 788 534 760 552 C780 594 762 642 724 652 C714 702 668 726 630 708 C600 742 548 740 528 706 Z"/>
+        <path d="M616 250 C598 300 600 340 640 372 C680 400 724 392 752 352"/>
+        <path d="M560 330 C560 300 590 290 600 310 M706 272 C690 300 660 320 642 300"/>
+        <path d="M526 420 C570 420 600 400 640 372 M766 452 C730 470 690 470 660 450"/>
+        <path d="M528 520 C590 520 620 560 610 600 C600 640 640 660 690 640 C720 630 740 600 760 552"/>
+        <path d="M560 470 C620 470 660 500 700 528 M600 600 C580 640 560 660 548 690"/>
+        <path d="M630 708 C640 680 660 660 690 640"/>
+      </g>
+      <g stroke="url(#mb-violet)" stroke-width="7">
+        <path d="M545 448 L590 424 M540 466 L568 504 M562 504 L596 470 L700 420 M600 680 L640 628 L690 578 M650 690 L668 650"/>
+      </g>
+      <g fill="#c4b5fd" stroke="#8b5cf6" stroke-width="6">
+        <circle cx="590" cy="424" r="10"/><circle cx="700" cy="420" r="10"/><circle cx="568" cy="504" r="10"/>
+        <circle cx="690" cy="578" r="10"/><circle cx="640" cy="628" r="10"/><circle cx="600" cy="680" r="10"/>
+        <circle cx="668" cy="650" r="10"/><circle cx="596" cy="336" r="10"/>
+      </g>
+      <path d="M512 236 V790" stroke="#93c5fd" stroke-opacity=".45" stroke-width="4"/>
+      <circle cx="512" cy="512" r="13" fill="#e0f2fe" stroke="#60a5fa" stroke-width="6"/>
+    </g>
+    </g>
+  </g>
+</svg>

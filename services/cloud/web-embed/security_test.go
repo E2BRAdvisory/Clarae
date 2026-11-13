@@ -55,7 +55,7 @@ func TestBuiltIndexPinsEverySubresourceWithSRI(t *testing.T) {
 // every script and style sheet pinned by SRI to the bytes that are really embedded.
 func TestBuiltWorkbenchPinsEverySubresourceWithSRI(t *testing.T) {
 	if _, err := fs.Stat(Dist(), "workbench.html"); err != nil {
-		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
+		if os.Getenv("CLARAE_REQUIRE_WEB_BUILD") != "" {
 			t.Fatal("workbench.html is not embedded: is dist/ built (task web-build)?")
 		}
 		t.Skip("dist/ holds only the placeholder index (run task web-build)")
@@ -149,8 +149,8 @@ func checkPinned(t *testing.T, root fs.FS, tag, ref string, a map[string]string)
 	data, err := fs.ReadFile(root, strings.TrimPrefix(ref, "/"))
 	if err != nil {
 		// The tracked dist/ holds only the placeholder index; CI builds the real SPA
-		// (task web-build) and sets MEMOBRAIN_REQUIRE_WEB_BUILD=1 so a missing file is an error.
-		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
+		// (task web-build) and sets CLARAE_REQUIRE_WEB_BUILD=1 so a missing file is an error.
+		if os.Getenv("CLARAE_REQUIRE_WEB_BUILD") != "" {
 			t.Errorf("<%s %s>: file is not embedded: %v", tag, ref, err)
 		}
 		return
@@ -194,7 +194,7 @@ func csp(v string) map[string][]string {
 }
 
 func TestCSPIsStrict(t *testing.T) {
-	p := csp(CSP("https://id.example.com/realms/memobrain"))
+	p := csp(CSP("https://id.example.com/realms/clarae"))
 	has := func(dir string, want ...string) {
 		t.Helper()
 		got := strings.Join(p[dir], " ")
@@ -228,7 +228,7 @@ func TestCSPIsStrict(t *testing.T) {
 
 // Every class of response (page, asset, 404, 405) carries the full header set.
 func TestSecurityHeadersOnEveryResponseClass(t *testing.T) {
-	h := Handler(Options{Issuer: "https://id.example.com/realms/memobrain"})
+	h := Handler(Options{Issuer: "https://id.example.com/realms/clarae"})
 	for _, c := range []struct {
 		method, path string
 		code         int
@@ -261,7 +261,7 @@ func TestSecurityHeadersOnEveryResponseClass(t *testing.T) {
 	// Embedded assets listed by the index are served with their immutable caching.
 	for _, m := range regexp.MustCompile(`(?:src|href)="(/assets/[^"]+)"`).FindAllStringSubmatch(indexHTML(t), -1) {
 		if _, err := fs.Stat(Dist(), strings.TrimPrefix(m[1], "/")); err != nil {
-			if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
+			if os.Getenv("CLARAE_REQUIRE_WEB_BUILD") != "" {
 				t.Errorf("%s is not embedded", m[1])
 			}
 			continue
@@ -314,7 +314,7 @@ func checkImportMap(t *testing.T, root fs.FS, page []byte) {
 func TestEveryEmbeddedScriptIsPinned(t *testing.T) {
 	root := Dist()
 	if _, err := fs.Stat(root, "workbench.html"); err != nil {
-		if os.Getenv("MEMOBRAIN_REQUIRE_WEB_BUILD") != "" {
+		if os.Getenv("CLARAE_REQUIRE_WEB_BUILD") != "" {
 			t.Fatal("workbench.html is not embedded: is dist/ built (task web-build)?")
 		}
 		t.Skip("dist/ holds only the placeholder index (run task web-build)")

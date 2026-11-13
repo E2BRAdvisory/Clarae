@@ -69,8 +69,7 @@ export function refreshedLabel(path: string, markdown: string): string {
 }
 
 const cardPath = (e: SceneElement): string | null => {
-  const m = (e.customData as { memobrain?: { kind?: string; path?: string } } | undefined)
-    ?.memobrain;
+  const m = (e.customData as { clarae?: { kind?: string; path?: string } } | undefined)?.clarae;
   return m?.kind === 'note' && typeof m.path === 'string' ? m.path : null;
 };
 
@@ -129,18 +128,18 @@ export function setSlideNotes(): Promise<void> {
     const frames = selectedElements(c.context()).filter((e) => e.type === 'frame');
     if (frames.length !== 1) return dialog.alert(t('notesTitle'), t('notesPickFrame'));
     const frame = frames[0] as SceneElement;
-    const mb = (frame.customData as { memobrain?: Record<string, unknown> } | undefined)?.memobrain;
+    const mb = (frame.customData as { clarae?: Record<string, unknown> } | undefined)?.clarae;
     const raw = await dialog.prompt(t('notesTitle'), typeof mb?.notes === 'string' ? mb.notes : '');
     if (raw === null) return;
     const rest = { ...mb };
     delete rest['notes'];
-    const memobrain = raw.trim() ? { ...rest, notes: raw.trim() } : rest;
+    const clarae = raw.trim() ? { ...rest, notes: raw.trim() } : rest;
     c.apply({
       update: {
         [frame.id]: {
           customData: {
             ...(frame.customData as Record<string, unknown> | undefined),
-            memobrain,
+            clarae,
           },
         },
       },

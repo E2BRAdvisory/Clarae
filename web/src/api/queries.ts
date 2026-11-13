@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { unwrap, type Schemas } from '@memobrain/api-client';
-import { Feature } from '@memobrain/api-client/features';
-import { cloudKeys, RestCloudPort, useFeature } from '@memobrain/cloud-features';
+import { unwrap, type Schemas } from '@clarae/api-client';
+import { Feature } from '@clarae/api-client/features';
+import { cloudKeys, RestCloudPort, useFeature } from '@clarae/cloud-features';
 import { useAuth } from '../auth/AuthProvider';
 import { ADMIN_ROLE } from '../auth/types';
 import { useApi } from './context';
@@ -11,7 +11,7 @@ export type Share = Schemas['Share'];
 
 /**
  * The console's own query keys. Vaults, shares and feature flags are NOT here: the console reads
- * them through the cache of @memobrain/cloud-features (cloudKeys), the one its components use and
+ * them through the cache of @clarae/cloud-features (cloudKeys), the one its components use and
  * invalidate, so every view of the same resource is one cache entry and a change refreshes them all.
  */
 export const keys = {

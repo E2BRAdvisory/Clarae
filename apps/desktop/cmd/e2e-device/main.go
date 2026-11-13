@@ -7,13 +7,13 @@
 // against the same cloud.
 //
 // Instead of the system-browser sign-in it signs in with the resource-owner password grant of
-// the throwaway Keycloak realm (scripts/e2e-mixed.sh enables it on memobrain-desktop there, never
+// the throwaway Keycloak realm (scripts/e2e-mixed.sh enables it on clarae-desktop there, never
 // in the shipped realm) and hands the tokens to the core as a hosted session (auth.Hosted, the
 // path the browser build uses). Vault keys stay in memory.
 //
 //	go build -tags e2e -o .dev/bin/e2e-device ./cmd/e2e-device
-//	e2e-device -server http://localhost:18091 -issuer http://localhost:8080/realms/memobrain \
-//	    -user user1 -password memobrain-dev-password -data /tmp/devA
+//	e2e-device -server http://localhost:18091 -issuer http://localhost:8080/realms/clarae \
+//	    -user user1 -password clarae-dev-password -data /tmp/devA
 //
 // It prints "LISTEN http://127.0.0.1:<port>" on stdout once ready. API (JSON):
 //
@@ -21,7 +21,7 @@
 //	GET  /events  every event the core emitted, in order: [{"seq","name","payload"}]
 //	GET  /file?vault=<local id>&path=<rel>   the file's bytes on disk (404 when missing)
 //	PUT  /file?vault=<local id>&path=<rel>   writes the file on disk, as an editor outside the app would
-//	GET  /files?vault=<local id>             every file of the vault folder (paths, without .memobrain)
+//	GET  /files?vault=<local id>             every file of the vault folder (paths, without .clarae)
 //	POST /quit
 package main
 
@@ -46,18 +46,18 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/auth"
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/rpc"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/rpc"
 )
 
 func main() {
 	server := flag.String("server", "http://localhost:18091", "cloud base URL")
-	issuer := flag.String("issuer", "http://localhost:8080/realms/memobrain", "OIDC issuer (Keycloak realm)")
-	clientID := flag.String("client", "memobrain-desktop", "OIDC client with the password grant enabled")
+	issuer := flag.String("issuer", "http://localhost:8080/realms/clarae", "OIDC issuer (Keycloak realm)")
+	clientID := flag.String("client", "clarae-desktop", "OIDC client with the password grant enabled")
 	user := flag.String("user", "user1", "user name")
-	password := flag.String("password", "memobrain-dev-password", "password")
+	password := flag.String("password", "clarae-dev-password", "password")
 	dataDir := flag.String("data", "", "data directory (required)")
 	listen := flag.String("listen", "127.0.0.1:0", "address of the control API")
 	verbose := flag.Bool("v", false, "log the core to stderr")
@@ -309,7 +309,7 @@ func (h *host) routes(d *rpc.Dispatcher, quit chan struct{}) http.Handler {
 				return nil
 			}
 			if de.IsDir() {
-				if p != dir && (de.Name() == ".memobrain" || de.Name() == ".trash") {
+				if p != dir && (de.Name() == ".clarae" || de.Name() == ".trash") {
 					return filepath.SkipDir
 				}
 				return nil

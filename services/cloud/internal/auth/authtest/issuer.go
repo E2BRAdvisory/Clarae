@@ -86,16 +86,16 @@ func (i *Issuer) Token(t *testing.T, o TokenOptions) string {
 		o.Username = "user1"
 	}
 	if o.Email == "" {
-		o.Email = o.Username + "@memobrain.local"
+		o.Email = o.Username + "@clarae.local"
 	}
 	if o.AZP == "" {
-		o.AZP = "memobrain-desktop"
+		o.AZP = "clarae-desktop"
 	}
 	if len(o.Audience) == 0 {
-		o.Audience = []string{"memobrain-api"}
+		o.Audience = []string{"clarae-api"}
 	}
 	if len(o.Roles) == 0 {
-		o.Roles = []string{"memobrain-user"}
+		o.Roles = []string{"clarae-user"}
 	}
 	if o.ExpiresIn == 0 {
 		o.ExpiresIn = 5 * time.Minute

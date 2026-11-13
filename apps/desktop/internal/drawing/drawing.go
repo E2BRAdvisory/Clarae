@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"memobrain/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/parser"
 )
 
 // MaxSize is the soft size limit of a drawing (§M3-WP1): the editor warns above it.

@@ -1,8 +1,8 @@
 package app
 
 import (
-	"memobrain/apps/desktop/internal/auth"
-	"memobrain/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/events"
 )
 
 // Events the app itself sends to the frontend (§2.5). Each is declared with its payload type and
@@ -19,7 +19,7 @@ var (
 	EventConfigUpdated = events.New[ConfigState]("config:updated",
 		"The distributed configuration in force changed: the new configuration and its feature flags.")
 	EventOpenRequest = events.New[OpenRequestPayload]("app:open-request",
-		"A memobrain://open link handled by the operating system asks to open a vault (and a file).")
+		"A clarae://open link handled by the operating system asks to open a vault (and a file).")
 	EventMountsChanged = events.New[MountsChangedPayload]("mounts:changed",
 		"Mount levels or availability changed on this device (after a reconcile with the server).")
 	EventImportProgress = events.New[ImportProgressPayload]("importer:progress",

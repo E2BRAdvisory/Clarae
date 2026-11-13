@@ -6,7 +6,7 @@ _Nuova lavagna_ crea un file `.canvas` (formato JSON Canvas, compatibile con Obs
 
 ## Disegni
 
-_Nuovo disegno_ crea un file `.excalidraw` (JSON standard in chiaro, apribile anche con excalidraw.com), modificabile con l'editor di disegno integrato (forme, frecce, testo, tratto libero, librerie). Funziona **offline**: gli asset sono inclusi nell'app. Dove nasce il file, come si chiama e come si apre (modifica, sola lettura, zen) si sceglie in _Impostazioni > Disegni_; lì si fissano anche i colori, il carattere e la dimensione predefiniti dei nuovi elementi e l'esportazione automatica. Le impostazioni stanno in `.memobrain/drawing.json` e viaggiano con il vault.
+_Nuovo disegno_ crea un file `.excalidraw` (JSON standard in chiaro, apribile anche con excalidraw.com), modificabile con l'editor di disegno integrato (forme, frecce, testo, tratto libero, librerie). Funziona **offline**: gli asset sono inclusi nell'app. Dove nasce il file, come si chiama e come si apre (modifica, sola lettura, zen) si sceglie in _Impostazioni > Disegni_; lì si fissano anche i colori, il carattere e la dimensione predefiniti dei nuovi elementi e l'esportazione automatica. Le impostazioni stanno in `.clarae/drawing.json` e viaggiano con il vault.
 
 ### Nelle note
 

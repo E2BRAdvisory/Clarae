@@ -11,10 +11,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"memobrain/apps/desktop/internal/cloudtest"
+	"clarae/apps/desktop/internal/cloudtest"
 )
 
-// The end-to-end tests run the real cloud service (the memobrain-cloud binary,
+// The end-to-end tests run the real cloud service (the clarae-cloud binary,
 // built from this repository) against PostgreSQL in a container, with a local
 // OIDC issuer standing in for Keycloak (see cloudtest). Two desktop engines then
 // synchronize through it, exactly as two devices would.

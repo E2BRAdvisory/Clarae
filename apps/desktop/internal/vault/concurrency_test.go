@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/shared/hashing"
+	"clarae/shared/hashing"
 )
 
 // The Wails bindings, the importer and the sync engine share one FS: the

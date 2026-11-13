@@ -1,4 +1,4 @@
-/* MemoBrain Notes UI design system for the console: tokens, components, then the page globals.
+/* Clarae notanda UI design system for the console: tokens, components, then the page globals.
    Plain CSS, no runtime. Dark mode follows the OS unless data-theme="light" | "dark" is set on <html>.
 
    The tokens (tokens.css) are shared with the workbench, the component rules (components.css, nd-*

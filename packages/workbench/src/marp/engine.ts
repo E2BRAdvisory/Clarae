@@ -74,9 +74,9 @@ export interface Deck {
   css: string;
   /** 0-based first line of each slide in the source. */
   slideLines: number[];
-  /** Presenter notes of each slide (its non-directive HTML comments, without memobrain markers). */
+  /** Presenter notes of each slide (its non-directive HTML comments, without clarae markers). */
   notes: string[];
-  /** True for each slide left out of the presentation (`<!-- memobrain: hidden -->`). */
+  /** True for each slide left out of the presentation (`<!-- clarae: hidden -->`). */
   hidden: boolean[];
   /** For each slide, whether it advanced the page counter (not `paginate: skip` or `hold`). */
   advances: boolean[];
@@ -94,7 +94,7 @@ export function embedsToImages(source: string): string {
 }
 
 /** The marker comment that leaves a slide out of the presentation and its exports. */
-export const HIDDEN_COMMENT = /^memobrain:\s*hidden$/i;
+export const HIDDEN_COMMENT = /^clarae:\s*hidden$/i;
 
 const URL_IN_CSS = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
 

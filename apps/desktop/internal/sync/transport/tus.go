@@ -121,7 +121,7 @@ func (c *Client) tusOffset(ctx context.Context, path string) (int64, error) {
 }
 
 // offsetMismatch recognises a PATCH refused because its Upload-Offset is not
-// the server's: 409 in tus 1.0.0; the MemoBrain cloud answers 400
+// the server's: 409 in tus 1.0.0; the Clarae cloud answers 400
 // VALIDATION_FAILED with its own Upload-Offset.
 func offsetMismatch(resp *http.Response) bool {
 	return resp.StatusCode == http.StatusConflict ||

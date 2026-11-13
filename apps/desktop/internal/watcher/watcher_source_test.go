@@ -136,7 +136,7 @@ func TestWatcherIgnoresGitAndInternals(t *testing.T) {
 		t.Skip("the browser build has no file system events")
 	}
 	root := t.TempDir()
-	for _, d := range []string{".git", ".memobrain"} {
+	for _, d := range []string{".git", ".clarae"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -149,7 +149,7 @@ func TestWatcherIgnoresGitAndInternals(t *testing.T) {
 	}
 	defer func() { _ = w.Close() }()
 	time.Sleep(100 * time.Millisecond)
-	for p, c := range map[string]string{".git/HEAD": "ref", ".memobrain/index.db-wal": "x", "a.md": "a"} {
+	for p, c := range map[string]string{".git/HEAD": "ref", ".clarae/index.db-wal": "x", "a.md": "a"} {
 		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(p)), []byte(c), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -160,7 +160,7 @@ func TestWatcherIgnoresGitAndInternals(t *testing.T) {
 		case ch := <-w.C():
 			done := false
 			for _, p := range ch.Paths {
-				if p == ".git" || p == ".git/HEAD" || p == ".memobrain/index.db-wal" {
+				if p == ".git" || p == ".git/HEAD" || p == ".clarae/index.db-wal" {
 					t.Fatalf("reported %s", p)
 				}
 				done = done || p == "a.md"

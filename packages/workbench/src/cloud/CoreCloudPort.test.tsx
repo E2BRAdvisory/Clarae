@@ -6,7 +6,7 @@ import {
   cloudVaultsTableSuite,
   seedVaults,
   type CloudSeed,
-} from '@memobrain/cloud-features/testing';
+} from '@clarae/cloud-features/testing';
 import { api } from '../app/api';
 import { initI18n } from '../i18n';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
@@ -22,7 +22,7 @@ import { CoreCloudPort } from './CoreCloudPort';
  */
 async function signedInMock(seed: Parameters<typeof seedVaults>[0]): Promise<WailsMock> {
   const mock = installWailsMock();
-  await api.auth.login('https://memobrain.test');
+  await api.auth.login('https://clarae.test');
   mock.sync.cloudVaults = seedVaults(seed);
   return mock;
 }

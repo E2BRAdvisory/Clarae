@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/vault"
 )
 
 var fixedNow = time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)

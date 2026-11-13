@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadSlideCases } from '@memobrain/conformance';
+import { loadSlideCases } from '@clarae/conformance';
 import { DEFAULT_SLIDE_CONFIG, parseSlideConfig, parseSlides } from './slides';
 
 // Every shared fixture must produce exactly the expectation that the Go parser also satisfies

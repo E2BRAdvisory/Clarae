@@ -31,12 +31,12 @@ func openFDs(t *testing.T) int {
 }
 
 // TestWatcherDescriptors measures the descriptors a watcher keeps open on a
-// large vault (MEMOBRAIN_WATCH_FD_DIR, e.g. a perf dataset; it is only read),
+// large vault (CLARAE_WATCH_FD_DIR, e.g. a perf dataset; it is only read),
 // with the platform's source and with plain fsnotify.
 func TestWatcherDescriptors(t *testing.T) {
-	dir := os.Getenv("MEMOBRAIN_WATCH_FD_DIR")
+	dir := os.Getenv("CLARAE_WATCH_FD_DIR")
 	if dir == "" {
-		t.Skip("set MEMOBRAIN_WATCH_FD_DIR to a vault to measure")
+		t.Skip("set CLARAE_WATCH_FD_DIR to a vault to measure")
 	}
 	files, dirs := 0, 0
 	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {

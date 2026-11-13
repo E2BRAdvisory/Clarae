@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/vaultcrypto"
 )
 
 // attachEmpty attaches an empty local folder as vault localID.

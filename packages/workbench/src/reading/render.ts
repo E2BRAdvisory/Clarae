@@ -14,12 +14,7 @@ import remarkRehype from 'remark-rehype';
 import { unified, type Plugin } from 'unified';
 import type { Element, Root as HastRoot, RootContent as HastContent } from 'hast';
 import type { FootnoteDefinition, Parent, PhrasingContent, Root, Text } from 'mdast';
-import {
-  parseWikilinkInner,
-  scanSpans,
-  stripInlineCode,
-  type BlockState,
-} from '@memobrain/markdown';
+import { parseWikilinkInner, scanSpans, stripInlineCode, type BlockState } from '@clarae/markdown';
 import { sanitizeHtml } from '../util/sanitize';
 import { stripFrontmatter } from './sections';
 
@@ -152,7 +147,7 @@ function transformText(value: string): PhrasingContent[] {
  * they are numbered with the [^label] ones in reading order and listed in the same footnotes
  * section. Brackets nest (^[see [[Note]]]) and the content may hold emphasis or code; an unclosed
  * ^[ stays text, and \^[ was protected by prepareSource. The indexers count them alike
- * (inlineFootnotes in @memobrain/markdown and in the Go parser).
+ * (inlineFootnotes in @clarae/markdown and in the Go parser).
  */
 const remarkInlineFootnotes: Plugin<[], Root> = () => (tree) => {
   const defs: FootnoteDefinition[] = [];

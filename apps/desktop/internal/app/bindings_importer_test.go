@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/importer"
-	syncpkg "memobrain/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/importer"
+	syncpkg "clarae/apps/desktop/internal/sync"
 )
 
 func TestImporterRunEmitsEventsAndTheWatcherIndexesTheNotes(t *testing.T) {

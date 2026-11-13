@@ -73,7 +73,7 @@ func TestNotifyDebouncesAndCoalesces(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		w.Notify([]string{"Dir/a.md"})
 	}
-	w.Notify([]string{".DS_Store", ".memobrain-tmp-123", "Dir/b.md", "../escape.md"})
+	w.Notify([]string{".DS_Store", ".clarae-tmp-123", "Dir/b.md", "../escape.md"})
 
 	select {
 	case ch := <-w.C():

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { SlideTheme } from '@memobrain/markdown';
+import type { SlideTheme } from '@clarae/markdown';
 import { slidesCss } from '../export/css';
 import { handleLinkClick } from '../util/links';
 
 /** Logical size of a slide: the content is laid out at this size and scaled to fit. */
 export const SLIDE_WIDTH = 1280;
 export const SLIDE_HEIGHT = 720;
-const STYLE_ID = 'memobrain-slides-style';
+const STYLE_ID = 'clarae-slides-style';
 
 /** Injects the application-written stylesheet of the slides, once. */
 function ensureSlidesStyle(): void {

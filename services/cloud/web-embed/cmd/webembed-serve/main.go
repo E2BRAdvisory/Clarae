@@ -11,12 +11,12 @@ import (
 	"os"
 	"time"
 
-	webembed "memobrain/services/cloud/web-embed"
+	webembed "clarae/services/cloud/web-embed"
 )
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:18095", "listen address")
-	issuer := flag.String("issuer", "https://id.example.invalid/realms/memobrain", "OIDC issuer allowed in connect-src")
+	issuer := flag.String("issuer", "https://id.example.invalid/realms/clarae", "OIDC issuer allowed in connect-src")
 	dir := flag.String("dir", "", "serve this directory instead of the embedded build (browser tests of E2E builds)")
 	flag.Parse()
 	var root fs.FS // nil = the embedded build

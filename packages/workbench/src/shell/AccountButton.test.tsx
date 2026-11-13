@@ -17,7 +17,7 @@ const profile = (over: Partial<AuthState['profile']> = {}): AuthState['profile']
 });
 const auth = (over: Partial<AuthState> = {}): AuthState => ({
   status: 'ready',
-  serverUrl: 'https://memobrain.test',
+  serverUrl: 'https://clarae.test',
   profile: profile(),
   deviceId: 'd1',
   error: '',
@@ -49,7 +49,7 @@ describe('account button', () => {
     render(<AccountButton />);
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
     await waitFor(() => expect(useAppStore.getState().auth?.status).toBe('ready'));
-    expect(mock.auth.serverUrl).toBe('https://memobrain.test');
+    expect(mock.auth.serverUrl).toBe('https://clarae.test');
     expect(await screen.findByRole('button', { name: 'Uno' })).toBeInTheDocument();
   });
 

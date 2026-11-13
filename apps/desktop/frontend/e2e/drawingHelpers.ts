@@ -62,7 +62,7 @@ export const scene = (elements: El[]): string =>
   JSON.stringify({
     type: 'excalidraw',
     version: 2,
-    source: 'memobrain',
+    source: 'clarae',
     elements,
     appState: { viewBackgroundColor: '#ffffff' },
     files: {},
@@ -138,7 +138,7 @@ export interface Saved {
     height: number;
     backgroundColor?: string;
     textAlign?: string;
-    customData?: { memobrain?: { kind?: string; latex?: string } };
+    customData?: { clarae?: { kind?: string; latex?: string } };
   })[];
   files: Record<string, { mimeType: string; dataURL: string }>;
 }

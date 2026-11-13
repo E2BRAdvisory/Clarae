@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"memobrain/shared/features"
-	"memobrain/shared/features/internal/featuregen"
+	"clarae/shared/features"
+	"clarae/shared/features/internal/featuregen"
 )
 
 const root = "../../.."

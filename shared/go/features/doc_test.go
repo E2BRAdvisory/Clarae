@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/features/internal/featuregen"
+	"clarae/shared/features/internal/featuregen"
 )
 
 // adminGuide documents every key of the Config Profile in a table (section "Chiavi del profilo").

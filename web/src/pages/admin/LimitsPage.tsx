@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, InlineError, TextField, useToast } from '@memobrain/ui';
+import { Button, Card, InlineError, TextField, useToast } from '@clarae/ui';
 import { usePutStorageSettings, useStorageSettings, type StorageSettings } from '../../api/admin';
 import { QueryState } from '../QueryState';
 import { adminError } from './adminError';

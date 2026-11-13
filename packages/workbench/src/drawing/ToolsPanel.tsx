@@ -11,7 +11,7 @@ import { drawingFeatureOn } from '../state/managed';
 import { Icon } from '../shell/icons';
 
 const RECENT_MAX = 6;
-const recentKey = (vaultId: string): string => `memobrain.drawing.tools.recent.${vaultId}`;
+const recentKey = (vaultId: string): string => `clarae.drawing.tools.recent.${vaultId}`;
 
 function loadRecent(vaultId: string): string[] {
   try {

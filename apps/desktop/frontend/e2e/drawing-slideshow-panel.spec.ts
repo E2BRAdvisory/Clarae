@@ -35,8 +35,8 @@ test('the Slideshow tab lists the frames and reorders, excludes and annotates th
   await waitSaved(page);
   const saved = (await savedDrawing(page)).elements;
   const memo = (id: string) =>
-    (saved.find((e) => e.id === id) as { customData?: { memobrain?: Record<string, unknown> } })
-      .customData?.memobrain;
+    (saved.find((e) => e.id === id) as { customData?: { clarae?: Record<string, unknown> } })
+      .customData?.clarae;
   expect(memo('f1')).toMatchObject({ slide: 1, notes: 'say hello' });
   expect(memo('f2')).toMatchObject({ slide: 2, slideHidden: true });
 });

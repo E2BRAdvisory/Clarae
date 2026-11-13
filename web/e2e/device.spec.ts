@@ -82,7 +82,7 @@ test.describe('browser device registration (P6)', () => {
     const r = await page.evaluate(async () => {
       // The database as versions up to 1.3 left it: one row per server.
       await new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('memobrain-device', 1);
+        const req = indexedDB.open('clarae-device', 1);
         req.onupgradeneeded = () =>
           req.result.createObjectStore('devices', { keyPath: 'server' }).put({
             server: location.origin,

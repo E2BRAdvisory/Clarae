@@ -70,7 +70,7 @@ describe('deckSlides', () => {
 
   it('reads notes, leaving directives and the marker out', () => {
     const src =
-      '# A\n\n<!-- _class: lead -->\n<!-- say hi -->\n<!-- memobrain: hidden -->\n<!--\nsecond\nnote\n-->\n';
+      '# A\n\n<!-- _class: lead -->\n<!-- say hi -->\n<!-- clarae: hidden -->\n<!--\nsecond\nnote\n-->\n';
     const [a] = deckSlides(src, [0]);
     expect(a?.notes).toBe('say hi\n\nsecond\nnote');
     expect(a?.hidden).toBe(true);
@@ -132,7 +132,7 @@ Plain three
   });
 
   it('carries the notes and the marker of a slide with it', () => {
-    const src = '# A\n\n---\n\n# B\n\n<!-- n -->\n<!-- memobrain: hidden -->\n';
+    const src = '# A\n\n---\n\n# B\n\n<!-- n -->\n<!-- clarae: hidden -->\n';
     const out = apply(src, moveSlideEdit(src, linesOf(src), 1, -1));
     const s = deckSlides(out, linesOf(out));
     expect(s[0]).toMatchObject({ title: 'B', notes: 'n', hidden: true });
@@ -187,10 +187,10 @@ describe('notesEdit', () => {
   });
 
   it('keeps directives and the marker when the notes change', () => {
-    const src = '# A\n\n<!-- _class: lead -->\n<!-- old -->\n<!-- memobrain: hidden -->\n';
+    const src = '# A\n\n<!-- _class: lead -->\n<!-- old -->\n<!-- clarae: hidden -->\n';
     const out = apply(src, notesEdit(src, [0], 0, 'new'));
     expect(out).toContain('_class: lead');
-    expect(out).toContain('memobrain: hidden');
+    expect(out).toContain('clarae: hidden');
     expect(out).not.toContain('old');
     expect(deckSlides(out, [0])[0]?.notes).toBe('new');
   });
@@ -217,7 +217,7 @@ describe('settings', () => {
     });
     expect(
       deckSettings(
-        '---\ntheme: "uncover"\npaginate: true\nmemobrain-loop: true\nmemobrain-notes: false\n---\n',
+        '---\ntheme: "uncover"\npaginate: true\nclarae-loop: true\nclarae-notes: false\n---\n',
       ),
     ).toEqual({ theme: 'uncover', paginate: true, loop: true, notes: false });
   });
@@ -227,8 +227,8 @@ describe('settings', () => {
     expect(set).toContain('theme: uncover\n---');
     expect(deckSettings(apply(DECK, frontmatterEdit(DECK, 'paginate', true))).paginate).toBe(true);
     expect(apply(DECK, frontmatterEdit(DECK, 'theme', null))).not.toContain('theme');
-    expect(frontmatterEdit(DECK, 'memobrain-loop', null)).toEqual([]);
-    const loop = apply(DECK, frontmatterEdit(DECK, 'memobrain-loop', true));
+    expect(frontmatterEdit(DECK, 'clarae-loop', null)).toEqual([]);
+    const loop = apply(DECK, frontmatterEdit(DECK, 'clarae-loop', true));
     expect(deckSettings(loop).loop).toBe(true);
   });
 
@@ -246,7 +246,7 @@ describe('what is a comment, as Marp reads it (ADR-0048)', () => {
       { from: src.length - 1, insert: '\n\n<!-- x -->' },
     ]);
     expect(apply(src, notesEdit(src, [0], 0, 'x'))).toContain('`<!-- like this -->`');
-    const marked = '# A\n\nUse `<!-- memobrain: hidden -->` to hide.\n';
+    const marked = '# A\n\nUse `<!-- clarae: hidden -->` to hide.\n';
     expect(deckSlides(marked, [0])[0]?.hidden).toBe(false);
     expect(hiddenEdit(marked, [0], 0, false)).toEqual([]);
     const indented = '# A\n\n    <!-- not a note -->\n\ntext\n';
@@ -309,7 +309,7 @@ describe('what is a comment, as Marp reads it (ADR-0048)', () => {
     expect(deckSettings(src).theme).toBe('gaia');
     const withNote = src.replace(
       'text of one',
-      'text of one\r\n\r\n<!-- n -->\r\n<!-- memobrain: hidden -->',
+      'text of one\r\n\r\n<!-- n -->\r\n<!-- clarae: hidden -->',
     );
     expect(deckSlides(withNote, linesOf(withNote.replace(/\r/g, '')))[0]).toMatchObject({
       notes: 'n',
@@ -320,7 +320,7 @@ describe('what is a comment, as Marp reads it (ADR-0048)', () => {
   it('puts the marker of a last, empty slide after its separator', () => {
     const src = '# A\n\n---';
     const out = apply(src, hiddenEdit(src, [0, 2], 1, true));
-    expect(out).toBe('# A\n\n---\n<!-- memobrain: hidden -->');
+    expect(out).toBe('# A\n\n---\n<!-- clarae: hidden -->');
     const s = deckSlides(out, [0, 2]);
     expect(s.map((x) => x.hidden)).toEqual([false, true]);
   });
@@ -328,8 +328,8 @@ describe('what is a comment, as Marp reads it (ADR-0048)', () => {
   const TRICKY = [
     '# A\n\nWrite `<!-- n -->` here <!-- real -->\n',
     '# A\n\n    <!-- code -->\n\n<!-- note -->\n',
-    '# A\n\n```md\n<!-- code -->\n```\n\n<!-- note -->\n<!-- memobrain: hidden -->\n',
-    '# A\r\n\r\n<!-- note -->\r\n\r\n---\r\n\r\n# B\r\n<!-- memobrain: hidden -->\r\n',
+    '# A\n\n```md\n<!-- code -->\n```\n\n<!-- note -->\n<!-- clarae: hidden -->\n',
+    '# A\r\n\r\n<!-- note -->\r\n\r\n---\r\n\r\n# B\r\n<!-- clarae: hidden -->\r\n',
     '---\nmarp: true\ntheme: gaia\n---\n\n<!-- _class: lead -->\n<!-- title: x -->\n# A\n\n---\n\n<!-- paginate: true\nheaderx: y -->\n',
     '# A\n\n<!--\nmulti\n\nparagraph note\n-->\n\ntext ``<!-- two ticks -->`` x\n',
     '# A\n\n<!-- prettier-ignore -->\n- a\n  `<!-- c -->` b\n',
@@ -421,42 +421,42 @@ describe('page numbers when slides are left out (ADR-0048)', () => {
   it.each([
     [
       'skip, left out',
-      `${FM}# 1\n\n---\n<!-- _paginate: skip -->\n# 2\n<!-- memobrain: hidden -->\n\n---\n# 3\n`,
+      `${FM}# 1\n\n---\n<!-- _paginate: skip -->\n# 2\n<!-- clarae: hidden -->\n\n---\n# 3\n`,
       ['1/2', '2/2'],
     ],
     [
       'hold, left out',
-      `${FM}# 1\n\n---\n<!-- _paginate: hold -->\n# 2\n<!-- memobrain: hidden -->\n\n---\n# 3\n`,
+      `${FM}# 1\n\n---\n<!-- _paginate: hold -->\n# 2\n<!-- clarae: hidden -->\n\n---\n# 3\n`,
       ['1/2', '2/2'],
     ],
     [
       'false, left out',
-      `${FM}# 1\n\n---\n<!-- _paginate: false -->\n# 2\n<!-- memobrain: hidden -->\n\n---\n# 3\n`,
+      `${FM}# 1\n\n---\n<!-- _paginate: false -->\n# 2\n<!-- clarae: hidden -->\n\n---\n# 3\n`,
       ['1/2', '2/2'],
     ],
     [
       'plain, left out',
-      `${FM}# 1\n\n---\n# 2\n<!-- memobrain: hidden -->\n\n---\n# 3\n`,
+      `${FM}# 1\n\n---\n# 2\n<!-- clarae: hidden -->\n\n---\n# 3\n`,
       ['1/2', '2/2'],
     ],
     [
       'false, kept',
-      `${FM}# 1\n<!-- memobrain: hidden -->\n\n---\n<!-- _paginate: false -->\n# 2\n\n---\n# 3\n`,
+      `${FM}# 1\n<!-- clarae: hidden -->\n\n---\n<!-- _paginate: false -->\n# 2\n\n---\n# 3\n`,
       ['-/-', '2/2'],
     ],
     [
       'skip, kept',
-      `${FM}# 1\n\n---\n<!-- _paginate: skip -->\n# 2\n\n---\n# 3\n<!-- memobrain: hidden -->\n\n---\n# 4\n`,
+      `${FM}# 1\n\n---\n<!-- _paginate: skip -->\n# 2\n\n---\n# 3\n<!-- clarae: hidden -->\n\n---\n# 4\n`,
       ['1/2', '-/-', '2/2'],
     ],
     [
       'hold, kept',
-      `${FM}# 1\n<!-- memobrain: hidden -->\n\n---\n<!-- _paginate: hold -->\n# 2\n\n---\n# 3\n`,
+      `${FM}# 1\n<!-- clarae: hidden -->\n\n---\n<!-- _paginate: hold -->\n# 2\n\n---\n# 3\n`,
       ['1/1', '1/1'],
     ],
     [
       'inherited skip, left out',
-      `${FM}# 1\n\n---\n<!-- paginate: skip -->\n# 2\n<!-- memobrain: hidden -->\n\n---\n# 3\n\n---\n<!-- paginate: true -->\n# 4\n`,
+      `${FM}# 1\n\n---\n<!-- paginate: skip -->\n# 2\n<!-- clarae: hidden -->\n\n---\n# 3\n\n---\n<!-- paginate: true -->\n# 4\n`,
       ['1/2', '-/-', '2/2'],
     ],
   ])('closes the gap the way Marp numbers the kept slides alone (%s)', async (_l, src, want) => {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/links"
 )
 
 // resolveFixture is shared/conformance/links/resolve.json.

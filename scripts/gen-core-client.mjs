@@ -122,9 +122,7 @@ w(
   '// method name by hand: ESLint refuses them outside this file. A new binding appears here after',
 );
 w('// `task gen` (docs/desktop-web-sync.md, "Contratto degli eventi").');
-w(
-  `import type { ${[...namespaces].sort().join(', ')} } from '@memobrain/workbench/wailsjs/models';`,
-);
+w(`import type { ${[...namespaces].sort().join(', ')} } from '@clarae/workbench/wailsjs/models';`);
 w();
 w(
   '/** A model of the bindings as plain data: the core answers with JSON, not with model classes. */',

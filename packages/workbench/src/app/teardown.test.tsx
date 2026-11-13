@@ -183,10 +183,10 @@ describe('teardown flush', { timeout: 30_000 }, () => {
       useBookmarks.getState().update((items) => [...items, fileItem('A.md', '', 1)]);
       act(() => mock.emit(Events.appBeforeClose, undefined));
       await waitFor(() => expect(mock.quits).toBe(1));
-      expect(JSON.parse(disk('.memobrain/editor.json') ?? '{}')).toMatchObject({
+      expect(JSON.parse(disk('.clarae/editor.json') ?? '{}')).toMatchObject({
         lineNumbers: true,
       });
-      expect(disk('.memobrain/bookmarks.json')).toContain('A.md');
+      expect(disk('.clarae/bookmarks.json')).toContain('A.md');
     } finally {
       off();
     }
@@ -203,7 +203,7 @@ describe('teardown flush', { timeout: 30_000 }, () => {
       hidden.mockRestore();
       // Well before the settings' own delay (400 ms): the write was started by the hide.
       await act(() => new Promise((r) => setTimeout(r, 50)));
-      expect(JSON.parse(disk('.memobrain/editor.json') ?? '{}')).toMatchObject({ wrap: false });
+      expect(JSON.parse(disk('.clarae/editor.json') ?? '{}')).toMatchObject({ wrap: false });
     } finally {
       off();
     }

@@ -23,7 +23,7 @@ describe('imagePatch', () => {
       x: -100,
       y: 0,
     });
-    expect(el.customData).toEqual({ memobrain: { kind: 'image', path: 'pics/a.png' } });
+    expect(el.customData).toEqual({ clarae: { kind: 'image', path: 'pics/a.png' } });
     const f = Object.values(p.files!)[0]!;
     expect(f.id).toBe(el.fileId);
     expect(f.dataURL).toBe('data:image/png;base64,AAAA');
@@ -106,7 +106,7 @@ describe('noteCardPatch', () => {
     expect(card).toMatchObject({
       type: 'rectangle',
       link: '[[Folder/My note]]',
-      customData: { memobrain: { kind: 'note', path: 'Folder/My note.md' } },
+      customData: { clarae: { kind: 'note', path: 'Folder/My note.md' } },
     });
     expect(card!.boundElements).toEqual([{ id: text!.id, type: 'text' }]);
     expect(text).toMatchObject({ type: 'text', containerId: card!.id, textAlign: 'left' });
@@ -132,7 +132,7 @@ describe('imagePatch kind', () => {
       'drawing',
     );
     expect(p.add![0]!.customData).toEqual({
-      memobrain: { kind: 'drawing', path: 'Other.excalidraw' },
+      clarae: { kind: 'drawing', path: 'Other.excalidraw' },
     });
   });
 });

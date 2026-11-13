@@ -1,4 +1,4 @@
-// Command memobrain is the MemoBrain Notes desktop client (Wails v3: Go backend + React
+// Command clarae is the Clarae notanda desktop client (Wails v3: Go backend + React
 // frontend). See internal/app for the composition root and internal/shell for the Wails side.
 package main
 
@@ -15,11 +15,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/platform"
-	"memobrain/apps/desktop/internal/rpc"
-	"memobrain/apps/desktop/internal/shell"
-	"memobrain/apps/desktop/internal/telemetry"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/platform"
+	"clarae/apps/desktop/internal/rpc"
+	"clarae/apps/desktop/internal/shell"
+	"clarae/apps/desktop/internal/telemetry"
 )
 
 //go:embed all:frontend/dist
@@ -29,14 +29,14 @@ var assets embed.FS
 var Version = "dev"
 
 // appName is the name of the application: window title, menu and About box.
-const appName = "MemoBrain Notes"
+const appName = "Clarae notanda"
 
 func main() {
 	os.Exit(run())
 }
 
 func run() int {
-	dataDirFlag := flag.String("data-dir", "", "application data directory (default $MEMOBRAIN_DATA_DIR or the OS config dir)")
+	dataDirFlag := flag.String("data-dir", "", "application data directory (default $CLARAE_DATA_DIR or the OS config dir)")
 	logLevel := flag.String("log-level", "info", "log level: debug|info|warn|error")
 	flag.Parse()
 
@@ -45,7 +45,7 @@ func run() int {
 	// pass to go build, so it also tells a release from a dev build.
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		if found, production := shell.ForbiddenBuildTags(bi); production && len(found) > 0 {
-			fmt.Fprintln(os.Stderr, "memobrain: a production build must not carry the build tags", found)
+			fmt.Fprintln(os.Stderr, "clarae: a production build must not carry the build tags", found)
 			return 1
 		}
 	}
@@ -55,12 +55,12 @@ func run() int {
 	}
 	dataDir, err := platform.DataDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "memobrain: data dir:", err)
+		fmt.Fprintln(os.Stderr, "clarae: data dir:", err)
 		return 1
 	}
 	logger, closer, err := telemetry.NewLogger(dataDir, *logLevel, Version == "dev")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "memobrain: logger:", err)
+		fmt.Fprintln(os.Stderr, "clarae: logger:", err)
 		return 1
 	}
 	defer func() { _ = closer.Close() }()
@@ -90,7 +90,7 @@ func run() int {
 		}
 	}
 
-	// A memobrain:// URL on our own command line (first instance launched by the OS).
+	// A clarae:// URL on our own command line (first instance launched by the OS).
 	if u, ok := platform.FindSchemeURL(os.Args[1:]); ok {
 		a.HandleURL(u)
 	}
@@ -115,7 +115,7 @@ func run() int {
 		OnShutdown:     lc.Stop,
 		SingleInstance: singleInstanceOptions(dataDir, a.OnSecondInstance),
 		Mac:            application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
-		Linux:          application.LinuxOptions{ProgramName: "memobrain"}, // the icon in the dock (StartupWMClass)
+		Linux:          application.LinuxOptions{ProgramName: "clarae"}, // the icon in the dock (StartupWMClass)
 	})
 	guardWindow.Bind(wa)
 
@@ -158,7 +158,7 @@ func run() int {
 // directory hands its command line to the first and exits. The id is a valid D-Bus name on Linux
 // (platform.InstanceID) and the messages between the instances are encrypted with a key derived
 // from it. onSecond receives the whole os.Args of the second instance, program name included
-// (FindSchemeURL finds the memobrain:// URL among them: that is how Windows and Linux deliver it).
+// (FindSchemeURL finds the clarae:// URL among them: that is how Windows and Linux deliver it).
 func singleInstanceOptions(dataDir string, onSecond func(args []string)) *application.SingleInstanceOptions {
 	id := platform.InstanceID(dataDir)
 	return &application.SingleInstanceOptions{

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/services/cloud/internal/keycloak"
+	"clarae/services/cloud/internal/keycloak"
 )
 
 // Regression (M12): the purge replaced keycloak_sub, so a login with an

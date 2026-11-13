@@ -5,7 +5,7 @@ import { VAULTS_PATH, api, bind, markersKey, signIn } from './support';
 // text, so locking it removes the copy, unless that would lose changes that were not uploaded (D-04,
 // ADR-0029 §6). Start the stack first (after `task web-build`):
 //   scripts/run-desktop-with-cloud.sh --cloud-only --keep
-// Run with: yarn workspace @memobrain/web e2e:cloud
+// Run with: yarn workspace @clarae/web e2e:cloud
 
 const PASSPHRASE = 'correct horse battery staple 42';
 

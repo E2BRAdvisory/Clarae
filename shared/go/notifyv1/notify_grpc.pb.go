@@ -5,7 +5,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: memobrain/v1/notify.proto
+// source: clarae/v1/notify.proto
 
 package notifyv1
 
@@ -22,7 +22,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NotifyService_Subscribe_FullMethodName = "/memobrain.v1.NotifyService/Subscribe"
+	NotifyService_Subscribe_FullMethodName = "/clarae.v1.NotifyService/Subscribe"
 )
 
 // NotifyServiceClient is the client API for NotifyService service.
@@ -119,7 +119,7 @@ type NotifyService_SubscribeServer = grpc.ServerStreamingServer[Event]
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NotifyService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "memobrain.v1.NotifyService",
+	ServiceName: "clarae.v1.NotifyService",
 	HandlerType: (*NotifyServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
@@ -129,5 +129,5 @@ var NotifyService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "memobrain/v1/notify.proto",
+	Metadata: "clarae/v1/notify.proto",
 }

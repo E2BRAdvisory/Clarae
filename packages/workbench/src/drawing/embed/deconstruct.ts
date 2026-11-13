@@ -49,7 +49,7 @@ export function deconstruct(
     {
       type: 'excalidraw',
       version: 2,
-      source: 'memobrain',
+      source: 'clarae',
       elements,
       appState: { gridSize: null, viewBackgroundColor: background },
       files: used,

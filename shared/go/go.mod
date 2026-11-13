@@ -1,4 +1,4 @@
-module memobrain/shared
+module clarae/shared
 
 go 1.27.4
 

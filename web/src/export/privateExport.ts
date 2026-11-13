@@ -1,6 +1,6 @@
 // Browser-side export of a private (E2EE) vault: key envelopes, manifest and blobs come from
 // the API (ciphertext only); everything else happens in packages/vaultcrypto-web.
-import { ApiError, isProblem, type MemobrainClient } from '@memobrain/api-client';
+import { ApiError, isProblem, type ClaraeClient } from '@clarae/api-client';
 import {
   BlobNotFoundError,
   DecryptError,
@@ -12,7 +12,7 @@ import {
   type TreeItem,
   type Unlocked,
   type VaultSource,
-} from '@memobrain/vaultcrypto-web';
+} from '@clarae/vaultcrypto-web';
 
 export interface PrivateSession {
   keys: Unlocked;
@@ -32,7 +32,7 @@ function apiError(res: Response, error: unknown): ApiError {
 
 /** Reads the manifest and blobs through the API client (bearer token, problem errors). */
 export function apiVaultSource(
-  api: MemobrainClient,
+  api: ClaraeClient,
   vaultId: string,
   prefetched?: TreeItem[],
 ): VaultSource {
@@ -76,7 +76,7 @@ export function retryableBlobError(err: unknown): boolean {
  * secret), then load the manifest. The caller owns `keys` and must `wipe()` them.
  */
 export async function openPrivateVault(
-  api: MemobrainClient,
+  api: ClaraeClient,
   vaultId: string,
   secret: Secret,
   signal?: AbortSignal,

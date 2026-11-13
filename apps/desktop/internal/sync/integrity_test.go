@@ -20,8 +20,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // scanNow runs one scan as a cycle would (under the cycle lock).

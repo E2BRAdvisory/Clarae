@@ -12,8 +12,8 @@ import (
 	"slices"
 	"testing"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // identityRemote is a scripted server whose changelog entries have ids, like

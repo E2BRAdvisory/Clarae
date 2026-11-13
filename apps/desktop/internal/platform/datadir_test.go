@@ -40,7 +40,7 @@ func randomDataDirs(t *testing.T, n int) []string {
 			t.Fatal(err)
 		}
 		h := hex.EncodeToString(b[:])
-		dir := filepath.Join("/home", "u"+h[:6], ".config", "MemoBrain Notes", h[6:])
+		dir := filepath.Join("/home", "u"+h[:6], ".config", "Clarae notanda", h[6:])
 		if !seen[dir] {
 			seen[dir] = true
 			out = append(out, dir)
@@ -58,7 +58,7 @@ func TestInstanceIDIsAValidDBusNameForEveryDataDir(t *testing.T) {
 		if err := dbusNames(id); err != nil {
 			t.Fatalf("data dir %q: %v", dir, err)
 		}
-		if !strings.HasPrefix(id, "dev.memobrain.desktop.i") || len(id) != len("dev.memobrain.desktop.i")+16 {
+		if !strings.HasPrefix(id, "dev.clarae.desktop.i") || len(id) != len("dev.clarae.desktop.i")+16 {
 			t.Fatalf("unexpected shape %q", id)
 		}
 		if prev, dup := ids[id]; dup {
@@ -71,10 +71,10 @@ func TestInstanceIDIsAValidDBusNameForEveryDataDir(t *testing.T) {
 // The rule itself is the one that rejected the old shape: guards the test against a copy that
 // accepts everything.
 func TestDBusRuleRejectsADigitLeadingElement(t *testing.T) {
-	if dbusNames("dev.memobrain.desktop.0123456789abcdef") == nil {
+	if dbusNames("dev.clarae.desktop.0123456789abcdef") == nil {
 		t.Fatal("a digit-leading element must be refused")
 	}
-	if dbusNames("dev.memobrain.desktop.i0123456789abcdef") != nil {
+	if dbusNames("dev.clarae.desktop.i0123456789abcdef") != nil {
 		t.Fatal("the new shape must be accepted")
 	}
 }

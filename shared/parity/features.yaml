@@ -88,7 +88,7 @@ features:
     title: Elenco dei vault cloud
     desktop:
       status: yes
-      note: Impostazioni → Cloud, `CloudVaultsTable` di @memobrain/cloud-features (ADR-0037 §2)
+      note: Impostazioni → Cloud, `CloudVaultsTable` di @clarae/cloud-features (ADR-0037 §2)
       bindings: [SyncAPI.ListCloudVaults]
       operationIds: [listVaults, getVault]
     workbench:
@@ -98,7 +98,7 @@ features:
       note: '`CloudVaultsTable` con `RestCloudPort`; le condivisioni accettate si aprono come mount (`?share=`)'
       routes: [/vaults]
       operationIds: [listVaults]
-    notes: una sola UI (@memobrain/cloud-features) su due adattatori, binding e REST (ADR-0037 §2)
+    notes: una sola UI (@clarae/cloud-features) su due adattatori, binding e REST (ADR-0037 §2)
     tests:
       desktop:
         - packages/workbench/src/sync/sync.test.tsx
@@ -271,7 +271,7 @@ features:
         - web/e2e/workbench.spec.ts
 
   - id: settings.vault
-    title: Configurazione del vault (.memobrain/)
+    title: Configurazione del vault (.clarae/)
     desktop:
       status: yes
       bindings: [VaultAPI.ReadConfig, VaultAPI.WriteConfig]
@@ -497,7 +497,7 @@ features:
     title: Creazione di una condivisione (vault, cartella o file)
     desktop:
       status: yes
-      note: da Impostazioni → Condivisione («Nuova condivisione», un vault condiviso intero o una sua cartella, con @memobrain/cloud-features; «Condividi una parte» su una condivisione che l'utente gestisce come manager, solo dentro il suo ambito, ADR-0041 §8) e dal menu «Condividi…» dell'esplorazione (anche un documento del vault aperto; non sui mount)
+      note: da Impostazioni → Condivisione («Nuova condivisione», un vault condiviso intero o una sua cartella, con @clarae/cloud-features; «Condividi una parte» su una condivisione che l'utente gestisce come manager, solo dentro il suo ambito, ADR-0041 §8) e dal menu «Condividi…» dell'esplorazione (anche un documento del vault aperto; non sui mount)
       commands: [sharing:share]
       bindings: [SharingAPI.CreateShare, SharingAPI.CreateCloudShare]
       operationIds: [createShare]
@@ -532,7 +532,7 @@ features:
     title: Elenco e revoca delle condivisioni create
     desktop:
       status: yes
-      note: SharesManager di @memobrain/cloud-features, lo stesso componente della console; solo il proprietario revoca, un gestore no
+      note: SharesManager di @clarae/cloud-features, lo stesso componente della console; solo il proprietario revoca, un gestore no
       commands: [sharing:open]
       bindings:
         [SharingAPI.ListShares, SharingAPI.VaultShares, SharingAPI.Share, SharingAPI.RevokeShare]
@@ -593,7 +593,7 @@ features:
     title: Permessi di utenti e gruppi su una condivisione
     desktop:
       status: yes
-      note: GrantEditor e ricerca nella directory di @memobrain/cloud-features, gli stessi della console; una richiesta per tipo (utenti o gruppi) con i campi dell'API, descrizione dei gruppi compresa
+      note: GrantEditor e ricerca nella directory di @clarae/cloud-features, gli stessi della console; una richiesta per tipo (utenti o gruppi) con i campi dell'API, descrizione dei gruppi compresa
       bindings:
         [
           SharingAPI.SetGrant,
@@ -628,7 +628,7 @@ features:
     title: Inviti ricevuti (accetta, rifiuta)
     desktop:
       status: yes
-      note: InvitationsList di @memobrain/cloud-features; una condivisione accettata diventa un mount (MountsList); il conteggio degli inviti nella barra di stato legge la stessa cache di InvitationsList
+      note: InvitationsList di @clarae/cloud-features; una condivisione accettata diventa un mount (MountsList); il conteggio degli inviti nella barra di stato legge la stessa cache di InvitationsList
       bindings: [SharingAPI.Invitations, SharingAPI.AcceptShare, SharingAPI.DeclineShare]
       operationIds: [listShares, listSharedWithMe, acceptShare, declineShare]
     workbench:
@@ -656,7 +656,7 @@ features:
     title: Mount delle condivisioni ricevute
     desktop:
       status: yes
-      note: MountsList di @memobrain/cloud-features (lo stesso elenco della console, ADR-0045 §7) con le azioni del workbench nel suo spazio; alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies)
+      note: MountsList di @clarae/cloud-features (lo stesso elenco della console, ADR-0045 §7) con le azioni del workbench nel suo spazio; alla revoca la copia si elimina o si conserva come vault ordinario (capability detachedCopies)
       actions: [mount:open, mount:remove, mount:delete-copy, mount:keep-copy]
       bindings: [SharingAPI.Mounts, SharingAPI.OpenMount, SharingAPI.RemoveMount]
       operationIds: [listSharedWithMe]
@@ -793,7 +793,7 @@ features:
       reason: informazione dell'account, che spetta alla console
     console:
       status: yes
-      note: pagina Account, sezione «I miei gruppi» (MyGroups di @memobrain/cloud-features); il ruolo `manager` nel gruppo è mostrato come riservato, senza effetti in v1 (ADR-0041 §9)
+      note: pagina Account, sezione «I miei gruppi» (MyGroups di @clarae/cloud-features); il ruolo `manager` nel gruppo è mostrato come riservato, senza effetti in v1 (ADR-0041 §9)
       routes: [/account]
       operationIds: [listMyGroups]
     tests:
@@ -806,7 +806,7 @@ features:
     title: Dispositivi collegati e revoca
     desktop:
       status: yes
-      note: DevicesPanel di @memobrain/cloud-features; il dispositivo in uso è segnato e non si revoca da qui
+      note: DevicesPanel di @clarae/cloud-features; il dispositivo in uso è segnato e non si revoca da qui
       bindings: [SyncAPI.Devices, SyncAPI.RevokeDevice]
       operationIds: [listMyDevices, revokeDevice, registerDevice]
     workbench:
@@ -861,7 +861,7 @@ features:
     title: Spazio occupato e quota
     desktop:
       status: yes
-      note: UsagePanel di @memobrain/cloud-features, con il livello calcolato dal server e lo spazio di ogni vault (§2.8.2)
+      note: UsagePanel di @clarae/cloud-features, con il livello calcolato dal server e lo spazio di ogni vault (§2.8.2)
       bindings: [SyncAPI.Usage]
       operationIds: [getMyUsage]
     workbench:
@@ -895,7 +895,7 @@ features:
       status: yes
     console:
       status: yes
-      note: la console applica `web_workbench` e `sharing` (gli altri flag riguardano il contenuto di un vault aperto, quindi il workbench); nomi e default dei flag vengono dallo schema del Config Profile, generati in `shared/go/features` e `@memobrain/api-client/features` (`task gen`)
+      note: la console applica `web_workbench` e `sharing` (gli altri flag riguardano il contenuto di un vault aperto, quindi il workbench); nomi e default dei flag vengono dallo schema del Config Profile, generati in `shared/go/features` e `@clarae/api-client/features` (`task gen`)
       operationIds: [getEffectiveConfig]
     tests:
       desktop:
@@ -1031,7 +1031,7 @@ features:
         - apps/desktop/frontend/e2e/fullscreen.spec.ts
 
   - id: deeplink
-    title: Link memobrain://
+    title: Link clarae://
     desktop:
       status: yes
     workbench:
@@ -1278,7 +1278,7 @@ features:
       status: exception
       capability: aiAssistant
       bindings: [AIAPI.Cancel, AIAPI.SetKey, AIAPI.Start, AIAPI.Status]
-      reason: "inattiva (ADR-0050): il core è implementato e provato e `attachAi` è collegato in `MilkdownAdapter.ts`, ma la funzione resta irraggiungibile: la costante di build `MEMOBRAIN_AI` è spenta nella build di rilascio e il flag `ai` del profilo vale false, quindi l'utente non può usarla. Il core rifiuta se la costante di build è spenta, se il flag `ai` del profilo è spento, se il vault è privato (E2EE) o se manca il provider. La rete parte solo dal core Go"
+      reason: "inattiva (ADR-0050): il core è implementato e provato e `attachAi` è collegato in `MilkdownAdapter.ts`, ma la funzione resta irraggiungibile: la costante di build `CLARAE_AI` è spenta nella build di rilascio e il flag `ai` del profilo vale false, quindi l'utente non può usarla. Il core rifiuta se la costante di build è spenta, se il flag `ai` del profilo è spento, se il vault è privato (E2EE) o se manca il provider. La rete parte solo dal core Go"
     workbench:
       status: exception
       reason: 'il core WebAssembly non contiene il codice AI (la CSP della pagina non ammette terze parti e il provider metterebbe la chiave nella pagina); ogni metodo di AIAPI rifiuta e la capability aiAssistant è falsa'

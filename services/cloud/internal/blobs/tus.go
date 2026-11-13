@@ -14,19 +14,19 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/services/cloud/internal/access"
+	"clarae/services/cloud/internal/access"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/blobs/blobsdb"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/storage"
-	"memobrain/services/cloud/internal/vaults"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/blobs/blobsdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/vaults"
+	"clarae/shared/syncproto"
 )
 
 // Resumable uploads (tus 1.0.0, creation and termination extensions) for
@@ -474,7 +474,7 @@ func (h *TusHandler) finalizeClaimed(ctx context.Context, u blobsdb.Upload) erro
 // publishes the blob and drops the upload.
 func (h *TusHandler) finalize(ctx context.Context, u blobsdb.Upload) error {
 	keys := chunkKeys(u)
-	f, err := os.CreateTemp("", "memobrain-upload-*")
+	f, err := os.CreateTemp("", "clarae-upload-*")
 	if err != nil {
 		return err
 	}

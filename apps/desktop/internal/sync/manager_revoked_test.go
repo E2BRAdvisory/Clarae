@@ -13,8 +13,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // switchSession is a signed-in account whose device can be revoked and replaced.

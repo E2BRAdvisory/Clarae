@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 const (

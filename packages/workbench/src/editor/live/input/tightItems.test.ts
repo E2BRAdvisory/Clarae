@@ -4,7 +4,7 @@
 // sequence on a mounted editor; the text saved, the index's reading of it and the note opened again are checked.
 import { TextSelection } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '../../../i18n';
 import { renderMarkdown } from '../../../reading/render';

@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/sharing/sharingdb"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/sharing/sharingdb"
 )
 
 func grant(ptype, perm, status string) sharingdb.ShareGrant {

@@ -1,4 +1,4 @@
-# MemoBrain Notes monorepo entry points. Run `task` (or `task --list`) for the list.
+# Clarae notanda monorepo entry points. Run `task` (or `task --list`) for the list.
 # Variables are passed as `task <name> VAR=value` (or as environment variables);
 # extra script arguments go after `--`.
 version: '3'
@@ -21,7 +21,7 @@ vars:
   VERSION:
     sh: echo "${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
   WASM_OUT: '{{.WASM_OUT | default "build/wasm"}}'
-  IMAGE: '{{.IMAGE | default "ghcr.io/e2br/memobrain-cloud"}}'
+  IMAGE: '{{.IMAGE | default "ghcr.io/e2br/clarae-cloud"}}'
   PLATFORMS: '{{.PLATFORMS | default "linux/amd64,linux/arm64"}}'
   PERF_NOTES: '{{.PERF_NOTES | default "50000"}}'
   PERF_DIR: '{{.PERF_DIR | default (print .ROOT_DIR "/.perf")}}'
@@ -63,7 +63,7 @@ tasks:
       - task: gen-parity-features
 
   gen-features:
-    desc: Config Profile schema -> Go flags and defaults (shared/go/features), TS flags (@memobrain/api-client/features)
+    desc: Config Profile schema -> Go flags and defaults (shared/go/features), TS flags (@clarae/api-client/features)
     dir: shared/go
     cmds:
       - go run ./features/gen
@@ -76,7 +76,7 @@ tasks:
     cmds:
       - cd {{.CLOUD}} && oapi-codegen -config ../../api/oapi-codegen.yaml ../../api/openapi.yaml
       - cd shared/go && oapi-codegen -config ../../api/oapi-codegen-client.yaml ../../api/openapi.yaml
-      - cmd: if [ -d packages/api-client ]; then yarn workspace @memobrain/api-client run gen; fi
+      - cmd: if [ -d packages/api-client ]; then yarn workspace @clarae/api-client run gen; fi
         silent: true
 
   gen-proto:
@@ -199,15 +199,15 @@ tasks:
     deps: [frontend-placeholder]
     env:
       # Set by `task ci`: the dispatcher/bindings test fails instead of skipping when wailsjs is missing.
-      MEMOBRAIN_REQUIRE_BINDINGS: '{{.REQUIRE_BINDINGS | default ""}}'
+      CLARAE_REQUIRE_BINDINGS: '{{.REQUIRE_BINDINGS | default ""}}'
     cmds:
       - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && go test -race -count=1 {{.GO_TAGS_FLAG}} ./...) || exit 1; done
 
   wasm-core:
-    desc: The desktop core as WebAssembly (apps/desktop/cmd/memobrain-core) + wasm_exec.js (ADR-0030)
+    desc: The desktop core as WebAssembly (apps/desktop/cmd/clarae-core) + wasm_exec.js (ADR-0030)
     cmds:
       - mkdir -p {{.WASM_OUT}}
-      - cd apps/desktop && GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o {{.ROOT_DIR}}/{{.WASM_OUT}}/memobrain-core.wasm ./cmd/memobrain-core
+      - cd apps/desktop && GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o {{.ROOT_DIR}}/{{.WASM_OUT}}/clarae-core.wasm ./cmd/clarae-core
       - install -m 0644 "$(go env GOROOT)/lib/wasm/wasm_exec.js" {{.WASM_OUT}}/wasm_exec.js
 
   test-wasm:
@@ -220,7 +220,7 @@ tasks:
     desc: 'The cloud panels on the Go core compiled to WebAssembly, in Node, against a fake cloud checked by api/openapi.yaml (ADR-0045 §7)'
     deps: [wasm-core, wailsjs]
     cmds:
-      - yarn workspace @memobrain/workbench run test:core
+      - yarn workspace @clarae/workbench run test:core
 
   test-ts:
     desc: Vitest in every workspace package
@@ -239,9 +239,9 @@ tasks:
       - cd shared/go && go test -race -count=1 -run Conformance ./conformance/... ./merge/...
       - cmd: if [ -d {{.DESKTOP}}/internal/parser ]; then cd {{.DESKTOP}} && go test -race -count=1 -run Conformance ./internal/parser/...; fi
         silent: true
-      - yarn workspace @memobrain/conformance run test
-      - yarn workspace @memobrain/markdown run test
-      - cmd: if [ -f packages/workbench/src/test/conformance.test.ts ]; then yarn workspace @memobrain/workbench exec vitest run src/test/conformance.test.ts; fi
+      - yarn workspace @clarae/conformance run test
+      - yarn workspace @clarae/markdown run test
+      - cmd: if [ -f packages/workbench/src/test/conformance.test.ts ]; then yarn workspace @clarae/workbench exec vitest run src/test/conformance.test.ts; fi
         silent: true
 
   test-desktop-e2e:
@@ -265,23 +265,23 @@ tasks:
   e2e-desktop:
     desc: Desktop UI against the in-memory Wails mock
     cmds:
-      - yarn workspace @memobrain/desktop-frontend run e2e
+      - yarn workspace @clarae/desktop-frontend run e2e
 
   e2e-desktop-prod:
     desc: Drawing/graph/canvas specs on the minified production bundle (ADR-0025)
     cmds:
-      - yarn workspace @memobrain/desktop-frontend run e2e:prod
+      - yarn workspace @clarae/desktop-frontend run e2e:prod
 
   e2e-web:
     desc: Web UI on the esbuild dev server with the API mocked (OIDC test double)
     cmds:
-      - yarn workspace @memobrain/web run e2e
+      - yarn workspace @clarae/web run e2e
 
   e2e-matrix:
     desc: The desktop UI specs on both targets, desktop-mock and web-core (web/playwright.workbench-ui.config.ts)
     deps: [wasm-core]
     cmds:
-      - yarn workspace @memobrain/web run e2e:workbench-ui {{.CLI_ARGS}}
+      - yarn workspace @clarae/web run e2e:workbench-ui {{.CLI_ARGS}}
 
   e2e-mixed:
     desc: 'Mixed clients on one cloud: headless desktop device + web workbench, on a throwaway stack (scripts/e2e-mixed.sh; args: all|up|build|cloud|test|down)'
@@ -317,7 +317,7 @@ tasks:
 
   # There is no CI service (ADR-0036): this is the verification to run locally before merging and before tagging
   # a release. Slower suites that need Docker or browsers are listed in docs/dev-setup.md (test-integration,
-  # test-desktop-e2e, e2e, `yarn workspace @memobrain/web e2e:cloud`).
+  # test-desktop-e2e, e2e, `yarn workspace @clarae/web e2e:cloud`).
   ci:
     desc: Full local verification before merging or tagging (ADR-0036)
     cmds:
@@ -363,7 +363,7 @@ tasks:
     env:
       WEB: '{{.WEB | default "1"}}'
     cmds:
-      - bash -c '. scripts/lib.sh; if [ "${WEB:-1}" != 0 ]; then trap web_stop EXIT; web_start; fi; cd {{.CLOUD}} && set -a && . ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/memobrain-cloud --role=all'
+      - bash -c '. scripts/lib.sh; if [ "${WEB:-1}" != 0 ]; then trap web_stop EXIT; web_start; fi; cd {{.CLOUD}} && set -a && . ../../deploy/docker/cloud.dev.env && set +a && go run ./cmd/clarae-cloud --role=all'
 
   # `wails3 dev` is not used: it forces `localhost` and a port of its own, while our esbuild server (ADR-0025) listens on
   # 127.0.0.1:5173. The watcher (build/config.yml) starts that server, rebuilds the Go binary on every .go change and
@@ -382,7 +382,7 @@ tasks:
   dev-web:
     desc: Web UI on :5174 with live reload, proxying /api to the cloud on :18081
     cmds:
-      - yarn workspace @memobrain/web run dev
+      - yarn workspace @clarae/web run dev
 
   run-desktop:
     desc: 'Desktop standalone (no cloud) with a demo vault: scripts/run-desktop.sh --demo'
@@ -406,17 +406,17 @@ tasks:
 
   ## ---- build -----------------------------------------------------------------
 
-  # The Web UI of a release is the default build: no MEMOBRAIN_AI / _COLLAB / _E2E / _DIST in the environment
+  # The Web UI of a release is the default build: no CLARAE_AI / _COLLAB / _E2E / _DIST in the environment
   # (check-editor-switches.sh, first, before the slow steps), no collaboration code or binding mock and the Milkdown editor chunk in
   # web/dist (check-dist.sh, last, before the copy). The cloud image does the same in services/cloud/Dockerfile. A web build with a switch on is made by calling
-  # `yarn workspace @memobrain/web run build` directly (e2e, docs/dev-setup.md).
+  # `yarn workspace @clarae/web run build` directly (e2e, docs/dev-setup.md).
   web-build:
     desc: Build the Web UI (with the WebAssembly core) and copy it into the cloud binary's embed dir (then run build-cloud)
     cmds:
       - sh scripts/release/check-editor-switches.sh
       - task: wasm-core
       - task: wailsjs
-      - MEMOBRAIN_VERSION={{.VERSION}} yarn workspace @memobrain/web run build
+      - CLARAE_VERSION={{.VERSION}} yarn workspace @clarae/web run build
       - sh scripts/release/check-dist.sh {{.WEB_DIR}}/dist
       - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
       - cp -R {{.WEB_DIR}}/dist/. {{.WEBEMBED}}/dist/
@@ -431,7 +431,7 @@ tasks:
     desc: 'Build the cloud binary into bin/ (embeds whatever is in web-embed/dist: run web-build first)'
     dir: '{{.CLOUD}}'
     cmds:
-      - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o ../../bin/memobrain-cloud ./cmd/memobrain-cloud
+      - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version={{.VERSION}}" -o ../../bin/clarae-cloud ./cmd/clarae-cloud
 
   # Frontend build, then `go build -tags production[,gtk3]` into apps/desktop/build/bin (macOS: universal .app).
   build-desktop:
@@ -462,7 +462,7 @@ tasks:
 
   helm-check:
     desc: helm lint + template for the chart with every values file, on Kubernetes 1.27 (oldest supported) and 1.30
-    dir: deploy/helm/memobrain
+    dir: deploy/helm/clarae
     silent: true
     cmds:
       # The defaults hold no secret: the chart must refuse to create an empty Secret.
@@ -484,7 +484,7 @@ tasks:
     requires:
       vars: [OS, V]
     cmds:
-      # --release: no build switch or MEMOBRAIN_DIST in the environment, no collaboration code and no binding mock in the built UI
+      # --release: no build switch or CLARAE_DIST in the environment, no collaboration code and no binding mock in the built UI
       # (check-editor-switches.sh, check-dist.sh), no development update key. What it builds is what is shipped.
       - bash scripts/release/build-desktop.sh {{.OS}} {{.V}} --release
 
@@ -502,7 +502,7 @@ tasks:
       - cmd: mkdir -p {{.PERF_DIR}}
         silent: true
       - >-
-        cd {{.DESKTOP}} && MEMOBRAIN_PERF_NOTES={{.PERF_NOTES}} MEMOBRAIN_PERF_DIR={{.PERF_DIR}} MEMOBRAIN_PERF_OUT={{.PERF_OUT}}
+        cd {{.DESKTOP}} && CLARAE_PERF_NOTES={{.PERF_NOTES}} CLARAE_PERF_DIR={{.PERF_DIR}} CLARAE_PERF_OUT={{.PERF_OUT}}
         go test -run TestPerf -count=1 -timeout 90m -v ./internal/perf/
 
   perf-check:
@@ -519,5 +519,5 @@ tasks:
       - cmd: mkdir -p {{.PERF_DIR}}
         silent: true
       - >-
-        cd {{.CLOUD}} && MEMOBRAIN_LOADENV_USERS={{.USERS | default "1000"}} MEMOBRAIN_LOADENV_OUT={{.PERF_DIR}}/tokens.json
+        cd {{.CLOUD}} && CLARAE_LOADENV_USERS={{.USERS | default "1000"}} CLARAE_LOADENV_OUT={{.PERF_DIR}}/tokens.json
         go test -tags integration -run TestServeLoadEnv -count=1 -timeout 2h -v ./test/integration/

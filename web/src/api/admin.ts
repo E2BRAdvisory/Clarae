@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
-import { ApiError, unwrap, type MemobrainClient, type Schemas } from '@memobrain/api-client';
+import { ApiError, unwrap, type ClaraeClient, type Schemas } from '@clarae/api-client';
 import { useApi } from './context';
 import { invalidateOwnViews, keys } from './queries';
 
@@ -75,7 +75,7 @@ export const adminKeys = {
  * Refreshes every resolved configuration after a change that can alter it (a profile, its versions,
  * the profiles of a group, group membership or priority): each user's "effective configuration" in
  * the admin console and the signed-in user's own, both the full one (keys.effectiveConfig) and its
- * feature flags as @memobrain/cloud-features caches them (cloudKeys.features: `sharing` and
+ * feature flags as @clarae/cloud-features caches them (cloudKeys.features: `sharing` and
  * `web_workbench` gate pages and links). Without it they keep the old resolution for their stale time.
  */
 export function invalidateConfigResolution(qc: QueryClient): Promise<void> {
@@ -614,7 +614,7 @@ export function useAuditLog(f: AuditFilters) {
 
 /** Fetches the CSV with the bearer token of the client (a plain link could not send it). */
 export async function fetchAuditCsv(
-  api: MemobrainClient,
+  api: ClaraeClient,
   f: AuditFilters,
   signal?: AbortSignal,
 ): Promise<Blob> {

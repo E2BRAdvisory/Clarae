@@ -31,7 +31,7 @@ let mock: WailsMock;
 let vaultId: string;
 
 async function signIn() {
-  await api.auth.login('https://memobrain.test');
+  await api.auth.login('https://clarae.test');
   useAppStore.getState().setAuth(await api.auth.status());
 }
 
@@ -103,7 +103,7 @@ describe('ConnectWizard', () => {
   it('asks the user to sign in first', async () => {
     render(wrap(<ConnectWizard vaultId={vaultId} vaultName="Notes" />));
     expect(
-      await screen.findByText(/Sign in to your MemoBrain Notes server first/),
+      await screen.findByText(/Sign in to your Clarae notanda server first/),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText('Open cloud settings'));
     expect(useAppStore.getState().settingsOpen).toBe(true);

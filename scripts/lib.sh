@@ -2,12 +2,12 @@
 # Shared helpers for the dev scripts. Source it; do not execute it.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEV_DIR="${MEMOBRAIN_DEV_DIR:-$ROOT/.dev}"        # git-ignored scratch area: data dirs, logs, pids, binaries
+DEV_DIR="${CLARAE_DEV_DIR:-$ROOT/.dev}"        # git-ignored scratch area: data dirs, logs, pids, binaries
 COMPOSE_FILE="$ROOT/deploy/docker/compose.dev.yaml"
 CLOUD_ENV="$ROOT/deploy/docker/cloud.dev.env"
 CLOUD_PID="$DEV_DIR/cloud.pid"
 CLOUD_LOG="$DEV_DIR/logs/cloud.log"
-CLOUD_BIN="$DEV_DIR/bin/memobrain-cloud"
+CLOUD_BIN="$DEV_DIR/bin/clarae-cloud"
 CLOUD_URL="http://127.0.0.1:18081"
 WEB_PID="$DEV_DIR/web.pid"
 WEB_LOG="$DEV_DIR/logs/web.log"
@@ -33,7 +33,7 @@ desktop_bin() {
 
 # desktop_dev runs the desktop app with live reload (ADR-0051, ADR-0025): `wails3 tool watcher` with build/config.yml
 # starts our esbuild server on 127.0.0.1:5173, rebuilds the Go binary on every change and restarts it. `wails3 dev`
-# is not used: it forces localhost and a port of its own. The environment (MEMOBRAIN_DATA_DIR, ...) is inherited.
+# is not used: it forces localhost and a port of its own. The environment (CLARAE_DATA_DIR, ...) is inherited.
 desktop_dev() {
   "$ROOT/scripts/install-wails.sh" --check || die "the Wails CLI is missing or does not match apps/desktop/go.mod: run 'task wails-cli'"
   cd "$ROOT/apps/desktop"
@@ -87,7 +87,7 @@ cloud_start() {
     die "something else already answers on $CLOUD_URL (not started by these scripts). Stop it first."
   fi
   log "Building cloud service"
-  (cd "$ROOT/services/cloud" && go build -o "$CLOUD_BIN" ./cmd/memobrain-cloud) || die "cloud build failed"
+  (cd "$ROOT/services/cloud" && go build -o "$CLOUD_BIN" ./cmd/clarae-cloud) || die "cloud build failed"
   log "Starting cloud service (log: ${CLOUD_LOG#$ROOT/})"
   (
     set -a; . "$CLOUD_ENV"; set +a
@@ -130,7 +130,7 @@ web_start() {
   (cd "$ROOT/web" && exec node scripts/esbuild.mjs dev --port 5174) >"$WEB_LOG" 2>&1 &
   echo $! >"$WEB_PID"
   for _ in $(seq 1 30); do
-    web_ready && { ok "web UI is ready at $WEB_URL (admin: admin / memobrain-dev-password)"; return; }
+    web_ready && { ok "web UI is ready at $WEB_URL (admin: admin / clarae-dev-password)"; return; }
     web_running || { tail -n 20 "$WEB_LOG" >&2; warn "the web UI exited during startup"; rm -f "$WEB_PID"; return; }
     sleep 1
   done
@@ -151,7 +151,7 @@ seed_demo_vault() {
   if [ -e "$dir/Welcome.md" ]; then return; fi
   mkdir -p "$dir/Projects" "$dir/Journal"
   cat >"$dir/Welcome.md" <<'MD'
-# Welcome to MemoBrain Notes
+# Welcome to Clarae notanda
 
 This demo vault is for checks and debugging. Try these:
 

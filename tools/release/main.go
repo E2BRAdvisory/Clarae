@@ -2,7 +2,7 @@
 //
 //	release gen-manifest   -channel stable -version 1.0.0 -sequence 12 [-min-version 1.0.0] \
 //	                       [-notes-file CHANGELOG-1.0.0.md] -artifacts-dir dist -base-url https://… -out manifest.json
-//	release sign-manifest  -in manifest.json [-key-env MEMOBRAIN_UPDATE_SIGNING_KEY | -key-file path] [-out manifest.json.sig]
+//	release sign-manifest  -in manifest.json [-key-env CLARAE_UPDATE_SIGNING_KEY | -key-file path] [-out manifest.json.sig]
 //	release verify-manifest -in manifest.json [-sig manifest.json.sig] -pubkey <base64> | -pubkey-file path
 //	release gen-key        (prints a fresh key pair to stdout; nothing is stored)
 //	release pubkey         [-key-env NAME | -key-file path]  (public key of a private key)
@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/shared/updatemanifest"
+	"clarae/shared/updatemanifest"
 )
 
 func main() {
@@ -60,10 +60,10 @@ func run(args []string, out io.Writer) error {
 }
 
 // artifactFiles maps release file names to manifest artifacts:
-// memobrain-<version>-<os>-<arch>.<ext>, ext = dmg|exe(nsis)|AppImage|deb.
+// clarae-<version>-<os>-<arch>.<ext>, ext = dmg|exe(nsis)|AppImage|deb.
 func classify(name string) (osName, arch, kind string, ok bool) {
 	parts := strings.Split(strings.TrimSuffix(name, filepath.Ext(name)), "-")
-	if len(parts) < 4 || parts[0] != "memobrain" {
+	if len(parts) < 4 || parts[0] != "clarae" {
 		return "", "", "", false
 	}
 	osName, arch = parts[len(parts)-2], parts[len(parts)-1]
@@ -90,7 +90,7 @@ func genManifest(args []string, out io.Writer) error {
 	minVersion := fs.String("min-version", "", "revocation floor (optional)")
 	notesFile := fs.String("notes-file", "", "Markdown release notes (optional)")
 	notesURL := fs.String("notes-url", "", "release page URL (optional)")
-	dir := fs.String("artifacts-dir", "", "directory with memobrain-<version>-<os>-<arch>.<ext> files")
+	dir := fs.String("artifacts-dir", "", "directory with clarae-<version>-<os>-<arch>.<ext> files")
 	baseURL := fs.String("base-url", "", "public URL prefix of the artifacts")
 	outPath := fs.String("out", "", "output file (default stdout)")
 	validity := fs.Duration("validity", updatemanifest.DefaultValidity, "freshness window signed as expires_at (re-sign before it ends)")
@@ -156,7 +156,7 @@ func hashFile(path string) (string, int64, error) {
 func signManifest(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("sign-manifest", flag.ContinueOnError)
 	in := fs.String("in", "", "manifest file")
-	keyEnv := fs.String("key-env", "MEMOBRAIN_UPDATE_SIGNING_KEY", "environment variable holding the base64 private key")
+	keyEnv := fs.String("key-env", "CLARAE_UPDATE_SIGNING_KEY", "environment variable holding the base64 private key")
 	keyFile := fs.String("key-file", "", "file holding the base64 private key (overrides -key-env)")
 	outPath := fs.String("out", "", "signature file (default <in>.sig)")
 	if err := fs.Parse(args); err != nil {
@@ -268,7 +268,7 @@ func genKey(out io.Writer) error {
 // pubKey prints the public key of the private key given by env var or file.
 func pubKey(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("pubkey", flag.ContinueOnError)
-	keyEnv := fs.String("key-env", "MEMOBRAIN_UPDATE_SIGNING_KEY", "environment variable holding the base64 private key")
+	keyEnv := fs.String("key-env", "CLARAE_UPDATE_SIGNING_KEY", "environment variable holding the base64 private key")
 	keyFile := fs.String("key-file", "", "file holding the base64 private key")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -292,7 +292,7 @@ func pubKey(args []string, out io.Writer) error {
 
 // genDevKey prints a throwaway key pair for local experiments.
 func genDevKey(out io.Writer) error {
-	seed := sha256.Sum256([]byte("memobrain-development-update-key-NOT-FOR-PRODUCTION"))
+	seed := sha256.Sum256([]byte("clarae-development-update-key-NOT-FOR-PRODUCTION"))
 	priv := ed25519.NewKeyFromSeed(seed[:])
 	pub, _ := priv.Public().(ed25519.PublicKey)
 	_, err := fmt.Fprintf(out, "private: %s\npublic:  %s\n(development key, public by design: never sign a release with it)\n",

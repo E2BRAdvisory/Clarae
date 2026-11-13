@@ -23,7 +23,7 @@ func newTestApp(t *testing.T) *application.App {
 	t.Helper()
 	testApp.once.Do(func() {
 		testApp.app = application.New(application.Options{
-			Name:                        "MemoBrain Notes",
+			Name:                        "Clarae notanda",
 			Description:                 "test",
 			Logger:                      slog.New(slog.NewTextHandler(io.Discard, nil)),
 			DisableDefaultSignalHandler: true,
@@ -55,14 +55,14 @@ func dumpMenu(m *application.Menu, indent string, out *[]string) {
 func TestExplicitMenuHasOnlyAppEditAndWindow(t *testing.T) {
 	newTestApp(t)
 	var got []string
-	dumpMenu(ExplicitMenu("MemoBrain Notes"), "", &got)
+	dumpMenu(ExplicitMenu("Clarae notanda"), "", &got)
 	var top []string
 	for _, l := range got {
 		if len(l) > 2 && l[len(l)-2:] == " >" && l[0] != ' ' {
 			top = append(top, l[:len(l)-2])
 		}
 	}
-	if want := []string{"MemoBrain Notes", "Edit", "Window"}; !reflect.DeepEqual(top, want) {
+	if want := []string{"Clarae notanda", "Edit", "Window"}; !reflect.DeepEqual(top, want) {
 		t.Fatalf("top-level menus = %v, want %v\nfull menu: %q", top, want, got)
 	}
 	for _, l := range got {

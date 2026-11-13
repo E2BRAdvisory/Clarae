@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 // The tests run the client against an in-process RoundTripper rather than a

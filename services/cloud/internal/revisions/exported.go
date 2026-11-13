@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/revisions/revisionsdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/revisions/revisionsdb"
 )
 
 // DeletedRefs is one group of the revisions DeleteVaultRevisionsPage deleted:

@@ -69,7 +69,7 @@ function openTask(tr: Transaction, pos: number): void {
   tr.setNodeMarkup(pos, undefined, { ...item.attrs, checked: false });
 }
 
-const stateKey = new PluginKey<DecorationSet>('memobrain-task-states');
+const stateKey = new PluginKey<DecorationSet>('clarae-task-states');
 const CLASS = 'ofm-task-state';
 const BOX = 'ofm-task-box';
 
@@ -294,7 +294,7 @@ function trimTaskHeads(tr: Transaction): boolean {
 export const taskKeepsItsText = $prose(
   () =>
     new Plugin({
-      key: new PluginKey('memobrain-task-text'),
+      key: new PluginKey('clarae-task-text'),
       // one transaction for both: a plugin does not see the transaction it appended itself, and the text of
       // a task that was cut from its box by a line break (trimmed) is the text a mend moves up
       appendTransaction: (trs, _old, state) => {

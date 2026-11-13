@@ -144,9 +144,9 @@ test.describe('OPFS fs shim (what Go os calls)', () => {
       const get = async (p) => { const fd = await call('open', p, C.O_RDONLY, 0); const b = new Uint8Array(64); const n = await call('read', fd, b, 0, 64, null); await call('close', fd); return text(b.subarray(0, n)); };
       await call('mkdir', '/v', 0o755);
       await put('/v/note.md', 'OLD');
-      await put('/v/.memobrain-tmp-1', 'NEW CONTENT');
-      await call('rename', '/v/.memobrain-tmp-1', '/v/note.md');
-      return { content: await get('/v/note.md'), tmpGone: await code(() => call('stat', '/v/.memobrain-tmp-1')), names: (await call('readdir', '/v')) };
+      await put('/v/.clarae-tmp-1', 'NEW CONTENT');
+      await call('rename', '/v/.clarae-tmp-1', '/v/note.md');
+      return { content: await get('/v/note.md'), tmpGone: await code(() => call('stat', '/v/.clarae-tmp-1')), names: (await call('readdir', '/v')) };
     `,
     );
     expect(r).toEqual({ content: 'NEW CONTENT', tmpGone: 'ENOENT', names: ['note.md'] });
@@ -163,8 +163,8 @@ test.describe('OPFS fs shim (what Go os calls)', () => {
       await call('mkdir', '/v', 0o755);
       await put('/v/note.md', 'OLD');
       const reader = await call('open', '/v/note.md', C.O_RDONLY, 0);
-      await put('/v/.memobrain-tmp-2', 'NEW CONTENT');
-      await call('rename', '/v/.memobrain-tmp-2', '/v/note.md');
+      await put('/v/.clarae-tmp-2', 'NEW CONTENT');
+      await call('rename', '/v/.clarae-tmp-2', '/v/note.md');
       const b = new Uint8Array(64);
       const n = await call('read', reader, b, 0, 64, 0);
       const fresh = await get('/v/note.md');
@@ -220,8 +220,8 @@ test.describe('OPFS fs shim (what Go os calls)', () => {
       `
       const put = async (p, s) => { const fd = await call('open', p, C.O_WRONLY | C.O_CREAT | C.O_EXCL, 0o644); await call('write', fd, bytes(s), 0, s.length, null); await call('fsync', fd); await call('close', fd); };
       await call('mkdir', '/v', 0o755);
-      await put('/v/.memobrain-tmp-9', 'persisted text');
-      await call('rename', '/v/.memobrain-tmp-9', '/v/Kept.md');
+      await put('/v/.clarae-tmp-9', 'persisted text');
+      await call('rename', '/v/.clarae-tmp-9', '/v/Kept.md');
     `,
     );
     // A listing and a read from the page itself (a different context from the worker that wrote it).

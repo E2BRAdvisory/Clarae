@@ -1,0 +1,217 @@
+# Clarae notanda Cloud Service chart. PostgreSQL, S3-compatible storage and Keycloak are NOT part of the chart:
+# point `config` and `secret` at them. Two Deployments run the same image: --role=api (HTTP + gRPC)
+# and --role=worker (background jobs).
+
+image:
+  repository: ghcr.io/e2br/clarae-cloud # set to the registry of the release (release.yml publishes it)
+  tag: '' # defaults to the chart appVersion; release builds set it to the git tag
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ''
+  annotations: {}
+
+# Settings shared by the two roles are set per role below; anything not listed uses the chart defaults.
+api:
+  replicas: 2 # ignored while autoscaling is enabled
+  # ephemeral-storage covers the /tmp volume below (blob uploads are spooled there) plus the logs.
+  resources:
+    requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 256Mi }
+    limits: { cpu: '1', memory: 512Mi, ephemeral-storage: 3Gi }
+  # /tmp (emptyDir) of the API: blob uploads (PUT and tus) are spooled here before reaching S3, one file
+  # per upload in progress. Size it for the concurrent uploads (each at most the max blob size); past the
+  # limit the kubelet evicts the pod. Keep it within resources.limits.ephemeral-storage.
+  tmp:
+    sizeLimit: 2Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null # e.g. 80; null = not used
+  # Voluntary disruptions (node drains): at least one API pod stays up. With replicas: 1 set enabled: false.
+  pdb:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: null # use instead of minAvailable when set
+  # The shutdown takes preStopSleepSeconds, then SHUTDOWN_DRAIN (config, default 5 s: /readyz fails, HTTP and
+  # the gRPC streams keep serving), then up to SHUTDOWN_TIMEOUT (default 15 s) for the requests in flight.
+  # Must exceed their sum (5 + 5 + 15 = 25 s by default), or the pod is killed mid-drain.
+  terminationGracePeriodSeconds: 30
+  # Delays SIGTERM so the endpoint is removed from the Service first. Rendered only on Kubernetes >= 1.30
+  # (the preStop sleep action, no shell needed in the distroless image); on older clusters SHUTDOWN_DRAIN
+  # alone delays the shutdown inside the process.
+  preStopSleepSeconds: 5
+  # The API listener opens as the process starts, before the database migrations and the OIDC discovery:
+  # meanwhile /healthz answers 200 and /readyz 503. A new pod can thus stay unready for minutes without
+  # being restarted: up to 10 min waiting for the migration lock held by another replica, plus the
+  # migrations themselves, plus about 1 min of OIDC discovery retries while Keycloak starts (30 attempts, each
+  # bounded at 10 s, then the process exits and restarts). The rollout is reported failed only
+  # past progressDeadlineSeconds (keep it above that budget; `helm upgrade --wait` needs a --timeout as long).
+  progressDeadlineSeconds: 900
+  probes:
+    startup: { periodSeconds: 2, failureThreshold: 30 } # up to 60 s for the process to open its listener
+    liveness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 }
+    readiness: { periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 } # startup done, PostgreSQL and S3 up
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+  antiAffinity: soft # soft | hard | none (spread over nodes)
+  nodeSelector: {}
+  tolerations: []
+  affinity: {} # full override: when set, antiAffinity is ignored
+  podAnnotations: {}
+
+worker:
+  # Keep 1 unless the worker jobs are known to be safe with several instances.
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 512Mi }
+    limits: { cpu: 500m, memory: 512Mi, ephemeral-storage: 11Gi }
+  # /tmp (emptyDir) of the worker: each export archive (the ZIP of a whole vault) is built here before the
+  # upload to S3. Size it above the largest vault; past the limit the kubelet evicts the pod.
+  tmp:
+    sizeLimit: 10Gi
+  # Internal listener (METRICS_LISTEN_ADDR): /metrics for Prometheus, /healthz and /readyz for the probes.
+  metricsPort: 18083
+  probes:
+    liveness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 } # the job scheduler ticks
+    readiness: { periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 } # the jobs run (schema migrated)
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
+  pdb:
+    enabled: false # a single replica with minAvailable 1 would block node drains
+    minAvailable: 1
+    maxUnavailable: null
+  terminationGracePeriodSeconds: 30
+  preStopSleepSeconds: 0
+  # A new worker stays unready until the API migrated the schema (see api.progressDeadlineSeconds).
+  progressDeadlineSeconds: 900
+  topologySpread:
+    enabled: false
+    maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+  antiAffinity: none
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Non-secret configuration (environment variables of the binary; see deploy/docker/cloud.dev.env).
+config:
+  OIDC_ISSUER: https://auth.example.com/realms/clarae
+  OIDC_AUDIENCE: clarae-api
+  OIDC_ALLOWED_AZP: clarae-desktop,clarae-web
+  S3_ENDPOINT: https://s3.example.com
+  S3_REGION: us-east-1
+  S3_BUCKET_BLOBS: clarae-blobs
+  S3_BUCKET_EXPORTS: clarae-exports
+  S3_USE_PATH_STYLE: 'true'
+  # Where browsers reach the object store: when set, export downloads use presigned URLs
+  # (the bucket then needs a CORS rule for the Web UI origin); empty = served through the API.
+  # S3_PUBLIC_ENDPOINT: https://s3.example.com
+  KC_ADMIN_BASE_URL: https://auth.example.com
+  KC_REALM: clarae
+  KC_ADMIN_CLIENT_ID: clarae-admin-svc
+  WEB_UI_ORIGIN: https://clarae.example.com
+  # Address desktop clients use for the notification stream (gRPC needs TLS + HTTP/2 end to end).
+  PUBLIC_GRPC_ADDR: notify.clarae.example.com:443
+  # Networks of the ingress controller / reverse proxies whose X-Forwarded-For is believed. Without it
+  # every request seems to come from the ingress pods and all users share one per-IP rate-limit bucket.
+  # The default trusts the private ranges; narrow it to the pod CIDR of the ingress controller if you can.
+  TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7
+  LOG_LEVEL: info
+
+# Secrets. Three ways, in order of preference:
+#   1. secret.existingSecret: a Secret you manage (sealed-secrets, SOPS, Vault injector...).
+#   2. externalSecret.enabled: the chart renders an ExternalSecret (External Secrets Operator CRD).
+#   3. secret.values: the chart creates the Secret (development only: values end up in Helm history).
+# The Secret must hold DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, KC_ADMIN_CLIENT_SECRET. With option 3 the
+# render fails while one is empty or a placeholder (change-me...), and so does the service at start;
+# config.CLARAE_ALLOW_PLACEHOLDER_SECRETS: '1' lifts the placeholder check (throwaway tests only).
+secret:
+  existingSecret: ''
+  values:
+    DATABASE_URL: '' # e.g. postgres://clarae:<password>@postgres:5432/clarae?sslmode=require
+    S3_ACCESS_KEY: ''
+    S3_SECRET_KEY: ''
+    KC_ADMIN_CLIENT_SECRET: ''
+
+externalSecret:
+  enabled: false
+  apiVersion: external-secrets.io/v1
+  refreshInterval: 1h
+  secretStoreRef:
+    name: ''
+    kind: ClusterSecretStore
+  # One entry per key of the Secret, e.g.
+  # - { secretKey: DATABASE_URL, remoteRef: { key: clarae/prod, property: database_url } }
+  data: []
+
+service:
+  type: ClusterIP
+  httpPort: 18081
+  grpcPort: 18082
+
+# Two Ingress objects because the nginx backend-protocol annotation is per Ingress:
+#  - HTTP/1.1+2 for the REST API and the Web UI on `host`;
+#  - gRPC (HTTP/2 end to end) for the notification stream, either on its own host (mode: host,
+#    default) or on the main host under the service path (mode: path).
+# gRPC through an ingress REQUIRES TLS (HTTP/2 over cleartext is not negotiated by browsers or
+# nginx): keep ingress.tls.enabled=true and use a certificate valid for every host listed.
+ingress:
+  enabled: true
+  className: nginx
+  host: clarae.example.com
+  tls:
+    enabled: true
+    secretName: clarae-tls
+  annotations: {} # applied to both Ingress objects (cert-manager issuer, ...)
+  proxyBodySize: 64m
+  grpc:
+    mode: host # host | path
+    host: notify.clarae.example.com
+    path: /clarae.v1.NotifyService # gRPC services are routed by /<package>.<Service>
+    # Long-lived server-streaming RPC: keep the connection open (seconds).
+    streamTimeoutSeconds: 3600
+    annotations: {} # extra annotations for the gRPC Ingress only
+
+networkPolicy:
+  enabled: false
+  # Who may reach the API pods; the default lets the whole namespace and any ingress controller
+  # namespace labelled name=ingress-nginx in. Adjust to your controller.
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    - podSelector: {}
+  # Who may scrape /metrics (API HTTP port, worker metricsPort), e.g. the Prometheus namespace:
+  # - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+  metricsFrom: []
+  # Restrict outbound traffic to DNS plus `egressTo` (PostgreSQL, S3, Keycloak); off = unrestricted.
+  restrictEgress: false
+  egressTo: []
+
+# Pod level security (the container context is fixed: read-only root, no capabilities, no privilege escalation).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile: { type: RuntimeDefault }
+
+podAnnotations: {}
+
+metrics:
+  # prometheus.io/scrape, /port and /path annotations on the pods of both roles (API: the HTTP port,
+  # worker: metricsPort). Scrape the pods, not the ingress: /metrics answers 404 to proxied requests.
+  podAnnotations: true

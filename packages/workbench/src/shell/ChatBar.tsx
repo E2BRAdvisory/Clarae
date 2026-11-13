@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { featureOn, useManaged } from '../state/managed';
 import { Icon } from './icons';
 

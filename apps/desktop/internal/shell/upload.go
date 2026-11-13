@@ -28,7 +28,7 @@ import (
 
 const (
 	// UploadPath is the prefix of the URLs of the chunks: UploadPath + id, POST, ?offset=<n>.
-	UploadPath = "/memobrain/upload/"
+	UploadPath = "/clarae/upload/"
 	// MaxUploadBytes is the largest body of an upload: the export of 256 MiB (maxExportHTML), plus
 	// the escapes JSON adds to the quotes and the line breaks of a document.
 	MaxUploadBytes = 320 << 20

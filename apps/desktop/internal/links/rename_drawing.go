@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"memobrain/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/parser"
 )
 
 // drawingLink matches a wikilink as it appears inside the JSON text of a drawing (the `link` of

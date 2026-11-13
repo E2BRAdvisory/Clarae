@@ -29,7 +29,7 @@ export async function mergeActiveNote(): Promise<void> {
       e.path.toLowerCase().endsWith('.md') &&
       e.path !== source &&
       !e.path.startsWith('.trash/') &&
-      !e.path.startsWith('.memobrain/'),
+      !e.path.startsWith('.clarae/'),
   );
   const target = await dialog.pick(
     i18next.t('composer.mergePick', { name: stem(source) }),

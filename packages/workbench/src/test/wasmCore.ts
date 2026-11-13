@@ -1,9 +1,9 @@
 /// <reference types="node" />
-// The Go core compiled to WebAssembly (build/wasm/memobrain-core.wasm, `task wasm-core`), started in
+// The Go core compiled to WebAssembly (build/wasm/clarae-core.wasm, `task wasm-core`), started in
 // the Node process of a test: the same program the browser workbench runs in its Web Worker, with
 // the harness of `task test-wasm` (Node's file system in a temporary data folder, SQLite through the
-// sqlite-wasm bridge of @memobrain/sqlite-bridge). The page's part of the contract (globalThis.
-// __memobrainHost, see apps/desktop/cmd/memobrain-core/doc.go) is played here: a session owned by
+// sqlite-wasm bridge of @clarae/sqlite-bridge). The page's part of the contract (globalThis.
+// __claraeHost, see apps/desktop/cmd/clarae-core/doc.go) is played here: a session owned by
 // the "page" (a token, a remembered device), and `fetch` answered by an in-process cloud, so no
 // port is opened. `window.go.app` is installed from the methods the core reports, as the web host's
 // bridge does, so the workbench's binding facade (app/api.ts) and CoreCloudPort run unchanged.
@@ -17,7 +17,7 @@ import { api } from '../app/api';
 // Not `new URL(…, import.meta.url)`: Vite rewrites that pattern into an asset URL.
 const root = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '../../../..');
 /** The core and Go's loader, as `task wasm-core` writes them. */
-export const wasmCore = nodePath.join(root, 'build/wasm/memobrain-core.wasm');
+export const wasmCore = nodePath.join(root, 'build/wasm/clarae-core.wasm');
 const wasmExec = nodePath.join(root, 'build/wasm/wasm_exec.js');
 
 /** Whether `task wasm-core` has built the core. */
@@ -56,23 +56,23 @@ interface CoreGlobal {
  * `window.runtime` for the generated Wails modules. One core per test file: it holds global state.
  */
 export async function startWasmCore(o: WasmCoreOptions): Promise<WasmCore> {
-  // The globals the core and Go's loader read and write (fs, fetch, __memobrain*, Go).
+  // The globals the core and Go's loader read and write (fs, fetch, __clarae*, Go).
   const g = globalThis as unknown as Record<string, unknown>;
   // The same SQLite bridge as `task test-wasm` (scripts/go-js-exec.sh preloads it). The specifier
   // is not a literal: the module imports TypeScript files by their extension, which this package's
   // compiler options do not allow, and it is only needed at run time.
-  const preload = '@memobrain/sqlite-bridge/go-test-preload';
+  const preload = '@clarae/sqlite-bridge/go-test-preload';
   await import(/* @vite-ignore */ preload);
 
   // What wasm_exec_node.js provides: Node's file system for the Go runtime.
   g['fs'] = nodeFs;
   g['path'] = nodePath;
-  const dataDir = mkdtempSync(nodePath.join(tmpdir(), 'memobrain-core-'));
-  g['__memobrainConfig'] = { dataDir, version: 'test', logLevel: 'error' };
+  const dataDir = mkdtempSync(nodePath.join(tmpdir(), 'clarae-core-'));
+  g['__claraeConfig'] = { dataDir, version: 'test', logLevel: 'error' };
 
   const events: WasmCore['events'] = [];
   const subscribers = new Map<string, Set<(payload: unknown) => void>>();
-  g['__memobrainHost'] = {
+  g['__claraeHost'] = {
     serverURL: o.serverURL ?? 'http://cloud.test',
     emit: (name: string, payload: string) => {
       const data = JSON.parse(payload) as unknown;
@@ -109,7 +109,7 @@ export async function startWasmCore(o: WasmCoreOptions): Promise<WasmCore> {
   };
 
   const ready = new Promise<void>((resolve) => {
-    g['__memobrainCoreReady'] = resolve;
+    g['__claraeCoreReady'] = resolve;
   });
   // Go's loader (a script that defines globalThis.Go; it runs as a module as well).
   await import(/* @vite-ignore */ pathToFileURL(wasmExec).href);
@@ -126,7 +126,7 @@ export async function startWasmCore(o: WasmCoreOptions): Promise<WasmCore> {
   // name while the program initializes. go.run runs it synchronously up to its first wait, so the
   // real object is back before any other code runs.
   const realProcess = process;
-  g['process'] = Object.create(realProcess, { argv0: { value: 'memobrain-core' } }) as unknown;
+  g['process'] = Object.create(realProcess, { argv0: { value: 'clarae-core' } }) as unknown;
   let exited: Promise<void>;
   try {
     exited = go.run(instance);
@@ -137,7 +137,7 @@ export async function startWasmCore(o: WasmCoreOptions): Promise<WasmCore> {
     throw new Error('the core exited');
   });
   await ready;
-  const core = g['__memobrainCore'] as CoreGlobal;
+  const core = g['__claraeCore'] as CoreGlobal;
 
   const call = async <T>(service: string, method: string, ...args: unknown[]): Promise<T> => {
     try {

@@ -1,5 +1,5 @@
 import { StateField, type EditorState, type Text, type Transaction } from '@codemirror/state';
-import { scanSpans, stripInlineCode, type BlockState } from '@memobrain/markdown';
+import { scanSpans, stripInlineCode, type BlockState } from '@clarae/markdown';
 
 /** Block state (inside %%comment%% / $$math$$) at the START of each line. */
 export interface LineBlockState {

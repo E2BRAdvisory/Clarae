@@ -14,7 +14,7 @@ import (
 func DefaultSecrets() Secrets { return keychain{} }
 
 const (
-	keychainService = "MemoBrain Notes AI"
+	keychainService = "Clarae notanda AI"
 	keychainAccount = "provider-key"
 )
 

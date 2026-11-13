@@ -1,4 +1,4 @@
-import type { Slide, SlideDeck } from '@memobrain/markdown';
+import type { Slide, SlideDeck } from '@clarae/markdown';
 
 /** Index of the slide that contains `line` (1-based file line): the last one that starts at or before it. */
 export function slideIndexAtLine(deck: SlideDeck, line: number): number {

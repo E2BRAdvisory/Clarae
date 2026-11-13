@@ -15,16 +15,16 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/configprofiles/configprofilesdb"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/groups"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/services/cloud/internal/pagination"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/shared/features"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/configprofiles/configprofilesdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/groups"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/pagination"
+	"clarae/services/cloud/internal/settings"
+	"clarae/shared/features"
+	"clarae/shared/syncproto"
 )
 
 // schemaJSON is api/config-profile.schema.json, embedded by package features (its copy is

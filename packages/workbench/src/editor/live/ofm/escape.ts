@@ -10,7 +10,7 @@
 //
 // What counts as a construct is decided by `scanInline`, the scanner of the indexer, applied to the
 // output: there is no second set of rules here.
-import { scanInline } from '@memobrain/markdown';
+import { scanInline } from '@clarae/markdown';
 
 interface Info {
   before: string;

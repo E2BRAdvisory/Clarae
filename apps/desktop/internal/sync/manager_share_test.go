@@ -12,8 +12,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 const (

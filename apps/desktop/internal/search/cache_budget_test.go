@@ -8,9 +8,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/vault"
 )
 
 // The cache budget counts the indexed text, not the file sizes: a drawing
@@ -22,7 +22,7 @@ func TestCacheBudgetCountsIndexedText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".clarae", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}

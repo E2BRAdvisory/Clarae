@@ -6,7 +6,7 @@
 // with a time limit (`coreClient(core, ms)`; 0 = no limit). The host never writes a service or
 // method name by hand: ESLint refuses them outside this file. A new binding appears here after
 // `task gen` (docs/desktop-web-sync.md, "Contratto degli eventi").
-import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, search, sync, updater, vault } from '@memobrain/workbench/wailsjs/models';
+import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, search, sync, updater, vault } from '@clarae/workbench/wailsjs/models';
 
 /** A model of the bindings as plain data: the core answers with JSON, not with model classes. */
 export type Data<T> = T extends (...args: never[]) => unknown

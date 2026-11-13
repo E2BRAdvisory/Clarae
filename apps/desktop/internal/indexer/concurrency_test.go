@@ -10,8 +10,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/vault"
 )
 
 type testVault struct {
@@ -30,7 +30,7 @@ func newTestVault(t *testing.T) *testVault {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".clarae", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}

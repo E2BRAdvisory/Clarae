@@ -27,11 +27,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/notify/notifydb"
-	"memobrain/services/cloud/internal/observability"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/users"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/notify/notifydb"
+	"clarae/services/cloud/internal/observability"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/users"
 )
 
 // Channel is the Postgres NOTIFY channel of vault changes; PublishVaultChanged

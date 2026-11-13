@@ -1,4 +1,4 @@
-# Architettura di MemoBrain Notes
+# Architettura di Clarae notanda
 
 Panoramica per chi inizia a lavorare sul codice. La fonte di verità resta [`Specifications.md`](../Specifications.md) (architettura, vincoli V-xx, decisioni D-xx); le deviazioni sono negli [ADR](adr/README.md). Per la parità tra desktop e browser c'è una guida dedicata: [desktop-web-sync.md](desktop-web-sync.md).
 
@@ -7,16 +7,16 @@ Panoramica per chi inizia a lavorare sul codice. La fonte di verità resta [`Spe
 ```mermaid
 flowchart LR
   subgraph Desktop["Client desktop (Wails v2)"]
-    WBd["@memobrain/workbench<br/>(React, Milkdown, CodeMirror 6)"] -- binding Wails --> CoreD["core Go<br/>apps/desktop/internal"]
+    WBd["@clarae/workbench<br/>(React, Milkdown, CodeMirror 6)"] -- binding Wails --> CoreD["core Go<br/>apps/desktop/internal"]
     CoreD --> FS[("vault = cartella<br/>.md .canvas .base .excalidraw")]
     CoreD --> SQL[("index.db, sync.db, app.db<br/>SQLite pure-Go")]
   end
   subgraph Browser["Browser"]
     Console["console web<br/>web/src/pages"]
-    WBw["@memobrain/workbench"] -- bridge + Web Worker --> CoreW["stesso core Go<br/>in WebAssembly"]
+    WBw["@clarae/workbench"] -- bridge + Web Worker --> CoreW["stesso core Go<br/>in WebAssembly"]
     CoreW --> OPFS[("OPFS + sqlite-wasm")]
   end
-  subgraph Cloud["Cloud Service (memobrain-cloud)"]
+  subgraph Cloud["Cloud Service (clarae-cloud)"]
     API["--role=api<br/>REST /api/v1, gRPC, SSE"]
     Worker["--role=worker<br/>job di manutenzione"]
   end
@@ -32,10 +32,10 @@ flowchart LR
   API -. JWKS .-> KC
 ```
 
-- **Client desktop** (`apps/desktop`): app Wails v2, una finestra per processo. La UI è il pacchetto condiviso `@memobrain/workbench` (React; editor Live su Milkdown, editor Sorgente su CodeMirror 6, ADR-0049); la logica è il core Go in `apps/desktop/internal` (vault, indice, link, sync, crittografia), esposto alla UI come binding (`App.Services()`). Funziona offline su un vault che è una cartella di file ordinari, compatibile con Obsidian.
-- **Workbench web**: la stessa UI e lo stesso core Go, compilato in WebAssembly (`apps/desktop/cmd/memobrain-core`) e avviato in un Web Worker dalla pagina `/vaults/:id/open` della Web UI. I file stanno in OPFS e gli indici in sqlite-wasm. Il browser è un dispositivo come gli altri (ADR-0029, ADR-0030).
-- **Console web** (`web/`): area utente e amministrazione, in React. Parla con la REST attraverso il client TypeScript generato (`@memobrain/api-client`). La console e il workbench sono compilati e incorporati nel binario del cloud (`services/cloud/web-embed`, `go:embed`).
-- **Cloud Service** (`services/cloud`): un unico binario Go, _modular monolith_, con `--role=api|worker|all`. Il ruolo `api` serve la REST (`/api/v1`), il gRPC `NotifyService` e il fallback SSE (`GET /api/v1/events`); il ruolo `worker` esegue i job (GC dei blob, upload scaduti, retention, compattazione, purge, riconciliazione delle quote, snapshot, export ZIP). Usa PostgreSQL, uno storage S3-compatibile e Keycloak, rispetto al quale è solo _resource server_: valida i JWT (JWKS, `iss`, `aud=memobrain-api`) e controlla lo stato dell'utente nel proprio database. I gruppi esistono solo nel database del cloud (D-05).
+- **Client desktop** (`apps/desktop`): app Wails v2, una finestra per processo. La UI è il pacchetto condiviso `@clarae/workbench` (React; editor Live su Milkdown, editor Sorgente su CodeMirror 6, ADR-0049); la logica è il core Go in `apps/desktop/internal` (vault, indice, link, sync, crittografia), esposto alla UI come binding (`App.Services()`). Funziona offline su un vault che è una cartella di file ordinari, compatibile con Obsidian.
+- **Workbench web**: la stessa UI e lo stesso core Go, compilato in WebAssembly (`apps/desktop/cmd/clarae-core`) e avviato in un Web Worker dalla pagina `/vaults/:id/open` della Web UI. I file stanno in OPFS e gli indici in sqlite-wasm. Il browser è un dispositivo come gli altri (ADR-0029, ADR-0030).
+- **Console web** (`web/`): area utente e amministrazione, in React. Parla con la REST attraverso il client TypeScript generato (`@clarae/api-client`). La console e il workbench sono compilati e incorporati nel binario del cloud (`services/cloud/web-embed`, `go:embed`).
+- **Cloud Service** (`services/cloud`): un unico binario Go, _modular monolith_, con `--role=api|worker|all`. Il ruolo `api` serve la REST (`/api/v1`), il gRPC `NotifyService` e il fallback SSE (`GET /api/v1/events`); il ruolo `worker` esegue i job (GC dei blob, upload scaduti, retention, compattazione, purge, riconciliazione delle quote, snapshot, export ZIP). Usa PostgreSQL, uno storage S3-compatibile e Keycloak, rispetto al quale è solo _resource server_: valida i JWT (JWKS, `iss`, `aud=clarae-api`) e controlla lo stato dell'utente nel proprio database. I gruppi esistono solo nel database del cloud (D-05).
 - **Notifiche**: un commit fa `pg_notify`; ogni processo ha una sola connessione `LISTEN` e inoltra gli eventi (`vault_changed`, `config_changed`, `share_changed`, `account_changed`) agli stream gRPC e SSE dei client. Il client reagisce con un pull.
 
 ## Sincronizzazione
@@ -59,30 +59,30 @@ La **retention** dello storico e la **compattazione** del changelog sono legate 
 
 ## Dati locali
 
-| File          | Contenuto                                                                                                              | Sincronizzato |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
-| il vault      | i file dell'utente; scritture atomiche (tmp, fsync, rename), niente path traversal, `WriteNote` con `expectedHash`     | sì            |
-| `.memobrain/` | configurazione del vault (editor, aspetto, hotkey, workspace), con scope di sync differenziato                         | in parte      |
-| `index.db`    | indice SQLite FTS5 (tokenizer `trigram`, driver pure-Go `modernc.org/sqlite`, ADR-0002): link, tag, proprietà, ricerca | no, si rifà   |
-| `sync.db`     | stato della sync: cursore, file noti, outbox, conflitti, candidati al merge (`pending_remote`) e quarantena (ADR-0039) | no            |
-| `app.db`      | stato dell'app (vault recenti, impostazioni globali); token e chiavi stanno nel keychain del sistema operativo         | no            |
+| File       | Contenuto                                                                                                              | Sincronizzato |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
+| il vault   | i file dell'utente; scritture atomiche (tmp, fsync, rename), niente path traversal, `WriteNote` con `expectedHash`     | sì            |
+| `.clarae/` | configurazione del vault (editor, aspetto, hotkey, workspace), con scope di sync differenziato                         | in parte      |
+| `index.db` | indice SQLite FTS5 (tokenizer `trigram`, driver pure-Go `modernc.org/sqlite`, ADR-0002): link, tag, proprietà, ricerca | no, si rifà   |
+| `sync.db`  | stato della sync: cursore, file noti, outbox, conflitti, candidati al merge (`pending_remote`) e quarantena (ADR-0039) | no            |
+| `app.db`   | stato dell'app (vault recenti, impostazioni globali); token e chiavi stanno nel keychain del sistema operativo         | no            |
 
 Nel browser gli stessi file stanno in OPFS e i database nel pool `opfs-sahpool` di sqlite-wasm; la copia in chiaro di un vault privato non sopravvive al blocco (ADR-0029 §6, [desktop-web-sync.md](desktop-web-sync.md#host-del-browser)).
 
 ## Contratti
 
-- **REST:** [`api/openapi.yaml`](../api/openapi.yaml) è la fonte unica. `task gen-openapi` genera gli stub del server (oapi-codegen, strict server e validatore delle richieste, `services/cloud/internal/api/api.gen.go`), il client Go (`shared/go/apiclient`, usato da `apps/desktop/internal/sync/transport`) e il client TypeScript (`packages/api-client`). Gli errori sono `application/problem+json` con un `code` allineato a `shared/go/syncproto`; ogni operazione autenticata dichiara anche i rifiuti dell'autenticazione (401, `403 USER_SUSPENDED`, `409 INVALID_STATE` per il conflitto d'identità di ADR-0041, 429). tus e SSE sono fuori dal generatore e documentati nell'estensione `x-memobrain-external-routes` (ADR-0037 §3).
-- **Config Profile:** [`api/config-profile.schema.json`](../api/config-profile.schema.json) → costanti e default dei flag in Go (`shared/go/features`) e TypeScript (`@memobrain/api-client/features`), `task gen-features`.
-- **Notifiche gRPC:** [`api/proto/memobrain/v1/notify.proto`](../api/proto/memobrain/v1/notify.proto) → `shared/go/notifyv1` (buf).
+- **REST:** [`api/openapi.yaml`](../api/openapi.yaml) è la fonte unica. `task gen-openapi` genera gli stub del server (oapi-codegen, strict server e validatore delle richieste, `services/cloud/internal/api/api.gen.go`), il client Go (`shared/go/apiclient`, usato da `apps/desktop/internal/sync/transport`) e il client TypeScript (`packages/api-client`). Gli errori sono `application/problem+json` con un `code` allineato a `shared/go/syncproto`; ogni operazione autenticata dichiara anche i rifiuti dell'autenticazione (401, `403 USER_SUSPENDED`, `409 INVALID_STATE` per il conflitto d'identità di ADR-0041, 429). tus e SSE sono fuori dal generatore e documentati nell'estensione `x-clarae-external-routes` (ADR-0037 §3).
+- **Config Profile:** [`api/config-profile.schema.json`](../api/config-profile.schema.json) → costanti e default dei flag in Go (`shared/go/features`) e TypeScript (`@clarae/api-client/features`), `task gen-features`.
+- **Notifiche gRPC:** [`api/proto/clarae/v1/notify.proto`](../api/proto/clarae/v1/notify.proto) → `shared/go/notifyv1` (buf).
 - **Database del cloud:** query per modulo in `services/cloud/internal/db/queries/<modulo>.sql` → `internal/<modulo>/<modulo>db` (sqlc); migrazioni SQL versionate in `internal/db/migrations`.
-- **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati) e, da questi, il client tipizzato dell'host del browser `web/src/workbench/core.gen.ts` (versionato). I binding di gestione cloud ricevono e restituiscono i tipi dell'OpenAPI (`apps/desktop/internal/app/cloudapi`, ADR-0045 §6), quindi i modelli generati da Wails coincidono con gli schemi di `@memobrain/api-client`.
+- **Binding Wails:** i metodi dei servizi Go → `packages/workbench/wailsjs` (generati, non versionati) e, da questi, il client tipizzato dell'host del browser `web/src/workbench/core.gen.ts` (versionato). I binding di gestione cloud ricevono e restituiscono i tipi dell'OpenAPI (`apps/desktop/internal/app/cloudapi`, ADR-0045 §6), quindi i modelli generati da Wails coincidono con gli schemi di `@clarae/api-client`.
 - **Eventi Go → TypeScript:** il registro `apps/desktop/internal/app/events_registry.go` → `packages/workbench/src/app/events.gen.ts` (nomi e payload, `task gen-events`). Regole e controlli: [desktop-web-sync.md](desktop-web-sync.md#contratto-degli-eventi) (ADR-0045 §5).
 - **Capability e funzioni:** le capability dell'host le dichiara il core (`apps/desktop/internal/app/capabilities.go`) → `packages/workbench/src/platform/capabilities.gen.ts` e `shared/parity/capabilities.gen.json` (`task gen-capabilities`); il registro `shared/parity/features.yaml` → il tipo `FeatureId` e le costanti Go `shared/go/parity` (`task gen-parity-features`).
 - **Verifiche:** contract test del client contro il server reale (`apps/desktop/internal/sync/transport/contract_test.go`), fixture di conformance Go/TS per Markdown, merge e crittografia (`shared/conformance`), registro di parità (`shared/parity/features.yaml`, con le prove per superficie di ADR-0045), le suite dei pannelli cloud sul core WebAssembly contro un cloud finto validato sull'OpenAPI (`task test-core`). Conformance, `test-core`, registro e codice generato (`task check-gen`) girano in `task ci` (ADR-0036); il contract test ha il tag `integration` e gira con le altre suite lente in `task test-desktop-e2e`, da eseguire quando si toccano il client della sync o le API.
 
 ## Parità tra desktop, workbench web e console
 
-La parità è **per costruzione** (ADR-0045): una sola UI (`@memobrain/workbench`) montata da entrambi gli host, una sola logica (`App.Services()`, servita da Wails sul desktop e dal dispatcher RPC del core WebAssembly nel browser) e un solo modulo per la gestione dei vault cloud (`@memobrain/cloud-features`, dietro `CloudPort` con un adattatore REST per la console e uno sui binding per desktop e workbench). Le differenze ammesse passano da punti dichiarati e controllati:
+La parità è **per costruzione** (ADR-0045): una sola UI (`@clarae/workbench`) montata da entrambi gli host, una sola logica (`App.Services()`, servita da Wails sul desktop e dal dispatcher RPC del core WebAssembly nel browser) e un solo modulo per la gestione dei vault cloud (`@clarae/cloud-features`, dietro `CloudPort` con un adattatore REST per la console e uno sui binding per desktop e workbench). Le differenze ammesse passano da punti dichiarati e controllati:
 
 - il confine `Host` nel core Go, implementato da entrambi gli host e classificato per capability (`TestHostCapabilities`);
 - le capability, dichiarate dal core e generate per la UI; comandi e azioni dei pannelli le nominano in `requires`/`excludes` e dichiarano la loro funzione (`FeatureId`);
@@ -107,11 +107,11 @@ Ogni modulo è un pacchetto `services/cloud/internal/<modulo>` con interfacce es
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Entry del desktop (Wails)     | `apps/desktop/main.go`, `apps/desktop/frontend` (solo entry e e2e)                                                     |
 | Core Go (desktop e WASM)      | `apps/desktop/internal/{app,vault,indexer,links,search,sync,crypto,…}`                                                 |
-| Core in WebAssembly           | `apps/desktop/cmd/memobrain-core`                                                                                      |
+| Core in WebAssembly           | `apps/desktop/cmd/clarae-core`                                                                                         |
 | UI condivisa                  | `packages/workbench`                                                                                                   |
 | Gestione dei vault cloud (UI) | `packages/cloud-features` (ADR-0037)                                                                                   |
 | Console e host del browser    | `web/src/pages`, `web/src/workbench`                                                                                   |
-| Cloud                         | `services/cloud/cmd/memobrain-cloud`, `services/cloud/internal/<modulo>`                                               |
+| Cloud                         | `services/cloud/cmd/clarae-cloud`, `services/cloud/internal/<modulo>`                                                  |
 | Codice Go condiviso           | `shared/go` (`merge`, `vaultcrypto`, `syncproto`, `pathrules`, `apiclient`, `features`, `parity`, `updatemanifest`, …) |
 | Fixture condivise             | `shared/conformance`, registro di parità `shared/parity`                                                               |
 | Contratti                     | `api/openapi.yaml`, `api/proto`, `api/config-profile.schema.json`                                                      |

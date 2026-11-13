@@ -207,7 +207,7 @@ func TestLoginSchemeFallbackAndRestore(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() { done <- svc.Login(ctx, cloud.URL) }()
-	// Wait for the browser to be "opened", then simulate the OS delivering memobrain://auth/callback.
+	// Wait for the browser to be "opened", then simulate the OS delivering clarae://auth/callback.
 	var authURL string
 	for i := 0; i < 100 && authURL == ""; i++ {
 		if p := br.lastURL.Load(); p != nil {

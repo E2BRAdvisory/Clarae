@@ -13,7 +13,7 @@
 //
 // Where the editor cannot hold a block, the block is kept whole and byte for byte: it is never
 // "almost" projected.
-import { scanBody } from '@memobrain/markdown';
+import { scanBody } from '@clarae/markdown';
 import { InitReady, remarkPluginsCtx, schemaCtx } from '@milkdown/kit/core';
 import type { MilkdownPlugin } from '@milkdown/kit/ctx';
 import { decodeText, entitiesIn, insideConstruct, matchesValue } from './decode';

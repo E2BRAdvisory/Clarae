@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/apps/desktop/internal/composer"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/templates"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/composer"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/templates"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // dailySettingsFile holds the per-vault settings of daily notes, unique notes and

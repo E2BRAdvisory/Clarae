@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button, InlineError } from '@memobrain/ui';
+import { Button, InlineError } from '@clarae/ui';
 import { useAuth } from '../auth/AuthProvider';
 import { isWorkbenchReturn } from '../shared/routes';
 

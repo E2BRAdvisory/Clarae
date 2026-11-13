@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // Effective is the configuration as the application uses it.

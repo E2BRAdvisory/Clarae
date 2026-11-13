@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"memobrain/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/auth"
 )
 
 // Host is everything the application needs from the environment that runs it: the Wails window on

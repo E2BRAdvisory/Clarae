@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/vaults"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/vaults"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/sync/syncdb"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/sync/syncdb"
+	"clarae/shared/syncproto"
 )
 
 // Change is one changelog entry (§3.5.3).

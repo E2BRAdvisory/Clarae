@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // Sink receives the files of an import. Implementations choose collision-free paths.

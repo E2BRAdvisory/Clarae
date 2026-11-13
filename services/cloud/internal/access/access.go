@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/vaults/vaultsdb"
-	"memobrain/shared/pathrules"
+	"clarae/services/cloud/internal/vaults/vaultsdb"
+	"clarae/shared/pathrules"
 )
 
 // Permission is a level of access to a resource.

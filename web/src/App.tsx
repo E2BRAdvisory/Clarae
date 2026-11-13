@@ -9,8 +9,8 @@ import {
   type MemoryRouterProps,
 } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ApiError, createClient, type MemobrainClient } from '@memobrain/api-client';
-import { EmptyState, ToastProvider } from '@memobrain/ui';
+import { ApiError, createClient, type ClaraeClient } from '@clarae/api-client';
+import { EmptyState, ToastProvider } from '@clarae/ui';
 import { ApiProvider } from './api/context';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { RequireAdmin, RequireAuth } from './auth/guards';
@@ -75,7 +75,7 @@ export function DataLayer({
   client,
   children,
 }: {
-  client?: MemobrainClient;
+  client?: ClaraeClient;
   children: React.ReactNode;
 }) {
   const { getAccessToken, signIn } = useAuth();
@@ -108,7 +108,7 @@ export function DataLayer({
   );
 }
 
-export function App({ auth, client }: { auth: AuthService; client?: MemobrainClient }) {
+export function App({ auth, client }: { auth: AuthService; client?: ClaraeClient }) {
   return (
     <AuthProvider service={auth}>
       <DataLayer {...(client ? { client } : {})}>
@@ -127,7 +127,7 @@ export function TestApp({
   router,
 }: {
   auth: AuthService;
-  client: MemobrainClient;
+  client: ClaraeClient;
   router?: MemoryRouterProps;
 }) {
   return (

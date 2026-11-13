@@ -1,6 +1,6 @@
 import { Fragment, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, InlineError, Table, TextField, useToast } from '@memobrain/ui';
+import { Button, InlineError, Table, TextField, useToast } from '@clarae/ui';
 import {
   fetchAuditCsv,
   useAdminUsers,

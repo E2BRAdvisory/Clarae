@@ -29,11 +29,11 @@ describe('drawing helpers', () => {
         elements: [],
         appState: {},
         files: {},
-        memobrain: { autoExport: 'png' },
+        clarae: { autoExport: 'png' },
         other: 1,
       }),
     );
-    expect(s.extra).toEqual({ memobrain: { autoExport: 'png' }, other: 1 });
+    expect(s.extra).toEqual({ clarae: { autoExport: 'png' }, other: 1 });
     expect(parseScene(EMPTY_DRAWING).extra).toEqual({});
   });
 

@@ -10,12 +10,12 @@ import (
 
 func testHandler() http.Handler {
 	return Handler(Options{
-		Issuer: "https://id.example.com:8443/realms/memobrain",
+		Issuer: "https://id.example.com:8443/realms/clarae",
 		FS: fstest.MapFS{
 			"index.html":       {Data: []byte("<html>app</html>")},
 			"assets/app-1.js":  {Data: []byte("console.log(1)")},
 			"favicon.svg":      {Data: []byte("<svg/>")},
-			"site.webmanifest": {Data: []byte(`{"name":"MemoBrain Notes"}`)},
+			"site.webmanifest": {Data: []byte(`{"name":"Clarae notanda"}`)},
 			"favicon.ico":      {Data: []byte("\x00\x00\x01\x00")},
 		},
 	})

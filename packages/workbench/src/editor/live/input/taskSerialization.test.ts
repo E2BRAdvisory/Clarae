@@ -18,7 +18,7 @@ import {
   newlineInCode,
   splitBlock,
 } from '@milkdown/kit/prose/commands';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';

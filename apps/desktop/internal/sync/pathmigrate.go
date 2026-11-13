@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
+	"clarae/shared/vaultcrypto"
 )
 
 // Background migration of enc1 path tokens (ADR-0042, release N+1).

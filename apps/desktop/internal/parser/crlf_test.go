@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/conformance"
+	"clarae/shared/conformance"
 )
 
 // TestConformanceCRLF reads every shared fixture again with its line endings turned into CRLF: the

@@ -15,8 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/export"
-	"memobrain/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/export"
+	"clarae/services/cloud/internal/storage"
 )
 
 // A POST /vaults retried with its Idempotency-Key (the response was lost)

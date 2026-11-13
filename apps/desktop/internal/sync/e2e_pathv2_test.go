@@ -13,10 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/crypto"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/shared/syncproto"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/crypto"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/shared/syncproto"
+	"clarae/shared/vaultcrypto"
 )
 
 // tokenVersions counts the path token formats of a vault's tree on the server.

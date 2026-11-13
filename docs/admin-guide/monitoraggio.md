@@ -13,53 +13,53 @@
 
 Oltre alle metriche standard di Go (`go_*`, `process_*`):
 
-| Metrica                                         | Tipo      | Etichette                                   | Significato                                                                                                                                                          |
-| ----------------------------------------------- | --------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `memobrain_http_requests_total`                 | counter   | `route`, `method`, `status`                 | Richieste HTTP. `route` è il pattern, non il path, e `method` è uno tra `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` o `OTHER` (cardinalità limitata). |
-| `memobrain_http_request_duration_seconds`       | histogram | `route`, `method`                           | Latenza delle richieste.                                                                                                                                             |
-| `memobrain_http_inflight_requests`              | gauge     | —                                           | Richieste in corso.                                                                                                                                                  |
-| `memobrain_sync_commits_total`                  | counter   | `outcome` (`ok`/`error`)                    | Richieste di commit di sync.                                                                                                                                         |
-| `memobrain_sync_ops_total`                      | counter   | `status` (`accepted`/`conflict`/`rejected`) | Operazioni di sync per esito.                                                                                                                                        |
-| `memobrain_notify_streams_active`               | gauge     | —                                           | Stream di notifica aperti (gRPC + SSE) su questo processo.                                                                                                           |
-| `memobrain_jobs_runs_total`                     | counter   | `job`, `result`                             | Esecuzioni dei job (`blob-gc`, `uploads`, `retention`, `maintenance`, `exports`).                                                                                    |
-| `memobrain_jobs_run_duration_seconds`           | histogram | `job`                                       | Durata dei job.                                                                                                                                                      |
-| `memobrain_jobs_last_success_timestamp_seconds` | gauge     | `job`                                       | Quando ogni job è riuscito l'ultima volta (solo processi worker).                                                                                                    |
-| `memobrain_db_pool_connections`                 | gauge     | `state` (`acquired`/`idle`/`total`/`max`)   | Connessioni del pool PostgreSQL.                                                                                                                                     |
-| `memobrain_db_pool_acquires_total`              | counter   | —                                           | Acquisizioni di connessione completate.                                                                                                                              |
-| `memobrain_db_pool_empty_acquires_total`        | counter   | —                                           | Acquisizioni che hanno dovuto attendere (pool esaurito).                                                                                                             |
-| `memobrain_db_pool_acquire_wait_seconds_total`  | counter   | —                                           | Tempo totale speso in attesa di una connessione.                                                                                                                     |
+| Metrica                                      | Tipo      | Etichette                                   | Significato                                                                                                                                                          |
+| -------------------------------------------- | --------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clarae_http_requests_total`                 | counter   | `route`, `method`, `status`                 | Richieste HTTP. `route` è il pattern, non il path, e `method` è uno tra `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` o `OTHER` (cardinalità limitata). |
+| `clarae_http_request_duration_seconds`       | histogram | `route`, `method`                           | Latenza delle richieste.                                                                                                                                             |
+| `clarae_http_inflight_requests`              | gauge     | —                                           | Richieste in corso.                                                                                                                                                  |
+| `clarae_sync_commits_total`                  | counter   | `outcome` (`ok`/`error`)                    | Richieste di commit di sync.                                                                                                                                         |
+| `clarae_sync_ops_total`                      | counter   | `status` (`accepted`/`conflict`/`rejected`) | Operazioni di sync per esito.                                                                                                                                        |
+| `clarae_notify_streams_active`               | gauge     | —                                           | Stream di notifica aperti (gRPC + SSE) su questo processo.                                                                                                           |
+| `clarae_jobs_runs_total`                     | counter   | `job`, `result`                             | Esecuzioni dei job (`blob-gc`, `uploads`, `retention`, `maintenance`, `exports`).                                                                                    |
+| `clarae_jobs_run_duration_seconds`           | histogram | `job`                                       | Durata dei job.                                                                                                                                                      |
+| `clarae_jobs_last_success_timestamp_seconds` | gauge     | `job`                                       | Quando ogni job è riuscito l'ultima volta (solo processi worker).                                                                                                    |
+| `clarae_db_pool_connections`                 | gauge     | `state` (`acquired`/`idle`/`total`/`max`)   | Connessioni del pool PostgreSQL.                                                                                                                                     |
+| `clarae_db_pool_acquires_total`              | counter   | —                                           | Acquisizioni di connessione completate.                                                                                                                              |
+| `clarae_db_pool_empty_acquires_total`        | counter   | —                                           | Acquisizioni che hanno dovuto attendere (pool esaurito).                                                                                                             |
+| `clarae_db_pool_acquire_wait_seconds_total`  | counter   | —                                           | Tempo totale speso in attesa di una connessione.                                                                                                                     |
 
 Il tracciamento distribuito (OpenTelemetry) non è incluso in questa versione.
 
 Le metriche dei job compaiono solo sui processi che eseguono il worker: con `--role=all` sulla porta HTTP dell'API, con `--role=worker` sul listener interno `METRICS_LISTEN_ADDR` (`:18083` nell'immagine), che Prometheus deve raccogliere a parte. Quelle HTTP e degli stream compaiono solo sui processi che servono l'API.
 
-L'etichetta `job` delle metriche dei job (il nome del job) coincide con l'etichetta di target di Prometheus: con la configurazione predefinita (`honor_labels: false`) Prometheus la rinomina in `exported_job` e `job` diventa il nome dello scraping. Le regole di alerting fornite gestiscono entrambi i casi; nelle query manuali usare `exported_job` (oppure impostare `honor_labels: true` per i target di MemoBrain Notes).
+L'etichetta `job` delle metriche dei job (il nome del job) coincide con l'etichetta di target di Prometheus: con la configurazione predefinita (`honor_labels: false`) Prometheus la rinomina in `exported_job` e `job` diventa il nome dello scraping. Le regole di alerting fornite gestiscono entrambi i casi; nelle query manuali usare `exported_job` (oppure impostare `honor_labels: true` per i target di Clarae notanda).
 
 ## Dashboard Grafana
 
-File: `deploy/observability/grafana/memobrain-overview.json` (Grafana 10+). Importarlo da _Dashboards → Import_, scegliendo il datasource Prometheus; la variabile `job` seleziona i job di scraping di MemoBrain Notes. Sezioni: panoramica (richieste/s, 5xx, p95, stream, repliche), RED per route, sincronizzazione (commit, operazioni per esito, pull, blob), job in background (esecuzioni, durata, tempo dall'ultimo successo), pool del database, processo Go. Un test (`TestDeployAssetsUseExistingMetrics`) garantisce che dashboard e regole usino solo metriche realmente registrate dal servizio.
+File: `deploy/observability/grafana/clarae-overview.json` (Grafana 10+). Importarlo da _Dashboards → Import_, scegliendo il datasource Prometheus; la variabile `job` seleziona i job di scraping di Clarae notanda. Sezioni: panoramica (richieste/s, 5xx, p95, stream, repliche), RED per route, sincronizzazione (commit, operazioni per esito, pull, blob), job in background (esecuzioni, durata, tempo dall'ultimo successo), pool del database, processo Go. Un test (`TestDeployAssetsUseExistingMetrics`) garantisce che dashboard e regole usino solo metriche realmente registrate dal servizio.
 
 ## Regole di alerting
 
-File: `deploy/observability/prometheus/alerts.yaml` (esempio da adattare). Contiene: istanza giù, tasso 5xx, latenza p95, picchi 401/403, errori di commit, operazioni rifiutate, job che falliscono o fermi (export, manutenzione), assenza delle metriche dei job (`MemobrainJobMetricsAbsent`: nessun worker raccolto da 15 minuti; `MemobrainJobNeverSucceeded`: un job senza alcun successo da 2 ore, che copre anche il caso in cui le regole "stale" non possono scattare perché la serie non esiste), saturazione e attese del pool. Ogni alert ha l'annotazione `runbook` che rimanda al [runbook](runbook.md). Validazione: `promtool check rules deploy/observability/prometheus/alerts.yaml` (oppure via Docker: `docker run --rm --entrypoint promtool -v $PWD/deploy/observability/prometheus:/r:ro prom/prometheus:v2.55.1 check rules /r/alerts.yaml`).
+File: `deploy/observability/prometheus/alerts.yaml` (esempio da adattare). Contiene: istanza giù, tasso 5xx, latenza p95, picchi 401/403, errori di commit, operazioni rifiutate, job che falliscono o fermi (export, manutenzione), assenza delle metriche dei job (`ClaraeJobMetricsAbsent`: nessun worker raccolto da 15 minuti; `ClaraeJobNeverSucceeded`: un job senza alcun successo da 2 ore, che copre anche il caso in cui le regole "stale" non possono scattare perché la serie non esiste), saturazione e attese del pool. Ogni alert ha l'annotazione `runbook` che rimanda al [runbook](runbook.md). Validazione: `promtool check rules deploy/observability/prometheus/alerts.yaml` (oppure via Docker: `docker run --rm --entrypoint promtool -v $PWD/deploy/observability/prometheus:/r:ro prom/prometheus:v2.55.1 check rules /r/alerts.yaml`).
 
 Scraping con Prometheus Operator (esempio):
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
-metadata: { name: memobrain }
+metadata: { name: clarae }
 spec:
-  selector: { matchLabels: { app.kubernetes.io/name: memobrain } }
+  selector: { matchLabels: { app.kubernetes.io/name: clarae } }
   endpoints: [{ port: http, path: /metrics, interval: 30s }]
 ---
 # Il worker non ha un Service: si raccoglie dai pod, porta "metrics" (18083).
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
-metadata: { name: memobrain-worker }
+metadata: { name: clarae-worker }
 spec:
   selector:
-    matchLabels: { app.kubernetes.io/name: memobrain, app.kubernetes.io/component: worker }
+    matchLabels: { app.kubernetes.io/name: clarae, app.kubernetes.io/component: worker }
   podMetricsEndpoints: [{ port: metrics, path: /metrics, interval: 30s }]
 ```
 

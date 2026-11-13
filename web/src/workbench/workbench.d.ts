@@ -1,4 +1,4 @@
-// Public signature of @memobrain/workbench as the Web UI uses it (tsconfig.app.json maps the package to
+// Public signature of @clarae/workbench as the Web UI uses it (tsconfig.app.json maps the package to
 // this file, so the workbench sources are not compiled twice; they are type-checked by their own project).
 export interface MountRef {
   shareId: string;

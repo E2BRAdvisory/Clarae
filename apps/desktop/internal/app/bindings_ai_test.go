@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/ai"
-	"memobrain/apps/desktop/internal/store"
-	syncpkg "memobrain/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/ai"
+	"clarae/apps/desktop/internal/store"
+	syncpkg "clarae/apps/desktop/internal/sync"
 )
 
 // aiRecorder counts the HTTP requests the assistant makes.
@@ -93,7 +93,7 @@ func (h *aiHarness) flagOn(t *testing.T) {
 func (h *aiHarness) linkAs(t *testing.T, kind string) {
 	t.Helper()
 	ctx := context.Background()
-	sdb, err := store.Open(ctx, filepath.Join(h.root, ".memobrain", "sync.db"), store.KindSync)
+	sdb, err := store.Open(ctx, filepath.Join(h.root, ".clarae", "sync.db"), store.KindSync)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func (h *aiHarness) linkAs(t *testing.T, kind string) {
 // longer be read (Info used to take that for a vault that is not linked, which is open to the assistant).
 func (h *aiHarness) breakSyncMeta(t *testing.T) {
 	t.Helper()
-	sdb, err := store.Open(context.Background(), filepath.Join(h.root, ".memobrain", "sync.db"), store.KindSync)
+	sdb, err := store.Open(context.Background(), filepath.Join(h.root, ".clarae", "sync.db"), store.KindSync)
 	if err != nil {
 		t.Fatal(err)
 	}

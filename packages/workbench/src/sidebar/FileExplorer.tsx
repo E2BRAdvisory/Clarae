@@ -104,7 +104,7 @@ const KIND_ICON: Record<EmbedKind, IconName> = {
 export const fileIcon = (path: string): IconName =>
   openTarget(path) === 'external' ? 'attach' : KIND_ICON[classify(path)];
 
-/** Dot-files and dot-folders (.memobrain, .trash, .git) are not shown in the explorer. */
+/** Dot-files and dot-folders (.clarae, .trash, .git) are not shown in the explorer. */
 export const isHidden = (path: string): boolean => path.split('/').some((s) => s.startsWith('.'));
 
 const parentDir = (path: string | null): string =>
@@ -425,10 +425,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           className={`node ${entry.isDir ? 'folder' : 'file'} ${activePath === entry.path ? 'active' : ''} ${dropTarget === entry.path ? 'drop' : ''}`}
           style={{ paddingLeft: 8 + depth * 14, height: ROW_HEIGHT, boxSizing: 'border-box' }}
           draggable={!readOnly}
-          onDragStart={(e) => e.dataTransfer.setData('application/x-memobrain-path', entry.path)}
+          onDragStart={(e) => e.dataTransfer.setData('application/x-clarae-path', entry.path)}
           onDragOver={(e) => {
-            if (!entry.isDir || !e.dataTransfer.types.includes('application/x-memobrain-path'))
-              return;
+            if (!entry.isDir || !e.dataTransfer.types.includes('application/x-clarae-path')) return;
             e.preventDefault();
             setDropTarget(entry.path);
           }}
@@ -436,7 +435,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           onDrop={(e) => {
             e.preventDefault();
             setDropTarget(null);
-            const from = e.dataTransfer.getData('application/x-memobrain-path');
+            const from = e.dataTransfer.getData('application/x-clarae-path');
             if (from && entry.isDir) void move(from, entry.path);
           }}
           onClick={(e) =>
@@ -510,14 +509,14 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
           });
         }}
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('application/x-memobrain-path')) {
+          if (e.dataTransfer.types.includes('application/x-clarae-path')) {
             e.preventDefault();
             setDropTarget('');
           }
         }}
         onDragLeave={() => setDropTarget(null)}
         onDrop={(e) => {
-          const from = e.dataTransfer.getData('application/x-memobrain-path');
+          const from = e.dataTransfer.getData('application/x-clarae-path');
           setDropTarget(null);
           if (from) void move(from, '');
         }}

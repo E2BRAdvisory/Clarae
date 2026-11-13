@@ -18,9 +18,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/services/cloud/internal/grpcserver"
-	"memobrain/shared/notifyv1"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/grpcserver"
+	"clarae/shared/notifyv1"
 )
 
 func TestHubCoalescesAndScopesEvents(t *testing.T) {

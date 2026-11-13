@@ -13,10 +13,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 type clock struct {
@@ -127,7 +127,7 @@ func TestSkipsBinaryLargeAndExcluded(t *testing.T) {
 	if _, _, err := h.Take("big.md", ReasonPeriodic); !errors.Is(err, ErrSkipped) {
 		t.Fatalf("large: %v", err)
 	}
-	for _, p := range []string{".memobrain/editor.json", ".memobrain/snapshots/meta/x/1.json", ".trash/a.md", "x.tmp", ".DS_Store"} {
+	for _, p := range []string{".clarae/editor.json", ".clarae/snapshots/meta/x/1.json", ".trash/a.md", "x.tmp", ".DS_Store"} {
 		if _, _, err := h.Take(p, ReasonPeriodic); !errors.Is(err, ErrSkipped) {
 			t.Fatalf("%s: %v", p, err)
 		}
@@ -413,10 +413,10 @@ func TestSnapshotsInvisibleToTreeIndexAndSync(t *testing.T) {
 	if _, _, err := h.Take("a.md", ReasonPeriodic); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(fsys.Root(), ".memobrain", "snapshots")); err != nil {
+	if _, err := os.Stat(filepath.Join(fsys.Root(), ".clarae", "snapshots")); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{".memobrain/snapshots", ".memobrain/snapshots/meta/k/1.json", ".memobrain/snapshots/blobs/ab/abcdef"} {
+	for _, p := range []string{".clarae/snapshots", ".clarae/snapshots/meta/k/1.json", ".clarae/snapshots/blobs/ab/abcdef"} {
 		if !pathrules.IsExcluded(p, false) {
 			t.Fatalf("%s not excluded", p)
 		}
@@ -434,7 +434,7 @@ func TestSnapshotsInvisibleToTreeIndexAndSync(t *testing.T) {
 		t.Fatal("walk saw nothing")
 	}
 	for _, p := range seen {
-		if strings.HasPrefix(p, ".memobrain/snapshots") {
+		if strings.HasPrefix(p, ".clarae/snapshots") {
 			t.Fatalf("tree/walk exposes %s", p)
 		}
 	}
@@ -456,7 +456,7 @@ func TestSnapshotsInvisibleToTreeIndexAndSync(t *testing.T) {
 		var p string
 		_ = rows.Scan(&p)
 		n++
-		if strings.HasPrefix(p, ".memobrain") {
+		if strings.HasPrefix(p, ".clarae") {
 			t.Fatalf("indexed %s", p)
 		}
 	}

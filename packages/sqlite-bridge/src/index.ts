@@ -2,7 +2,7 @@
  * Synchronous SQLite bridge for the Go core compiled to WebAssembly (ADR-0030).
  *
  * The Go side (`apps/desktop/internal/sqlitejs`) is a `database/sql` driver that calls the methods
- * of `globalThis.__memobrainSQLite` through `syscall/js`. Both run in the same Web Worker, so every
+ * of `globalThis.__claraeSQLite` through `syscall/js`. Both run in the same Web Worker, so every
  * call is synchronous. The bridge knows nothing about OPFS: the caller supplies `openDatabase`
  * (the `opfs-sahpool` VFS in the browser, in-memory databases in tests).
  *
@@ -186,5 +186,5 @@ export function createBridge(opts: BridgeOptions): SqliteBridge {
 
 /** Publishes the bridge where the Go driver looks for it. */
 export function installBridge(bridge: SqliteBridge, target: object = globalThis): void {
-  (target as Record<string, unknown>)['__memobrainSQLite'] = bridge;
+  (target as Record<string, unknown>)['__claraeSQLite'] = bridge;
 }

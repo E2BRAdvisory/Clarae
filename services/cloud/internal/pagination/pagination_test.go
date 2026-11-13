@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 func TestLimit(t *testing.T) {

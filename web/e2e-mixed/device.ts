@@ -32,15 +32,15 @@ export class Device {
 
   /** Starts a device signed in as `user` (password grant of the throwaway realm). */
   static async start(user: string, label = user): Promise<Device> {
-    const bin = process.env['MEMOBRAIN_E2E_DEVICE'];
+    const bin = process.env['CLARAE_E2E_DEVICE'];
     if (!bin)
-      throw new Error('MEMOBRAIN_E2E_DEVICE is not set: run the suite with scripts/e2e-mixed.sh');
-    const root = process.env['MEMOBRAIN_E2E_DEVICE_DATA'] ?? tmpdir();
+      throw new Error('CLARAE_E2E_DEVICE is not set: run the suite with scripts/e2e-mixed.sh');
+    const root = process.env['CLARAE_E2E_DEVICE_DATA'] ?? tmpdir();
     mkdirSync(root, { recursive: true });
     const dataDir = mkdtempSync(join(root, `${label}-`));
-    const server = process.env['MEMOBRAIN_CLOUD_URL'] ?? 'http://localhost:18091';
+    const server = process.env['CLARAE_CLOUD_URL'] ?? 'http://localhost:18091';
     const args = ['-server', server, '-user', user, '-data', dataDir];
-    if (process.env['MEMOBRAIN_E2E_DEVICE_VERBOSE']) args.push('-v');
+    if (process.env['CLARAE_E2E_DEVICE_VERBOSE']) args.push('-v');
     const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'inherit'] });
     const base = await new Promise<string>((resolve, reject) => {
       const lines = createInterface({ input: proc.stdout });

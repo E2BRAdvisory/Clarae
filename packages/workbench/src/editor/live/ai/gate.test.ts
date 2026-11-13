@@ -1,4 +1,4 @@
-import { Feature, FEATURE_DEFAULTS, featureEnabled } from '@memobrain/api-client/features';
+import { Feature, FEATURE_DEFAULTS, featureEnabled } from '@clarae/api-client/features';
 import { describe, expect, it } from 'vitest';
 import { checkAi, type AiGateDeps } from './gate';
 import { fakeCore, openStatus } from './testing';

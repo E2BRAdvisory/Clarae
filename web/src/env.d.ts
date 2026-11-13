@@ -3,19 +3,19 @@
 declare module '*.css';
 
 /** The WebAssembly files of the core, recorded by the build (null when it was built without them). */
-declare const __MEMOBRAIN_CORE__: unknown;
+declare const __CLARAE_CORE__: unknown;
 /** URL of the bundled worker that runs the core (scripts/esbuild.mjs). */
-declare const __MEMOBRAIN_WORKER__: string;
+declare const __CLARAE_WORKER__: string;
 /** SHA-384 of that bundle (Subresource Integrity), checked before the worker starts (bridge.ts). */
-declare const __MEMOBRAIN_WORKER_INTEGRITY__: string;
+declare const __CLARAE_WORKER_INTEGRITY__: string;
 /** Version stamped by the build. */
-declare const __MEMOBRAIN_VERSION__: string;
+declare const __CLARAE_VERSION__: string;
 /** Go's loader for the core (build/wasm/wasm_exec.js, produced by `task wasm-core`). */
 declare module '*/wasm_exec.js';
 
 interface ImportMetaEnv {
   /** "1" when built for Playwright: use the OIDC test double. */
-  readonly MEMOBRAIN_E2E?: string;
+  readonly CLARAE_E2E?: string;
 }
 
 interface ImportMeta {

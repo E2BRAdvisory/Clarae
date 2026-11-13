@@ -6,12 +6,12 @@ Dalla 1.2.2 `release.yml` **non legge nessun segreto né variabile del repositor
 
 | Job                        | Permessi del `GITHUB_TOKEN`         | Uso                                                                |
 | -------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
-| `image` (immagine cloud)   | `contents: read`, `packages: write` | login e push su GHCR (`ghcr.io/<owner>/memobrain-cloud`)           |
+| `image` (immagine cloud)   | `contents: read`, `packages: write` | login e push su GHCR (`ghcr.io/<owner>/clarae-cloud`)              |
 | `chart` (chart Helm)       | `contents: read`, `packages: write` | `helm registry login` e push OCI su `oci://ghcr.io/<owner>/charts` |
 | `desktop` (installer)      | `contents: read` (default del file) | nessun accesso in scrittura; gli installer sono artefatti del run  |
 | `release` (GitHub Release) | `contents: write`                   | `gh release create` con installer e `SHA256SUMS`                   |
 
-Non serve configurare nulla in Settings, Secrets and variables, Actions. I pacchetti GHCR creati al primo push sono privati: renderli pubblici (Package settings, Change visibility) o concedere l'accesso dalle impostazioni del pacchetto; il chart (`.../charts/memobrain`) è un pacchetto separato. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
+Non serve configurare nulla in Settings, Secrets and variables, Actions. I pacchetti GHCR creati al primo push sono privati: renderli pubblici (Package settings, Change visibility) o concedere l'accesso dalle impostazioni del pacchetto; il chart (`.../charts/clarae`) è un pacchetto separato. **Nessuna chiave o certificato è nel repository** e nessuna è stata generata qui.
 
 ## Da riattivare
 
@@ -23,7 +23,7 @@ Il resto di questo documento descrive la pipeline firmata di ADR-0023 e il canal
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `APPLE_CERT_P12_BASE64` o `APPLE_SIGNING_IDENTITY`   | `.dmg` non firmato né notarizzato: Gatekeeper avvisa (tasto destro, Apri).                                                    | La pipeline fallisce in `meta`.      |
 | `APPLE_API_KEY_*`                                    | `.dmg` firmato ma non notarizzato (se il resto c'è).                                                                          | Come sopra.                          |
-| `WINDOWS_CERT_PFX_BASE64`                            | `memobrain.exe` e installer non firmati: SmartScreen avvisa (Ulteriori informazioni, Esegui comunque).                        | La pipeline fallisce in `meta`.      |
+| `WINDOWS_CERT_PFX_BASE64`                            | `clarae.exe` e installer non firmati: SmartScreen avvisa (Ulteriori informazioni, Esegui comunque).                           | La pipeline fallisce in `meta`.      |
 | `UPDATE_SIGNING_KEY` o variabile `UPDATE_PUBLIC_KEY` | Il desktop è compilato con l'updater **disattivato** (`updater.DisabledByBuild`) e non si pubblica nessun manifest.           | La pipeline fallisce in `meta`.      |
 | nessuno dei precedenti                               | Release in prerelease "unsigned", bozza (vedi `RELEASE_AUTO_PUBLISH`). Le immagini Docker restano firmate (cosign è keyless). | La pipeline fallisce in `meta`.      |
 
@@ -66,7 +66,7 @@ Alternativa locale a `APPLE_API_*`: `NOTARY_KEYCHAIN_PROFILE` (profilo di `xcrun
 | `WINDOWS_CERT_PFX_BASE64` | Certificato di code signing (OV/EV) con chiave privata in `.pfx`, base64. |
 | `WINDOWS_CERT_PASSWORD`   | Password del `.pfx`.                                                      |
 
-Un certificato EV su token hardware non è utilizzabile da un runner ospitato da GitHub: serve un runner self-hosted o un servizio di firma in cloud (in quel caso definire direttamente `MEMOBRAIN_SIGNTOOL_CMD`, vedi `build/windows/installer/project.nsi`).
+Un certificato EV su token hardware non è utilizzabile da un runner ospitato da GitHub: serve un runner self-hosted o un servizio di firma in cloud (in quel caso definire direttamente `CLARAE_SIGNTOOL_CMD`, vedi `build/windows/installer/project.nsi`).
 
 #### Immagini OCI e chart Helm
 
@@ -81,7 +81,7 @@ task release-tool
 bin/release gen-key      # private -> segreto UPDATE_SIGNING_KEY, public -> variabile UPDATE_PUBLIC_KEY
 ```
 
-Salvare la chiave privata in un password manager o in un HSM/vault e tenerne una copia offline cifrata. Per ricavare la pubblica da una privata esistente: `MEMOBRAIN_UPDATE_SIGNING_KEY=... bin/release pubkey`. Prima di impostare i segreti verificare la coppia: `bin/release gen-manifest ... && bin/release sign-manifest -in manifest.json && bin/release verify-manifest -in manifest.json -pubkey <pubblica>`.
+Salvare la chiave privata in un password manager o in un HSM/vault e tenerne una copia offline cifrata. Per ricavare la pubblica da una privata esistente: `CLARAE_UPDATE_SIGNING_KEY=... bin/release pubkey`. Prima di impostare i segreti verificare la coppia: `bin/release gen-manifest ... && bin/release sign-manifest -in manifest.json && bin/release verify-manifest -in manifest.json -pubkey <pubblica>`.
 
 ### Chiave di sviluppo
 

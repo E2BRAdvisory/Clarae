@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { InlineError, Table } from '@memobrain/ui';
+import { InlineError, Table } from '@clarae/ui';
 import { cloudKeys, describeError } from './CloudVaultsTable';
 import { createT } from './i18n';
 import type { CloudPort } from './port';

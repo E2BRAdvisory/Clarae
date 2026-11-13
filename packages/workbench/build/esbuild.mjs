@@ -1,6 +1,6 @@
 // esbuild pieces shared by every app that hosts the workbench (the desktop frontend today, the Web UI
 // in M9-WP5): plugins, loaders and the copies of Excalidraw's assets. Each app keeps its own entry,
-// HTML, dev server and bundle budget. Usage: `import { ... } from '@memobrain/workbench/build'`.
+// HTML, dev server and bundle budget. Usage: `import { ... } from '@clarae/workbench/build'`.
 import { cp, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -12,17 +12,17 @@ export const workbenchRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(join(workbenchRoot, 'package.json'));
 
 /**
- * The directory a build writes to (it is emptied first): `MEMOBRAIN_DIST` when it is set, else `fallback`. A
+ * The directory a build writes to (it is emptied first): `CLARAE_DIST` when it is set, else `fallback`. A
  * relative value starts at `root`, the app's package, never at the working directory; an absolute one is taken
  * as it is (so a build can go anywhere, a scratch folder included). The package itself, or a folder that holds
  * it, is refused: the build would delete the sources.
  */
-export function distDir(root, fallback, env = process.env['MEMOBRAIN_DIST']) {
+export function distDir(root, fallback, env = process.env['CLARAE_DIST']) {
   const pkg = resolve(root);
   const dist = resolve(pkg, env || fallback);
   if (dist === pkg || pkg.startsWith(dist.endsWith(sep) ? dist : dist + sep)) {
     throw new Error(
-      `MEMOBRAIN_DIST=${env} is the package or one of its parents: refusing to empty it`,
+      `CLARAE_DIST=${env} is the package or one of its parents: refusing to empty it`,
     );
   }
   return dist;
@@ -140,7 +140,7 @@ export function withoutCdnFallback(script) {
 }
 
 /**
- * The collaboration chunk (ADR-0050, A-D12) exists only in a build made for it (`MEMOBRAIN_COLLAB=1`):
+ * The collaboration chunk (ADR-0050, A-D12) exists only in a build made for it (`CLARAE_COLLAB=1`):
  * in every other one `live/chunks/collab.ts` is replaced by a stub, so that Yjs, y-prosemirror and the
  * plugin are in no file of a released build, however a profile is set. The gate of the editor refuses
  * first (build constant, flag, provider); this keeps the code out as well. The stub throws if it is ever

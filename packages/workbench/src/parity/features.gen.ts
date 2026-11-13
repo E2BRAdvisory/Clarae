@@ -16,7 +16,7 @@ export type FeatureId =
   | 'vault.restore' // Ripristino di un vault cloud eliminato
   | 'vault.system-trash' // Cestino di sistema per i file eliminati
   | 'index.rebuild' // Ricostruzione dell'indice del vault
-  | 'settings.vault' // Configurazione del vault (.memobrain/)
+  | 'settings.vault' // Configurazione del vault (.clarae/)
   | 'sync.link' // Collegamento di un vault locale a un vault cloud
   | 'sync.unlink' // Scollegamento di un vault dal cloud
   | 'sync.engine' // Sincronizzazione del vault (stato, pausa, sincronizza ora)
@@ -49,7 +49,7 @@ export type FeatureId =
   | 'command-palette' // Palette dei comandi
   | 'app.updater' // Aggiornamento automatico dell'applicazione
   | 'window.native' // Finestra nativa (schermo intero, link esterni nel browser di sistema)
-  | 'deeplink' // Link memobrain://
+  | 'deeplink' // Link clarae://
   | 'note.create' // Creazione di note e cartelle
   | 'note.edit' // Lettura e salvataggio delle note
   | 'note.rename' // Rinomina e spostamento con aggiornamento dei link

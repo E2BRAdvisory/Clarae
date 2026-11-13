@@ -10,12 +10,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/quota/quotadb"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/users"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/quota/quotadb"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/users"
+	"clarae/shared/syncproto"
 )
 
 // Unlimited is the quota value for accounts without a limit.

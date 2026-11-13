@@ -18,7 +18,7 @@ import (
 func TestWebAssemblyCoreDoesNotLinkTheAssistant(t *testing.T) {
 	deps := func(env ...string) []string {
 		t.Helper()
-		cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "memobrain/apps/desktop/internal/app")
+		cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "clarae/apps/desktop/internal/app")
 		cmd.Env = append(os.Environ(), env...)
 		out, err := cmd.Output()
 		if err != nil {
@@ -31,7 +31,7 @@ func TestWebAssemblyCoreDoesNotLinkTheAssistant(t *testing.T) {
 		}
 		return strings.Fields(string(out))
 	}
-	const pkg = "memobrain/apps/desktop/internal/ai"
+	const pkg = "clarae/apps/desktop/internal/ai"
 	if !slices.Contains(deps(), pkg) {
 		t.Fatalf("the desktop core does not link %s: the check below proves nothing", pkg)
 	}

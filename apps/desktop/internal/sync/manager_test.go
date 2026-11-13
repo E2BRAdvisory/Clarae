@@ -9,10 +9,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // offlineSession is signed in but has no client: every cycle fails fast with

@@ -9,13 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/updatemanifest"
+	"clarae/shared/updatemanifest"
 )
 
 func TestApplyWindowsRunsInstallerSilentlyAfterExit(t *testing.T) {
 	fr := &fakeRunner{}
-	a := &SystemApplier{OS: "windows", Exe: `C:\Program Files\MemoBrain Notes\memobrain.exe`, Runner: fr}
-	res, err := a.Apply(context.Background(), `C:\data\updates\memobrain-1.1.0.exe`, updatemanifest.Artifact{Kind: "nsis"})
+	a := &SystemApplier{OS: "windows", Exe: `C:\Program Files\Clarae notanda\clarae.exe`, Runner: fr}
+	res, err := a.Apply(context.Background(), `C:\data\updates\clarae-1.1.0.exe`, updatemanifest.Artifact{Kind: "nsis"})
 	if err != nil || res.Method != MethodInstallerOnExit || !res.Quit {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -24,8 +24,8 @@ func TestApplyWindowsRunsInstallerSilentlyAfterExit(t *testing.T) {
 		t.Fatalf("command: %v", c)
 	}
 	script := c[len(c)-1]
-	if !strings.Contains(script, `Start-Process -FilePath 'C:\data\updates\memobrain-1.1.0.exe' -ArgumentList '/S' -Wait`) ||
-		!strings.Contains(script, `Start-Process -FilePath 'C:\Program Files\MemoBrain Notes\memobrain.exe'`) ||
+	if !strings.Contains(script, `Start-Process -FilePath 'C:\data\updates\clarae-1.1.0.exe' -ArgumentList '/S' -Wait`) ||
+		!strings.Contains(script, `Start-Process -FilePath 'C:\Program Files\Clarae notanda\clarae.exe'`) ||
 		!strings.Contains(script, "Wait-Process -Id ") {
 		t.Fatalf("script: %s", script)
 	}
@@ -37,8 +37,8 @@ func TestApplyWindowsRunsInstallerSilentlyAfterExit(t *testing.T) {
 // %VAR%, carets, non-ASCII.
 func TestWindowsInstallerCommandLineRoundTrip(t *testing.T) {
 	paths := [][2]string{
-		{`C:\Users\Ada\AppData\Local\MemoBrain\updates\memobrain-1.1.0.exe`, `C:\Program Files\MemoBrain Notes\memobrain.exe`},
-		{`C:\Users\O'Brien & Co\%TEMP%\up^date\setup (1).exe`, `D:\Apps\Mémo ‘Brain’\memobrain.exe`},
+		{`C:\Users\Ada\AppData\Local\Clarae\updates\clarae-1.1.0.exe`, `C:\Program Files\Clarae notanda\clarae.exe`},
+		{`C:\Users\O'Brien & Co\%TEMP%\up^date\setup (1).exe`, `D:\Apps\Mémo ‘Brain’\clarae.exe`},
 		{`\\server\share\dir\`, `C:\trailing\`},
 	}
 	for _, p := range paths {
@@ -177,7 +177,7 @@ func splitWindowsCommandLine(s string) []string {
 
 func TestApplyAppImageReplacesInPlace(t *testing.T) {
 	dir := t.TempDir()
-	cur := filepath.Join(dir, "MemoBrain-Notes.AppImage")
+	cur := filepath.Join(dir, "Clarae-notanda.AppImage")
 	staged := filepath.Join(dir, "staged.AppImage")
 	if err := os.WriteFile(cur, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
@@ -195,7 +195,7 @@ func TestApplyAppImageReplacesInPlace(t *testing.T) {
 	if string(got) != "new" || fi.Mode().Perm()&0o100 == 0 {
 		t.Fatalf("content %q mode %v", got, fi.Mode())
 	}
-	left, _ := filepath.Glob(filepath.Join(dir, ".memobrain-update-*"))
+	left, _ := filepath.Glob(filepath.Join(dir, ".clarae-update-*"))
 	if len(left) != 0 {
 		t.Fatalf("temp left: %v", left)
 	}
@@ -214,9 +214,9 @@ func TestApplyDebAndNonAppImageOnlyReveal(t *testing.T) {
 
 func TestApplyMacosHelperScript(t *testing.T) {
 	dir := t.TempDir()
-	app := filepath.Join(dir, "MemoBrain Notes.app")
-	exe := filepath.Join(app, "Contents", "MacOS", "memobrain")
-	staged := filepath.Join(dir, "memobrain.dmg")
+	app := filepath.Join(dir, "Clarae notanda.app")
+	exe := filepath.Join(app, "Contents", "MacOS", "clarae")
+	staged := filepath.Join(dir, "clarae.dmg")
 	fr := &fakeRunner{}
 	a := &SystemApplier{OS: "darwin", Exe: exe, Runner: fr}
 	res, err := a.Apply(context.Background(), staged, updatemanifest.Artifact{Kind: "dmg"})
@@ -233,7 +233,7 @@ func TestApplyMacosHelperScript(t *testing.T) {
 		}
 	}
 	// Not running from a bundle (dev, `wails dev`): fall back to revealing the dmg.
-	b := &SystemApplier{OS: "darwin", Exe: "/usr/local/bin/memobrain", Runner: &fakeRunner{}}
+	b := &SystemApplier{OS: "darwin", Exe: "/usr/local/bin/clarae", Runner: &fakeRunner{}}
 	if res, _ := b.Apply(context.Background(), staged, updatemanifest.Artifact{Kind: "dmg"}); res.Method != MethodReveal {
 		t.Fatalf("%+v", res)
 	}

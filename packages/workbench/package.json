@@ -1,5 +1,5 @@
 {
-  "name": "@memobrain/workbench",
+  "name": "@clarae/workbench",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -20,6 +20,10 @@
     "live:metrics": "LIVE_METRICS=1 vitest run src/test/conformance.test.ts -t 'A gate' --reporter=verbose"
   },
   "dependencies": {
+    "@clarae/api-client": "workspace:*",
+    "@clarae/cloud-features": "workspace:*",
+    "@clarae/markdown": "workspace:*",
+    "@clarae/ui": "workspace:*",
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
@@ -34,10 +38,6 @@
     "@lezer/highlight": "^1.2.5",
     "@lezer/markdown": "^1.8.1",
     "@marp-team/marp-core": "5.0.2",
-    "@memobrain/api-client": "workspace:*",
-    "@memobrain/cloud-features": "workspace:*",
-    "@memobrain/markdown": "workspace:*",
-    "@memobrain/ui": "workspace:*",
     "@milkdown/crepe": "7.23.0",
     "@milkdown/kit": "7.23.0",
     "@milkdown/plugin-collab": "7.23.0",
@@ -75,8 +75,8 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@clarae/sqlite-bridge": "workspace:*",
     "@discordapp/twemoji": "14.1.2",
-    "@memobrain/sqlite-bridge": "workspace:*",
     "@mui/icons-material": "7.3.5",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

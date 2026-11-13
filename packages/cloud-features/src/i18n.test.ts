@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkUsage, comparePair } from '@memobrain/ui/i18nCheck';
+import { checkUsage, comparePair } from '@clarae/ui/i18nCheck';
 import { createT, langOf, resources } from './i18n';
 import { errorCode } from './port';
 

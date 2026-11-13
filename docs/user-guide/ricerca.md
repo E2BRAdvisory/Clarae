@@ -20,7 +20,7 @@ Scrive in una query libera; il risultato mostra i frammenti trovati, con ordinam
 | `[proprietà:valore]`              | `[stato:attivo]`, `[scadenza:<2026-12-31]` | Filtro sulle proprietà tipizzate.                                         |
 | `/regex/`                         | `/\d{4}-\d{2}/`                            | Espressione regolare (RE2).                                               |
 | `OR`, `-`, `( )`                  | `(a OR b) -c`                              | Booleani e raggruppamento; più termini = AND implicito; `"frase esatta"`. |
-| `match-case:` `ignore-case:`      | `match-case:MemoBrain Notes`               | Forza la sensibilità alle maiuscole.                                      |
+| `match-case:` `ignore-case:`      | `match-case:Clarae notanda`                | Forza la sensibilità alle maiuscole.                                      |
 
 Le note nel cestino sono escluse, a meno di attivare _Includi le note nel cestino_.
 

@@ -1,6 +1,6 @@
 // Package history keeps device-local snapshots of the text files of a vault ("File recovery",
 // §2.2.1): at most one snapshot per file every few minutes while it changes, deduplicated by
-// content, pruned by age and total size. Snapshots live under .memobrain/snapshots, which is
+// content, pruned by age and total size. Snapshots live under .clarae/snapshots, which is
 // excluded from sync, the index and the file tree, so they never travel and never feed back
 // into the watcher.
 //
@@ -25,9 +25,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/hashing"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/hashing"
+	"clarae/shared/pathrules"
 )
 
 // Reason says why a snapshot was taken.
@@ -64,7 +64,7 @@ type Content struct {
 	Content  string   `json:"content"`
 }
 
-// Settings are the per-vault history settings (stored in .memobrain/history.json).
+// Settings are the per-vault history settings (stored in .clarae/history.json).
 type Settings struct {
 	IntervalMinutes int `json:"intervalMinutes"` // minimum time between two snapshots of a file
 	RetentionDays   int `json:"retentionDays"`
@@ -120,7 +120,7 @@ type History struct {
 	now      func() time.Time
 	readOnly func() bool
 
-	mu       sync.Mutex // guards the files under .memobrain/snapshots and the fields below
+	mu       sync.Mutex // guards the files under .clarae/snapshots and the fields below
 	settings Settings
 	last     map[string]time.Time // newest snapshot time per path (lazy cache)
 	pending  map[string]struct{}  // paths seen changing, waiting for their interval
@@ -146,7 +146,7 @@ func New(o Options) *History {
 	return h
 }
 
-// LoadSettings reads .memobrain/history.json (defaults when absent or invalid).
+// LoadSettings reads .clarae/history.json (defaults when absent or invalid).
 func LoadSettings(root string) Settings {
 	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(settingsFile)))
 	var s Settings

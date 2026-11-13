@@ -23,7 +23,7 @@ func TestAppDoesNotImportWails(t *testing.T) {
 			name = strings.Join(env, " ")
 		}
 		t.Run(name, func(t *testing.T) {
-			cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "memobrain/apps/desktop/internal/app")
+			cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "clarae/apps/desktop/internal/app")
 			cmd.Env = append(os.Environ(), env...)
 			out, err := cmd.Output()
 			if err != nil {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@memobrain/ui';
+import { Button } from '@clarae/ui';
 import { useSharingAllowed } from '../api/cloud';
 import { useAdminAccess } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';

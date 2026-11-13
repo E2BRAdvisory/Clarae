@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 func TestDailyAndUniqueNotes(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/conformance"
+	"clarae/shared/conformance"
 )
 
 // TestUpdateFixtures writes the expectation of every fixture whose

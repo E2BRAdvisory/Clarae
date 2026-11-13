@@ -9,7 +9,7 @@ describe('invalidateConfigResolution', () => {
       adminConfig: adminKeys.userPart('u1', 'config'),
       otherConfig: adminKeys.userPart('u2', 'config'),
       own: ['config', 'effective'],
-      // The flags as @memobrain/cloud-features caches them (the Shares link, the workbench).
+      // The flags as @clarae/cloud-features caches them (the Shares link, the workbench).
       flags: ['cloud-features', 'rest', 'features'],
       devices: adminKeys.userPart('u1', 'devices'),
       profiles: adminKeys.profiles,

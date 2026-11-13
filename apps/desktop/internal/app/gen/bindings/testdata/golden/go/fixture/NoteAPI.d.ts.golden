@@ -14,7 +14,7 @@ export function Foreign(arg1:other.Tag,arg2:other.Tag):Promise<Array<other.Tag>>
 
 export function ForeignMap():Promise<Record<string, other.Tag>>;
 
-export function Generic():Promise<fixture.Page_memobrain_apps_desktop_internal_app_gen_bindings_fixture_Link_>;
+export function Generic():Promise<fixture.Page_clarae_apps_desktop_internal_app_gen_bindings_fixture_Link_>;
 
 export function GenericPtr(arg1:fixture.Page_string_):Promise<void>;
 

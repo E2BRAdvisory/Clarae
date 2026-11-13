@@ -1,0 +1,13 @@
+apiVersion: v2
+name: clarae
+description: Clarae notanda Cloud Service (API + worker). PostgreSQL, S3-compatible storage and Keycloak are external dependencies.
+type: application
+version: 0.2.0
+appVersion: '0.0.1'
+kubeVersion: '>=1.27.0-0'
+# Placeholder until the final artwork is published (the repository has no logo yet).
+icon: https://clarae.example/assets/clarae-icon.svg
+keywords: [notes, knowledge-management, local-first, sync]
+home: https://clarae.example
+annotations:
+  category: Productivity

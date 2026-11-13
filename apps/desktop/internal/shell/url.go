@@ -7,7 +7,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-// ListenForURLs registers handle for the memobrain:// URLs the system hands to the running
+// ListenForURLs registers handle for the clarae:// URLs the system hands to the running
 // application, and reports whether it did. Only macOS delivers them as an event
 // (ApplicationLaunchedWithUrl, an Apple Event: the URL is not in os.Args). On Windows and Linux the
 // URL is on the command line: the first instance reads os.Args itself, a later one reaches the

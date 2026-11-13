@@ -1,4 +1,4 @@
-# Welcome to MemoBrain Notes
+# Welcome to Clarae notanda
 
 This demo vault is for checks and debugging. Try these:
 

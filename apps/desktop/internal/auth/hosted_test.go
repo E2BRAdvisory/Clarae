@@ -188,7 +188,7 @@ func newDeviceCloud(t *testing.T) *deviceCloud {
 		c.mu.Lock()
 		user := c.userID
 		c.mu.Unlock()
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": user, "username": "user1", "email": "user1@memobrain.local", "role": "user", "status": "active", "quota_bytes": 1, "used_bytes": 0, "config_version": 0, "created_at": time.Now()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": user, "username": "user1", "email": "user1@clarae.local", "role": "user", "status": "active", "quota_bytes": 1, "used_bytes": 0, "config_version": 0, "created_at": time.Now()})
 	})
 	mux.HandleFunc("/api/v1/me/devices", func(w http.ResponseWriter, r *http.Request) {
 		c.mu.Lock()

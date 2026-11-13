@@ -1,5 +1,5 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
-import type { FeatureId } from '@memobrain/workbench/parity';
+import type { FeatureId } from '@clarae/workbench/parity';
 
 /**
  * The same specs run on two targets (ADR-0029, P7 of the W8 review):
@@ -171,7 +171,7 @@ export async function readVaultFile(page: Page, path: string): Promise<string> {
       const vault = ((await app['VaultAPI']!['ListOpen']!()) as { id: string }[])[0];
       if (!vault) return '';
       try {
-        if (p.startsWith('.memobrain/'))
+        if (p.startsWith('.clarae/'))
           return (await app['VaultAPI']!['ReadConfig']!(vault.id, p.slice(11))) as string;
         return ((await app['VaultAPI']!['ReadNote']!(vault.id, p)) as { content: string }).content;
       } catch {

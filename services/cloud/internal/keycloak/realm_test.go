@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const prodRealm = "../../../../deploy/keycloak-prod/realm-memobrain.json"
+const prodRealm = "../../../../deploy/keycloak-prod/realm-clarae.json"
 
 // realmClient loads one client of a realm export as a generic JSON object.
 func realmClient(t *testing.T, path, clientID string) map[string]any {
@@ -75,13 +75,13 @@ func uriAllowed(uri string, patterns []string) bool {
 
 // The production realm (deploy/keycloak-prod, imported by deploy/compose) takes the Web UI
 // origin from WEB_UI_ORIGIN, which Keycloak substitutes at import time. A development origin
-// left in memobrain-web breaks production: with a post-logout redirect URI that does not match
+// left in clarae-web breaks production: with a post-logout redirect URI that does not match
 // the public origin Keycloak refuses the Web UI logout and the SSO session stays open.
 func TestProductionRealmWebClientUsesPublicOrigin(t *testing.T) {
-	c := realmClient(t, prodRealm, "memobrain-web")
+	c := realmClient(t, prodRealm, "clarae-web")
 
 	values := map[string]string{}
-	stringsOf("memobrain-web", c, values)
+	stringsOf("clarae-web", c, values)
 	for path, v := range values {
 		if l := strings.ToLower(v); strings.Contains(l, "localhost") || strings.Contains(l, "127.0.0.1") {
 			t.Errorf("%s = %q: development origin in the production realm, use ${WEB_UI_ORIGIN}", path, v)

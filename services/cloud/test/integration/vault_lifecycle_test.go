@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"memobrain/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/settings"
 )
 
 // TestListVaultsIncludeDeleted covers GET /vaults?include_deleted=true (ADR-0037):

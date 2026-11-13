@@ -11,9 +11,9 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/shared/features"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/shared/features"
 )
 
 // HTTP implements GET /config/effective.
@@ -24,7 +24,7 @@ func NewHTTP(s *Service) *HTTP { return &HTTP{svc: s} }
 
 // ProductDefaults are the built-in defaults every client starts from: the "default" keywords of
 // api/config-profile.schema.json (every feature flag, the sync interval and file limit, the
-// redirect mode), generated into package memobrain/shared/features by `task gen`.
+// redirect mode), generated into package clarae/shared/features by `task gen`.
 func ProductDefaults() map[string]any { return features.ProductDefaults() }
 
 // GetEffectiveConfig implements GET /config/effective with ETag support.

@@ -10,7 +10,7 @@ const ORIGIN = 'http://127.0.0.1:18096';
 const SKETCH = JSON.stringify({
   type: 'excalidraw',
   version: 2,
-  source: 'memobrain',
+  source: 'clarae',
   elements: [
     {
       id: 'label1',

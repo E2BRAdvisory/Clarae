@@ -6,8 +6,8 @@
 import type { SourceEdit } from '../editor/types';
 
 /** The comment that leaves a slide out of the presentation and of its exports. */
-export const HIDDEN_MARKER = '<!-- memobrain: hidden -->';
-const HIDDEN_RE = /^memobrain:\s*hidden$/i;
+export const HIDDEN_MARKER = '<!-- clarae: hidden -->';
+const HIDDEN_RE = /^clarae:\s*hidden$/i;
 
 /** A horizontal rule: the separator between two slides. */
 const SEPARATOR = /^ {0,3}([-*_])(?: *\1){2,} *$/;
@@ -540,9 +540,9 @@ export function moveSlideEdit(
 export interface DeckSettings {
   theme: string;
   paginate: boolean;
-  /** `memobrain-loop`: start again after the last slide. */
+  /** `clarae-loop`: start again after the last slide. */
   loop: boolean;
-  /** `memobrain-notes`: show the presenter notes while presenting (on unless set to false). */
+  /** `clarae-notes`: show the presenter notes while presenting (on unless set to false). */
   notes: boolean;
 }
 
@@ -563,8 +563,8 @@ export function deckSettings(source: string): DeckSettings {
   return {
     theme: fm['theme'] || 'default',
     paginate: fm['paginate'] === 'true',
-    loop: fm['memobrain-loop'] === 'true',
-    notes: fm['memobrain-notes'] !== 'false',
+    loop: fm['clarae-loop'] === 'true',
+    notes: fm['clarae-notes'] !== 'false',
   };
 }
 

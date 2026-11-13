@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/vaultcrypto"
+	"clarae/shared/vaultcrypto"
 )
 
 // Negative vectors: inputs that every implementation (Go and TypeScript) must

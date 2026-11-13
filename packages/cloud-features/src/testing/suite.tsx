@@ -1,5 +1,5 @@
 // One suite for CloudVaultsTable, run against every adapter (ADR-0037 §2): RestCloudPort over the
-// fake REST endpoints here, CoreCloudPort over the Wails mock in @memobrain/workbench. What a host
+// fake REST endpoints here, CoreCloudPort over the Wails mock in @clarae/workbench. What a host
 // adds (the console's export column, the workbench's connect flow) is tested by the host.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';

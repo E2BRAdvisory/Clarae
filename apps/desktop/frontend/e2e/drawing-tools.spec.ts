@@ -57,7 +57,7 @@ test('a LaTeX formula is inserted as an image and can be edited from the palette
   await waitSaved(page);
   const first = await savedDrawing(page);
   const image = first.elements.find((e) => e.type === 'image');
-  expect(image?.customData?.memobrain).toMatchObject({
+  expect(image?.customData?.clarae).toMatchObject({
     kind: 'latex',
     latex: '\\frac{a}{b} + x^2',
   });
@@ -76,7 +76,7 @@ test('a LaTeX formula is inserted as an image and can be edited from the palette
   await expect
     .poll(
       async () =>
-        (await savedDrawing(page)).elements.find((e) => e.type === 'image')?.customData?.memobrain
+        (await savedDrawing(page)).elements.find((e) => e.type === 'image')?.customData?.clarae
           ?.latex,
     )
     .toBe('\\sqrt{y}');

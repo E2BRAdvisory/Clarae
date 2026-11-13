@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/syncproto"
 )
 
 // ChangeType says what happened to the path of a FileChange.

@@ -1,5 +1,5 @@
 // The console's CloudPort: the REST API through the generated client (ADR-0037 §2).
-import { unwrap, type MemobrainClient } from '@memobrain/api-client';
+import { unwrap, type ClaraeClient } from '@clarae/api-client';
 import { featuresOf } from './featureFlags';
 import {
   groupEntries,
@@ -32,7 +32,7 @@ export class RestCloudPort implements CloudPort {
   readonly capabilities: CloudCapabilities;
 
   constructor(
-    private readonly api: MemobrainClient,
+    private readonly api: ClaraeClient,
     options: RestCloudPortOptions = {},
   ) {
     this.capabilities = {

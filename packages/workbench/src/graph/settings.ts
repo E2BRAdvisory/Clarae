@@ -1,4 +1,4 @@
-// Graph view settings, stored per vault in .memobrain/graph.json. Like the other settings files,
+// Graph view settings, stored per vault in .clarae/graph.json. Like the other settings files,
 // unknown keys and values of the wrong type are ignored so a hand-edited file cannot break the view.
 import { create } from 'zustand';
 import { api } from '../app/api';

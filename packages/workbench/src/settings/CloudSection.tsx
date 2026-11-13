@@ -15,7 +15,7 @@ export function CloudSection() {
   const signsIn = useAction('account:sign-in', server) !== null;
   const [busy, setBusy] = useState(false);
 
-  // Development convenience: MEMOBRAIN_DEFAULT_SERVER_URL prefills the address.
+  // Development convenience: CLARAE_DEFAULT_SERVER_URL prefills the address.
   useEffect(() => {
     void api.settings.info().then((i) => {
       if (i.defaultServer) setServer((cur) => cur || (i.defaultServer ?? ''));

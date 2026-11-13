@@ -1,14 +1,14 @@
 // Slideshow: every frame of the drawing is a slide. The order is the explicit
-// `customData.memobrain.slide` number when frames have one, else the frame names read as
+// `customData.clarae.slide` number when frames have one, else the frame names read as
 // "natural" text (Slide 2 before Slide 10), else their position on the board (rows, then columns).
 import type { SceneElement } from './actions/types';
 
 export interface Slide {
   id: string;
   name: string;
-  /** Presenter notes (`customData.memobrain.notes` of the frame). */
+  /** Presenter notes (`customData.clarae.notes` of the frame). */
   notes: string;
-  /** False when the frame is left out of the presentation (`customData.memobrain.slideHidden`). */
+  /** False when the frame is left out of the presentation (`customData.clarae.slideHidden`). */
   included: boolean;
   /** The frame's version, to know when its thumbnail is stale. */
   version: number;
@@ -16,22 +16,22 @@ export interface Slide {
 
 type Meta = Record<string, unknown>;
 const metaOf = (e: SceneElement): Meta =>
-  (e.customData as { memobrain?: Meta } | undefined)?.memobrain ?? {};
+  (e.customData as { clarae?: Meta } | undefined)?.clarae ?? {};
 
 /**
- * The property changes that set (or, with `undefined`, clear) keys of a frame's `memobrain`
+ * The property changes that set (or, with `undefined`, clear) keys of a frame's `clarae`
  * custom data, keeping the rest of `customData`.
  */
 export function slideMetaUpdate(
   e: SceneElement,
   changes: Record<string, unknown>,
 ): Record<string, unknown> {
-  const memobrain: Meta = { ...metaOf(e) };
+  const clarae: Meta = { ...metaOf(e) };
   for (const [k, v] of Object.entries(changes)) {
-    if (v === undefined || v === '' || v === false) delete memobrain[k];
-    else memobrain[k] = v;
+    if (v === undefined || v === '' || v === false) delete clarae[k];
+    else clarae[k] = v;
   }
-  return { customData: { ...(e.customData as Meta | undefined), memobrain } };
+  return { customData: { ...(e.customData as Meta | undefined), clarae } };
 }
 
 /** Patch that numbers the frames 1..n in the given order (only those whose number changes). */
@@ -53,12 +53,12 @@ export const playable = (slides: readonly Slide[]): Slide[] => slides.filter((s)
 
 /** The presenter notes stored on a frame. */
 export const slideNotes = (e: SceneElement): string => {
-  const mb = (e.customData as { memobrain?: { notes?: unknown } } | undefined)?.memobrain;
+  const mb = (e.customData as { clarae?: { notes?: unknown } } | undefined)?.clarae;
   return typeof mb?.notes === 'string' ? mb.notes : '';
 };
 
 const slideNumber = (e: SceneElement): number | null => {
-  const mb = (e.customData as { memobrain?: { slide?: unknown } } | undefined)?.memobrain;
+  const mb = (e.customData as { clarae?: { slide?: unknown } } | undefined)?.clarae;
   return typeof mb?.slide === 'number' && Number.isFinite(mb.slide) ? mb.slide : null;
 };
 

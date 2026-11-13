@@ -14,12 +14,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/crypto"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/apiclient"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/crypto"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/apiclient"
+	"clarae/shared/syncproto"
 )
 
 // M4-WP4: shares between users, mounts, permissions and revocation, against the real cloud binary.

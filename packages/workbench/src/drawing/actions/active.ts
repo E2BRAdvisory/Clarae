@@ -25,7 +25,7 @@ export interface SceneController {
   drawingPath: string;
   /** The binary files (images) of the drawing, by id. */
   files(): Record<string, SceneFile>;
-  /** Per-drawing settings stored in the file itself (`memobrain` key); null clears one. */
+  /** Per-drawing settings stored in the file itself (`clarae` key); null clears one. */
   setFileSetting(key: string, value: string | null): void;
   /** Opens a tool dialog of the editor; `editId` edits an existing element. */
   openTool(kind: ToolKind, editId?: string): void;
@@ -43,7 +43,7 @@ export interface SceneController {
   openExport(format: 'png' | 'svg'): void;
   /** Prints the whole drawing (the system dialog offers "Save as PDF"). */
   printDrawing(): Promise<void>;
-  /** The drawing's own settings (`memobrain` key of the file). */
+  /** The drawing's own settings (`clarae` key of the file). */
   fileSettings(): Record<string, unknown>;
 }
 

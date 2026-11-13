@@ -1,4 +1,4 @@
-/* Design tokens of MemoBrain Notes (ADR-0043), shared by the console (styles.css) and the workbench
+/* Design tokens of Clarae notanda (ADR-0043), shared by the console (styles.css) and the workbench
    (packages/workbench/src/style.css): the --nd-* custom properties the nd-* components are drawn
    with. Here they have the console palette, light and dark: dark follows the OS unless
    data-theme="light" | "dark" is set on <html>, the same switch the workbench uses. A host with its

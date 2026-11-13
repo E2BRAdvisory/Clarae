@@ -1,0 +1,38 @@
+# Overrides for the local k3d session (scripts/run-cloud-k3d.sh). Development values only.
+# The issuer host resolves to 127.0.0.1 on the host (public DNS) and to the Keycloak
+# Service inside the cluster (k3d --host-alias), so browser and pods see the same issuer.
+image:
+  repository: clarae-cloud
+  tag: dev
+  pullPolicy: Never
+
+api:
+  replicas: 1
+  pdb:
+    enabled: false # a single replica with a PDB would block node drains
+  topologySpread:
+    enabled: false
+worker:
+  replicas: 1
+
+config:
+  OIDC_ISSUER: http://keycloak.localtest.me:18080/realms/clarae
+  OIDC_AUDIENCE: clarae-api
+  S3_ENDPOINT: http://s3:9000
+  KC_ADMIN_BASE_URL: http://keycloak:18080
+  WEB_UI_ORIGIN: http://localhost:18081
+  PUBLIC_GRPC_ADDR: localhost:18082
+  LOG_LEVEL: debug
+
+secret:
+  values:
+    DATABASE_URL: postgres://clarae:clarae@postgres:5432/clarae?sslmode=disable
+    S3_ACCESS_KEY: clarae
+    S3_SECRET_KEY: clarae-secret
+    KC_ADMIN_CLIENT_SECRET: dev-admin-svc-secret
+
+service:
+  type: LoadBalancer # published on the host by the k3d load balancer (18081, 18082)
+
+ingress:
+  enabled: false

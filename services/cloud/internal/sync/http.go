@@ -6,10 +6,10 @@ import (
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // HTTP implements GET changes and POST commit of the generated strict server.

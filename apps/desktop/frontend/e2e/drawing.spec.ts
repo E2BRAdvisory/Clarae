@@ -4,7 +4,7 @@ import { appOrigin, expect, listVaultFiles, openVault, readVaultFile, test } fro
 const SKETCH = JSON.stringify({
   type: 'excalidraw',
   version: 2,
-  source: 'memobrain',
+  source: 'clarae',
   elements: [
     {
       id: 'box1',

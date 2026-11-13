@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/apiclient"
-	flags "memobrain/shared/features"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/apiclient"
+	flags "clarae/shared/features"
+	"clarae/shared/vaultcrypto"
 )
 
 // Errors.

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@memobrain/ui/styles.css';
-import '@memobrain/cloud-features/styles.css';
+import '@clarae/ui/styles.css';
+import '@clarae/cloud-features/styles.css';
 import './app.css';
 import { App } from './App';
 import { createOidcAuth } from './auth/oidc';
@@ -15,9 +15,9 @@ async function start() {
   applyTheme(loadTheme());
 
   let auth: AuthService;
-  // `import.meta.env.MEMOBRAIN_E2E` is a build-time constant: in production this branch and
+  // `import.meta.env.CLARAE_E2E` is a build-time constant: in production this branch and
   // the e2e module are removed from the bundle.
-  if (import.meta.env.MEMOBRAIN_E2E) {
+  if (import.meta.env.CLARAE_E2E) {
     auth = (await import('./auth/e2e')).createE2EAuth();
   } else {
     auth = createOidcAuth();

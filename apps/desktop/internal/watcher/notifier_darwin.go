@@ -188,7 +188,7 @@ func (s *fseventsSource) Add(root string) error {
 	if stream == 0 {
 		return errors.New("fsevents: FSEventStreamCreate failed")
 	}
-	label := []byte("memobrain.watcher\x00")
+	label := []byte("clarae.watcher\x00")
 	queue := fse.queueCreate(&label[0], 0) // serial queue
 	fse.streamSetQueue(stream, queue)
 	if !fse.streamStart(stream) {

@@ -23,7 +23,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // idpClient is the OAuth client of a desktop session, on the endpoints found by discovery.
@@ -31,7 +31,7 @@ type idpClient = oauth2.Config
 
 // login runs the browser flow against serverURL (Login checked the URL and the session state).
 func (s *Service) login(ctx context.Context, serverURL string) error {
-	client, err := transport.New(serverURL, nil, s.hc, "memobrain-desktop/"+s.opts.AppVersion)
+	client, err := transport.New(serverURL, nil, s.hc, "clarae-desktop/"+s.opts.AppVersion)
 	if err != nil {
 		return err
 	}
@@ -373,7 +373,7 @@ func randomString(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-const loopbackPage = `<!doctype html><html><head><meta charset="utf-8"><title>MemoBrain Notes</title>
+const loopbackPage = `<!doctype html><html><head><meta charset="utf-8"><title>Clarae notanda</title>
 <style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:grid;place-items:center;height:100vh;margin:0;color:#1d1d1f}</style></head>
-<body><div><h2>Signed in to MemoBrain Notes</h2><p>You can close this window and return to the app.</p></div>
+<body><div><h2>Signed in to Clarae notanda</h2><p>You can close this window and return to the app.</p></div>
 <script>setTimeout(function(){window.close()},1500)</script></body></html>`

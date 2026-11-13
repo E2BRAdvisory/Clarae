@@ -49,7 +49,7 @@ export async function mountWorkbench(
   initI18n();
   // Playwright runs the desktop UI in a plain browser: swap the Wails bindings for the in-memory mock.
   // A web host brings its own backend (the Go core), which must never be replaced.
-  if (import.meta.env.MEMOBRAIN_E2E && usesWailsBindings()) {
+  if (import.meta.env.CLARAE_E2E && usesWailsBindings()) {
     const { installWailsMock } = await import('./test/wails-mock');
     (window as unknown as { __mock: unknown }).__mock = installWailsMock();
   }

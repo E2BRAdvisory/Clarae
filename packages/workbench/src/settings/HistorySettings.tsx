@@ -11,7 +11,7 @@ const FIELDS: { key: keyof Values; label: string; min: number }[] = [
   { key: 'maxTotalMb', label: 'recovery.settingsMaxTotal', min: 10 },
 ];
 
-/** File recovery settings of the open vault (stored in .memobrain/history.json). */
+/** File recovery settings of the open vault (stored in .clarae/history.json). */
 export function HistorySettings() {
   const { t } = useTranslation();
   const vault = useAppStore((s) => s.vault);

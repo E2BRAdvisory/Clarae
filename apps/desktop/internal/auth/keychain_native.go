@@ -15,7 +15,7 @@ func defaultSecrets() SecretStore { return KeychainStore{} }
 // Manager, freedesktop Secret Service) via go-keyring (§2.5 "auth").
 type KeychainStore struct{}
 
-const keychainService = "MemoBrain Notes"
+const keychainService = "Clarae notanda"
 
 // Set implements SecretStore.
 func (KeychainStore) Set(server, refreshToken string) error {

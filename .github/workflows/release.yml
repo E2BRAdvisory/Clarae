@@ -45,7 +45,7 @@ jobs:
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/memobrain-cloud" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/clarae-cloud" >> "$GITHUB_ENV"
           echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -90,12 +90,12 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"; owner="${GITHUB_REPOSITORY_OWNER,,}"
-          work="$(mktemp -d)"; cp -R deploy/helm/memobrain "$work/memobrain"
+          work="$(mktemp -d)"; cp -R deploy/helm/clarae "$work/clarae"
           # The repository default names the project's registry: point it at the image published by this run.
-          sed -i "s#ghcr.io/e2br/memobrain-cloud#ghcr.io/${owner}/memobrain-cloud#" "$work/memobrain/values.yaml"
-          helm package "$work/memobrain" --version "$version" --app-version "$version" -d "$work"
+          sed -i "s#ghcr.io/e2br/clarae-cloud#ghcr.io/${owner}/clarae-cloud#" "$work/clarae/values.yaml"
+          helm package "$work/clarae" --version "$version" --app-version "$version" -d "$work"
           echo "$TOKEN" | helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
-          helm push "$work/memobrain-${version}.tgz" "oci://ghcr.io/${owner}/charts"
+          helm push "$work/clarae-${version}.tgz" "oci://ghcr.io/${owner}/charts"
 
   desktop:
     name: Desktop ${{ matrix.id }}
@@ -165,7 +165,7 @@ jobs:
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
           bash scripts/release/build-desktop.sh windows "$VERSION" --release
           mkdir -p dist
-          cp "apps/desktop/build/bin/memobrain-$ARCH-installer.exe" "dist/memobrain-$VERSION-windows-$ARCH.exe"
+          cp "apps/desktop/build/bin/clarae-$ARCH-installer.exe" "dist/clarae-$VERSION-windows-$ARCH.exe"
 
       - name: Linux (.deb, AppImage)
         if: matrix.os_name == 'linux'
@@ -194,7 +194,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installers-${{ matrix.id }}
-          path: dist/memobrain-*
+          path: dist/clarae-*
           if-no-files-found: error
 
   release:
@@ -218,17 +218,17 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"; owner="${GITHUB_REPOSITORY_OWNER,,}"
-          (cd dist && sha256sum memobrain-* > SHA256SUMS)
+          (cd dist && sha256sum clarae-* > SHA256SUMS)
           prev="$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
           bash scripts/release/notes.sh "$version" "$prev" > notes.md
           {
             echo; echo "## Cloud service"
             echo; echo '```sh'
-            echo "docker pull ghcr.io/${owner}/memobrain-cloud:${version}"
-            echo "helm install memobrain oci://ghcr.io/${owner}/charts/memobrain --version ${version} -f my-values.yaml"
+            echo "docker pull ghcr.io/${owner}/clarae-cloud:${version}"
+            echo "helm install clarae oci://ghcr.io/${owner}/charts/clarae --version ${version} -f my-values.yaml"
             echo '```'
             echo; echo "The desktop installers are not code-signed: macOS Gatekeeper and Windows SmartScreen warn on first launch. Verify the download against \`SHA256SUMS\`."
           } >> notes.md
-          flags=(--title "MemoBrain Notes ${version}" --notes-file notes.md)
+          flags=(--title "Clarae notanda ${version}" --notes-file notes.md)
           [[ "$version" == *-* ]] && flags+=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}" dist/memobrain-* dist/SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" dist/clarae-* dist/SHA256SUMS

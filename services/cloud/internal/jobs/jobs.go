@@ -19,16 +19,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/admin"
-	"memobrain/services/cloud/internal/blobs"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/jobs/jobsdb"
-	"memobrain/services/cloud/internal/observability"
-	"memobrain/services/cloud/internal/quota"
-	"memobrain/services/cloud/internal/revisions"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/storage"
-	"memobrain/services/cloud/internal/vaults"
+	"clarae/services/cloud/internal/admin"
+	"clarae/services/cloud/internal/blobs"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/jobs/jobsdb"
+	"clarae/services/cloud/internal/observability"
+	"clarae/services/cloud/internal/quota"
+	"clarae/services/cloud/internal/revisions"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/vaults"
 )
 
 // Runner schedules the jobs.
@@ -312,7 +312,7 @@ const objectDeleteTimeout = 30 * time.Second
 // object when the commit failed after the object was gone.
 //
 // The candidates are walked in keyset order: a blob that cannot be collected
-// is logged, counted (memobrain_jobs_item_failures_total) and skipped, and the
+// is logged, counted (clarae_jobs_item_failures_total) and skipped, and the
 // run reports the failures at the end instead of stopping at the first one.
 func (r *Runner) CollectBlobs(ctx context.Context) (int, error) {
 	grace := time.Duration(r.setting(ctx, "blobs.gc_grace_hours", 24)) * time.Hour

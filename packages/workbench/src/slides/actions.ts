@@ -1,4 +1,4 @@
-import { parseSlides } from '@memobrain/markdown';
+import { parseSlides } from '@clarae/markdown';
 import { api } from '../app/api';
 import { useActiveNote } from '../state/activeNote';
 import { selectActivePath, useAppStore } from '../state/store';

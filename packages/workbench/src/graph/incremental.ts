@@ -7,14 +7,14 @@ import type { VaultChangeBatch } from '../app/fileChanges';
 import type { GraphModel } from './model';
 import type { GraphData } from './types';
 
-/** Device and vault settings (.memobrain/): never part of the graph. */
-const isConfig = (path: string): boolean => path === '.memobrain' || path.startsWith('.memobrain/');
+/** Device and vault settings (.clarae/): never part of the graph. */
+const isConfig = (path: string): boolean => path === '.clarae' || path.startsWith('.clarae/');
 const isNote = (path: string): boolean => /\.md$/i.test(path);
 
 /**
  * Whether a batch of file changes can alter the graph. Creations, deletions and renames add or
  * remove nodes; an edited note may have gained or lost links, tags or the properties the filters
- * and groups match. An edited attachment or canvas, and any change under .memobrain/, cannot.
+ * and groups match. An edited attachment or canvas, and any change under .clarae/, cannot.
  */
 export function graphNeedsReload(batch: VaultChangeBatch): boolean {
   if (batch.unknown) return true;

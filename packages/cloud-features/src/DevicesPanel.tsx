@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, Dialog, EmptyState, InlineError, Table } from '@memobrain/ui';
+import { Badge, Button, Dialog, EmptyState, InlineError, Table } from '@clarae/ui';
 import { cloudKeys, describeError } from './CloudVaultsTable';
 import { formatDay } from './format';
 import { createT, type TFunction } from './i18n';

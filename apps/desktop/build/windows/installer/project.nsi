@@ -67,17 +67,17 @@ ManifestDPIAware true
 !insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
 
 ## Authenticode signing of the installer and the uninstaller (M7-WP3). Gated on the environment
-## variable MEMOBRAIN_SIGNTOOL_CMD, a signtool command line in which %1 is replaced by the file to sign, e.g.
+## variable CLARAE_SIGNTOOL_CMD, a signtool command line in which %1 is replaced by the file to sign, e.g.
 ##   signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 <thumbprint> "%1"
 ## Without it the installer is built UNSIGNED (the release workflow decides whether that is acceptable).
-!define SIGNTOOL_CMD "$%MEMOBRAIN_SIGNTOOL_CMD%"
+!define SIGNTOOL_CMD "$%CLARAE_SIGNTOOL_CMD%"
 !if "${SIGNTOOL_CMD}" != ""
   !uninstfinalize '${SIGNTOOL_CMD}'
   !finalize '${SIGNTOOL_CMD}'
 !endif
 
 Name "${INFO_PRODUCTNAME}"
-OutFile "..\..\bin\memobrain-${ARCH}-installer.exe" # Name of the installer's file: fixed, the release scripts look for it (INFO_PROJECTNAME is the display name and may contain spaces).
+OutFile "..\..\bin\clarae-${ARCH}-installer.exe" # Name of the installer's file: fixed, the release scripts look for it (INFO_PROJECTNAME is the display name and may contain spaces).
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 

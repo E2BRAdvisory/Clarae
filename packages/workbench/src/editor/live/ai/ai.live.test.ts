@@ -7,7 +7,7 @@ import { commandsCtx } from '@milkdown/kit/core';
 import { acceptAllDiffsCmd, clearDiffReviewCmd, diffPluginKey } from '@milkdown/kit/plugin/diff';
 import { streamingPluginKey } from '@milkdown/kit/plugin/streaming';
 import { TextSelection } from '@milkdown/kit/prose/state';
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadAi } from '../chunks';
 import { emojiAsTyped } from '../chunks/emoji';

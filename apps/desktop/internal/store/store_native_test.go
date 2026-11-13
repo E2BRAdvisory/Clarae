@@ -27,7 +27,7 @@ func TestOpenEscapesPath(t *testing.T) {
 	}
 	for _, name := range names {
 		for _, kind := range []Kind{KindIndex, KindSync} {
-			path := filepath.Join(base, name, ".memobrain", string(kind)+".db")
+			path := filepath.Join(base, name, ".clarae", string(kind)+".db")
 			db, err := Open(ctx, path, kind)
 			if err != nil {
 				t.Fatalf("%q %s: %v", name, kind, err)
@@ -80,7 +80,7 @@ func TestOpenWarnsAboutLegacyDatabase(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
-	path := filepath.Join(base, "Progetti #1", ".memobrain", "sync.db")
+	path := filepath.Join(base, "Progetti #1", ".clarae", "sync.db")
 	db, err := Open(ctx, path, KindSync)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestOpenWarnsAboutLegacyDatabase(t *testing.T) {
 	if err := os.WriteFile(legacy, []byte("not a database"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{filepath.Join(base, "Progetti #2", ".memobrain", "sync.db"), filepath.Join(base, "plain", "sync.db")} {
+	for _, p := range []string{filepath.Join(base, "Progetti #2", ".clarae", "sync.db"), filepath.Join(base, "plain", "sync.db")} {
 		db, err := Open(ctx, p, KindSync)
 		if err != nil {
 			t.Fatal(err)

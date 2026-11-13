@@ -14,7 +14,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"memobrain/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/storage"
 )
 
 // rustfsImage is the S3 server of the deployment (deploy/PINS.md), pinned by
@@ -22,15 +22,15 @@ import (
 const rustfsImage = "rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2"
 
 // TestS3Store runs the BlobStore contract against a real S3 server: the one in
-// MEMOBRAIN_TEST_S3_ENDPOINT (credentials in MEMOBRAIN_TEST_S3_KEY/SECRET) or a RustFS container.
+// CLARAE_TEST_S3_ENDPOINT (credentials in CLARAE_TEST_S3_KEY/SECRET) or a RustFS container.
 func TestS3Store(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	opts := storage.S3Options{Endpoint: os.Getenv("MEMOBRAIN_TEST_S3_ENDPOINT"), AccessKey: os.Getenv("MEMOBRAIN_TEST_S3_KEY"), SecretKey: os.Getenv("MEMOBRAIN_TEST_S3_SECRET"), Region: "us-east-1", Bucket: "memobrain-test-blobs", UsePathStyle: true}
+	opts := storage.S3Options{Endpoint: os.Getenv("CLARAE_TEST_S3_ENDPOINT"), AccessKey: os.Getenv("CLARAE_TEST_S3_KEY"), SecretKey: os.Getenv("CLARAE_TEST_S3_SECRET"), Region: "us-east-1", Bucket: "clarae-test-blobs", UsePathStyle: true}
 	if opts.Endpoint == "" {
 		c, err := testcontainers.Run(ctx, rustfsImage,
 			testcontainers.WithEnv(map[string]string{
-				"RUSTFS_ACCESS_KEY": "memobrain", "RUSTFS_SECRET_KEY": "memobrain-secret",
+				"RUSTFS_ACCESS_KEY": "clarae", "RUSTFS_SECRET_KEY": "clarae-secret",
 				"RUSTFS_VOLUMES": "/data", "RUSTFS_ADDRESS": ":9000",
 			}),
 			testcontainers.WithExposedPorts("9000/tcp"),
@@ -44,7 +44,7 @@ func TestS3Store(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		opts.Endpoint, opts.AccessKey, opts.SecretKey = addr, "memobrain", "memobrain-secret"
+		opts.Endpoint, opts.AccessKey, opts.SecretKey = addr, "clarae", "clarae-secret"
 	}
 	s, err := storage.NewS3(ctx, opts)
 	if err != nil {

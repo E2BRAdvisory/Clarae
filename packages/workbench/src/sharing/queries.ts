@@ -1,5 +1,5 @@
-import { cloudKeys, useSharePages } from '@memobrain/cloud-features';
-import type { Share } from '@memobrain/cloud-features/port';
+import { cloudKeys, useSharePages } from '@clarae/cloud-features';
+import type { Share } from '@clarae/cloud-features/port';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 
 /** The workbench's sharing calls go through its CloudPort (ADR-0045 §7, enforced by ESLint). */
@@ -7,7 +7,7 @@ const port = new CoreCloudPort();
 
 export const sharingKeys = {
   /**
-   * The shares received, in the cache of @memobrain/cloud-features: the status bar's count and
+   * The shares received, in the cache of @clarae/cloud-features: the status bar's count and
    * InvitationsList read the same entry, so answering an invitation updates both.
    */
   received: cloudKeys.sharesOf(port, 'received'),

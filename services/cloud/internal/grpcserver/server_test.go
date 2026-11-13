@@ -16,10 +16,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/shared/notifyv1"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/notify"
+	"clarae/shared/notifyv1"
 )
 
 // fakeHub serves subscriptions from a real (database-less) hub and replays a
@@ -102,7 +102,7 @@ type harness struct {
 func newHarness(t *testing.T, prov auth.Provisioner, replay []notify.Event, maxStreams int, opts ...Option) *harness {
 	t.Helper()
 	iss := authtest.New(t)
-	v, err := auth.NewVerifier(context.Background(), iss.URL(), "memobrain-api", nil)
+	v, err := auth.NewVerifier(context.Background(), iss.URL(), "clarae-api", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,7 @@ describe('workspaces', () => {
     useSync.setState({ info: {} });
   });
 
-  it('saves to .memobrain/workspaces.json and loads the layout back, dropping missing files', async () => {
+  it('saves to .clarae/workspaces.json and loads the layout back, dropping missing files', async () => {
     await openVault({ 'A.md': '', 'B.md': '', 'C.md': '' });
     let layout = openPath(emptyLayout(), 'A.md', { mode: 'live' });
     layout = openPath(layout, 'B.md', { mode: 'source', newTab: true });
@@ -47,7 +47,7 @@ describe('workspaces', () => {
       .update((l) => upsertWorkspace(l, captureWorkspace('Work', s.layout, s.left, s.right)));
 
     const stored = parseWorkspaces(
-      mock.vaults.get(vaultId)?.files.get('.memobrain/workspaces.json') ?? '',
+      mock.vaults.get(vaultId)?.files.get('.clarae/workspaces.json') ?? '',
     );
     expect(stored.workspaces.map((w) => w.name)).toEqual(['Work']);
 
@@ -137,6 +137,6 @@ describe('workspaces', () => {
         ),
       );
     expect(ok).toBe(false);
-    expect(mock.vaults.get(vaultId)?.files.has('.memobrain/workspaces.json')).toBe(false);
+    expect(mock.vaults.get(vaultId)?.files.has('.clarae/workspaces.json')).toBe(false);
   });
 });

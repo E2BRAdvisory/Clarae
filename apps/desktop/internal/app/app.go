@@ -18,19 +18,19 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/auth"
-	"memobrain/apps/desktop/internal/config"
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/history"
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/platform"
-	"memobrain/apps/desktop/internal/search"
-	"memobrain/apps/desktop/internal/store"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/apps/desktop/internal/watcher"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/config"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/history"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/platform"
+	"clarae/apps/desktop/internal/search"
+	"clarae/apps/desktop/internal/store"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/watcher"
+	"clarae/shared/pathrules"
 )
 
 // Options configure the application.
@@ -61,7 +61,7 @@ type App struct {
 	mu        sync.Mutex
 	vaults    map[string]*openVault
 	opening   map[string]*vaultOpening // opens in progress, by vault id (guarded by mu)
-	pending   []string                 // memobrain:// URLs received before the frontend was ready (guarded by mu)
+	pending   []string                 // clarae:// URLs received before the frontend was ready (guarded by mu)
 	ready     bool                     // the frontend can receive events: DomReady was called (guarded by mu)
 	updates   updaterState             // the update channel (none in the browser build)
 	ai        aiState                  // the writing assistant (inactive; none in the browser build)
@@ -176,7 +176,7 @@ func (a *App) Startup(ctx context.Context) {
 	db, err := store.Open(ctx, filepath.Join(a.opts.DataDir, "app.db"), store.KindApp)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("open app.db")
-		a.host.ErrorDialog(ctx, "MemoBrain Notes", "Cannot open the application database: "+err.Error())
+		a.host.ErrorDialog(ctx, "Clarae notanda", "Cannot open the application database: "+err.Error())
 		return
 	}
 	a.appDB = db
@@ -202,7 +202,7 @@ func (a *App) appContext() context.Context {
 }
 
 // DomReady is the explicit "frontend ready" signal: the shell calls it when the frontend can
-// receive events (the frontend shim through CoreBridge.DomReady; the page in the browser). memobrain:// URLs that
+// receive events (the frontend shim through CoreBridge.DomReady; the page in the browser). clarae:// URLs that
 // arrived earlier, whatever the state of the context, are delivered now, in order, and the ones
 // that follow are handled at once.
 func (a *App) DomReady(_ context.Context) {
@@ -232,7 +232,7 @@ func (a *App) Shutdown(_ context.Context) {
 	a.logger.Info().Msg("stopped")
 }
 
-// HandleURL processes a memobrain:// URL (macOS ApplicationLaunchedWithUrl, second instance
+// HandleURL processes a clarae:// URL (macOS ApplicationLaunchedWithUrl, second instance
 // arguments, or the login flow's custom-scheme fallback). Until DomReady the URL is queued: the
 // frontend could not receive the event, and an auth callback needs the login the frontend started.
 func (a *App) HandleURL(raw string) {
@@ -265,7 +265,7 @@ func (a *App) HandleURL(raw string) {
 }
 
 // OnSecondInstance handles another instance launched with these arguments (the single-instance
-// callback of the shell; Windows and Linux deliver memobrain:// URLs this way). The running window
+// callback of the shell; Windows and Linux deliver clarae:// URLs this way). The running window
 // is brought to the front; the arguments may be the whole command line, the first URL is the one
 // handled.
 func (a *App) OnSecondInstance(args []string) {

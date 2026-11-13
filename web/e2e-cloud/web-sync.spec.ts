@@ -4,7 +4,7 @@ import { api, bind, signIn } from './support';
 // The vault workbench against a real cloud: Keycloak login, the real API, PostgreSQL and S3. Two browser
 // contexts are two devices (each has its own OPFS, so its own copy of the vault and its own sync state).
 // Start the stack first: scripts/run-desktop-with-cloud.sh --cloud-only --keep   (after `task web-build`).
-// Run with: yarn workspace @memobrain/web e2e:cloud
+// Run with: yarn workspace @clarae/web e2e:cloud
 
 async function openVault(page: Page, vaultId: string, name: string): Promise<string> {
   await page.goto(`/vaults/${vaultId}/open`);

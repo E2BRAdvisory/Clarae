@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, InlineError } from '@memobrain/ui';
+import { Badge, InlineError } from '@clarae/ui';
 import { cloudKeys } from '../CloudVaultsTable';
 import { useFeatureFlag } from '../featureFlags';
 import { formatDay } from '../format';

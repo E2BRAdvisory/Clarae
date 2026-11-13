@@ -1,7 +1,7 @@
 // The package's own strings, in English and Italian: the components are the same on every host, so
 // are their words. The host only says which language to use (`lang`); interpolation is i18next's
 // `{{name}}`, plurals are `_one` / `_other` (CLDR, Intl.PluralRules), so the consistency checks of
-// @memobrain/ui (i18nCheck) apply as they do to the hosts' own resources.
+// @clarae/ui (i18nCheck) apply as they do to the hosts' own resources.
 
 const en = {
   'vaults.caption': 'Cloud vaults',

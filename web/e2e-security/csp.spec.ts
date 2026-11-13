@@ -22,8 +22,8 @@ test('the SPA loads with strict headers, SRI and no request to another origin', 
       contentType: 'application/json',
       body: JSON.stringify({
         issuer: `${origin}/realms/test`,
-        web_client_id: 'memobrain-web',
-        audience: 'memobrain-api',
+        web_client_id: 'clarae-web',
+        audience: 'clarae-api',
       }),
     }),
   );

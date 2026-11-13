@@ -27,4 +27,4 @@ export interface AuthService {
 }
 
 /** Realm role that unlocks the administration area. */
-export const ADMIN_ROLE = 'memobrain-admin';
+export const ADMIN_ROLE = 'clarae-admin';

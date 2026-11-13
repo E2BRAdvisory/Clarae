@@ -14,13 +14,13 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/events"
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // SessionInfo describes the signed-in account.

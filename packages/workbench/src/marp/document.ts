@@ -18,12 +18,12 @@ div.marpit > svg.current { display: block; }
 
 /** Print layer of "Export to PDF": one slide per page of the slide's size (Marp sets @page). */
 export const PRINT_CSS = `
-@media screen { #memobrain-print { display: none; } }
+@media screen { #clarae-print { display: none; } }
 @media print {
   html, body { height: auto !important; overflow: visible !important; background: #fff !important; zoom: 1 !important; }
-  body.printing > *:not(#memobrain-print) { display: none !important; }
-  #memobrain-print { display: block; }
-  #memobrain-print div.marpit > svg { display: block; width: 1280px; height: 720px; break-after: page; page-break-after: always; }
+  body.printing > *:not(#clarae-print) { display: none !important; }
+  #clarae-print { display: block; }
+  #clarae-print div.marpit > svg { display: block; width: 1280px; height: 720px; break-after: page; page-break-after: always; }
 }
 `;
 

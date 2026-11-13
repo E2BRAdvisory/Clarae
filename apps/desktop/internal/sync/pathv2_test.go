@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // newCryptoEngine is a private-vault engine with the real key manager (paths

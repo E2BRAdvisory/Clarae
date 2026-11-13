@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"memobrain/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/app"
 )
 
 // The generated files, relative to the repository root.

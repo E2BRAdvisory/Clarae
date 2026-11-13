@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 func listed(vs []transport.Vault, id string) bool {

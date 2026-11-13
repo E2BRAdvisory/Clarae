@@ -1,7 +1,7 @@
 // The Live editor's own opening, with the assistant's gates in their real places (ADR-0050): a profile
 // with `ai: true` loads nothing in a normal build, and only the build constant plus every other gate
 // attach the feature (the chunk is fetched, the core is asked for `Status`, the note opens as it is).
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as chunks from '../chunks';
 import { capabilitiesFor, usePlatform } from '../../../platform';
@@ -69,7 +69,7 @@ describe('opening a note in Live', () => {
   });
 
   it('a build made for it with the flag off, the capability off or no vault still load nothing', async () => {
-    vi.stubEnv('MEMOBRAIN_AI', '1');
+    vi.stubEnv('CLARAE_AI', '1');
     profile(false);
     (await open()).dispose();
     profile(true);
@@ -82,7 +82,7 @@ describe('opening a note in Live', () => {
   });
 
   it('a core that says it is not available keeps the chunk away', async () => {
-    vi.stubEnv('MEMOBRAIN_AI', '1');
+    vi.stubEnv('CLARAE_AI', '1');
     profile(true);
     status.mockResolvedValue({ ...AVAILABLE, available: false, reason: 'not-configured' });
     const live = await open();
@@ -96,7 +96,7 @@ describe('opening a note in Live', () => {
   });
 
   it('every gate open attaches it: the chunk is fetched and the note opens as it is', async () => {
-    vi.stubEnv('MEMOBRAIN_AI', '1');
+    vi.stubEnv('CLARAE_AI', '1');
     profile(true);
     const live = await open();
     try {
@@ -109,7 +109,7 @@ describe('opening a note in Live', () => {
   });
 
   it('a core that fails does not keep the note from opening', async () => {
-    vi.stubEnv('MEMOBRAIN_AI', '1');
+    vi.stubEnv('CLARAE_AI', '1');
     profile(true);
     status.mockRejectedValue(new Error('down'));
     const live = await open();

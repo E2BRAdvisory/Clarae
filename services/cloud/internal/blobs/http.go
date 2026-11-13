@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // HTTP implements the blob endpoints of the generated strict server.

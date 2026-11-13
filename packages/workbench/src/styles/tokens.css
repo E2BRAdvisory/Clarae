@@ -55,8 +55,8 @@
   --mark: #6b5e1a;
 }
 
-/* The shared tokens of @memobrain/ui (--nd-*, ADR-0043) with the workbench's values, so the nd-*
-   components (the cloud panels of @memobrain/cloud-features, the Dialog primitive) follow the
+/* The shared tokens of @clarae/ui (--nd-*, ADR-0043) with the workbench's values, so the nd-*
+   components (the cloud panels of @clarae/cloud-features, the Dialog primitive) follow the
    workbench palette and theme. Set on <body>, they win over the console palette of tokens.css (on
    :root) by inheritance; the workbench variables they point to change with the theme above. */
 body {

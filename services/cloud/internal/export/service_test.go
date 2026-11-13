@@ -8,21 +8,21 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/storage"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/storage"
+	"clarae/shared/syncproto"
 )
 
 func TestSkippedLeavesOutDeviceSpecificFiles(t *testing.T) {
 	for p, want := range map[string]bool{
-		"Notes/a.md":                  false,
-		".memobrain/editor.json":      false, // user settings are part of the vault
-		".memobrain/workspace.json":   true,
-		".memobrain/index.db":         true,
-		".memobrain/cache/x.svg":      true,
-		".memobrain/snapshots/1/a.md": true,
-		"Notes/.DS_Store":             true,
-		"Notes/.memobrain/cache/x":    false,
+		"Notes/a.md":               false,
+		".clarae/editor.json":      false, // user settings are part of the vault
+		".clarae/workspace.json":   true,
+		".clarae/index.db":         true,
+		".clarae/cache/x.svg":      true,
+		".clarae/snapshots/1/a.md": true,
+		"Notes/.DS_Store":          true,
+		"Notes/.clarae/cache/x":    false,
 	} {
 		if got := skipped(p); got != want {
 			t.Errorf("skipped(%q) = %v, want %v", p, got, want)
@@ -33,7 +33,7 @@ func TestSkippedLeavesOutDeviceSpecificFiles(t *testing.T) {
 // The error stored in a failed job is shown to the client: it never carries
 // the internal error text (endpoints, paths, SQL).
 func TestFailureHidesTheInternalError(t *testing.T) {
-	internal := errors.New(`Put "https://minio.internal:9000/memobrain-exports/exports/x.zip": dial tcp 10.0.3.7:9000: connection refused`)
+	internal := errors.New(`Put "https://minio.internal:9000/clarae-exports/exports/x.zip": dial tcp 10.0.3.7:9000: connection refused`)
 	for err, want := range map[error]string{
 		internal:     failedBuild,
 		errVaultGone: failedVaultGone,

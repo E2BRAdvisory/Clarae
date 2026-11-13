@@ -11,13 +11,13 @@
 //
 // A call whose arguments are larger than the HTTP transport of Wails takes (64 MiB per request: the
 // export of a note as HTML goes up to 256 MiB) does not go through `Call`: its arguments are sent in
-// chunks to the asset server, to /memobrain/upload/<id> (same origin, so the CSP is unchanged), and
+// chunks to the asset server, to /clarae/upload/<id> (same origin, so the CSP is unchanged), and
 // the core then runs the call on them (B-W4b, ADR-0051; shell.UploadStore on the Go side). The
 // signature a binding has for the workbench does not change.
 //
 // The runtime is loaded with a dynamic import: it is not part of the initial bundle (ADR-0020 counts
 // the entry and its static imports; v2 injected its runtime outside the budget as well).
-import { Events } from '@memobrain/workbench/events';
+import { Events } from '@clarae/workbench/events';
 import type * as WailsRuntimeModule from '@wailsio/runtime';
 
 // `package.struct.method` of the Go service (key of Wails v3's binding table, see CoreBridge).
@@ -29,7 +29,7 @@ const CORE_ABORT_UPLOAD = 'main.CoreBridge.AbortUpload';
 const CORE_CALL_UPLOADED = 'main.CoreBridge.CallUploaded';
 
 /** Where the chunks of an upload go (shell.UploadPath). */
-export const UPLOAD_PATH = '/memobrain/upload/';
+export const UPLOAD_PATH = '/clarae/upload/';
 /**
  * Arguments of more than this many bytes of JSON go through an upload. The transport of Wails takes
  * 64 MiB per request; half of that leaves room for the envelope and for the day it counts differently.
@@ -84,7 +84,7 @@ const messageOf = (e: unknown): string =>
 const report =
   (what: string) =>
   (e: unknown): void => {
-    console.error(`memobrain: ${what} failed: ${messageOf(e)}`);
+    console.error(`clarae: ${what} failed: ${messageOf(e)}`);
   };
 
 /**
@@ -207,7 +207,7 @@ export async function installWailsHost(options: InstallOptions = {}): Promise<()
     app[service] = bound;
   }
 
-  // The frontend is ready when the workbench first listens for memobrain:// links (App.tsx): until
+  // The frontend is ready when the workbench first listens for clarae:// links (App.tsx): until
   // then the core keeps them. A page reload starts over with a new shim, which tells the core again
   // (harmless for it); within a page the signal goes once, and again only if it failed.
   let readySent = false;

@@ -19,7 +19,7 @@ import (
 // buildEnabled is the second gate of ADR-0050 (the first is the `ai` flag of the Config Profile). It
 // is spelled out in the build with
 //
-//	-ldflags "-X memobrain/apps/desktop/internal/ai.buildEnabled=on"
+//	-ldflags "-X clarae/apps/desktop/internal/ai.buildEnabled=on"
 //
 // and is off otherwise: a released build is built without it, so a profile cannot switch the function
 // on without a new release. The polarity is the opposite of updater.DisabledByBuild on purpose.

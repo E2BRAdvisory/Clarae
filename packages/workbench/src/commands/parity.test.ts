@@ -1,5 +1,5 @@
 // The registries as scripts/parity.mjs sees them (ADR-0037, ADR-0045 §2). The script runs this file
-// with MEMOBRAIN_PARITY_OUT=<file> and reads back, for every command and every declarative action
+// with CLARAE_PARITY_OUT=<file> and reads back, for every command and every declarative action
 // (commands/actions.ts), its id, feature and the platforms that offer it (its `requires`, and an
 // action's `excludes`, evaluated with configurePlatform). It reads the capabilities of each
 // platform from the core's declaration instead (shared/parity/capabilities.gen.json, ADR-0045 §1).
@@ -71,7 +71,7 @@ describe('command requirements', () => {
       platforms: platforms(a.id),
     }));
     expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
-    const out = process.env.MEMOBRAIN_PARITY_OUT;
+    const out = process.env.CLARAE_PARITY_OUT;
     if (out) {
       const { writeFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
         writeFileSync: WriteFile;

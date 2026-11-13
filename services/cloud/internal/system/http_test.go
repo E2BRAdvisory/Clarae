@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/services/cloud/internal/api"
+	"clarae/services/cloud/internal/api"
 )
 
 func TestClientConfigExposesBothClientIDs(t *testing.T) {
 	h := NewHTTP("v1", ClientConfig{
-		Issuer: "https://id.example.com/realms/memobrain", DesktopClientID: "memobrain-desktop", WebClientID: "memobrain-web",
-		Audience: "memobrain-api", GRPCEndpoint: "host:18082",
+		Issuer: "https://id.example.com/realms/clarae", DesktopClientID: "clarae-desktop", WebClientID: "clarae-web",
+		Audience: "clarae-api", GRPCEndpoint: "host:18082",
 	})
 	res, err := h.GetClientConfig(context.Background(), api.GetClientConfigRequestObject{})
 	if err != nil {
@@ -24,7 +24,7 @@ func TestClientConfigExposesBothClientIDs(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected response %T", res)
 	}
-	if cc.WebClientId != "memobrain-web" || cc.DesktopClientId != "memobrain-desktop" || cc.Issuer == "" || cc.ApiVersion != "v1" {
+	if cc.WebClientId != "clarae-web" || cc.DesktopClientId != "clarae-desktop" || cc.Issuer == "" || cc.ApiVersion != "v1" {
 		t.Fatalf("client config: %+v", cc)
 	}
 }

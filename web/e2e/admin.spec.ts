@@ -31,7 +31,7 @@ const adminUser = (id: string, username: string) => ({
 });
 
 test('an administrator opens the console and sees the storage dashboard', async ({ page }) => {
-  await signedIn(page, ['memobrain-admin']);
+  await signedIn(page, ['clarae-admin']);
   await mockApi(page, { 'GET /admin/storage/overview': overview });
   await page.goto('/usage');
   await page.getByRole('link', { name: 'Administration' }).click();
@@ -57,7 +57,7 @@ test('regular users do not get the administration entry or the console', async (
 });
 
 test('an administrator creates a user', async ({ page }) => {
-  await signedIn(page, ['memobrain-admin']);
+  await signedIn(page, ['clarae-admin']);
   let users = [adminUser('u1', 'alice')];
   let created: unknown;
   await mockApi(page, {

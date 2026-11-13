@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/links"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/vault"
 )
 
 // Every binding that sets a new passphrase applies the policy in the core and

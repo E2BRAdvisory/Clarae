@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"memobrain/shared/pathrules"
+	"clarae/shared/pathrules"
 )
 
 // Prefixes of the opaque path tokens stored by the server (§3.8.3).

@@ -1,4 +1,4 @@
-// The panels of @memobrain/cloud-features loaded on demand: Settings > Cloud and Sharing are not
+// The panels of @clarae/cloud-features loaded on demand: Settings > Cloud and Sharing are not
 // needed to open a vault, so they stay out of the initial bundle (ADR-0020). A failed download is
 // retried once; then the error boundary of the settings section offers a retry. The style sheet
 // (workbench.css) is imported by the hosts, statically: a lazy chunk's CSS would not be loaded.
@@ -10,10 +10,10 @@ import type {
   MountsListProps,
   SharesManagerProps,
   UsagePanelProps,
-} from '@memobrain/cloud-features';
+} from '@clarae/cloud-features';
 import { lazyView } from '../ui/lazyView';
 
-const load = () => import('@memobrain/cloud-features/panels');
+const load = () => import('@clarae/cloud-features/panels');
 
 const LazyVaults = lazyView(async () => ({ default: (await load()).CloudVaultsTable }));
 const LazyDevices = lazyView(async () => ({ default: (await load()).DevicesPanel }));

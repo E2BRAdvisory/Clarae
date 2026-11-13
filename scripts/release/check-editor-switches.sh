@@ -3,10 +3,10 @@
 # the desktop frontend and of the Web UI read them, so a variable exported in the shell of whoever builds would
 # reach the release without a trace:
 #
-#   MEMOBRAIN_AI           lets the editor ask for the AI assistant (ADR-0050)
-#   MEMOBRAIN_COLLAB       puts the collaboration code in the build (ADR-0050)
-#   MEMOBRAIN_E2E          the in-memory binding mock / the OIDC test double of the end-to-end tests
-#   MEMOBRAIN_DIST         builds the front end somewhere else: Go would embed (or the image copy) whatever an
+#   CLARAE_AI           lets the editor ask for the AI assistant (ADR-0050)
+#   CLARAE_COLLAB       puts the collaboration code in the build (ADR-0050)
+#   CLARAE_E2E          the in-memory binding mock / the OIDC test double of the end-to-end tests
+#   CLARAE_DIST         builds the front end somewhere else: Go would embed (or the image copy) whatever an
 #                          older build left in apps/desktop/frontend/dist or web/dist, a test build included
 #
 #   scripts/release/check-editor-switches.sh
@@ -17,7 +17,7 @@
 set -eu
 
 set_vars=""
-for name in MEMOBRAIN_AI MEMOBRAIN_COLLAB MEMOBRAIN_E2E MEMOBRAIN_DIST; do
+for name in CLARAE_AI CLARAE_COLLAB CLARAE_E2E CLARAE_DIST; do
   eval "value=\${$name:-}"
   [ -z "$value" ] || set_vars="$set_vars $name"
 done

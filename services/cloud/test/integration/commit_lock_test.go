@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// commitFallbacks sums memobrain_sync_commit_fallbacks_total over its labels
+// commitFallbacks sums clarae_sync_commit_fallbacks_total over its labels
 // (the server runs in process: same default registry).
 func commitFallbacks(t *testing.T) (total float64, byReason map[string]float64) {
 	t.Helper()
@@ -21,7 +21,7 @@ func commitFallbacks(t *testing.T) (total float64, byReason map[string]float64) 
 	}
 	byReason = map[string]float64{}
 	for _, f := range families {
-		if f.GetName() != "memobrain_sync_commit_fallbacks_total" {
+		if f.GetName() != "clarae_sync_commit_fallbacks_total" {
 			continue
 		}
 		for _, m := range f.GetMetric() {

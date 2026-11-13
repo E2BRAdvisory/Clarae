@@ -15,9 +15,9 @@
  * files and keeps the marker, the only record the console has (it runs without a core) and the only one
  * left once the core disconnected a folder whose cloud vault was deleted.
  */
-import { Events, type EventPayloads } from '@memobrain/workbench/events';
+import { Events, type EventPayloads } from '@clarae/workbench/events';
 import type { CoreHandle } from './bridge';
-import type { sync } from '@memobrain/workbench/wailsjs/models';
+import type { sync } from '@clarae/workbench/wailsjs/models';
 import { coreClient, type Data } from './core.gen';
 import { readMarkers, removeMarker, unsynced, updateMarker, type VaultMarker } from './markers';
 import { closeOverlay, confirmDelete, showLocked, showOverlay, unsyncedLines } from './overlay';
@@ -197,7 +197,7 @@ export function createVaultGuard(o: GuardOptions): VaultGuard {
       removeMarker(o.account, o.markerId);
     } catch (e) {
       // The marker stays: the next start-up sweep removes the copy.
-      console.error('memobrain: could not remove the copy of the vault:', e);
+      console.error('clarae: could not remove the copy of the vault:', e);
     }
     go();
   };

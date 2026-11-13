@@ -21,17 +21,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/export/exportdb"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/storage"
-	"memobrain/services/cloud/internal/sync"
-	"memobrain/services/cloud/internal/vaults"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/export/exportdb"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/sync"
+	"clarae/services/cloud/internal/vaults"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 const (
@@ -276,7 +276,7 @@ func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb
 	var j exportdb.ExportJob
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := exportdb.New(tx)
-		if err := q.LockExportRequests(ctx, "memobrain.exports:"+user.String()); err != nil {
+		if err := q.LockExportRequests(ctx, "clarae.exports:"+user.String()); err != nil {
 			return err
 		}
 		var err error
@@ -526,7 +526,7 @@ func (s *Service) build(ctx context.Context, j exportdb.ExportJob) error {
 	// Read before the files: the archive is at least as recent as seq, so a
 	// later request reuses it only if nothing was committed since.
 	seq := v.LastSeq
-	tmp, err := os.CreateTemp("", "memobrain-export-*.zip")
+	tmp, err := os.CreateTemp("", "clarae-export-*.zip")
 	if err != nil {
 		return err
 	}

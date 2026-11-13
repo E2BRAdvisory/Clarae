@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/shell"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/shell"
 )
 
 // B-W4b: a call whose arguments are larger than the transport of Wails takes (64 MiB per request)

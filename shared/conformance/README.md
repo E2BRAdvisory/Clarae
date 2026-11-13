@@ -3,7 +3,7 @@
 Fixture eseguite da **tre consumatori** con `task conformance` (che è parte di `task ci`). Evitano che un link, un tag o un heading siano visti da un lato e non dall'altro (spec §2.3.3). Nessuna release con fixture non verdi.
 
 - **Parser Go** (`apps/desktop/internal/parser`, `conformance_test.go`): è quello dell'indicizzatore.
-- **Estrattore TypeScript** (`@memobrain/markdown`, `packages/markdown/src/conformance.test.ts`): serve le sezioni incorporate, le statistiche della nota, le query e l'adattatore di Source. Reading rende con remark/rehype e non legge le fixture; il cancello A del terzo parser ne confronta però l'HTML.
+- **Estrattore TypeScript** (`@clarae/markdown`, `packages/markdown/src/conformance.test.ts`): serve le sezioni incorporate, le statistiche della nota, le query e l'adattatore di Source. Reading rende con remark/rehype e non legge le fixture; il cancello A del terzo parser ne confronta però l'HTML.
 - **Terzo parser: l'editor Live su Milkdown** ([ADR-0049](../../docs/adr/0049-editor-live-milkdown.md), `packages/workbench/src/test/conformance.test.ts`): le stesse fixture passano dalla pipeline Milkdown e ciò che l'indice estrae dal risultato dev'essere l'atteso; poi round-trip (identità, dieci giri idempotenti) e, sul corpus di `roundtrip/`, l'invariante di escape e i criteri C1–C4 del cancello A. L'editor in Source (CodeMirror) non ha un parser Markdown proprio da confrontare.
 
 ```
@@ -14,7 +14,7 @@ shared/conformance/
 ├── crypto/          # vectors.json                        — da M2 (§3.8.7)
 ├── passphrase/      # policy.json: politica della passphrase (§3.8.2), core Go e strength.ts
 ├── links/           # resolve.json: risoluzione dei link, core Go (links) e mock dei binding del workbench
-└── ts/              # pacchetto @memobrain/conformance: tipi e loader per i test TS
+└── ts/              # pacchetto @clarae/conformance: tipi e loader per i test TS
 ```
 
 I loader Go stanno in `shared/go/conformance`.
@@ -86,5 +86,5 @@ Regole condivise:
 ## Esecuzione
 
 ```sh
-task conformance   # Go (desktop parser) + TS (@memobrain/conformance e frontend)
+task conformance   # Go (desktop parser) + TS (@clarae/conformance e frontend)
 ```

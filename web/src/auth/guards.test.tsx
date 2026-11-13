@@ -56,11 +56,11 @@ describe('role guard', () => {
     expect(screen.queryByRole('link', { name: 'Administration' })).not.toBeInTheDocument();
   });
 
-  it('shows the administration console to memobrain-admin', async () => {
+  it('shows the administration console to clarae-admin', async () => {
     renderApp({
       path: '/admin',
       routes: { ...usage, 'GET /admin/storage/overview': new Response(null, { status: 500 }) },
-      user: { roles: ['memobrain-admin'] },
+      user: { roles: ['clarae-admin'] },
     });
     expect(
       await screen.findByRole('navigation', { name: 'Administration sections' }),
@@ -73,7 +73,7 @@ describe('role guard', () => {
     renderApp({
       path: '/admin',
       routes: { ...usage, 'GET /me': { id: 'u1', username: 'alice', role: 'user' } },
-      user: { roles: ['memobrain-admin'] },
+      user: { roles: ['clarae-admin'] },
     });
     expect(await screen.findByText('Not allowed')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Administration' })).not.toBeInTheDocument();

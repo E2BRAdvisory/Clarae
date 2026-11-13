@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { ME, mockApi, signedIn } from './support';
 
 // Devices and storage in the console (ADR-0037 §2, DevicesPanel and UsagePanel of
-// @memobrain/cloud-features over REST): the API is a small in-memory server, so each step sees the
+// @clarae/cloud-features over REST): the API is a small in-memory server, so each step sees the
 // result of the previous one.
 
 const MB = 1024 * 1024;

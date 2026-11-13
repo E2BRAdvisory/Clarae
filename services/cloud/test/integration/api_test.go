@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/shared/syncproto"
 )
 
 func readAll(t *testing.T, resp *http.Response) io.ReadCloser {
@@ -90,7 +90,7 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("client-config: %d", resp.StatusCode)
 	}
 	cc := decode[map[string]any](t, resp)
-	if cc["issuer"] != e.issuer.URL() || cc["desktop_client_id"] != "memobrain-desktop" || cc["audience"] != "memobrain-api" {
+	if cc["issuer"] != e.issuer.URL() || cc["desktop_client_id"] != "clarae-desktop" || cc["audience"] != "clarae-api" {
 		t.Fatalf("client-config: %v", cc)
 	}
 }
@@ -117,7 +117,7 @@ func TestMeRequiresToken(t *testing.T) {
 
 func TestMeProvisionsAndReturnsProfile(t *testing.T) {
 	e := newEnv(t)
-	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-ada", Username: "ada", Email: "ada@memobrain.local", Name: "Ada Admin", Roles: []string{"memobrain-admin", "memobrain-user"}})
+	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-ada", Username: "ada", Email: "ada@clarae.local", Name: "Ada Admin", Roles: []string{"clarae-admin", "clarae-user"}})
 
 	resp := e.request(http.MethodGet, "/me", tok, nil)
 	if resp.StatusCode != http.StatusOK {
@@ -142,7 +142,7 @@ func TestMeProvisionsAndReturnsProfile(t *testing.T) {
 func TestSuspendedUserIsRejected(t *testing.T) {
 	e := newEnv(t)
 	sub := "sub-suspended-" + newID()
-	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: sub, Username: "bob", Email: sub + "@memobrain.local"})
+	tok := e.issuer.Token(t, authtest.TokenOptions{Subject: sub, Username: "bob", Email: sub + "@clarae.local"})
 	if resp := e.request(http.MethodGet, "/me", tok, nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("first call: %d", resp.StatusCode)
 	}

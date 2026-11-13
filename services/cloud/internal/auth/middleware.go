@@ -10,9 +10,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // ErrSuspended is returned by a Provisioner when the account may not use the
@@ -22,7 +22,7 @@ var ErrSuspended = errors.New("user suspended")
 // ErrIdentityConflict is returned by a Provisioner when the token's identity
 // cannot be linked to an account: another live account already uses its
 // e-mail address (typically an identity provider account deleted and
-// recreated while its MemoBrain account still exists). An administrator
+// recreated while its Clarae account still exists). An administrator
 // resolves it; the provisioner never relinks accounts by e-mail.
 var ErrIdentityConflict = errors.New("identity conflicts with an existing account")
 
@@ -96,7 +96,7 @@ func (m *Middleware) Protect(next http.Handler) http.Handler {
 		ctx := r.Context()
 		raw, ok := bearerToken(r)
 		if !ok {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="memobrain"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="clarae"`)
 			httpproblem.Write(w, r, syncproto.CodeUnauthenticated, "missing bearer token", nil)
 			return
 		}
@@ -110,7 +110,7 @@ func (m *Middleware) Protect(next http.Handler) http.Handler {
 			return
 		case errors.Is(err, ErrInvalidToken):
 			zerolog.Ctx(ctx).Debug().Err(err).Msg("token rejected")
-			w.Header().Set("WWW-Authenticate", `Bearer realm="memobrain", error="invalid_token"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="clarae", error="invalid_token"`)
 			httpproblem.Write(w, r, syncproto.CodeUnauthenticated, "invalid token", nil)
 			return
 		case err != nil:
@@ -170,7 +170,7 @@ func (m *Middleware) AuthenticateExp(ctx context.Context, raw string) (Principal
 }
 
 // IdentityConflictDetail is the problem detail of ErrIdentityConflict.
-const IdentityConflictDetail = "this sign-in cannot be linked to your MemoBrain account: another account already uses " +
+const IdentityConflictDetail = "this sign-in cannot be linked to your Clarae account: another account already uses " +
 	"the same e-mail address; ask an administrator to resolve it"
 
 // Invalidate drops the cached status of a user (called after a suspension, an

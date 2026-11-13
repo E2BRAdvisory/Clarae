@@ -6,7 +6,7 @@ import { useSettings } from '../state/settings';
 import { allPanes, parseLayout, removePath } from '../workspace/layout';
 
 /**
- * Writes the layout and the sidebars of the open vault to `.memobrain/workspace.json` now (the
+ * Writes the layout and the sidebars of the open vault to `.clarae/workspace.json` now (the
  * session does it 500 ms after a change). Call it before the store is reset for another vault.
  */
 export async function saveWorkspaceNow(vaultId: string): Promise<void> {

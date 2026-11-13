@@ -3,13 +3,13 @@ package sharing
 import (
 	"context"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/pagination"
-	"memobrain/services/cloud/internal/sharing/sharingdb"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/pagination"
+	"clarae/services/cloud/internal/sharing/sharingdb"
+	"clarae/shared/syncproto"
 )
 
 // HTTP implements the sharing endpoints of the generated strict server.

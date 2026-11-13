@@ -23,7 +23,7 @@ Supportati: titoli, elenchi, attività (`- [ ]`, con stati personalizzati), cita
 
 ## Tag e proprietà
 
-- **Tag:** `#idea`, `#progetto/memobrain` (gerarchici). La scheda _Tag_ elenca i tag con i conteggi. In Live, `Mod+clic` su un tag apre la ricerca di quel tag; in Sorgente il tag resta testo e il clic non fa nulla.
+- **Tag:** `#idea`, `#progetto/clarae` (gerarchici). La scheda _Tag_ elenca i tag con i conteggi. In Live, `Mod+clic` su un tag apre la ricerca di quel tag; in Sorgente il tag resta testo e il clic non fa nulla.
 - **Proprietà (frontmatter YAML):** in cima alla nota, tra `---`. In Live il frontmatter è nascosto: il pannello _Proprietà_ permette di aggiungere e modificare le proprietà con il tipo corretto (testo, numero, data, elenco, casella). In Sorgente lo scrivete come testo. Le proprietà `tags` e `aliases` hanno un significato speciale: gli alias diventano nomi alternativi per i link.
 
 ## Blocchi di ricerca incorporati

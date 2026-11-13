@@ -2,12 +2,12 @@
 //   node scripts/esbuild.mjs build            production bundle in dist/ (embedded by the cloud binary)
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload, proxying /api to the cloud
 //                                             (--no-watch builds once, for the e2e matrix)
-// MEMOBRAIN_E2E=1 makes main.tsx install the OIDC test double (Playwright); it is compiled out otherwise.
+// CLARAE_E2E=1 makes main.tsx install the OIDC test double (Playwright); it is compiled out otherwise.
 //
 // Two pages are built: the console (index.html) and the vault workbench (workbench.html, served for
 // /vaults/:id/open). The workbench is a page of its own so that the desktop UI's global style sheet
 // cannot reach the console (ADR-0029). It also needs the WebAssembly core, which `task wasm-core`
-// produces in build/wasm/ (MEMOBRAIN_CORE_WASM overrides the path).
+// produces in build/wasm/ (CLARAE_CORE_WASM overrides the path).
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
@@ -28,25 +28,25 @@ import {
   graphWorkerEntry,
   linkLazyStyles,
   liveCollab,
-} from '@memobrain/workbench/build';
+} from '@clarae/workbench/build';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-// MEMOBRAIN_DIST builds elsewhere (the browser test of the production handler uses an E2E build of its own). An
+// CLARAE_DIST builds elsewhere (the browser test of the production handler uses an E2E build of its own). An
 // absolute path is taken as it is, a relative one starts at this package (never at the working directory).
 const dist = distDir(root, 'dist');
 const mode = process.argv[2] ?? 'build';
 const dev = mode === 'dev';
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5174;
-const apiTarget = new URL(process.env['MEMOBRAIN_API'] ?? 'http://127.0.0.1:18081');
-const e2e = process.env['MEMOBRAIN_E2E'] === '1';
-// MEMOBRAIN_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
+const apiTarget = new URL(process.env['CLARAE_API'] ?? 'http://127.0.0.1:18081');
+const e2e = process.env['CLARAE_E2E'] === '1';
+// CLARAE_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
 // (ADR-0050); without it no Yjs is in any file and a profile cannot switch collaboration on.
-const collab = process.env['MEMOBRAIN_COLLAB'] === '1';
-// MEMOBRAIN_AI=1 lets the editor ask for the AI assistant (ADR-0050): the second gate, next to the `ai` flag
+const collab = process.env['CLARAE_COLLAB'] === '1';
+// CLARAE_AI=1 lets the editor ask for the AI assistant (ADR-0050): the second gate, next to the `ai` flag
 // of the Config Profile; a released build is made without it, so a profile cannot switch the assistant on.
-const ai = process.env['MEMOBRAIN_AI'] === '1';
-const version = process.env['MEMOBRAIN_VERSION'] ?? 'dev';
+const ai = process.env['CLARAE_AI'] === '1';
+const version = process.env['CLARAE_VERSION'] ?? 'dev';
 
 /** The pages of the app: each has an HTML template and the entry point it loads. */
 const PAGES = [
@@ -278,8 +278,7 @@ function serve(port) {
  * Without the core (it needs the Go toolchain) the workbench page says so instead of failing.
  */
 async function prepareCore() {
-  const corePath =
-    process.env['MEMOBRAIN_CORE_WASM'] ?? join(root, '../build/wasm/memobrain-core.wasm');
+  const corePath = process.env['CLARAE_CORE_WASM'] ?? join(root, '../build/wasm/clarae-core.wasm');
   const sqlitePath = join(
     dirname(fileURLToPath(import.meta.resolve('@sqlite.org/sqlite-wasm'))),
     'sqlite3.wasm',
@@ -294,7 +293,7 @@ async function prepareCore() {
   const sizes = {};
   const assets = {};
   for (const [key, name, file] of [
-    ['core', 'memobrain-core', corePath],
+    ['core', 'clarae-core', corePath],
     ['sqlite', 'sqlite3', sqlitePath],
   ]) {
     const bytes = await readFile(file);
@@ -441,11 +440,11 @@ const shared = {
   legalComments: 'none',
   define: {
     ...base.define,
-    'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : ''),
-    'import.meta.env.MEMOBRAIN_COLLAB': JSON.stringify(collab ? '1' : ''),
-    'import.meta.env.MEMOBRAIN_AI': JSON.stringify(ai ? '1' : ''),
-    __MEMOBRAIN_CORE__: JSON.stringify(assets),
-    __MEMOBRAIN_VERSION__: JSON.stringify(version),
+    'import.meta.env.CLARAE_E2E': JSON.stringify(e2e ? '1' : ''),
+    'import.meta.env.CLARAE_COLLAB': JSON.stringify(collab ? '1' : ''),
+    'import.meta.env.CLARAE_AI': JSON.stringify(ai ? '1' : ''),
+    __CLARAE_CORE__: JSON.stringify(assets),
+    __CLARAE_VERSION__: JSON.stringify(version),
   },
 };
 delete shared.splitting;
@@ -482,8 +481,8 @@ const builds = [
     plugins: [verifiedLoaders({ layoutWorker }), ...common.plugins],
     define: {
       ...shared.define,
-      __MEMOBRAIN_WORKER__: JSON.stringify(worker.url),
-      __MEMOBRAIN_WORKER_INTEGRITY__: JSON.stringify(worker.integrity),
+      __CLARAE_WORKER__: JSON.stringify(worker.url),
+      __CLARAE_WORKER_INTEGRITY__: JSON.stringify(worker.integrity),
     },
   },
 ];

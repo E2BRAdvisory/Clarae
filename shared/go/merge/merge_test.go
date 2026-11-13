@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/shared/merge"
-	"memobrain/shared/syncproto"
+	"clarae/shared/merge"
+	"clarae/shared/syncproto"
 )
 
 type meta struct {

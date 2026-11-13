@@ -14,17 +14,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/groups"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/keycloak"
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/services/cloud/internal/privacy/privacydb"
-	"memobrain/services/cloud/internal/sharing"
-	"memobrain/services/cloud/internal/users"
-	"memobrain/services/cloud/internal/vaults"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/groups"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/keycloak"
+	"clarae/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/privacy/privacydb"
+	"clarae/services/cloud/internal/sharing"
+	"clarae/services/cloud/internal/users"
+	"clarae/services/cloud/internal/vaults"
+	"clarae/shared/syncproto"
 )
 
 // SessionInvalidator drops the cached authentication state of a user (auth.Middleware).

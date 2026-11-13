@@ -33,11 +33,11 @@ import (
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/cloudtest"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/apiclient"
-	"memobrain/shared/hashing"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/cloudtest"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/apiclient"
+	"clarae/shared/hashing"
+	"clarae/shared/syncproto"
 )
 
 var (
@@ -228,7 +228,7 @@ func TestTransportHonoursTheContract(t *testing.T) {
 
 	// --- account ---
 	cc := must[transport.ClientConfig](t, "client config")(client(t, "").GetClientConfig(ctx))
-	if cc.Audience != "memobrain-api" {
+	if cc.Audience != "clarae-api" {
 		t.Fatalf("client config: %+v", cc)
 	}
 	me := must[transport.Me](t, "me")(ada.GetMe(ctx))

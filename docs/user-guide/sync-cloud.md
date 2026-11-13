@@ -1,11 +1,11 @@
 # Sincronizzazione e cloud
 
-La sincronizzazione è **facoltativa**. Serve un server MemoBrain Notes (fornito dalla vostra organizzazione) e un account.
+La sincronizzazione è **facoltativa**. Serve un server Clarae notanda (fornito dalla vostra organizzazione) e un account.
 
 ## Collegarsi al server
 
 1. _Impostazioni → Cloud_: inserite l'**URL del server** (il resto della configurazione si scarica da lì) e scegliete _Accedi_.
-2. Il login si completa nel **browser di sistema** (non nell'app): se il collegamento locale non è possibile, l'app ripiega sullo schema `memobrain://`. Il token di rinnovo è custodito nel **portachiavi** del sistema.
+2. Il login si completa nel **browser di sistema** (non nell'app): se il collegamento locale non è possibile, l'app ripiega sullo schema `clarae://`. Il token di rinnovo è custodito nel **portachiavi** del sistema.
 3. Sotto _Cloud_ vedete il profilo, lo spazio usato e i **dispositivi** collegati (si possono revocare).
 
 ## Collegare un vault

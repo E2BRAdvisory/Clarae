@@ -446,7 +446,7 @@ func (q *Queries) ListVaultBlobsAmong(ctx context.Context, arg ListVaultBlobsAmo
 }
 
 const lockBlobHash = `-- name: LockBlobHash :exec
-SELECT pg_advisory_xact_lock(hashtextextended('memobrain.blob:' || $1::text, 0))
+SELECT pg_advisory_xact_lock(hashtextextended('clarae.blob:' || $1::text, 0))
 `
 
 // Serializes, per hash, the publication of a blob row with the deletion of

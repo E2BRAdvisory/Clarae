@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadMarkdownCases } from '@memobrain/conformance';
+import { loadMarkdownCases } from '@clarae/conformance';
 import { extract, parseProperties, splitFrontmatter } from './extract';
 
 // Every shared fixture must produce exactly the expectation that the Go parser

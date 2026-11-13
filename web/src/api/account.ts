@@ -1,9 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
-import { ApiError, type MemobrainClient, type Schemas } from '@memobrain/api-client';
+import { ApiError, type ClaraeClient, type Schemas } from '@clarae/api-client';
 import { useApi } from './context';
 
 /** Fetches the account export with the bearer token of the client (a plain link could not send it). */
-export async function fetchAccountExport(api: MemobrainClient): Promise<Blob> {
+export async function fetchAccountExport(api: ClaraeClient): Promise<Blob> {
   const { data, error, response } = await api.GET('/me/export', { parseAs: 'blob' });
   if (!response.ok) {
     const problem = error as Schemas['Problem'] | undefined;

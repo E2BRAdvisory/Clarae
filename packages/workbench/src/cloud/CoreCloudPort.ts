@@ -1,5 +1,5 @@
 // The CloudPort of the desktop and of the web workbench (ADR-0037 §2): cloud vaults, devices, usage
-// and sharing through the Go core's bindings. It lives here, not in @memobrain/cloud-features,
+// and sharing through the Go core's bindings. It lives here, not in @clarae/cloud-features,
 // because it calls the workbench's binding facade (app/api.ts); the package only defines the
 // interface, so the dependency goes one way (workbench -> cloud-features). The bindings return the
 // OpenAPI types the components use (ADR-0045 §6, asserted by bindingTypes.test.ts), so this adapter
@@ -24,8 +24,8 @@ import {
   type SharePage,
   type SharePermission,
   type ShareUpdate,
-} from '@memobrain/cloud-features/port';
-import type { Schemas } from '@memobrain/api-client';
+} from '@clarae/cloud-features/port';
+import type { Schemas } from '@clarae/api-client';
 import { api, type MountState } from '../app/api';
 
 /**

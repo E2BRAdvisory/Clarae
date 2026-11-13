@@ -10,7 +10,7 @@
 // Used by the core's worker (host functions loadDevice/saveDevice, internal/app/host_web.go) and by
 // the console (thisBrowserDevice, forgetThisBrowserDevice). Same origin, same database.
 
-const DB = 'memobrain-device';
+const DB = 'clarae-device';
 const VERSION = 2;
 /** Registrations by [server, account]. */
 const STORE = 'devices';

@@ -41,15 +41,15 @@ describe('slidesOf', () => {
   });
 
   it('carries the presenter notes of a frame', () => {
-    const els = [frame('a', 'A', 0, 0, { customData: { memobrain: { notes: 'say hello' } } })];
+    const els = [frame('a', 'A', 0, 0, { customData: { clarae: { notes: 'say hello' } } })];
     expect(slidesOf(els)[0]?.notes).toBe('say hello');
   });
 
   it('puts explicitly numbered slides first, in that order', () => {
     const els = [
       frame('x', 'A', 0, 0),
-      frame('b', 'Z', 0, 0, { customData: { memobrain: { slide: 2 } } }),
-      frame('a', 'Y', 0, 0, { customData: { memobrain: { slide: 1 } } }),
+      frame('b', 'Z', 0, 0, { customData: { clarae: { slide: 2 } } }),
+      frame('a', 'Y', 0, 0, { customData: { clarae: { slide: 1 } } }),
     ];
     expect(slidesOf(els).map((s) => s.id)).toEqual(['a', 'b', 'x']);
   });
@@ -73,24 +73,24 @@ describe('navigation', () => {
 
 describe('slide panel helpers', () => {
   it('keeps the other custom data when it sets or clears a key', () => {
-    const f = frame('a', 'A', 0, 0, { customData: { other: 1, memobrain: { notes: 'n' } } });
+    const f = frame('a', 'A', 0, 0, { customData: { other: 1, clarae: { notes: 'n' } } });
     expect(slideMetaUpdate(f, { slideHidden: true })).toEqual({
-      customData: { other: 1, memobrain: { notes: 'n', slideHidden: true } },
+      customData: { other: 1, clarae: { notes: 'n', slideHidden: true } },
     });
     expect(slideMetaUpdate(f, { notes: '' })).toEqual({
-      customData: { other: 1, memobrain: {} },
+      customData: { other: 1, clarae: {} },
     });
   });
 
   it('numbers frames in the new order and flags the hidden ones', () => {
     const els = [
       frame('a', 'A', 0, 0),
-      frame('b', 'B', 0, 0, { customData: { memobrain: { slide: 2, slideHidden: true } } }),
+      frame('b', 'B', 0, 0, { customData: { clarae: { slide: 2, slideHidden: true } } }),
     ];
     const upd = reorderUpdate(els, ['b', 'a']);
     expect(Object.keys(upd).sort()).toEqual(['a', 'b']);
-    expect(upd['a']).toEqual({ customData: { memobrain: { slide: 2 } } });
-    expect(upd['b']).toEqual({ customData: { memobrain: { slide: 1, slideHidden: true } } });
+    expect(upd['a']).toEqual({ customData: { clarae: { slide: 2 } } });
+    expect(upd['b']).toEqual({ customData: { clarae: { slide: 1, slideHidden: true } } });
     expect(playable(slidesOf(els)).map((s) => s.id)).toEqual(['a']);
   });
 });

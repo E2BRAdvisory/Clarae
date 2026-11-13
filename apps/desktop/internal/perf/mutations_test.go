@@ -19,15 +19,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/links"
-	"memobrain/apps/desktop/internal/store"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/hashing"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/store"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/hashing"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // The phases below mutate the cached dataset and leave it as they found it:

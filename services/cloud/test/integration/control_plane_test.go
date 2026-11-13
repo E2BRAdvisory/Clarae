@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/notify"
 )
 
 // tokenAt mints a token for an existing subject with the given realm roles and iat.
@@ -38,15 +38,15 @@ func TestDemotionHoldsAgainstTokensIssuedBefore(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root-demote")
 	sub := "sub-demoted-" + uuid.NewString()
-	email := "demoted-" + uuid.NewString()[:8] + "@memobrain.local"
+	email := "demoted-" + uuid.NewString()[:8] + "@clarae.local"
 	before := time.Now().Add(-time.Minute)
-	b := &client{e: e, token: e.tokenAt(sub, "demoted", email, before, "memobrain-admin", "memobrain-user")}
+	b := &client{e: e, token: e.tokenAt(sub, "demoted", email, before, "clarae-admin", "clarae-user")}
 	b.userID = decode[map[string]any](t, b.json(http.MethodGet, "/me", nil))["id"].(string)
 	expect(t, b.json(http.MethodGet, "/admin/users", nil), http.StatusOK)
 
 	expect(t, root.json(http.MethodPut, "/admin/users/"+b.userID+"/role", map[string]any{"role": "user"}), http.StatusOK)
 
-	// The old token still carries memobrain-admin: it no longer opens the console.
+	// The old token still carries clarae-admin: it no longer opens the console.
 	expect(t, b.json(http.MethodGet, "/admin/users", nil), http.StatusForbidden)
 	if me := decode[map[string]any](t, b.json(http.MethodGet, "/me", nil)); me["role"] != "user" {
 		t.Fatalf("/me role %v after the demotion", me["role"])
@@ -57,11 +57,11 @@ func TestDemotionHoldsAgainstTokensIssuedBefore(t *testing.T) {
 	// A token issued after the change mirrors the identity provider again,
 	// which now says user...
 	later := time.Now().Add(2 * time.Second)
-	b.token = e.tokenAt(sub, "demoted", email, later, "memobrain-user")
+	b.token = e.tokenAt(sub, "demoted", email, later, "clarae-user")
 	e.authn.Invalidate(sub)
 	expect(t, b.json(http.MethodGet, "/admin/users", nil), http.StatusForbidden)
 	// ...and a role granted again directly in Keycloak afterwards wins.
-	b.token = e.tokenAt(sub, "demoted", email, later.Add(time.Second), "memobrain-admin", "memobrain-user")
+	b.token = e.tokenAt(sub, "demoted", email, later.Add(time.Second), "clarae-admin", "clarae-user")
 	e.authn.Invalidate(sub)
 	expect(t, b.json(http.MethodGet, "/admin/users", nil), http.StatusOK)
 	if r := e.roleOf(b.uid()); r != "admin" {
@@ -89,7 +89,7 @@ func TestPromotionAppliesBeforeANewToken(t *testing.T) {
 func TestProvisioningEmailConflictIsAClearProblem(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root-conflict")
-	email := "twin-" + uuid.NewString()[:8] + "@memobrain.local"
+	email := "twin-" + uuid.NewString()[:8] + "@clarae.local"
 	first := &client{e: e, token: e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-first-" + uuid.NewString(), Username: "twin", Email: email})}
 	first.userID = decode[map[string]any](t, first.json(http.MethodGet, "/me", nil))["id"].(string)
 

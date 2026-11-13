@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // Startup is the handler of the API listener, which opens before the slow

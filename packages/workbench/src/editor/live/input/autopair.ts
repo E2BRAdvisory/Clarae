@@ -31,7 +31,7 @@ interface Meta {
   remove?: number;
 }
 
-const key = new PluginKey<number[]>('memobrain-autopair');
+const key = new PluginKey<number[]>('clarae-autopair');
 
 const charBefore = ($pos: ResolvedPos): string =>
   $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 1), $pos.parentOffset, undefined, '￼');

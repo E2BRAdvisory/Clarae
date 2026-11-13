@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // SSEHandler serves GET /events, the fallback for networks that block gRPC

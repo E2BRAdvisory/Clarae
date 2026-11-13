@@ -19,11 +19,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/services/cloud/internal/sharing/sharingdb"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/sharing/sharingdb"
 )
 
 // target is the scope of a share, new or existing, as access.Scope.ContainsScope reads it.

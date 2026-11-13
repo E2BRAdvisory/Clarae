@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, InlineError, QuotaBar, Table, serverQuotaLevel } from '@memobrain/ui';
+import { Badge, InlineError, QuotaBar, Table, serverQuotaLevel } from '@clarae/ui';
 import { cloudKeys, describeError } from './CloudVaultsTable';
 import { formatBytes } from './format';
 import { createT } from './i18n';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { parseSlides, type Slide, type SlideDeck } from '@memobrain/markdown';
+import { parseSlides, type Slide, type SlideDeck } from '@clarae/markdown';
 import { renderExportBody } from '../export/render';
 import { backendFor } from '../reading/ReadingView';
 import { useActiveNote } from '../state/activeNote';

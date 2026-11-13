@@ -20,7 +20,7 @@ describe('i18n', () => {
 
   it('prefers the saved choice', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('it-IT');
-    window.localStorage.setItem('memobrain.web.lang', 'en');
+    window.localStorage.setItem('clarae.web.lang', 'en');
     expect(detectLanguage()).toBe('en');
     expect(initI18n().language).toBe('en');
   });
@@ -34,7 +34,7 @@ describe('i18n', () => {
     await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Language' }), 'it');
     expect(await screen.findByRole('heading', { name: 'Spazio utilizzato' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'I miei vault' })).toBeInTheDocument();
-    expect(window.localStorage.getItem('memobrain.web.lang')).toBe('it');
+    expect(window.localStorage.getItem('clarae.web.lang')).toBe('it');
     expect(document.documentElement.lang).toBe('it');
   });
 

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/crypto"
 )
 
 // Folder renames against the real cloud binary (ADR-0040): one move_prefix in

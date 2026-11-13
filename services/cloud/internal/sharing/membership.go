@@ -6,9 +6,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/services/cloud/internal/sharing/sharingdb"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/sharing/sharingdb"
 )
 
 // GroupChange implements groups.Shares: change alters the members of a group

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"memobrain/shared/apiclient"
+	"clarae/shared/apiclient"
 )
 
 // API types of the sharing, directory and configuration endpoints (generated

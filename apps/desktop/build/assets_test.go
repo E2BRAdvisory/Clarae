@@ -125,14 +125,14 @@ func TestRenderedIdentifiers(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<key>CFBundleIdentifier</key>\s*<string>dev\.memobrain\.desktop</string>`,
-		`<key>CFBundleExecutable</key>\s*<string>memobrain</string>`,
-		`<key>CFBundleName</key>\s*<string>MemoBrain Notes</string>`,
+		`<key>CFBundleIdentifier</key>\s*<string>dev\.clarae\.desktop</string>`,
+		`<key>CFBundleExecutable</key>\s*<string>clarae</string>`,
+		`<key>CFBundleName</key>\s*<string>Clarae notanda</string>`,
 		`<key>CFBundleShortVersionString</key>\s*<string>1\.3\.4</string>`,
 		`<key>CFBundleIconFile</key>\s*<string>iconfile</string>`,
 		// The binary is built for macOS 13 (Go 1.27 itself needs it): Finder must say so instead of letting dyld fail.
 		`<key>LSMinimumSystemVersion</key>\s*<string>13\.0\.0</string>`,
-		`<key>CFBundleURLSchemes</key>\s*<array>\s*<string>memobrain</string>`,
+		`<key>CFBundleURLSchemes</key>\s*<array>\s*<string>clarae</string>`,
 	} {
 		if !regexp.MustCompile(want).MatchString(plist) {
 			t.Errorf("Info.plist: %s not found", want)
@@ -144,14 +144,14 @@ func TestRenderedIdentifiers(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`!define INFO_PROJECTNAME "MemoBrain Notes"`, // PRODUCT_EXECUTABLE = "${INFO_PROJECTNAME}.exe" = "MemoBrain Notes.exe"
+		`!define INFO_PROJECTNAME "Clarae notanda"`, // PRODUCT_EXECUTABLE = "${INFO_PROJECTNAME}.exe" = "Clarae notanda.exe"
 		`!define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"`,
 		`!define INFO_COMPANYNAME "E2BR-Advisory Sagl"`,
-		`!define INFO_PRODUCTNAME "MemoBrain Notes"`,
+		`!define INFO_PRODUCTNAME "Clarae notanda"`,
 		`!define UNINST_KEY_NAME "${INFO_COMPANYNAME}${INFO_PRODUCTNAME}"`,
 		`!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINST_KEY_NAME}"`,
-		`!insertmacro CUSTOM_PROTOCOL_ASSOCIATE "memobrain"`,
-		`!insertmacro CUSTOM_PROTOCOL_UNASSOCIATE "memobrain"`,
+		`!insertmacro CUSTOM_PROTOCOL_ASSOCIATE "clarae"`,
+		`!insertmacro CUSTOM_PROTOCOL_UNASSOCIATE "clarae"`,
 		`WriteRegStr SHELL_CONTEXT "Software\Classes\${PROTOCOL}\shell\open\command" "" "${COMMAND}"`,
 	} {
 		if !strings.Contains(nsh, want) {
@@ -163,7 +163,7 @@ func TestRenderedIdentifiers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(manifest, `name="com.wails.MemoBrain Notes" version="1.3.4.0"`) {
+	if !strings.Contains(manifest, `name="com.wails.Clarae notanda" version="1.3.4.0"`) {
 		t.Errorf("manifest: assemblyIdentity is not name+four-part version:\n%s", manifest)
 	}
 
@@ -180,13 +180,13 @@ func TestRenderedIdentifiers(t *testing.T) {
 	if err := json.Unmarshal([]byte(info), &parsed); err != nil {
 		t.Fatalf("info.json is not JSON: %v\n%s", err, info)
 	}
-	if parsed.Fixed.FileVersion != version || parsed.Info["0000"]["ProductName"] != "MemoBrain Notes" || parsed.Info["0000"]["CompanyName"] != "E2BR-Advisory Sagl" {
+	if parsed.Fixed.FileVersion != version || parsed.Info["0000"]["ProductName"] != "Clarae notanda" || parsed.Info["0000"]["CompanyName"] != "E2BR-Advisory Sagl" {
 		t.Errorf("info.json: unexpected content %+v", parsed)
 	}
 }
 
 // TestInstallerOutputName pins the installer file name (release.yml, package scripts and the updater's
-// memobrain-<version>-<os>-<arch>.<ext> look for it) and the WebView2 data path the uninstaller removes.
+// clarae-<version>-<os>-<arch>.<ext> look for it) and the WebView2 data path the uninstaller removes.
 func TestInstallerOutputName(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(repoRoot(), "apps", "desktop", "build", "windows", "installer", "project.nsi"))
 	if err != nil {
@@ -194,7 +194,7 @@ func TestInstallerOutputName(t *testing.T) {
 	}
 	nsi := string(raw)
 	for _, want := range []string{
-		`OutFile "..\..\bin\memobrain-${ARCH}-installer.exe"`,
+		`OutFile "..\..\bin\clarae-${ARCH}-installer.exe"`,
 		`InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"`,
 		`RMDir /r "$AppData\${PRODUCT_EXECUTABLE}"`,
 	} {
@@ -205,7 +205,7 @@ func TestInstallerOutputName(t *testing.T) {
 }
 
 func TestProjectFields(t *testing.T) {
-	for field, want := range map[string]string{"name": "MemoBrain Notes", "outputfilename": "memobrain", "productname": "MemoBrain Notes"} {
+	for field, want := range map[string]string{"name": "Clarae notanda", "outputfilename": "clarae", "productname": "Clarae notanda"} {
 		cmd := exec.Command(renderTool(t), "-project", projectJSON(), "-field", field) //nolint:gosec // the tool built above
 		out, err := cmd.Output()
 		if err != nil {

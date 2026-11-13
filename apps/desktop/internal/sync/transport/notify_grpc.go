@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"memobrain/shared/notifyv1"
+	"clarae/shared/notifyv1"
 )
 
 // grpcSupported: the native builds open the gRPC stream first (§3.4.4 D). The WebAssembly core cannot

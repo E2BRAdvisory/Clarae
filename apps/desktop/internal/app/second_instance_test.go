@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/store"
 )
 
 // recordingHost counts what the second-instance path asks of the window.
@@ -55,8 +55,8 @@ func openRequests(got []sentEvent) []OpenRequestPayload {
 // context is already there (v3 sets it before the window exists), and is delivered by DomReady.
 func TestDeepLinksWaitForTheReadySignal(t *testing.T) {
 	a, _, got := newSignalApp(t)
-	a.HandleURL("memobrain://open?vault=A&file=a.md")
-	a.OnSecondInstance([]string{"/bin/memobrain", "memobrain://open?vault=B&file=b.md"})
+	a.HandleURL("clarae://open?vault=A&file=a.md")
+	a.OnSecondInstance([]string{"/bin/clarae", "clarae://open?vault=B&file=b.md"})
 	if n := len(openRequests(*got)); n != 0 {
 		t.Fatalf("%d open requests before DomReady, want 0 (queued)", n)
 	}
@@ -66,7 +66,7 @@ func TestDeepLinksWaitForTheReadySignal(t *testing.T) {
 		t.Fatalf("open requests after DomReady = %+v, want A then B", reqs)
 	}
 	// Later ones go straight through; the queue is not replayed by a second DomReady (a page reload).
-	a.HandleURL("memobrain://open?vault=C")
+	a.HandleURL("clarae://open?vault=C")
 	a.DomReady(context.Background())
 	if reqs := openRequests(*got); len(reqs) != 3 || reqs[2].Vault != "C" {
 		t.Fatalf("open requests = %+v, want A, B, C", reqs)
@@ -77,7 +77,7 @@ func TestDeepLinksBeforeTheContext(t *testing.T) {
 	a := New(Options{DataDir: t.TempDir(), Logger: zerolog.Nop(), Version: "test"})
 	var got []sentEvent
 	a.setEmitter(func(name string, payload any) { got = append(got, sentEvent{name, payload}) })
-	a.HandleURL("memobrain://open?vault=first") // the first instance's own command line, before Wails runs
+	a.HandleURL("clarae://open?vault=first") // the first instance's own command line, before Wails runs
 	a.ctx = context.Background()
 	a.DomReady(context.Background())
 	if reqs := openRequests(got); len(reqs) != 1 || reqs[0].Vault != "first" {
@@ -86,20 +86,20 @@ func TestDeepLinksBeforeTheContext(t *testing.T) {
 }
 
 // Wails v3 hands the whole os.Args to a second instance: the program name and extra arguments are
-// ignored, the first memobrain:// URL is the one handled, and the window comes to the front.
+// ignored, the first clarae:// URL is the one handled, and the window comes to the front.
 func TestOnSecondInstanceArgs(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		args []string
 		want []string // vaults of the open requests
 	}{
-		{"url alone", []string{"memobrain://open?vault=V&file=n.md"}, []string{"V"}},
-		{"os.Args with program name", []string{"/Applications/MemoBrain", "memobrain://open?vault=V"}, []string{"V"}},
-		{"extra arguments around the url", []string{"memobrain", "--data-dir", "/tmp/x", "MEMOBRAIN://open?vault=V", "--log-level=debug"}, []string{"V"}},
-		{"only the first url", []string{"memobrain://open?vault=one", "memobrain://open?vault=two"}, []string{"one"}},
-		{"no url", []string{"/bin/memobrain", "--flag", "file.md"}, nil},
+		{"url alone", []string{"clarae://open?vault=V&file=n.md"}, []string{"V"}},
+		{"os.Args with program name", []string{"/Applications/Clarae", "clarae://open?vault=V"}, []string{"V"}},
+		{"extra arguments around the url", []string{"clarae", "--data-dir", "/tmp/x", "CLARAE://open?vault=V", "--log-level=debug"}, []string{"V"}},
+		{"only the first url", []string{"clarae://open?vault=one", "clarae://open?vault=two"}, []string{"one"}},
+		{"no url", []string{"/bin/clarae", "--flag", "file.md"}, nil},
 		{"no arguments", nil, nil},
-		{"unknown url", []string{"memobrain://nope"}, nil},
+		{"unknown url", []string{"clarae://nope"}, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			a, h, got := newSignalApp(t)
@@ -122,7 +122,7 @@ func TestOnSecondInstanceArgs(t *testing.T) {
 func TestOnSecondInstanceBeforeStartup(t *testing.T) {
 	h := &recordingHost{Host: defaultHost()}
 	a := New(Options{DataDir: t.TempDir(), Logger: zerolog.Nop(), Version: "test", Host: h})
-	a.OnSecondInstance([]string{"memobrain://open?vault=V"}) // no context yet: no window to show, URL queued
+	a.OnSecondInstance([]string{"clarae://open?vault=V"}) // no context yet: no window to show, URL queued
 	if h.shown != 0 {
 		t.Fatalf("ShowWindow called before Startup")
 	}
@@ -143,7 +143,7 @@ func TestStartupAndOnSecondInstanceRaceFree(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() { defer wg.Done(); a.Startup(ctx) }()
-	go func() { defer wg.Done(); a.OnSecondInstance([]string{"memobrain://open?vault=V"}) }()
+	go func() { defer wg.Done(); a.OnSecondInstance([]string{"clarae://open?vault=V"}) }()
 	wg.Wait()
 	t.Cleanup(func() { a.Shutdown(ctx) })
 	a.OnSecondInstance(nil)

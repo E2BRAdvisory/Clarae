@@ -31,12 +31,10 @@ const graph = (ids: string[], edges: [number, number][], created = 1): GraphData
 describe('graph refresh', () => {
   it('reloads only for changes that can alter nodes or links', () => {
     // The app's own writes of its settings and workspace.
-    expect(graphNeedsReload(batch([{ type: 'modify', path: '.memobrain/workspace.json' }]))).toBe(
+    expect(graphNeedsReload(batch([{ type: 'modify', path: '.clarae/workspace.json' }]))).toBe(
       false,
     );
-    expect(graphNeedsReload(batch([{ type: 'create', path: '.memobrain/graph.json' }]))).toBe(
-      false,
-    );
+    expect(graphNeedsReload(batch([{ type: 'create', path: '.clarae/graph.json' }]))).toBe(false);
     // An edited attachment or canvas has no links in the graph.
     expect(graphNeedsReload(batch([{ type: 'modify', path: 'img/a.png' }]))).toBe(false);
     expect(graphNeedsReload(batch([{ type: 'modify', path: 'board.canvas' }]))).toBe(false);

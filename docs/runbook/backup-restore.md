@@ -1,15 +1,15 @@
 # Runbook: backup e restore (PostgreSQL + bucket S3)
 
-Ambito: Cloud Service MemoBrain Notes (modular monolith) con PostgreSQL e uno store S3-compatibile per i blob. Requisito di riferimento: Appendice A, "Affidabilità dati: RPO ≤ 5 min (PITR PG, versioning bucket)". Il procedimento qui descritto è provato da `scripts/chaos/restore-drill.sh` su container usa e getta (esito in fondo).
+Ambito: Cloud Service Clarae notanda (modular monolith) con PostgreSQL e uno store S3-compatibile per i blob. Requisito di riferimento: Appendice A, "Affidabilità dati: RPO ≤ 5 min (PITR PG, versioning bucket)". Il procedimento qui descritto è provato da `scripts/chaos/restore-drill.sh` su container usa e getta (esito in fondo).
 
 ## 1. Che cosa si protegge
 
-| Dato                                                                          | Dove                        | Proprietà                                                                              | Come si protegge                                                               |
-| ----------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Stato (utenti, vault, file, revisioni, changelog `seq`, share, quote, config) | PostgreSQL                  | Fonte di verità; `seq` per vault monotono                                              | Base backup + archiviazione WAL continua (PITR); dump logico come seconda rete |
-| Contenuto dei file                                                            | Bucket S3 `memobrain-blobs` | Blob **content-addressed** (SHA-256) e immutabili; una chiave non cambia mai contenuto | Versioning del bucket + lifecycle sulle versioni non correnti                  |
-| Export ZIP                                                                    | Bucket `memobrain-exports`  | Temporanei (scadono)                                                                   | Nessun backup necessario                                                       |
-| Identità                                                                      | Keycloak (DB proprio)       | Fuori dal perimetro di questo runbook                                                  | Backup del DB di Keycloak e export del realm, stessa disciplina                |
+| Dato                                                                          | Dove                     | Proprietà                                                                              | Come si protegge                                                               |
+| ----------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Stato (utenti, vault, file, revisioni, changelog `seq`, share, quote, config) | PostgreSQL               | Fonte di verità; `seq` per vault monotono                                              | Base backup + archiviazione WAL continua (PITR); dump logico come seconda rete |
+| Contenuto dei file                                                            | Bucket S3 `clarae-blobs` | Blob **content-addressed** (SHA-256) e immutabili; una chiave non cambia mai contenuto | Versioning del bucket + lifecycle sulle versioni non correnti                  |
+| Export ZIP                                                                    | Bucket `clarae-exports`  | Temporanei (scadono)                                                                   | Nessun backup necessario                                                       |
+| Identità                                                                      | Keycloak (DB proprio)    | Fuori dal perimetro di questo runbook                                                  | Backup del DB di Keycloak e export del realm, stessa disciplina                |
 
 I vault privati sono E2EE: backup e restore contengono solo testo cifrato. Nessuna chiave è nel backup: la perdita di passphrase e recovery key resta non recuperabile (D-02).
 
@@ -32,7 +32,7 @@ archive_timeout = 60
 ```
 
 - **Base backup**: `pg_basebackup -D <dir> -Ft -z -X stream -c fast` (giornaliero; ritenzione ≥ finestra PITR desiderata + 1 base backup). Sono equivalenti `pgBackRest backup` o `wal-g backup-push`, preferibili in produzione (incrementali, verifica, ritenzione).
-- **Dump logico** (rete di sicurezza, non PITR): `pg_dump -Fc -f memobrain.dump memobrain`, settimanale. Serve per migrare/ispezionare, non per rispettare l'RPO.
+- **Dump logico** (rete di sicurezza, non PITR): `pg_dump -Fc -f clarae.dump clarae`, settimanale. Serve per migrare/ispezionare, non per rispettare l'RPO.
 - **Verifica**: ogni base backup va ripristinato da un job periodico (è ciò che fa il drill); un backup mai ripristinato non è un backup.
 
 ### 3.2 PostgreSQL gestito
@@ -41,7 +41,7 @@ Usare il PITR del servizio (RDS/Aurora, Cloud SQL, Azure Flexible Server, CloudN
 
 ### 3.3 Bucket S3
 
-- **Versioning attivo** su `memobrain-blobs` (`PutBucketVersioning` = Enabled). Una cancellazione crea un _delete marker_, una sovrascrittura una nuova versione: entrambe reversibili.
+- **Versioning attivo** su `clarae-blobs` (`PutBucketVersioning` = Enabled). Una cancellazione crea un _delete marker_, una sovrascrittura una nuova versione: entrambe reversibili.
 - **Lifecycle**: scadenza delle sole versioni non correnti dopo N giorni, con **N ≥ finestra PITR** (consigliato 30), così un DB ripristinato a T trova ancora i blob che il GC ha tolto dopo T. Non impostare mai scadenza sulla versione corrente.
 - Facoltativi: replica cross-region, Object Lock in modalità governance.
 - **Supporto per backend**: il drill sonda lo store (`drilltool s3 probe`: due put, una delete, elenco delle versioni). **RustFS (`rustfs/rustfs:latest`, lo store di sviluppo) supporta versioning, delete marker, ripristino di versione e regole lifecycle** (esito del 2026-10-27); lo script ripiega su MinIO solo se la sonda fallisce. Per la produzione usare uno store che offra le stesse funzioni (AWS S3, MinIO, Ceph RGW) e rieseguire la sonda sul backend scelto.
@@ -60,7 +60,7 @@ Perciò: si ripristina **prima il DB**, poi si **verifica la coerenza DB↔bucke
 
 Precondizione: stabilire il timestamp target **T** (UTC, es. l'ultimo istante prima dell'incidente) dal log di audit o dai log applicativi.
 
-1. **Fermare il traffico e i job**: `kubectl scale deploy/<rel>-memobrain-api deploy/<rel>-memobrain-worker --replicas=0` (il worker esegue GC blob e manutenzione: non deve girare con DB e bucket in stati diversi).
+1. **Fermare il traffico e i job**: `kubectl scale deploy/<rel>-clarae-api deploy/<rel>-clarae-worker --replicas=0` (il worker esegue GC blob e manutenzione: non deve girare con DB e bucket in stati diversi).
 2. **Ripristinare PostgreSQL a T**
    - Preparare un data directory vuoto, estrarre `base.tar.gz` e `pg_wal.tar.gz` del base backup scelto (anteriore a T) in `PGDATA` e `PGDATA/pg_wal`;
    - creare `recovery.signal`; in `postgresql.auto.conf`: `restore_command = 'cp /wal-archive/%f %p'`, `recovery_target_time = '<T>'`, `recovery_target_action = 'promote'`;
@@ -80,13 +80,13 @@ Precondizione: stabilire il timestamp target **T** (UTC, es. l'ultimo istante pr
 Caso: un blob è stato cancellato o sovrascritto, il DB è sano.
 
 1. Individuare la chiave: `blobs/<primi 2 caratteri dell'hash>/<hash>`.
-2. `aws s3api list-object-versions --bucket memobrain-blobs --prefix <chiave>`: cercare delete marker (`IsLatest: true`) o la versione precedente.
+2. `aws s3api list-object-versions --bucket clarae-blobs --prefix <chiave>`: cercare delete marker (`IsLatest: true`) o la versione precedente.
 3. Ripristinare come al punto 4 di §5 e rieseguire `verify-blobs`.
 4. Nota: il server **non** verifica l'hash in lettura; è il client a farlo (`fetch` scarta il contenuto che non corrisponde al digest). Un oggetto corrotto in silenzio si manifesta come errore di sincronizzazione del client, non come errore del server.
 
 ## 7. Prova eseguita (restore drill)
 
-`scripts/chaos/restore-drill.sh` (container `memobrain-chaos-drill-*`, rimossi a fine esecuzione; report in `.dev/chaos/drill-*/report.md`):
+`scripts/chaos/restore-drill.sh` (container `clarae-chaos-drill-*`, rimossi a fine esecuzione; report in `.dev/chaos/drill-*/report.md`):
 
 1. PostgreSQL 17 con archiviazione WAL + store S3 (RustFS, con ripiego su MinIO se manca il versioning), cloud reale come processo;
 2. dati creati via API (lotto a: 30 file, alcuni da ~300 KB), base backup + dump logico, versioning e lifecycle sul bucket;

@@ -1,6 +1,6 @@
 // The measurements of the A gate, on the corpus of corpus.ts. The tests assert on them and
-// `yarn workspace @memobrain/workbench run live:metrics` prints them. Test support only.
-import { extract } from '@memobrain/markdown';
+// `yarn workspace @clarae/workbench run live:metrics` prints them. Test support only.
+import { extract } from '@clarae/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import {
   AllSelection,

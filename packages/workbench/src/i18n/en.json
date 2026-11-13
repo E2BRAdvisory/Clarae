@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MemoBrain Notes",
+    "name": "Clarae notanda",
     "backToConsole": "Back to the console",
     "crash": {
       "shell": "Something went wrong and the app stopped.",
@@ -269,7 +269,7 @@
     "disconnected": "Offline — signed in as {{name}}",
     "deviceRevoked": "Signed in as {{name}} — this device was revoked",
     "role": "Role",
-    "placeholder": "https://memobrain.example.com",
+    "placeholder": "https://clarae.example.com",
     "storage": "Storage",
     "devices": "Devices",
     "vaults": "Cloud vaults"
@@ -608,7 +608,7 @@
     "notConnected": "Not connected",
     "notConnectedText": "This vault lives only on this computer. Connect it to the cloud to sync it between your devices.",
     "connectTitle": "Connect to the cloud",
-    "needSignIn": "Sign in to your MemoBrain Notes server first (Settings → Cloud).",
+    "needSignIn": "Sign in to your Clarae notanda server first (Settings → Cloud).",
     "openCloudSettings": "Open cloud settings",
     "kindShared": "Shared vault",
     "kindSharedText": "Notes are stored readable on the server. Can be shared with other people and groups. Administrators can access the content.",
@@ -1273,10 +1273,10 @@
     "title": "Open File",
     "message": "The file {{name}} cannot be shown here. Do you want to download it?",
     "download": "Download",
-    "executable": "{{name}} is a program: for safety MemoBrain Notes does not open it. Show it in its folder?",
+    "executable": "{{name}} is a program: for safety Clarae notanda does not open it. Show it in its folder?",
     "reveal": "Show in folder",
     "openWithApp": "Open with default app",
-    "notShown": "This file cannot be shown in MemoBrain Notes."
+    "notShown": "This file cannot be shown in Clarae notanda."
   },
   "marp": {
     "title": "Presentation",
@@ -1421,8 +1421,8 @@
   "updater": {
     "title": "Software update",
     "checking": "Checking for updates…",
-    "upToDate": "MemoBrain Notes {{version}} is up to date.",
-    "available": "MemoBrain Notes {{version}} is available",
+    "upToDate": "Clarae notanda {{version}} is up to date.",
+    "available": "Clarae notanda {{version}} is available",
     "indicator": "Update {{version}}",
     "current": "you have {{version}}",
     "required": "This version is no longer supported: please update.",

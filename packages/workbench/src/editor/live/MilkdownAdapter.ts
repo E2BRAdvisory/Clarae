@@ -13,7 +13,7 @@
 //
 // Source lines and columns are what the handle speaks (positions.ts maps them): the line is exact, the
 // column is approximate inside a block (ADR-0049).
-import { extract, parseWikilinkInner } from '@memobrain/markdown';
+import { extract, parseWikilinkInner } from '@clarae/markdown';
 import type { Ctx } from '@milkdown/kit/ctx';
 import type { CrepeBuilder } from '@milkdown/crepe/builder';
 import { setCodeMirrorTheme } from '@milkdown/crepe/feature/code-mirror';
@@ -66,7 +66,7 @@ export interface LiveEditorOptions {
   collabRoom?: () => CollabRoom | undefined;
   /**
    * The vault of the note, for the AI assistant (ADR-0050): off, so it never matters in a build without
-   * the constant (`MEMOBRAIN_AI`), the `ai` flag, the capability, a vault that is not private and a core
+   * the constant (`CLARAE_AI`), the `ai` flag, the capability, a vault that is not private and a core
    * that answers `Status` as available. Read once, when the editor is opened.
    */
   vaultId?: () => string | undefined;

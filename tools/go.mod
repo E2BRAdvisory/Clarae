@@ -1,7 +1,7 @@
 // Module tools pins the developer tools (code generators, linters) used by the
 // repository. It is intentionally outside go.work so its large dependency tree
 // never leaks into the application modules. Install with `task tools`.
-module memobrain/tools
+module clarae/tools
 
 go 1.27.4
 

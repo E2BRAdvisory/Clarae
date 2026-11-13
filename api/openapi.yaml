@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
-  title: MemoBrain Notes Cloud API
+  title: Clarae notanda Cloud API
   version: 1.4.0
   description: |
-    REST contract of the MemoBrain Notes Cloud Service (Specifications.md §3.1, §3.5).
+    REST contract of the Clarae notanda Cloud Service (Specifications.md §3.1, §3.5).
     This file is the single source of truth: the Go server stubs (strict server and
     request validator), the Go client (`shared/go/apiclient`) and the TypeScript client
-    (`@memobrain/api-client`) are generated from it (`task gen-openapi`).
+    (`@clarae/api-client`) are generated from it (`task gen-openapi`).
 
     **Version.** `info.version` is the product version (git tag `vX.Y.Z`) of the
     release that ships this contract. The URL prefix `/api/v1` only changes with an
@@ -33,7 +33,7 @@ info:
 
     **Authentication and roles.** Operations take a Keycloak access token as a bearer
     token (`bearerAuth`; the cloud is an OIDC resource server and validates `iss`,
-    `aud=memobrain-api` and the signature against the realm's JWKS). The
+    `aud=clarae-api` and the signature against the realm's JWKS). The
     `openIdConnect` scheme `oidc` only documents where clients obtain such a token;
     the issuer of a running instance is returned by `GET /client-config`. Authentication
     runs before every authenticated operation (and the routes outside this contract) and
@@ -44,7 +44,7 @@ info:
     `409 INVALID_STATE` (response `IdentityConflict`, ADR-0041) until an administrator
     resolves it; an exhausted per-user bucket is `429 RATE_LIMITED`. Every authenticated
     operation therefore declares 401, 403, 409 and 429. Operations
-    marked `x-required-role: memobrain-admin` (the `admin` tag) also require that
+    marked `x-required-role: clarae-admin` (the `admin` tag) also require that
     Keycloak realm role in the token (`realm_access.roles`); without it they answer
     `403 FORBIDDEN`. Groups never come from the token (D-05).
 
@@ -61,7 +61,7 @@ info:
     **Routes outside this contract** (ADR-0037 §3): resumable uploads (tus 1.0.0) and
     the Server-Sent Events stream (`GET /events`) speak their own protocol, so no stub
     or client is generated for them. They are documented in the root extension
-    `x-memobrain-external-routes`.
+    `x-clarae-external-routes`.
 servers:
   - url: /api/v1
 security:
@@ -86,9 +86,9 @@ tags:
   - name: admin
     description: >-
       Administration console: users, groups, Config Profiles, storage settings and audit log.
-      Every operation requires the `memobrain-admin` realm role (`x-required-role`)
+      Every operation requires the `clarae-admin` realm role (`x-required-role`)
 
-x-memobrain-external-routes:
+x-clarae-external-routes:
   description: >-
     Routes served under the same base path, with the same bearer authentication and the same
     per-client rate limit, but outside the generated contract (ADR-0037 §3). The request
@@ -1634,7 +1634,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUsers
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Users, paginated and filtered
@@ -1702,7 +1702,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminCreateUser
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Create a user (also in Keycloak, with required actions)
@@ -1740,7 +1740,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetUser
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: One user
@@ -1766,7 +1766,7 @@ paths:
     patch:
       tags: [admin]
       operationId: adminUpdateUser
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Change the profile of a user
@@ -1802,7 +1802,7 @@ paths:
     delete:
       tags: [admin]
       operationId: adminDeleteUser
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: 'Delete a user: disabled in Keycloak, their vaults enter the retention period'
@@ -1828,7 +1828,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminSuspendUser
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: 'Suspend: Keycloak account disabled, sessions revoked, access ends within 30 s'
@@ -1858,7 +1858,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminActivateUser
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Activate a suspended user
@@ -1888,7 +1888,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminResetPassword
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Require a new password at the next login (and send the e-mail when Keycloak can)
@@ -1918,7 +1918,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetUserRole
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Set the global role
@@ -1958,7 +1958,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetUserQuota
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: 'Set the quota override: null = default, -1 = unlimited'
@@ -1998,7 +1998,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUserVaults
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Vault metadata only (name, kind, size)
@@ -2030,7 +2030,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUserDevices
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Active devices of a user
@@ -2062,7 +2062,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListUserSessions
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Open Keycloak sessions of a user
@@ -2097,7 +2097,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminUserEffectiveConfig
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Preview of the configuration a user receives
@@ -2125,7 +2125,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListGroups
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Groups, by name
@@ -2155,7 +2155,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminCreateGroup
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Create a group
@@ -2193,7 +2193,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetGroup
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: One group
@@ -2219,7 +2219,7 @@ paths:
     patch:
       tags: [admin]
       operationId: adminUpdateGroup
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Rename or describe a group
@@ -2255,7 +2255,7 @@ paths:
     delete:
       tags: [admin]
       operationId: adminDeleteGroup
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Delete a group with its memberships, grants and assignments
@@ -2281,7 +2281,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListGroupMembers
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Members of a group, by username
@@ -2318,7 +2318,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetGroupMember
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Add a member or change their role
@@ -2350,7 +2350,7 @@ paths:
     delete:
       tags: [admin]
       operationId: adminRemoveGroupMember
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Remove a member
@@ -2376,7 +2376,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetGroupProfiles
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Profiles assigned to a group
@@ -2404,7 +2404,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminSetGroupProfiles
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Replace the profiles assigned to a group
@@ -2438,7 +2438,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListConfigProfiles
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Profiles
@@ -2464,7 +2464,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminCreateConfigProfile
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Create a profile (validated against the schema)
@@ -2502,7 +2502,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetConfigProfile
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: One profile
@@ -2528,7 +2528,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminUpdateConfigProfile
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: 'Replace a profile: its version grows and the old one goes to the history'
@@ -2567,7 +2567,7 @@ paths:
     delete:
       tags: [admin]
       operationId: adminDeleteConfigProfile
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Delete a profile and its assignments
@@ -2593,7 +2593,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminListProfileVersions
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: History of a profile, newest first
@@ -2639,7 +2639,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetProfileVersion
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: One version of a profile, with its configuration
@@ -2670,7 +2670,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminRestoreProfileVersion
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: 'Roll back: an old version becomes the new current one'
@@ -2698,7 +2698,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminGetStorageSettings
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Default quota, thresholds, retention
@@ -2722,7 +2722,7 @@ paths:
     put:
       tags: [admin]
       operationId: adminPutStorageSettings
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Change the storage settings
@@ -2758,7 +2758,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminStorageOverview
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Totals, top consumers, users over the thresholds, trend
@@ -2784,7 +2784,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminBulkQuota
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Set the quota override of several users at once
@@ -2820,7 +2820,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminAuditLog
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: Audit trail, newest first
@@ -2890,7 +2890,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminAuditLogCsv
-      x-required-role: memobrain-admin
+      x-required-role: clarae-admin
       security:
         - bearerAuth: []
       summary: The audit trail as CSV (same filters, up to 50000 rows)
@@ -3091,10 +3091,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Keycloak access token with `aud=memobrain-api`
+      description: Keycloak access token with `aud=clarae-api`
     oidc:
       type: openIdConnect
-      openIdConnectUrl: https://keycloak.example.com/realms/memobrain/.well-known/openid-configuration
+      openIdConnectUrl: https://keycloak.example.com/realms/clarae/.well-known/openid-configuration
       description: >-
         Where clients obtain the access token used as `bearerAuth` (documentation only: no operation
         references this scheme). The URL is `<issuer>/.well-known/openid-configuration`, where the
@@ -3285,7 +3285,7 @@ components:
             $ref: '#/components/schemas/Problem'
     IdentityConflict:
       description: >-
-        The identity of the token cannot be linked to a MemoBrain account (code INVALID_STATE,
+        The identity of the token cannot be linked to a Clarae account (code INVALID_STATE,
         ADR-0041): another account already uses the same e-mail address. Possible on every
         authenticated operation; an administrator has to resolve it, so retrying does not help
       content:
@@ -3352,7 +3352,7 @@ components:
 
     Problem:
       type: object
-      description: RFC 9457 problem details with the MemoBrain Notes application code
+      description: RFC 9457 problem details with the Clarae notanda application code
       required: [type, title, status, code]
       properties:
         type:

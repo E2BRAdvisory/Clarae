@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"memobrain/shared/features"
+	"clarae/shared/features"
 )
 
 func TestEmbeddedSchemaMatchesTheContract(t *testing.T) {
@@ -16,7 +16,7 @@ func TestEmbeddedSchemaMatchesTheContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(want, schemaJSON) {
-		t.Fatal("the schema embedded by memobrain/shared/features differs from api/config-profile.schema.json: run `task gen`")
+		t.Fatal("the schema embedded by clarae/shared/features differs from api/config-profile.schema.json: run `task gen`")
 	}
 }
 

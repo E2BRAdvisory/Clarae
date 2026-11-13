@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/singleflight"
 
-	"memobrain/services/cloud/internal/api"
+	"clarae/services/cloud/internal/api"
 )
 
 // Checker reports the health of one dependency.

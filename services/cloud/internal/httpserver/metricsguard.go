@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"net/netip"
 
-	"memobrain/services/cloud/internal/system"
+	"clarae/services/cloud/internal/system"
 )
 
 // internalOnly serves h only to direct callers. Prometheus scrapes the pods inside the cluster,

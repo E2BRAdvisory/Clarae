@@ -14,19 +14,19 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"memobrain/services/cloud/internal/access"
+	"clarae/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/vaults/vaultsdb"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/vaults/vaultsdb"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // Vault kinds (D-02). The kind never changes after creation.

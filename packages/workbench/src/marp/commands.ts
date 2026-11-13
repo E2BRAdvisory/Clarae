@@ -124,7 +124,7 @@ export async function exportDeckPdf(): Promise<void> {
     if (!r) return;
     const { PRINT_CSS } = await importWithRetry(() => import('./document'));
     beginPrint(r.html, { css: `${r.css}\n${PRINT_CSS}`, className: 'marp-print' });
-    const imgs = [...document.querySelectorAll<HTMLImageElement>('#memobrain-print img')];
+    const imgs = [...document.querySelectorAll<HTMLImageElement>('#clarae-print img')];
     await Promise.all(imgs.map((i) => i.decode().catch(() => undefined)));
     window.addEventListener('afterprint', endPrint, { once: true });
     try {

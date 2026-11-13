@@ -17,7 +17,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"memobrain/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/app"
 )
 
 // Host implements app.Host on the desktop with the Wails v3 application and its window.

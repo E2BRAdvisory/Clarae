@@ -24,7 +24,7 @@ export async function signIn(context: BrowserContext, user: string): Promise<Pag
   const page = await context.newPage();
   await page.goto('/vaults');
   await page.locator('#username').fill(user);
-  await page.locator('#password').fill('memobrain-dev-password');
+  await page.locator('#password').fill('clarae-dev-password');
   await page.locator('#kc-login').click();
   await expect(page.getByRole('heading', { name: 'My vaults' })).toBeVisible({ timeout: 60_000 });
   return page;
@@ -82,7 +82,7 @@ export const VAULTS_PATH = async (page: Page): Promise<string[]> => {
 /** The localStorage key of the signed-in account's vault markers (web/src/workbench/markers.ts). */
 export const markersKey = (page: Page): Promise<string> =>
   page.evaluate(() => {
-    const prefix = 'memobrain.workbench.vaults@';
+    const prefix = 'clarae.workbench.vaults@';
     const keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix));
     if (keys.length > 1) throw new Error(`more than one account's markers: ${keys.join(', ')}`);
     // Before the workbench wrote any: the key does not exist, and reads as empty.

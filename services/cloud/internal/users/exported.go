@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/users/usersdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/users/usersdb"
 )
 
 // Types of the exported queries.

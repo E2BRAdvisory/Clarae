@@ -19,7 +19,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 
-	"memobrain/shared/pathrules"
+	"clarae/shared/pathrules"
 )
 
 // Change is a batch of vault-relative paths that may have changed (created,
@@ -244,7 +244,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		return
 	}
 	rel = filepath.ToSlash(rel)
-	if _, base := pathrules.Split(rel); strings.HasPrefix(base, ".memobrain-tmp-") {
+	if _, base := pathrules.Split(rel); strings.HasPrefix(base, ".clarae-tmp-") {
 		return // our own atomic-write temporaries
 	}
 	normalized, err := pathrules.Normalize(rel)
@@ -275,7 +275,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 func (w *Watcher) Notify(paths []string) {
 	var keep []string
 	for _, p := range paths {
-		if _, base := pathrules.Split(p); strings.HasPrefix(base, ".memobrain-tmp-") {
+		if _, base := pathrules.Split(p); strings.HasPrefix(base, ".clarae-tmp-") {
 			continue
 		}
 		if n, err := pathrules.Normalize(p); err == nil && !pathrules.IsExcluded(n, false) {

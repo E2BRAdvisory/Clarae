@@ -1,7 +1,7 @@
 // Package auth signs the desktop in to the cloud with OpenID Connect
 // Authorization Code + PKCE in the system browser (§1.3, RFC 8252). The
 // redirect is a loopback listener on a random port, with the custom scheme
-// memobrain://auth/callback as fallback (D-08). The refresh token lives in the OS
+// clarae://auth/callback as fallback (D-08). The refresh token lives in the OS
 // keychain; the access token only in memory. The browser build (ADR-0030) leaves the
 // flow and the keychain out (oidc_native.go, keychain_native.go): its page owns the
 // session (Hosted, hosted.go).
@@ -21,8 +21,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/apiclient"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/apiclient"
 )
 
 // Status of the session.
@@ -68,7 +68,7 @@ func ParseRedirectMode(v string) RedirectMode {
 }
 
 // SchemeRedirectURI is the custom-scheme callback registered in Keycloak.
-const SchemeRedirectURI = "memobrain://auth/callback"
+const SchemeRedirectURI = "clarae://auth/callback"
 
 // Profile is the signed-in user as seen by the client.
 type Profile struct {
@@ -188,7 +188,7 @@ func New(opts Options) *Service {
 		if h, err := os.Hostname(); err == nil {
 			opts.DeviceName = h
 		} else {
-			opts.DeviceName = "MemoBrain Notes desktop"
+			opts.DeviceName = "Clarae notanda desktop"
 		}
 	}
 	if opts.Platform == "" {
@@ -268,7 +268,7 @@ func (s *Service) Client() *transport.Client {
 	if sess == nil {
 		return nil
 	}
-	c, err := transport.New(sess.ServerURL, s, s.hc, "memobrain-desktop/"+s.opts.AppVersion)
+	c, err := transport.New(sess.ServerURL, s, s.hc, "clarae-desktop/"+s.opts.AppVersion)
 	if err != nil {
 		return nil
 	}
@@ -445,7 +445,7 @@ func (s *Service) ReregisterDevice(ctx context.Context) error {
 	return err
 }
 
-// HandleCallback delivers a memobrain://auth/callback (custom scheme fallback).
+// HandleCallback delivers a clarae://auth/callback (custom scheme fallback).
 func (s *Service) HandleCallback(params url.Values) bool {
 	s.mu.Lock()
 	att := s.pending

@@ -1,4 +1,4 @@
-import { Feature, FEATURE_DEFAULTS, featureEnabled } from '@memobrain/api-client/features';
+import { Feature, FEATURE_DEFAULTS, featureEnabled } from '@clarae/api-client/features';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { loadCollab } from '../chunks';
 import { attachCollab } from './attach';

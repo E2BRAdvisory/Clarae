@@ -1,4 +1,4 @@
-import { splitFrontmatter } from '@memobrain/markdown';
+import { splitFrontmatter } from '@clarae/markdown';
 import { describe, expect, it } from 'vitest';
 import {
   adoptFrontmatter,

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/services/cloud/internal/configprofiles"
-	"memobrain/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/configprofiles"
+	"clarae/services/cloud/internal/notify"
 )
 
 type effective struct {

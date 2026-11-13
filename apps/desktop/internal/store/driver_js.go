@@ -5,7 +5,7 @@ package store
 import (
 	"strings"
 
-	"memobrain/apps/desktop/internal/sqlitejs"
+	"clarae/apps/desktop/internal/sqlitejs"
 )
 
 // Exists reports whether a database is stored under path (in sqlite-wasm's VFS, not in the file

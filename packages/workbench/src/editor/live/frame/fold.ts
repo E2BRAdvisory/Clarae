@@ -120,7 +120,7 @@ export interface FoldMeta {
   enabled?: boolean;
 }
 
-export const foldKey = new PluginKey<FoldState>('memobrain-live-fold');
+export const foldKey = new PluginKey<FoldState>('clarae-live-fold');
 
 export const foldStateOf = (state: EditorState): FoldState | undefined => foldKey.getState(state);
 

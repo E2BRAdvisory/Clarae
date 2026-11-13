@@ -3,7 +3,7 @@
 # binding mock in it, or has no Milkdown Live editor: the build of a release is the default one, whose Live mode is
 # Milkdown (ADR-0049) without collaboration (ADR-0050), and which talks to the real core. It reads the files that were
 # built, so it also catches an import of editor/live/chunks/collab that reached the build by mistake (a stub stands in
-# for it unless MEMOBRAIN_COLLAB=1), a stale dist/ made with MEMOBRAIN_E2E=1 that go:embed would pick up, and a build
+# for it unless CLARAE_COLLAB=1), a stale dist/ made with CLARAE_E2E=1 that go:embed would pick up, and a build
 # whose Live editor chunk is gone:
 #
 #   scripts/release/check-dist.sh <dist dir> [...]     apps/desktop/frontend/dist, web/dist
@@ -24,7 +24,7 @@ for dir in "$@"; do
   [ -n "$(ls -A "$dir")" ] || { echo "error: $dir is empty: nothing to check" >&2; exit 1; }
   hits="$(grep -rlE 'Yjs was already imported|"y-sync"|ProseMirror-yjs-cursor' "$dir" || true)"
   if [ -n "$hits" ]; then
-    echo "error: the collaboration code (Yjs, y-prosemirror) is in the release build $dir (built with MEMOBRAIN_COLLAB, or imported past the stub of live/chunks/collab):" >&2
+    echo "error: the collaboration code (Yjs, y-prosemirror) is in the release build $dir (built with CLARAE_COLLAB, or imported past the stub of live/chunks/collab):" >&2
     printf '%s\n' "$hits" | head -n 10 >&2
     exit 1
   fi
@@ -34,7 +34,7 @@ for dir in "$@"; do
   fi
   mocks="$(grep -rlE 'installWailsMock|wails-mock|__mock' "$dir" || true)"
   if [ -n "$mocks" ]; then
-    echo "error: the end-to-end binding mock is in the release build $dir (built with MEMOBRAIN_E2E=1, or a stale dist/):" >&2
+    echo "error: the end-to-end binding mock is in the release build $dir (built with CLARAE_E2E=1, or a stale dist/):" >&2
     printf '%s\n' "$mocks" | head -n 10 >&2
     exit 1
   fi

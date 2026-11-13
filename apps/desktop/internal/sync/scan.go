@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 type localFile struct {
@@ -20,7 +20,7 @@ type localFile struct {
 }
 
 // walkLocal lists the vault files that take part in synchronization
-// (§3.4.2: .DS_Store, *.tmp, the trash and device-local .memobrain files are out).
+// (§3.4.2: .DS_Store, *.tmp, the trash and device-local .clarae files are out).
 func (e *Engine) walkLocal() (map[string]localFile, error) {
 	out := map[string]localFile{}
 	err := e.cfg.FS.Walk(func(en vault.Entry) error {

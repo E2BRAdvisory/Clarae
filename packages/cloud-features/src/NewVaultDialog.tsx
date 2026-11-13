@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
-import { Button, Dialog, InlineError, TextField } from '@memobrain/ui';
+import { Button, Dialog, InlineError, TextField } from '@clarae/ui';
 import type { TFunction } from './i18n';
 import type { CloudCapabilities, VaultKind } from './port';
 

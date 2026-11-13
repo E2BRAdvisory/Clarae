@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/auth/authtest"
 )
 
 // countingProvisioner returns a scripted outcome and counts the calls.
@@ -48,7 +48,7 @@ func (p *countingProvisioner) count() int {
 func newTestMiddleware(t *testing.T, ttl time.Duration) (*Middleware, *countingProvisioner, *authtest.Issuer) {
 	t.Helper()
 	iss := authtest.New(t)
-	v, err := NewVerifier(context.Background(), iss.URL(), "memobrain-api", nil)
+	v, err := NewVerifier(context.Background(), iss.URL(), "clarae-api", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func (p *hookProvisioner) Provision(_ context.Context, c Claims) (Principal, err
 // whole TTL. The middleware reads again and caches the suspension.
 func TestMiddlewareInvalidateDuringProvisioningWins(t *testing.T) {
 	iss := authtest.New(t)
-	v, err := NewVerifier(context.Background(), iss.URL(), "memobrain-api", nil)
+	v, err := NewVerifier(context.Background(), iss.URL(), "clarae-api", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

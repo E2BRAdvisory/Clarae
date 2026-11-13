@@ -1,40 +1,40 @@
 #!/usr/bin/env bash
 # Full cloud session on a local k3d cluster: PostgreSQL, S3 (RustFS), Keycloak and the
-# MemoBrain Notes Cloud Service deployed with Helm (deploy/helm/memobrain + values-k3d.yaml).
+# Clarae notanda Cloud Service deployed with Helm (deploy/helm/clarae + values-k3d.yaml).
 #
 #   yarn dev:cloud:k3d [up]                  choose the cluster (asked), build, deploy, wait;
 #                                            starts a stopped cluster
-#   yarn dev:cloud:k3d down                  switch MemoBrain Notes off, keeping its data until the next
-#                                            "up": stops the dedicated "memobrain" cluster; on any
-#                                            other cluster only scales MemoBrain Notes down to zero pods
-#   yarn dev:cloud:k3d delete                remove MemoBrain Notes for good (deletes the dedicated
+#   yarn dev:cloud:k3d down                  switch Clarae notanda off, keeping its data until the next
+#                                            "up": stops the dedicated "clarae" cluster; on any
+#                                            other cluster only scales Clarae notanda down to zero pods
+#   yarn dev:cloud:k3d delete                remove Clarae notanda for good (deletes the dedicated
 #                                            cluster; on other clusters only the namespace)
 #   yarn dev:cloud:k3d status                show pods
 #   --no-web                                 (up) do not start the Web UI on http://localhost:5174
 #   --cluster NAME                           (any command) use NAME without asking; created by
-#                                            "up" if missing. MEMOBRAIN_K3D_CLUSTER does the same
+#                                            "up" if missing. CLARAE_K3D_CLUSTER does the same
 #
-# Existing clusters are listed and a new cluster dedicated to MemoBrain Notes is suggested: it keeps
+# Existing clusters are listed and a new cluster dedicated to Clarae notanda is suggested: it keeps
 # the host ports (18081, 18082, 18080, 9000; on 127.0.0.1 only) and the DNS override away from your other work.
 # On an existing cluster the script adds those ports to its load balancer, a CoreDNS
-# override and the namespace "memobrain"; all other workloads are left alone.
+# override and the namespace "clarae"; all other workloads are left alone.
 #
 # Endpoints on the host: API http://localhost:18081, notify gRPC localhost:18082,
 # Keycloak http://keycloak.localtest.me:18080 (admin/admin; users admin/user1/user2,
-# password "memobrain-dev-password"), S3 http://localhost:9000. localtest.me resolves to
+# password "clarae-dev-password"), S3 http://localhost:9000. localtest.me resolves to
 # 127.0.0.1 through public DNS, so the same issuer URL works in the browser and in pods.
 # The Web UI (admin console) runs on http://localhost:5174 (esbuild dev server, log .dev/logs/web.log)
 # until "down"/"delete"; sign in as admin. Desktop: yarn dev:desktop, then enter the server URL in Settings > Cloud.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-DEFAULT_CLUSTER=memobrain
-NS=memobrain
+DEFAULT_CLUSTER=clarae
+NS=clarae
 KEYCLOAK_IP=10.43.0.50   # must match deploy/k3d/deps.yaml (inside the default k3s service CIDR)
 KEYCLOAK_HOST=keycloak.localtest.me
 PORTS=(18081 18082 18080 9000)
 
-CLUSTER="${MEMOBRAIN_K3D_CLUSTER:-}"
+CLUSTER="${CLARAE_K3D_CLUSTER:-}"
 ACTION=up
 WEB=1
 while [ $# -gt 0 ]; do
@@ -59,11 +59,11 @@ cluster_exists() { cluster_names | grep -qx "$1"; }
 choose_cluster() {
   if [ ! -t 0 ]; then CLUSTER="$DEFAULT_CLUSTER"; return; fi
   local choices=("$DEFAULT_CLUSTER") n i=1 pick
-  echo "${C_BOLD}Which local k3d cluster should run MemoBrain Notes?${C_OFF}"
+  echo "${C_BOLD}Which local k3d cluster should run Clarae notanda?${C_OFF}"
   if cluster_exists "$DEFAULT_CLUSTER"; then
-    echo "  [1] $DEFAULT_CLUSTER  (dedicated MemoBrain Notes cluster, exists - recommended)"
+    echo "  [1] $DEFAULT_CLUSTER  (dedicated Clarae notanda cluster, exists - recommended)"
   else
-    echo "  [1] create a new cluster '$DEFAULT_CLUSTER' dedicated to MemoBrain Notes (recommended)"
+    echo "  [1] create a new cluster '$DEFAULT_CLUSTER' dedicated to Clarae notanda (recommended)"
   fi
   while read -r n; do
     { [ -z "$n" ] || [ "$n" = "$DEFAULT_CLUSTER" ]; } && continue
@@ -96,7 +96,7 @@ case "$ACTION" in
       ok "cluster '$CLUSTER' stopped (data is kept; 'up' starts it again)"
     else
       k scale deploy --all --replicas=0 >/dev/null 2>&1 || true
-      ok "MemoBrain Notes scaled down on '$CLUSTER'; the cluster keeps running ('up' brings MemoBrain Notes back)"
+      ok "Clarae notanda scaled down on '$CLUSTER'; the cluster keeps running ('up' brings Clarae notanda back)"
     fi
     exit 0 ;;
   delete)
@@ -104,7 +104,7 @@ case "$ACTION" in
     cluster_exists "$CLUSTER" || die "cluster '$CLUSTER' does not exist"
     if [ "$CLUSTER" = "$DEFAULT_CLUSTER" ]; then k3d cluster delete "$CLUSTER"
     else
-      helm --kube-context "$CTX" -n "$NS" uninstall memobrain >/dev/null 2>&1 || true
+      helm --kube-context "$CTX" -n "$NS" uninstall clarae >/dev/null 2>&1 || true
       kubectl --context "$CTX" delete ns "$NS" --ignore-not-found >/dev/null
       ok "removed namespace '$NS' from '$CLUSTER' (ports and DNS override left in place)"
     fi
@@ -114,7 +114,7 @@ esac
 if cluster_exists "$CLUSTER"; then
   ok "cluster '$CLUSTER' exists"
   k3d cluster start "$CLUSTER" >/dev/null 2>&1 || true
-  # Publish the MemoBrain Notes ports on the cluster's load balancer when they are not mapped yet,
+  # Publish the Clarae notanda ports on the cluster's load balancer when they are not mapped yet,
   # on loopback only: Keycloak (admin/admin), the API and S3 hold development credentials.
   mapped="$(docker inspect "k3d-$CLUSTER-serverlb" --format '{{json .HostConfig.PortBindings}}' 2>/dev/null || true)"
   for p in "${PORTS[@]}"; do
@@ -172,7 +172,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata: { name: coredns-custom }
 data:
-  memobrain.server: |
+  clarae.server: |
     $KEYCLOAK_HOST:53 {
       hosts {
         $KEYCLOAK_IP $KEYCLOAK_HOST
@@ -181,7 +181,7 @@ data:
 DNS
 # A broken override from an earlier run would keep CoreDNS crash-looping.
 kubectl --context "$CTX" -n kube-system patch cm coredns-custom --type=json \
-  -p '[{"op":"remove","path":"/data/memobrain.override"}]' >/dev/null 2>&1 || true
+  -p '[{"op":"remove","path":"/data/clarae.override"}]' >/dev/null 2>&1 || true
 kubectl --context "$CTX" -n kube-system rollout restart deploy/coredns >/dev/null 2>&1 || true
 
 # Pods stay Pending when every node carries the disk-pressure taint (the Docker disk is full).
@@ -195,11 +195,11 @@ fi
 # Build and import the cloud image while the dependencies start (Keycloak is the slow one).
 BUILD_LOG="$(mktemp)"
 (
-  docker build -q -f "$ROOT/services/cloud/Dockerfile" -t memobrain-cloud:dev "$ROOT" \
-    && k3d image import memobrain-cloud:dev -c "$CLUSTER"
+  docker build -q -f "$ROOT/services/cloud/Dockerfile" -t clarae-cloud:dev "$ROOT" \
+    && k3d image import clarae-cloud:dev -c "$CLUSTER"
 ) >"$BUILD_LOG" 2>&1 &
 BUILD_PID=$!
-log "Building the cloud image in the background (memobrain-cloud:dev)"
+log "Building the cloud image in the background (clarae-cloud:dev)"
 # Images already in the local Docker cache are copied in instead of pulled from the registries.
 # The list is the pinned references of deploy/k3d/deps.yaml (name:tag@digest).
 for img in $(awk '$1 == "image:" { print $2 }' "$ROOT/deploy/k3d/deps.yaml"); do
@@ -207,11 +207,11 @@ for img in $(awk '$1 == "image:" { print $2 }' "$ROOT/deploy/k3d/deps.yaml"); do
 done
 
 log "Deploying dependencies (PostgreSQL, S3, Keycloak)"
-k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-memobrain.json" \
+k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-clarae.json" \
   --dry-run=client -o yaml | k apply -f - >/dev/null
 k apply -f "$ROOT/deploy/k3d/deps.yaml" >/dev/null
 # Keycloak imports the realm only on an empty database: restart it when the realm file changed.
-realm_hash="$(shasum -a 256 "$ROOT/deploy/keycloak/realm-memobrain.json" | cut -c1-16)"
+realm_hash="$(shasum -a 256 "$ROOT/deploy/keycloak/realm-clarae.json" | cut -c1-16)"
 k patch deploy keycloak -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"realm-hash\":\"$realm_hash\"}}}}}" >/dev/null
 
 log "Waiting for dependencies (Keycloak can take a minute)"
@@ -229,10 +229,10 @@ rm -f "$BUILD_LOG"
 
 log "Installing the Helm release"
 # The image id as annotation rolls the pods only when the image really changed.
-helm --kube-context "$CTX" -n "$NS" upgrade --install memobrain "$ROOT/deploy/helm/memobrain" \
-  -f "$ROOT/deploy/helm/memobrain/values-k3d.yaml" \
-  --set-string "podAnnotations.image=$(docker image inspect -f '{{.Id}}' memobrain-cloud:dev)" --wait --timeout 5m >/dev/null \
-  || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/memobrain-api)"
+helm --kube-context "$CTX" -n "$NS" upgrade --install clarae "$ROOT/deploy/helm/clarae" \
+  -f "$ROOT/deploy/helm/clarae/values-k3d.yaml" \
+  --set-string "podAnnotations.image=$(docker image inspect -f '{{.Id}}' clarae-cloud:dev)" --wait --timeout 5m >/dev/null \
+  || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/clarae-api)"
 
 for _ in $(seq 1 30); do cloud_ready && break; sleep 2; done
 cloud_ready || die "API does not answer on $CLOUD_URL"
@@ -241,9 +241,9 @@ ok "cloud is ready on $CLOUD_URL"
 cat <<MSG
 
   API        $CLOUD_URL   (gRPC localhost:18082)
-  Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/memobrain-dev-password
-  Web UI     $WEB_URL   (admin / memobrain-dev-password; log ${WEB_LOG#$ROOT/}; --no-web to skip)
+  Keycloak   http://$KEYCLOAK_HOST:18080   admin/admin; user1/clarae-dev-password
+  Web UI     $WEB_URL   (admin / clarae-dev-password; log ${WEB_LOG#$ROOT/}; --no-web to skip)
   Desktop    yarn dev:desktop, then Settings > Cloud: server URL $CLOUD_URL
-  Logs       kubectl --context $CTX -n $NS logs -f deploy/memobrain-api
+  Logs       kubectl --context $CTX -n $NS logs -f deploy/clarae-api
   Stop       yarn dev:cloud:k3d down   (or delete)
 MSG

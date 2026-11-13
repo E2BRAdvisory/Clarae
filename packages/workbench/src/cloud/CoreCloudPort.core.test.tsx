@@ -1,4 +1,4 @@
-// The shared suites of @memobrain/cloud-features on CoreCloudPort over the real Go core
+// The shared suites of @clarae/cloud-features on CoreCloudPort over the real Go core
 // (ADR-0045 §4, §7): the core compiled to WebAssembly runs in this Node process
 // (test/wasmCore.ts, the harness of `task test-wasm`) and talks to the same fake cloud as the
 // RestCloudPort's run (fakeCloudApi), checked against api/openapi.yaml on both sides. Where
@@ -13,9 +13,9 @@ import {
   cloudVaultsTableSuite,
   fakeCloudApi,
   type CloudSeed,
-} from '@memobrain/cloud-features/testing';
-import { contractFetch, type ContractFetch } from '@memobrain/cloud-features/testing/contract';
-import { errorCode } from '@memobrain/cloud-features/port';
+} from '@clarae/cloud-features/testing';
+import { contractFetch, type ContractFetch } from '@clarae/cloud-features/testing/contract';
+import { errorCode } from '@clarae/cloud-features/port';
 import { api } from '../app/api';
 import { startWasmCore, wasmCoreBuilt, type WasmCore } from '../test/wasmCore';
 import { CoreCloudPort } from './CoreCloudPort';

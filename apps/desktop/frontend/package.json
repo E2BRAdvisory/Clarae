@@ -1,5 +1,5 @@
 {
-  "name": "@memobrain/desktop-frontend",
+  "name": "@clarae/desktop-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,7 +12,7 @@
     "e2e:prod": "E2E_PREVIEW=1 playwright test e2e/drawing.spec.ts e2e/drawing-tools.spec.ts e2e/drawing-wp5.spec.ts e2e/drawing-wp6.spec.ts e2e/drawing-embed.spec.ts e2e/graph.spec.ts e2e/canvas.spec.ts"
   },
   "dependencies": {
-    "@memobrain/workbench": "workspace:*",
+    "@clarae/workbench": "workspace:*",
     "@wailsio/runtime": "3.1.0"
   },
   "devDependencies": {

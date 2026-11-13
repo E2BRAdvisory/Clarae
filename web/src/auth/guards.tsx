@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button, EmptyState } from '@memobrain/ui';
+import { Button, EmptyState } from '@clarae/ui';
 import { useAdminAccess } from '../api/queries';
 import { useAuth } from './AuthProvider';
 

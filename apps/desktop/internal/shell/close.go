@@ -8,8 +8,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/events"
 )
 
 // CloseFlushTimeout bounds the wait for the frontend: a frontend that never answers (still loading,

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	_ "memobrain/apps/desktop/internal/store" // registers the "sqlite" driver for the platform
+	_ "clarae/apps/desktop/internal/store" // registers the "sqlite" driver for the platform
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 func memDB(t *testing.T) *sql.DB {

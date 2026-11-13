@@ -30,7 +30,7 @@ async function openVault(files: Record<string, string>, bookmarks?: unknown): Pr
   vaultId = v.id;
   const vf = mock.vaults.get(v.id)?.files;
   for (const [p, c] of Object.entries(files)) vf?.set(p, c);
-  if (bookmarks) vf?.set('.memobrain/bookmarks.json', JSON.stringify(bookmarks));
+  if (bookmarks) vf?.set('.clarae/bookmarks.json', JSON.stringify(bookmarks));
   useAppStore.setState({ vault: v, layout: emptyLayout() });
   await waitFor(() => expect(useBookmarks.getState().loaded).toBe(true));
 }
@@ -49,7 +49,7 @@ describe('bookmarks', () => {
     useSync.setState({ info: {} });
   });
 
-  it('loads .memobrain/bookmarks.json, lists items and opens a note at its heading', async () => {
+  it('loads .clarae/bookmarks.json, lists items and opens a note at its heading', async () => {
     await openVault(
       { 'A.md': '# Intro\n\ntext', 'B.md': '' },
       {
@@ -79,7 +79,7 @@ describe('bookmarks', () => {
     expect(useBookmarks.getState().file.items).toHaveLength(1);
     await useBookmarks.getState().flush();
     const saved = parseBookmarks(
-      mock.vaults.get(vaultId)?.files.get('.memobrain/bookmarks.json') ?? '',
+      mock.vaults.get(vaultId)?.files.get('.clarae/bookmarks.json') ?? '',
     );
     expect(saved.items.map((i) => i.path)).toEqual(['A.md']);
     expect(useAppStore.getState().right.tab).toBe('links');
@@ -94,17 +94,17 @@ describe('bookmarks', () => {
     await renameEntry('Dir/A.md', 'Dir/B.md');
     expect(useBookmarks.getState().file.items[0]?.items?.[0]?.path).toBe('Dir/B.md');
     await useBookmarks.getState().flush();
-    expect(mock.vaults.get(vaultId)?.files.get('.memobrain/bookmarks.json')).toContain('Dir/B.md');
+    expect(mock.vaults.get(vaultId)?.files.get('.clarae/bookmarks.json')).toContain('Dir/B.md');
   });
 
   it('reloads when the file changes outside the app, but ignores its own writes', async () => {
     await openVault({ 'A.md': 'x' }, { items: [{ type: 'file', path: 'A.md' }] });
     const files = mock.vaults.get(vaultId)?.files;
     files?.set(
-      '.memobrain/bookmarks.json',
+      '.clarae/bookmarks.json',
       JSON.stringify({ items: [{ type: 'search', query: 'q' }] }),
     );
-    act(() => mock.emit('vault:file-changed', { vaultId, paths: ['.memobrain/bookmarks.json'] }));
+    act(() => mock.emit('vault:file-changed', { vaultId, paths: ['.clarae/bookmarks.json'] }));
     await waitFor(() => expect(useBookmarks.getState().file.items[0]?.type).toBe('search'));
   });
 

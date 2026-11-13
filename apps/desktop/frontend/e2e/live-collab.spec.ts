@@ -4,7 +4,7 @@ import { expect, test, uuid, vault } from './cloud';
 // Collaboration on the Live editor is off (ADR-0050, A-W7): a profile with `collab: true` loads no code
 // for it, because it also takes a build made for it and a registered provider, and no provider is in the
 // build. It runs on both targets (desktop-mock, web-core), and, to show that the flag and the build constant
-// together still open nothing, with MEMOBRAIN_COLLAB=1.
+// together still open nothing, with CLARAE_COLLAB=1.
 const HOME = uuid(1);
 
 test('a profile with collab: true does not load the collaboration chunk', async ({

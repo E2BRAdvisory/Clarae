@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/sync/syncdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/sync/syncdb"
 )
 
 // Types of the exported queries.

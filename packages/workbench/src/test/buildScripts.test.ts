@@ -31,7 +31,7 @@ const load = async (): Promise<Build> => (await import(/* @vite-ignore */ buildU
 
 let root = '';
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'memobrain-build-'));
+  root = await mkdtemp(join(tmpdir(), 'clarae-build-'));
   await mkdir(join(root, 'dist/assets'), { recursive: true });
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
@@ -87,7 +87,7 @@ describe('linkLazyStyles', () => {
   });
 });
 
-describe('distDir (MEMOBRAIN_DIST)', () => {
+describe('distDir (CLARAE_DIST)', () => {
   it('uses the default folder of the package when the variable is not set, or empty', async () => {
     const { distDir } = await load();
     expect(distDir(root, 'dist', undefined)).toBe(join(root, 'dist'));
@@ -102,7 +102,7 @@ describe('distDir (MEMOBRAIN_DIST)', () => {
 
   it('takes an absolute path as it is (it is not joined to the package)', async () => {
     const { distDir } = await load();
-    const elsewhere = join(tmpdir(), 'memobrain-elsewhere', 'dist');
+    const elsewhere = join(tmpdir(), 'clarae-elsewhere', 'dist');
     expect(distDir(root, 'dist', elsewhere)).toBe(elsewhere);
   });
 

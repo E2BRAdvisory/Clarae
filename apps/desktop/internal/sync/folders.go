@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // Folder renames (§3.4.7, ADR-0040). In a shared vault a folder renamed here

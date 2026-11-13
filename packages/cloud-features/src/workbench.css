@@ -1,10 +1,10 @@
 /* The cloud vault components inside the workbench (desktop and web workbench). The workbench does not
    load the console's design system (its global rules would reach the editor), only the component
-   rules of @memobrain/ui (components.css, nd-* classes only). Their tokens (--nd-*) are the shared
-   ones of @memobrain/ui/tokens.css, which the workbench loads and maps to its own palette and theme
+   rules of @clarae/ui (components.css, nd-* classes only). Their tokens (--nd-*) are the shared
+   ones of @clarae/ui/tokens.css, which the workbench loads and maps to its own palette and theme
    (packages/workbench/src/styles/tokens.css, ADR-0043): here only the density of the settings panel
    and the contrast of status text remain. */
-@import '@memobrain/ui/components.css';
+@import '@clarae/ui/components.css';
 @import './styles.css';
 
 .mbcf {

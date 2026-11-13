@@ -1,7 +1,7 @@
 // Headless benchmark of the layout step (d3-force on the main thread, Node/V8). It only runs
-// when MEMOBRAIN_GRAPH_BENCH is set, so CI is not slowed down:
+// when CLARAE_GRAPH_BENCH is set, so CI is not slowed down:
 //
-//   MEMOBRAIN_GRAPH_BENCH=10000 yarn workspace @memobrain/desktop-frontend exec vitest run src/graph/layout.bench.test.ts
+//   CLARAE_GRAPH_BENCH=10000 yarn workspace @clarae/desktop-frontend exec vitest run src/graph/layout.bench.test.ts
 //
 // The render loop is measured in a real browser by e2e/graph-bench.spec.ts. Results are
 // recorded in docs/qa/m6-graph-benchmark.md.
@@ -16,7 +16,7 @@ const proc = (
     process: { env: Record<string, string | undefined>; stdout: { write(s: string): void } };
   }
 ).process;
-const n = Number(proc.env['MEMOBRAIN_GRAPH_BENCH'] ?? 0);
+const n = Number(proc.env['CLARAE_GRAPH_BENCH'] ?? 0);
 
 describe.skipIf(!n)('layout benchmark', () => {
   it(`ticks a ${n}-node graph`, () => {

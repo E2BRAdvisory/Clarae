@@ -1,13 +1,13 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { withCommon } from '@memobrain/ui/i18n';
+import { withCommon } from '@clarae/ui/i18n';
 import en from './en.json';
 import it from './it.json';
 
 export const supportedLanguages = ['en', 'it'] as const;
 export type Language = (typeof supportedLanguages)[number];
 
-const STORAGE_KEY = 'memobrain.web.lang';
+const STORAGE_KEY = 'clarae.web.lang';
 
 export function isLanguage(value: unknown): value is Language {
   return typeof value === 'string' && (supportedLanguages as readonly string[]).includes(value);
@@ -28,7 +28,7 @@ export function detectLanguage(): Language {
 export function initI18n(language?: string): typeof i18next {
   const lng: Language = isLanguage(language) ? language : detectLanguage();
   if (!i18next.isInitialized) {
-    // The strings shared with the other UI (OK, Cancel, errors.<code>…) come from @memobrain/ui.
+    // The strings shared with the other UI (OK, Cancel, errors.<code>…) come from @clarae/ui.
     const { resources, options } = withCommon({ en, it });
     void i18next.use(initReactI18next).init({
       resources,

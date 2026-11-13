@@ -8,7 +8,7 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "memobrain/apps/desktop/internal/sqlitejs"
+	_ "clarae/apps/desktop/internal/sqlitejs"
 )
 
 func open(t *testing.T) *sql.DB {

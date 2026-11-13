@@ -8,7 +8,7 @@ import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 // CodeMirror's content DOM is excluded from the scan (documented in docs/qa/a11y-desktop.md);
 // the editor surface is covered by the manual screen reader checklist. The Live editor of the Milkdown
 // build is scanned whole (a rich note, below): its DOM is HTML like the chrome's, and ProseMirror is not excluded. Excalidraw's own canvas
-// and toolbars are excluded too; MemoBrain's chrome around it (header, export dialog, tools
+// and toolbars are excluded too; Clarae's chrome around it (header, export dialog, tools
 // panel, slideshow bar, tool dialogs) is scanned.
 // The colour of a link in the document is the accent on the page, which the dark theme gives too little contrast
 // for: it is the same for the CodeMirror editor and tracked apart. The chrome is what the scans below look at.

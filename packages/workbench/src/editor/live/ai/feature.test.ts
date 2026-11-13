@@ -1,4 +1,4 @@
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { describe, expect, it, vi } from 'vitest';
 import type { loadAi } from '../chunks';
 import { attachAi } from './feature';
@@ -44,7 +44,7 @@ describe('attaching the assistant to the editor', () => {
   });
 
   it('with the default conditions of this build the function is off: no chunk, no call to the core', async () => {
-    // A test build is made without MEMOBRAIN_AI, as a released one is: the build constant is off.
+    // A test build is made without CLARAE_AI, as a released one is: the build constant is off.
     const b = builder();
     const load = vi.fn(() => Promise.resolve(chunk()));
     const reasons: string[] = [];

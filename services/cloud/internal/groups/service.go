@@ -13,13 +13,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/groups/groupsdb"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/pagination"
-	"memobrain/services/cloud/internal/users"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/groups/groupsdb"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/pagination"
+	"clarae/services/cloud/internal/users"
+	"clarae/shared/syncproto"
 )
 
 // DirectoryLimit caps the answers of the directory endpoints.

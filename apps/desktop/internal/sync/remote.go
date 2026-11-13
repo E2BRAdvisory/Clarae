@@ -6,9 +6,9 @@ import (
 	"io"
 	"strings"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/apiclient"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/apiclient"
+	"clarae/shared/syncproto"
 )
 
 // Remote is the part of the cloud API the engine uses, for one vault.

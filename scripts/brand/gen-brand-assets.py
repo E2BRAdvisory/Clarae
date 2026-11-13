@@ -173,7 +173,7 @@ def card(size, icon, icon_px, title_px, lines, tagline=None):
     sub_f = font(round(title_px * 0.40), 500)
     tag_f = font(round(title_px * 0.30), 500)
     d = ImageDraw.Draw(bg)
-    title = "MemoBrain Notes"
+    title = "Clarae notanda"
     tb = d.textbbox((0, 0), title, font=title_f)
     gap = round(icon_px * 0.22)
     block_w = icon_px + gap + max(tb[2], *(d.textbbox((0, 0), l, font=sub_f)[2] for l in lines))
@@ -201,8 +201,8 @@ def card(size, icon, icon_px, title_px, lines, tagline=None):
 
 def write_manifest(path):
     manifest = {
-        "name": "MemoBrain Notes",
-        "short_name": "MemoBrain",
+        "name": "Clarae notanda",
+        "short_name": "Clarae",
         "description": "Local-first notes and knowledge base",
         "start_url": "/",
         "scope": "/",
@@ -257,8 +257,8 @@ def main():
     ico = [resized(tile, px) for px in (256, 128, 64)] + [small[48], small[32], small[16]]
     ico[0].save(os.path.join(DESKTOP, "windows", "icon.ico"),
                 sizes=[(px, px) for px in (256, 128, 64, 48, 32, 16)], append_images=ico[1:])
-    resized(tile, 512).save(os.path.join(DESKTOP, "linux", "memobrain.png"))
-    shutil.copyfile(vector, os.path.join(DESKTOP, "linux", "memobrain.svg"))
+    resized(tile, 512).save(os.path.join(DESKTOP, "linux", "clarae.png"))
+    shutil.copyfile(vector, os.path.join(DESKTOP, "linux", "clarae.svg"))
 
     # Repository graphics.
     card((1280, 640), tile, 300, 92,

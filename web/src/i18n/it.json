@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MemoBrain Notes",
+    "name": "Clarae notanda",
     "loading": "Caricamento…",
     "redirecting": "Reindirizzamento all'accesso…",
     "signInFailed": "Impossibile avviare l'accesso: il server o il provider di identità non ha risposto. Controlla la connessione e riprova."
@@ -249,7 +249,7 @@
       "createTitle": "Crea un gruppo",
       "editTitle": "Modifica il gruppo",
       "save": "Salva",
-      "note": "I gruppi esistono solo in MemoBrain Notes e servono per le condivisioni e per i profili di configurazione.",
+      "note": "I gruppi esistono solo in Clarae notanda e servono per le condivisioni e per i profili di configurazione.",
       "name": "Nome",
       "description": "Descrizione",
       "nameRequired": "Il nome è obbligatorio.",

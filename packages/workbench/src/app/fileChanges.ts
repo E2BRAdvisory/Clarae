@@ -80,7 +80,7 @@ function flush(): void {
       try {
         l(batch);
       } catch (e) {
-        console.error('memobrain: file change listener failed', e);
+        console.error('clarae: file change listener failed', e);
       }
     }
   }
@@ -107,7 +107,7 @@ export function onVaultChanges(listener: Listener): () => void {
 const TEXTUAL = /\.(md|canvas|excalidraw)$/i;
 const isNote = (path: string): boolean => /\.md$/i.test(path);
 /** Device and vault settings: never content of the index views. */
-const isConfig = (path: string): boolean => path === '.memobrain' || path.startsWith('.memobrain/');
+const isConfig = (path: string): boolean => path === '.clarae' || path.startsWith('.clarae/');
 const under = (path: string, dir: string): boolean => path === dir || path.startsWith(dir + '/');
 
 /**

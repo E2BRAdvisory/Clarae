@@ -39,9 +39,9 @@ I criteri sono asserzioni bloccanti in `packages/workbench/src/test/conformance.
 ## Rieseguire la misura
 
 ```sh
-yarn workspace @memobrain/workbench run live:metrics     # stampa i numeri e i casi che falliscono, per causa
-yarn workspace @memobrain/workbench exec vitest run src/test/conformance.test.ts   # le asserzioni
-LIVE_PROPERTY_RUNS=60000 LIVE_PROPERTY_SEED=3 yarn workspace @memobrain/workbench exec vitest run src/test/conformance.test.ts   # invariante di escape, altre sequenze
+yarn workspace @clarae/workbench run live:metrics     # stampa i numeri e i casi che falliscono, per causa
+yarn workspace @clarae/workbench exec vitest run src/test/conformance.test.ts   # le asserzioni
+LIVE_PROPERTY_RUNS=60000 LIVE_PROPERTY_SEED=3 yarn workspace @clarae/workbench exec vitest run src/test/conformance.test.ts   # invariante di escape, altre sequenze
 ```
 
 Aggiungere un caso = aggiungere un file in `cases/` (o in `demo/`); le varianti CRLF/BOM si generano da sole.

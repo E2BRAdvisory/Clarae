@@ -170,7 +170,7 @@ describe('App shell', () => {
 
     it('says so when the cloud vault of the folder was deleted elsewhere, and shows it unlinked', async () => {
       const { mock, info } = await openDemo();
-      await api.auth.login('https://memobrain.test');
+      await api.auth.login('https://clarae.test');
       useAppStore.getState().setAuth(await api.auth.status());
       await api.sync.linkNew(info.id, 'Demo cloud', 'shared', '');
       renderApp();

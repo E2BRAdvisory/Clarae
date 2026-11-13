@@ -11,7 +11,7 @@ import (
 // defaultStore keeps the VMKs of a desktop in the OS keychain.
 func defaultStore() KeyStore { return KeychainStore{} }
 
-const keychainService = "MemoBrain Notes vault keys"
+const keychainService = "Clarae notanda vault keys"
 
 // KeychainStore uses the OS keychain (macOS Keychain, Windows Credential
 // Manager, freedesktop Secret Service).

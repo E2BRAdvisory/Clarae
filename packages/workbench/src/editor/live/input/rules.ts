@@ -7,7 +7,7 @@
 //
 // The wikilink node also has two keys of its own: `]` leaves the node (the way the closing brackets are
 // typed over in a text editor), and Backspace in an empty one deletes it.
-import { isValidTag } from '@memobrain/markdown';
+import { isValidTag } from '@clarae/markdown';
 import { InputRule } from '@milkdown/kit/prose/inputrules';
 import type { MarkType, Node as PMNode, ResolvedPos } from '@milkdown/kit/prose/model';
 import {
@@ -198,7 +198,7 @@ export function nameTakes(before: string, text: string, after: string): boolean 
 
 // ---- the keys of the wikilink node -----------------------------------------------------------------------
 
-const wikilinkKeyKey = new PluginKey('memobrain-wikilink-keys');
+const wikilinkKeyKey = new PluginKey('clarae-wikilink-keys');
 
 /**
  * `]` in a wikilink leaves it (the second one, typed right after, is not typed either: the two closing
@@ -288,7 +288,7 @@ export const wikilinkKeys = $prose((ctx) => {
   });
 });
 
-const mathKeyKey = new PluginKey('memobrain-math-fence');
+const mathKeyKey = new PluginKey('clarae-math-fence');
 
 /** The ranges of the document that `trs` changed, in the coordinates of the document they left. */
 function changedRanges(trs: readonly Transaction[]): [number, number][] {
@@ -339,7 +339,7 @@ export const mathKeepsItsFence = $prose(
     }),
 );
 
-const wikilinkEnterKey = new PluginKey('memobrain-wikilink-enter');
+const wikilinkEnterKey = new PluginKey('clarae-wikilink-enter');
 
 /**
  * Enter in the name of a wikilink ends the link: the caret goes after the node. A block split there

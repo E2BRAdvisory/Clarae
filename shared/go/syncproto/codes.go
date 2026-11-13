@@ -5,7 +5,7 @@
 //
 // api/openapi.yaml is the normative contract. These are the domain types of
 // both sides; the HTTP layers convert them to and from the types generated from
-// the spec (services/cloud/internal/api on the server, memobrain/shared/apiclient
+// the spec (services/cloud/internal/api on the server, clarae/shared/apiclient
 // in the desktop transport), so a schema change breaks the build there rather
 // than the wire. Problem is the exception, written as is by the server: the
 // cloud integration tests validate those responses against the spec, and
@@ -75,7 +75,7 @@ func (c Code) HTTPStatus() int {
 }
 
 // ProblemTypeBase is the prefix of Problem.Type URIs.
-const ProblemTypeBase = "https://memobrain.example/errors/"
+const ProblemTypeBase = "https://clarae.example/errors/"
 
 // Problem is the application/problem+json body (RFC 9457) with the
 // application-specific Code and request id (§3.1).

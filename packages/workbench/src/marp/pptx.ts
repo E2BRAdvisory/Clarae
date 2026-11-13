@@ -694,7 +694,7 @@ export async function deckToPptx(deck: PptxDeck): Promise<PptxResult> {
   pptx.layout = 'LAYOUT_WIDE';
   pptx.title = deck.title;
   pptx.subject = deck.title;
-  pptx.company = 'MemoBrain Notes';
+  pptx.company = 'Clarae notanda';
   const doc = new DOMParser().parseFromString(`<body>${deck.html}</body>`, 'text/html');
   const svgs = [...doc.querySelectorAll('div.marpit > svg')];
   // SVG pictures first: each one is drawn into a PNG, and one that cannot be is left out and reported.

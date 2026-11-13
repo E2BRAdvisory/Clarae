@@ -24,9 +24,9 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/shared/notifyv1"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/notify"
+	"clarae/shared/notifyv1"
 )
 
 // Hub is what the stream needs from the notify module.

@@ -2,7 +2,7 @@ import { onWeb, openVault } from './support';
 import { expect, test, uuid, vault } from './cloud';
 
 // The AI assistant on the Live editor is off (ADR-0050, A-W6): a profile with `ai: true` loads no code for
-// it, because it also takes a build made for it (`MEMOBRAIN_AI=1`), the capability, a vault that is not
+// it, because it also takes a build made for it (`CLARAE_AI=1`), the capability, a vault that is not
 // private and a core that says `Status` is available. In a normal build no gate but the flag is open, and
 // the chunk of the assistant is never requested, whatever the profile says. It runs on both targets
 // (desktop-mock, web-core).

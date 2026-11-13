@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/apiclient"
+	"clarae/shared/apiclient"
 )
 
 // TestCodesMatchOpenAPI keeps the application error codes of codes.go equal to

@@ -14,7 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/db"
 )
 
 // freshDatabase creates an empty database next to the shared one and returns its URL.

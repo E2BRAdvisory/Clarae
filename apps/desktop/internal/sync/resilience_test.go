@@ -20,10 +20,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // scriptRemote is a tiny in-memory server: a changelog the test fills, blobs,

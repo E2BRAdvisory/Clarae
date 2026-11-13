@@ -6,8 +6,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"memobrain/apps/desktop/internal/rpc"
-	"memobrain/apps/desktop/internal/shell"
+	"clarae/apps/desktop/internal/rpc"
+	"clarae/apps/desktop/internal/shell"
 )
 
 // CoreBridge is the one Wails service of the desktop application: the door between the web view
@@ -22,7 +22,7 @@ import (
 //	Call.ByName("main.CoreBridge.Methods")                      // {service: [method, ...]}
 //	Call.ByName("main.CoreBridge.DomReady")                     // the "frontend ready" signal
 //	Call.ByName("main.CoreBridge.BeginUpload", bytes)           // a call too large for the transport:
-//	POST /memobrain/upload/<id>?offset=<n>  (chunks)            //   its arguments go in chunks (shell.UploadStore)
+//	POST /clarae/upload/<id>?offset=<n>  (chunks)            //   its arguments go in chunks (shell.UploadStore)
 //	Call.ByName("main.CoreBridge.CallUploaded", service, method, id)
 //
 // The key is the package path of the type ("main"), so the type stays in package main.
@@ -77,7 +77,7 @@ func (b *CoreBridge) CallUploaded(service, method, uploadID string) (json.RawMes
 func (b *CoreBridge) Methods() map[string][]string { return b.d.Methods() }
 
 // DomReady is the "frontend ready" signal: the shim calls it when the workbench subscribes to
-// app:open-request. Until then the memobrain:// URLs wait in the core (App.DomReady delivers them);
+// app:open-request. Until then the clarae:// URLs wait in the core (App.DomReady delivers them);
 // a page reload calls it again, which is harmless.
 func (b *CoreBridge) DomReady() { b.lc.DomReady() }
 

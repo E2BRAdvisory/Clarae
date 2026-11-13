@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"memobrain/apps/desktop/internal/history"
+	"clarae/apps/desktop/internal/history"
 )
 
 // HistoryAPI exposes the device-local file history ("File recovery"): snapshots of text files,

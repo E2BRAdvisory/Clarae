@@ -5,7 +5,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12-devel
 // 	protoc        (unknown)
-// source: memobrain/v1/notify.proto
+// source: clarae/v1/notify.proto
 
 package notifyv1
 
@@ -35,7 +35,7 @@ type SubscribeRequest struct {
 
 func (x *SubscribeRequest) Reset() {
 	*x = SubscribeRequest{}
-	mi := &file_memobrain_v1_notify_proto_msgTypes[0]
+	mi := &file_clarae_v1_notify_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +47,7 @@ func (x *SubscribeRequest) String() string {
 func (*SubscribeRequest) ProtoMessage() {}
 
 func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_memobrain_v1_notify_proto_msgTypes[0]
+	mi := &file_clarae_v1_notify_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +60,7 @@ func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_memobrain_v1_notify_proto_rawDescGZIP(), []int{0}
+	return file_clarae_v1_notify_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *SubscribeRequest) GetDeviceId() string {
@@ -99,7 +99,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_memobrain_v1_notify_proto_msgTypes[1]
+	mi := &file_clarae_v1_notify_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -111,7 +111,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_memobrain_v1_notify_proto_msgTypes[1]
+	mi := &file_clarae_v1_notify_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -124,7 +124,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_memobrain_v1_notify_proto_rawDescGZIP(), []int{1}
+	return file_clarae_v1_notify_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Event) GetPayload() isEvent_Payload {
@@ -208,7 +208,7 @@ type VaultChanged struct {
 
 func (x *VaultChanged) Reset() {
 	*x = VaultChanged{}
-	mi := &file_memobrain_v1_notify_proto_msgTypes[2]
+	mi := &file_clarae_v1_notify_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +220,7 @@ func (x *VaultChanged) String() string {
 func (*VaultChanged) ProtoMessage() {}
 
 func (x *VaultChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_memobrain_v1_notify_proto_msgTypes[2]
+	mi := &file_clarae_v1_notify_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +233,7 @@ func (x *VaultChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VaultChanged.ProtoReflect.Descriptor instead.
 func (*VaultChanged) Descriptor() ([]byte, []int) {
-	return file_memobrain_v1_notify_proto_rawDescGZIP(), []int{2}
+	return file_clarae_v1_notify_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *VaultChanged) GetVaultId() string {
@@ -259,7 +259,7 @@ type ConfigChanged struct {
 
 func (x *ConfigChanged) Reset() {
 	*x = ConfigChanged{}
-	mi := &file_memobrain_v1_notify_proto_msgTypes[3]
+	mi := &file_clarae_v1_notify_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -271,7 +271,7 @@ func (x *ConfigChanged) String() string {
 func (*ConfigChanged) ProtoMessage() {}
 
 func (x *ConfigChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_memobrain_v1_notify_proto_msgTypes[3]
+	mi := &file_clarae_v1_notify_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -284,7 +284,7 @@ func (x *ConfigChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigChanged.ProtoReflect.Descriptor instead.
 func (*ConfigChanged) Descriptor() ([]byte, []int) {
-	return file_memobrain_v1_notify_proto_rawDescGZIP(), []int{3}
+	return file_clarae_v1_notify_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ConfigChanged) GetVersion() int32 {
@@ -304,7 +304,7 @@ type ShareChanged struct {
 
 func (x *ShareChanged) Reset() {
 	*x = ShareChanged{}
-	mi := &file_memobrain_v1_notify_proto_msgTypes[4]
+	mi := &file_clarae_v1_notify_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -316,7 +316,7 @@ func (x *ShareChanged) String() string {
 func (*ShareChanged) ProtoMessage() {}
 
 func (x *ShareChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_memobrain_v1_notify_proto_msgTypes[4]
+	mi := &file_clarae_v1_notify_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -329,7 +329,7 @@ func (x *ShareChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShareChanged.ProtoReflect.Descriptor instead.
 func (*ShareChanged) Descriptor() ([]byte, []int) {
-	return file_memobrain_v1_notify_proto_rawDescGZIP(), []int{4}
+	return file_clarae_v1_notify_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ShareChanged) GetShareId() string {
@@ -355,7 +355,7 @@ type AccountChanged struct {
 
 func (x *AccountChanged) Reset() {
 	*x = AccountChanged{}
-	mi := &file_memobrain_v1_notify_proto_msgTypes[5]
+	mi := &file_clarae_v1_notify_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -367,7 +367,7 @@ func (x *AccountChanged) String() string {
 func (*AccountChanged) ProtoMessage() {}
 
 func (x *AccountChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_memobrain_v1_notify_proto_msgTypes[5]
+	mi := &file_clarae_v1_notify_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -380,7 +380,7 @@ func (x *AccountChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountChanged.ProtoReflect.Descriptor instead.
 func (*AccountChanged) Descriptor() ([]byte, []int) {
-	return file_memobrain_v1_notify_proto_rawDescGZIP(), []int{5}
+	return file_clarae_v1_notify_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AccountChanged) GetKind() string {
@@ -390,23 +390,23 @@ func (x *AccountChanged) GetKind() string {
 	return ""
 }
 
-var File_memobrain_v1_notify_proto protoreflect.FileDescriptor
+var File_clarae_v1_notify_proto protoreflect.FileDescriptor
 
-const file_memobrain_v1_notify_proto_rawDesc = "" +
+const file_clarae_v1_notify_proto_rawDesc = "" +
 	"\n" +
-	"\x19memobrain/v1/notify.proto\x12\fmemobrain.v1\"\xde\x01\n" +
+	"\x16clarae/v1/notify.proto\x12\tclarae.v1\"\xdb\x01\n" +
 	"\x10SubscribeRequest\x12\x1b\n" +
-	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12I\n" +
-	"\tknown_seq\x18\x02 \x03(\v2,.memobrain.v1.SubscribeRequest.KnownSeqEntryR\bknownSeq\x12%\n" +
+	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12F\n" +
+	"\tknown_seq\x18\x02 \x03(\v2).clarae.v1.SubscribeRequest.KnownSeqEntryR\bknownSeq\x12%\n" +
 	"\x0econfig_version\x18\x03 \x01(\x05R\rconfigVersion\x1a;\n" +
 	"\rKnownSeqEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xa7\x02\n" +
-	"\x05Event\x12A\n" +
-	"\rvault_changed\x18\x01 \x01(\v2\x1a.memobrain.v1.VaultChangedH\x00R\fvaultChanged\x12D\n" +
-	"\x0econfig_changed\x18\x02 \x01(\v2\x1b.memobrain.v1.ConfigChangedH\x00R\rconfigChanged\x12A\n" +
-	"\rshare_changed\x18\x03 \x01(\v2\x1a.memobrain.v1.ShareChangedH\x00R\fshareChanged\x12G\n" +
-	"\x0faccount_changed\x18\x04 \x01(\v2\x1c.memobrain.v1.AccountChangedH\x00R\x0eaccountChangedB\t\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\x9b\x02\n" +
+	"\x05Event\x12>\n" +
+	"\rvault_changed\x18\x01 \x01(\v2\x17.clarae.v1.VaultChangedH\x00R\fvaultChanged\x12A\n" +
+	"\x0econfig_changed\x18\x02 \x01(\v2\x18.clarae.v1.ConfigChangedH\x00R\rconfigChanged\x12>\n" +
+	"\rshare_changed\x18\x03 \x01(\v2\x17.clarae.v1.ShareChangedH\x00R\fshareChanged\x12D\n" +
+	"\x0faccount_changed\x18\x04 \x01(\v2\x19.clarae.v1.AccountChangedH\x00R\x0eaccountChangedB\t\n" +
 	"\apayload\";\n" +
 	"\fVaultChanged\x12\x19\n" +
 	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x10\n" +
@@ -417,40 +417,40 @@ const file_memobrain_v1_notify_proto_rawDesc = "" +
 	"\bshare_id\x18\x01 \x01(\tR\ashareId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\"$\n" +
 	"\x0eAccountChanged\x12\x12\n" +
-	"\x04kind\x18\x01 \x01(\tR\x04kind2S\n" +
-	"\rNotifyService\x12B\n" +
-	"\tSubscribe\x12\x1e.memobrain.v1.SubscribeRequest\x1a\x13.memobrain.v1.Event0\x01B$Z\"memobrain/shared/notifyv1;notifyv1b\x06proto3"
+	"\x04kind\x18\x01 \x01(\tR\x04kind2M\n" +
+	"\rNotifyService\x12<\n" +
+	"\tSubscribe\x12\x1b.clarae.v1.SubscribeRequest\x1a\x10.clarae.v1.Event0\x01B!Z\x1fclarae/shared/notifyv1;notifyv1b\x06proto3"
 
 var (
-	file_memobrain_v1_notify_proto_rawDescOnce sync.Once
-	file_memobrain_v1_notify_proto_rawDescData []byte
+	file_clarae_v1_notify_proto_rawDescOnce sync.Once
+	file_clarae_v1_notify_proto_rawDescData []byte
 )
 
-func file_memobrain_v1_notify_proto_rawDescGZIP() []byte {
-	file_memobrain_v1_notify_proto_rawDescOnce.Do(func() {
-		file_memobrain_v1_notify_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_memobrain_v1_notify_proto_rawDesc), len(file_memobrain_v1_notify_proto_rawDesc)))
+func file_clarae_v1_notify_proto_rawDescGZIP() []byte {
+	file_clarae_v1_notify_proto_rawDescOnce.Do(func() {
+		file_clarae_v1_notify_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_clarae_v1_notify_proto_rawDesc), len(file_clarae_v1_notify_proto_rawDesc)))
 	})
-	return file_memobrain_v1_notify_proto_rawDescData
+	return file_clarae_v1_notify_proto_rawDescData
 }
 
-var file_memobrain_v1_notify_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_memobrain_v1_notify_proto_goTypes = []any{
-	(*SubscribeRequest)(nil), // 0: memobrain.v1.SubscribeRequest
-	(*Event)(nil),            // 1: memobrain.v1.Event
-	(*VaultChanged)(nil),     // 2: memobrain.v1.VaultChanged
-	(*ConfigChanged)(nil),    // 3: memobrain.v1.ConfigChanged
-	(*ShareChanged)(nil),     // 4: memobrain.v1.ShareChanged
-	(*AccountChanged)(nil),   // 5: memobrain.v1.AccountChanged
-	nil,                      // 6: memobrain.v1.SubscribeRequest.KnownSeqEntry
+var file_clarae_v1_notify_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_clarae_v1_notify_proto_goTypes = []any{
+	(*SubscribeRequest)(nil), // 0: clarae.v1.SubscribeRequest
+	(*Event)(nil),            // 1: clarae.v1.Event
+	(*VaultChanged)(nil),     // 2: clarae.v1.VaultChanged
+	(*ConfigChanged)(nil),    // 3: clarae.v1.ConfigChanged
+	(*ShareChanged)(nil),     // 4: clarae.v1.ShareChanged
+	(*AccountChanged)(nil),   // 5: clarae.v1.AccountChanged
+	nil,                      // 6: clarae.v1.SubscribeRequest.KnownSeqEntry
 }
-var file_memobrain_v1_notify_proto_depIdxs = []int32{
-	6, // 0: memobrain.v1.SubscribeRequest.known_seq:type_name -> memobrain.v1.SubscribeRequest.KnownSeqEntry
-	2, // 1: memobrain.v1.Event.vault_changed:type_name -> memobrain.v1.VaultChanged
-	3, // 2: memobrain.v1.Event.config_changed:type_name -> memobrain.v1.ConfigChanged
-	4, // 3: memobrain.v1.Event.share_changed:type_name -> memobrain.v1.ShareChanged
-	5, // 4: memobrain.v1.Event.account_changed:type_name -> memobrain.v1.AccountChanged
-	0, // 5: memobrain.v1.NotifyService.Subscribe:input_type -> memobrain.v1.SubscribeRequest
-	1, // 6: memobrain.v1.NotifyService.Subscribe:output_type -> memobrain.v1.Event
+var file_clarae_v1_notify_proto_depIdxs = []int32{
+	6, // 0: clarae.v1.SubscribeRequest.known_seq:type_name -> clarae.v1.SubscribeRequest.KnownSeqEntry
+	2, // 1: clarae.v1.Event.vault_changed:type_name -> clarae.v1.VaultChanged
+	3, // 2: clarae.v1.Event.config_changed:type_name -> clarae.v1.ConfigChanged
+	4, // 3: clarae.v1.Event.share_changed:type_name -> clarae.v1.ShareChanged
+	5, // 4: clarae.v1.Event.account_changed:type_name -> clarae.v1.AccountChanged
+	0, // 5: clarae.v1.NotifyService.Subscribe:input_type -> clarae.v1.SubscribeRequest
+	1, // 6: clarae.v1.NotifyService.Subscribe:output_type -> clarae.v1.Event
 	6, // [6:7] is the sub-list for method output_type
 	5, // [5:6] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -458,12 +458,12 @@ var file_memobrain_v1_notify_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_memobrain_v1_notify_proto_init() }
-func file_memobrain_v1_notify_proto_init() {
-	if File_memobrain_v1_notify_proto != nil {
+func init() { file_clarae_v1_notify_proto_init() }
+func file_clarae_v1_notify_proto_init() {
+	if File_clarae_v1_notify_proto != nil {
 		return
 	}
-	file_memobrain_v1_notify_proto_msgTypes[1].OneofWrappers = []any{
+	file_clarae_v1_notify_proto_msgTypes[1].OneofWrappers = []any{
 		(*Event_VaultChanged)(nil),
 		(*Event_ConfigChanged)(nil),
 		(*Event_ShareChanged)(nil),
@@ -473,17 +473,17 @@ func file_memobrain_v1_notify_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_memobrain_v1_notify_proto_rawDesc), len(file_memobrain_v1_notify_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_clarae_v1_notify_proto_rawDesc), len(file_clarae_v1_notify_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_memobrain_v1_notify_proto_goTypes,
-		DependencyIndexes: file_memobrain_v1_notify_proto_depIdxs,
-		MessageInfos:      file_memobrain_v1_notify_proto_msgTypes,
+		GoTypes:           file_clarae_v1_notify_proto_goTypes,
+		DependencyIndexes: file_clarae_v1_notify_proto_depIdxs,
+		MessageInfos:      file_clarae_v1_notify_proto_msgTypes,
 	}.Build()
-	File_memobrain_v1_notify_proto = out.File
-	file_memobrain_v1_notify_proto_goTypes = nil
-	file_memobrain_v1_notify_proto_depIdxs = nil
+	File_clarae_v1_notify_proto = out.File
+	file_clarae_v1_notify_proto_goTypes = nil
+	file_clarae_v1_notify_proto_depIdxs = nil
 }

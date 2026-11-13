@@ -14,14 +14,14 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/app/gen/bindings/fixture"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/app/gen/bindings/fixture"
 )
 
 // goldenModule is the module path as the golden holds it (testdata/regen-golden.sh), in the form a generic type
 // argument is written in: the name of such a type carries the import path of its package, which changes when
 // the module is renamed. The golden holds this fixed name whatever the module is called.
-const goldenModule = "memobrain_apps_desktop"
+const goldenModule = "clarae_apps_desktop"
 
 // fixtureSuffix is the import path of the fixture package inside the module.
 const fixtureSuffix = "/internal/app/gen/bindings/fixture"

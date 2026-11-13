@@ -2,7 +2,7 @@
 // order, all of them local and synchronous, so that with the function off nothing is loaded and nothing
 // is asked of anyone. The flag of a profile alone opens nothing: a build without the constant, or
 // without a registered provider (there is none), keeps it closed.
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { useManaged, featureOn } from '../../../state/managed';
 import { collabBuild } from './build';
 import { collabProviders, type CollabProvider, type CollabRoom } from './providers';

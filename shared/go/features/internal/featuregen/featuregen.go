@@ -1,6 +1,6 @@
 // Package featuregen reads the Config Profile schema (api/config-profile.schema.json) and renders
 // the code generated from it: the Go flag constants and defaults of package features, and the
-// TypeScript module of @memobrain/api-client (`@memobrain/api-client/features`). The schema is the
+// TypeScript module of @clarae/api-client (`@clarae/api-client/features`). The schema is the
 // only place where a flag, its default and its description are written (P8 of the W8 review).
 package featuregen
 

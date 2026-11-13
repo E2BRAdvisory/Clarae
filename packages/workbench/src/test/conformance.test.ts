@@ -14,7 +14,7 @@
 // Then the round trip of the fixtures: identity, ten idempotent rounds. The blocking criteria of the
 // Live editor ride on this file, which `task conformance` runs: the escape invariant (B2) and the
 // A gate (C1 to C4) on the roundtrip corpus.
-import { extract, parseWikilinkInner } from '@memobrain/markdown';
+import { extract, parseWikilinkInner } from '@clarae/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

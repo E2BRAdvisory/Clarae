@@ -4,7 +4,7 @@ Obiettivo dichiarato: **WCAG 2.1 livello AA**. Questo documento **non** afferma 
 
 ## Copertura automatica (Playwright + axe-core)
 
-`yarn workspace @memobrain/web e2e a11y` (file `web/e2e/a11y.spec.ts`, libreria `@axe-core/playwright` 4.10.2). Tag axe: `wcag2a, wcag2aa, wcag21a, wcag21aa`. Il test **fallisce** con violazioni di impatto `serious` o `critical`; quelle `moderate`/`minor` non bloccano ma il test non le nasconde: si vedono rilanciando axe a mano.
+`yarn workspace @clarae/web e2e a11y` (file `web/e2e/a11y.spec.ts`, libreria `@axe-core/playwright` 4.10.2). Tag axe: `wcag2a, wcag2aa, wcag21a, wcag21aa`. Il test **fallisce** con violazioni di impatto `serious` o `critical`; quelle `moderate`/`minor` non bloccano ma il test non le nasconde: si vedono rilanciando axe a mano.
 
 | Cosa                          | Dettaglio                                                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

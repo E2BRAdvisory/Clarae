@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 // share-declined-status-never-set: a declined invitation is reported as

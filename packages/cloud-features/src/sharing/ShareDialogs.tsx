@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Dialog, InlineError, SelectField, TextField } from '@memobrain/ui';
+import { Button, Dialog, InlineError, SelectField, TextField } from '@clarae/ui';
 import { NAME_MAX } from '../NewVaultDialog';
 import type { TFunction } from '../i18n';
 import type { CloudVault, NewShare, Share, ShareUpdate } from '../port';

@@ -1,4 +1,4 @@
-module memobrain/services/cloud
+module clarae/services/cloud
 
 go 1.27.4
 

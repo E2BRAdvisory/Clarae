@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"memobrain/shared/pathrules"
+	"clarae/shared/pathrules"
 )
 
 const maxNameBytes = 120 // leaves room for " (n)" and the extension within pathrules' segment limit

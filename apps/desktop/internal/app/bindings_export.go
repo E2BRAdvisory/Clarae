@@ -145,7 +145,7 @@ func writeExportFrom(vaultRoot, dest string, src io.Reader) (ExportResult, error
 			return ExportResult{}, errors.New("choose a location outside the vault")
 		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dest), ".memobrain-export-*.part")
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".clarae-export-*.part")
 	if err != nil {
 		return ExportResult{}, err
 	}

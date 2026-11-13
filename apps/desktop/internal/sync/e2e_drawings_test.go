@@ -131,7 +131,7 @@ func TestExcalidrawDeletionStaysDeleted(t *testing.T) {
 	}
 }
 
-// ADR-0024: frames, images with customData, the per-drawing `memobrain` key, the derived
+// ADR-0024: frames, images with customData, the per-drawing `clarae` key, the derived
 // exports next to the drawing and the vault's drawing settings travel and merge like the rest.
 func TestExcalidrawExtraElementsAndDerivedFilesConverge(t *testing.T) {
 	v := createVault(t, "ada", "drawings-extra")
@@ -144,17 +144,17 @@ func TestExcalidrawExtraElementsAndDerivedFilesConverge(t *testing.T) {
 	}
 	formula := func(version int, tex string) obj {
 		return obj{"id": "m1", "type": "image", "fileId": "F1", "x": 10, "y": 10, "width": 40, "height": 20,
-			"customData": obj{"memobrain": obj{"kind": "latex", "latex": tex}},
+			"customData": obj{"clarae": obj{"kind": "latex", "latex": tex}},
 			"version":    version, "versionNonce": version * 7, "isDeleted": false}
 	}
 	withKey := func(base string, key obj) string {
 		d := parse(t, base)
-		d["memobrain"] = key
+		d["clarae"] = key
 		return mustJSON(d)
 	}
 
 	a.write("Board.excalidraw", drawing(frame(1, "Slide 1"), formula(1, "a")))
-	a.write(".memobrain/drawing.json", `{"autoExport":"none"}`)
+	a.write(".clarae/drawing.json", `{"autoExport":"none"}`)
 	a.sync()
 	b.sync()
 
@@ -180,14 +180,14 @@ func TestExcalidrawExtraElementsAndDerivedFilesConverge(t *testing.T) {
 		if len(byID) != 3 || byID["f1"]["name"] != "Intro" || byID["r1"]["frameId"] != "f1" {
 			t.Errorf("%s: frame and its shape not merged: %v", d.name, byID)
 		}
-		latex := byID["m1"]["customData"].(obj)["memobrain"].(obj)["latex"]
+		latex := byID["m1"]["customData"].(obj)["clarae"].(obj)["latex"]
 		if latex != "b" {
 			t.Errorf("%s: formula source %v, want A's edit (b)", d.name, latex)
 		}
-		if key, _ := parsed["memobrain"].(obj); key["autoExport"] != "png" {
-			t.Errorf("%s: the per-drawing setting was lost: %v", d.name, parsed["memobrain"])
+		if key, _ := parsed["clarae"].(obj); key["autoExport"] != "png" {
+			t.Errorf("%s: the per-drawing setting was lost: %v", d.name, parsed["clarae"])
 		}
-		if !d.exists("Board.excalidraw.png") || d.read(".memobrain/drawing.json") != `{"autoExport":"none"}` {
+		if !d.exists("Board.excalidraw.png") || d.read(".clarae/drawing.json") != `{"autoExport":"none"}` {
 			t.Errorf("%s: derived export or drawing settings missing: %v", d.name, sortedKeys(d.files()))
 		}
 	}

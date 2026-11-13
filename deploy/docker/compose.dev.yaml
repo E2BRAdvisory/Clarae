@@ -1,23 +1,23 @@
-# Development stack for the MemoBrain Notes Cloud Service: PostgreSQL, an S3-compatible
+# Development stack for the Clarae notanda Cloud Service: PostgreSQL, an S3-compatible
 # object store (RustFS: MinIO-compatible, Apache-2.0; MinIO images are no longer
 # publicly pullable) and Keycloak. The cloud service itself runs on the host
 # (`task dev-cloud`) with deploy/docker/cloud.dev.env. Every port is published on 127.0.0.1 only:
 # the credentials below (Keycloak admin/admin, the dev realm's users) are public.
-name: memobrain-dev
+name: clarae-dev
 
 services:
   postgres:
     image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     environment:
-      POSTGRES_USER: memobrain
-      POSTGRES_PASSWORD: memobrain
-      POSTGRES_DB: memobrain
+      POSTGRES_USER: clarae
+      POSTGRES_PASSWORD: clarae
+      POSTGRES_DB: clarae
     ports:
       - '127.0.0.1:5433:5432' # 5433 on the host: 5432 is often taken by a local PostgreSQL
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U memobrain -d memobrain']
+      test: ['CMD-SHELL', 'pg_isready -U clarae -d clarae']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -25,8 +25,8 @@ services:
   s3:
     image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
     environment:
-      RUSTFS_ACCESS_KEY: memobrain
-      RUSTFS_SECRET_KEY: memobrain-secret
+      RUSTFS_ACCESS_KEY: clarae
+      RUSTFS_SECRET_KEY: clarae-secret
       RUSTFS_VOLUMES: /data
       RUSTFS_ADDRESS: ':9000'
       RUSTFS_CONSOLE_ENABLE: 'true'
@@ -53,13 +53,13 @@ services:
       s3:
         condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: memobrain
-      AWS_SECRET_ACCESS_KEY: memobrain-secret
+      AWS_ACCESS_KEY_ID: clarae
+      AWS_SECRET_ACCESS_KEY: clarae-secret
       AWS_DEFAULT_REGION: us-east-1
       AWS_EC2_METADATA_DISABLED: 'true'
     entrypoint: >
       /bin/sh -c "
-        for b in memobrain-blobs memobrain-exports; do
+        for b in clarae-blobs clarae-exports; do
           aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $$b >/dev/null 2>&1 ||
           aws --endpoint-url http://s3:9000 s3 mb s3://$$b;
         done && echo buckets ready

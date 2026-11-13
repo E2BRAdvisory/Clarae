@@ -1,6 +1,6 @@
 // The Live editor's own opening, with the collaboration gates in their real places (ADR-0050): a
 // profile with `collab: true` loads nothing, and only a build made for it plus a provider joins the room.
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as chunks from '../chunks';
 import { useManaged, unmanaged } from '../../../state/managed';
@@ -49,7 +49,7 @@ describe('opening a note in Live', () => {
   });
 
   it('a build made for it, a profile that says so and no provider still load nothing', async () => {
-    vi.stubEnv('MEMOBRAIN_COLLAB', '1');
+    vi.stubEnv('CLARAE_COLLAB', '1');
     profile(true);
     const live = await openLive('Hello\n', { collabRoom: () => ROOM });
     live.dispose();
@@ -57,7 +57,7 @@ describe('opening a note in Live', () => {
   });
 
   it('the build, the flag and a provider together load it, join the note and leave with the editor', async () => {
-    vi.stubEnv('MEMOBRAIN_COLLAB', '1');
+    vi.stubEnv('CLARAE_COLLAB', '1');
     profile(true);
     const leave = vi.fn();
     join.mockReturnValue({ leave });
@@ -76,7 +76,7 @@ describe('opening a note in Live', () => {
   });
 
   it('a provider that fails does not keep the note from opening', async () => {
-    vi.stubEnv('MEMOBRAIN_COLLAB', '1');
+    vi.stubEnv('CLARAE_COLLAB', '1');
     profile(true);
     join.mockImplementation(() => {
       throw new Error('offline');

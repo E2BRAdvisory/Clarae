@@ -1,7 +1,7 @@
 import { expect, test, type Route } from '@playwright/test';
 import { BOB, ME, mockApi, signedIn } from './support';
 
-// Sharing in the console (ADR-0037 §2, SharesManager of @memobrain/cloud-features over REST):
+// Sharing in the console (ADR-0037 §2, SharesManager of @clarae/cloud-features over REST):
 // creation of a share of a shared vault, rename and expiry (PATCH /shares/{id}), access through the
 // directory, creation by a manager inside the share they manage (ADR-0041 §8), and the `sharing`
 // flag. The API is a small in-memory server.

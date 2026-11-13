@@ -1,6 +1,6 @@
 // Entry of the vault workbench page (/vaults/:id/open). It is a page of its own, with its own HTML and
 // style sheet, because the desktop UI's global styles must not reach the console (ADR-0029).
-import { mountCreateCloudVault, mountWorkbench } from '@memobrain/workbench';
+import { mountCreateCloudVault, mountWorkbench } from '@clarae/workbench';
 import { createOidcAuth } from '../auth/oidc';
 import { workbenchVaultId } from '../shared/routes';
 import type { AuthService } from '../auth/types';
@@ -67,10 +67,10 @@ async function start(): Promise<void> {
     return show(message('workbench.badCreate'), { error: true, back: true });
 
   // Playwright opens a folder of the browser without a cloud, using the OIDC test double.
-  const localOnly = Boolean(import.meta.env.MEMOBRAIN_E2E) && params.has('local');
+  const localOnly = Boolean(import.meta.env.CLARAE_E2E) && params.has('local');
 
   let auth: AuthService;
-  if (import.meta.env.MEMOBRAIN_E2E) auth = (await import('../auth/e2e')).createE2EAuth();
+  if (import.meta.env.CLARAE_E2E) auth = (await import('../auth/e2e')).createE2EAuth();
   else auth = createOidcAuth();
 
   // A cloud that does not answer (its client configuration, the identity provider) is shown with a
@@ -94,7 +94,7 @@ async function start(): Promise<void> {
   if (!(await takeLock())) return show(message('workbench.busy'), { error: true, back: true });
 
   const assets =
-    typeof __MEMOBRAIN_CORE__ === 'undefined' ? null : (__MEMOBRAIN_CORE__ as CoreAssets | null);
+    typeof __CLARAE_CORE__ === 'undefined' ? null : (__CLARAE_CORE__ as CoreAssets | null);
   if (!assets) return show(message('workbench.noCore'), { error: true, back: true });
 
   show(message('workbench.core'));
@@ -109,9 +109,9 @@ async function start(): Promise<void> {
         return mountCreateCloudVault(root, options);
       },
       localOnly,
-      fsTrace: Boolean(import.meta.env.MEMOBRAIN_E2E) && params.has('fstrace'),
+      fsTrace: Boolean(import.meta.env.CLARAE_E2E) && params.has('fstrace'),
       assets,
-      version: typeof __MEMOBRAIN_VERSION__ === 'undefined' ? 'dev' : __MEMOBRAIN_VERSION__,
+      version: typeof __CLARAE_VERSION__ === 'undefined' ? 'dev' : __CLARAE_VERSION__,
       progress: (step) => show(message(STEP_MESSAGE[step])),
       mount: async ({
         vaultPath,

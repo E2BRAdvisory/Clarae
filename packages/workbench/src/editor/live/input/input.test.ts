@@ -11,7 +11,7 @@ import {
 } from '@milkdown/kit/prose/commands';
 import { Selection, TextSelection, type Plugin } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderMarkdown } from '../../../reading/render';
 import type { Suggestion } from '../../../app/api';
@@ -1647,7 +1647,7 @@ describe('smart paste and drop', () => {
   const takes = (ed: Ed, type: 'paste' | 'drop', ev: Event): boolean => {
     const plugin = ed.view.state.plugins.find((p) =>
       String((p.spec.key as { key?: string } | undefined)?.key).startsWith(
-        'memobrain-pending-inserts',
+        'clarae-pending-inserts',
       ),
     );
     const handler = plugin?.props.handleDOMEvents?.[type] as

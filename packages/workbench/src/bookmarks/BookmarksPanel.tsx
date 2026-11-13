@@ -19,7 +19,7 @@ import { Icon, type IconName } from '../shell/icons';
 import { bookmarksReadOnly, useBookmarks } from './store';
 import './bookmarks.css';
 
-const DRAG_TYPE = 'application/x-memobrain-bookmark';
+const DRAG_TYPE = 'application/x-clarae-bookmark';
 
 type Drop = { key: string; zone: 'before' | 'after' | 'into' } | null;
 

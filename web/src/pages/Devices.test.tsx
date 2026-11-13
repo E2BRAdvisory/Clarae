@@ -1,4 +1,4 @@
-// The Devices page mounts the DevicesPanel of @memobrain/cloud-features (its behaviour is tested by
+// The Devices page mounts the DevicesPanel of @clarae/cloud-features (its behaviour is tested by
 // the package's suite on both adapters): here, the wiring to the REST API and the page.
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

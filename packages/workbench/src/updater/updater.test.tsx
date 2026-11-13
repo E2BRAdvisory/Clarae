@@ -41,7 +41,7 @@ describe('update:check command', () => {
       await cmd?.run();
     });
     expect(updaterMock.checks).toBe(1);
-    expect(await screen.findByText(/MemoBrain Notes 1\.0\.0 is up to date/)).toBeInTheDocument();
+    expect(await screen.findByText(/Clarae notanda 1\.0\.0 is up to date/)).toBeInTheDocument();
   });
 
   it('shows the error of a failed check', async () => {

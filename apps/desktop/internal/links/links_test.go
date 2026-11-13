@@ -9,10 +9,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/links"
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/vault"
 )
 
 func setup(t *testing.T, files map[string]string) (*indexer.Indexer, context.Context) {
@@ -23,7 +23,7 @@ func setup(t *testing.T, files map[string]string) (*indexer.Indexer, context.Con
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".clarae", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestRenameRewritesLinks(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	fsys, _ := vault.NewFS(root)
-	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".clarae", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestRenameRewritesLinksInsideDrawings(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	fsys, _ := vault.NewFS(root)
-	db, err := store.Open(ctx, filepath.Join(root, ".memobrain", "index.db"), store.KindIndex)
+	db, err := store.Open(ctx, filepath.Join(root, ".clarae", "index.db"), store.KindIndex)
 	if err != nil {
 		t.Fatal(err)
 	}

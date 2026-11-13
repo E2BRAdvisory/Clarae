@@ -3,9 +3,9 @@
 # first, then the binary with the tags and linker flags of a release. The output goes where the packaging
 # scripts look for it, apps/desktop/build/bin:
 #
-#   darwin   "MemoBrain Notes.app" (universal by default: one build per architecture + lipo, ad-hoc signed)
-#   linux    memobrain                 (-tags production,gtk3: GTK3 + WebKit2GTK 4.1)
-#   windows  memobrain.exe             (-H windowsgui, icon/manifest/version info from `wails3 generate syso`)
+#   darwin   "Clarae notanda.app" (universal by default: one build per architecture + lipo, ad-hoc signed)
+#   linux    clarae                 (-tags production,gtk3: GTK3 + WebKit2GTK 4.1)
+#   windows  clarae.exe             (-H windowsgui, icon/manifest/version info from `wails3 generate syso`)
 #
 #   scripts/build-desktop-bin.sh [--os darwin|windows|linux] [--arch amd64|arm64|universal] [--version V]
 #                                [--ldflags "-X pkg.Var=value ..."] [--skip-frontend] [--release]
@@ -18,7 +18,7 @@
 # The updater flags (-X <updater>.PublicKeyB64 / ManifestBaseURL / DisabledByBuild) are passed with --ldflags or
 # LDFLAGS_EXTRA: scripts/release/build-desktop.sh decides them and refuses a release without the production key.
 # --release is for a build that is shipped: it refuses the build switches of the frontend in the environment
-# (MEMOBRAIN_AI, MEMOBRAIN_COLLAB, MEMOBRAIN_E2E) and MEMOBRAIN_DIST (the UI would be built
+# (CLARAE_AI, CLARAE_COLLAB, CLARAE_E2E) and CLARAE_DIST (the UI would be built
 # where Go does not embed it from): release/check-editor-switches.sh. It always builds the frontend (no --skip-frontend,
 # no --dev) and checks that neither the collaboration code nor the binding mock of the e2e tests is in what it built, and that
 # the Milkdown editor is (release/check-dist.sh).
@@ -142,7 +142,7 @@ elif [ "$SKIP_FRONTEND" = 0 ]; then
   log "Generating the Wails bindings"
   (cd "$DESKTOP" && go run ./internal/app/gen/bindings)
   log "Building the frontend"
-  (cd "$ROOT" && yarn workspace @memobrain/desktop-frontend run build)
+  (cd "$ROOT" && yarn workspace @clarae/desktop-frontend run build)
 fi
 if [ "$DEV" = 0 ]; then
   [ -s "$DIST/index.html" ] || die "$DIST has no index.html: build the frontend (omit --skip-frontend)"

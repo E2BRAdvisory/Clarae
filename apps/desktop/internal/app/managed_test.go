@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/history"
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/history"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 func intPtr(n int) *int { return &n }

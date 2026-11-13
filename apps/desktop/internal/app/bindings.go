@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/apps/desktop/internal/links"
-	"memobrain/apps/desktop/internal/search"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/search"
+	"clarae/apps/desktop/internal/vault"
 )
 
 // The API structs below are bound to the frontend by Wails (see main.go);
@@ -130,7 +130,7 @@ func (a *App) exportZip(vaultID, dest string) (ExportResult, error) {
 			return ExportResult{}, errors.New("choose a location outside the vault")
 		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dest), ".memobrain-export-*.part")
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".clarae-export-*.part")
 	if err != nil {
 		return ExportResult{}, err
 	}
@@ -405,8 +405,8 @@ func (s *SettingsAPI) Info() map[string]string {
 		"platform": platform,
 		"version":  s.app.opts.Version,
 		"dataDir":  s.app.opts.DataDir,
-		// Convenience for development: MEMOBRAIN_DEFAULT_SERVER_URL prefills the sign-in form.
-		"defaultServer": os.Getenv("MEMOBRAIN_DEFAULT_SERVER_URL"),
+		// Convenience for development: CLARAE_DEFAULT_SERVER_URL prefills the sign-in form.
+		"defaultServer": os.Getenv("CLARAE_DEFAULT_SERVER_URL"),
 	}
 }
 

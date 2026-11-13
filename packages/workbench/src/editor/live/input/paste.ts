@@ -54,7 +54,7 @@ interface Meta {
   done?: number;
 }
 
-const key = new PluginKey<ReadonlyMap<number, number>>('memobrain-pending-inserts');
+const key = new PluginKey<ReadonlyMap<number, number>>('clarae-pending-inserts');
 let lastId = 0;
 
 /**

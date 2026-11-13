@@ -1,6 +1,6 @@
 // The A gate (criteria C1 to C4 of the plan, A-W3), measured on the corpus of testing/corpus.ts and
 // asserted here. The suite is registered by src/test/conformance.test.ts, which `task conformance`
-// runs: the criteria are blocking there. `yarn workspace @memobrain/workbench run live:metrics`
+// runs: the criteria are blocking there. `yarn workspace @clarae/workbench run live:metrics`
 // prints the numbers.
 //
 //   C1  with every block forced dirty, extract() and the Reading HTML do not change

@@ -114,7 +114,7 @@ interface BlockState {
   decorations: DecorationSet;
 }
 
-const blocksKey = new PluginKey<BlockState>('memobrain-live-blocks');
+const blocksKey = new PluginKey<BlockState>('clarae-live-blocks');
 
 export const blocksPlugin = (host: LiveViewsHost) =>
   $prose(

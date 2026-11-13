@@ -34,16 +34,14 @@ test('the account page downloads the data and guards the deletion', async ({ pag
   });
   await page.goto('/account');
   await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible();
-  // The groups of the user (MyGroups of @memobrain/cloud-features, GET /me/groups).
+  // The groups of the user (MyGroups of @clarae/cloud-features, GET /me/groups).
   const groups = page.getByRole('table', { name: 'My groups' });
   await expect(groups.getByRole('row', { name: /engineers/ })).toContainText('Manager');
   expect(calls).toContain('GET /me/groups');
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download my data' }).click();
-  expect((await download).suggestedFilename()).toMatch(
-    /^memobrain-account-\d{4}-\d{2}-\d{2}\.json$/,
-  );
+  expect((await download).suggestedFilename()).toMatch(/^clarae-account-\d{4}-\d{2}-\d{2}\.json$/);
   expect(calls).toContain('GET /me/export');
 
   await page.getByRole('button', { name: 'Delete my account' }).click();

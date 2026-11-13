@@ -35,12 +35,12 @@ const message = (e: unknown): string => errorMessage(e);
 /** Quiet time after the last vault change before the base runs again. */
 export const REFRESH_MS = 300;
 
-const isConfig = (path: string): boolean => path === '.memobrain' || path.startsWith('.memobrain/');
+const isConfig = (path: string): boolean => path === '.clarae' || path.startsWith('.clarae/');
 
 /**
  * Whether a batch of file changes can change a base's result. Any file of the vault can be a row
  * (file.* properties, attachments included) and any note's properties can match its filters,
- * the containing note's own ("this") among them; only the app's settings under .memobrain/ cannot.
+ * the containing note's own ("this") among them; only the app's settings under .clarae/ cannot.
  */
 export function baseNeedsRefresh(batch: VaultChangeBatch): boolean {
   return batch.unknown || batch.changes.some((c) => !isConfig(c.path));

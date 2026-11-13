@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/audit"
-	"memobrain/services/cloud/internal/jobs/jobsdb"
-	"memobrain/services/cloud/internal/keycloak"
-	"memobrain/services/cloud/internal/privacy"
-	"memobrain/services/cloud/internal/users"
+	"clarae/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/jobs/jobsdb"
+	"clarae/services/cloud/internal/keycloak"
+	"clarae/services/cloud/internal/privacy"
+	"clarae/services/cloud/internal/users"
 )
 
 // IdentityDisabler disables an account at the identity provider; implemented

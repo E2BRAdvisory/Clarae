@@ -13,10 +13,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/syncproto"
 )
 
 const linkVault = "0198f1c2-aaaa-7bbb-8ccc-0000000000aa"

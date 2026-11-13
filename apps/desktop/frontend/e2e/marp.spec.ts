@@ -93,9 +93,7 @@ test('a slide left out is marked in the file and skipped by the presentation', a
   await page.getByRole('button', { name: 'Leave out of the presentation' }).nth(1).click();
   await expect(page.getByText('Slideshow · 2 of 3 slides included')).toBeVisible();
   await expect(page.getByTestId('marp-card').nth(1)).toHaveClass(/excluded/);
-  await expect
-    .poll(() => readVaultFile(page, 'Kickoff.marp'))
-    .toContain('<!-- memobrain: hidden -->');
+  await expect.poll(() => readVaultFile(page, 'Kickoff.marp')).toContain('<!-- clarae: hidden -->');
 
   await page.getByRole('button', { name: 'Start presentation' }).click();
   const show = page.locator('.marp-show');
@@ -204,7 +202,7 @@ test('the ribbon exports to HTML and to an editable PPTX, leaving out the hidden
   page,
 }) => {
   const external = watchNetwork(page);
-  const deck = `${DECK}\n---\n\n<!-- memobrain: hidden -->\n\n## Secret\n\n---\n\n## Budget\n\n<!-- Mention the budget -->\n`;
+  const deck = `${DECK}\n---\n\n<!-- clarae: hidden -->\n\n## Secret\n\n---\n\n## Budget\n\n<!-- Mention the budget -->\n`;
   await openDeck(page, { 'Kickoff.marp': deck }, 'Kickoff.marp');
   await expect(page.getByTestId('marp-card')).toHaveCount(4);
   const ribbon = page.getByRole('navigation', { name: 'Quick actions' });

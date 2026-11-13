@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 func (e *env) refCount(hash string) int {

@@ -37,7 +37,7 @@ import (
 const SchemaVersion = 1
 
 // signContext is prepended to the manifest bytes before signing (domain separation).
-const signContext = "memobrain-update-manifest-v1\n"
+const signContext = "clarae-update-manifest-v1\n"
 
 // Validity of a manifest (expires_at - released_at). DefaultValidity is what
 // the release tool should sign; MaxValidity bounds what clients accept, so a

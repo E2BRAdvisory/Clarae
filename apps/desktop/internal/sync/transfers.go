@@ -8,7 +8,7 @@ import (
 	"fmt"
 	stdsync "sync"
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // Blob transfers (M12-W6.1). A cycle applies the changes one after the other,

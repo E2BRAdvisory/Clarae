@@ -37,7 +37,7 @@ test('an image of the vault is inserted into the drawing and stored in its files
   const saved = await savedDrawing(page);
   const img = saved.elements.find((e) => e.type === 'image')!;
   expect(img).toBeTruthy();
-  expect(img.customData?.memobrain).toMatchObject({ kind: 'image', path: 'pics/dot.png' });
+  expect(img.customData?.clarae).toMatchObject({ kind: 'image', path: 'pics/dot.png' });
   const files = Object.values(saved.files);
   expect(files).toHaveLength(1);
   expect(files[0]?.mimeType).toBe('image/png');

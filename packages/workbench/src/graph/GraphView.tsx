@@ -123,7 +123,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
   }, [vaultId, optionsKey, loaded, reload]);
 
   // The index changed (note created, renamed, edited): rebuild, coalescing bursts. Changes that
-  // cannot alter nodes or links (settings under .memobrain/, an edited attachment) are ignored.
+  // cannot alter nodes or links (settings under .clarae/, an edited attachment) are ignored.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = onVaultChanges((batch) => {

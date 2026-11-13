@@ -80,9 +80,9 @@ interface Choice {
   apply(view: EditorView, trigger: Trigger): void;
 }
 
-const SUGGEST_META = 'memobrain-suggest';
+const SUGGEST_META = 'clarae-suggest';
 /** A transaction with this meta arms the slash menu at a position (a number) or disarms it (null). */
-const ARM_META = 'memobrain-suggest-arm';
+const ARM_META = 'clarae-suggest-arm';
 
 /**
  * What the plugin keeps: how many edits the user made (what opens the popup) and the position where the
@@ -93,7 +93,7 @@ interface SuggestState {
   typed: number;
   armed: number | null;
 }
-const key = new PluginKey<SuggestState>('memobrain-suggest');
+const key = new PluginKey<SuggestState>('clarae-suggest');
 
 /** The query typed since the slash menu was armed at `armed`, or null when the arming no longer holds. */
 function armedQuery(state: EditorState, armed: number): string | null {

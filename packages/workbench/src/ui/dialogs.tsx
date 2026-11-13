@@ -2,7 +2,7 @@
 // webviews Wails uses, so every confirmation and text question goes through here.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog } from '@memobrain/ui';
+import { Dialog } from '@clarae/ui';
 import { create } from 'zustand';
 import { i18next } from '../i18n';
 import { errorMessage } from '../util/errors';
@@ -182,7 +182,7 @@ const DIALOG_CLASSES = { backdrop: 'modal-backdrop', dialog: 'modal dialog' };
 
 /**
  * Renders the pending dialog; mount once near the root. It goes through the Dialog primitive of
- * @memobrain/ui (focus, Escape, labelling: ADR-0043) with the workbench classes.
+ * @clarae/ui (focus, Escape, labelling: ADR-0043) with the workbench classes.
  */
 export function DialogHost() {
   const { t } = useTranslation();

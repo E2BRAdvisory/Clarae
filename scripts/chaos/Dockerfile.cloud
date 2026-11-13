@@ -1,7 +1,7 @@
 # Image of the cloud service for the chaos run: the same Go build as services/cloud/Dockerfile
 # without the Web UI stage (the placeholder web-embed/dist/index.html is enough for an API test),
 # so it builds from a fresh checkout and without network access to the npm registry.
-#   docker build -f scripts/chaos/Dockerfile.cloud -t memobrain-cloud:chaos .
+#   docker build -f scripts/chaos/Dockerfile.cloud -t clarae-cloud:chaos .
 FROM golang:1.27.4-alpine3.24@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates
@@ -15,12 +15,12 @@ COPY services/cloud/ services/cloud/
 COPY apps/desktop/go.mod apps/desktop/go.sum apps/desktop/
 RUN mkdir -p services/cloud/web-embed/dist && echo '<!doctype html><title>chaos</title>' > services/cloud/web-embed/dist/index.html
 RUN cd services/cloud && CGO_ENABLED=0 GOOS=linux go build -trimpath \
-    -ldflags "-s -w -X main.Version=chaos" -o /out/memobrain-cloud ./cmd/memobrain-cloud
+    -ldflags "-s -w -X main.Version=chaos" -o /out/clarae-cloud ./cmd/clarae-cloud
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-COPY --from=build /out/memobrain-cloud /memobrain-cloud
+COPY --from=build /out/clarae-cloud /clarae-cloud
 USER nonroot:nonroot
 EXPOSE 18081 18082
 ENV LISTEN_ADDR=0.0.0.0:18081 GRPC_LISTEN_ADDR=0.0.0.0:18082
-ENTRYPOINT ["/memobrain-cloud"]
+ENTRYPOINT ["/clarae-cloud"]
 CMD ["--role=all"]

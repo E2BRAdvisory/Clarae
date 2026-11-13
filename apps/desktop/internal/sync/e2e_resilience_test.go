@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // faultTransport wraps the real transport. Once armed it fails every request

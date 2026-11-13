@@ -7,7 +7,7 @@ import { defineConfig } from '@playwright/test';
 //    (OPFS, sqlite-wasm). e2e/support.ts opens a vault of this browser (`?local`, E2E builds only).
 // A spec that cannot run on the web calls skipOnWeb(<feature id>, <reason>) (support.ts); the
 // coverage of each target is in docs/web-workbench-parity.md (scripts/parity.mjs).
-// Prerequisite: `task wasm-core`. Run with: yarn workspace @memobrain/web e2e:workbench-ui
+// Prerequisite: `task wasm-core`. Run with: yarn workspace @clarae/web e2e:workbench-ui
 // (one target: add `--project web-core` or `--project desktop-mock`).
 /** The `target` option of e2e/support.ts (the specs are not part of this TypeScript project). */
 type Target = 'desktop' | 'web';
@@ -41,7 +41,7 @@ export default defineConfig<{ target: Target }>({
     },
   ],
   // Built once (--no-watch: a rebuild would reload the pages of the running tests) into folders of
-  // their own (MEMOBRAIN_DIST): web/dist and apps/desktop/frontend/dist are rebuilt by other builds.
+  // their own (CLARAE_DIST): web/dist and apps/desktop/frontend/dist are rebuilt by other builds.
   webServer: [
     {
       command: `node scripts/esbuild.mjs dev --port ${DESKTOP_PORT} --no-watch`,
@@ -49,14 +49,14 @@ export default defineConfig<{ target: Target }>({
       url: DESKTOP,
       reuseExistingServer: !process.env['CI'],
       timeout: 120_000,
-      env: { MEMOBRAIN_E2E: '1', MEMOBRAIN_DIST: `../../${OUT}/desktop-dist` },
+      env: { CLARAE_E2E: '1', CLARAE_DIST: `../../${OUT}/desktop-dist` },
     },
     {
       command: `node scripts/esbuild.mjs dev --port ${WEB_PORT} --no-watch`,
       url: WEB,
       reuseExistingServer: !process.env['CI'],
       timeout: 120_000,
-      env: { MEMOBRAIN_E2E: '1', MEMOBRAIN_DIST: `${OUT}/web-dist` },
+      env: { CLARAE_E2E: '1', CLARAE_DIST: `${OUT}/web-dist` },
     },
   ],
 });

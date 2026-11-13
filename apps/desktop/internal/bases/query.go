@@ -57,7 +57,7 @@ type Result struct {
 type RunOptions struct {
 	This   *Note             // the note embedding the base (for "this"), may be nil
 	Now    time.Time         // zero = time.Now()
-	Schema map[string]string // declared property types (.memobrain/types.json)
+	Schema map[string]string // declared property types (.clarae/types.json)
 	// OnPanic receives the first unexpected failure (a bug) of the engine in
 	// a run, recovered and turned into an error, so that it reaches the log.
 	OnPanic func(error)

@@ -6,7 +6,7 @@
 // so it stays hidden and protected by construction (the Properties panel edits it). The end-of-line
 // style is the dominant one of the file: the body is handled with LF and gets it back at the end, so a
 // CRLF file is saved as CRLF (the CodeMirror editor saves it as LF today).
-import { splitFrontmatter } from '@memobrain/markdown';
+import { splitFrontmatter } from '@clarae/markdown';
 
 export interface Envelope {
   /** The byte order mark (U+FEFF) or "". */

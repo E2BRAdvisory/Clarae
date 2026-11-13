@@ -3,8 +3,8 @@
 #
 #   scripts/chaos/run-helm-chaos.sh [--drain 5s] [--replicas 3] [--keep] [--out DIR]
 #
-# The script creates its own cluster "memobrain-chaos-<rand>" (never reuses another one, and
-# refuses to act on any kubectl context that is not a k3d-memobrain-chaos-* one), deploys the
+# The script creates its own cluster "clarae-chaos-<rand>" (never reuses another one, and
+# refuses to act on any kubectl context that is not a k3d-clarae-chaos-* one), deploys the
 # dependencies and the chart (values-k3d.yaml + values-chaos.yaml), then runs an availability
 # probe at 10 Hz (GET /readyz and an authenticated GET /me with a real Keycloak token)
 # while it:
@@ -15,9 +15,9 @@
 # It then writes samples, events and a JSON + Markdown report to .dev/chaos/<timestamp>/
 # and deletes the cluster (unless --keep).
 #
-# Host ports (not the dev ones, so a running "memobrain" cluster is unaffected):
+# Host ports (not the dev ones, so a running "clarae" cluster is unaffected):
 # API on 28081, Keycloak on 28080 (override with CHAOS_API_PORT / CHAOS_KC_PORT).
-# The cloud image is built from the working tree as memobrain-cloud:chaos.
+# The cloud image is built from the working tree as clarae-cloud:chaos.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib.sh"
 
@@ -45,9 +45,9 @@ for p in "$API_PORT" "$KC_PORT"; do
   if lsof -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then die "host port $p is in use"; fi
 done
 
-CLUSTER="memobrain-chaos-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
+CLUSTER="clarae-chaos-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
 CTX="k3d-$CLUSTER"
-NS=memobrain
+NS=clarae
 KEYCLOAK_IP=10.43.0.50   # must match deploy/k3d/deps.yaml
 KEYCLOAK_HOST=keycloak.localtest.me
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -59,8 +59,8 @@ CREATED=0
 
 # guard: every mutating call goes through k, which only ever talks to our own cluster.
 guard() {
-  case "$CLUSTER" in memobrain-chaos-*) ;; *) die "refusing: '$CLUSTER' is not a chaos cluster" ;; esac
-  case "$CTX" in k3d-memobrain-chaos-*) ;; *) die "refusing: context '$CTX' is not a chaos cluster" ;; esac
+  case "$CLUSTER" in clarae-chaos-*) ;; *) die "refusing: '$CLUSTER' is not a chaos cluster" ;; esac
+  case "$CTX" in k3d-clarae-chaos-*) ;; *) die "refusing: context '$CTX' is not a chaos cluster" ;; esac
 }
 k() { guard; kubectl --context "$CTX" -n "$NS" "$@"; }
 now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
@@ -96,7 +96,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata: { name: coredns-custom }
 data:
-  memobrain.server: |
+  clarae.server: |
     $KEYCLOAK_HOST:53 {
       hosts {
         $KEYCLOAK_IP $KEYCLOAK_HOST
@@ -105,14 +105,14 @@ data:
 DNS
 kubectl --context "$CTX" -n kube-system rollout restart deploy/coredns >/dev/null 2>&1 || true
 
-log "Building the cloud image from the working tree (memobrain-cloud:chaos)"
-docker build -q -f "$ROOT/scripts/chaos/Dockerfile.cloud" -t memobrain-cloud:chaos "$ROOT" >/dev/null || die "image build failed"
-for img in memobrain-cloud:chaos $(awk '$1 == "image:" { print $2 }' "$ROOT/deploy/k3d/deps.yaml"); do
+log "Building the cloud image from the working tree (clarae-cloud:chaos)"
+docker build -q -f "$ROOT/scripts/chaos/Dockerfile.cloud" -t clarae-cloud:chaos "$ROOT" >/dev/null || die "image build failed"
+for img in clarae-cloud:chaos $(awk '$1 == "image:" { print $2 }' "$ROOT/deploy/k3d/deps.yaml"); do
   docker image inspect "$img" >/dev/null 2>&1 && k3d image import "$img" -c "$CLUSTER" >/dev/null 2>&1 || true
 done
 
 log "Deploying dependencies"
-k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-memobrain.json" >/dev/null
+k create configmap keycloak-realm --from-file="$ROOT/deploy/keycloak/realm-clarae.json" >/dev/null
 k apply -f "$ROOT/deploy/k3d/deps.yaml" >/dev/null
 kubectl --context "$CTX" -n kube-system rollout status deploy/coredns --timeout=120s >/dev/null
 for d in postgres s3 keycloak; do k rollout status "deploy/$d" --timeout=300s >/dev/null & done
@@ -120,10 +120,10 @@ wait || die "a dependency did not become ready"
 
 log "Installing the chart (api replicas=$REPLICAS, SHUTDOWN_DRAIN=$DRAIN)"
 guard
-helm --kube-context "$CTX" -n "$NS" upgrade --install memobrain "$ROOT/deploy/helm/memobrain" \
-  -f "$ROOT/deploy/helm/memobrain/values-k3d.yaml" -f "$ROOT/deploy/helm/memobrain/values-chaos.yaml" \
+helm --kube-context "$CTX" -n "$NS" upgrade --install clarae "$ROOT/deploy/helm/clarae" \
+  -f "$ROOT/deploy/helm/clarae/values-k3d.yaml" -f "$ROOT/deploy/helm/clarae/values-chaos.yaml" \
   --set "api.replicas=$REPLICAS" --set-string "config.SHUTDOWN_DRAIN=$DRAIN" \
-  --wait --timeout 5m >/dev/null || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/memobrain-memobrain-api)"
+  --wait --timeout 5m >/dev/null || die "helm install failed (kubectl --context $CTX -n $NS logs deploy/clarae-clarae-api)"
 API="http://127.0.0.1:$API_PORT"
 for _ in $(seq 1 40); do curl -fsS "$API/api/v1/readyz" >/dev/null 2>&1 && break; sleep 2; done
 curl -fsS "$API/api/v1/readyz" >/dev/null || die "API does not answer on $API"
@@ -139,12 +139,12 @@ for _ in $(seq 1 30); do
   [ -n "${ADMIN_TOKEN:-}" ] && [ "$ADMIN_TOKEN" != null ] && break; sleep 2
 done
 [ -n "${ADMIN_TOKEN:-}" ] && [ "$ADMIN_TOKEN" != null ] || die "cannot get a Keycloak admin token"
-CID="$(curl -fsS "${RESOLVE[@]}" -H "Authorization: Bearer $ADMIN_TOKEN" "$KC/admin/realms/memobrain/clients?clientId=memobrain-desktop" | jq -r '.[0].id')"
-curl -fsS "${RESOLVE[@]}" -H "Authorization: Bearer $ADMIN_TOKEN" "$KC/admin/realms/memobrain/clients/$CID" \
+CID="$(curl -fsS "${RESOLVE[@]}" -H "Authorization: Bearer $ADMIN_TOKEN" "$KC/admin/realms/clarae/clients?clientId=clarae-desktop" | jq -r '.[0].id')"
+curl -fsS "${RESOLVE[@]}" -H "Authorization: Bearer $ADMIN_TOKEN" "$KC/admin/realms/clarae/clients/$CID" \
   | jq '.directAccessGrantsEnabled = true' \
-  | curl -fsS "${RESOLVE[@]}" -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d @- "$KC/admin/realms/memobrain/clients/$CID" >/dev/null
+  | curl -fsS "${RESOLVE[@]}" -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d @- "$KC/admin/realms/clarae/clients/$CID" >/dev/null
 
-TOKEN_URL="$KC/realms/memobrain/protocol/openid-connect/token"
+TOKEN_URL="$KC/realms/clarae/protocol/openid-connect/token"
 log "Warming up and checking the authenticated probe"
 PROBE_BIN="$OUT/probe"
 (cd "$ROOT" && go build -o "$PROBE_BIN" scripts/chaos/probe/main.go) || die "probe build failed"
@@ -155,7 +155,7 @@ ok_me="$(jq -s '[.[]|select(.kind=="me" and .ok)]|length' "$OUT/samples.jsonl")"
 [ "${ok_me:-0}" -gt 10 ] || die "the authenticated probe gets no 200 from /me"
 ok "probe works ($ok_me successful /me calls so far)"
 
-API_DEPLOY="$(k get deploy -l app.kubernetes.io/component=api -o name | head -1)"   # deployment/<release>-memobrain-api
+API_DEPLOY="$(k get deploy -l app.kubernetes.io/component=api -o name | head -1)"   # deployment/<release>-clarae-api
 [ -n "$API_DEPLOY" ] || die "API deployment not found"
 wait_api_ready() { # wait until all desired API replicas are ready
   k rollout status "$API_DEPLOY" --timeout=180s >/dev/null
@@ -210,7 +210,7 @@ event postgres-crash end "readyz healthy again ${rec:-never} ms after the crash 
 event cooldown start; sleep 10; event cooldown end
 
 kill "$PROBE_PID" 2>/dev/null || true; wait "$PROBE_PID" 2>/dev/null || true; PROBE_PID=""
-jq -n --arg cluster "$CLUSTER" --arg drain "$DRAIN" --argjson replicas "$REPLICAS" --arg image "memobrain-cloud:chaos" --arg rate "10 Hz (readyz + me per tick)" --arg timeout "2 s" \
+jq -n --arg cluster "$CLUSTER" --arg drain "$DRAIN" --argjson replicas "$REPLICAS" --arg image "clarae-cloud:chaos" --arg rate "10 Hz (readyz + me per tick)" --arg timeout "2 s" \
   '{cluster:$cluster, api_replicas:$replicas, SHUTDOWN_DRAIN:$drain, image:$image, probe_rate:$rate, request_timeout:$timeout}' >"$OUT/meta.json"
 k get "$API_DEPLOY" -o json | jq '{pdb:"none in chart", strategy:.spec.strategy, readinessProbe:.spec.template.spec.containers[0].readinessProbe, terminationGracePeriodSeconds:.spec.template.spec.terminationGracePeriodSeconds, lifecycle:.spec.template.spec.containers[0].lifecycle, affinity:.spec.template.spec.affinity}' >"$OUT/deployment-facts.json"
 python3 "$ROOT/scripts/chaos/report.py" "$OUT"

@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SLIDE_KEYS, SLIDE_THEMES, SLIDE_TRANSITIONS, type SlideConfig } from '@memobrain/markdown';
+import { SLIDE_KEYS, SLIDE_THEMES, SLIDE_TRANSITIONS, type SlideConfig } from '@clarae/markdown';
 import { api } from '../app/api';
 import { useActiveNote } from '../state/activeNote';
 import { selectActivePath, useAppStore } from '../state/store';

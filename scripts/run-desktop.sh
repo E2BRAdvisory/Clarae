@@ -9,7 +9,7 @@
 #   scripts/run-desktop.sh --data-dir DIR  use another application data directory
 #   scripts/run-desktop.sh --fresh         wipe the standalone data directory first
 #
-# State lives under .dev/standalone (git-ignored): app.db, logs/memobrain.log, vaults/.
+# State lives under .dev/standalone (git-ignored): app.db, logs/clarae.log, vaults/.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -32,12 +32,12 @@ need node; need yarn
 mkdir -p "$DATA_DIR/vaults"
 [ "$DEMO" = 1 ] && seed_demo_vault "$DATA_DIR/vaults/Demo"
 
-log "Standalone desktop (data: ${DATA_DIR#$ROOT/}, log: ${DATA_DIR#$ROOT/}/logs/memobrain.log)"
+log "Standalone desktop (data: ${DATA_DIR#$ROOT/}, log: ${DATA_DIR#$ROOT/}/logs/clarae.log)"
 log "Installing frontend dependencies"
 (cd "$ROOT" && run_quiet "yarn install" yarn install --immutable)
 
-export MEMOBRAIN_DATA_DIR="$DATA_DIR"
-unset MEMOBRAIN_DEFAULT_SERVER_URL
+export CLARAE_DATA_DIR="$DATA_DIR"
+unset CLARAE_DEFAULT_SERVER_URL
 if [ "$BUILD" = 1 ]; then
   log "Building (production)"
   run_quiet "desktop build" "$ROOT/scripts/build-desktop-bin.sh" --version dev-standalone

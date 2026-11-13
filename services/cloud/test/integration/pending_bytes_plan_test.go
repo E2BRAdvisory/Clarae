@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/db"
 )
 
 // windowScanPending is PendingUploadBytes as it was before M12-W6.1: every

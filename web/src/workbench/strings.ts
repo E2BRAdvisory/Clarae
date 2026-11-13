@@ -1,11 +1,11 @@
 // The few messages the workbench page shows before (and instead of) the UI, and the page-level overlays
 // that cover it (a locked private vault, a stopped engine). Once the UI is up it has its own translations
 // (it/en, packages/workbench/src/i18n). The texts live in the Web UI resources under `workbench.*`
-// (covered by their consistency test), plus Retry/Cancel from the strings shared with @memobrain/ui
+// (covered by their consistency test), plus Retry/Cancel from the strings shared with @clarae/ui
 // (ADR-0043); the page does not load i18next for them. Named imports keep the rest of the console's
 // resources out of the page bundle.
-import { common as commonEn } from '@memobrain/ui/i18n/en.json';
-import { common as commonIt } from '@memobrain/ui/i18n/it.json';
+import { common as commonEn } from '@clarae/ui/i18n/en.json';
+import { common as commonIt } from '@clarae/ui/i18n/it.json';
 import { workbench as en } from '../i18n/en.json';
 import { workbench as it } from '../i18n/it.json';
 

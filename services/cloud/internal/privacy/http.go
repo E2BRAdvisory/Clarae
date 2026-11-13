@@ -9,10 +9,10 @@ import (
 	"io"
 	"net/http"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // HTTP implements the GDPR endpoints of the generated strict server.
@@ -30,7 +30,7 @@ type exportResponse struct {
 
 func (r exportResponse) VisitExportMyDataResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="memobrain-account-%s.json"`, r.data.GeneratedAt.Format("20060102")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="clarae-account-%s.json"`, r.data.GeneratedAt.Format("20060102")))
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	return r.write(w)

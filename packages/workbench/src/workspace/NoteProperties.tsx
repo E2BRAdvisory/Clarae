@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { parseProperties } from '@memobrain/markdown';
+import { parseProperties } from '@clarae/markdown';
 import { api } from '../app/api';
 import { dialog } from '../ui/dialogs';
 import { Icon } from '../shell/icons';

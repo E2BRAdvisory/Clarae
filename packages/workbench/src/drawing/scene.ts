@@ -8,7 +8,7 @@ export const EMPTY_DRAWING = JSON.stringify(
   {
     type: 'excalidraw',
     version: 2,
-    source: 'memobrain',
+    source: 'clarae',
     elements: [],
     appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
     files: {},
@@ -21,7 +21,7 @@ export interface RawScene {
   elements: Record<string, unknown>[];
   appState: Record<string, unknown>;
   files: Record<string, unknown>;
-  /** Other top-level keys of the file (MemoBrain's per-drawing settings live in `memobrain`). */
+  /** Other top-level keys of the file (Clarae's per-drawing settings live in `clarae`). */
   extra: Record<string, unknown>;
 }
 

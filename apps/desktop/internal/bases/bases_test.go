@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/store"
 )
 
 var testNow = time.Date(2026, 3, 15, 10, 30, 0, 0, time.Local)
@@ -393,7 +393,7 @@ func TestLoadNotesFromIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	mustExec(`INSERT INTO files (path, kind, mtime_ns, size, hash, title, indexed_at) VALUES ('A/x.md','md',1000000000,5,'hh','x','now'),('.memobrain/c.json','config',1,1,'h','c','now')`)
+	mustExec(`INSERT INTO files (path, kind, mtime_ns, size, hash, title, indexed_at) VALUES ('A/x.md','md',1000000000,5,'hh','x','now'),('.clarae/c.json','config',1,1,'h','c','now')`)
 	mustExec(`INSERT INTO properties (path,key,kind,value) VALUES ('A/x.md','due','date','"2026-01-02"'),('A/x.md','n','number','4'),('A/x.md','l','list','["a","[[B]]"]')`)
 	mustExec(`INSERT INTO tags (path,line,name) VALUES ('A/x.md',1,'t1'),('A/x.md',2,'t1')`)
 	mustExec(`INSERT INTO links (path,line,kind,target_raw,target_resolved) VALUES ('A/x.md',1,'wikilink','B','B.md'),('A/x.md',2,'external','http://x',NULL)`)

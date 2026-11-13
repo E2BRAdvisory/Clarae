@@ -1,4 +1,4 @@
-// The Usage page mounts the UsagePanel of @memobrain/cloud-features: here, the wiring to the REST API.
+// The Usage page mounts the UsagePanel of @clarae/cloud-features: here, the wiring to the REST API.
 // The level shown is the server's (ADR-0037 §2), whatever the default thresholds would say.
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';

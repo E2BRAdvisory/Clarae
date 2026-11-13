@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, InlineError, SelectField, Table, TextField } from '@memobrain/ui';
+import { Badge, Button, InlineError, SelectField, Table, TextField } from '@clarae/ui';
 import { cloudKeys, describeError } from '../CloudVaultsTable';
 import type { TFunction } from '../i18n';
 import type {

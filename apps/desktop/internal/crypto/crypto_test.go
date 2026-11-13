@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/text/unicode/norm"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/vaultcrypto"
 )
 
 const vaultID = "0194f0a8-0000-7000-8000-00000000aaaa"

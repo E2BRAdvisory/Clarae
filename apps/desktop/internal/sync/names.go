@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"memobrain/shared/pathrules"
+	"clarae/shared/pathrules"
 )
 
 // uniqueReserve is the room kept in a segment for the " (n)" suffix

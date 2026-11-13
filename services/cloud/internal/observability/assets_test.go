@@ -20,7 +20,7 @@ func TestDeployAssetsUseExistingMetrics(t *testing.T) {
 		ch := make(chan *prometheus.Desc, 16)
 		go func() { c.Describe(ch); close(ch) }()
 		for d := range ch {
-			// Desc.String(): Desc{fqName: "memobrain_x", help: ...}
+			// Desc.String(): Desc{fqName: "clarae_x", help: ...}
 			if m := regexp.MustCompile(`fqName: "([^"]+)"`).FindStringSubmatch(d.String()); m != nil {
 				known[m[1]] = true
 			}
@@ -29,9 +29,9 @@ func TestDeployAssetsUseExistingMetrics(t *testing.T) {
 	if len(known) < 10 {
 		t.Fatalf("collected only %d metric names: %v", len(known), known)
 	}
-	token := regexp.MustCompile(`\bmemobrain_[a-z0-9_]+`)
+	token := regexp.MustCompile(`\bclarae_[a-z0-9_]+`)
 	for _, f := range []string{
-		"../../../../deploy/observability/grafana/memobrain-overview.json",
+		"../../../../deploy/observability/grafana/clarae-overview.json",
 		"../../../../deploy/observability/prometheus/alerts.yaml",
 	} {
 		raw, err := os.ReadFile(f)
@@ -45,7 +45,7 @@ func TestDeployAssetsUseExistingMetrics(t *testing.T) {
 					base = strings.TrimSuffix(name, suf)
 				}
 			}
-			if !known[base] && name != "memobrain_overview" {
+			if !known[base] && name != "clarae_overview" {
 				t.Errorf("%s uses unknown metric %q", f, name)
 			}
 		}

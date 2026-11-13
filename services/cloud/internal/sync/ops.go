@@ -6,16 +6,16 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/sharing"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/sharing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/sync/syncdb"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/sync/syncdb"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // timePtr adapts the optional client mtime.

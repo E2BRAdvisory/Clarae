@@ -116,7 +116,7 @@ const rawCoreCalls = [
 
 // ---- The cloud lifecycle goes through the CloudPort (ADR-0045 §7) ---------------------------------
 // Vaults, devices, usage, shares, grants, invitations, mounts, directory and groups are managed by
-// the components of @memobrain/cloud-features over a CloudPort: RestCloudPort in the console,
+// the components of @clarae/cloud-features over a CloudPort: RestCloudPort in the console,
 // CoreCloudPort in the desktop and the workbench. The hosts never call those APIs themselves, so a
 // function cannot drift on one surface. What only the console does (the ZIP export of VaultExport:
 // /vaults/{vaultId}/tree, /blobs, /key-envelopes, /export.zip, /exports) is not part of the port and
@@ -132,13 +132,13 @@ const consoleRestCalls = [
     selector:
       'CallExpression:matches([callee.property.name=/^(?:GET|POST|PUT|PATCH|DELETE|request)$/], [callee.name=/^(?:GET|POST|PUT|PATCH|DELETE)$/]) > :matches(Literal[value=/^\\/(?:vaults|shares)$/], TemplateLiteral[expressions.length=0][quasis.0.value.cooked=/^\\/(?:vaults|shares)$/]).arguments',
     message:
-      'The cloud vault lifecycle goes through the CloudPort (useCloudPort, @memobrain/cloud-features), not through the REST client (ADR-0045 §7).',
+      'The cloud vault lifecycle goes through the CloudPort (useCloudPort, @clarae/cloud-features), not through the REST client (ADR-0045 §7).',
   },
   {
     // Any other path of the port, in a call or kept in a variable first.
     selector: `:matches(Literal[value=/^\\/${portPath}$/], TemplateLiteral[expressions.length=0] > TemplateElement[value.cooked=/^\\/${portPath}$/]):not([value=/^\\/(?:vaults|shares)$/], [value.cooked=/^\\/(?:vaults|shares)$/]):not(TSLiteralType > Literal)`,
     message:
-      'This is a REST path of the CloudPort: use the port (@memobrain/cloud-features), not the REST client (ADR-0045 §7).',
+      'This is a REST path of the CloudPort: use the port (@clarae/cloud-features), not the REST client (ADR-0045 §7).',
   },
   {
     // fetch('/api/v1/shares?scope=received'), `${base}/api/v1/me/devices`

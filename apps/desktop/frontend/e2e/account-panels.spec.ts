@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test, uuid, vault, type CloudSeed } from './cloud';
 
-// Settings > Cloud and Settings > Sharing with the components of @memobrain/cloud-features over the
+// Settings > Cloud and Settings > Sharing with the components of @clarae/cloud-features over the
 // bindings (ADR-0037 §2): the server's quota level and the space of each vault, the devices with
 // the one in use protected, and the shares of the account (create, edit, give access, revoke; a
 // manager shares inside the share they manage, ADR-0041 §8). On the web the same panels run on the

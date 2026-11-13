@@ -1,5 +1,5 @@
 // The feature flags of the Config Profile (`features.*`), generated from api/config-profile.schema.json
-// by `task gen` (src/gen/features.ts). Import from '@memobrain/api-client/features': the subpath has no
+// by `task gen` (src/gen/features.ts). Import from '@clarae/api-client/features': the subpath has no
 // dependency, so the workbench and the console share it without pulling the REST client in.
 import { FEATURE_DEFAULTS, type Feature } from './gen/features';
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/shared/merge"
+	"clarae/shared/merge"
 )
 
 // lineSet returns the non-blank lines of s with trailing whitespace and

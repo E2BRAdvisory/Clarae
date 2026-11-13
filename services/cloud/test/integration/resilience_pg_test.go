@@ -33,7 +33,7 @@ func startRestartablePG(t *testing.T) *restartablePG {
 	t.Helper()
 	ctx := context.Background()
 	ctr, err := tcpostgres.Run(ctx, postgresImage,
-		tcpostgres.WithDatabase("memobrain"), tcpostgres.WithUsername("memobrain"), tcpostgres.WithPassword("memobrain"),
+		tcpostgres.WithDatabase("clarae"), tcpostgres.WithUsername("clarae"), tcpostgres.WithPassword("clarae"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
@@ -44,7 +44,7 @@ func startRestartablePG(t *testing.T) *restartablePG {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &restartablePG{ctr: ctr, l: l, open: map[net.Conn]struct{}{}, URL: fmt.Sprintf("postgres://memobrain:memobrain@%s/memobrain?sslmode=disable", l.Addr())}
+	p := &restartablePG{ctr: ctr, l: l, open: map[net.Conn]struct{}{}, URL: fmt.Sprintf("postgres://clarae:clarae@%s/clarae?sslmode=disable", l.Addr())}
 	go p.serve()
 	t.Cleanup(func() { _ = l.Close(); p.dropAll() })
 	return p

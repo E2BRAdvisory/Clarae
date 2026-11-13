@@ -7,7 +7,7 @@
 //             is in and nothing else.
 //   active    the atoms and links the caret is in or next to get `ofm-active`: their source shows, as
 //             the source of a construct shows under the caret.
-import { parseWikilinkInner } from '@memobrain/markdown';
+import { parseWikilinkInner } from '@clarae/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@milkdown/kit/prose/state';
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
@@ -163,7 +163,7 @@ function updateDecorations(
   return set;
 }
 
-export const baseKey = new PluginKey<DecorationSet>('memobrain-live-base');
+export const baseKey = new PluginKey<DecorationSet>('clarae-live-base');
 
 /** The nodes whose source shows when the selection touches them. */
 const REVEALED = new Set(['ofm_wikilink', 'raw_inline', 'raw_block']);
@@ -184,7 +184,7 @@ export function touchedNodes(state: EditorState): { pos: number; node: PMNode }[
   return out;
 }
 
-const activeKey = new PluginKey<{ at: string; set: DecorationSet }>('memobrain-live-active');
+const activeKey = new PluginKey<{ at: string; set: DecorationSet }>('clarae-live-active');
 
 function activeSet(state: EditorState): { at: string; set: DecorationSet } {
   const nodes = touchedNodes(state);

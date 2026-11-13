@@ -1,5 +1,5 @@
 // Vault and appearance settings. Editor/appearance/hotkeys are stored per
-// vault in .memobrain/*.json (§3.4.6: synced per user later); unknown keys and
+// vault in .clarae/*.json (§3.4.6: synced per user later); unknown keys and
 // values of the wrong type are ignored so a hand-edited file cannot break the app.
 import { create } from 'zustand';
 import { api } from '../app/api';

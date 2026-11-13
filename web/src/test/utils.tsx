@@ -1,6 +1,6 @@
 import { render, type RenderResult } from '@testing-library/react';
 import { vi, type Mock } from 'vitest';
-import { createClient, type MemobrainClient } from '@memobrain/api-client';
+import { createClient, type ClaraeClient } from '@clarae/api-client';
 import { TestApp } from '../App';
 import { ADMIN_ROLE, type AuthService, type AuthUser } from '../auth/types';
 
@@ -23,7 +23,7 @@ export function problem(status: number, code: string, detail = ''): Response {
 }
 
 export interface MockApi {
-  client: MemobrainClient;
+  client: ClaraeClient;
   calls: RecordedCall[];
   routes: Routes;
   called: (method: string, path: string) => RecordedCall[];

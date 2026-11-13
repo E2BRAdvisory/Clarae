@@ -10,7 +10,7 @@ import {
   Table,
   TextField,
   useToast,
-} from '@memobrain/ui';
+} from '@clarae/ui';
 import {
   useAdminGroups,
   pageItems,

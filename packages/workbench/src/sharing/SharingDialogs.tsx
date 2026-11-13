@@ -9,7 +9,7 @@ import { useSharing } from '../state/sharing';
 import { ActionButton } from '../ui/ActionButton';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { lazyView } from '../ui/lazyView';
-// Loaded on demand: the dialog (and the share editor of @memobrain/cloud-features) is not needed to
+// Loaded on demand: the dialog (and the share editor of @clarae/cloud-features) is not needed to
 // open a vault.
 const ShareDialog = lazyView(async () => ({
   default: (await import('./ShareDialog')).ShareDialog,
@@ -29,7 +29,7 @@ export function SharingDialogs() {
     void useManaged.getState().load();
     const refreshLists = () => {
       void qc.invalidateQueries({ queryKey: ['shares'] });
-      // The lists of @memobrain/cloud-features (Settings > Sharing, the share dialog).
+      // The lists of @clarae/cloud-features (Settings > Sharing, the share dialog).
       void qc.invalidateQueries({ queryKey: ['cloud-features', 'core', 'shares'] });
     };
     const offs = [

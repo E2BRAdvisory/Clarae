@@ -50,7 +50,7 @@ func TestSetTypeKeepsConcurrentDeclarations(t *testing.T) {
 // A types.json that cannot be parsed is not replaced by one holding the new key only.
 func TestSetTypeRefusesAnUnreadableSchema(t *testing.T) {
 	a, info, root := newTestApp(t)
-	p := filepath.Join(root, ".memobrain", "types.json")
+	p := filepath.Join(root, ".clarae", "types.json")
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}

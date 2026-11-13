@@ -1,8 +1,8 @@
-# Dependencies of the MemoBrain Notes Cloud Service for the local k3d session: PostgreSQL, an
+# Dependencies of the Clarae notanda Cloud Service for the local k3d session: PostgreSQL, an
 # S3-compatible store (RustFS) and Keycloak. Development values only.
 # Keycloak's Service has a fixed ClusterIP so the cluster can alias the public issuer
 # host to it (see scripts/run-cloud-k3d.sh). The realm comes from the `keycloak-realm`
-# ConfigMap, created from deploy/keycloak/realm-memobrain.json.
+# ConfigMap, created from deploy/keycloak/realm-clarae.json.
 apiVersion: v1
 kind: Service
 metadata: { name: postgres }
@@ -23,13 +23,13 @@ spec:
         - name: postgres
           image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
           env:
-            - { name: POSTGRES_USER, value: memobrain }
-            - { name: POSTGRES_PASSWORD, value: memobrain }
-            - { name: POSTGRES_DB, value: memobrain }
+            - { name: POSTGRES_USER, value: clarae }
+            - { name: POSTGRES_PASSWORD, value: clarae }
+            - { name: POSTGRES_DB, value: clarae }
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
           ports: [{ containerPort: 5432 }]
           readinessProbe:
-            exec: { command: [pg_isready, -U, memobrain, -d, memobrain] }
+            exec: { command: [pg_isready, -U, clarae, -d, clarae] }
             periodSeconds: 3
           volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
       volumes: [{ name: data, emptyDir: {} }]
@@ -55,8 +55,8 @@ spec:
         - name: rustfs
           image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
           env:
-            - { name: RUSTFS_ACCESS_KEY, value: memobrain }
-            - { name: RUSTFS_SECRET_KEY, value: memobrain-secret }
+            - { name: RUSTFS_ACCESS_KEY, value: clarae }
+            - { name: RUSTFS_SECRET_KEY, value: clarae-secret }
             - { name: RUSTFS_VOLUMES, value: /data }
             - { name: RUSTFS_ADDRESS, value: ':9000' }
           ports: [{ containerPort: 9000 }]

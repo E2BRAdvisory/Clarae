@@ -30,7 +30,7 @@ test('the slideshow plays the frames in order and Escape ends it', async ({ page
     page,
     scene([
       frame('f1', 'Slide 2', 600),
-      { ...frame('f2', 'Slide 1', 0), customData: { memobrain: { notes: 'Say hello' } } },
+      { ...frame('f2', 'Slide 1', 0), customData: { clarae: { notes: 'Say hello' } } },
     ]),
   );
   await runCommand(page, 'start the slideshow');
@@ -76,7 +76,7 @@ test('the tools panel searches, runs a generator and remembers favorites', async
   await panel.getByRole('button', { name: /Add insert comic panels to favorites/ }).click();
   const favorites = async () =>
     (
-      JSON.parse((await readVaultFile(page, '.memobrain/drawing.json')) || '{}') as {
+      JSON.parse((await readVaultFile(page, '.clarae/drawing.json')) || '{}') as {
         toolFavorites?: string[];
       }
     ).toolFavorites ?? [];
@@ -169,7 +169,7 @@ test('importing a .excalidrawlib merges its shapes into the library', async ({ p
     .poll(
       async () =>
         (
-          JSON.parse((await readVaultFile(page, '.memobrain/excalidraw-library.json')) || '{}') as {
+          JSON.parse((await readVaultFile(page, '.clarae/excalidraw-library.json')) || '{}') as {
             libraryItems?: unknown[];
           }
         ).libraryItems?.length ?? 0,

@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"memobrain/services/cloud/internal/access"
+	"clarae/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/sync/syncdb"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/sync/syncdb"
+	"clarae/shared/syncproto"
 )
 
 // restoreAttempts bounds how often a restore is re-based on a file that other

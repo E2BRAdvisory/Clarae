@@ -112,7 +112,7 @@ export async function runCreation(
       removeMarker(d.account, tempId);
     } catch (e) {
       // The marker stays: the next start-up sweep removes the folder.
-      console.warn('memobrain: could not remove the folder of a cancelled vault:', e);
+      console.warn('clarae: could not remove the folder of a cancelled vault:', e);
     }
     return null;
   }

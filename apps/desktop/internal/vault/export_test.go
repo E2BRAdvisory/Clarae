@@ -27,15 +27,15 @@ func writeTree(t *testing.T, root string, files map[string]string) {
 func TestExportZipRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"Home.md":                    "# Home",
-		"Notes/déjà vu.md":           "accents",
-		"Notes/deep/x.json":          `{"a":1}`,
-		"Attachments/pic.png":        "\x89PNG-fake",
-		".memobrain/editor.json":     `{"fontSize":14}`,
-		".memobrain/workspace.json":  "device",
-		".memobrain/cache/thumb.svg": "cache",
-		".trash/Old.md":              "deleted",
-		"Notes/.DS_Store":            "junk",
+		"Home.md":                 "# Home",
+		"Notes/déjà vu.md":        "accents",
+		"Notes/deep/x.json":       `{"a":1}`,
+		"Attachments/pic.png":     "\x89PNG-fake",
+		".clarae/editor.json":     `{"fontSize":14}`,
+		".clarae/workspace.json":  "device",
+		".clarae/cache/thumb.svg": "cache",
+		".trash/Old.md":           "deleted",
+		"Notes/.DS_Store":         "junk",
 	}
 	writeTree(t, root, files)
 	if err := os.MkdirAll(filepath.Join(root, "Empty", "Folder"), 0o755); err != nil {
@@ -63,13 +63,13 @@ func TestExportZipRoundTrip(t *testing.T) {
 	}
 	for p, want := range map[string]string{
 		"Home.md": "# Home", "Notes/déjà vu.md": "accents", "Notes/deep/x.json": `{"a":1}`,
-		"Attachments/pic.png": "\x89PNG-fake", ".memobrain/editor.json": `{"fontSize":14}`,
+		"Attachments/pic.png": "\x89PNG-fake", ".clarae/editor.json": `{"fontSize":14}`,
 	} {
 		if got[p] != want {
 			t.Errorf("%s = %q, want %q", p, got[p], want)
 		}
 	}
-	for _, absent := range []string{".memobrain/workspace.json", ".memobrain/cache/thumb.svg", ".trash/Old.md", ".trash/", "Notes/.DS_Store"} {
+	for _, absent := range []string{".clarae/workspace.json", ".clarae/cache/thumb.svg", ".trash/Old.md", ".trash/", "Notes/.DS_Store"} {
 		if _, ok := got[absent]; ok {
 			t.Errorf("%s must not be exported", absent)
 		}

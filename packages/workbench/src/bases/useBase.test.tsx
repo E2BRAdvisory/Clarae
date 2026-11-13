@@ -53,7 +53,7 @@ describe('useBase refresh', () => {
       paths: [path],
       changes: [{ type: 'modify' as const, path }],
     });
-    expect(baseNeedsRefresh(batch('.memobrain/workspace.json'))).toBe(false);
+    expect(baseNeedsRefresh(batch('.clarae/workspace.json'))).toBe(false);
     expect(baseNeedsRefresh(batch('A.md'))).toBe(true);
     expect(baseNeedsRefresh(batch('img/a.png'))).toBe(true);
     expect(baseNeedsRefresh({ vaultId, unknown: true, paths: [], changes: [] })).toBe(true);
@@ -69,7 +69,7 @@ describe('useBase refresh', () => {
     expect(run).toHaveBeenCalledTimes(1);
     const first = result.current.result;
 
-    changed(['.memobrain/workspace.json']);
+    changed(['.clarae/workspace.json']);
     await wait(REFRESH_MS + 300);
     expect(run).toHaveBeenCalledTimes(1);
 

@@ -1,6 +1,6 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { createClient } from '@memobrain/api-client';
+import { createClient } from '@clarae/api-client';
 import { fakeAuth } from '../test/utils';
 import { AuthProvider, useAuth, type AuthState } from './AuthProvider';
 import type { AuthUser } from './types';

@@ -9,7 +9,7 @@
 //             the plugin's own (positions mapped through the edits), never an attribute of the
 //             document: flipping it is not an edit and never makes the note dirty (A4 of the critique).
 //             A folded callout shows its body while the caret is in it.
-import { parseCalloutHead } from '@memobrain/markdown';
+import { parseCalloutHead } from '@clarae/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@milkdown/kit/prose/state';
 import { Decoration, DecorationSet, type EditorView } from '@milkdown/kit/prose/view';
@@ -30,7 +30,7 @@ interface Meta {
   flip: number;
 }
 
-export const calloutKey = new PluginKey<CalloutState>('memobrain-live-callouts');
+export const calloutKey = new PluginKey<CalloutState>('clarae-live-callouts');
 
 /** The head of the callout a blockquote is, with where its title line is in the document. */
 export interface CalloutAt {

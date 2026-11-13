@@ -3,7 +3,7 @@ import { useAppStore } from '../state/store';
 import type { OpenRequestPayload } from './events';
 
 /**
- * Handles a memobrain://open request: opens the vault when it is not the current
+ * Handles a clarae://open request: opens the vault when it is not the current
  * one (matched by name, then by path or id), then the file.
  */
 export async function followLinkPath(

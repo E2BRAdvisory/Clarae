@@ -229,7 +229,7 @@ func Rebase(path, from, to string) (string, bool) {
 }
 
 // ConfigDir is the per-vault configuration folder (the Obsidian ".obsidian" analogue).
-const ConfigDir = ".memobrain"
+const ConfigDir = ".clarae"
 
 // TrashDir is the optional in-vault trash folder.
 const TrashDir = ".trash"
@@ -249,7 +249,7 @@ func IsExcluded(normalized string, excludeTrash bool) bool {
 	}
 	// Staging files of atomic writes (vault.WriteFile): a crash can leave one behind
 	// and it must never be synchronized, indexed or listed.
-	if strings.HasPrefix(base, ".memobrain-tmp-") {
+	if strings.HasPrefix(base, ".clarae-tmp-") {
 		return true
 	}
 	if excludeTrash && (normalized == TrashDir || strings.HasPrefix(normalized, TrashDir+"/")) {
@@ -258,7 +258,7 @@ func IsExcluded(normalized string, excludeTrash bool) bool {
 	if !HasPrefix(normalized, ConfigDir) {
 		return false
 	}
-	// Inside .memobrain/: only user settings are synchronized (§3.4.6); everything
+	// Inside .clarae/: only user settings are synchronized (§3.4.6); everything
 	// device-specific or derived stays local.
 	for _, local := range []string{"cache", "snapshots"} {
 		if HasPrefix(normalized, ConfigDir+"/"+local) {

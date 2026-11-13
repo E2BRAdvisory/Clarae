@@ -1,4 +1,4 @@
-/* Components of the MemoBrain Notes UI design system: nd-* classes only, no element or global rule,
+/* Components of the Clarae notanda UI design system: nd-* classes only, no element or global rule,
    so they can be loaded next to another style sheet. They are drawn with the tokens (--nd-*) of
    tokens.css, which the console (styles.css) and the workbench (style.css, with its own palette)
    both load. */

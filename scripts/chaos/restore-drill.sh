@@ -5,7 +5,7 @@
 #
 # What it does, end to end:
 #   1. starts PostgreSQL 17 with WAL archiving and an S3 store (RustFS; falls back to MinIO when
-#      RustFS cannot do bucket versioning), all named memobrain-chaos-drill-<rand>-*;
+#      RustFS cannot do bucket versioning), all named clarae-chaos-drill-<rand>-*;
 #   2. runs the real cloud binary against them, creates data through the API (batch "a");
 #   3. takes a base backup (pg_basebackup) and a logical dump (pg_dump), enables bucket versioning;
 #   4. creates batch "b", notes the point-in-time T, then simulates an accident: batch "b" is
@@ -28,7 +28,7 @@ need docker; need go; need python3
 docker info >/dev/null 2>&1 || die "Docker is not running"
 
 RAND="$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
-P="memobrain-chaos-drill-$RAND"
+P="clarae-chaos-drill-$RAND"
 WORK="$DEV_DIR/chaos/drill-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$WORK"
 REPORT="$WORK/report.md"
@@ -39,7 +39,7 @@ PG_IMG=postgres:17
 CLOUD_PID=""; ISSUER_PID=""
 S3_IMPL=rustfs
 # Only ever remove things this script created: names are checked before every removal.
-mine() { case "$1" in memobrain-chaos-drill-"$RAND"*) return 0 ;; *) die "refusing to touch '$1'" ;; esac; }
+mine() { case "$1" in clarae-chaos-drill-"$RAND"*) return 0 ;; *) die "refusing to touch '$1'" ;; esac; }
 dk_rm() { mine "$1"; docker rm -f "$1" >/dev/null 2>&1 || true; }
 vol_rm() { mine "$1"; docker volume rm -f "$1" >/dev/null 2>&1 || true; }
 
@@ -61,20 +61,20 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-DRILL="$WORK/drilltool"; CLOUD="$WORK/memobrain-cloud"
+DRILL="$WORK/drilltool"; CLOUD="$WORK/clarae-cloud"
 step "Building drilltool and the cloud binary"
-(cd "$ROOT/services/cloud" && go build -o "$DRILL" ./test/drilltool && go build -o "$CLOUD" ./cmd/memobrain-cloud) || die "build failed"
+(cd "$ROOT/services/cloud" && go build -o "$DRILL" ./test/drilltool && go build -o "$CLOUD" ./cmd/clarae-cloud) || die "build failed"
 MANIFEST="$WORK/manifest.json"
 ISSUER="http://127.0.0.1:$ISS_PORT"
 API="http://127.0.0.1:$API_PORT"
-DBURL="postgres://memobrain:memobrain@127.0.0.1:$PG_PORT/memobrain?sslmode=disable"
+DBURL="postgres://clarae:clarae@127.0.0.1:$PG_PORT/clarae?sslmode=disable"
 
-psql_q() { docker exec -u postgres "$P-pg" psql -U memobrain -d "${2:-memobrain}" -Atqc "$1"; }
-wait_pg() { for _ in $(seq 1 60); do docker exec "$P-pg" pg_isready -U memobrain -d memobrain >/dev/null 2>&1 && return 0; sleep 1; done; die "PostgreSQL did not become ready"; }
+psql_q() { docker exec -u postgres "$P-pg" psql -U clarae -d "${2:-clarae}" -Atqc "$1"; }
+wait_pg() { for _ in $(seq 1 60); do docker exec "$P-pg" pg_isready -U clarae -d clarae >/dev/null 2>&1 && return 0; sleep 1; done; die "PostgreSQL did not become ready"; }
 
 start_pg() { # $1 = fresh|restored
   local extra=()
-  [ "$1" = fresh ] && extra=(-e POSTGRES_USER=memobrain -e POSTGRES_PASSWORD=memobrain -e POSTGRES_DB=memobrain)
+  [ "$1" = fresh ] && extra=(-e POSTGRES_USER=clarae -e POSTGRES_PASSWORD=clarae -e POSTGRES_DB=clarae)
   docker run -d --name "$P-pg" ${extra[@]+"${extra[@]}"} \
     -v "$P-pgdata:/var/lib/postgresql/data" -v "$P-wal:/wal" -v "$P-base:/base" \
     -p "127.0.0.1:$PG_PORT:5432" "$PG_IMG" \
@@ -100,8 +100,8 @@ has() { printf '%s' "$1" | grep -q "$2"; }
 start_cloud() { # waits for readiness
   [ -n "$CLOUD_PID" ] && { kill -9 "$CLOUD_PID" 2>/dev/null || true; CLOUD_PID=""; }
   LISTEN_ADDR="127.0.0.1:$API_PORT" GRPC_LISTEN_ADDR="127.0.0.1:$GRPC_PORT" DATABASE_URL="$DBURL" \
-  OIDC_ISSUER="$ISSUER" OIDC_AUDIENCE=memobrain-api OIDC_STATUS_CACHE_TTL=1s LOG_LEVEL=debug \
-  S3_ENDPOINT="http://127.0.0.1:$S3_PORT" S3_ACCESS_KEY=$AK S3_SECRET_KEY=$SK S3_BUCKET_BLOBS=memobrain-blobs S3_BUCKET_EXPORTS=memobrain-exports S3_USE_PATH_STYLE=true \
+  OIDC_ISSUER="$ISSUER" OIDC_AUDIENCE=clarae-api OIDC_STATUS_CACHE_TTL=1s LOG_LEVEL=debug \
+  S3_ENDPOINT="http://127.0.0.1:$S3_PORT" S3_ACCESS_KEY=$AK S3_SECRET_KEY=$SK S3_BUCKET_BLOBS=clarae-blobs S3_BUCKET_EXPORTS=clarae-exports S3_USE_PATH_STYLE=true \
   "$CLOUD" --role=all >>"$WORK/cloud.log" 2>&1 &
   CLOUD_PID=$!
   for _ in $(seq 1 60); do curl -fsS "$API/api/v1/readyz" >/dev/null 2>&1 && return 0; kill -0 "$CLOUD_PID" 2>/dev/null || { tail -20 "$WORK/cloud.log" >&2; die "cloud exited"; }; sleep 1; done
@@ -117,19 +117,19 @@ docker run --rm --user root -v "$P-wal:/wal" -v "$P-base:/base" --entrypoint cho
 start_pg fresh
 start_s3
 S3A=(-s3 "127.0.0.1:$S3_PORT" -ak "$AK" -sk "$SK")
-for b in memobrain-blobs memobrain-exports probe; do D s3 mkbucket "${S3A[@]}" -bucket "$b" >/dev/null; done
+for b in clarae-blobs clarae-exports probe; do D s3 mkbucket "${S3A[@]}" -bucket "$b" >/dev/null; done
 out="$(D s3 probe "${S3A[@]}" -bucket probe 2>&1)"; echo "$out" | tee -a "$REPORT"
 if ! has "$out" 'versioning=SUPPORTED'; then
   note "RustFS does not support bucket versioning: using MinIO for the object store of the drill."
   dk_rm "$P-s3"; vol_rm "$P-s3data"; docker volume create "$P-s3data" >/dev/null
   S3_IMPL=minio; start_s3
-  for b in memobrain-blobs memobrain-exports probe; do D s3 mkbucket "${S3A[@]}" -bucket "$b" >/dev/null; done
+  for b in clarae-blobs clarae-exports probe; do D s3 mkbucket "${S3A[@]}" -bucket "$b" >/dev/null; done
   out="$(D s3 probe "${S3A[@]}" -bucket probe 2>&1)"; echo "$out" | tee -a "$REPORT"
   has "$out" 'versioning=SUPPORTED' || die "MinIO versioning probe failed"
 fi
 note "object store used: $S3_IMPL"
-D s3 enable "${S3A[@]}" -bucket memobrain-blobs | tee -a "$REPORT"
-D s3 lifecycle "${S3A[@]}" -bucket memobrain-blobs 2>&1 | tee -a "$REPORT" || note "(lifecycle rules not supported by this store)"
+D s3 enable "${S3A[@]}" -bucket clarae-blobs | tee -a "$REPORT"
+D s3 lifecycle "${S3A[@]}" -bucket clarae-blobs 2>&1 | tee -a "$REPORT" || note "(lifecycle rules not supported by this store)"
 
 "$DRILL" issuer -addr "127.0.0.1:$ISS_PORT" >"$WORK/issuer.log" 2>&1 &
 ISSUER_PID=$!
@@ -143,9 +143,9 @@ D seed -api "$API" -issuer "$ISSUER" -manifest "$MANIFEST" -tag a -n 30 | tee -a
 
 step "3. Base backup + logical dump"
 T_BACKUP="$(date -u +%FT%TZ)"
-docker exec -u postgres "$P-pg" pg_basebackup -U memobrain -D /base/b1 -Ft -z -X stream -c fast
-docker exec -u postgres "$P-pg" pg_dump -U memobrain -Fc -f /base/memobrain.dump memobrain
-docker exec "$P-pg" ls -la /base/b1 /base/memobrain.dump | tee -a "$REPORT"
+docker exec -u postgres "$P-pg" pg_basebackup -U clarae -D /base/b1 -Ft -z -X stream -c fast
+docker exec -u postgres "$P-pg" pg_dump -U clarae -Fc -f /base/clarae.dump clarae
+docker exec "$P-pg" ls -la /base/b1 /base/clarae.dump | tee -a "$REPORT"
 note "backup taken at $T_BACKUP"
 COUNT_FILES_BACKUP="$(psql_q 'SELECT count(*) FROM files')"
 
@@ -169,14 +169,14 @@ HASH_A1="$(python3 -c "import json;print([f['hash'] for f in json.load(open('$MA
 KEY0="blobs/${HASH_A0:0:2}/$HASH_A0"; KEY1="blobs/${HASH_A1:0:2}/$HASH_A1"
 # The bucket was versioned after the objects of batch a existed in RustFS/MinIO? They were written
 # after "enable", so every object has a version.
-D s3 rm "${S3A[@]}" -bucket memobrain-blobs -key "$KEY0" | tee -a "$REPORT"
+D s3 rm "${S3A[@]}" -bucket clarae-blobs -key "$KEY0" | tee -a "$REPORT"
 vbc() { D verify-blobs -db "$DBURL" "${S3A[@]}" 2>&1 || true; }
 out="$(vbc)"; echo "$out" | tee -a "$REPORT"; has "$out" 'missing=1' || die "deleted object not detected"; ok "the consistency check detects the deleted object"
-D s3 restore "${S3A[@]}" -bucket memobrain-blobs -key "$KEY0" | tee -a "$REPORT"
+D s3 restore "${S3A[@]}" -bucket clarae-blobs -key "$KEY0" | tee -a "$REPORT"
 out="$(vbc)"; echo "$out" | tee -a "$REPORT"; has "$out" 'missing=0 size-mismatch=0' || die "object not healed"
-D s3 overwrite "${S3A[@]}" -bucket memobrain-blobs -key "$KEY1" | tee -a "$REPORT"
+D s3 overwrite "${S3A[@]}" -bucket clarae-blobs -key "$KEY1" | tee -a "$REPORT"
 out="$(vbc)"; echo "$out" | tee -a "$REPORT"; has "$out" 'size-mismatch=1' || die "overwritten object not detected"; ok "the consistency check detects the overwritten object"
-D s3 restore "${S3A[@]}" -bucket memobrain-blobs -key "$KEY1" | tee -a "$REPORT"
+D s3 restore "${S3A[@]}" -bucket clarae-blobs -key "$KEY1" | tee -a "$REPORT"
 out="$(vbc)"; echo "$out" | tee -a "$REPORT"; has "$out" 'missing=0 size-mismatch=0' || die "object not healed"
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ dk_rm "$P-scratch"
 docker run -d --name "$P-scratch" -e POSTGRES_PASSWORD=x -v "$P-base:/base:ro" "$PG_IMG" >/dev/null
 for _ in $(seq 1 60); do docker exec "$P-scratch" pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
 docker exec "$P-scratch" createdb -U postgres scratch
-docker exec "$P-scratch" sh -c 'pg_restore -U postgres -d scratch --no-owner /base/memobrain.dump' 2>&1 | tail -3 || true
+docker exec "$P-scratch" sh -c 'pg_restore -U postgres -d scratch --no-owner /base/clarae.dump' 2>&1 | tail -3 || true
 N_DUMP="$(docker exec "$P-scratch" psql -U postgres -d scratch -Atc 'SELECT count(*) FROM files')"
 note "files in the dump restored into the scratch DB: $N_DUMP (at backup time: $COUNT_FILES_BACKUP)"
 [ "$N_DUMP" = "$COUNT_FILES_BACKUP" ] || die "dump restore row count mismatch"

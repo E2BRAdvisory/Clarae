@@ -2,7 +2,7 @@
 // this order, the cheap and local ones first, so that with the function off nothing is asked of the
 // core at all. The core checks them again on its own account (AIAPI.Start refuses): this is what
 // keeps the UI, and the lazy chunk, from existing while the function is inactive.
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { aiBuild } from './build';
 import type { AiPort, AiStatus } from './port';
 import { featureOn, useManaged } from '../../../state/managed';

@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 
-	"memobrain/apps/desktop/internal/graph"
+	"clarae/apps/desktop/internal/graph"
 )
 
-// The graph view keeps its per-vault settings in .memobrain/graph.json.
+// The graph view keeps its per-vault settings in .clarae/graph.json.
 func init() { vaultConfigFiles["graph.json"] = true }
 
 // GraphAPI exposes the data of the Graph view (§2.5 "graph"). Layout and

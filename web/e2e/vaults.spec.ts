@@ -1,7 +1,7 @@
 import { expect, test, type Route } from '@playwright/test';
 import { ME, mockApi, signedIn } from './support';
 
-// The lifecycle of a cloud vault in the console (ADR-0037 §2, @memobrain/cloud-features): the REST
+// The lifecycle of a cloud vault in the console (ADR-0037 §2, @clarae/cloud-features): the REST
 // API is a small in-memory server here, so each step sees the result of the previous one.
 
 interface Vault {

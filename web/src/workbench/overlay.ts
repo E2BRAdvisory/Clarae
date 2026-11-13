@@ -3,7 +3,7 @@
  * built here with the DOM (no inline styles: the CSP forbids them; the look is in shell.css). One at a
  * time: showing an overlay replaces the previous one.
  */
-import { checkPassphrase } from '@memobrain/workbench/strength';
+import { checkPassphrase } from '@clarae/workbench/strength';
 import { message, plural } from './strings';
 
 export interface OverlayAction {

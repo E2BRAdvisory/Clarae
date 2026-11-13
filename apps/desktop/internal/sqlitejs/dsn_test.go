@@ -12,7 +12,7 @@ func TestParseDSN(t *testing.T) {
 		pragmas []string
 		wantErr bool
 	}{
-		{dsn: "file:/v/.memobrain/index.db?_pragma=journal_mode%28WAL%29&_pragma=busy_timeout%285000%29", path: "/v/.memobrain/index.db", pragmas: []string{"journal_mode(WAL)", "busy_timeout(5000)"}},
+		{dsn: "file:/v/.clarae/index.db?_pragma=journal_mode%28WAL%29&_pragma=busy_timeout%285000%29", path: "/v/.clarae/index.db", pragmas: []string{"journal_mode(WAL)", "busy_timeout(5000)"}},
 		{dsn: "file:/a/b.db", path: "/a/b.db"},
 		{dsn: "/plain/path.db", path: "/plain/path.db"},
 		{dsn: "file:?_pragma=x", wantErr: true},

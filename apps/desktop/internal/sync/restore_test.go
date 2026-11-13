@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // expiringRemote answers the next GET /changes with a 410 CURSOR_EXPIRED

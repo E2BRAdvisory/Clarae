@@ -3,8 +3,8 @@
 // and applies their embedded migrations:
 //
 //   - app.db   (data dir)        recent vaults, application preferences
-//   - index.db (<vault>/.memobrain/) derived search index, rebuildable at any time
-//   - sync.db  (<vault>/.memobrain/) synchronization state (M2)
+//   - index.db (<vault>/.clarae/) derived search index, rebuildable at any time
+//   - sync.db  (<vault>/.clarae/) synchronization state (M2)
 package store
 
 import (

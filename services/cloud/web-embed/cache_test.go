@@ -15,7 +15,7 @@ func cacheHandler(t *testing.T) (http.Handler, map[string][]byte) {
 	t.Helper()
 	files := map[string][]byte{
 		"index.html":             []byte("<html>" + strings.Repeat("console ", 200) + "</html>"),
-		"assets/app-1.js":        []byte(strings.Repeat("console.log('memobrain');\n", 400)),
+		"assets/app-1.js":        []byte(strings.Repeat("console.log('clarae');\n", 400)),
 		"assets/tiny-1.js":       []byte("console.log(1)"),
 		"icon.png":               bytes.Repeat([]byte{0x89, 'P', 'N', 'G'}, 400),
 		"core/sqlite3-ab.wasm":   bytes.Repeat([]byte("\x00asm-sqlite-"), 500),
@@ -113,19 +113,19 @@ func TestRawWasmIsCompressedToo(t *testing.T) {
 // The stored gzip WebAssembly is streamed decompressed with its exact length, and revalidates.
 func TestDecompressedWasmHasLengthAndValidator(t *testing.T) {
 	h, wasm := workbenchHandler(t)
-	rec := do(h, "/core/memobrain-core-ab.wasm", nil)
+	rec := do(h, "/core/clarae-core-ab.wasm", nil)
 	if rec.Header().Get("Content-Length") != strconv.Itoa(len(wasm)) || !bytes.Equal(rec.Body.Bytes(), wasm) {
 		t.Fatalf("Content-Length %q, body %d bytes, want %d", rec.Header().Get("Content-Length"), rec.Body.Len(), len(wasm))
 	}
 	etag := rec.Header().Get("ETag")
-	compressed := do(h, "/core/memobrain-core-ab.wasm", map[string]string{"Accept-Encoding": "gzip"})
+	compressed := do(h, "/core/clarae-core-ab.wasm", map[string]string{"Accept-Encoding": "gzip"})
 	if etag == "" || etag == compressed.Header().Get("ETag") {
 		t.Fatalf("ETags: plain %q compressed %q", etag, compressed.Header().Get("ETag"))
 	}
-	if again := do(h, "/core/memobrain-core-ab.wasm", map[string]string{"If-None-Match": etag}); again.Code != http.StatusNotModified || again.Body.Len() != 0 {
+	if again := do(h, "/core/clarae-core-ab.wasm", map[string]string{"If-None-Match": etag}); again.Code != http.StatusNotModified || again.Body.Len() != 0 {
 		t.Fatalf("revalidation: %d", again.Code)
 	}
-	if head := get(h, http.MethodHead, "/core/memobrain-core-ab.wasm"); head.Code != http.StatusOK || head.Body.Len() != 0 ||
+	if head := get(h, http.MethodHead, "/core/clarae-core-ab.wasm"); head.Code != http.StatusOK || head.Body.Len() != 0 ||
 		head.Header().Get("Content-Length") != strconv.Itoa(len(wasm)) {
 		t.Fatalf("HEAD: %d len %d Content-Length %q", head.Code, head.Body.Len(), head.Header().Get("Content-Length"))
 	}

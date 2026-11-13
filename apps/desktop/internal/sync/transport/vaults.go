@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/shared/apiclient"
-	"memobrain/shared/syncproto"
+	"clarae/shared/apiclient"
+	"clarae/shared/syncproto"
 )
 
 // API types of the vault endpoints (generated from api/openapi.yaml).

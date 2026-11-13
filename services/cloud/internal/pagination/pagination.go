@@ -14,8 +14,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 // The page size of a list operation unless its contract says otherwise.

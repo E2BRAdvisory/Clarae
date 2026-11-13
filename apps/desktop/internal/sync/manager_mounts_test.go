@@ -24,9 +24,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/syncproto"
 )
 
 const (
@@ -441,7 +441,7 @@ func TestReconcileMountsReportsAFailedMountAndHandlesTheOthers(t *testing.T) {
 	mountsDir := t.TempDir()
 	good := filepath.Join(mountsDir, mountShareA)
 	mountAt(t, good, mountShareA, lifeOwner)
-	bad := filepath.Join(mountsDir, mountShareB, ".memobrain")
+	bad := filepath.Join(mountsDir, mountShareB, ".clarae")
 	if err := os.MkdirAll(bad, 0o755); err != nil {
 		t.Fatal(err)
 	}

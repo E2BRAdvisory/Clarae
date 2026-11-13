@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/notify"
-	"memobrain/services/cloud/internal/sharing"
-	"memobrain/services/cloud/internal/vaults"
+	"clarae/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/sharing"
+	"clarae/services/cloud/internal/vaults"
 )
 
 // Integrity of shares and grants (M12-W1): invitations sent again, idempotent answers,

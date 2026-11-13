@@ -1,4 +1,4 @@
-// Per-vault drawing settings (.memobrain/drawing.json, synced with the vault like the other
+// Per-vault drawing settings (.clarae/drawing.json, synced with the vault like the other
 // settings files). Unknown keys and values of the wrong type are ignored so a hand-edited file
 // cannot break the app.
 import { create } from 'zustand';

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/indexer"
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/indexer"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/vault"
 
 	"github.com/rs/zerolog"
 )

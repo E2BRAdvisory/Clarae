@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Button } from '@memobrain/ui';
+import { Button } from '@clarae/ui';
 import type { LeaveResult as ForgetResult } from '../workbench/forget';
 import { updateMarker } from '../workbench/markers';
 import { accountKey } from '../workbench/storage';

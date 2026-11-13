@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"memobrain/apps/desktop/internal/canvas"
-	"memobrain/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/canvas"
+	"clarae/apps/desktop/internal/parser"
 )
 
 // rewritable is a link a rename or a redirect may rewrite in place.

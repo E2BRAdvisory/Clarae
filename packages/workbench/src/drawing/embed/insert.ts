@@ -60,7 +60,7 @@ export function imagePatch(
       status: 'saved',
       fileId,
       scale: [1, 1],
-      customData: { memobrain: { kind, path: img.path } },
+      customData: { clarae: { kind, path: img.path } },
     },
   );
   return {
@@ -139,7 +139,7 @@ export function noteCardPatch(
       roundness: { type: 3 },
       link: noteLink(path),
       boundElements: [{ id: textId, type: 'text' }],
-      customData: { memobrain: { kind: 'note', path } },
+      customData: { clarae: { kind: 'note', path } },
     },
   );
   const text = baseElement(

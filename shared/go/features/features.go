@@ -2,7 +2,7 @@
 // §2.6.6), shared by the cloud service and the desktop core (and so by the web workbench, which
 // runs the same core). The flag names, their defaults and the product defaults are generated
 // from the schema by `task gen` (features_gen.go); the TypeScript twin is
-// `@memobrain/api-client/features`. Add a flag to the schema, with a default and a description,
+// `@clarae/api-client/features`. Add a flag to the schema, with a default and a description,
 // and run `task gen`: nothing else lists flags by hand.
 package features
 

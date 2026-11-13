@@ -13,12 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/users/usersdb"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/users/usersdb"
+	"clarae/shared/syncproto"
 )
 
 // QuotaUnlimited is the sentinel stored in quota_bytes_override and returned

@@ -1,10 +1,10 @@
 // The cloud-management bindings speak the types of api/openapi.yaml (ADR-0045 §6): the models Wails
-// generates from the core's package cloudapi must equal the Schemas of @memobrain/api-client, field
+// generates from the core's package cloudapi must equal the Schemas of @clarae/api-client, field
 // for field, optional for optional, enum for enum. These assertions are checked by `tsc` (the
 // typecheck of the package), so a drift between the Go DTOs and the OpenAPI fails the build; the
 // Go side checks the same types against shared/go/apiclient (cloudapi_test.go).
 import { describe, expectTypeOf, it } from 'vitest';
-import type { Schemas } from '@memobrain/api-client';
+import type { Schemas } from '@clarae/api-client';
 import type * as SharingAPI from '../../wailsjs/go/app/SharingAPI';
 import type * as SyncAPI from '../../wailsjs/go/app/SyncAPI';
 

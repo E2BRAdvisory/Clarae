@@ -93,7 +93,7 @@ async function printDrawing(out: { base64: string }): Promise<void> {
   beginPrint(
     `<p><img alt="" style="max-width:100%" src="data:image/svg+xml;base64,${out.base64}"></p>`,
   );
-  const imgs = [...document.querySelectorAll<HTMLImageElement>('#memobrain-print img')];
+  const imgs = [...document.querySelectorAll<HTMLImageElement>('#clarae-print img')];
   await Promise.all(imgs.map((i) => i.decode().catch(() => undefined)));
   window.addEventListener('afterprint', endPrint, { once: true });
   try {
@@ -141,7 +141,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   const shownVersion = useRef(0);
   const libraryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // The library lives in the vault (.memobrain/excalidraw-library.json) and syncs with it.
+  // The library lives in the vault (.clarae/excalidraw-library.json) and syncs with it.
   useEffect(() => {
     void api.vault
       .readConfig(vaultId, LIBRARY_FILE)
@@ -304,7 +304,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     (fromId?: string) => {
       startEvent.current = window.event ?? null;
       if (excalidraw) {
-        const mb = (extra.current['memobrain'] as Record<string, unknown> | undefined) ?? {};
+        const mb = (extra.current['clarae'] as Record<string, unknown> | undefined) ?? {};
         setSlideOpts({
           loop: mb['slideLoop'] === 'true',
           numbers: mb['slideNumbers'] !== 'false',
@@ -414,13 +414,13 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       files: () => excalidraw.getFiles(),
       setFileSetting: (key, value) => {
         const mb = {
-          ...((extra.current['memobrain'] as Record<string, unknown> | undefined) ?? {}),
+          ...((extra.current['clarae'] as Record<string, unknown> | undefined) ?? {}),
         };
         if (value === null) delete mb[key];
         else mb[key] = value;
         const next = { ...extra.current };
-        if (Object.keys(mb).length) next['memobrain'] = mb;
-        else delete next['memobrain'];
+        if (Object.keys(mb).length) next['clarae'] = mb;
+        else delete next['clarae'];
         extra.current = next;
         // Persist now: the setting lives in the file.
         docRef.current.edit(
@@ -452,7 +452,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       },
       startSlideshow: (fromId) => startPresent(fromId),
       fileSettings: () => ({
-        ...((extra.current['memobrain'] as Record<string, unknown> | undefined) ?? {}),
+        ...((extra.current['clarae'] as Record<string, unknown> | undefined) ?? {}),
       }),
       showFrame: (id) => {
         const frame = excalidraw.getSceneElements().find((e) => e.id === id);
@@ -499,7 +499,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         }
         if (pages.length === 0) return;
         beginPrint(pages.join(''));
-        const imgs = [...document.querySelectorAll<HTMLImageElement>('#memobrain-print img')];
+        const imgs = [...document.querySelectorAll<HTMLImageElement>('#clarae-print img')];
         await Promise.all(imgs.map((i) => i.decode().catch(() => undefined)));
         window.addEventListener('afterprint', endPrint, { once: true });
         try {
@@ -573,7 +573,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // A file dragged from the file explorer: images and notes are added where it is dropped.
   const onCanvasDrop = useCallback(
     (e: React.DragEvent) => {
-      const dropped = e.dataTransfer.getData('application/x-memobrain-path');
+      const dropped = e.dataTransfer.getData('application/x-clarae-path');
       if (!excalidraw || !dropped) return;
       e.preventDefault();
       e.stopPropagation();
@@ -590,7 +590,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     [excalidraw, path],
   );
   const onCanvasDragOver = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('application/x-memobrain-path')) return;
+    if (!e.dataTransfer.types.includes('application/x-clarae-path')) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'copy';
@@ -800,7 +800,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     }
     const cfg = useDrawingSettings.getState().settings;
     // A drawing can override the vault's auto-export choice (stored in the file itself).
-    const own = (extra.current['memobrain'] as { autoExport?: unknown } | undefined)?.autoExport;
+    const own = (extra.current['clarae'] as { autoExport?: unknown } | undefined)?.autoExport;
     const mode =
       own === 'none' || own === 'png' || own === 'svg' || own === 'both' ? own : cfg.autoExport;
     const plan = autoExportPlan(mode, cfg.autoExportTheme);

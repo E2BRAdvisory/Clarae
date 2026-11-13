@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"memobrain/apps/desktop/internal/auth"
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // AuthAPI exposes the cloud session to the frontend (§2.5 "auth").

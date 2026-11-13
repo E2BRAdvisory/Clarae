@@ -14,8 +14,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/auth"
-	syncpkg "memobrain/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/auth"
+	syncpkg "clarae/apps/desktop/internal/sync"
 )
 
 const testShareID = "0198f1c2-aaaa-7bbb-8ccc-000000000041"
@@ -48,7 +48,7 @@ func TestRemoveMountRefusesAnInvalidShareID(t *testing.T) {
 	}
 	for _, dir := range []string{victim, mount} {
 		// The folder itself (the browser core keeps sync.db in sqlite-wasm).
-		if _, err := os.Stat(filepath.Join(dir, ".memobrain")); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, ".clarae")); err != nil {
 			t.Fatalf("%s was touched: %v", dir, err)
 		}
 	}

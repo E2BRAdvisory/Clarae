@@ -24,7 +24,7 @@ INSERT INTO blobs (hash, size, storage_key) VALUES ($1, $2, $3) ON CONFLICT (has
 -- its object by the garbage collector until the transaction ends: under this
 -- lock a row is inserted only once its object is verified, and the collector
 -- deletes an object only when no row exists (see ingestFile and LockObject).
-SELECT pg_advisory_xact_lock(hashtextextended('memobrain.blob:' || sqlc.arg(hash)::text, 0));
+SELECT pg_advisory_xact_lock(hashtextextended('clarae.blob:' || sqlc.arg(hash)::text, 0));
 
 -- name: RenewUnreferencedBlob :exec
 -- An upload linking a blob nobody references restarts its grace period: the

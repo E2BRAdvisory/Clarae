@@ -14,7 +14,7 @@
  * The localStorage key of the markers of versions up to 1.3, which had no account (storage.ts): read
  * only to adopt or delete the copies they describe.
  */
-export const MARKERS_KEY = 'memobrain.workbench.vaults';
+export const MARKERS_KEY = 'clarae.workbench.vaults';
 
 /** The localStorage key of an account's markers (`account` is storage.ts accountKey). */
 export const markersKey = (account: string): string => `${MARKERS_KEY}@${account}`;
@@ -164,7 +164,7 @@ export async function sweepPrivateCopies(
       removeMarker(account, id);
       removed.push(id);
     } catch (e) {
-      console.warn(`memobrain: could not remove the copy of vault ${id}:`, e);
+      console.warn(`clarae: could not remove the copy of vault ${id}:`, e);
     }
   }
   return removed;

@@ -5,7 +5,7 @@
 // with link updates, attachments and vault settings files.
 // Install with installWailsMock() before the application modules are used.
 import { parseDocument } from 'yaml';
-import { extract, splitFrontmatter } from '@memobrain/markdown';
+import { extract, splitFrontmatter } from '@clarae/markdown';
 import { linkInfo } from '../../app/api';
 import type { FileChange } from '../../app/events';
 import { Events } from '../../app/events';
@@ -61,7 +61,7 @@ type Handler = (...data: unknown[]) => void;
 
 export interface MockVault {
   info: VaultInfo;
-  /** Text files: path -> content. Includes .memobrain/*.json settings. */
+  /** Text files: path -> content. Includes .clarae/*.json settings. */
   files: Map<string, string>;
   /** Binary attachments: path -> base64. */
   binaries: Map<string, string>;
@@ -196,10 +196,10 @@ const lower = (s: string): string => s.toLowerCase();
 function entriesOf(v: MockVault): Entry[] {
   const out: Entry[] = [];
   const dirs = new Set<string>();
-  // Device-local files inside .memobrain/ are not part of the vault tree (pathrules.IsExcluded).
+  // Device-local files inside .clarae/ are not part of the vault tree (pathrules.IsExcluded).
   const all = [...v.files.keys(), ...v.binaries.keys()].filter(
     (p) =>
-      !/^\.memobrain\/(workspace[^/]*\.json|(index|sync|app)\.db[^/]*|cache\/.*|snapshots\/.*)$/.test(
+      !/^\.clarae\/(workspace[^/]*\.json|(index|sync|app)\.db[^/]*|cache\/.*|snapshots\/.*)$/.test(
         p,
       ),
   );
@@ -507,9 +507,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
     RebuildIndex: (): Promise<void> => Promise.resolve(),
     ReadConfig: (id: string, name: string): Promise<string> =>
-      Promise.resolve(vaultOf(id).files.get('.memobrain/' + name) ?? ''),
+      Promise.resolve(vaultOf(id).files.get('.clarae/' + name) ?? ''),
     WriteConfig: (id: string, name: string, content: string): Promise<void> => {
-      vaultOf(id).files.set('.memobrain/' + name, content);
+      vaultOf(id).files.set('.clarae/' + name, content);
       return Promise.resolve();
     },
     ReadBinary: (id: string, path: string): Promise<BinaryContent> => {
@@ -827,7 +827,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
 
   const schemaOf = (v: MockVault): Record<string, string> => {
     try {
-      return JSON.parse(v.files.get('.memobrain/types.json') || '{}') as Record<string, string>;
+      return JSON.parse(v.files.get('.clarae/types.json') || '{}') as Record<string, string>;
     } catch {
       return {};
     }
@@ -868,7 +868,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       const s = schemaOf(v);
       if (kind) s[key] = kind;
       else delete s[key];
-      v.files.set('.memobrain/types.json', JSON.stringify(s, null, 2));
+      v.files.set('.clarae/types.json', JSON.stringify(s, null, 2));
       return Promise.resolve();
     },
     Update: (
@@ -950,7 +950,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         profile: {
           userId: 'u1',
           username: 'user1',
-          email: 'user1@memobrain.local',
+          email: 'user1@clarae.local',
           displayName: 'Uno',
           role: 'user',
         },
@@ -1609,8 +1609,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const GraphAPI = {
     Build: (id: string, o: GraphOptions): Promise<GraphData> => {
       // Benchmarks and e2e runs can ask for a synthetic graph of a given size.
-      const fixture = (window as unknown as { __MEMOBRAIN_GRAPH_FIXTURE__?: number })
-        .__MEMOBRAIN_GRAPH_FIXTURE__;
+      const fixture = (window as unknown as { __CLARAE_GRAPH_FIXTURE__?: number })
+        .__CLARAE_GRAPH_FIXTURE__;
       if (fixture) return Promise.resolve(syntheticGraph(fixture));
       const v = vaultOf(id);
       const notes = [...v.files.keys()].filter(isNote);

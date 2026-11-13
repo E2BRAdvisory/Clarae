@@ -68,7 +68,7 @@ const oauthError = (error: string) => new ErrorResponse({ error });
 const auth = (renewRetryMs: number[] = [0, 0]) => createOidcAuth(load as never, [], renewRetryMs);
 
 const load = () =>
-  Promise.resolve({ issuer: 'https://idp.example/realms/m', webClientId: 'memobrain-web' });
+  Promise.resolve({ issuer: 'https://idp.example/realms/m', webClientId: 'clarae-web' });
 
 const user = (over: Partial<FakeUser>): FakeUser => ({
   access_token: 'header.e30.sig',

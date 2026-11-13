@@ -24,7 +24,7 @@ func TestWindowsInstallerCommandRuns(t *testing.T) {
 	installed := filepath.Join(dir, "installed.txt")
 	relaunched := filepath.Join(dir, "relaunched.txt")
 	installer := filepath.Join(dir, "setup (1).cmd")
-	exe := filepath.Join(dir, "memobrain.cmd")
+	exe := filepath.Join(dir, "clarae.cmd")
 	if err := os.WriteFile(installer, []byte("@echo %1> \""+installed+"\"\r\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}

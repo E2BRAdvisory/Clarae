@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"memobrain/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/auth"
 )
 
 // onSignedIn runs after a login: configuration first, then the mounts.

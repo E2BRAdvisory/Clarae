@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/events"
 )
 
 // fakeWindow records the events and the quits of the guard.

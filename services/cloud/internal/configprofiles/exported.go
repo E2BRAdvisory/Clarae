@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/configprofiles/configprofilesdb"
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/configprofiles/configprofilesdb"
+	"clarae/services/cloud/internal/db"
 )
 
 // Types of the module's public API and of the exported queries.

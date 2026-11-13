@@ -9,9 +9,9 @@ function token(payload: object): string {
 
 describe('rolesFromAccessToken', () => {
   it('reads realm roles', () => {
-    expect(
-      rolesFromAccessToken(token({ realm_access: { roles: ['memobrain-admin', 'x'] } })),
-    ).toEqual(['memobrain-admin', 'x']);
+    expect(rolesFromAccessToken(token({ realm_access: { roles: ['clarae-admin', 'x'] } }))).toEqual(
+      ['clarae-admin', 'x'],
+    );
   });
   it('is empty for tokens without roles or malformed ones', () => {
     expect(rolesFromAccessToken(token({}))).toEqual([]);

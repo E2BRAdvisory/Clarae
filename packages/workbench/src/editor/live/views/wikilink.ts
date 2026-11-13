@@ -8,7 +8,7 @@
 //
 // The view sets the attributes the interactions read (`data-target`, `data-heading`, `data-block`) and
 // the resolution state; the part of an alias that is hidden is an inline decoration (decorations.ts).
-import { parseWikilinkInner } from '@memobrain/markdown';
+import { parseWikilinkInner } from '@clarae/markdown';
 import type { Node as PMNode } from '@milkdown/kit/prose/model';
 import type { NodeViewConstructor, ViewMutationRecord } from '@milkdown/kit/prose/view';
 import { $view } from '@milkdown/kit/utils';

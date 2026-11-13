@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"memobrain/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/app"
 )
 
 // The core starts in ServiceStartup, before the loop of the platform runs: an error dialog asked
@@ -19,13 +19,13 @@ func TestErrorDialogWaitsForTheStartOfTheLoop(t *testing.T) {
 	h.showError = func(title, message string) { shown = append(shown, title+"|"+message) }
 	ctx := context.Background()
 
-	h.ErrorDialog(ctx, "MemoBrain Notes", "Cannot open the application database: boom")
-	h.ErrorDialog(ctx, "MemoBrain Notes", "second")
+	h.ErrorDialog(ctx, "Clarae notanda", "Cannot open the application database: boom")
+	h.ErrorDialog(ctx, "Clarae notanda", "second")
 	if len(shown) != 0 {
 		t.Fatalf("shown before the loop runs: %v", shown)
 	}
 	h.Started()
-	if len(shown) != 2 || shown[0] != "MemoBrain Notes|Cannot open the application database: boom" || shown[1] != "MemoBrain Notes|second" {
+	if len(shown) != 2 || shown[0] != "Clarae notanda|Cannot open the application database: boom" || shown[1] != "Clarae notanda|second" {
 		t.Fatalf("shown = %v", shown)
 	}
 	h.Started()                     // a second signal shows nothing more

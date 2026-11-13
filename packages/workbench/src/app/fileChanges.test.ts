@@ -94,7 +94,7 @@ describe('applyVaultChanges', () => {
     });
     qc.setQueryData(
       ['tree', 'v'],
-      [dir('Notes'), file('Notes/a.md'), file('b.md'), file('pic.png'), dir('.memobrain')],
+      [dir('Notes'), file('Notes/a.md'), file('b.md'), file('pic.png'), dir('.clarae')],
     );
   });
   const tree = () => (qc.getQueryData<Entry[]>(['tree', 'v']) ?? []).map((e) => e.path);
@@ -130,8 +130,8 @@ describe('applyVaultChanges', () => {
         { type: 'modify', path: 'pic.png', entry: file('pic.png', 5) },
         {
           type: 'modify',
-          path: '.memobrain/bookmarks.json',
-          entry: file('.memobrain/bookmarks.json'),
+          path: '.clarae/bookmarks.json',
+          entry: file('.clarae/bookmarks.json'),
         },
       ]),
     );
@@ -146,9 +146,9 @@ describe('applyVaultChanges', () => {
         { type: 'delete', path: 'b.md' },
       ]),
     );
-    expect(tree()).toEqual(['Notes', 'Notes/a.md', 'pic.png', '.memobrain', 'Notes/c.md']);
+    expect(tree()).toEqual(['Notes', 'Notes/a.md', 'pic.png', '.clarae', 'Notes/c.md']);
     applyVaultChanges(qc, batch([{ type: 'delete', path: 'Notes' }]));
-    expect(tree()).toEqual(['pic.png', '.memobrain']);
+    expect(tree()).toEqual(['pic.png', '.clarae']);
     expect(invalidated).not.toContain('["tree","v"]');
   });
 

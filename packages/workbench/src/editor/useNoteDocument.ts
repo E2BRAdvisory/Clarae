@@ -303,7 +303,7 @@ export function useNoteDocument(
           const copy = await rescue();
           if (copy) await reportFlush({ failed: [], rescued: [copy] });
         } catch (e) {
-          console.error(`memobrain: unsaved edits of ${path} could not be written`, e);
+          console.error(`clarae: unsaved edits of ${path} could not be written`, e);
           await reportFlush({ failed: [path], rescued: [] });
         }
       })();

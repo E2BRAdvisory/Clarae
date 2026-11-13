@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/apps/desktop/internal/auth"
-	"memobrain/apps/desktop/internal/history"
-	flags "memobrain/shared/features"
+	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/history"
+	flags "clarae/shared/features"
 )
 
 // Configuration keys the backend applies itself (the frontend handles the others).
@@ -98,10 +98,10 @@ func pathV2Enabled(cfg map[string]any) bool {
 }
 
 // envRedirectMode is the redirect mode forced from the environment
-// (MEMOBRAIN_AUTH_REDIRECT, used by the manual checklist); "" lets the
+// (CLARAE_AUTH_REDIRECT, used by the manual checklist); "" lets the
 // Config Profile decide.
 func envRedirectMode() auth.RedirectMode {
-	return auth.ParseRedirectMode(os.Getenv("MEMOBRAIN_AUTH_REDIRECT"))
+	return auth.ParseRedirectMode(os.Getenv("CLARAE_AUTH_REDIRECT"))
 }
 
 // snapshotBeforeOverwrite keeps the local content a sync merge is about to

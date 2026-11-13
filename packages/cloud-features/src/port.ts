@@ -1,8 +1,8 @@
 // The one interface the cloud management UI depends on (ADR-0037 §2). Two adapters implement it:
-// RestCloudPort (the web console, REST through @memobrain/api-client) and CoreCloudPort (desktop
-// and web workbench, the Go bindings; it lives in @memobrain/workbench, next to the bindings it
+// RestCloudPort (the web console, REST through @clarae/api-client) and CoreCloudPort (desktop
+// and web workbench, the Go bindings; it lives in @clarae/workbench, next to the bindings it
 // calls). The data types are the ones generated from api/openapi.yaml.
-import type { Schemas } from '@memobrain/api-client';
+import type { Schemas } from '@clarae/api-client';
 
 /** A cloud vault as the API describes it; `deleted_at` is set on a soft-deleted one. */
 export type CloudVault = Schemas['Vault'];

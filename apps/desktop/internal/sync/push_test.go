@@ -17,10 +17,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/syncproto"
 )
 
 // memRemote is an empty vault on a server that accepts every commit. Blobs
@@ -75,7 +75,7 @@ func newTestEngine(t testing.TB, remote Remote, maxFile int64) (*Engine, string)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sdb, err := store.Open(context.Background(), filepath.Join(dir, ".memobrain", "sync.db"), store.KindSync)
+	sdb, err := store.Open(context.Background(), filepath.Join(dir, ".clarae", "sync.db"), store.KindSync)
 	if err != nil {
 		t.Fatal(err)
 	}

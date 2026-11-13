@@ -20,7 +20,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/app"
 )
 
 // Output is the generated tree, relative to the repository root.

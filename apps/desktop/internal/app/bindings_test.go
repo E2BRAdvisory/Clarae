@@ -13,8 +13,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/store"
-	syncpkg "memobrain/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/store"
+	syncpkg "clarae/apps/desktop/internal/sync"
 )
 
 func newTestApp(t *testing.T) (*App, VaultInfo, string) {
@@ -85,7 +85,7 @@ func TestVaultConfigAllowList(t *testing.T) {
 	if err := v.WriteConfig(info.ID, "types.json", `{"a":"bogus"}`); err == nil {
 		t.Error("invalid schema must be refused")
 	}
-	if _, err := os.Stat(filepath.Join(root, ".memobrain", "editor.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, ".clarae", "editor.json")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -214,7 +214,7 @@ func TestDrawingPreviewCache(t *testing.T) {
 	if got, _ := d.ReadPreview(info.ID, hash); !strings.HasPrefix(got, "<svg") {
 		t.Fatalf("round trip: %q", got)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".memobrain", "cache", "drawings", hash+".svg")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, ".clarae", "cache", "drawings", hash+".svg")); err != nil {
 		t.Fatal(err)
 	}
 	for name, c := range map[string]struct{ hash, svg string }{

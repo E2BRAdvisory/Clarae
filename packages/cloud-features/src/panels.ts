@@ -1,5 +1,5 @@
 // The heavier components of the package, for hosts that load them on demand (the workbench keeps
-// them out of its initial bundle: `lazy(() => import('@memobrain/cloud-features/panels'))`). The
+// them out of its initial bundle: `lazy(() => import('@clarae/cloud-features/panels'))`). The
 // same components are exported by the package's main entry.
 export { CloudVaultsTable } from './CloudVaultsTable';
 export { DevicesPanel } from './DevicesPanel';

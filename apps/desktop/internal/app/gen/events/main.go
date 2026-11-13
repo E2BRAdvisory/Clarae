@@ -14,8 +14,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/events"
 )
 
 // Output is the generated file, relative to the repository root.

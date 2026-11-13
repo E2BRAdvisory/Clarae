@@ -10,7 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/system"
+	"clarae/services/cloud/internal/system"
 )
 
 func TestInternalOnlyRefusesProxiedRequests(t *testing.T) {

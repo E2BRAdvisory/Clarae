@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/blobs"
-	"memobrain/services/cloud/internal/jobs"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/blobs"
+	"clarae/services/cloud/internal/jobs"
+	"clarae/shared/syncproto"
 )
 
 func (e *env) jobs(now time.Time) *jobs.Runner {

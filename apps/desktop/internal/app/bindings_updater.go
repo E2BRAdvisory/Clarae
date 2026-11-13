@@ -11,8 +11,8 @@ import (
 	"os"
 	"sync"
 
-	"memobrain/apps/desktop/internal/events"
-	"memobrain/apps/desktop/internal/updater"
+	"clarae/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/updater"
 )
 
 // EventUpdaterStatus carries an updater.Status to the frontend (desktop only: the browser build has
@@ -34,7 +34,7 @@ func (a *App) updaterService() (*updater.Service, error) {
 		return a.updates.svc, nil
 	}
 	reason := ""
-	if os.Getenv("MEMOBRAIN_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
+	if os.Getenv("CLARAE_UPDATES") == "off" { // enterprise switch (managed images, offline sites)
 		reason = "updates are disabled by the administrator"
 	}
 	svc, err := updater.New(updater.Options{

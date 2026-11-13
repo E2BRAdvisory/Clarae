@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"memobrain/apps/desktop/internal/drawing"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/drawing"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // DrawingAPI stores the SVG previews of drawings (§M3-WP2). The frontend renders

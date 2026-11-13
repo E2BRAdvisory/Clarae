@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/revisions/revisionsdb"
-	syncmod "memobrain/services/cloud/internal/sync"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/revisions/revisionsdb"
+	syncmod "clarae/services/cloud/internal/sync"
 )
 
 // HTTP implements the history endpoints of the generated strict server.

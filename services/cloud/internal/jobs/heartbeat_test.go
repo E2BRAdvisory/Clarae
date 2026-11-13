@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/db"
 )
 
 // The scheduler heartbeat advances while Run is active, even though no job

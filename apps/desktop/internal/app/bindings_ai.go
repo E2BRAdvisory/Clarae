@@ -13,9 +13,9 @@ import (
 	"errors"
 	"sync"
 
-	"memobrain/apps/desktop/internal/ai"
-	"memobrain/apps/desktop/internal/events"
-	flags "memobrain/shared/features"
+	"clarae/apps/desktop/internal/ai"
+	"clarae/apps/desktop/internal/events"
+	flags "clarae/shared/features"
 )
 
 // Codes of the errors of AIAPI (see the binding errors of errors.go).

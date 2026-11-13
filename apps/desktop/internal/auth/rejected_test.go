@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // A token the cloud refused is dropped: the next Token call refreshes it. A
@@ -88,7 +88,7 @@ func TestLoginRefusesPlainHTTP(t *testing.T) {
 		t.Fatalf("state: %+v", st)
 	}
 
-	cloud := newFakeCloud(t, "http://idp.example.com/realms/memobrain")
+	cloud := newFakeCloud(t, "http://idp.example.com/realms/clarae")
 	if err := svc.Login(ctx, cloud.URL); !errors.Is(err, transport.ErrInsecureURL) {
 		t.Fatalf("err: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestLoginRefusesPlainHTTP(t *testing.T) {
 func TestRestoreSkipsAnInsecureSession(t *testing.T) {
 	svc, secrets := newService(t, RedirectAuto, &browser{t: t})
 	const server = "http://cloud.example.com"
-	if err := saveSession(svc.opts.DataDir, &persisted{ServerURL: server, Issuer: "https://idp.example.com/realms/memobrain", ClientID: "memobrain-desktop"}); err != nil {
+	if err := saveSession(svc.opts.DataDir, &persisted{ServerURL: server, Issuer: "https://idp.example.com/realms/clarae", ClientID: "clarae-desktop"}); err != nil {
 		t.Fatal(err)
 	}
 	_ = secrets.Set(server, "rt-1")

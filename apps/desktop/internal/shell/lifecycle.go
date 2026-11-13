@@ -72,7 +72,7 @@ func (l *Lifecycle) Start() {
 }
 
 // DomReady forwards the "frontend ready" signal of the shim to the core: it delivers the
-// memobrain:// URLs that arrived before.
+// clarae:// URLs that arrived before.
 func (l *Lifecycle) DomReady() { l.core.DomReady(l.ctx) }
 
 // Stop shuts the core down once, then cancels its context. Concurrent callers wait for the first

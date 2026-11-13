@@ -6,7 +6,7 @@ import { VAULTS_PATH, api, bind, markersKey, signIn } from './support';
 // recovery key once (the keys are made by the Go core, never in TypeScript); the page then continues
 // as a normal open of the new vault. Start the stack first (after `task web-build`):
 //   scripts/run-desktop-with-cloud.sh --cloud-only --keep
-// Run with: yarn workspace @memobrain/web e2e:cloud
+// Run with: yarn workspace @clarae/web e2e:cloud
 
 const PASSPHRASE = 'correct horse battery staple 42';
 

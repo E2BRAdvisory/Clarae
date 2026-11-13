@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/vaults/vaultsdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/vaults/vaultsdb"
 )
 
 // Types of the exported queries.

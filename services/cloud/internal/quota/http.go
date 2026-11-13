@@ -3,8 +3,8 @@ package quota
 import (
 	"context"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
 )
 
 // HTTP implements GET /me/usage.

@@ -100,7 +100,7 @@ describe('Slideshow tab of a presentation', () => {
         name: 'Leave out of the presentation',
       }),
     );
-    expect(view.state.doc.toString()).toContain('<!-- memobrain: hidden -->');
+    expect(view.state.doc.toString()).toContain('<!-- clarae: hidden -->');
     await waitFor(() =>
       expect(screen.getByText('Slideshow · 2 of 3 slides included')).toBeInTheDocument(),
     );
@@ -117,7 +117,7 @@ describe('Slideshow tab of a presentation', () => {
     await setup();
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(await screen.findByText('Exclude all slides'));
-    expect(view.state.doc.toString().match(/memobrain: hidden/g)).toHaveLength(3);
+    expect(view.state.doc.toString().match(/clarae: hidden/g)).toHaveLength(3);
     await waitFor(() =>
       expect(screen.getByText('Slideshow · 0 of 3 slides included')).toBeInTheDocument(),
     );
@@ -174,7 +174,7 @@ describe('Slideshow tab of a presentation', () => {
         name: 'Leave out of the presentation',
       }),
     );
-    await waitFor(() => expect(view.state.doc.toString()).toContain('memobrain: hidden'), {
+    await waitFor(() => expect(view.state.doc.toString()).toContain('clarae: hidden'), {
       timeout: 1500,
     });
     // ...and nothing fires later on its own
@@ -268,7 +268,7 @@ describe('Slideshow tab of a presentation', () => {
     await setup();
     fireEvent.click(screen.getByRole('button', { name: 'Presentation settings' }));
     fireEvent.click(await screen.findByLabelText('Loop at the end'));
-    expect(view.state.doc.toString()).toContain('memobrain-loop: true');
+    expect(view.state.doc.toString()).toContain('clarae-loop: true');
     await waitFor(() => expect(screen.getByLabelText('Loop at the end')).toBeChecked());
     await waitFor(() => expect(screen.getByLabelText('Theme')).toBeEnabled());
     fireEvent.change(screen.getByLabelText('Theme'), { target: { value: 'gaia' } });

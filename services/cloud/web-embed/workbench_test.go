@@ -32,12 +32,12 @@ func workbenchHandler(t *testing.T) (http.Handler, []byte) {
 	t.Helper()
 	wasm := bytes.Repeat([]byte("\x00asm-core-"), 1000)
 	return Handler(Options{
-		Issuer: "https://id.example.com:8443/realms/memobrain",
+		Issuer: "https://id.example.com:8443/realms/clarae",
 		FS: fstest.MapFS{
-			"index.html":                     {Data: []byte("<html>console</html>")},
-			"workbench.html":                 {Data: []byte("<html>workbench</html>")},
-			"assets/workbench-1.js":          {Data: []byte("1")},
-			"core/memobrain-core-ab.wasm.gz": {Data: gz(t, wasm)},
+			"index.html":                  {Data: []byte("<html>console</html>")},
+			"workbench.html":              {Data: []byte("<html>workbench</html>")},
+			"assets/workbench-1.js":       {Data: []byte("1")},
+			"core/clarae-core-ab.wasm.gz": {Data: gz(t, wasm)},
 		},
 	}), wasm
 }
@@ -103,7 +103,7 @@ func TestWorkbenchRouteFallsBackToTheConsoleWithoutTheWorkbenchBuild(t *testing.
 
 func TestWasmIsServedCompressedToBrowsersThatAcceptGzip(t *testing.T) {
 	h, wasm := workbenchHandler(t)
-	rec := do(h, "/core/memobrain-core-ab.wasm", map[string]string{"Accept-Encoding": "gzip, deflate, br"})
+	rec := do(h, "/core/clarae-core-ab.wasm", map[string]string{"Accept-Encoding": "gzip, deflate, br"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("code %d", rec.Code)
 	}
@@ -129,7 +129,7 @@ func TestWasmIsServedCompressedToBrowsersThatAcceptGzip(t *testing.T) {
 func TestWasmIsDecompressedForClientsWithoutGzip(t *testing.T) {
 	h, wasm := workbenchHandler(t)
 	for _, enc := range []string{"", "identity", "gzip;q=0", "br"} {
-		rec := do(h, "/core/memobrain-core-ab.wasm", map[string]string{"Accept-Encoding": enc})
+		rec := do(h, "/core/clarae-core-ab.wasm", map[string]string{"Accept-Encoding": enc})
 		if rec.Code != http.StatusOK || rec.Header().Get("Content-Encoding") != "" {
 			t.Fatalf("%q: code %d encoding %q", enc, rec.Code, rec.Header().Get("Content-Encoding"))
 		}

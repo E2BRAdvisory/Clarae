@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/notify"
 )
 
 // notify owns the vault_changed protocol (Channel, FormatMessage,

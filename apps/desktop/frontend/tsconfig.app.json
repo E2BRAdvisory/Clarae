@@ -4,9 +4,9 @@
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "types": [],
-    // The workbench is type-checked by its own project (yarn workspace @memobrain/workbench run
+    // The workbench is type-checked by its own project (yarn workspace @clarae/workbench run
     // typecheck); here only its public signature matters, declared in src/workbench.d.ts.
-    "paths": { "@memobrain/workbench": ["./src/workbench.d.ts"] }
+    "paths": { "@clarae/workbench": ["./src/workbench.d.ts"] }
   },
   "include": ["src"]
 }

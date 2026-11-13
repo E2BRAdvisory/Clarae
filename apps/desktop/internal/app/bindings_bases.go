@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/apps/desktop/internal/bases"
-	"memobrain/apps/desktop/internal/vault"
+	"clarae/apps/desktop/internal/bases"
+	"clarae/apps/desktop/internal/vault"
 )
 
 // BasesAPI exposes ".base" files (§2.2.1 "Bases"): load, run a view over the

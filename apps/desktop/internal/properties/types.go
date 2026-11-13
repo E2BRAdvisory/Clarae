@@ -1,6 +1,6 @@
 // Package properties handles typed frontmatter properties (§2.2.1
 // "Properties"): the six types, type inference, coercion, the per-vault type
-// schema (.memobrain/types.json) and edits of a note's frontmatter that preserve
+// schema (.clarae/types.json) and edits of a note's frontmatter that preserve
 // key order and comments.
 package properties
 
@@ -135,7 +135,7 @@ func Coerce(k Kind, raw any) (any, error) {
 	return nil, fmt.Errorf("value %v is not valid for type %s", raw, k)
 }
 
-// Schema is the per-vault mapping property name -> type (.memobrain/types.json).
+// Schema is the per-vault mapping property name -> type (.clarae/types.json).
 type Schema map[string]Kind
 
 // ParseSchema decodes and validates the content of types.json; an empty input is an empty schema.

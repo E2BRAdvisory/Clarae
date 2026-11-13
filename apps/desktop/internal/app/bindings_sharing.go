@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/app/cloudapi"
-	"memobrain/apps/desktop/internal/config"
-	"memobrain/apps/desktop/internal/features"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/app/cloudapi"
+	"clarae/apps/desktop/internal/config"
+	"clarae/apps/desktop/internal/features"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // ErrReadOnly is the error of a write on a vault the user may only read.

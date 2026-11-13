@@ -67,7 +67,7 @@ describe('latexPatch', () => {
         type: 'image',
         version: 1,
         versionNonce: 1,
-        customData: { memobrain: { kind: 'md' } },
+        customData: { clarae: { kind: 'md' } },
       }),
     ).toBeNull();
   });

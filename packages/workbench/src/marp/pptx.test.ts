@@ -24,7 +24,7 @@ First note of the presenter
 
 ---
 
-<!-- memobrain: hidden -->
+<!-- clarae: hidden -->
 
 ## Secret slide
 
@@ -241,7 +241,7 @@ describe('includedDeck', () => {
 
   it('numbers the pages of the slides that stay 1..n, and their total', async () => {
     const src =
-      '---\nmarp: true\npaginate: true\n---\n\n# One\n\n---\n\n<!-- memobrain: hidden -->\n# Two\n\n---\n\n# Three\n\n---\n\n# Four\n';
+      '---\nmarp: true\npaginate: true\n---\n\n# One\n\n---\n\n<!-- clarae: hidden -->\n# Two\n\n---\n\n# Three\n\n---\n\n# Four\n';
     const deck = await renderDeck(src, () => Promise.resolve(null));
     const raw = deck.html.match(/data-marpit-pagination="(\d+)"/g);
     expect(raw).toEqual([

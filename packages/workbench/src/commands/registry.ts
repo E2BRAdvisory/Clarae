@@ -14,7 +14,7 @@ import { newBase } from '../bases/commands';
 import { insertDrawing, newDrawing } from '../drawing/commands';
 import { sceneCommands, toolCommands } from '../drawing/sceneCommands';
 import { infoOf, useSync } from '../state/sync';
-import { Feature } from '@memobrain/api-client/features';
+import { Feature } from '@clarae/api-client/features';
 import { featureOn, useManaged } from '../state/managed';
 import { useSharing } from '../state/sharing';
 import { useRecovery } from '../recovery/store';

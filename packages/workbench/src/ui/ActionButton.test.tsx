@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vites
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { CloudMount } from '@memobrain/cloud-features/port';
+import type { CloudMount } from '@clarae/cloud-features/port';
 import type { MountRevokedPayload } from '../app/events';
 import { actionById, actions, defineAction, type ActionArg } from '../commands/actions';
 import { initI18n } from '../i18n';
@@ -74,7 +74,7 @@ describe('ActionButton', () => {
       wrap(
         <ActionButton
           id="account:sign-in"
-          arg="https://memobrain.test"
+          arg="https://clarae.test"
           onPending={(p) => (pending = [...pending, p])}
         />,
       ),

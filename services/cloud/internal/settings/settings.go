@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/settings/settingsdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/settings/settingsdb"
 )
 
 // Get returns the raw JSON value of key; ok is false when it is not set.

@@ -1,4 +1,4 @@
-# MemoBrain Notes Cloud on-premise (single host): reverse proxy with TLS, API + worker, PostgreSQL,
+# Clarae notanda Cloud on-premise (single host): reverse proxy with TLS, API + worker, PostgreSQL,
 # S3-compatible object store and Keycloak. See README.md for the first-run steps.
 #
 #   cp .env.example .env   # then edit: domain, passwords, image tag
@@ -6,23 +6,23 @@
 #
 # Production notes: PostgreSQL and the object store hold all the data (volumes pgdata, s3data):
 # back them up (README, "Backup"). Only the reverse proxy publishes ports.
-name: ${COMPOSE_PROJECT_NAME:-memobrain-onprem}
+name: ${COMPOSE_PROJECT_NAME:-clarae-onprem}
 
 x-cloud-env: &cloud-env
-  DATABASE_URL: postgres://memobrain:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/memobrain?sslmode=disable
+  DATABASE_URL: postgres://clarae:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/clarae?sslmode=disable
   S3_ENDPOINT: http://s3:9000
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
   S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
-  S3_BUCKET_BLOBS: memobrain-blobs
-  S3_BUCKET_EXPORTS: memobrain-exports
+  S3_BUCKET_BLOBS: clarae-blobs
+  S3_BUCKET_EXPORTS: clarae-exports
   S3_USE_PATH_STYLE: 'true'
-  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/memobrain
-  OIDC_AUDIENCE: memobrain-api
+  OIDC_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_HOST:?set AUTH_HOST in .env}/realms/clarae
+  OIDC_AUDIENCE: clarae-api
   KC_ADMIN_BASE_URL: http://keycloak:8080
-  KC_REALM: memobrain
-  KC_ADMIN_CLIENT_ID: memobrain-admin-svc
+  KC_REALM: clarae
+  KC_ADMIN_CLIENT_ID: clarae-admin-svc
   KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
-  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${MEMOBRAIN_HOST:?set MEMOBRAIN_HOST in .env}
+  WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${CLARAE_HOST:?set CLARAE_HOST in .env}
   PUBLIC_GRPC_ADDR: ${NOTIFY_HOST:?set NOTIFY_HOST in .env}:${PUBLIC_GRPC_PORT:-443}
   LISTEN_ADDR: 0.0.0.0:18081
   GRPC_LISTEN_ADDR: 0.0.0.0:18082
@@ -32,7 +32,7 @@ x-cloud-env: &cloud-env
   # so the bridge ranges can be trusted: without this all users would share one per-IP rate-limit bucket.
   TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
   # The service refuses to start while a secret is still a placeholder of .env.example; "1" allows it (tests only).
-  MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS: ${MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS:-}
+  CLARAE_ALLOW_PLACEHOLDER_SECRETS: ${CLARAE_ALLOW_PLACEHOLDER_SECRETS:-}
 
 services:
   # One-shot check before anything stores a secret: every password and key of .env must have been replaced
@@ -45,7 +45,7 @@ services:
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     environment:
-      MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS: ${MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS:-}
+      CLARAE_ALLOW_PLACEHOLDER_SECRETS: ${CLARAE_ALLOW_PLACEHOLDER_SECRETS:-}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD in .env}
@@ -63,8 +63,8 @@ services:
           esac
         done
         if [ -z "$$bad" ]; then echo "preflight: secrets set"; exit 0; fi
-        if [ "$$MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS" = 1 ]; then
-          echo "preflight: WARNING placeholder secrets allowed (MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS=1):$$bad"
+        if [ "$$CLARAE_ALLOW_PLACEHOLDER_SECRETS" = 1 ]; then
+          echo "preflight: WARNING placeholder secrets allowed (CLARAE_ALLOW_PLACEHOLDER_SECRETS=1):$$bad"
           exit 0
         fi
         echo "preflight: still the placeholder of .env.example:$$bad"
@@ -79,7 +79,7 @@ services:
       - '${HTTPS_PORT:-443}:443'
       - '${HTTPS_PORT:-443}:443/udp' # HTTP/3
     environment:
-      MEMOBRAIN_SITE: ${MEMOBRAIN_SITE:-${MEMOBRAIN_HOST}}
+      CLARAE_SITE: ${CLARAE_SITE:-${CLARAE_HOST}}
       NOTIFY_SITE: ${NOTIFY_SITE:-${NOTIFY_HOST}}
       AUTH_SITE: ${AUTH_SITE:-${AUTH_HOST}}
       CADDY_GLOBAL: ${CADDY_GLOBAL:-}
@@ -95,7 +95,7 @@ services:
         # Containers reach the public names through the proxy (the cloud validates tokens against the issuer URL).
         aliases:
           - ${AUTH_HOST}
-          - ${MEMOBRAIN_HOST}
+          - ${CLARAE_HOST}
     depends_on:
       cloud-api:
         condition: service_started
@@ -103,7 +103,7 @@ services:
         condition: service_healthy
 
   cloud-api:
-    image: ${MEMOBRAIN_IMAGE:-ghcr.io/e2br/memobrain-cloud}:${MEMOBRAIN_VERSION:?set MEMOBRAIN_VERSION in .env}
+    image: ${CLARAE_IMAGE:-ghcr.io/e2br/clarae-cloud}:${CLARAE_VERSION:?set CLARAE_VERSION in .env}
     restart: unless-stopped
     command: ['--role=api']
     environment: *cloud-env
@@ -126,7 +126,7 @@ services:
     expose: ['18081', '18082']
 
   cloud-worker:
-    image: ${MEMOBRAIN_IMAGE:-ghcr.io/e2br/memobrain-cloud}:${MEMOBRAIN_VERSION}
+    image: ${CLARAE_IMAGE:-ghcr.io/e2br/clarae-cloud}:${CLARAE_VERSION}
     restart: unless-stopped
     command: ['--role=worker']
     environment: *cloud-env
@@ -148,9 +148,9 @@ services:
     image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
     restart: unless-stopped
     environment:
-      POSTGRES_USER: memobrain
+      POSTGRES_USER: clarae
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: memobrain
+      POSTGRES_DB: clarae
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -158,7 +158,7 @@ services:
     depends_on:
       preflight: { condition: service_completed_successfully }
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U memobrain -d memobrain']
+      test: ['CMD-SHELL', 'pg_isready -U clarae -d clarae']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -198,7 +198,7 @@ services:
       AWS_EC2_METADATA_DISABLED: 'true'
     entrypoint: >
       /bin/sh -c "
-        for b in memobrain-blobs memobrain-exports; do
+        for b in clarae-blobs clarae-exports; do
           aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $$b >/dev/null 2>&1 ||
           aws --endpoint-url http://s3:9000 s3 mb s3://$$b;
         done && echo buckets ready
@@ -222,9 +222,9 @@ services:
       KC_HEALTH_ENABLED: 'true'
       # Substituted into the imported realm (deploy/keycloak-prod): no secret or origin lives in the file.
       KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:?set KC_ADMIN_CLIENT_SECRET in .env}
-      WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${MEMOBRAIN_HOST:?set MEMOBRAIN_HOST in .env}
+      WEB_UI_ORIGIN: ${PUBLIC_SCHEME:-https}://${CLARAE_HOST:?set CLARAE_HOST in .env}
     volumes:
-      # First start only: creates the realm "memobrain" (clients memobrain-desktop, memobrain-web, memobrain-admin-svc,
+      # First start only: creates the realm "clarae" (clients clarae-desktop, clarae-web, clarae-admin-svc,
       # roles). Production variant of deploy/keycloak: no test users, secret and web origin from the environment.
       - ../keycloak-prod:/opt/keycloak/data/import:ro
     depends_on:
@@ -250,7 +250,7 @@ services:
     volumes:
       - ./backups:/backups
     entrypoint: >
-      /bin/sh -c "pg_dump -h postgres -U memobrain -Fc memobrain > /backups/memobrain-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
+      /bin/sh -c "pg_dump -h postgres -U clarae -Fc clarae > /backups/clarae-$$(date +%Y%m%d-%H%M%S).dump && echo dump written"
     depends_on:
       postgres: { condition: service_healthy }
 

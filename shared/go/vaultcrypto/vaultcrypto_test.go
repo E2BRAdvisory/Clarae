@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"memobrain/shared/vaultcrypto"
+	"clarae/shared/vaultcrypto"
 )
 
 var (

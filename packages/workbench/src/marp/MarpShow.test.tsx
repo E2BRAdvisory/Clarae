@@ -67,7 +67,7 @@ describe('Marp full-screen presentation', () => {
 
   it('skips the slides that are left out, and starts at the next included one', async () => {
     await start(
-      `${DECK}\n---\n\n## Four\n`.replace('## Two\n', '## Two\n\n<!-- memobrain: hidden -->\n'),
+      `${DECK}\n---\n\n## Four\n`.replace('## Two\n', '## Two\n\n<!-- clarae: hidden -->\n'),
       1,
     );
     // Two is left out: the show is One, Three and Four, and starts at Three.
@@ -81,7 +81,7 @@ describe('Marp full-screen presentation', () => {
   });
 
   it('loops when the presentation asks for it', async () => {
-    await start(DECK.replace('marp: true', 'marp: true\nmemobrain-loop: true'));
+    await start(DECK.replace('marp: true', 'marp: true\nclarae-loop: true'));
     press('ArrowLeft');
     await waitFor(() => expect(current()).toBe(2));
     press('ArrowRight');
@@ -97,7 +97,7 @@ describe('Marp full-screen presentation', () => {
     cleanup();
     useMarpShow.setState({ open: false });
     await start(
-      DECK.replace('marp: true', 'marp: true\nmemobrain-notes: false').replace(
+      DECK.replace('marp: true', 'marp: true\nclarae-notes: false').replace(
         '## Two\n',
         '## Two\n\n<!-- say hi -->\n',
       ),
@@ -125,7 +125,7 @@ describe('Marp full-screen presentation', () => {
   it('says so when every slide is left out', async () => {
     const mock = installWailsMock();
     const info = await api.vault.open('/vaults/Show');
-    mock.vaults.get(info.id)?.files.set('Deck.marp', '# Only\n\n<!-- memobrain: hidden -->\n');
+    mock.vaults.get(info.id)?.files.set('Deck.marp', '# Only\n\n<!-- clarae: hidden -->\n');
     useAppStore.getState().setVault(info);
     render(<MarpShow />);
     act(() => useMarpShow.getState().start(info.id, 'Deck.marp', 0));

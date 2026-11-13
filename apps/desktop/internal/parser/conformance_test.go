@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"memobrain/shared/conformance"
+	"clarae/shared/conformance"
 )
 
 // TestConformance runs every shared Markdown fixture through the parser and

@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 
-	"memobrain/apps/desktop/internal/app/cloudapi"
-	"memobrain/apps/desktop/internal/crypto"
-	syncpkg "memobrain/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/app/cloudapi"
+	"clarae/apps/desktop/internal/crypto"
+	syncpkg "clarae/apps/desktop/internal/sync"
 )
 
 // ConflictTexts are the two versions shown side by side.

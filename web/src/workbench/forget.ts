@@ -21,7 +21,7 @@ export type UnsyncedCopy = VaultMarker & { id: string };
  * The Web Lock a workbench page holds while it is open (web/src/workbench/main.tsx): one workbench
  * per browser, since the synchronous handles of OPFS are exclusive.
  */
-export const WORKBENCH_LOCK = 'memobrain-workbench';
+export const WORKBENCH_LOCK = 'clarae-workbench';
 
 /**
  * Whether a workbench page is open in this browser (any account). Unknown (no Web Locks) counts as
@@ -44,7 +44,7 @@ export function forgetThisBrowser(account: string): Promise<ForgetResult> {
 }
 
 /** The channel between the console and a workbench tab of the same browser. */
-export const WORKBENCH_CHANNEL = 'memobrain-workbench';
+export const WORKBENCH_CHANNEL = 'clarae-workbench';
 
 export interface LeaveRequest {
   type: 'leave';
@@ -163,7 +163,7 @@ export async function discardAccountStorage(
     const r = await forgetAfterLeave(account, { timeoutMs: 10_000, ...o, discard: true });
     return r.removed;
   } catch (e) {
-    console.error('memobrain: could not remove the vault copies of the deleted account:', e);
+    console.error('clarae: could not remove the vault copies of the deleted account:', e);
     return false;
   }
 }

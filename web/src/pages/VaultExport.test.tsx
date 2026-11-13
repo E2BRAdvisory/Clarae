@@ -16,7 +16,7 @@ import {
   uuidBytes,
   wrap,
   type Subkeys,
-} from '@memobrain/vaultcrypto-web';
+} from '@clarae/vaultcrypto-web';
 import { readZip } from '../../../packages/vaultcrypto-web/src/zipreader.testutil';
 import { problem, renderApp, type Routes } from '../test/utils';
 

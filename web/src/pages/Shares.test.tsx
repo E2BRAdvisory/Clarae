@@ -1,4 +1,4 @@
-// The Sharing page mounts InvitationsList and SharesManager of @memobrain/cloud-features (their
+// The Sharing page mounts InvitationsList and SharesManager of @clarae/cloud-features (their
 // behaviour is tested by the package's suite on both adapters): here, the REST calls the page makes,
 // the link to open a mount and the `sharing` flag.
 import { screen, waitFor, within } from '@testing-library/react';

@@ -4,10 +4,10 @@
 # in docs/admin-guide/runbook.md (sezione indicata in `runbook`).
 # Validazione: promtool check rules deploy/observability/prometheus/alerts.yaml
 groups:
-  - name: memobrain-availability
+  - name: clarae-availability
     rules:
-      - alert: MemobrainDown
-        expr: up{job=~"memobrain.*"} == 0
+      - alert: ClaraeDown
+        expr: up{job=~"clarae.*"} == 0
         for: 2m
         labels: { severity: critical }
         annotations:
@@ -15,10 +15,10 @@ groups:
           description: 'Prometheus non riesce a leggere /metrics da {{ $labels.instance }} da 2 minuti.'
           runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'
 
-      - alert: MemobrainHighErrorRate
+      - alert: ClaraeHighErrorRate
         expr: |
-          100 * sum(rate(memobrain_http_requests_total{status=~"5.."}[5m]))
-            / clamp_min(sum(rate(memobrain_http_requests_total[5m])), 1e-9) > 5
+          100 * sum(rate(clarae_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(clarae_http_requests_total[5m])), 1e-9) > 5
         for: 10m
         labels: { severity: critical }
         annotations:
@@ -26,9 +26,9 @@ groups:
           description: 'Il tasso di errori 5xx è {{ $value | printf "%.1f" }}% negli ultimi 5 minuti.'
           runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'
 
-      - alert: MemobrainHighLatency
+      - alert: ClaraeHighLatency
         expr: |
-          histogram_quantile(0.95, sum by (le) (rate(memobrain_http_request_duration_seconds_bucket[5m]))) > 2
+          histogram_quantile(0.95, sum by (le) (rate(clarae_http_request_duration_seconds_bucket[5m]))) > 2
         for: 15m
         labels: { severity: warning }
         annotations:
@@ -36,12 +36,12 @@ groups:
           description: 'La latenza p95 dell''API è {{ $value | printf "%.2f" }} s.'
           runbook: 'docs/admin-guide/runbook.md#la-sincronizzazione-è-bloccata-o-lenta'
 
-      - alert: MemobrainAuthFailuresSpike
+      - alert: ClaraeAuthFailuresSpike
         expr: |
-          sum(rate(memobrain_http_requests_total{status=~"401|403"}[5m])) > 1
+          sum(rate(clarae_http_requests_total{status=~"401|403"}[5m])) > 1
             and
-          sum(rate(memobrain_http_requests_total{status=~"401|403"}[5m]))
-            / clamp_min(sum(rate(memobrain_http_requests_total[5m])), 1e-9) > 0.2
+          sum(rate(clarae_http_requests_total{status=~"401|403"}[5m]))
+            / clamp_min(sum(rate(clarae_http_requests_total[5m])), 1e-9) > 0.2
         for: 10m
         labels: { severity: warning }
         annotations:
@@ -49,11 +49,11 @@ groups:
           description: 'Oltre il 20% delle richieste è rifiutato per autenticazione: controllare Keycloak, orologi e OIDC_ISSUER.'
           runbook: 'docs/admin-guide/runbook.md#il-login-non-funziona'
 
-  - name: memobrain-sync
+  - name: clarae-sync
     rules:
-      - alert: MemobrainSyncCommitErrors
+      - alert: ClaraeSyncCommitErrors
         expr: |
-          sum(rate(memobrain_sync_commits_total{outcome="error"}[10m])) > 0.05
+          sum(rate(clarae_sync_commits_total{outcome="error"}[10m])) > 0.05
         for: 10m
         labels: { severity: warning }
         annotations:
@@ -61,10 +61,10 @@ groups:
           description: 'Commit falliti per intero a {{ $value | printf "%.2f" }}/s: database o storage in difficoltà.'
           runbook: 'docs/admin-guide/runbook.md#la-sincronizzazione-è-bloccata-o-lenta'
 
-      - alert: MemobrainSyncRejectedOps
+      - alert: ClaraeSyncRejectedOps
         expr: |
-          sum(rate(memobrain_sync_ops_total{status="rejected"}[15m]))
-            / clamp_min(sum(rate(memobrain_sync_ops_total[15m])), 1e-9) > 0.2
+          sum(rate(clarae_sync_ops_total{status="rejected"}[15m]))
+            / clamp_min(sum(rate(clarae_sync_ops_total[15m])), 1e-9) > 0.2
         for: 30m
         labels: { severity: info }
         annotations:
@@ -76,12 +76,12 @@ groups:
   # target di Prometheus: senza `honor_labels: true` lo scraping la rinomina in `exported_job`. Le regole
   # seguenti funzionano in entrambi i casi (`label_replace` o un selettore per ciascuna etichetta).
   # I job girano nei processi `--role=worker` (porta interna METRICS_LISTEN_ADDR, :18083) o `--role=all`.
-  - name: memobrain-jobs
+  - name: clarae-jobs
     rules:
-      - alert: MemobrainJobFailing
+      - alert: ClaraeJobFailing
         expr: |
           sum by (job) (
-            label_replace(increase(memobrain_jobs_runs_total{result="error"}[1h]), "job", "$1", "exported_job", "(.+)")
+            label_replace(increase(clarae_jobs_runs_total{result="error"}[1h]), "job", "$1", "exported_job", "(.+)")
           ) >= 3
         for: 5m
         labels: { severity: warning }
@@ -90,11 +90,11 @@ groups:
           description: "{{ $value }} errori nell'ultima ora."
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
-      - alert: MemobrainExportJobStale
+      - alert: ClaraeExportJobStale
         expr: |
           time() - max(
-            memobrain_jobs_last_success_timestamp_seconds{job="exports"}
-              or memobrain_jobs_last_success_timestamp_seconds{exported_job="exports"}
+            clarae_jobs_last_success_timestamp_seconds{job="exports"}
+              or clarae_jobs_last_success_timestamp_seconds{exported_job="exports"}
           ) > 600
         for: 5m
         labels: { severity: warning }
@@ -103,11 +103,11 @@ groups:
           description: 'Controllare che almeno una replica con `--role=worker` o `--role=all` sia attiva.'
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
-      - alert: MemobrainMaintenanceStale
+      - alert: ClaraeMaintenanceStale
         expr: |
           time() - max(
-            memobrain_jobs_last_success_timestamp_seconds{job="maintenance"}
-              or memobrain_jobs_last_success_timestamp_seconds{exported_job="maintenance"}
+            clarae_jobs_last_success_timestamp_seconds{job="maintenance"}
+              or clarae_jobs_last_success_timestamp_seconds{exported_job="maintenance"}
           ) > 2 * 86400
         for: 30m
         labels: { severity: warning }
@@ -118,8 +118,8 @@ groups:
 
       # Le regole "stale" non scattano se la serie manca del tutto (worker spento, non raccolto da
       # Prometheus, o job mai riuscito dall'avvio): queste due coprono l'assenza.
-      - alert: MemobrainJobMetricsAbsent
-        expr: absent(memobrain_jobs_runs_total)
+      - alert: ClaraeJobMetricsAbsent
+        expr: absent(clarae_jobs_runs_total)
         for: 15m
         labels: { severity: critical }
         annotations:
@@ -127,18 +127,18 @@ groups:
           description: "Nessuna metrica dei job da 15 minuti (ogni job parte entro un minuto dall'avvio): il worker è giù o Prometheus non raccoglie la sua porta interna (METRICS_LISTEN_ADDR, :18083)."
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
-      - alert: MemobrainJobNeverSucceeded
+      - alert: ClaraeJobNeverSucceeded
         expr: |
-          (absent(memobrain_jobs_last_success_timestamp_seconds{job="blob-gc"})
-            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="blob-gc"}))
-          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="uploads"})
-            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="uploads"}))
-          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="retention"})
-            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="retention"}))
-          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="maintenance"})
-            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="maintenance"}))
-          or (absent(memobrain_jobs_last_success_timestamp_seconds{job="exports"})
-            and on() absent(memobrain_jobs_last_success_timestamp_seconds{exported_job="exports"}))
+          (absent(clarae_jobs_last_success_timestamp_seconds{job="blob-gc"})
+            and on() absent(clarae_jobs_last_success_timestamp_seconds{exported_job="blob-gc"}))
+          or (absent(clarae_jobs_last_success_timestamp_seconds{job="uploads"})
+            and on() absent(clarae_jobs_last_success_timestamp_seconds{exported_job="uploads"}))
+          or (absent(clarae_jobs_last_success_timestamp_seconds{job="retention"})
+            and on() absent(clarae_jobs_last_success_timestamp_seconds{exported_job="retention"}))
+          or (absent(clarae_jobs_last_success_timestamp_seconds{job="maintenance"})
+            and on() absent(clarae_jobs_last_success_timestamp_seconds{exported_job="maintenance"}))
+          or (absent(clarae_jobs_last_success_timestamp_seconds{job="exports"})
+            and on() absent(clarae_jobs_last_success_timestamp_seconds{exported_job="exports"}))
         for: 2h
         labels: { severity: warning }
         annotations:
@@ -146,12 +146,12 @@ groups:
           description: 'Nessun successo del job da quando il worker è stato avviato (o il worker non è raccolto): controllare i log `job failed`.'
           runbook: 'docs/admin-guide/runbook.md#gli-export-restano-in-coda'
 
-  - name: memobrain-database
+  - name: clarae-database
     rules:
-      - alert: MemobrainDbPoolSaturated
+      - alert: ClaraeDbPoolSaturated
         expr: |
-          100 * max(memobrain_db_pool_connections{state="acquired"})
-            / max(memobrain_db_pool_connections{state="max"}) > 90
+          100 * max(clarae_db_pool_connections{state="acquired"})
+            / max(clarae_db_pool_connections{state="max"}) > 90
         for: 10m
         labels: { severity: warning }
         annotations:
@@ -159,8 +159,8 @@ groups:
           description: 'Connessioni acquisite al {{ $value | printf "%.0f" }}% del massimo.'
           runbook: 'docs/admin-guide/runbook.md#il-servizio-non-risponde-o-il-database-è-giù'
 
-      - alert: MemobrainDbPoolWaiting
-        expr: rate(memobrain_db_pool_empty_acquires_total[5m]) > 1
+      - alert: ClaraeDbPoolWaiting
+        expr: rate(clarae_db_pool_empty_acquires_total[5m]) > 1
         for: 10m
         labels: { severity: warning }
         annotations:

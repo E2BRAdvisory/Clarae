@@ -1,7 +1,7 @@
 //go:build integration
 
 // Package cloudtest runs the real cloud service for the desktop integration
-// tests: the memobrain-cloud binary, built from this repository, against
+// tests: the clarae-cloud binary, built from this repository, against
 // PostgreSQL in a container, with a local OIDC issuer standing in for
 // Keycloak. Packages call Start from TestMain and share the Env.
 package cloudtest
@@ -52,7 +52,7 @@ func Start(ctx context.Context) (*Env, error) {
 	}()
 
 	pg, err := tcpostgres.Run(ctx, "postgres:17",
-		tcpostgres.WithDatabase("memobrain"), tcpostgres.WithUsername("memobrain"), tcpostgres.WithPassword("memobrain"),
+		tcpostgres.WithDatabase("clarae"), tcpostgres.WithUsername("clarae"), tcpostgres.WithPassword("clarae"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
@@ -66,14 +66,14 @@ func Start(ctx context.Context) (*Env, error) {
 	e.Issuer = newIssuer()
 	e.cleanup = append(e.cleanup, e.Issuer.srv.Close)
 
-	tmp, err := os.MkdirTemp("", "memobrain-e2e-")
+	tmp, err := os.MkdirTemp("", "clarae-e2e-")
 	if err != nil {
 		return nil, err
 	}
 	e.cleanup = append(e.cleanup, func() { _ = os.RemoveAll(tmp) })
 
-	bin := filepath.Join(tmp, "memobrain-cloud")
-	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "memobrain/services/cloud/cmd/memobrain-cloud") //nolint:gosec // test harness: fixed command, temp output path
+	bin := filepath.Join(tmp, "clarae-cloud")
+	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "clarae/services/cloud/cmd/clarae-cloud") //nolint:gosec // test harness: fixed command, temp output path
 	build.Stderr, build.Stdout = os.Stderr, os.Stdout
 	if err := build.Run(); err != nil {
 		return nil, fmt.Errorf("build cloud service: %w", err)
@@ -83,7 +83,7 @@ func Start(ctx context.Context) (*Env, error) {
 	srv := exec.Command(bin, "--role=all") //nolint:gosec // test harness: the binary it just built
 	srv.Env = append(os.Environ(),
 		"LISTEN_ADDR="+httpAddr, "GRPC_LISTEN_ADDR="+grpcAddr, "DATABASE_URL="+e.DatabaseURL,
-		"STORAGE_DIR="+filepath.Join(tmp, "blobs"), "OIDC_ISSUER="+e.Issuer.srv.URL, "OIDC_AUDIENCE=memobrain-api",
+		"STORAGE_DIR="+filepath.Join(tmp, "blobs"), "OIDC_ISSUER="+e.Issuer.srv.URL, "OIDC_AUDIENCE=clarae-api",
 		"OIDC_STATUS_CACHE_TTL=1s", "LOG_LEVEL=warn",
 	)
 	e.logPath = filepath.Join(tmp, "cloud.log")
@@ -182,8 +182,8 @@ func (i *Issuer) URL() string { return i.srv.URL }
 // Token returns a valid access token for user (provisioned on first use).
 func (i *Issuer) Token(user string) string {
 	now := time.Now()
-	claims := jwt.Claims{Issuer: i.srv.URL, Subject: "e2e-" + user, Audience: jwt.Audience{"memobrain-api"}, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)), Expiry: jwt.NewNumericDate(now.Add(time.Hour))}
-	private := map[string]any{"typ": "Bearer", "azp": "memobrain-desktop", "preferred_username": user, "email": user + "@e2e.local", "realm_access": map[string]any{"roles": []string{"memobrain-user"}}}
+	claims := jwt.Claims{Issuer: i.srv.URL, Subject: "e2e-" + user, Audience: jwt.Audience{"clarae-api"}, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)), Expiry: jwt.NewNumericDate(now.Add(time.Hour))}
+	private := map[string]any{"typ": "Bearer", "azp": "clarae-desktop", "preferred_username": user, "email": user + "@e2e.local", "realm_access": map[string]any{"roles": []string{"clarae-user"}}}
 	raw, err := jwt.Signed(i.signer).Claims(claims).Claims(private).Serialize()
 	if err != nil {
 		panic(err)

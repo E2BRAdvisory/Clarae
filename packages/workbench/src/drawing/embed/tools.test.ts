@@ -89,7 +89,7 @@ describe('reset-latex-size', () => {
     el('f', 'image', {
       width: w,
       height: h,
-      customData: { memobrain: { kind: 'latex', latex: 'x', w0: 50, color: '#000' } },
+      customData: { clarae: { kind: 'latex', latex: 'x', w0: 50, color: '#000' } },
     });
 
   it('goes back to the rendered width, keeping the aspect ratio', () => {

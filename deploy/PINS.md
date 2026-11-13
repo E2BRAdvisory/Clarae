@@ -44,7 +44,7 @@ La versione (Wails v3, ADR-0051) esiste in un solo posto, `apps/desktop/go.mod`;
 
 ```sh
 go -C apps/desktop get github.com/wailsapp/wails/v3@vX.Y.Z && go -C apps/desktop mod tidy
-yarn workspace @memobrain/desktop-frontend add --exact @wailsio/runtime@X.Y.Z    # stessa versione, senza la v
+yarn workspace @clarae/desktop-frontend add --exact @wailsio/runtime@X.Y.Z    # stessa versione, senza la v
 task wails-cli && task gen-wails      # poi un build desktop su ogni OS
 ```
 

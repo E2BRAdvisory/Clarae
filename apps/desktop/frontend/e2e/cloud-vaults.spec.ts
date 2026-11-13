@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { onWeb, readVaultFile } from './support';
 import { expect, test, uuid, vault, type CloudSeed } from './cloud';
 
-// Settings > Cloud: the account's cloud vaults (ADR-0037 §2, @memobrain/cloud-features over the
+// Settings > Cloud: the account's cloud vaults (ADR-0037 §2, @clarae/cloud-features over the
 // bindings). On the desktop deleting the cloud vault the open folder is connected to disconnects the
 // folder and keeps its files; in the browser the page is that cloud vault, which is deleted from the
 // console, not from its own page. On the web the panels run on the real Go core against the REST

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 // respProblem decodes the problem document of an error response.

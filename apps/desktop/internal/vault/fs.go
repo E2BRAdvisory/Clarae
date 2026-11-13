@@ -23,9 +23,9 @@ import (
 	"syscall"
 	"time"
 
-	"memobrain/shared/hashing"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/shared/hashing"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // Errors returned by FS operations.
@@ -421,7 +421,7 @@ func publishTemp(tmpName, abs string, noReplace bool) error {
 }
 
 // tmpPrefix names the staging files of atomic writes.
-const tmpPrefix = ".memobrain-tmp-"
+const tmpPrefix = ".clarae-tmp-"
 
 // CleanStaleTemp removes staging files left by a crashed write. Only files
 // older than olderThan are removed, so a write in progress is never touched.
@@ -637,7 +637,7 @@ type Entry struct {
 
 // Walk visits every file and folder of the vault (depth first, sorted),
 // skipping excluded entries (.DS_Store, caches, …), symlinks and the
-// .memobrain/ internals other than user settings. fn receives vault-relative
+// .clarae/ internals other than user settings. fn receives vault-relative
 // paths. Returning fs.SkipDir from fn for a folder skips its contents.
 func (f *FS) Walk(fn func(e Entry) error) error {
 	return f.walk(f.root, "", fn)

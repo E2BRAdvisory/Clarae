@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"memobrain/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/parser"
 )
 
 func init() {

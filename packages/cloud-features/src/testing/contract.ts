@@ -5,7 +5,7 @@
 // the run of the shared suites on the Go core compiled to WebAssembly
 // (packages/workbench/src/cloud/CoreCloudPort.core.test.tsx), so a fake that drifts from the contract,
 // or a client that sends what the contract does not allow, fails a test (ADR-0045 §4, §7).
-// Node only (it reads the document from disk): imported as @memobrain/cloud-features/testing/contract,
+// Node only (it reads the document from disk): imported as @clarae/cloud-features/testing/contract,
 // never from the package's index.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

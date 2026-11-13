@@ -20,14 +20,14 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/canvas"
-	"memobrain/apps/desktop/internal/drawing"
-	"memobrain/apps/desktop/internal/links"
-	"memobrain/apps/desktop/internal/parser"
-	"memobrain/apps/desktop/internal/properties"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/canvas"
+	"clarae/apps/desktop/internal/drawing"
+	"clarae/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/properties"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // Progress is reported while indexing.

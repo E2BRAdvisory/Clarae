@@ -34,7 +34,7 @@ describe('Marp rendering', () => {
 
   it('reports the presenter notes and the slides that are left out', async () => {
     const deck = await renderDeck(
-      '# A\n\n<!-- _class: lead -->\n<!-- say hi -->\n\n---\n\n# B\n\n<!-- memobrain: hidden -->\n',
+      '# A\n\n<!-- _class: lead -->\n<!-- say hi -->\n\n---\n\n# B\n\n<!-- clarae: hidden -->\n',
       vault,
     );
     expect(deck.notes).toEqual(['say hi', '']);

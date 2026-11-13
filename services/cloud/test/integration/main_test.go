@@ -25,13 +25,13 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"memobrain/services/cloud/internal/app"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpserver"
-	"memobrain/services/cloud/internal/storage"
-	"memobrain/services/cloud/internal/system"
+	"clarae/services/cloud/internal/app"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpserver"
+	"clarae/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/system"
 )
 
 var (
@@ -52,9 +52,9 @@ func run(m *testing.M) int {
 	defer cancel()
 
 	pg, err := tcpostgres.Run(ctx, postgresImage,
-		tcpostgres.WithDatabase("memobrain"),
-		tcpostgres.WithUsername("memobrain"),
-		tcpostgres.WithPassword("memobrain"),
+		tcpostgres.WithDatabase("clarae"),
+		tcpostgres.WithUsername("clarae"),
+		tcpostgres.WithPassword("clarae"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
@@ -135,7 +135,7 @@ func newEnv(t *testing.T) *env {
 	}
 
 	issuer := authtest.New(t)
-	verifier, err := auth.NewVerifier(ctx, issuer.URL(), "memobrain-api", []string{"memobrain-desktop", "memobrain-web"})
+	verifier, err := auth.NewVerifier(ctx, issuer.URL(), "clarae-api", []string{"clarae-desktop", "clarae-web"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func newEnv(t *testing.T) *env {
 	router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
 		Logger: zerolog.Nop(),
 		Auth:   authn,
-		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "memobrain-desktop", Audience: "memobrain-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
+		System: system.NewHTTP("test", system.ClientConfig{Issuer: issuer.URL(), DesktopClientID: "clarae-desktop", Audience: "clarae-api", GRPCEndpoint: "127.0.0.1:18082"}, system.CheckerFunc{N: "database", F: database.Ping}, system.CheckerFunc{N: "storage", F: store.Ping}),
 	}))
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)

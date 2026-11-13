@@ -28,105 +28,105 @@ linters:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/admin/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/admin/admindb'
+            - pkg: 'clarae/services/cloud/internal/admin/admindb'
               desc: 'tables of the admin module: call the functions it exports (ADR-0033)'
         audit-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/audit/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/audit/auditdb'
+            - pkg: 'clarae/services/cloud/internal/audit/auditdb'
               desc: 'tables of the audit module: call the functions it exports (ADR-0033)'
         blobs-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/blobs/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/blobs/blobsdb'
+            - pkg: 'clarae/services/cloud/internal/blobs/blobsdb'
               desc: 'tables of the blobs module: call the functions it exports (ADR-0033)'
         configprofiles-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/configprofiles/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/configprofiles/configprofilesdb'
+            - pkg: 'clarae/services/cloud/internal/configprofiles/configprofilesdb'
               desc: 'tables of the configprofiles module: call the functions it exports (ADR-0033)'
         export-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/export/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/export/exportdb'
+            - pkg: 'clarae/services/cloud/internal/export/exportdb'
               desc: 'tables of the export module: call the functions it exports (ADR-0033)'
         groups-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/groups/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/groups/groupsdb'
+            - pkg: 'clarae/services/cloud/internal/groups/groupsdb'
               desc: 'tables of the groups module: call the functions it exports (ADR-0033)'
         jobs-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/jobs/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/jobs/jobsdb'
+            - pkg: 'clarae/services/cloud/internal/jobs/jobsdb'
               desc: 'tables of the jobs module: call the functions it exports (ADR-0033)'
         notify-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/notify/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/notify/notifydb'
+            - pkg: 'clarae/services/cloud/internal/notify/notifydb'
               desc: 'tables of the notify module: call the functions it exports (ADR-0033)'
         privacy-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/privacy/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/privacy/privacydb'
+            - pkg: 'clarae/services/cloud/internal/privacy/privacydb'
               desc: 'tables of the privacy module: call the functions it exports (ADR-0033)'
         quota-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/quota/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/quota/quotadb'
+            - pkg: 'clarae/services/cloud/internal/quota/quotadb'
               desc: 'tables of the quota module: call the functions it exports (ADR-0033)'
         revisions-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/revisions/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/revisions/revisionsdb'
+            - pkg: 'clarae/services/cloud/internal/revisions/revisionsdb'
               desc: 'tables of the revisions module: call the functions it exports (ADR-0033)'
         settings-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/settings/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/settings/settingsdb'
+            - pkg: 'clarae/services/cloud/internal/settings/settingsdb'
               desc: 'tables of the settings module: call the functions it exports (ADR-0033)'
         sharing-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/sharing/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/sharing/sharingdb'
+            - pkg: 'clarae/services/cloud/internal/sharing/sharingdb'
               desc: 'tables of the sharing module: call the functions it exports (ADR-0033)'
         sync-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/sync/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/sync/syncdb'
+            - pkg: 'clarae/services/cloud/internal/sync/syncdb'
               desc: 'tables of the sync module: call the functions it exports (ADR-0033)'
         users-db:
           files:
             - '**/services/cloud/**'
             - '!**/services/cloud/internal/users/**'
           deny:
-            - pkg: 'memobrain/services/cloud/internal/users/usersdb'
+            - pkg: 'clarae/services/cloud/internal/users/usersdb'
               desc: 'tables of the users module: call the functions it exports (ADR-0033)'
         vaults-db:
           files:
@@ -134,7 +134,7 @@ linters:
             - '!**/services/cloud/internal/vaults/**'
             - '!**/services/cloud/internal/access/**' # access.Vault aliases the row type (ADR-0033)
           deny:
-            - pkg: 'memobrain/services/cloud/internal/vaults/vaultsdb'
+            - pkg: 'clarae/services/cloud/internal/vaults/vaultsdb'
               desc: 'tables of the vaults module: call the functions it exports (ADR-0033)'
         main:
           files:
@@ -167,4 +167,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - memobrain
+        - clarae

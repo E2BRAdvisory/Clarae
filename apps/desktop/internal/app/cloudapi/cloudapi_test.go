@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/shared/apiclient"
+	"clarae/shared/apiclient"
 )
 
 // sameShape reports the first difference between a DTO and its API type: field names, order, JSON

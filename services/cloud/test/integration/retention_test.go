@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 // dayAt is hour h (UTC) of the day daysAgo days before now.

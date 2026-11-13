@@ -13,18 +13,18 @@ import (
 	"strconv"
 	"time"
 
-	"memobrain/services/cloud/internal/access"
+	"clarae/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/blobs"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/revisions/revisionsdb"
-	syncmod "memobrain/services/cloud/internal/sync"
-	"memobrain/services/cloud/internal/vaults"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/blobs"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/revisions/revisionsdb"
+	syncmod "clarae/services/cloud/internal/sync"
+	"clarae/services/cloud/internal/vaults"
+	"clarae/shared/syncproto"
 )
 
 // Restorer creates the new revision (implemented by the sync module).

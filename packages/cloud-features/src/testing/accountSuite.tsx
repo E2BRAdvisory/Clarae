@@ -1,6 +1,6 @@
 // One suite for the account components (DevicesPanel, UsagePanel, SharesManager, InvitationsList,
 // MyGroups), run against every adapter (ADR-0037 §2): RestCloudPort over fakeCloudApi here,
-// CoreCloudPort over the Wails mock in @memobrain/workbench. The seed is in the API's shapes; each
+// CoreCloudPort over the Wails mock in @clarae/workbench. The seed is in the API's shapes; each
 // harness puts it behind its own backend.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';

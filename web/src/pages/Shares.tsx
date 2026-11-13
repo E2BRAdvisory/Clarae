@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { InvitationsList, SharesManager } from '@memobrain/cloud-features';
-import { useFeatureFlag } from '@memobrain/cloud-features';
+import { InvitationsList, SharesManager } from '@clarae/cloud-features';
+import { useFeatureFlag } from '@clarae/cloud-features';
 import { useCloudPort } from '../api/cloud';
 import { useWorkbenchAllowed } from '../api/queries';
 
@@ -11,7 +11,7 @@ export function mountHref(vaultId: string, shareId: string): string {
 
 /**
  * Sharing: the invitations and shares received, and the shares created or managed by the user, with
- * the components of @memobrain/cloud-features (ADR-0037 §2). The `sharing` flag of the effective
+ * the components of @clarae/cloud-features (ADR-0037 §2). The `sharing` flag of the effective
  * configuration turns the page off, as it does in the workbench.
  */
 export function SharesPage() {

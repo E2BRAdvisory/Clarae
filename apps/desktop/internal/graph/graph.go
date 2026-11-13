@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/apps/desktop/internal/search"
+	"clarae/apps/desktop/internal/search"
 )
 
 // Node kinds.

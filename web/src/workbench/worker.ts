@@ -11,7 +11,7 @@ import {
   installBridge,
   type SqliteDatabase,
   type SqliteStatement,
-} from '@memobrain/sqlite-bridge';
+} from '@clarae/sqlite-bridge';
 import { loadDevice, saveDevice } from './device';
 import { installOpfsFs, segments, UNLINKED_DIR, type OpfsFs } from './opfs-fs';
 import type {
@@ -65,9 +65,9 @@ function ask(
   });
 }
 
-/** The object Go's webHost (internal/app/host_web.go) looks for as globalThis.__memobrainHost. */
+/** The object Go's webHost (internal/app/host_web.go) looks for as globalThis.__claraeHost. */
 function installHost(): void {
-  (globalThis as Record<string, unknown>)['__memobrainHost'] = {
+  (globalThis as Record<string, unknown>)['__claraeHost'] = {
     emit: (name: string, payload: string) => post({ type: 'event', name, payload }),
     token: async () => {
       const { value } = await ask({ op: 'token' });
@@ -102,7 +102,7 @@ function installHost(): void {
     pickFile: async (title: string, patterns: string[]) => {
       const { file } = await ask({ op: 'pickFile', title, patterns });
       if (!file) return '';
-      const dir = '/tmp/memobrain-uploads';
+      const dir = '/tmp/clarae-uploads';
       await new Promise<void>((resolve, reject) =>
         mkdirAll(dir, (e) => (e ? reject(e) : resolve())),
       );
@@ -188,7 +188,7 @@ async function installSqlite(assets: CoreAssets, directory: string): Promise<voi
       ): Promise<SahPool & { OpfsSAHPoolDb: new (n: string) => unknown }>;
     }
   ).installOpfsSAHPoolVfs({
-    name: 'memobrain',
+    name: 'clarae',
     directory,
     initialCapacity: POOL_MIN,
     clearOnInit: false,
@@ -246,7 +246,7 @@ function ensureSlots(): Promise<unknown> {
   growing = pool
     .addCapacity(POOL_MARGIN)
     .catch((e: unknown) => {
-      console.warn('memobrain: the database pool cannot grow (storage full?):', e);
+      console.warn('clarae: the database pool cannot grow (storage full?):', e);
     })
     .finally(() => {
       growing = null;
@@ -261,7 +261,7 @@ function ensureSlots(): Promise<unknown> {
  * runs from a blob: URL (bridge.ts), which cannot serve as a base.
  */
 async function fetchChecked(ref: AssetRef): Promise<Response> {
-  if (!ref.integrity && !import.meta.env.MEMOBRAIN_E2E)
+  if (!ref.integrity && !import.meta.env.CLARAE_E2E)
     throw new Error(`refusing to load ${ref.url} without its integrity hash`);
   const url = new URL(ref.url, location.origin).href;
   const res = await fetch(url, ref.integrity ? { integrity: ref.integrity } : {});
@@ -281,9 +281,9 @@ type GoCore = {
 let core: GoCore | null = null;
 
 async function startGo(assets: CoreAssets, config: CoreConfig): Promise<void> {
-  (globalThis as Record<string, unknown>)['__memobrainConfig'] = config;
+  (globalThis as Record<string, unknown>)['__claraeConfig'] = config;
   const ready = new Promise<void>((resolve) => {
-    (globalThis as Record<string, unknown>)['__memobrainCoreReady'] = resolve;
+    (globalThis as Record<string, unknown>)['__claraeCoreReady'] = resolve;
   });
   // wasm_exec.js (Go's own loader, evaluated for its side effect) defines globalThis.Go.
   await import('../../../build/wasm/wasm_exec.js');
@@ -298,7 +298,7 @@ async function startGo(assets: CoreAssets, config: CoreConfig): Promise<void> {
     }
   ).Go;
   const go = new Go();
-  go.argv = ['memobrain-core'];
+  go.argv = ['clarae-core'];
   go.env = { TMPDIR: '/tmp', HOME: '/' };
   const res = await fetchChecked(assets.core);
   let instance: WebAssembly.Instance;
@@ -313,13 +313,13 @@ async function startGo(assets: CoreAssets, config: CoreConfig): Promise<void> {
     (e: unknown) => post({ type: 'fatal', error: `the Go core stopped: ${String(e)}` }),
   );
   await ready;
-  core = (globalThis as unknown as { __memobrainCore: GoCore }).__memobrainCore;
+  core = (globalThis as unknown as { __claraeCore: GoCore }).__claraeCore;
 }
 
 // ---- messages ---------------------------------------------------------------------------------------
 
 /** Scratch folders of the host (webHost.SaveFile, pickFile) and of the fs shim. */
-const SCRATCH = ['/tmp/memobrain-downloads', '/tmp/memobrain-uploads', UNLINKED_DIR];
+const SCRATCH = ['/tmp/clarae-downloads', '/tmp/clarae-uploads', UNLINKED_DIR];
 
 async function init(assets: CoreAssets, config: CoreConfig): Promise<void> {
   // Only the signed-in account's storage is opened (storage.ts): never a default shared by accounts.

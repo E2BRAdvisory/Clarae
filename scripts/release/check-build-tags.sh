@@ -2,7 +2,7 @@
 # Fails when a release binary was built with a build tag it must never carry (ADR-0051, B-D8), or without
 # "production". Reads the build settings the Go linker embeds (`go version -m`), so it checks what was really built:
 #
-#   scripts/release/check-build-tags.sh <binary|MemoBrain Notes.app> [...]
+#   scripts/release/check-build-tags.sh <binary|Clarae notanda.app> [...]
 #
 #   mcp       the Wails v3 MCP server: drives the app from 127.0.0.1:9099
 #   server    the Wails v3 server mode: an HTTP server instead of a window

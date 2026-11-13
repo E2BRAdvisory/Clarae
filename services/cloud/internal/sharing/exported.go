@@ -13,13 +13,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/access"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/sharing/sharingdb"
-	"memobrain/services/cloud/internal/vaults"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/access"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/sharing/sharingdb"
+	"clarae/services/cloud/internal/vaults"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 // Types of the exported queries.

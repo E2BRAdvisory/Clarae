@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '@memobrain/api-client';
-import { Badge, Button, Card, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
+import { ApiError } from '@clarae/api-client';
+import { Badge, Button, Card, Dialog, InlineError, TextField, useToast } from '@clarae/ui';
 import {
   useDeleteProfile,
   useProfile,

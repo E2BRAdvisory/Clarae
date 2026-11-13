@@ -8,7 +8,7 @@
  * that arrived from outside. Neither dirties the note, neither may be undone, and neither is turned
  * away by a read-only editor.
  */
-export const EXTERNAL_META = 'memobrain-external';
+export const EXTERNAL_META = 'clarae-external';
 
 export const isUserEdit = (tr: { docChanged: boolean; getMeta(key: string): unknown }): boolean =>
   tr.docChanged && tr.getMeta('addToHistory') !== false && !tr.getMeta(EXTERNAL_META);

@@ -1,4 +1,4 @@
-// Saved workspaces of the open vault (.memobrain/workspaces.json, device-local).
+// Saved workspaces of the open vault (.clarae/workspaces.json, device-local).
 // Loaded and reset automatically when the vault changes. A read-only vault
 // (viewer mount) can load its workspaces but not change them.
 import { create } from 'zustand';

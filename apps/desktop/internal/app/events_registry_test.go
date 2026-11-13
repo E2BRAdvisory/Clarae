@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/events"
 )
 
 // moduleRoot is apps/desktop, seen from this package's directory.
@@ -213,10 +213,10 @@ func TestEventEnumsComplete(t *testing.T) {
 func packageDir(t *testing.T, pkg string) string {
 	t.Helper()
 	switch {
-	case strings.HasPrefix(pkg, "memobrain/apps/desktop/"):
-		return filepath.Join(moduleRoot, strings.TrimPrefix(pkg, "memobrain/apps/desktop/"))
-	case strings.HasPrefix(pkg, "memobrain/shared/"):
-		return filepath.Join(moduleRoot, "../../shared/go", strings.TrimPrefix(pkg, "memobrain/shared/"))
+	case strings.HasPrefix(pkg, "clarae/apps/desktop/"):
+		return filepath.Join(moduleRoot, strings.TrimPrefix(pkg, "clarae/apps/desktop/"))
+	case strings.HasPrefix(pkg, "clarae/shared/"):
+		return filepath.Join(moduleRoot, "../../shared/go", strings.TrimPrefix(pkg, "clarae/shared/"))
 	}
 	t.Fatalf("no directory known for package %s", pkg)
 	return ""

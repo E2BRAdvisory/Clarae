@@ -44,7 +44,7 @@ export const LOCAL_SUBJECT = 'local';
  * nor characters a file name cannot hold. 128 bits of SHA-256 (no collision between accounts).
  */
 export async function accountKey(a: Account): Promise<string> {
-  const data = new TextEncoder().encode(`memobrain/workbench-account\n${a.server}\n${a.subject}`);
+  const data = new TextEncoder().encode(`clarae/workbench-account\n${a.server}\n${a.subject}`);
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
   return 'a' + Array.from(digest.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
 }

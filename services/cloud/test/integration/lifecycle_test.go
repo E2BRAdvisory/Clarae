@@ -19,8 +19,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/shared/notifyv1"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/shared/notifyv1"
 )
 
 // migrationLockID mirrors db.migrationLockID.

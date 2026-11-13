@@ -48,7 +48,7 @@ export const Events = {
   aiChunk: 'ai:chunk',
   /** Desktop: a request of the AI assistant ended (complete, cancelled or failed); no chunk follows. */
   aiDone: 'ai:done',
-  /** A memobrain://open link handled by the operating system asks to open a vault (and a file). */
+  /** A clarae://open link handled by the operating system asks to open a vault (and a file). */
   appOpenRequest: 'app:open-request',
   /** Desktop: the window is closing; write the pending edits, then call the runtime Quit again. */
   appBeforeClose: 'app:before-close',

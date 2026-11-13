@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/db"
 )
 
 // unindexedReferences are the tables whose rows are never deleted, so the

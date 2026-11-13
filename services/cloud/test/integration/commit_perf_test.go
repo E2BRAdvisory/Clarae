@@ -14,9 +14,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"memobrain/services/cloud/internal/db"
-	syncmod "memobrain/services/cloud/internal/sync"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/db"
+	syncmod "clarae/services/cloud/internal/sync"
+	"clarae/shared/syncproto"
 )
 
 // queryCounter counts the statements sent to PostgreSQL (each one a round trip).

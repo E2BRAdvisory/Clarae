@@ -12,10 +12,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"memobrain/apps/desktop/internal/app"
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/rpc"
-	"memobrain/apps/desktop/internal/shell"
+	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/rpc"
+	"clarae/apps/desktop/internal/shell"
 )
 
 // recordingHost keeps what the core sends to the window and its error dialogs.
@@ -187,11 +187,11 @@ func TestServiceStartupNeverFailsAndReportsAppDBToTheHost(t *testing.T) {
 	}
 }
 
-// DomReady is the signal of the shim: a memobrain:// URL that arrived before waits for it, then
+// DomReady is the signal of the shim: a clarae:// URL that arrived before waits for it, then
 // reaches the frontend once, in order.
 func TestDomReadyDeliversTheQueuedURL(t *testing.T) {
 	b, _, a, h := newBridge(t, t.TempDir())
-	a.HandleURL("memobrain://open?vault=V&file=a.md")
+	a.HandleURL("clarae://open?vault=V&file=a.md")
 	h.mu.Lock()
 	n := len(h.events)
 	h.mu.Unlock()
@@ -227,7 +227,7 @@ func TestStopIsRepeatable(t *testing.T) {
 func TestSingleInstanceOptions(t *testing.T) {
 	var got []string
 	o := singleInstanceOptions("/data/a", func(args []string) { got = args })
-	if !strings.HasPrefix(o.UniqueID, "dev.memobrain.desktop.i") {
+	if !strings.HasPrefix(o.UniqueID, "dev.clarae.desktop.i") {
 		t.Fatalf("id %q", o.UniqueID)
 	}
 	if o.EncryptionKey == ([32]byte{}) {
@@ -237,8 +237,8 @@ func TestSingleInstanceOptions(t *testing.T) {
 		t.Fatal("two data dirs share a lock")
 	}
 	// v3 hands the whole os.Args of the second instance, program name first.
-	o.OnSecondInstanceLaunch(application.SecondInstanceData{Args: []string{"/bin/memobrain", "memobrain://open?vault=V"}})
-	if len(got) != 2 || got[0] != "/bin/memobrain" {
+	o.OnSecondInstanceLaunch(application.SecondInstanceData{Args: []string{"/bin/clarae", "clarae://open?vault=V"}})
+	if len(got) != 2 || got[0] != "/bin/clarae" {
 		t.Fatalf("args = %v", got)
 	}
 }

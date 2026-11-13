@@ -21,7 +21,7 @@ export async function flushWorkbench(timeoutMs = EXIT_FLUSH_MS): Promise<void> {
     (async () => {
       const report = await flushAllNotes({ rescue: true });
       if (report.failed.length)
-        console.error('memobrain: unsaved edits could not be written:', report.failed.join(', '));
+        console.error('clarae: unsaved edits could not be written:', report.failed.join(', '));
       const vault = useAppStore.getState().vault;
       if (vault) await saveWorkspaceNow(vault.id);
     })(),

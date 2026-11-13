@@ -12,8 +12,8 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/shared/syncproto"
 )
 
 const blobPath = "/api/v1/vaults/0190f3c4-0000-7000-8000-000000000001/blobs/" +

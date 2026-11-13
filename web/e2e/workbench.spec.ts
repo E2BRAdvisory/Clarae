@@ -30,7 +30,7 @@ async function bind<T>(
 const accountOf = (page: Page, subject = 'local'): Promise<string> =>
   page.evaluate(async (subject) => {
     const data = new TextEncoder().encode(
-      `memobrain/workbench-account\n${location.origin}\n${subject}`,
+      `clarae/workbench-account\n${location.origin}\n${subject}`,
     );
     const d = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
     return 'a' + Array.from(d.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -38,7 +38,7 @@ const accountOf = (page: Page, subject = 'local'): Promise<string> =>
 
 /** The localStorage key of an account's vault markers (web/src/workbench/markers.ts). */
 const markersOf = async (page: Page, subject?: string): Promise<string> =>
-  `memobrain.workbench.vaults@${await accountOf(page, subject)}`;
+  `clarae.workbench.vaults@${await accountOf(page, subject)}`;
 
 /** Whether this browser holds the folder of a vault (OPFS `accounts/<key>/fs/vaults/<name>`). */
 const vaultFolder = async (page: Page, name: string, subject?: string): Promise<boolean> =>
@@ -61,7 +61,7 @@ const signInAlice = async (page: Page): Promise<void> => {
   await page
     .context()
     .addInitScript(() =>
-      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
+      sessionStorage.setItem('clarae.e2e.user', JSON.stringify({ name: 'Alice' })),
     );
 };
 
@@ -371,7 +371,7 @@ test.describe('vault workbench', () => {
       for (const part of ['accounts', bob, 'fs', 'vaults', 'bob-vault'])
         d = await d.getDirectoryHandle(part, { create: true });
       localStorage.setItem(
-        `memobrain.workbench.vaults@${bob}`,
+        `clarae.workbench.vaults@${bob}`,
         JSON.stringify({
           'bob-1': {
             name: 'Bob diary',
@@ -426,7 +426,7 @@ test.describe('vault workbench', () => {
     expect(await folders()).toEqual(['accounts']);
     expect(await vaultFolder(page, 'bob-vault', 'bob')).toBe(true);
     expect(
-      await page.evaluate((key) => localStorage.getItem(key), `memobrain.workbench.vaults@${bob}`),
+      await page.evaluate((key) => localStorage.getItem(key), `clarae.workbench.vaults@${bob}`),
     ).toContain('Bob diary');
   });
 
@@ -518,7 +518,7 @@ test.describe('vault workbench', () => {
     // Signed in, so the console renders instead of bouncing through the E2E sign-in page (which is
     // itself a console route and would redirect forever without a user).
     await page.addInitScript(() =>
-      sessionStorage.setItem('memobrain.e2e.user', JSON.stringify({ name: 'Alice' })),
+      sessionStorage.setItem('clarae.e2e.user', JSON.stringify({ name: 'Alice' })),
     );
     await page.goto('/vaults/x/open/extra?local');
     // The server answers with the console for this path: no workbench page (no #status), no core worker.

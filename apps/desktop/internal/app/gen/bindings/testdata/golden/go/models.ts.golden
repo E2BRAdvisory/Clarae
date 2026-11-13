@@ -189,12 +189,12 @@ export namespace fixture {
 	
 	    }
 	}
-	export class Page_memobrain_apps_desktop_internal_app_gen_bindings_fixture_Link_ {
+	export class Page_clarae_apps_desktop_internal_app_gen_bindings_fixture_Link_ {
 	    items: Link[];
 	    next?: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Page_memobrain_apps_desktop_internal_app_gen_bindings_fixture_Link_(source);
+	        return new Page_clarae_apps_desktop_internal_app_gen_bindings_fixture_Link_(source);
 	    }
 	
 	    constructor(source: any = {}) {

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // slowRemote is a scriptRemote whose transfers take time, as on a distant

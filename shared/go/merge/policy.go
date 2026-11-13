@@ -1,6 +1,6 @@
 package merge
 
-import "memobrain/shared/syncproto"
+import "clarae/shared/syncproto"
 
 // Strategy is what the sync engine does with a candidate conflict.
 type Strategy string

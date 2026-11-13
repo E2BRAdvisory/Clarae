@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Turn the universal MemoBrain Notes.app into a (signed, notarised, stapled) .dmg (M7-WP3).
+# Turn the universal Clarae notanda.app into a (signed, notarised, stapled) .dmg (M7-WP3).
 #
 #   scripts/release/package-macos.sh <version> [--require-signing]
 #
 # Input : apps/desktop/build/bin/<name>.app (scripts/release/build-desktop.sh darwin <version>; the bundle is named after "name" in apps/desktop/build/project.json)
-# Output: dist/memobrain-<version>-darwin-universal.dmg
+# Output: dist/clarae-<version>-darwin-universal.dmg
 #
 # Signing and notarisation run ONLY when their secrets are present; otherwise the dmg is built
 # unsigned with a loud warning. With --require-signing (release workflow on a tag) missing
@@ -25,7 +25,7 @@ VERSION="${VERSION#v}"
 NAME="$(GOWORK=off go run "$ROOT/scripts/release/render-assets.go" -project "$ROOT/apps/desktop/build/project.json" -field name)"
 APP="$ROOT/apps/desktop/build/bin/$NAME.app"
 ENTITLEMENTS="$ROOT/apps/desktop/build/darwin/entitlements.plist"
-OUT_DIR="$ROOT/dist"; DMG="$OUT_DIR/memobrain-$VERSION-darwin-universal.dmg"
+OUT_DIR="$ROOT/dist"; DMG="$OUT_DIR/clarae-$VERSION-darwin-universal.dmg"
 [ -n "$APP" ] && [ -d "$APP" ] || die "no .app in apps/desktop/build/bin: run scripts/release/build-desktop.sh darwin $VERSION first"
 need go; need hdiutil; need codesign; need xcrun
 mkdir -p "$OUT_DIR"
@@ -44,11 +44,11 @@ else
 fi
 
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
-cp -R "$APP" "$STAGE/MemoBrain Notes.app"
+cp -R "$APP" "$STAGE/Clarae notanda.app"
 ln -s /Applications "$STAGE/Applications"
 log "Creating $DMG"
 rm -f "$DMG"
-hdiutil create -volname "MemoBrain Notes $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+hdiutil create -volname "Clarae notanda $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
 
 if [ "$SIGNED" = 1 ]; then
   codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG"

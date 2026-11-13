@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/export/exportdb"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/export/exportdb"
 )
 
 // HTTP implements the export endpoints of the generated strict server.

@@ -32,20 +32,20 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/services/cloud/internal/access"
+	"clarae/services/cloud/internal/access"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"memobrain/services/cloud/internal/blobs/blobsdb"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/quota"
-	"memobrain/services/cloud/internal/settings"
-	"memobrain/services/cloud/internal/storage"
-	"memobrain/services/cloud/internal/vaults"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/blobs/blobsdb"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/quota"
+	"clarae/services/cloud/internal/settings"
+	"clarae/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/vaults"
+	"clarae/shared/syncproto"
 )
 
 // MaxSingleUpload is the largest body accepted by PUT /blobs/{sha256} (§3.4.4).
@@ -157,7 +157,7 @@ func (s *Service) checkSums(ctx context.Context, tx db.DBTX, v access.Vault, siz
 
 // lockOwner serializes the quota checks of one owner until tx ends.
 func lockOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) error {
-	return blobsdb.New(tx).LockOwnerUploads(ctx, "memobrain.uploads:"+ownerID.String())
+	return blobsdb.New(tx).LockOwnerUploads(ctx, "clarae.uploads:"+ownerID.String())
 }
 
 // Store exposes the object store to modules that stream blobs (revisions).
@@ -207,7 +207,7 @@ func (s *Service) Check(ctx context.Context, userID, vaultID uuid.UUID, scope st
 
 // spool copies r to a temporary file while hashing it and enforcing max.
 func spool(r io.Reader, max int64) (path string, size int64, hash string, err error) {
-	f, err := os.CreateTemp("", "memobrain-blob-*")
+	f, err := os.CreateTemp("", "clarae-blob-*")
 	if err != nil {
 		return "", 0, "", err
 	}

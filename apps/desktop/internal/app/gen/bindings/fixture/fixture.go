@@ -8,7 +8,7 @@ package fixture
 import (
 	"time"
 
-	"memobrain/apps/desktop/internal/app/gen/bindings/fixture/other"
+	"clarae/apps/desktop/internal/app/gen/bindings/fixture/other"
 )
 
 // Base is embedded: its fields belong to the structs that embed it.

@@ -9,22 +9,22 @@
 #   the templates are rendered by scripts/release/render-assets.go into a temporary directory.
 # - The binary is built by scripts/build-desktop-bin.sh (plain `go build -tags production[,gtk3]`, no Wails CLI
 #   for the build itself) into apps/desktop/build/bin:
-#     darwin   "MemoBrain Notes.app", universal (the .dmg is made by package-macos.sh)
-#     windows  memobrain.exe and the NSIS installer memobrain-<arch>-installer.exe for $ARCH (needs makensis and the
+#     darwin   "Clarae notanda.app", universal (the .dmg is made by package-macos.sh)
+#     windows  clarae.exe and the NSIS installer clarae-<arch>-installer.exe for $ARCH (needs makensis and the
 #              wails3 CLI for the exe resources and the WebView2 bootstrapper; arm64 is cross-compiled, the
 #              WebView2 binding needs no CGO)
-#     linux    memobrain for $ARCH (arm64 needs an arm64 host, WebKitGTK is CGO; the .deb and AppImage are made by
+#     linux    clarae for $ARCH (arm64 needs an arm64 host, WebKitGTK is CGO; the .deb and AppImage are made by
 #              package-linux.sh)
 #   $ARCH defaults to amd64; macOS is always universal.
 # - SKIP_FRONTEND=1 reuses apps/desktop/frontend/dist instead of building the UI again (local checks only: with
 #   --release it is refused, a release always builds it). Any other value than 1, 0 or empty is an error.
-# - With --release the build switches of the frontend (MEMOBRAIN_AI, MEMOBRAIN_COLLAB,
-#   MEMOBRAIN_E2E) and MEMOBRAIN_DIST must not be set, and neither the collaboration code nor the binding mock of the
+# - With --release the build switches of the frontend (CLARAE_AI, CLARAE_COLLAB,
+#   CLARAE_E2E) and CLARAE_DIST must not be set, and neither the collaboration code nor the binding mock of the
 #   e2e tests may be in the frontend that was built, which must have the Milkdown editor (check-editor-switches.sh, check-dist.sh, run by build-desktop-bin.sh). A release
 #   is the default build. `task release-desktop` always passes --release.
 # - Every binary is checked with scripts/release/check-build-tags.sh: it must carry the tag "production" and none
 #   of mcp, server, devtools (ADR-0051, B-D8).
-# - Windows signing: when MEMOBRAIN_SIGNTOOL_CMD is set (a signtool command line, %1 = the file) the
+# - Windows signing: when CLARAE_SIGNTOOL_CMD is set (a signtool command line, %1 = the file) the
 #   application exe is signed BEFORE it is packed, then NSIS signs the installer and uninstaller.
 # - UPDATE_PUBLIC_KEY (base64 ed25519) and UPDATE_BASE_URL are compiled in with ldflags. With
 #   --release they are mandatory: a release must never ship the development update key. The one way out is
@@ -106,8 +106,8 @@ BUILD_DIR="$DESKTOP/build"
 BIN_DIR="$BUILD_DIR/bin"
 PROJECT="$BUILD_DIR/project.json"
 RENDER="$ROOT/scripts/release/render-assets.go"
-NAME="$(GOWORK=off go run "$RENDER" -project "$PROJECT" -field name)"          # "MemoBrain Notes": bundle and PRODUCT_EXECUTABLE
-OUTPUT="$(GOWORK=off go run "$RENDER" -project "$PROJECT" -field outputfilename)" # "memobrain": CFBundleExecutable, linux binary
+NAME="$(GOWORK=off go run "$RENDER" -project "$PROJECT" -field name)"          # "Clarae notanda": bundle and PRODUCT_EXECUTABLE
+OUTPUT="$(GOWORK=off go run "$RENDER" -project "$PROJECT" -field outputfilename)" # "clarae": CFBundleExecutable, linux binary
 [ -n "$NAME" ] && [ -n "$OUTPUT" ] || die "$PROJECT has no name or outputfilename"
 
 # bin_build <os> <arch>: scripts/build-desktop-bin.sh with the updater flags of this release.
@@ -147,12 +147,12 @@ case "$TARGET" in
     EXE="$BIN_DIR/$OUTPUT.exe"
     [ -f "$EXE" ] || die "the build did not produce $EXE"
     bash "$ROOT/scripts/release/check-build-tags.sh" "$EXE"
-    if [ -n "${MEMOBRAIN_SIGNTOOL_CMD:-}" ]; then
+    if [ -n "${CLARAE_SIGNTOOL_CMD:-}" ]; then
       # The command is a full signtool line with %1 for the file, as NSIS takes it.
       log "signing $EXE"
-      bash -c "${MEMOBRAIN_SIGNTOOL_CMD//%1/$EXE}"
+      bash -c "${CLARAE_SIGNTOOL_CMD//%1/$EXE}"
     else
-      warn "MEMOBRAIN_SIGNTOOL_CMD not set: $OUTPUT.exe and its installer are UNSIGNED"
+      warn "CLARAE_SIGNTOOL_CMD not set: $OUTPUT.exe and its installer are UNSIGNED"
     fi
     # makensis is run here, not by a Wails command, so the exe is signed first. The installer sources are copied into
     # a temporary tree with the layout project.nsi expects (installer/, ../icon.ico, ../../bin) and wails_tools.nsh is
@@ -167,7 +167,7 @@ case "$TARGET" in
     webview2_bootstrapper "$INST/tmp"
     cp "$EXE" "$STAGE/bin/$OUTPUT.exe"
     upper="$(printf '%s' "$ARCH" | tr '[:lower:]' '[:upper:]')"
-    INSTALLER="memobrain-$ARCH-installer.exe"
+    INSTALLER="clarae-$ARCH-installer.exe"
     rm -f "$BIN_DIR/$INSTALLER"
     (cd "$INST" && makensis -V2 "-DARG_WAILS_${upper}_BINARY=..\\..\\bin\\$OUTPUT.exe" project.nsi)
     [ -f "$STAGE/bin/$INSTALLER" ] || die "makensis did not produce $INSTALLER"

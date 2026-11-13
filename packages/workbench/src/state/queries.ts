@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import { api, type Entry, type SearchSort } from '../app/api';
 
 export const queryKeys = {

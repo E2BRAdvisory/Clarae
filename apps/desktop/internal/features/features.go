@@ -1,7 +1,7 @@
 // Package features turns the `features` section of the distributed configuration into
 // flags: a false value hides the function in the client (§2.6.6). The flags, their defaults and
 // their descriptions come from api/config-profile.schema.json, generated into
-// memobrain/shared/features by `task gen`; this package only adapts them to the client.
+// clarae/shared/features by `task gen`; this package only adapts them to the client.
 //
 // The drawing_* flags refine "drawings": each hides one family of functions of the drawing
 // editor (formulas, Mermaid diagrams, auto-export, the scene actions) and has no effect while
@@ -9,7 +9,7 @@
 // desktop ignores it.
 package features
 
-import shared "memobrain/shared/features"
+import shared "clarae/shared/features"
 
 // Known lists the flags the client understands (the schema's, in schema order).
 var Known = shared.Known

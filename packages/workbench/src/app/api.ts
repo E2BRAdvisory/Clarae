@@ -44,7 +44,7 @@ import * as ComposerAPI from '../../wailsjs/go/app/ComposerAPI';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import type { EventName, EventPayload } from './events.gen';
 import type { Capabilities } from '../platform';
-import type { Schemas } from '@memobrain/api-client';
+import type { Schemas } from '@clarae/api-client';
 import type { app, auth, composer, links, search, sync, vault } from '../../wailsjs/go/models';
 import * as HistoryAPI from '../../wailsjs/go/app/HistoryAPI';
 import type { history as localHistory } from '../../wailsjs/go/models';
@@ -434,7 +434,7 @@ export const api = {
     refresh: (): Promise<ConfigState> => ConfigAPI.Refresh(),
   },
   templates: {
-    /** Settings of daily notes, unique notes and templates (.memobrain/daily.json; "" when unset). */
+    /** Settings of daily notes, unique notes and templates (.clarae/daily.json; "" when unset). */
     readSettings: (vaultId: string): Promise<string> => TemplatesAPI.ReadSettings(vaultId),
     writeSettings: (vaultId: string, content: string): Promise<void> =>
       TemplatesAPI.WriteSettings(vaultId, content),

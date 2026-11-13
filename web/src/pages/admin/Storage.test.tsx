@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from '../../test/utils';
 
-const ADMIN = { roles: ['memobrain-admin'] };
+const ADMIN = { roles: ['clarae-admin'] };
 const MB = 1024 ** 2;
 
 const overview = {

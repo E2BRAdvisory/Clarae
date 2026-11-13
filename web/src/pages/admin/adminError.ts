@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { ApiError } from '@memobrain/api-client';
+import { ApiError } from '@clarae/api-client';
 import { describeError } from '../../api/errors';
 
 /** Like describeError, with administration-specific wording for the frequent state conflicts. */

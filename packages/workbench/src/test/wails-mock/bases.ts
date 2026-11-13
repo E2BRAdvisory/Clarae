@@ -1,7 +1,7 @@
 // Mock of BasesAPI for UI tests and Playwright: a tiny subset of the Go engine (equality and
 // inFolder filters, sort, order, one level of groupBy). The real semantics are tested in Go.
 import { parse } from 'yaml';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import type { WriteResult } from '../../app/api';
 import type { BaseCell, BaseInfo, BaseResult } from '../../bases/types';
 

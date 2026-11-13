@@ -1,6 +1,6 @@
 // Locating the wikilink under a position of a line of text (editor hover, "Preview
 // link under cursor"). Embeds (![[…]]) are not previewed: they already show their content.
-import { parseWikilinkInner } from '@memobrain/markdown';
+import { parseWikilinkInner } from '@clarae/markdown';
 import type { LinkSpec } from '../editor/types';
 
 export interface LinkAt {

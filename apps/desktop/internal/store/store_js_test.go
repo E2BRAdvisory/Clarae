@@ -14,7 +14,7 @@ func TestOpenEscapesPathJS(t *testing.T) {
 	ctx := context.Background()
 	base := t.TempDir()
 	for _, name := range []string{"Progetti #1", "100%25 done", "why?", "a?b#c", "Città è"} {
-		path := filepath.Join(base, name, ".memobrain", "sync.db")
+		path := filepath.Join(base, name, ".clarae", "sync.db")
 		db, err := Open(ctx, path, KindSync)
 		if err != nil {
 			t.Fatalf("%q: %v", name, err)
@@ -42,16 +42,16 @@ func TestLegacyDatabaseJS(t *testing.T) {
 	}
 	_ = old.Close()
 
-	if got, ok := legacyDatabase(filepath.Join(base, "why?", ".memobrain", "sync.db")); !ok || got != legacy {
+	if got, ok := legacyDatabase(filepath.Join(base, "why?", ".clarae", "sync.db")); !ok || got != legacy {
 		t.Fatalf("legacyDatabase = %q, %v; want %q, true", got, ok, legacy)
 	}
 	if ok, _ := Exists(legacy); !ok {
 		t.Fatal("legacy database removed")
 	}
 	for _, p := range []string{
-		filepath.Join(base, "why #1", ".memobrain", "sync.db"), // '#' never moved it
-		filepath.Join(base, "plain", ".memobrain", "sync.db"),
-		filepath.Join(base, "none?", ".memobrain", "sync.db"), // nothing stored at the truncated path
+		filepath.Join(base, "why #1", ".clarae", "sync.db"), // '#' never moved it
+		filepath.Join(base, "plain", ".clarae", "sync.db"),
+		filepath.Join(base, "none?", ".clarae", "sync.db"), // nothing stored at the truncated path
 	} {
 		if got, ok := legacyDatabase(p); ok {
 			t.Errorf("%q: unexpected legacy database %q", p, got)

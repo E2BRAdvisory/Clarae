@@ -105,7 +105,7 @@ describe('GraphView refresh', () => {
     const buildsAtStart = builds;
 
     // The workspace layout and the graph settings are saved by the app itself.
-    changed([{ type: 'modify', path: '.memobrain/workspace.json' }]);
+    changed([{ type: 'modify', path: '.clarae/workspace.json' }]);
     await settle();
     expect(builds).toBe(buildsAtStart);
 

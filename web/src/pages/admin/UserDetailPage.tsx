@@ -11,7 +11,7 @@ import {
   Table,
   TextField,
   useToast,
-} from '@memobrain/ui';
+} from '@clarae/ui';
 import {
   useAdminUser,
   useDeleteUser,

@@ -169,7 +169,7 @@ function isNamespace(keys: Set<string>, k: string): boolean {
 }
 
 /**
- * A host's resources with the shared ones of @memobrain/ui (`common` namespace, ADR-0043) laid over
+ * A host's resources with the shared ones of @clarae/ui (`common` namespace, ADR-0043) laid over
  * them, as i18next resolves them with `fallbackNS`: for the usage scan of a host.
  */
 export function withShared(host: Resource, shared: Resource): Resource {

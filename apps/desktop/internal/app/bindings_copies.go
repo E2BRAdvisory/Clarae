@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	syncpkg "memobrain/apps/desktop/internal/sync"
+	syncpkg "clarae/apps/desktop/internal/sync"
 )
 
 // CopyVerdict says whether the local copy of a vault can be removed without

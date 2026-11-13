@@ -3,7 +3,7 @@
 // note rescans a few lines instead of the whole document. And the frontmatter, as splitFrontmatter has it.
 import { describe, expect, it } from 'vitest';
 import { EditorState, Text, type ChangeSpec } from '@codemirror/state';
-import { splitFrontmatter } from '@memobrain/markdown';
+import { splitFrontmatter } from '@clarae/markdown';
 import { blockStates, frontmatterOf } from './blockState';
 
 /** Lines that open, close or continue every construct the scanner knows. */

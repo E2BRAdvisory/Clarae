@@ -2,20 +2,20 @@
 
 ## Componenti
 
-| Componente        | Ruolo                                                                                             | Note                                              |
-| ----------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `memobrain-cloud` | API REST `/api/v1`, gRPC/SSE per le notifiche, Web UI incorporata (`go:embed`), job in background | Un solo binario, `--role=api\|worker\|all`        |
-| PostgreSQL        | Metadati, changelog, revisioni, utenti, gruppi, audit                                             | 15 o successivo; migrazioni automatiche all'avvio |
-| Archivio S3       | Blob content-addressed ed archivi di export                                                       | RustFS, MinIO, AWS S3 o compatibile; 2 bucket     |
-| Keycloak          | Autenticazione OIDC (il servizio è solo resource server)                                          | Realm `memobrain`, vedi [Keycloak](keycloak.md)   |
+| Componente     | Ruolo                                                                                             | Note                                              |
+| -------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `clarae-cloud` | API REST `/api/v1`, gRPC/SSE per le notifiche, Web UI incorporata (`go:embed`), job in background | Un solo binario, `--role=api\|worker\|all`        |
+| PostgreSQL     | Metadati, changelog, revisioni, utenti, gruppi, audit                                             | 15 o successivo; migrazioni automatiche all'avvio |
+| Archivio S3    | Blob content-addressed ed archivi di export                                                       | RustFS, MinIO, AWS S3 o compatibile; 2 bucket     |
+| Keycloak       | Autenticazione OIDC (il servizio è solo resource server)                                          | Realm `clarae`, vedi [Keycloak](keycloak.md)      |
 
 Il traffico ha due ingressi: HTTP(S) per API e Web UI, **HTTP/2 (gRPC)** per lo stream di notifiche (in alternativa il client usa SSE su HTTP). Il database deve supportare `LISTEN/NOTIFY` senza pooler in modalità transaction.
 
 ## Kubernetes con Helm
 
-Il chart è in `deploy/helm/memobrain` (`values.yaml` documenta ogni valore).
+Il chart è in `deploy/helm/clarae` (`values.yaml` documenta ogni valore).
 
-1. **Preparare le dipendenze:** database e utente PostgreSQL; due bucket (`memobrain-blobs`, `memobrain-exports`) e una chiave con lettura/scrittura; realm Keycloak importato o configurato ([Keycloak](keycloak.md)).
+1. **Preparare le dipendenze:** database e utente PostgreSQL; due bucket (`clarae-blobs`, `clarae-exports`) e una chiave con lettura/scrittura; realm Keycloak importato o configurato ([Keycloak](keycloak.md)).
 2. **Segreti.** Creare un Secret con `DATABASE_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `KC_ADMIN_CLIENT_SECRET` e indicarlo in `secret.existingSecret` (consigliato), oppure lasciare che il chart lo crei da `secret.values` (solo prove). In questo caso `values.yaml` non fornisce valori: il rendering fallisce se una delle quattro chiavi è vuota o vale un segnaposto (`change-me`…), e il servizio applica la stessa regola all'avvio ([segreti segnaposto](configurazione.md#segreti-segnaposto)).
 3. **Valori non segreti** in `config:` (vedi [configurazione](configurazione.md)): `OIDC_ISSUER`, `S3_ENDPOINT`, `KC_ADMIN_BASE_URL`, `WEB_UI_ORIGIN`, …
 4. **Immagine.** `image.repository` e `image.tag` (l'immagine si costruisce con `docker build -f services/cloud/Dockerfile -t <repo>:<tag> .` dalla radice del repository; il registry definitivo è da decidere con la distribuzione, M7).
@@ -23,7 +23,7 @@ Il chart è in `deploy/helm/memobrain` (`values.yaml` documenta ogni valore).
 6. **Installare:**
 
    ```sh
-   helm upgrade --install memobrain deploy/helm/memobrain -n memobrain --create-namespace -f my-values.yaml
+   helm upgrade --install clarae deploy/helm/clarae -n clarae --create-namespace -f my-values.yaml
    ```
 
 Il chart avvia `api.replicas` repliche con `--role=api` e `worker.replicas` (1) con `--role=worker`. Le probe dell'API usano `/api/v1/healthz` (liveness) e `/api/v1/readyz` (readiness); quelle del worker `/healthz` e `/readyz` sulla porta interna `metrics` (`worker.metricsPort`, 18083). La directory `/tmp` di ogni pod è un `emptyDir` limitato (`api.tmp.sizeLimit` 2Gi per gli upload dei blob, `worker.tmp.sizeLimit` 10Gi per gli archivi di export; oltre il limite il kubelet sfratta il pod) con richieste e limiti di `ephemeral-storage` corrispondenti in `resources`: dimensionarli sugli upload concorrenti e sul vault più grande. Il pod gira come utente non root con profilo seccomp `RuntimeDefault`.
@@ -38,9 +38,9 @@ Uno stack di **sviluppo** (PostgreSQL, RustFS, Keycloak) è in `deploy/docker/co
 
 ## Primo avvio e verifica
 
-1. I pod diventano `Ready`; `GET https://<host>/api/v1/readyz` risponde `{"status":"ok"}`. Tramite l'ingress la risposta non riporta il dettaglio per dipendenza: per vederlo, interrogare il pod direttamente (`kubectl port-forward deploy/memobrain-api 18081` e `curl http://127.0.0.1:18081/api/v1/readyz`: `database` e `storage` a `ok`).
+1. I pod diventano `Ready`; `GET https://<host>/api/v1/readyz` risponde `{"status":"ok"}`. Tramite l'ingress la risposta non riporta il dettaglio per dipendenza: per vederlo, interrogare il pod direttamente (`kubectl port-forward deploy/clarae-api 18081` e `curl http://127.0.0.1:18081/api/v1/readyz`: `database` e `storage` a `ok`).
 2. `GET /api/v1/client-config` restituisce issuer e client id: è ciò che i client usano per configurarsi partendo dal solo URL del server.
-3. Accedere alla Web UI con un utente con il ruolo `memobrain-admin`: compare la voce **Amministrazione**.
+3. Accedere alla Web UI con un utente con il ruolo `clarae-admin`: compare la voce **Amministrazione**.
 4. Impostare i limiti in **Amministrazione → Limiti** (quota predefinita, conservazione dello storico, dimensione massima file).
 5. Nell'app desktop: _Impostazioni → Cloud_, inserire l'URL del server e accedere.
 

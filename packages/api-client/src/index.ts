@@ -1,5 +1,5 @@
-// Typed client for the MemoBrain Notes Cloud API, generated from api/openapi.yaml
-// (`yarn workspace @memobrain/api-client run gen`). Used by the Web UI.
+// Typed client for the Clarae notanda Cloud API, generated from api/openapi.yaml
+// (`yarn workspace @clarae/api-client run gen`). Used by the Web UI.
 import createOpenApiClient, { type ClientOptions, type Middleware } from 'openapi-fetch';
 import type { components, paths } from './gen/schema';
 
@@ -8,7 +8,7 @@ export type Schemas = components['schemas'];
 export type Problem = Schemas['Problem'];
 export type ErrorCode = Schemas['ErrorCode'];
 
-export interface MemobrainClientOptions extends ClientOptions {
+export interface ClaraeClientOptions extends ClientOptions {
   /**
    * Returns the bearer token, or undefined when signed out. It is called before every request (never
    * cached by the client), so it must return the session's current token, renewed when it is about to
@@ -18,7 +18,7 @@ export interface MemobrainClientOptions extends ClientOptions {
 }
 
 /** Creates a client bound to `/api/v1` with bearer authentication. */
-export function createClient(options: MemobrainClientOptions = {}) {
+export function createClient(options: ClaraeClientOptions = {}) {
   const { getAccessToken, baseUrl = '/api/v1', ...rest } = options;
   const client = createOpenApiClient<paths>({ baseUrl, ...rest });
   if (getAccessToken) {
@@ -34,7 +34,7 @@ export function createClient(options: MemobrainClientOptions = {}) {
   return client;
 }
 
-export type MemobrainClient = ReturnType<typeof createClient>;
+export type ClaraeClient = ReturnType<typeof createClient>;
 
 /** True when a response body is an RFC 9457 problem document from the API. */
 export function isProblem(body: unknown): body is Problem {

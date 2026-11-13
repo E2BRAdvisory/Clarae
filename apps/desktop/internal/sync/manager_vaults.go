@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"memobrain/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/sync/transport"
 )
 
 // Lifecycle of the account's cloud vaults (§2.6.1, ADR-0037 §2): rename, soft

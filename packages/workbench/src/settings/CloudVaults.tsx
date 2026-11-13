@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import '@memobrain/cloud-features/workbench.css';
+import '@clarae/cloud-features/workbench.css';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { CloudVaultsTable } from '../cloud/lazyPanels';
 import { useCan } from '../platform';
@@ -11,7 +11,7 @@ import { infoOf, useSync } from '../state/sync';
 
 /**
  * Settings > Cloud: the account's cloud vaults, renamed, deleted and restored with the components of
- * @memobrain/cloud-features (ADR-0037 §2). A new cloud vault comes from connecting the open folder
+ * @clarae/cloud-features (ADR-0037 §2). A new cloud vault comes from connecting the open folder
  * (the connect wizard); the web workbench, whose page is a cloud vault already, offers no creation
  * and does not delete the vault it has open. Both follow `unlinkVault`: where a folder can live
  * without its cloud vault (the desktop), the open folder is connected to a new one and deleting its

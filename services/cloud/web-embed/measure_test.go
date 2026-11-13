@@ -15,7 +15,7 @@ import (
 )
 
 // The measurements below run against a real Web UI build: set WEBEMBED_MEASURE_DIST to a production
-// dist/ (web/dist after `yarn workspace @memobrain/web run build`). They report what a browser
+// dist/ (web/dist after `yarn workspace @clarae/web run build`). They report what a browser
 // downloads on a first visit and on a revisit, and the allocations of one request per file class.
 
 func measureDist(tb testing.TB) string {
@@ -58,7 +58,7 @@ func measurePaths(tb testing.TB, root fs.FS) []string {
 
 func TestMeasureBytesServed(t *testing.T) {
 	root := os.DirFS(measureDist(t))
-	h := Handler(Options{FS: root, Issuer: "https://id.example.com/realms/memobrain"})
+	h := Handler(Options{FS: root, Issuer: "https://id.example.com/realms/clarae"})
 	var firstTotal, revisitTotal int64
 	for _, p := range measurePaths(t, root) {
 		req := httptest.NewRequest(http.MethodGet, p, nil)
@@ -131,7 +131,7 @@ func benchFS(b *testing.B) (fs.FS, map[string]string) {
 		"index":      "/",
 		"main-js":    pick("/assets/main-*.js"),
 		"excalidraw": "/excalidraw-assets/excalidraw.js",
-		"core-wasm":  pick("/core/memobrain-core-*.wasm"),
+		"core-wasm":  pick("/core/clarae-core-*.wasm"),
 	}
 }
 

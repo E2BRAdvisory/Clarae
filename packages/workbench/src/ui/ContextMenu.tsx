@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMenuKeyboard } from '@memobrain/ui';
+import { useMenuKeyboard } from '@clarae/ui';
 
 export interface MenuItem {
   label: string;
@@ -19,7 +19,7 @@ interface Props {
 
 /**
  * A small context menu positioned at the pointer. Keyboard and dismissal (arrows, Home/End, Escape,
- * Tab, outside press, focus in and back) come from useMenuKeyboard of @memobrain/ui.
+ * Tab, outside press, focus in and back) come from useMenuKeyboard of @clarae/ui.
  */
 export function ContextMenu({ x, y, items, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);

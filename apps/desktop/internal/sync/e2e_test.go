@@ -20,12 +20,12 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/store"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/store"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/syncproto"
 )
 
 type tokens struct{ user string }
@@ -104,7 +104,7 @@ func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, ciph
 	if err != nil {
 		t.Fatal(err)
 	}
-	sdb, err := store.Open(ctx, filepath.Join(dir, ".memobrain", "sync.db"), store.KindSync)
+	sdb, err := store.Open(ctx, filepath.Join(dir, ".clarae", "sync.db"), store.KindSync)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func (d *device) files() map[string]string {
 	out := map[string]string{}
 	_ = filepath.WalkDir(d.dir, func(p string, de os.DirEntry, err error) error {
 		if err != nil || de.IsDir() {
-			if de != nil && de.IsDir() && (de.Name() == ".memobrain" || de.Name() == ".trash") && p != d.dir {
+			if de != nil && de.IsDir() && (de.Name() == ".clarae" || de.Name() == ".trash") && p != d.dir {
 				return filepath.SkipDir
 			}
 			return nil
@@ -548,27 +548,27 @@ func TestSettingsMergePerKey(t *testing.T) {
 	v := createVault(t, "ada", "settings")
 	a := newDevice(t, "ada", "laptop", v, nil)
 	b := newDevice(t, "ada", "desktop", v, nil)
-	a.write(".memobrain/editor.json", `{"fontSize":15,"wrap":true}`)
+	a.write(".clarae/editor.json", `{"fontSize":15,"wrap":true}`)
 	a.sync()
 	b.sync()
-	if !b.exists(".memobrain/editor.json") {
+	if !b.exists(".clarae/editor.json") {
 		t.Fatal("settings did not sync")
 	}
 	// Device-local state never syncs.
-	a.write(".memobrain/workspace.json", `{"layout":1}`)
+	a.write(".clarae/workspace.json", `{"layout":1}`)
 	a.sync()
 	b.sync()
-	if b.exists(".memobrain/workspace.json") {
+	if b.exists(".clarae/workspace.json") {
 		t.Fatal("workspace.json must stay on the device")
 	}
 
-	a.write(".memobrain/editor.json", `{"fontSize":18,"wrap":true}`)
-	b.write(".memobrain/editor.json", `{"fontSize":15,"wrap":false}`)
+	a.write(".clarae/editor.json", `{"fontSize":18,"wrap":true}`)
+	b.write(".clarae/editor.json", `{"fontSize":15,"wrap":false}`)
 	a.sync()
 	b.sync()
 	a.sync()
 	for _, d := range []*device{a, b} {
-		got := d.read(".memobrain/editor.json")
+		got := d.read(".clarae/editor.json")
 		if !strings.Contains(got, `"fontSize": 18`) || !strings.Contains(got, `"wrap": false`) {
 			t.Errorf("%s: %s", d.name, got)
 		}

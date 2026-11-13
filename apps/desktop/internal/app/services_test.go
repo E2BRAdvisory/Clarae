@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/rpc"
+	"clarae/apps/desktop/internal/rpc"
 )
 
 func newDispatcher(t *testing.T, a *App) *rpc.Dispatcher {
@@ -46,12 +46,12 @@ func TestDispatcherExposesEveryService(t *testing.T) {
 // The TypeScript bindings (packages/workbench/wailsjs, generated from App.Services() by `task gen-wails`,
 // i.e. internal/app/gen/bindings) are what the UI calls: each function they declare must exist in the
 // dispatcher, and the dispatcher must not offer methods the UI cannot call. Skipped when the bindings
-// have not been generated, unless MEMOBRAIN_REQUIRE_BINDINGS is set (`task ci` sets it).
+// have not been generated, unless CLARAE_REQUIRE_BINDINGS is set (`task ci` sets it).
 func TestDispatcherMatchesTheGeneratedBindings(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "..", "packages", "workbench", "wailsjs", "go", "app")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.d.ts"))
 	if len(files) == 0 {
-		if os.Getenv("MEMOBRAIN_REQUIRE_BINDINGS") != "" {
+		if os.Getenv("CLARAE_REQUIRE_BINDINGS") != "" {
 			t.Fatal("packages/workbench/wailsjs is not generated (task wailsjs)")
 		}
 		t.Skip("packages/workbench/wailsjs is not generated (task wailsjs)")

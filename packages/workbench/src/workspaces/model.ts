@@ -1,8 +1,8 @@
 // Saved workspaces (§2.2.1 "Workspaces"): named snapshots of the layout (panes,
 // tabs, splits, link groups) and of the sidebars, stored in
-// .memobrain/workspaces.json. Like .memobrain/workspace.json this file is
+// .clarae/workspaces.json. Like .clarae/workspace.json this file is
 // device-specific and is NOT synchronized (shared/go/pathrules excludes every
-// ".memobrain/workspace*.json"; §3.4.6). Everything here is pure.
+// ".clarae/workspace*.json"; §3.4.6). Everything here is pure.
 //
 //   { "version": 1,
 //     "workspaces": [

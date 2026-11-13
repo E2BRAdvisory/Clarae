@@ -1232,7 +1232,7 @@ export interface components {
             /** @description Server version */
             api_version: string;
         };
-        /** @description RFC 9457 problem details with the MemoBrain Notes application code */
+        /** @description RFC 9457 problem details with the Clarae notanda application code */
         Problem: {
             /** Format: uri */
             type: string;
@@ -1991,7 +1991,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The identity of the token cannot be linked to a MemoBrain account (code INVALID_STATE, ADR-0041): another account already uses the same e-mail address. Possible on every authenticated operation; an administrator has to resolve it, so retrying does not help */
+        /** @description The identity of the token cannot be linked to a Clarae account (code INVALID_STATE, ADR-0041): another account already uses the same e-mail address. Possible on every authenticated operation; an administrator has to resolve it, so retrying does not help */
         IdentityConflict: {
             headers: {
                 [name: string]: unknown;

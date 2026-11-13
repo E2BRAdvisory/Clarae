@@ -316,7 +316,7 @@ export function MarpSlidesPanel({ vaultId, path }: { vaultId: string; path: stri
             <input
               type="checkbox"
               checked={settings.loop}
-              onChange={(e) => setKey('memobrain-loop', e.target.checked ? true : null)}
+              onChange={(e) => setKey('clarae-loop', e.target.checked ? true : null)}
             />
             {t('drawing.slidePanel.slideLoop')}
           </label>
@@ -332,7 +332,7 @@ export function MarpSlidesPanel({ vaultId, path }: { vaultId: string; path: stri
             <input
               type="checkbox"
               checked={settings.notes}
-              onChange={(e) => setKey('memobrain-notes', e.target.checked ? null : false)}
+              onChange={(e) => setKey('clarae-notes', e.target.checked ? null : false)}
             />
             {t('drawing.slidePanel.slideNotes')}
           </label>

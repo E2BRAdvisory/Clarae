@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"time"
 
-	"memobrain/apps/desktop/internal/crypto"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/crypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/vaultcrypto"
 )
 
 // LinkResult is returned when a vault is connected to the cloud.

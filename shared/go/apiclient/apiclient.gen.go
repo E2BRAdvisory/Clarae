@@ -870,7 +870,7 @@ type OpResult struct {
 // OpResultStatus defines model for OpResult.Status.
 type OpResultStatus string
 
-// Problem RFC 9457 problem details with the MemoBrain Notes application code
+// Problem RFC 9457 problem details with the Clarae notanda application code
 type Problem struct {
 	// Code Application error codes (§3.1); mirrored in shared/go/syncproto
 	Code      ErrorCode               `json:"code"`
@@ -1069,31 +1069,31 @@ type VaultId = openapi_types.UUID
 // VersionPathId defines model for VersionPathId.
 type VersionPathId = int
 
-// Conflict RFC 9457 problem details with the MemoBrain Notes application code
+// Conflict RFC 9457 problem details with the Clarae notanda application code
 type Conflict = Problem
 
-// Forbidden RFC 9457 problem details with the MemoBrain Notes application code
+// Forbidden RFC 9457 problem details with the Clarae notanda application code
 type Forbidden = Problem
 
-// IdentityConflict RFC 9457 problem details with the MemoBrain Notes application code
+// IdentityConflict RFC 9457 problem details with the Clarae notanda application code
 type IdentityConflict = Problem
 
-// InternalError RFC 9457 problem details with the MemoBrain Notes application code
+// InternalError RFC 9457 problem details with the Clarae notanda application code
 type InternalError = Problem
 
-// NotFound RFC 9457 problem details with the MemoBrain Notes application code
+// NotFound RFC 9457 problem details with the Clarae notanda application code
 type NotFound = Problem
 
-// PayloadTooLarge RFC 9457 problem details with the MemoBrain Notes application code
+// PayloadTooLarge RFC 9457 problem details with the Clarae notanda application code
 type PayloadTooLarge = Problem
 
-// RateLimited RFC 9457 problem details with the MemoBrain Notes application code
+// RateLimited RFC 9457 problem details with the Clarae notanda application code
 type RateLimited = Problem
 
-// Unauthenticated RFC 9457 problem details with the MemoBrain Notes application code
+// Unauthenticated RFC 9457 problem details with the Clarae notanda application code
 type Unauthenticated = Problem
 
-// ValidationFailed RFC 9457 problem details with the MemoBrain Notes application code
+// ValidationFailed RFC 9457 problem details with the Clarae notanda application code
 type ValidationFailed = Problem
 
 // GetEffectiveConfigParams defines parameters for GetEffectiveConfig.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/revisions/revisionsdb"
+	"clarae/services/cloud/internal/revisions/revisionsdb"
 )
 
 func TestSelectDoomed(t *testing.T) {

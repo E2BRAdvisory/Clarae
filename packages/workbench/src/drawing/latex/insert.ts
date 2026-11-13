@@ -1,5 +1,5 @@
 // Inserting and editing LaTeX formulas in a drawing. A formula is an ordinary `image` element
-// (an SVG in the drawing's `files`) whose `customData.memobrain` keeps the TeX source, so the
+// (an SVG in the drawing's `files`) whose `customData.clarae` keeps the TeX source, so the
 // file stays plain Excalidraw JSON that any tool can open, and the merge by element id is
 // untouched.
 import type { SceneElement, ScenePatch } from '../actions/types';
@@ -20,7 +20,7 @@ export interface LatexMeta {
 
 /** The formula source of an element, or null when it is not a formula. */
 export function latexOf(e: SceneElement | undefined): LatexMeta | null {
-  const meta = (e?.customData as { memobrain?: Partial<LatexMeta> } | undefined)?.memobrain;
+  const meta = (e?.customData as { clarae?: Partial<LatexMeta> } | undefined)?.clarae;
   return meta?.kind === LATEX_KIND && typeof meta.latex === 'string'
     ? {
         kind: LATEX_KIND,
@@ -62,7 +62,7 @@ export async function latexPatch(
           fileId,
           width: r.width * scale,
           height: r.height * scale,
-          customData: { ...(o.existing.customData as object), memobrain: meta },
+          customData: { ...(o.existing.customData as object), clarae: meta },
         },
       },
       files,
@@ -98,7 +98,7 @@ export async function latexPatch(
         isDeleted: false,
         version: 1,
         versionNonce: Math.floor(Math.random() * 2 ** 31),
-        customData: { memobrain: meta },
+        customData: { clarae: meta },
       },
     ],
     files,

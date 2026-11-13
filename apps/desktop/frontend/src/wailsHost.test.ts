@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Events } from '@memobrain/workbench/events';
+import { Events } from '@clarae/workbench/events';
 import {
   UPLOAD_CHUNK,
   UPLOAD_PATH,

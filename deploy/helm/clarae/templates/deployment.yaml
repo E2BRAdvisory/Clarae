@@ -1,0 +1,117 @@
+{{- $root := . -}}
+{{- range $role := list "api" "worker" }}
+{{- $spec := index $root.Values $role }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clarae.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "clarae.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  {{- if not $spec.autoscaling.enabled }}
+  replicas: {{ $spec.replicas }}
+  {{- end }}
+  {{- with $spec.progressDeadlineSeconds }}
+  progressDeadlineSeconds: {{ . }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "clarae.selector" (dict "root" $root "role" $role) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "clarae.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $role }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- if $root.Values.metrics.podAnnotations }}
+        # Annotation-based discovery; /metrics answers only direct (non-proxied) scrapes.
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: {{ ternary $root.Values.service.httpPort $spec.metricsPort (eq $role "api") | quote }}
+        {{- end }}
+        {{- with $root.Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+        {{- with $spec.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      serviceAccountName: {{ include "clarae.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ $spec.terminationGracePeriodSeconds }}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      {{- include "clarae.scheduling" (dict "root" $root "role" $role "spec" $spec) | nindent 6 }}
+      containers:
+        - name: clarae-cloud
+          image: {{ include "clarae.image" $root }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          args: ["--role={{ $role }}"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "clarae.fullname" $root }}
+            - secretRef:
+                name: {{ include "clarae.secretName" $root }}
+          {{- if eq $role "api" }}
+          ports:
+            - name: http
+              containerPort: {{ $root.Values.service.httpPort }}
+            - name: grpc
+              containerPort: {{ $root.Values.service.grpcPort }}
+          # startup holds liveness/readiness off until the process answers: the listener opens before the
+          # database migrations and the OIDC discovery, during which /healthz answers 200 and /readyz 503.
+          # liveness only says "alive" (/healthz), readiness also checks PostgreSQL and S3 (/readyz).
+          startupProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            {{- toYaml $spec.probes.startup | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            {{- toYaml $spec.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /api/v1/readyz, port: http }
+            {{- toYaml $spec.probes.readiness | nindent 12 }}
+          {{- else }}
+          ports:
+            - name: metrics
+              containerPort: {{ $spec.metricsPort }}
+          # The worker's internal listener (METRICS_LISTEN_ADDR): liveness holds while the job scheduler
+          # ticks (or while it waits for the API to migrate the schema), readiness once the jobs run.
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            {{- toYaml $spec.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+            {{- toYaml $spec.probes.readiness | nindent 12 }}
+          {{- end }}
+          {{- /* The sleep action is on by default from Kubernetes 1.30; older API servers reject it, and the
+                 image has no shell for an exec sleep: there SHUTDOWN_DRAIN alone delays the shutdown. */}}
+          {{- if and (gt (int $spec.preStopSleepSeconds) 0) (include "clarae.preStopSleepSupported" $root) }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ $spec.preStopSleepSeconds }}
+          {{- end }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp } # blob uploads (api) and export archives (worker) are spooled here
+          resources: {{- toYaml $spec.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: tmp
+          # Bounded: past sizeLimit the kubelet evicts the pod instead of filling the node's disk.
+          emptyDir:
+            {{- with (default (dict) $spec.tmp).sizeLimit }}
+            sizeLimit: {{ . }}
+            {{- else }} {}
+            {{- end }}
+{{- end }}

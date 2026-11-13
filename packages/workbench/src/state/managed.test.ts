@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FEATURES, FEATURE_DEFAULTS, Feature } from '@memobrain/api-client/features';
+import { FEATURES, FEATURE_DEFAULTS, Feature } from '@clarae/api-client/features';
 import {
   featureOn,
   fromState,

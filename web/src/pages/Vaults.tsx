@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { CloudVaultsTable, MountsList } from '@memobrain/cloud-features';
+import { CloudVaultsTable, MountsList } from '@clarae/cloud-features';
 import { useCloudPort } from '../api/cloud';
 import { useWorkbenchAllowed } from '../api/queries';
 import { mountHref } from './Shares';
@@ -16,7 +16,7 @@ export const navigation = { assign: (href: string) => window.location.assign(hre
 export function VaultsPage() {
   const { t, i18n } = useTranslation();
   const canOpen = useWorkbenchAllowed();
-  // The cloud vault lifecycle lives in @memobrain/cloud-features (ADR-0037 §2); a private vault is
+  // The cloud vault lifecycle lives in @clarae/cloud-features (ADR-0037 §2); a private vault is
   // created in the browser workbench, which holds the Go core's cryptography.
   const port = useCloudPort();
 

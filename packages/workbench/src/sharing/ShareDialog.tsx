@@ -1,7 +1,7 @@
 // The "Share…" dialog (M4-WP4): who can see a folder or document of a connected vault, at what level.
 // The new share's target comes from the explorer (a folder or a document of the open vault, which
 // the core resolves); the people are picked and the existing shares edited with the components of
-// @memobrain/cloud-features (ADR-0037 §2), the same as Settings > Sharing and the console.
+// @clarae/cloud-features (ADR-0037 §2), the same as Settings > Sharing and the console.
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,8 +11,8 @@ import {
   cloudKeys,
   createT,
   type DirectoryEntry,
-} from '@memobrain/cloud-features';
-import '@memobrain/cloud-features/workbench.css';
+} from '@clarae/cloud-features';
+import '@clarae/cloud-features/workbench.css';
 import type { NewGrant, PermissionLevel } from '../app/api';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { useSharing, type ShareTarget } from '../state/sharing';

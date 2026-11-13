@@ -6,7 +6,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
     "types": ["vitest/globals"],
     "paths": {
-      "@memobrain/workbench": ["./src/workbench/workbench.d.ts"]
+      "@clarae/workbench": ["./src/workbench/workbench.d.ts"]
     }
   },
   "include": [

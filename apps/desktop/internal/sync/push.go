@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
+	"clarae/shared/vaultcrypto"
 )
 
 const (

@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"memobrain/shared/features/internal/featuregen"
+	"clarae/shared/features/internal/featuregen"
 )
 
 func main() {

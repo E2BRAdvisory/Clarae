@@ -1,4 +1,4 @@
-import { scanInline, type BlockState } from '@memobrain/markdown';
+import { scanInline, type BlockState } from '@clarae/markdown';
 import { describe, expect, it } from 'vitest';
 import { escapeOfmText } from './escape';
 

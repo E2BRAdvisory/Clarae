@@ -1,6 +1,6 @@
 // The upstream nodes and settings that would rewrite the file, and what the layer does to them (B4).
 import { editorViewCtx } from '@milkdown/kit/core';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import { TextSelection } from '@milkdown/kit/prose/state';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import remarkGfm from 'remark-gfm';

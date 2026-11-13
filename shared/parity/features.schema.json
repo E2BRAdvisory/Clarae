@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://memobrain.dev/schemas/parity/features.schema.json",
-  "title": "MemoBrain Notes feature registry (ADR-0037)",
+  "$id": "https://clarae.dev/schemas/parity/features.schema.json",
+  "title": "Clarae notanda feature registry (ADR-0037)",
   "description": "One entry per user-facing feature, with what realizes it on the desktop, in the web workbench and in the web console. Checked by scripts/parity.mjs --check.",
   "type": "object",
   "additionalProperties": false,

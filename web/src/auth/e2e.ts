@@ -1,9 +1,9 @@
 // Test double for the identity layer. It is only reachable from main.tsx behind
-// `import.meta.env.MEMOBRAIN_E2E`, which esbuild replaces with a constant: production
+// `import.meta.env.CLARAE_E2E`, which esbuild replaces with a constant: production
 // builds drop this module entirely (checked by scripts in docs/web-ui.md).
 import type { AuthService, AuthUser } from './types';
 
-export const E2E_USER_KEY = 'memobrain.e2e.user';
+export const E2E_USER_KEY = 'clarae.e2e.user';
 
 export function createE2EAuth(): AuthService {
   const read = (): AuthUser | null => {

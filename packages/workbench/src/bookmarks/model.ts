@@ -1,5 +1,5 @@
 // Bookmarks model (§2.2.1 "Bookmarks"): a tree of items stored in
-// .memobrain/bookmarks.json. Everything here is pure: functions take the item list
+// .clarae/bookmarks.json. Everything here is pure: functions take the item list
 // and return a new one, so tree operations are easy to test and to persist.
 //
 // File shape (compatible in spirit with Obsidian's bookmarks.json; unknown

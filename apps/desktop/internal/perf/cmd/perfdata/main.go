@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"memobrain/apps/desktop/internal/perf/dataset"
+	"clarae/apps/desktop/internal/perf/dataset"
 )
 
 func main() {

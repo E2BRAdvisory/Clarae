@@ -1,10 +1,10 @@
 # Config profile, quote, limiti e audit
 
-Tutte le funzioni di questa pagina stanno nella **console di amministrazione** della Web UI (visibile agli utenti con ruolo `memobrain-admin`).
+Tutte le funzioni di questa pagina stanno nella **console di amministrazione** della Web UI (visibile agli utenti con ruolo `clarae-admin`).
 
 ## Gruppi
 
-Un gruppo è un insieme di utenti usato per **condividere** cartelle/vault e per **assegnare config profile**. Si gestiscono in _Amministrazione → Gruppi_ (crea, rinomina, aggiungi/rimuovi membri). Eliminare un gruppo elimina anche le sue condivisioni e le assegnazioni dei profili. I gruppi esistono solo nel database di MemoBrain Notes (non in Keycloak).
+Un gruppo è un insieme di utenti usato per **condividere** cartelle/vault e per **assegnare config profile**. Si gestiscono in _Amministrazione → Gruppi_ (crea, rinomina, aggiungi/rimuovi membri). Eliminare un gruppo elimina anche le sue condivisioni e le assegnazioni dei profili. I gruppi esistono solo nel database di Clarae notanda (non in Keycloak).
 
 ## Config profile
 
@@ -21,7 +21,7 @@ La pagina di un utente mostra la **configurazione effettiva** risolta (con le ch
 
 ### Chiavi del profilo
 
-Lo schema `api/config-profile.schema.json` è l'unica fonte delle chiavi, dei tipi e dei default: `task gen` ne genera le costanti Go (`shared/go/features`) e TypeScript (`@memobrain/api-client/features`) e i default del prodotto distribuiti dal cloud. Un test (`shared/go/features`, `go test ./features/...`) confronta questa tabella con lo schema: una chiave nuova senza riga, o con tipo o default diversi, lo fa fallire.
+Lo schema `api/config-profile.schema.json` è l'unica fonte delle chiavi, dei tipi e dei default: `task gen` ne genera le costanti Go (`shared/go/features`) e TypeScript (`@clarae/api-client/features`) e i default del prodotto distribuiti dal cloud. Un test (`shared/go/features`, `go test ./features/...`) confronta questa tabella con lo schema: una chiave nuova senza riga, o con tipo o default diversi, lo fa fallire.
 
 _Bloccabile_ indica se `locked_keys` ha effetto, cioè se esiste una scelta dell'utente che il blocco sostituisce (per le altre chiavi il valore del profilo vale sempre). _Default_ è il valore del prodotto; «—» vuol dire che senza profilo vale l'impostazione dell'utente o quella predefinita dell'app. Un flag `features.*` non elencato è accettato e ignorato dai client che non lo conoscono.
 
@@ -64,7 +64,7 @@ _Bloccabile_ indica se `locked_keys` ha effetto, cioè se esiste una scelta dell
 | `daily_notes.template`         | `string`                                  | —           | Modello della nota giornaliera.                                                                                                                                                                                                                             | sì         | desktop, workbench web              |
 | `templates.library_share_id`   | `string`                                  | —           | Condivisione montata in sola lettura come libreria di modelli del gruppo.                                                                                                                                                                                   | no         | desktop, workbench web              |
 | `servers`                      | `array`                                   | —           | Elenco di server (`name`, `url`). Riservato: nessun client lo applica ancora.                                                                                                                                                                               | no         | —                                   |
-| `auth.redirect_mode`           | enum: `auto`, `loopback`, `custom_scheme` | `"auto"`    | Redirect dell'accesso desktop (D-08): loopback con ripiego sullo schema `memobrain://` (`auto`), solo loopback, solo schema. Il workbench web usa la sessione della pagina.                                                                                 | no         | desktop                             |
+| `auth.redirect_mode`           | enum: `auto`, `loopback`, `custom_scheme` | `"auto"`    | Redirect dell'accesso desktop (D-08): loopback con ripiego sullo schema `clarae://` (`auto`), solo loopback, solo schema. Il workbench web usa la sessione della pagina.                                                                                    | no         | desktop                             |
 | `security.vault_lock_minutes`  | `integer`                                 | —           | Minuti di inattività dopo i quali un vault privato sbloccato dimentica la chiave sul dispositivo (0 = mai, massimo 1440). Senza profilo vale la scelta dell'utente, altrimenti 0.                                                                           | sì         | desktop, workbench web              |
 
 ## Quote e limiti

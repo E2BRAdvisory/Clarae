@@ -1,6 +1,6 @@
 # Impostazioni e scorciatoie
 
-Aprite le impostazioni con `Mod+,` (o _Apri impostazioni_). Le impostazioni di editor, aspetto e scorciatoie sono **per vault** (file in `.memobrain/`); lingua e tema valgono per l'app. Se l'amministratore ha bloccato una voce, compare disabilitata con l'indicazione "gestito dall'amministratore".
+Aprite le impostazioni con `Mod+,` (o _Apri impostazioni_). Le impostazioni di editor, aspetto e scorciatoie sono **per vault** (file in `.clarae/`); lingua e tema valgono per l'app. Se l'amministratore ha bloccato una voce, compare disabilitata con l'indicazione "gestito dall'amministratore".
 
 | Sezione                                 | Cosa contiene                                                                                                                                                                                                                         |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -7,7 +7,7 @@
 // every action belongs to a feature that lists it, and a surface that says `yes` offers it.
 import type { QueryClient } from '@tanstack/react-query';
 import i18next from 'i18next';
-import type { CloudMount } from '@memobrain/cloud-features/port';
+import type { CloudMount } from '@clarae/cloud-features/port';
 import { api } from '../app/api';
 import type { MountRevokedPayload } from '../app/events';
 import { lockVault } from '../app/actions';

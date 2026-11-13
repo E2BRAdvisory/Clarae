@@ -8,7 +8,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	"memobrain/services/cloud/internal/api"
+	"clarae/services/cloud/internal/api"
 )
 
 // requestValidator validates every request (parameters, headers, JSON body)

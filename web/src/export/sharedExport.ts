@@ -1,7 +1,7 @@
 // Download of a shared vault as ZIP: stream directly when the server allows it, otherwise
 // create an export job and poll it. Pure orchestration (no React) so it can be tested with
 // a mock client and fake timers.
-import { ApiError, isProblem, type MemobrainClient, type Schemas } from '@memobrain/api-client';
+import { ApiError, isProblem, type ClaraeClient, type Schemas } from '@clarae/api-client';
 
 export type ExportJob = Schemas['ExportJob'];
 
@@ -18,7 +18,7 @@ export class ExportJobError extends Error {
 }
 
 export interface SharedExportDeps {
-  api: MemobrainClient;
+  api: ClaraeClient;
   /** The session's current access token, read when a request starts (renewed if about to expire). */
   getToken: () => Promise<string | undefined> | string | undefined;
   fetchFn?: typeof fetch;

@@ -6,7 +6,7 @@ import {
   requestSchemaOf,
   responseOf,
   validate,
-} from '@memobrain/cloud-features/testing/contract';
+} from '@clarae/cloud-features/testing/contract';
 
 /**
  * A cloud of the REST API (api/openapi.yaml) in the test process, so the cloud panels of the
@@ -138,7 +138,7 @@ export interface CloudMock {
 }
 
 // ---- the contract ----------------------------------------------------------------------------
-// Matching and validation are those of @memobrain/cloud-features/testing/contract, shared with the
+// Matching and validation are those of @clarae/cloud-features/testing/contract, shared with the
 // run of the cloud suites on the Go core in Node (CoreCloudPort.core.test.tsx).
 
 // ---- helpers ------------------------------------------------------------------------------------

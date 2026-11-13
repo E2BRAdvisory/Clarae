@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/importer"
+	"clarae/apps/desktop/internal/importer"
 )
 
 // ImportProgressPayload accompanies EventImportProgress.

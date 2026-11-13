@@ -1,7 +1,7 @@
-// Package transport is the desktop's HTTP client for the MemoBrain Notes Cloud API.
+// Package transport is the desktop's HTTP client for the Clarae notanda Cloud API.
 //
 // Requests, parameters and payloads come from the client generated from
-// api/openapi.yaml (memobrain/shared/apiclient, ADR-0037 §3); this package is the
+// api/openapi.yaml (clarae/shared/apiclient, ADR-0037 §3); this package is the
 // thin layer around it: bearer authentication, request ids, idempotency keys,
 // retries with backoff (5xx, 429 with Retry-After, network errors), RFC 9457
 // problem decoding into typed errors (§3.1) and the engine's view of the sync
@@ -24,8 +24,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/shared/apiclient"
-	"memobrain/shared/syncproto"
+	"clarae/shared/apiclient"
+	"clarae/shared/syncproto"
 )
 
 // BasePath of the REST API.

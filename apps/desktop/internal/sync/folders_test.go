@@ -15,9 +15,9 @@ import (
 	stdsync "sync"
 	"testing"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/pathrules"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/pathrules"
+	"clarae/shared/syncproto"
 )
 
 type fsFile struct {
@@ -310,7 +310,7 @@ func mustRename(t *testing.T, dir, from, to string) {
 	}
 }
 
-// diskFiles lists the vault files (no .memobrain, no trash) with their content.
+// diskFiles lists the vault files (no .clarae, no trash) with their content.
 func diskFiles(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -319,7 +319,7 @@ func diskFiles(t *testing.T, dir string) map[string]string {
 			return nil //nolint:nilerr // test helper
 		}
 		if de.IsDir() {
-			if p != dir && (de.Name() == ".memobrain" || de.Name() == ".trash") {
+			if p != dir && (de.Name() == ".clarae" || de.Name() == ".trash") {
 				return filepath.SkipDir
 			}
 			return nil

@@ -12,7 +12,7 @@ export const enterOverRange = (readOnly: () => boolean) =>
   $prose(
     () =>
       new Plugin({
-        key: new PluginKey('memobrain-enter-over-range'),
+        key: new PluginKey('clarae-enter-over-range'),
         props: {
           handleDOMEvents: {
             keydown(view, event) {

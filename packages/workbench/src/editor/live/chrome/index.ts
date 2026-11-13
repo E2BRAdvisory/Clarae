@@ -73,7 +73,7 @@ export interface Chrome {
 export const sizeOf = (width: number): 'wide' | 'compact' | 'narrow' =>
   width < NARROW ? 'narrow' : width < COMPACT ? 'compact' : 'wide';
 
-const key = new PluginKey('memobrain-chrome');
+const key = new PluginKey('clarae-chrome');
 
 export function createChrome(o: ChromeOptions): Chrome {
   const { labels } = o;

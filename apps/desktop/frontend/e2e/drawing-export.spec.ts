@@ -195,7 +195,7 @@ test('auto-export writes the PNG and SVG variants next to the drawing after a sa
   // The settings were persisted in the vault.
   const cfg = await page.evaluate(() => {
     const w = window as unknown as MockWindow;
-    return [...w.__mock.vaults.values()][0]?.files.get('.memobrain/drawing.json') ?? '';
+    return [...w.__mock.vaults.values()][0]?.files.get('.clarae/drawing.json') ?? '';
   });
   expect(JSON.parse(cfg)).toMatchObject({ autoExport: 'both', autoExportTheme: 'both' });
 });

@@ -3,10 +3,10 @@
 package app
 
 import (
-	"memobrain/apps/desktop/internal/auth"
-	"memobrain/apps/desktop/internal/events"
-	syncpkg "memobrain/apps/desktop/internal/sync"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/events"
+	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/shared/syncproto"
 )
 
 // Events is the registry of every Go → TypeScript event of the core (ADR-0045 §5): the input of the

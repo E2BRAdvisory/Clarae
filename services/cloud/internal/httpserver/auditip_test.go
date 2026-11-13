@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"memobrain/services/cloud/internal/audit"
+	"clarae/services/cloud/internal/audit"
 )
 
 func TestAuditClientIPUsesTheTrustedProxyRule(t *testing.T) {

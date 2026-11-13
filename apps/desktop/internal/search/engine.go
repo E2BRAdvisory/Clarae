@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"memobrain/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/parser"
 )
 
 // Options tune a query.

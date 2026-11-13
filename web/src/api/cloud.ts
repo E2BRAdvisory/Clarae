@@ -1,8 +1,8 @@
 // The console's CloudPort (ADR-0037 §2): the vault, device, usage and sharing pages are the
-// components of @memobrain/cloud-features over the REST API.
+// components of @clarae/cloud-features over the REST API.
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RestCloudPort, useFeature } from '@memobrain/cloud-features';
+import { RestCloudPort, useFeature } from '@clarae/cloud-features';
 import { useAuth } from '../auth/AuthProvider';
 import { thisBrowserDevice } from '../workbench/device';
 import { useApi } from './context';

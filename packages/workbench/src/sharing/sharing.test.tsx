@@ -63,7 +63,7 @@ beforeEach(async () => {
 
 describe('invitations and mounts', () => {
   beforeEach(async () => {
-    await api.auth.login('https://memobrain.test');
+    await api.auth.login('https://clarae.test');
     useAppStore.getState().setAuth(await api.auth.status());
   });
 
@@ -256,7 +256,7 @@ describe('permission badge and read-only', () => {
 
 describe('Share dialog', () => {
   async function connectedVault() {
-    await api.auth.login('https://memobrain.test');
+    await api.auth.login('https://clarae.test');
     useSync.setState({
       info: {
         [vaultId]: linkInfo({
@@ -426,7 +426,7 @@ const revokedMount = (localId: string): MountState => ({
 
 describe('mounts in the browser', () => {
   beforeEach(async () => {
-    await api.auth.login('https://memobrain.test');
+    await api.auth.login('https://clarae.test');
     useAppStore.getState().setAuth(await api.auth.status());
   });
   afterEach(() => configurePlatform());

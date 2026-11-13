@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSlides } from '@memobrain/markdown';
+import { parseSlides } from '@clarae/markdown';
 import { slideIndexAtLine, slideTitle } from './model';
 
 const deck = parseSlides('---\ntitle: x\n---\n# One\n\ntext\n\n---\n\n# Two\n\n---\n\n# Three\n');

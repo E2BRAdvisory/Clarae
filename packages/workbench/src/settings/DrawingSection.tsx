@@ -1,4 +1,4 @@
-// Settings > "Drawings": per-vault defaults of the Excalidraw editor (.memobrain/drawing.json).
+// Settings > "Drawings": per-vault defaults of the Excalidraw editor (.clarae/drawing.json).
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FONT_FAMILIES } from '../drawing/actions/style';

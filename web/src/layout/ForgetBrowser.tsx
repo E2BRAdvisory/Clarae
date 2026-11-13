@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dialog } from '@memobrain/ui';
+import { Button, Dialog } from '@clarae/ui';
 import {
   forgetAfterLeave,
   forgetThisBrowser,

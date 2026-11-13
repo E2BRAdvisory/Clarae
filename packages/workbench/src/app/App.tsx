@@ -13,7 +13,7 @@ import { commandForEvent } from '../commands/registry';
 import { DialogHost, dialog } from '../ui/dialogs';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { openVaultAt } from './actions';
-import { installModalFocus } from '@memobrain/ui';
+import { installModalFocus } from '@clarae/ui';
 import { infoOf, useSync } from '../state/sync';
 import { SyncDialogs } from '../sync/SyncDialogs';
 import { useRecovery } from '../recovery/store';
@@ -110,7 +110,7 @@ export function App() {
   useEffect(() => applyAppearance(appearance), [appearance]);
 
   // Every aria-modal dialog traps Tab and gives focus back to its opener on close (one handler for
-  // the page, shared with the Dialog of @memobrain/ui used by the cloud panels: ADR-0043).
+  // the page, shared with the Dialog of @clarae/ui used by the cloud panels: ADR-0043).
   useEffect(() => installModalFocus(), []);
 
   // Cloud session: initial state, then pushed updates.
@@ -194,7 +194,7 @@ export function App() {
     if (syncInfo.linked && syncInfo.locked) useSync.getState().setUnlockOpen(true);
   }, [syncInfo.linked, syncInfo.kind, syncInfo.locked]);
 
-  // memobrain://open?vault=…&file=… (from the OS or another instance).
+  // clarae://open?vault=…&file=… (from the OS or another instance).
   useEffect(
     () =>
       api.on(Events.appOpenRequest, (p) => {

@@ -1,6 +1,6 @@
-/* The shared tokens of @memobrain/ui first (ADR-0043), then the workbench's own, which give them
+/* The shared tokens of @clarae/ui first (ADR-0043), then the workbench's own, which give them
    the workbench palette (styles/tokens.css). */
-@import '@memobrain/ui/tokens.css';
+@import '@clarae/ui/tokens.css';
 @import './styles/tokens.css';
 @import './query/query.css';
 /* The graph tab is a lazy chunk, whose own CSS would not be loaded: its rules ship here. */

@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import '@memobrain/cloud-features/workbench.css';
+import '@clarae/cloud-features/workbench.css';
 import { CoreCloudPort } from '../cloud/CoreCloudPort';
 import { DevicesPanel, UsagePanel } from '../cloud/lazyPanels';
 
 /**
  * Settings > Cloud: the storage of the account (the server's level, the space of each vault) and its
- * devices, with the components of @memobrain/cloud-features (ADR-0037 §2), the same as the
+ * devices, with the components of @clarae/cloud-features (ADR-0037 §2), the same as the
  * console's. The device the core runs on is marked and cannot be revoked from here.
  */
 export function AccountDevices() {

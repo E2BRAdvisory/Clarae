@@ -23,11 +23,11 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"memobrain/services/cloud/internal/auth/authtest"
-	"memobrain/services/cloud/internal/grpcserver"
-	"memobrain/services/cloud/internal/httpserver"
-	"memobrain/services/cloud/internal/system"
-	"memobrain/shared/notifyv1"
+	"clarae/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/grpcserver"
+	"clarae/services/cloud/internal/httpserver"
+	"clarae/services/cloud/internal/system"
+	"clarae/shared/notifyv1"
 )
 
 // auditIP returns the address stored for the newest audit row of action on target.
@@ -84,7 +84,7 @@ func TestAuditRecordsClientIP(t *testing.T) {
 
 	// Direct connection: the TCP peer is the client and a client-supplied
 	// X-Forwarded-For is not believed.
-	resp := postJSON(t, e.baseURL+"/admin/users", root.token, map[string]any{"username": "ipdirect", "role": "user", "display_name": "IP direct", "email": "ipdirect-" + newID()[:8] + "@memobrain.local"}, spoof)
+	resp := postJSON(t, e.baseURL+"/admin/users", root.token, map[string]any{"username": "ipdirect", "role": "user", "display_name": "IP direct", "email": "ipdirect-" + newID()[:8] + "@clarae.local"}, spoof)
 	expect(t, resp, http.StatusCreated)
 	direct := decode[adminUser](t, resp)
 	if got := e.auditIP("user.create", direct.ID); got != "127.0.0.1" {
@@ -94,7 +94,7 @@ func TestAuditRecordsClientIP(t *testing.T) {
 	// Behind a trusted proxy: the rightmost untrusted hop is the client; the
 	// entries further left were supplied by the client and are ignored.
 	base := e.proxiedRouter(netip.MustParsePrefix("127.0.0.1/32"))
-	resp = postJSON(t, base+"/admin/users", root.token, map[string]any{"username": "ipproxied", "role": "user", "display_name": "IP proxied", "email": "ipproxied-" + newID()[:8] + "@memobrain.local"},
+	resp = postJSON(t, base+"/admin/users", root.token, map[string]any{"username": "ipproxied", "role": "user", "display_name": "IP proxied", "email": "ipproxied-" + newID()[:8] + "@clarae.local"},
 		map[string]string{"X-Forwarded-For": "198.51.100.66, 203.0.113.7"})
 	expect(t, resp, http.StatusCreated)
 	proxied := decode[adminUser](t, resp)
@@ -156,7 +156,7 @@ func TestAuditCSVNeutralisesActorName(t *testing.T) {
 	e := newEnv(t)
 	root := e.admin("root")
 	// The username comes from the identity provider's preferred_username.
-	evil := &client{e: e, token: e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-evil-" + newID(), Username: `=HYPERLINK("http://evil.example")`, Email: "evil-" + newID()[:8] + "@memobrain.local"})}
+	evil := &client{e: e, token: e.issuer.Token(t, authtest.TokenOptions{Subject: "sub-evil-" + newID(), Username: `=HYPERLINK("http://evil.example")`, Email: "evil-" + newID()[:8] + "@clarae.local"})}
 	evil.userID, _ = decode[map[string]any](t, evil.json(http.MethodGet, "/me", nil))["id"].(string)
 	v := evil.createVault("CSV "+newID()[:8], "shared")
 	expect(t, evil.json(http.MethodDelete, "/vaults/"+v, nil), http.StatusNoContent)

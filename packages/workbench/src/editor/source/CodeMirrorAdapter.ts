@@ -5,7 +5,7 @@
 import { moveLineDown, moveLineUp, redo, undo } from '@codemirror/commands';
 import { openSearchPanel } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
-import { extract } from '@memobrain/markdown';
+import { extract } from '@clarae/markdown';
 import * as fmt from './commands';
 import { statsOf } from './stats';
 import type {

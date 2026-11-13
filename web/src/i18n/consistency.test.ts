@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { checkUsage, comparePair, flatten, overlap, withShared } from '@memobrain/ui/i18nCheck';
-import { commonResources } from '@memobrain/ui/i18n';
+import { checkUsage, comparePair, flatten, overlap, withShared } from '@clarae/ui/i18nCheck';
+import { commonResources } from '@clarae/ui/i18n';
 import en from './en.json';
 import it_ from './it.json';
 
@@ -32,7 +32,7 @@ describe('web i18n resources', () => {
     expect(f.pluralMismatch).toEqual([]);
     expect(f.italianPluralIncomplete).toEqual([]);
   });
-  it('leave the shared strings (common namespace of @memobrain/ui) to the package', () => {
+  it('leave the shared strings (common namespace of @clarae/ui) to the package', () => {
     expect(overlap(en, commonResources.en)).toEqual([]);
     expect(overlap(it_, commonResources.it)).toEqual([]);
   });

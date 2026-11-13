@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/services/cloud/internal/audit/auditdb"
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/audit/auditdb"
+	"clarae/services/cloud/internal/db"
 )
 
 type clientIPKey struct{}

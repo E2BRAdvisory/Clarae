@@ -9,8 +9,8 @@ import (
 	"os"
 	"sort"
 
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/merge"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/merge"
 )
 
 // errRetryLater means the file changed on disk while it was being resolved:

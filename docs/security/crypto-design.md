@@ -50,7 +50,7 @@ recovery key ──HKDF-SHA256(salt)───► KEK_rec  ─┘                
                                                                           └─ HKDF("memobrain/v1/file" ‖ file_id ‖ salt_file) → K_file
 ```
 
-Implementazione: `shared/go/vaultcrypto/keys.go` (Go), `packages/vaultcrypto-web/src/keys.ts` (TypeScript). Le etichette HKDF sono costanti con prefisso di versione (`memobrain/v1/…`) per la separazione di dominio. HKDF-SHA256 senza salt per le sottochiavi: la VMK è già uniforme a 256 bit.
+Implementazione: `shared/go/vaultcrypto/keys.go` (Go), `packages/vaultcrypto-web/src/keys.ts` (TypeScript). Le etichette HKDF sono costanti con prefisso di versione (`clarae/v1/…`) per la separazione di dominio. HKDF-SHA256 senza salt per le sottochiavi: la VMK è già uniforme a 256 bit.
 
 - **Envelope**: due formati, descritti in §5.3. Il v1 è `nonce(12) ‖ AES-256-GCM(KEK, VMK) ‖ tag(16)` = 60 byte, senza AAD. Il v2 (ADR-0034) è `0x02 ‖ nonce(12) ‖ AES-256-GCM(KEK, VMK; AAD) ‖ tag(16)` = 61 byte, legato a `vault_id` e al tipo di envelope. Nonce casuale: ogni KEK avvolge un solo valore (la VMK), il rischio di collisione è trascurabile.
 - **Recovery key**: 256 bit CSPRNG; testo = Base32 (alfabeto RFC 4648) in gruppi da 5 con checksum SHA-256 troncato a 16 bit (`"memobrain/v1/recovery-checksum" ‖ chiave`). Il checksum rileva refusi, non è un controllo di sicurezza. KEK_rec = HKDF(recovery key, salt dell'envelope): nessuno stretching, la chiave ha già piena entropia.

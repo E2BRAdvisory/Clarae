@@ -11,8 +11,8 @@ task perf-data PERF_NOTES=10000 # solo il dataset (cache in .perf/vault-N, mai c
 ```
 
 - Dataset: `apps/desktop/internal/perf/dataset` (seed fisso, stesso vault a ogni esecuzione). Note con dimensioni log-normali (mediana ≈ 1,8 KB, coda fino a 600 KB), frontmatter, intestazioni, tag, wikilink con grado entrante a legge di potenza (hub e coda lunga), link fantasma, riferimenti ad allegati. 50.000 note = 168 MB, ≈ 395.000 link.
-- Variabili del test (`internal/perf/perf_test.go`): `MEMOBRAIN_PERF_NOTES`, `MEMOBRAIN_PERF_DIR`, `MEMOBRAIN_PERF_GRAPH_NOTES`, `MEMOBRAIN_PERF_OUT`, `MEMOBRAIN_PERF_KEEP_INDEX`, `MEMOBRAIN_PERF_CPUPROFILE`, `MEMOBRAIN_PERF_INDEX_PROFILE`.
-- UI (Chromium headless su mock dei binding): `MEMOBRAIN_UI_BENCH=1 yarn workspace @memobrain/desktop-frontend exec playwright test e2e/ui-perf.spec.ts` (`MEMOBRAIN_UI_BENCH_NOTES`, `MEMOBRAIN_UI_BENCH_NOTE_KB`, `MEMOBRAIN_UI_BENCH_OUT`).
+- Variabili del test (`internal/perf/perf_test.go`): `CLARAE_PERF_NOTES`, `CLARAE_PERF_DIR`, `CLARAE_PERF_GRAPH_NOTES`, `CLARAE_PERF_OUT`, `CLARAE_PERF_KEEP_INDEX`, `CLARAE_PERF_CPUPROFILE`, `CLARAE_PERF_INDEX_PROFILE`.
+- UI (Chromium headless su mock dei binding): `CLARAE_UI_BENCH=1 yarn workspace @clarae/desktop-frontend exec playwright test e2e/ui-perf.spec.ts` (`CLARAE_UI_BENCH_NOTES`, `CLARAE_UI_BENCH_NOTE_KB`, `CLARAE_UI_BENCH_OUT`).
 - Cloud: vedi la sezione sotto.
 - Esecuzione: a mano (`task perf`, k6 e `perfcheck`); il workflow notturno `nightly-perf.yml` è stato rimosso il 2026-10-30 e non c'è più un job che produca artifact. Le baseline di CI sono `docs/perf/baseline-ci-<note>.json`: vanno create alla prima esecuzione su una macchina di riferimento, perché quella di questo repository è di un'altra macchina.
 
@@ -78,7 +78,7 @@ W8 è stato confrontato con l'albero precedente a 10.000 note in una sequenza A/
   ```
 
 - **Non eseguito qui.** k6 non è installato; il binario scaricato non è stato eseguito (l'esecuzione di codice esterno scaricato è stata rifiutata dal sistema di permessi). Verificati: sintassi JS (`node --check`), avvio dell'ambiente (20 utenti creati in 0,2 s, token validi). Il nightly installa k6 con `grafana/setup-k6-action` e fa uno smoke da 200 utenti.
-- `TestLoadSmallOps` (`MEMOBRAIN_LOAD=1`, anche con `MEMOBRAIN_LOAD_CPUPROFILE`) è il corrispettivo Go del mix «changes + commit piccoli». Con 32 client a ciclo chiuso il test M2 esistente satura (commit da 50 op p95 811 ms, tutti sullo stesso PG in Docker su un portatile carico): è un test di saturazione, non di 1.000 utenti reali (≈ 100 richieste/s).
+- `TestLoadSmallOps` (`CLARAE_LOAD=1`, anche con `CLARAE_LOAD_CPUPROFILE`) è il corrispettivo Go del mix «changes + commit piccoli». Con 32 client a ciclo chiuso il test M2 esistente satura (commit da 50 op p95 811 ms, tutti sullo stesso PG in Docker su un portatile carico): è un test di saturazione, non di 1.000 utenti reali (≈ 100 richieste/s).
 - Profilo del server sotto `TestLoadSmallOps`: il tempo è nei round trip verso PostgreSQL e nel `PutBlob` su filesystem; la compilazione degli schemi JSON per ogni richiesta (15 % della CPU) è nel client di test (`env.do`), non nel server. Nessun N+1 o contention evidente nei percorsi `changes`/`commit`: non è stato modificato codice del cloud.
 
 ## Limiti noti

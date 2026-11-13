@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/apiclient"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/apiclient"
+	"clarae/shared/syncproto"
 )
 
 // MountState is a share received by the user, with what this device knows about it.
@@ -383,7 +383,7 @@ func (m *Manager) VaultShares(ctx context.Context, localID string) ([]transport.
 // IsNotFound reports whether err is the server's NOT_FOUND.
 func IsNotFound(err error) bool { return transport.IsCode(err, syncproto.CodeNotFound) }
 
-// --- account-wide share management (@memobrain/cloud-features, ADR-0037 §2) -----
+// --- account-wide share management (@clarae/cloud-features, ADR-0037 §2) -----
 
 // ListSharesPage returns a page of the shares the caller owns or manages ("owned") or was invited
 // to ("received"), across every vault of the account, newest first: the first page with cursor

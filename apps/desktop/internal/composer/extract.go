@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"memobrain/apps/desktop/internal/parser"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // ExtractOptions describe the extraction of a selection into a new note.

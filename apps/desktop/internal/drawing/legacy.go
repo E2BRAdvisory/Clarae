@@ -344,7 +344,7 @@ func ConvertObsidianMD(md []byte, images ImageReader) ([]byte, error) {
 	out := map[string]any{
 		"type":     "excalidraw",
 		"version":  2,
-		"source":   "MemoBrain Notes",
+		"source":   "Clarae notanda",
 		"elements": scene.Elements,
 		"appState": scene.AppState,
 		"files":    scene.Files,
@@ -353,7 +353,7 @@ func ConvertObsidianMD(md []byte, images ImageReader) ([]byte, error) {
 }
 
 // tagFormulas marks the image elements that show a formula with its TeX in
-// `customData.memobrain` ({kind: "latex"}), the way the editor's LaTeX command does. The rendered
+// `customData.clarae` ({kind: "latex"}), the way the editor's LaTeX command does. The rendered
 // image is not converted here: the editor draws it when it opens the drawing.
 //
 // Only those elements are decoded as values; the others stay raw, so a large scene is not
@@ -388,7 +388,7 @@ func tagFormulas(elements json.RawMessage, tex map[string]string) (json.RawMessa
 		if cd == nil {
 			cd = map[string]any{}
 		}
-		cd["memobrain"] = map[string]any{"kind": "latex", "latex": src, "w0": 0, "color": "#000000"}
+		cd["clarae"] = map[string]any{"kind": "latex", "latex": src, "w0": 0, "color": "#000000"}
 		e["customData"] = cd
 		tagged, err := json.Marshal(e)
 		if err != nil {

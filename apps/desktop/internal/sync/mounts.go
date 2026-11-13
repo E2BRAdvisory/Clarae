@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"memobrain/apps/desktop/internal/events"
-	"memobrain/apps/desktop/internal/store"
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/store"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/pathrules"
 )
 
 // A mount is a share received from another user (§2.6.4): a folder of its own on this

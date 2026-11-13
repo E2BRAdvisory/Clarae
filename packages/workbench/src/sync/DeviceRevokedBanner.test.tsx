@@ -7,7 +7,7 @@ import { useAppStore } from '../state/store';
 import { AccountButton } from '../shell/AccountButton';
 import { DeviceRevokedBanner } from './DeviceRevokedBanner';
 
-const revoked = (serverUrl = 'https://memobrain.test'): AuthState => ({
+const revoked = (serverUrl = 'https://clarae.test'): AuthState => ({
   status: 'device_revoked',
   serverUrl,
   profile: { userId: 'u1', username: 'ada', email: '', displayName: 'Ada', role: 'user' },

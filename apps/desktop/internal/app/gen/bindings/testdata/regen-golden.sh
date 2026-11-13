@@ -8,7 +8,7 @@
 # CLI at that version: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
 #
 # The module path comes from apps/desktop/go.mod (the type arguments of a generic name carry the import path
-# of their package); it is written to the golden as memobrain_apps_desktop whatever the module is called,
+# of their package); it is written to the golden as clarae_apps_desktop whatever the module is called,
 # so that renaming the module does not invalidate the golden (generate_test.go does the same).
 #
 #   internal/app/gen/bindings/testdata/regen-golden.sh
@@ -58,7 +58,7 @@ echo '{"name":"fixture","outputfilename":"fixture","wailsjsdir":"./out"}' >"$tmp
 # A generic type argument is written with every character outside [A-Za-z0-9_] as an underscore.
 sanitize() { printf '%s' "$1" | sed 's/[^A-Za-z0-9_]/_/g'; }
 have="$(sanitize "$desktop")"
-want=memobrain_apps_desktop # goldenModule of generate_test.go
+want=clarae_apps_desktop # goldenModule of generate_test.go
 
 rm -rf "$here/golden"
 (cd "$tmp/out/wailsjs" && find . -type f) | while read -r f; do

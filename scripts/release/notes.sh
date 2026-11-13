@@ -17,7 +17,7 @@ if [ -f CHANGELOG.md ]; then
   if [ -n "${section//[[:space:]]/}" ]; then printf '%s\n' "$section"; exit 0; fi
 fi
 
-echo "## MemoBrain Notes $VERSION"
+echo "## Clarae notanda $VERSION"
 echo
 if [ -n "$PREV" ]; then range="$PREV..HEAD"; else range="HEAD"; fi
 git log --no-merges --pretty='- %s' "$range" | head -200

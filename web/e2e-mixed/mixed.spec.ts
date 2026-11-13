@@ -228,7 +228,7 @@ test('a canvas edited on both sides keeps both versions; a drawing merges by ele
     JSON.stringify({
       type: 'excalidraw',
       version: 2,
-      source: 'memobrain',
+      source: 'clarae',
       elements,
       appState: {},
       files: {},

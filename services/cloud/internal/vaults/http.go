@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/vaults/vaultsdb"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/vaults/vaultsdb"
+	"clarae/shared/syncproto"
 )
 
 // HTTP implements the vault endpoints of the generated strict server.

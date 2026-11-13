@@ -110,7 +110,7 @@ export interface CrepeOptions {
 
 export { EXTERNAL_META, isUserEdit };
 
-const readOnlyKey = new PluginKey('memobrain-readonly');
+const readOnlyKey = new PluginKey('clarae-readonly');
 
 /**
  * Builds the editor (not created yet). The read-only editor stays focusable and keeps its caret (the

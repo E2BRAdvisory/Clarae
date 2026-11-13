@@ -5,9 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/shared/syncproto"
 )
 
 func TestProfileInputCarriesTheExpectedVersion(t *testing.T) {

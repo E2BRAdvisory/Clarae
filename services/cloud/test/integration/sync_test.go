@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"memobrain/shared/syncproto"
+	"clarae/shared/syncproto"
 )
 
 func TestVaultLifecycle(t *testing.T) {

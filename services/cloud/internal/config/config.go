@@ -123,30 +123,30 @@ func Load(role Role, version string) (Config, error) {
 		ShutdownDrain:     envDuration("SHUTDOWN_DRAIN", 5*time.Second),
 		StorageDir:        env("STORAGE_DIR", ""),
 		// The escape hatch for the placeholder check below: never set it in production.
-		AllowPlaceholderSecrets: envBool("MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS", false),
+		AllowPlaceholderSecrets: envBool("CLARAE_ALLOW_PLACEHOLDER_SECRETS", false),
 		S3: S3Config{
 			Endpoint:       env("S3_ENDPOINT", ""),
 			AccessKey:      env("S3_ACCESS_KEY", ""),
 			SecretKey:      env("S3_SECRET_KEY", ""),
 			Region:         env("S3_REGION", "us-east-1"),
-			BucketBlobs:    env("S3_BUCKET_BLOBS", "memobrain-blobs"),
-			BucketExports:  env("S3_BUCKET_EXPORTS", "memobrain-exports"),
+			BucketBlobs:    env("S3_BUCKET_BLOBS", "clarae-blobs"),
+			BucketExports:  env("S3_BUCKET_EXPORTS", "clarae-exports"),
 			UsePathStyle:   envBool("S3_USE_PATH_STYLE", true),
 			PublicEndpoint: env("S3_PUBLIC_ENDPOINT", ""),
 		},
 		OIDC: OIDCConfig{
 			Issuer:          env("OIDC_ISSUER", ""),
-			Audience:        env("OIDC_AUDIENCE", "memobrain-api"),
-			AllowedAZP:      envList("OIDC_ALLOWED_AZP", "memobrain-desktop,memobrain-web"),
-			DesktopClientID: env("OIDC_DESKTOP_CLIENT_ID", "memobrain-desktop"),
-			WebClientID:     env("OIDC_WEB_CLIENT_ID", "memobrain-web"),
+			Audience:        env("OIDC_AUDIENCE", "clarae-api"),
+			AllowedAZP:      envList("OIDC_ALLOWED_AZP", "clarae-desktop,clarae-web"),
+			DesktopClientID: env("OIDC_DESKTOP_CLIENT_ID", "clarae-desktop"),
+			WebClientID:     env("OIDC_WEB_CLIENT_ID", "clarae-web"),
 			PublicGRPCAddr:  env("PUBLIC_GRPC_ADDR", env("GRPC_LISTEN_ADDR", "127.0.0.1:18082")),
 			StatusCacheTTL:  envDuration("OIDC_STATUS_CACHE_TTL", 30*time.Second),
 		},
 		Keycloak: KeycloakConfig{
 			BaseURL:      env("KC_ADMIN_BASE_URL", ""),
-			Realm:        env("KC_REALM", "memobrain"),
-			ClientID:     env("KC_ADMIN_CLIENT_ID", "memobrain-admin-svc"),
+			Realm:        env("KC_REALM", "clarae"),
+			ClientID:     env("KC_ADMIN_CLIENT_ID", "clarae-admin-svc"),
 			ClientSecret: env("KC_ADMIN_CLIENT_SECRET", ""),
 		},
 	}
@@ -206,7 +206,7 @@ func (c Config) validate() error {
 	}
 	if names := c.PlaceholderSecrets(); len(names) > 0 && !c.AllowPlaceholderSecrets {
 		errs = append(errs, fmt.Errorf("placeholder secret of the deployment template (%[2]s) in %[1]s: "+
-			"set real secrets (MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS=1 skips this check, for tests only)",
+			"set real secrets (CLARAE_ALLOW_PLACEHOLDER_SECRETS=1 skips this check, for tests only)",
 			strings.Join(names, ", "), strings.Join(placeholderValues, ", ")))
 	}
 	return errors.Join(errs...)

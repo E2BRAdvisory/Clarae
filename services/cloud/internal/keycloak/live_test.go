@@ -23,20 +23,20 @@ func TestLiveKeycloak(t *testing.T) {
 	if secret == "" {
 		secret = "dev-admin-svc-secret" //nolint:gosec // public development realm secret, see deploy/keycloak
 	}
-	kc := New(Config{BaseURL: base, Realm: "memobrain", ClientID: "memobrain-admin-svc", ClientSecret: secret})
+	kc := New(Config{BaseURL: base, Realm: "clarae", ClientID: "clarae-admin-svc", ClientSecret: secret})
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	name := "live-" + uuid.NewString()[:8]
-	sub, err := kc.CreateUser(ctx, UserSpec{Username: name, Email: name + "@memobrain.test", FirstName: "Live", TemporaryPassword: "Temp-pass-123", Admin: true})
+	sub, err := kc.CreateUser(ctx, UserSpec{Username: name, Email: name + "@clarae.test", FirstName: "Live", TemporaryPassword: "Temp-pass-123", Admin: true})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	t.Cleanup(func() { _ = kc.SetEnabled(context.Background(), sub, false) })
-	if _, err := kc.CreateUser(ctx, UserSpec{Username: name, Email: "other-" + name + "@memobrain.test"}); !errors.Is(err, ErrExists) {
+	if _, err := kc.CreateUser(ctx, UserSpec{Username: name, Email: "other-" + name + "@clarae.test"}); !errors.Is(err, ErrExists) {
 		t.Fatalf("duplicate username: %v", err)
 	}
-	if err := kc.UpdateUser(ctx, sub, "renamed-"+name+"@memobrain.test", "Renamed"); err != nil {
+	if err := kc.UpdateUser(ctx, sub, "renamed-"+name+"@clarae.test", "Renamed"); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	if err := kc.SetAdmin(ctx, sub, false); err != nil {

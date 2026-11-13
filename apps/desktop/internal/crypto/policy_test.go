@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/conformance"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/conformance"
+	"clarae/shared/vaultcrypto"
 )
 
 type policyFixture struct {

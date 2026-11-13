@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MemoBrain Notes",
+    "name": "Clarae notanda",
     "backToConsole": "Torna alla console",
     "crash": {
       "shell": "Si è verificato un errore e l'applicazione si è fermata.",
@@ -269,7 +269,7 @@
     "disconnected": "Offline — connesso come {{name}}",
     "deviceRevoked": "Accesso come {{name}} — questo dispositivo è stato revocato",
     "role": "Ruolo",
-    "placeholder": "https://memobrain.example.com",
+    "placeholder": "https://clarae.example.com",
     "storage": "Spazio",
     "devices": "Dispositivi",
     "vaults": "Vault nel cloud"
@@ -608,7 +608,7 @@
     "notConnected": "Non collegato",
     "notConnectedText": "Questo vault esiste solo su questo computer. Collegalo al cloud per sincronizzarlo tra i tuoi dispositivi.",
     "connectTitle": "Collega al cloud",
-    "needSignIn": "Accedi prima al tuo server MemoBrain Notes (Impostazioni → Cloud).",
+    "needSignIn": "Accedi prima al tuo server Clarae notanda (Impostazioni → Cloud).",
     "openCloudSettings": "Apri impostazioni cloud",
     "kindShared": "Vault condiviso",
     "kindSharedText": "Le note sono salvate in chiaro sul server. Si può condividere con altre persone e gruppi. Gli amministratori possono accedere ai contenuti.",
@@ -1273,10 +1273,10 @@
     "title": "Apertura File",
     "message": "Il file {{name}} non può essere visualizzato direttamente. Desideri scaricarlo?",
     "download": "Download",
-    "executable": "{{name}} è un programma: per sicurezza MemoBrain Notes non lo apre. Vuoi mostrarlo nella cartella?",
+    "executable": "{{name}} è un programma: per sicurezza Clarae notanda non lo apre. Vuoi mostrarlo nella cartella?",
     "reveal": "Mostra nella cartella",
     "openWithApp": "Apri con l'app predefinita",
-    "notShown": "Questo file non può essere visualizzato in MemoBrain Notes."
+    "notShown": "Questo file non può essere visualizzato in Clarae notanda."
   },
   "marp": {
     "title": "Presentazione",
@@ -1421,8 +1421,8 @@
   "updater": {
     "title": "Aggiornamento del software",
     "checking": "Verifica degli aggiornamenti…",
-    "upToDate": "MemoBrain Notes {{version}} è aggiornato.",
-    "available": "È disponibile MemoBrain Notes {{version}}",
+    "upToDate": "Clarae notanda {{version}} è aggiornato.",
+    "available": "È disponibile Clarae notanda {{version}}",
     "indicator": "Aggiornamento {{version}}",
     "current": "hai la {{version}}",
     "required": "Questa versione non è più supportata: aggiorna.",

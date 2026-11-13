@@ -57,7 +57,7 @@ describe('useVaultSession', () => {
     const files = mock.vaults.get(a)?.files;
     files?.set('Only in A.md', '# A');
     files?.set(
-      '.memobrain/workspace.json',
+      '.clarae/workspace.json',
       JSON.stringify({ layout: openPath(emptyLayout(), 'Only in A.md', { mode: 'live' }) }),
     );
     const release = hold('ListTree', a);
@@ -73,8 +73,8 @@ describe('useVaultSession', () => {
   });
 
   it('keeps the settings of the vault opened last when an earlier load ends later', async () => {
-    mock.vaults.get(a)?.files.set('.memobrain/editor.json', JSON.stringify({ lineNumbers: true }));
-    mock.vaults.get(b)?.files.set('.memobrain/editor.json', JSON.stringify({ lineNumbers: false }));
+    mock.vaults.get(a)?.files.set('.clarae/editor.json', JSON.stringify({ lineNumbers: true }));
+    mock.vaults.get(b)?.files.set('.clarae/editor.json', JSON.stringify({ lineNumbers: false }));
     const release = hold('ReadConfig', a);
     const slow = useSettings.getState().load(a);
     await useSettings.getState().load(b);
@@ -113,11 +113,11 @@ describe('settings writes', () => {
     await flushAllNotes();
     const editorWrites = write.mock.calls.filter(([, name]) => name === 'editor.json');
     expect(editorWrites.map(([id]) => id).sort()).toEqual([a, b].sort());
-    expect(
-      JSON.parse(mock.vaults.get(a)?.files.get('.memobrain/editor.json') ?? '{}'),
-    ).toMatchObject({ lineNumbers: true });
-    expect(
-      JSON.parse(mock.vaults.get(b)?.files.get('.memobrain/editor.json') ?? '{}'),
-    ).toMatchObject({ lineNumbers: false });
+    expect(JSON.parse(mock.vaults.get(a)?.files.get('.clarae/editor.json') ?? '{}')).toMatchObject({
+      lineNumbers: true,
+    });
+    expect(JSON.parse(mock.vaults.get(b)?.files.get('.clarae/editor.json') ?? '{}')).toMatchObject({
+      lineNumbers: false,
+    });
   });
 });

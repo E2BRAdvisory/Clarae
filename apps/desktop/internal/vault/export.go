@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"memobrain/shared/pathrules"
+	"clarae/shared/pathrules"
 )
 
 // ExportStats counts what an export wrote.

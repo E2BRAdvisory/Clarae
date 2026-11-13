@@ -27,7 +27,7 @@ task dev-desktop     # app Wails con ricarica del frontend (esbuild, ricarica co
 
 `task dev-web` avvia solo la Web UI su :5174 con proxy di `/api` verso il cloud su :18081. Con `--role=worker` il cloud non ha il listener API: metriche e probe stanno su `METRICS_LISTEN_ADDR` (127.0.0.1:18083 in sviluppo).
 
-Utenti di test nel realm `memobrain` (importato da `deploy/keycloak/realm-memobrain.json`): `admin`, `user1`, `user2`, tutti con password `memobrain-dev-password`.
+Utenti di test nel realm `clarae` (importato da `deploy/keycloak/realm-clarae.json`): `admin`, `user1`, `user2`, tutti con password `clarae-dev-password`.
 
 ## Script per verifiche e debug
 
@@ -45,7 +45,7 @@ Gli script stanno in `scripts/` (bash, macOS/Linux) e tengono tutto lo stato in 
 
 Opzioni comuni: `--fresh` (solo standalone) azzera la data dir; `--data-dir DIR` ne usa un'altra; `--keep` lascia cloud e stack attivi all'uscita. Ogni script ha `--help`.
 
-Accesso nel cloud: `user1` / `memobrain-dev-password` (anche `user2`, e `admin` per il ruolo admin). Log: `.dev/logs/cloud.log` e `.dev/<istanza>/logs/memobrain.log`. Keycloak: <http://localhost:8080> (admin/admin); console S3: <http://localhost:9001> (memobrain/memobrain-secret). Le istanze desktop usano `MEMOBRAIN_DATA_DIR` per la data dir e `MEMOBRAIN_AUTH_REDIRECT=scheme` forza il fallback `memobrain://` del login.
+Accesso nel cloud: `user1` / `clarae-dev-password` (anche `user2`, e `admin` per il ruolo admin). Log: `.dev/logs/cloud.log` e `.dev/<istanza>/logs/clarae.log`. Keycloak: <http://localhost:8080> (admin/admin); console S3: <http://localhost:9001> (clarae/clarae-secret). Le istanze desktop usano `CLARAE_DATA_DIR` per la data dir e `CLARAE_AUTH_REDIRECT=scheme` forza il fallback `clarae://` del login.
 
 ## Comandi quotidiani
 
@@ -54,7 +54,7 @@ task gen             # rigenera tutto il codice generato (sotto)
 task lint            # golangci-lint + eslint + prettier
 task typecheck       # tsc in tutti i pacchetti TypeScript (genera i binding Wails se mancano)
 task test            # go test -race, vitest, conformance
-task e2e             # Playwright (Chromium): UI desktop sul mock, bundle di produzione, Web UI (prima volta: yarn workspace @memobrain/desktop-frontend exec playwright install chromium)
+task e2e             # Playwright (Chromium): UI desktop sul mock, bundle di produzione, Web UI (prima volta: yarn workspace @clarae/desktop-frontend exec playwright install chromium)
 task ci              # verifica completa prima di merge e tag (vedi «Verifiche»)
 task --list
 ```
@@ -63,7 +63,7 @@ task --list
 
 | Generatore            | Da                                             | A                                                                                                               |
 | --------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `gen-features`        | `api/config-profile.schema.json`               | flag e default del Config Profile in Go (`shared/go/features`) e TypeScript (`@memobrain/api-client/features`)  |
+| `gen-features`        | `api/config-profile.schema.json`               | flag e default del Config Profile in Go (`shared/go/features`) e TypeScript (`@clarae/api-client/features`)     |
 | `gen-openapi`         | `api/openapi.yaml`                             | stub del server, client Go (`shared/go/apiclient`), client TypeScript (`packages/api-client`)                   |
 | `gen-proto`           | `api/proto`                                    | `shared/go/notifyv1`                                                                                            |
 | `gen-sqlc`            | `services/cloud/internal/db/queries`           | `services/cloud/internal/<modulo>/<modulo>db`                                                                   |
@@ -75,49 +75,49 @@ task --list
 Fuori da `task gen`: le tabelle di [web-workbench-parity.md](web-workbench-parity.md) (`node scripts/parity.mjs`) e l'inventario degli endpoint di `docs/security/pentest-scope.md` (`node scripts/pentest-inventory.mjs`, `--check` per verificarlo).
 
 Per un singolo test Go: `cd services/cloud && go test -race -run 'TestNome' ./internal/sync/...`.
-Per un singolo test TS: `yarn workspace @memobrain/workbench exec vitest run src/editor/foo.test.ts` (la UI sta in `packages/workbench`; `apps/desktop/frontend` contiene solo l'entry e gli e2e).
-Gli e2e del desktop girano in un browser normale: con `MEMOBRAIN_E2E=1` `mountWorkbench` (`packages/workbench/src/mount.tsx`) installa il mock dei binding (`packages/workbench/src/test/wails-mock`), esposto come `window.__mock` per preparare note nei test.
+Per un singolo test TS: `yarn workspace @clarae/workbench exec vitest run src/editor/foo.test.ts` (la UI sta in `packages/workbench`; `apps/desktop/frontend` contiene solo l'entry e gli e2e).
+Gli e2e del desktop girano in un browser normale: con `CLARAE_E2E=1` `mountWorkbench` (`packages/workbench/src/mount.tsx`) installa il mock dei binding (`packages/workbench/src/test/wails-mock`), esposto come `window.__mock` per preparare note nei test.
 
 ## Verifiche
 
 Non c'è un servizio di CI ([ADR-0036](adr/0036-verifiche-locali-senza-ci.md)). **`task ci` va eseguito, verde, prima di ogni merge su `main` e prima di creare un tag di rilascio.** Esegue nell'ordine:
 
-| Passo         | Cosa                                                                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lint`        | golangci-lint sui tre moduli Go (con le regole depguard dei moduli del cloud), ESLint, Prettier                                            |
-| `typecheck`   | `tsc` in tutti i pacchetti TypeScript                                                                                                      |
-| `vuln`        | govulncheck sui tre moduli Go                                                                                                              |
-| `wailsjs`     | genera i binding Wails se mancano                                                                                                          |
-| `test-go`     | `go test -race` (tag `webkit2_41` dove serve) con `MEMOBRAIN_REQUIRE_BINDINGS=1`: il test dispatcher/binding fallisce se i binding mancano |
-| `test-ts`     | Vitest in ogni pacchetto                                                                                                                   |
-| `conformance` | fixture Markdown, merge e crittografia in Go e TypeScript                                                                                  |
-| `test-wasm`   | test del core Go compilato in WebAssembly, sotto Node con sqlite-wasm                                                                      |
-| `test-core`   | le suite dei pannelli cloud su `CoreCloudPort` sopra il core WebAssembly, in Node, con un cloud finto validato su `api/openapi.yaml`       |
-| `parity`      | test di `scripts/parity/` e `node scripts/parity.mjs --check` (registro delle funzioni)                                                    |
-| `check-gen`   | fallisce se `task gen` cambia l'albero                                                                                                     |
+| Passo         | Cosa                                                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `lint`        | golangci-lint sui tre moduli Go (con le regole depguard dei moduli del cloud), ESLint, Prettier                                         |
+| `typecheck`   | `tsc` in tutti i pacchetti TypeScript                                                                                                   |
+| `vuln`        | govulncheck sui tre moduli Go                                                                                                           |
+| `wailsjs`     | genera i binding Wails se mancano                                                                                                       |
+| `test-go`     | `go test -race` (tag `webkit2_41` dove serve) con `CLARAE_REQUIRE_BINDINGS=1`: il test dispatcher/binding fallisce se i binding mancano |
+| `test-ts`     | Vitest in ogni pacchetto                                                                                                                |
+| `conformance` | fixture Markdown, merge e crittografia in Go e TypeScript                                                                               |
+| `test-wasm`   | test del core Go compilato in WebAssembly, sotto Node con sqlite-wasm                                                                   |
+| `test-core`   | le suite dei pannelli cloud su `CoreCloudPort` sopra il core WebAssembly, in Node, con un cloud finto validato su `api/openapi.yaml`    |
+| `parity`      | test di `scripts/parity/` e `node scripts/parity.mjs --check` (registro delle funzioni)                                                 |
+| `check-gen`   | fallisce se `task gen` cambia l'albero                                                                                                  |
 
 **Suite lente**, fuori da `task ci`: si eseguono quando si tocca l'area relativa e comunque prima di un rilascio.
 
-| Comando                                      | Cosa                                                                                                  | Prerequisiti                                                                  |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `task test-integration`                      | cloud con testcontainers (PostgreSQL, MinIO, Keycloak)                                                | Docker                                                                        |
-| `task test-desktop-e2e`                      | sync a due dispositivi e contract test del client REST (`internal/sync/...` con il tag `integration`) | Docker (costruisce il binario del cloud, PostgreSQL in container)             |
-| `task e2e`                                   | Playwright: UI desktop sul mock, spec di disegno/grafo/canvas sul bundle di produzione, Web UI        | Chromium di Playwright                                                        |
-| `task e2e-matrix`                            | matrice e2e: tutti gli spec di `apps/desktop/frontend/e2e` su `desktop-mock` e `web-core` (sotto)     | Chromium di Playwright (`task wasm-core` è una dipendenza)                    |
-| `task e2e-mixed`                             | client misti sullo stesso cloud: dispositivo desktop headless e workbench web (sotto)                 | Docker, porte 5434, 8080, 9010-9012, 18091-18093 libere                       |
-| `yarn workspace @memobrain/web e2e:cloud`    | workbench contro un cloud vero: login, sync tra browser, vault privato nel browser                    | `task web-build`, poi `scripts/run-desktop-with-cloud.sh --cloud-only --keep` |
-| `yarn workspace @memobrain/web e2e:security` | CSP, SRI e richieste esterne sulla build di produzione servita dall'handler Go                        | `task web-build`                                                              |
-| `task perf` / `task perf-check`              | suite di prestazioni del desktop e confronto con la baseline (vedi sotto)                             | dataset sintetico (`task perf-data`)                                          |
+| Comando                                   | Cosa                                                                                                  | Prerequisiti                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `task test-integration`                   | cloud con testcontainers (PostgreSQL, MinIO, Keycloak)                                                | Docker                                                                        |
+| `task test-desktop-e2e`                   | sync a due dispositivi e contract test del client REST (`internal/sync/...` con il tag `integration`) | Docker (costruisce il binario del cloud, PostgreSQL in container)             |
+| `task e2e`                                | Playwright: UI desktop sul mock, spec di disegno/grafo/canvas sul bundle di produzione, Web UI        | Chromium di Playwright                                                        |
+| `task e2e-matrix`                         | matrice e2e: tutti gli spec di `apps/desktop/frontend/e2e` su `desktop-mock` e `web-core` (sotto)     | Chromium di Playwright (`task wasm-core` è una dipendenza)                    |
+| `task e2e-mixed`                          | client misti sullo stesso cloud: dispositivo desktop headless e workbench web (sotto)                 | Docker, porte 5434, 8080, 9010-9012, 18091-18093 libere                       |
+| `yarn workspace @clarae/web e2e:cloud`    | workbench contro un cloud vero: login, sync tra browser, vault privato nel browser                    | `task web-build`, poi `scripts/run-desktop-with-cloud.sh --cloud-only --keep` |
+| `yarn workspace @clarae/web e2e:security` | CSP, SRI e richieste esterne sulla build di produzione servita dall'handler Go                        | `task web-build`                                                              |
+| `task perf` / `task perf-check`           | suite di prestazioni del desktop e confronto con la baseline (vedi sotto)                             | dataset sintetico (`task perf-data`)                                          |
 
-Con la build della Web UI presente (`task web-build`), `MEMOBRAIN_REQUIRE_WEB_BUILD=1 go test ./web-embed/...` in `services/cloud` rende obbligatori i controlli di CSP e SRI sugli asset incorporati invece di saltarli.
+Con la build della Web UI presente (`task web-build`), `CLARAE_REQUIRE_WEB_BUILD=1 go test ./web-embed/...` in `services/cloud` rende obbligatori i controlli di CSP e SRI sugli asset incorporati invece di saltarli.
 
 ## Workbench web e WebAssembly
 
 Il workbench nel browser esegue il core Go del desktop compilato in WebAssembly (ADR-0030); guida per gli sviluppatori in [desktop-web-sync.md](desktop-web-sync.md).
 
 ```sh
-task wasm-core       # build/wasm/memobrain-core.wasm + wasm_exec.js (GOOS=js GOARCH=wasm)
-task test-wasm       # test di apps/desktop/internal/... e cmd/... sotto Node, con scripts/go-js-exec.sh e @memobrain/sqlite-bridge
+task wasm-core       # build/wasm/clarae-core.wasm + wasm_exec.js (GOOS=js GOARCH=wasm)
+task test-wasm       # test di apps/desktop/internal/... e cmd/... sotto Node, con scripts/go-js-exec.sh e @clarae/sqlite-bridge
 task test-core       # pannelli cloud su CoreCloudPort sopra il core WASM in Node (*.core.test.tsx), cloud finto validato sull'OpenAPI
 task web-build       # core WASM + Web UI di produzione, copiati in services/cloud/web-embed/dist (poi task build-cloud)
 task web-clean       # rimuove la build incorporata e ripristina il segnaposto
@@ -127,13 +127,13 @@ Per un singolo pacchetto sotto WASM: `cd apps/desktop && GOOS=js GOARCH=wasm go 
 
 ## Matrice e2e e client misti
 
-**Matrice** (`web/playwright.workbench-ui.config.ts`, `task e2e-matrix` o `yarn workspace @memobrain/web e2e:workbench-ui`): ogni spec di `apps/desktop/frontend/e2e` gira in due progetti, `desktop-mock` (la UI sul mock dei binding, server su :5199) e `web-core` (il workbench nel browser sul core WebAssembly, OPFS, server su :5176); un solo target con `--project web-core`. I due server si costruiscono una volta sola (`--no-watch`): con il watch una modifica ai sorgenti ricaricherebbe le pagine dei test in corso. I server servono build proprie (`MEMOBRAIN_DIST`, che accetta anche percorsi assoluti: uno relativo parte dalla cartella del pacchetto dell'app, e il pacchetto stesso o una sua cartella madre è rifiutato), perché `web/dist` e `apps/desktop/frontend/dist` vengono ricostruiti da altre build. Due esecuzioni contemporanee (più worktree) vogliono porte diverse: `E2E_MATRIX_DESKTOP_PORT=5299 E2E_MATRIX_WEB_PORT=5276 task e2e-matrix`. Build, artefatti e trace in `.dev/e2e-matrix/<porta desktop>-<porta web>/`.
+**Matrice** (`web/playwright.workbench-ui.config.ts`, `task e2e-matrix` o `yarn workspace @clarae/web e2e:workbench-ui`): ogni spec di `apps/desktop/frontend/e2e` gira in due progetti, `desktop-mock` (la UI sul mock dei binding, server su :5199) e `web-core` (il workbench nel browser sul core WebAssembly, OPFS, server su :5176); un solo target con `--project web-core`. I due server si costruiscono una volta sola (`--no-watch`): con il watch una modifica ai sorgenti ricaricherebbe le pagine dei test in corso. I server servono build proprie (`CLARAE_DIST`, che accetta anche percorsi assoluti: uno relativo parte dalla cartella del pacchetto dell'app, e il pacchetto stesso o una sua cartella madre è rifiutato), perché `web/dist` e `apps/desktop/frontend/dist` vengono ricostruiti da altre build. Due esecuzioni contemporanee (più worktree) vogliono porte diverse: `E2E_MATRIX_DESKTOP_PORT=5299 E2E_MATRIX_WEB_PORT=5276 task e2e-matrix`. Build, artefatti e trace in `.dev/e2e-matrix/<porta desktop>-<porta web>/`.
 
 Gli spec importano `test` ed `expect` da `e2e/support.ts`, che espone l'opzione `target` e gli helper che dipendono dal target (`openVault`, `seedVault`, `readVaultFile`, `listVaultFiles`, `vaultBinaries`, `appOrigin`): sul mock leggono e scrivono `window.__mock`, sul web chiamano i binding del core. Uno spec, o un singolo test, che non può girare sul web lo dichiara con `skipOnWeb('<id del registro>', '<motivo>')`: a livello di file esclude tutto lo spec, come prima istruzione di un test solo quel test. `node scripts/parity.mjs` riporta la copertura per target nella tabella «Spec e2e per target» di [web-workbench-parity.md](web-workbench-parity.md) e fallisce se l'id non è una voce di `shared/parity/features.yaml`.
 
 **Client misti** (`task e2e-mixed`, cioè `scripts/e2e-mixed.sh`): il dispositivo A è il core del desktop senza finestra (`apps/desktop/cmd/e2e-device`, tag di build `e2e`: gli stessi binding di Wails, il motore di sync vero e cartelle del vault su disco, comandato da Playwright con una piccola API HTTP su loopback), il dispositivo B è il workbench web in Chromium, entrambi sullo stesso cloud. Scenari (`web/e2e-mixed/mixed.spec.ts`): merge di modifiche concorrenti a un `.md`, copia di conflitto di un `.canvas` e merge per elemento di un `.excalidraw`, vault privato creato sul desktop e sbloccato nel browser, condivisione creata sul desktop e accettata, montata e revocata nel browser, profilo con `features.web_workbench = false`, revoca del dispositivo dal browser.
 
-Lo script usa uno stack usa e getta, mai quello di sviluppo: progetto compose `memobrain-w8e2e` (`deploy/docker/compose.e2e-mixed.yaml` sopra `compose.dev.yaml`) con PostgreSQL :5434, S3 :9010/:9011, Keycloak :8080 (management :9012) e il cloud su :18091 (gRPC :18092). Keycloak importa una copia del realm di sviluppo in `.dev/e2e-mixed/realm`, con l'origine :18091 su `memobrain-web` e il password grant su `memobrain-desktop`, con cui il dispositivo headless ottiene i token (mai nel realm distribuito). Le build stanno sotto `.dev/e2e-mixed` (core WASM, Web UI con `MEMOBRAIN_DIST`, cloud compilato in una copia del modulo con la Web UI incorporata): `build/wasm`, `web/dist` e `services/cloud/web-embed/dist` non vengono toccati.
+Lo script usa uno stack usa e getta, mai quello di sviluppo: progetto compose `clarae-w8e2e` (`deploy/docker/compose.e2e-mixed.yaml` sopra `compose.dev.yaml`) con PostgreSQL :5434, S3 :9010/:9011, Keycloak :8080 (management :9012) e il cloud su :18091 (gRPC :18092). Keycloak importa una copia del realm di sviluppo in `.dev/e2e-mixed/realm`, con l'origine :18091 su `clarae-web` e il password grant su `clarae-desktop`, con cui il dispositivo headless ottiene i token (mai nel realm distribuito). Le build stanno sotto `.dev/e2e-mixed` (core WASM, Web UI con `CLARAE_DIST`, cloud compilato in una copia del modulo con la Web UI incorporata): `build/wasm`, `web/dist` e `services/cloud/web-embed/dist` non vengono toccati.
 
 ```sh
 task e2e-mixed                     # stack, build, cloud, test, poi down -v
@@ -142,7 +142,7 @@ task e2e-mixed -- test --grep canvas   # di nuovo i soli test (SKIP_BUILD=1 rius
 task e2e-mixed -- down             # ferma il cloud, rimuove stack e volumi
 ```
 
-Log in `.dev/e2e-mixed/logs` (`cloud.log`, `compose.log`, `web-build.log`); `MEMOBRAIN_E2E_DEVICE_VERBOSE=1` manda il log del core del dispositivo su stderr.
+Log in `.dev/e2e-mixed/logs` (`cloud.log`, `compose.log`, `web-build.log`); `CLARAE_E2E_DEVICE_VERBOSE=1` manda il log del core del dispositivo su stderr.
 
 ## Contract test
 
@@ -154,7 +154,7 @@ cd apps/desktop && go test -race -count=1 -tags integration -run TestTransportHo
 
 Il test `shared/go/syncproto/codes_contract_test.go` allinea l'enum `ErrorCode` di OpenAPI alle costanti Go (gira con `task test`).
 
-Lo stesso contratto valida i finti cloud lato TypeScript: `contractFetch` di `@memobrain/cloud-features/testing/contract` riconduce ogni richiesta a un'operazione di `api/openapi.yaml` e valida corpi e risposte JSON. Lo usano le suite sul core (`task test-core`) e il mock REST di Playwright (`web/e2e/cloudMock.ts`, negli spec del workbench e della matrice). Uno stato che l'operazione non dichiara viene confrontato con la sua risposta `default` (l'errore interno): per questo ogni operazione autenticata dichiara anche i rifiuti dell'autenticazione (401, `403 USER_SUSPENDED`, `409 INVALID_STATE` per il conflitto d'identità, 429), così i client generati e i test li trattano come risposte previste.
+Lo stesso contratto valida i finti cloud lato TypeScript: `contractFetch` di `@clarae/cloud-features/testing/contract` riconduce ogni richiesta a un'operazione di `api/openapi.yaml` e valida corpi e risposte JSON. Lo usano le suite sul core (`task test-core`) e il mock REST di Playwright (`web/e2e/cloudMock.ts`, negli spec del workbench e della matrice). Uno stato che l'operazione non dichiara viene confrontato con la sua risposta `default` (l'errore interno): per questo ogni operazione autenticata dichiara anche i rifiuti dell'autenticazione (401, `403 USER_SUSPENDED`, `409 INVALID_STATE` per il conflitto d'identità, 429), così i client generati e i test li trattano come risposte previste.
 
 ## Prestazioni
 
@@ -188,10 +188,10 @@ Ogni funzione utente ha una voce in `shared/parity/features.yaml` (ADR-0037 §1)
 
 - `shared/go/features/features_gen.go`: le costanti Go dei flag (`features.WebWorkbench`, …), `Known`, `Defaults`, `Descriptions` e i default del prodotto (`features.ProductDefaults()`, distribuiti dal cloud come base della configurazione effettiva); il pacchetto, importabile da cloud e core del desktop, aggiunge `Flags` ed `Enabled`;
 - `shared/go/features/config-profile.schema.json`: la copia dello schema incorporata (il cloud valida i profili con questa);
-- `packages/api-client/src/gen/features.ts`: l'unione TypeScript `Feature`, `FEATURES` e `FEATURE_DEFAULTS`, esportati con `featureEnabled` da `@memobrain/api-client/features` (senza dipendenze: lo usano workbench, console e `@memobrain/cloud-features`).
+- `packages/api-client/src/gen/features.ts`: l'unione TypeScript `Feature`, `FEATURES` e `FEATURE_DEFAULTS`, esportati con `featureEnabled` da `@clarae/api-client/features` (senza dipendenze: lo usano workbench, console e `@clarae/cloud-features`).
 
 Per un flag nuovo: aggiungilo allo schema con default e descrizione, `task gen`, una riga nella tabella «Chiavi del profilo» di [admin-guide/profili-quote-audit.md](admin-guide/profili-quote-audit.md), poi usalo con la costante (`featureOn(m.features, Feature.X)` nel workbench, `features.Enabled(cfg, features.X)` in Go). I test di `shared/go/features` falliscono se i file generati non corrispondono allo schema o se la tabella della guida non elenca esattamente le chiavi dello schema con tipo e default; `featureOn` accetta solo nomi dello schema (`Feature`), quindi un refuso non compila.
 
 ## Struttura
 
-Mappa del repository nel [README](../README.md#struttura-del-repository), componenti e contratti in [architecture.md](architecture.md), regole di contribuzione in [CONTRIBUTING.md](../CONTRIBUTING.md). Il module path Go è locale (`memobrain/…`).
+Mappa del repository nel [README](../README.md#struttura-del-repository), componenti e contratti in [architecture.md](architecture.md), regole di contribuzione in [CONTRIBUTING.md](../CONTRIBUTING.md). Il module path Go è locale (`clarae/…`).

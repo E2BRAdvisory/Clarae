@@ -3,8 +3,8 @@ package admin
 import (
 	"context"
 
-	"memobrain/services/cloud/internal/admin/admindb"
-	"memobrain/services/cloud/internal/db"
+	"clarae/services/cloud/internal/admin/admindb"
+	"clarae/services/cloud/internal/db"
 )
 
 // SnapshotStorage records today's total usage for the trend of the dashboard

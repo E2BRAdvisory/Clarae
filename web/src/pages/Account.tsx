@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Button, Dialog, InlineError, TextField, useToast } from '@memobrain/ui';
-import { MyGroups } from '@memobrain/cloud-features';
+import { Button, Dialog, InlineError, TextField, useToast } from '@clarae/ui';
+import { MyGroups } from '@clarae/cloud-features';
 import { useCloudPort } from '../api/cloud';
 import { describeError } from '../api/errors';
 import { useDeleteMyAccount, useExportMyData } from '../api/account';
@@ -116,7 +116,7 @@ export function AccountPage() {
     setExportError(null);
     exportData.mutate(undefined, {
       onSuccess: (blob) => {
-        downloadBlob(blob, `memobrain-account-${new Date().toISOString().slice(0, 10)}.json`);
+        downloadBlob(blob, `clarae-account-${new Date().toISOString().slice(0, 10)}.json`);
         toast.push(t('account.exportDone'));
       },
       onError: (e) => setExportError(describeError(e, t)),
@@ -140,7 +140,7 @@ export function AccountPage() {
           // The account is gone: the copies of its vaults leave this browser too, without asking
           // (changes not uploaded can never be uploaded now), and so does its device registration.
           void forgetDeletedAccount()
-            .catch((e: unknown) => console.error('memobrain: forgetting the browser failed:', e))
+            .catch((e: unknown) => console.error('clarae: forgetting the browser failed:', e))
             .finally(signOut);
         },
         onError: (e) => setError(describeError(e, t)),

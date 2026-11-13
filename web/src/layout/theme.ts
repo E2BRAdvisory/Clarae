@@ -1,5 +1,5 @@
 export type Theme = 'auto' | 'light' | 'dark';
-const KEY = 'memobrain.web.theme';
+const KEY = 'clarae.web.theme';
 
 export function loadTheme(): Theme {
   try {

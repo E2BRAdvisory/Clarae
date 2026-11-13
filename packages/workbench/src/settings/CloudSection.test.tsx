@@ -20,7 +20,7 @@ describe('CloudSection', () => {
     );
     expect(screen.getByText('Not signed in')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Server address'), {
-      target: { value: 'https://memobrain.test' },
+      target: { value: 'https://clarae.test' },
     });
     fireEvent.click(screen.getByText('Sign in'));
     expect(await screen.findByText('Signed in as Uno')).toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('CloudSection', () => {
       );
       expect(screen.queryByLabelText('Server address')).toBeNull();
       expect(screen.queryByText('Sign in')).toBeNull();
-      useAppStore.getState().setAuth(await api.auth.login('https://memobrain.test'));
+      useAppStore.getState().setAuth(await api.auth.login('https://clarae.test'));
       expect(await screen.findByText('Signed in as Uno')).toBeInTheDocument();
       expect(screen.queryByText('Sign out')).toBeNull();
       view.unmount();

@@ -5,7 +5,7 @@
 // embedded view, so a broken view leaves the others working.
 import { Component, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, InlineError } from '@memobrain/ui';
+import { Button, InlineError } from '@clarae/ui';
 import { flushWorkbench } from '../app/lifecycle';
 import { errorMessage } from '../util/errors';
 import { isChunkLoadError, resetFailedViews } from './lazyView';

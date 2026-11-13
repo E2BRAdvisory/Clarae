@@ -1,7 +1,7 @@
 // Package cloudapi holds the DTOs of the cloud-management bindings (cloud vaults, devices, usage,
 // sharing, directory): the OpenAPI types of shared/go/apiclient, field for field, with a `ts_type`
 // tag where Wails cannot type a field by itself (UUIDs, timestamps, enums). The JSON is the one of
-// the REST API, and the TypeScript models Wails generates are the Schemas of @memobrain/api-client
+// the REST API, and the TypeScript models Wails generates are the Schemas of @clarae/api-client
 // (ADR-0045 §6), so the CloudPort of the core passes them through without mapping.
 //
 // Drift from api/openapi.yaml cannot go unnoticed:
@@ -17,7 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"memobrain/shared/apiclient"
+	"clarae/shared/apiclient"
 )
 
 // Vault is a cloud vault of the account (OpenAPI Vault); DeletedAt is set on a soft-deleted one.

@@ -50,7 +50,7 @@ export interface FindMeta {
   query?: Partial<FindQuery>;
 }
 
-export const findKey = new PluginKey<FindState>('memobrain-live-find');
+export const findKey = new PluginKey<FindState>('clarae-live-find');
 
 export const EMPTY_QUERY: FindQuery = {
   search: '',

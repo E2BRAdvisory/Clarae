@@ -12,11 +12,11 @@ import (
 	"syscall/js"
 	"time"
 
-	"memobrain/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/auth"
 )
 
 // hostName is the JavaScript object the page installs for the Go core (web/src/workbench).
-const hostName = "__memobrainHost"
+const hostName = "__claraeHost"
 
 // isWeb tells the browser build from the desktop one: there is no file watcher (vault.FS.SetOnChange
 // reports the core's own writes), no updater and no OS trash.
@@ -202,7 +202,7 @@ func (h webHost) Emit(_ context.Context, name string, payload any) {
 // SaveFile hands out a path in the scratch area of the core's file system; Delivered turns the
 // finished file into a download.
 func (webHost) SaveFile(_ context.Context, d SaveDialog) (string, error) {
-	dir := filepath.Join(os.TempDir(), "memobrain-downloads")
+	dir := filepath.Join(os.TempDir(), "clarae-downloads")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

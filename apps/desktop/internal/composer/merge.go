@@ -11,10 +11,10 @@ import (
 	"path"
 	"strings"
 
-	"memobrain/apps/desktop/internal/links"
-	"memobrain/apps/desktop/internal/parser"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/pathrules"
+	"clarae/apps/desktop/internal/links"
+	"clarae/apps/desktop/internal/parser"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 // Env is what the composer needs from the application.

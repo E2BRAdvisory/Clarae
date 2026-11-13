@@ -1,4 +1,4 @@
-module memobrain/apps/desktop
+module clarae/apps/desktop
 
 go 1.27.4
 

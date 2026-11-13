@@ -11,7 +11,7 @@ import type {
   HostRequest,
   ToWorker,
 } from './protocol';
-import type { EventName } from '@memobrain/workbench/events';
+import type { EventName } from '@clarae/workbench/events';
 import { downloadBlob } from '../shared/download';
 import type { BindingHooks } from './core.gen';
 
@@ -81,7 +81,7 @@ export interface CoreHandle {
    */
   wipe(prefix: string, timeoutMs?: number): Promise<void>;
   /**
-   * Subscribes to a Go → TypeScript event (`Events.<key>` of @memobrain/workbench/events, generated
+   * Subscribes to a Go → TypeScript event (`Events.<key>` of @clarae/workbench/events, generated
    * from the Go registry); returns the unsubscribe function. The payload is the parsed JSON.
    */
   on(name: EventName, cb: (payload: unknown) => void): () => void;
@@ -95,9 +95,9 @@ export interface CoreHandle {
  * (scripts/esbuild.mjs). It holds the vault keys, so its script is checked like the page's own.
  */
 export const createCoreWorker = (): Worker =>
-  new VerifiedWorker(__MEMOBRAIN_WORKER__, __MEMOBRAIN_WORKER_INTEGRITY__, {
+  new VerifiedWorker(__CLARAE_WORKER__, __CLARAE_WORKER_INTEGRITY__, {
     type: 'module',
-    name: 'memobrain-core',
+    name: 'clarae-core',
   }) as unknown as Worker;
 
 /** What VerifiedWorker needs from the browser (replaced in tests). */
@@ -150,7 +150,7 @@ export class VerifiedWorker extends EventTarget {
 
   private async boot(url: string, integrity: string, options: WorkerOptions): Promise<void> {
     // Only E2E builds may start an unpinned script; production builds always embed the hash.
-    if (!integrity && !import.meta.env.MEMOBRAIN_E2E) throw new Error('no integrity to check');
+    if (!integrity && !import.meta.env.CLARAE_E2E) throw new Error('no integrity to check');
     if (!integrity) return this.started(this.deps.createWorker(url, options));
     const res = await this.deps.fetch(url, { integrity, credentials: 'same-origin' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

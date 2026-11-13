@@ -3,10 +3,10 @@ import { expect, openVault, readVaultFile, test } from './support';
 import { runCommand } from './drawingHelpers';
 
 // The optional status bar (ADR-0035): off by default, turned on from the palette and remembered in
-// .memobrain/appearance.json; figures of the active editor only.
+// .clarae/appearance.json; figures of the active editor only.
 const statusBar = async (page: Page) =>
   (
-    JSON.parse((await readVaultFile(page, '.memobrain/appearance.json')) || '{}') as {
+    JSON.parse((await readVaultFile(page, '.clarae/appearance.json')) || '{}') as {
       statusBar?: boolean;
     }
   ).statusBar;

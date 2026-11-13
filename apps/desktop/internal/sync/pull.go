@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/apps/desktop/internal/vault"
-	"memobrain/shared/syncproto"
-	"memobrain/shared/vaultcrypto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/syncproto"
+	"clarae/shared/vaultcrypto"
 )
 
 type transportChange = transport.Change

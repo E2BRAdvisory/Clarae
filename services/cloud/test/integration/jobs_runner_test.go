@@ -10,12 +10,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/app"
-	"memobrain/services/cloud/internal/db"
-	"memobrain/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/app"
+	"clarae/services/cloud/internal/db"
+	"clarae/services/cloud/internal/storage"
 )
 
-// jobRuns reads memobrain_jobs_runs_total of one job, every result included.
+// jobRuns reads clarae_jobs_runs_total of one job, every result included.
 func jobRuns(t *testing.T, job string) float64 {
 	t.Helper()
 	families, err := prometheus.DefaultGatherer.Gather()
@@ -24,7 +24,7 @@ func jobRuns(t *testing.T, job string) float64 {
 	}
 	total := 0.0
 	for _, mf := range families {
-		if mf.GetName() != "memobrain_jobs_runs_total" {
+		if mf.GetName() != "clarae_jobs_runs_total" {
 			continue
 		}
 		for _, m := range mf.GetMetric() {

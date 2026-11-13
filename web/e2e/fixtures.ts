@@ -153,7 +153,7 @@ export const allRoutes: Record<string, unknown> = {
       ip_address: '10.0.0.1',
       started: '2026-01-15T10:00:00Z',
       last_access: '2026-01-15T11:00:00Z',
-      clients: ['memobrain-desktop'],
+      clients: ['clarae-desktop'],
     },
   ],
   [`GET /admin/users/${U1}/vaults`]: [

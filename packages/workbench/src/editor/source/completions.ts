@@ -7,7 +7,7 @@ import type {
   CompletionResult,
   CompletionSource,
 } from '@codemirror/autocomplete';
-import { splitFrontmatter } from '@memobrain/markdown';
+import { splitFrontmatter } from '@clarae/markdown';
 import {
   tagCandidates,
   wikilinkCandidates,

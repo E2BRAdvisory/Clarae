@@ -14,8 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"memobrain/services/cloud/internal/blobs"
-	"memobrain/services/cloud/internal/storage"
+	"clarae/services/cloud/internal/blobs"
+	"clarae/services/cloud/internal/storage"
 )
 
 // waitFor polls cond until it holds or the deadline passes.

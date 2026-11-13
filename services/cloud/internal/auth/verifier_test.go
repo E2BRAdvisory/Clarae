@@ -11,24 +11,24 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
-	"memobrain/services/cloud/internal/auth/authtest"
+	"clarae/services/cloud/internal/auth/authtest"
 )
 
 func TestVerifier(t *testing.T) {
 	iss := authtest.New(t)
 	ctx := context.Background()
-	v, err := NewVerifier(ctx, iss.URL(), "memobrain-api", []string{"memobrain-desktop", "memobrain-web"})
+	v, err := NewVerifier(ctx, iss.URL(), "clarae-api", []string{"clarae-desktop", "clarae-web"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("valid token", func(t *testing.T) {
-		raw := iss.Token(t, authtest.TokenOptions{Username: "ada", Name: "Ada Admin", Roles: []string{"memobrain-admin", "memobrain-user"}})
+		raw := iss.Token(t, authtest.TokenOptions{Username: "ada", Name: "Ada Admin", Roles: []string{"clarae-admin", "clarae-user"}})
 		c, err := v.Verify(ctx, raw)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.PreferredUsername != "ada" || c.Name != "Ada Admin" || c.AuthorizedParty != "memobrain-desktop" {
+		if c.PreferredUsername != "ada" || c.Name != "Ada Admin" || c.AuthorizedParty != "clarae-desktop" {
 			t.Fatalf("unexpected claims %+v", c)
 		}
 		if RoleFromRealmRoles(c.RealmRoles) != RoleAdmin {
@@ -95,7 +95,7 @@ func TestVerifier(t *testing.T) {
 	})
 
 	t.Run("alg none", func(t *testing.T) {
-		claims := fmt.Sprintf(`{"iss":%q,"sub":"x","aud":"memobrain-api","exp":%d,"azp":"memobrain-desktop"}`, iss.URL(), time.Now().Add(time.Hour).Unix())
+		claims := fmt.Sprintf(`{"iss":%q,"sub":"x","aud":"clarae-api","exp":%d,"azp":"clarae-desktop"}`, iss.URL(), time.Now().Add(time.Hour).Unix())
 		raw := b64(`{"alg":"none","typ":"JWT"}`) + "." + b64(claims) + "."
 		if _, err := v.Verify(ctx, raw); !errors.Is(err, ErrInvalidToken) {
 			t.Fatalf("expected ErrInvalidToken, got %v", err)
@@ -109,9 +109,9 @@ func TestVerifier(t *testing.T) {
 			t.Fatal(err)
 		}
 		raw, err := jwt.Signed(signer).Claims(jwt.Claims{
-			Issuer: iss.URL(), Subject: "x", Audience: jwt.Audience{"memobrain-api"},
+			Issuer: iss.URL(), Subject: "x", Audience: jwt.Audience{"clarae-api"},
 			Expiry: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		}).Claims(map[string]any{"azp": "memobrain-desktop"}).Serialize()
+		}).Claims(map[string]any{"azp": "clarae-desktop"}).Serialize()
 		if err != nil {
 			t.Fatal(err)
 		}

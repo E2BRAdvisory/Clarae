@@ -17,7 +17,7 @@ func TestGenSignVerifyRoundTrip(t *testing.T) {
 	if err := os.Mkdir(art, 0o755); err != nil { //nolint:gosec // test
 		t.Fatal(err)
 	}
-	for _, n := range []string{"memobrain-1.0.0-darwin-universal.dmg", "memobrain-1.0.0-windows-amd64.exe", "memobrain-1.0.0-linux-amd64.deb", "SHA256SUMS"} {
+	for _, n := range []string{"clarae-1.0.0-darwin-universal.dmg", "clarae-1.0.0-windows-amd64.exe", "clarae-1.0.0-linux-amd64.deb", "SHA256SUMS"} {
 		if err := os.WriteFile(filepath.Join(art, n), []byte("payload "+n), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -52,7 +52,7 @@ func TestGenSignVerifyRoundTrip(t *testing.T) {
 }
 
 func TestSignRequiresKey(t *testing.T) {
-	t.Setenv("MEMOBRAIN_UPDATE_SIGNING_KEY", "")
+	t.Setenv("CLARAE_UPDATE_SIGNING_KEY", "")
 	f := filepath.Join(t.TempDir(), "m.json")
 	_ = os.WriteFile(f, []byte("{}"), 0o600)
 	if err := run([]string{"sign-manifest", "-in", f}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "no signing key") {

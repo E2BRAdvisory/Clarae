@@ -15,7 +15,7 @@ import { Plugin, PluginKey } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
 import { $prose } from '@milkdown/kit/utils';
 
-const key = new PluginKey('memobrain-list-semantics');
+const key = new PluginKey('clarae-list-semantics');
 
 /** The first paragraph of the item the `li` is the layout of: what the box of its task is the box of. */
 function textOfItem(li: Element): string {

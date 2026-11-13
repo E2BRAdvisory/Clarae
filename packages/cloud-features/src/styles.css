@@ -1,5 +1,5 @@
-/* Layout of the cloud vault components (@memobrain/cloud-features), for every host. The controls are
-   the components of @memobrain/ui (nd-* classes): the console styles them with its design system,
+/* Layout of the cloud vault components (@clarae/cloud-features), for every host. The controls are
+   the components of @clarae/ui (nd-* classes): the console styles them with its design system,
    the workbench with workbench.css. Plain CSS, no inline style (CSP, V-02). */
 
 .mbcf-toolbar {

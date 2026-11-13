@@ -98,7 +98,7 @@ describe('CanvasView', () => {
       [PATH]: JSON.stringify({ nodes: [], edges: [] }),
       'Live.md': '# live',
       '.trash/Old.md': '# old',
-      '.memobrain/x.md': '',
+      '.clarae/x.md': '',
     });
     const pick = vi.spyOn(dialog, 'pick').mockResolvedValue(null);
     fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
@@ -106,6 +106,6 @@ describe('CanvasView', () => {
     const offered = (pick.mock.calls[0]?.[1] ?? []).map((i) => i.value);
     expect(offered).toContain('Live.md');
     expect(offered).not.toContain('.trash/Old.md');
-    expect(offered).not.toContain('.memobrain/x.md');
+    expect(offered).not.toContain('.clarae/x.md');
   });
 });

@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"memobrain/apps/desktop/internal/sync/transport"
-	"memobrain/shared/syncproto"
+	"clarae/apps/desktop/internal/sync/transport"
+	"clarae/shared/syncproto"
 )
 
 // gatedRemote is a folderServer whose next Changes call, once armed, blocks

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"memobrain/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/auth"
 )
 
 // A server typed with plain http on another computer is refused before any

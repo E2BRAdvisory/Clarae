@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"memobrain/services/cloud/internal/keycloak"
+	"clarae/services/cloud/internal/keycloak"
 )
 
 type fakeDisabler struct {

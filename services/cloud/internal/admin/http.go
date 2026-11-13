@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"memobrain/services/cloud/internal/api"
-	"memobrain/services/cloud/internal/auth"
-	"memobrain/services/cloud/internal/configprofiles"
-	"memobrain/services/cloud/internal/groups"
-	"memobrain/services/cloud/internal/httpproblem"
-	"memobrain/services/cloud/internal/pagination"
-	"memobrain/shared/syncproto"
+	"clarae/services/cloud/internal/api"
+	"clarae/services/cloud/internal/auth"
+	"clarae/services/cloud/internal/configprofiles"
+	"clarae/services/cloud/internal/groups"
+	"clarae/services/cloud/internal/httpproblem"
+	"clarae/services/cloud/internal/pagination"
+	"clarae/shared/syncproto"
 )
 
 // Groups is what the admin API needs from the groups module.

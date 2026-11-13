@@ -5,7 +5,7 @@ import (
 	"path"
 	"runtime"
 
-	"memobrain/shared/pathrules"
+	"clarae/shared/pathrules"
 )
 
 // Files the application does not show itself (ADR-0047): on the desktop they open with the

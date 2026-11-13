@@ -101,24 +101,24 @@ func TestConvertObsidianMDFormulas(t *testing.T) {
 		Elements []struct {
 			ID         string `json:"id"`
 			CustomData struct {
-				Keep      bool `json:"keep"`
-				Memobrain struct {
+				Keep   bool `json:"keep"`
+				Clarae struct {
 					Kind  string `json:"kind"`
 					Latex string `json:"latex"`
-				} `json:"memobrain"`
+				} `json:"clarae"`
 			} `json:"customData"`
 		} `json:"elements"`
 	}
 	if err := json.Unmarshal(out, &s); err != nil {
 		t.Fatal(err)
 	}
-	if m := s.Elements[0].CustomData.Memobrain; m.Kind != "latex" || m.Latex != `\frac{a}{b}` {
+	if m := s.Elements[0].CustomData.Clarae; m.Kind != "latex" || m.Latex != `\frac{a}{b}` {
 		t.Errorf("formula not tagged: %s", out)
 	}
 	if !s.Elements[0].CustomData.Keep {
 		t.Error("existing customData lost")
 	}
-	if s.Elements[1].CustomData.Memobrain.Kind != "" {
+	if s.Elements[1].CustomData.Clarae.Kind != "" {
 		t.Error("an image that is not a formula was tagged")
 	}
 	if !strings.Contains(string(out), "2147483647") {

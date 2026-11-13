@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, Dialog, EmptyState, InlineError, Table, TextField } from '@memobrain/ui';
+import { Badge, Button, Dialog, EmptyState, InlineError, Table, TextField } from '@clarae/ui';
 import { formatBytes, formatDay, purgeDate } from './format';
 import { createT, type TFunction } from './i18n';
 import { NAME_MAX, NewVaultDialog } from './NewVaultDialog';

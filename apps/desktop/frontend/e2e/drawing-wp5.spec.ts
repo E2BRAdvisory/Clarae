@@ -226,8 +226,8 @@ test('the auto-export of one drawing overrides the vault setting and lives in th
               const w = window as unknown as MockWindow;
               return [...w.__mock.vaults.values()][0]!.files.get('Board.excalidraw') ?? '{}';
             }),
-          ) as { memobrain?: { autoExport?: string } }
-        ).memobrain?.autoExport,
+          ) as { clarae?: { autoExport?: string } }
+        ).clarae?.autoExport,
       { timeout: 15_000 },
     )
     .toBe('png');
@@ -252,8 +252,8 @@ test('Print / PDF puts the drawing on the print layer and asks the system to pri
   await openDrawing(page, scene([shape('a', 0, 0, 100, 60, { backgroundColor: '#ffc9c9' })]));
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByRole('button', { name: 'Print / PDF…' }).click();
-  await expect(page.locator('#memobrain-print img')).toHaveCount(1);
-  const src = await page.locator('#memobrain-print img').getAttribute('src');
+  await expect(page.locator('#clarae-print img')).toHaveCount(1);
+  const src = await page.locator('#clarae-print img').getAttribute('src');
   expect(src).toMatch(/^data:image\/svg\+xml;base64,/);
   expect(Buffer.from(src!.split(',')[1]!, 'base64').toString('utf8')).toContain('<svg');
   expect(
@@ -324,7 +324,7 @@ test('another drawing is inserted as a picture, from the command and from a drop
   await waitSaved(page);
   const saved = await savedDrawing(page);
   const img = saved.elements.find((e) => e.type === 'image')!;
-  expect(img.customData?.memobrain).toMatchObject({ kind: 'drawing', path: 'Other.excalidraw' });
+  expect(img.customData?.clarae).toMatchObject({ kind: 'drawing', path: 'Other.excalidraw' });
   const file = Object.values(saved.files)[0]!;
   expect(file.mimeType).toBe('image/svg+xml');
   expect(Buffer.from(file.dataURL.split(',')[1]!, 'base64').toString('utf8')).toContain('<svg');

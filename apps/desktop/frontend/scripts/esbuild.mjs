@@ -3,7 +3,7 @@
 //   node scripts/esbuild.mjs dev [--port N]   watch + serve dist/ with live reload (Wails dev, Playwright;
 //                                             --no-watch builds once, for the e2e matrix)
 //   node scripts/esbuild.mjs preview [--port N]   production bundle in node_modules/.preview/, served as is (Playwright)
-// MEMOBRAIN_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
+// CLARAE_E2E=1 makes main.tsx install the in-memory Wails mock (Playwright).
 // The style sheets of the lazy chunks are linked by the chunks themselves (lazyStyles): a safety net, it links none today.
 import * as esbuild from 'esbuild';
 import { createReadStream } from 'node:fs';
@@ -19,24 +19,24 @@ import {
   graphWorkerEntry,
   lazyStyles,
   liveCollab,
-} from '@memobrain/workbench/build';
+} from '@clarae/workbench/build';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const mode = process.argv[2] ?? 'build';
 const dev = mode === 'dev';
 // `preview` builds the production bundle somewhere else, so it never touches the embedded dist/.
-// MEMOBRAIN_DIST builds elsewhere: the e2e matrix keeps its own copy. An absolute path is taken as it is, a
+// CLARAE_DIST builds elsewhere: the e2e matrix keeps its own copy. An absolute path is taken as it is, a
 // relative one starts at this package (never at the working directory).
 const dist = distDir(root, mode === 'preview' ? 'node_modules/.preview' : 'dist');
 const portArg = process.argv.indexOf('--port');
 const port = portArg > 0 ? Number(process.argv[portArg + 1]) : 5173;
-const e2e = process.env['MEMOBRAIN_E2E'] === '1';
-// MEMOBRAIN_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
+const e2e = process.env['CLARAE_E2E'] === '1';
+// CLARAE_COLLAB=1 puts the (off) collaboration code in the build and lets the editor ask for it
 // (ADR-0050); without it no Yjs is in any file and a profile cannot switch collaboration on.
-const collab = process.env['MEMOBRAIN_COLLAB'] === '1';
-// MEMOBRAIN_AI=1 lets the editor ask for the AI assistant (ADR-0050): the second gate, next to the `ai` flag
+const collab = process.env['CLARAE_COLLAB'] === '1';
+// CLARAE_AI=1 lets the editor ask for the AI assistant (ADR-0050): the second gate, next to the `ai` flag
 // of the Config Profile; a released build is made without it, so a profile cannot switch the assistant on.
-const ai = process.env['MEMOBRAIN_AI'] === '1';
+const ai = process.env['CLARAE_AI'] === '1';
 
 /** Writes dist/index.html with the hashed bundle and stylesheet, and copies Excalidraw's fonts. */
 const html = {
@@ -140,9 +140,9 @@ const options = {
   logLevel: 'info',
   define: {
     ...base.define,
-    'import.meta.env.MEMOBRAIN_E2E': JSON.stringify(e2e ? '1' : ''),
-    'import.meta.env.MEMOBRAIN_COLLAB': JSON.stringify(collab ? '1' : ''),
-    'import.meta.env.MEMOBRAIN_AI': JSON.stringify(ai ? '1' : ''),
+    'import.meta.env.CLARAE_E2E': JSON.stringify(e2e ? '1' : ''),
+    'import.meta.env.CLARAE_COLLAB': JSON.stringify(collab ? '1' : ''),
+    'import.meta.env.CLARAE_AI': JSON.stringify(ai ? '1' : ''),
   },
   plugins: [
     ...base.plugins,
