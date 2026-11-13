@@ -6,9 +6,10 @@
 import type { VaultChangeBatch } from '../app/fileChanges';
 import type { GraphModel } from './model';
 import type { GraphData } from './types';
+import { isConfigPath } from '../platform/vaultPaths';
 
-/** Device and vault settings (.clarae/): never part of the graph. */
-const isConfig = (path: string): boolean => path === '.clarae' || path.startsWith('.clarae/');
+/** Device and vault settings (the configuration folder): never part of the graph. */
+const isConfig = isConfigPath;
 const isNote = (path: string): boolean => /\.md$/i.test(path);
 
 /**

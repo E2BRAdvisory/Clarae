@@ -5,6 +5,7 @@ import { dialog } from '../ui/dialogs';
 import { viewIndexByName } from './model';
 import type { BaseInfo, BaseResult, ViewPatch } from './types';
 import { errorMessage } from '../util/errors';
+import { isConfigPath } from '../platform/vaultPaths';
 
 interface Options {
   vaultId: string;
@@ -35,7 +36,7 @@ const message = (e: unknown): string => errorMessage(e);
 /** Quiet time after the last vault change before the base runs again. */
 export const REFRESH_MS = 300;
 
-const isConfig = (path: string): boolean => path === '.clarae' || path.startsWith('.clarae/');
+const isConfig = isConfigPath;
 
 /**
  * Whether a batch of file changes can change a base's result. Any file of the vault can be a row

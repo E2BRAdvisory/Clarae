@@ -8,6 +8,7 @@ import { useActiveNote } from '../state/activeNote';
 import { useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
 import { activeTab } from '../workspace/layout';
+import { isConfigPath, isTrashPath } from '../platform/vaultPaths';
 
 const stem = (p: string): string => p.replace(/^.*\//, '').replace(/\.md$/, '');
 
@@ -28,8 +29,8 @@ export async function mergeActiveNote(): Promise<void> {
       !e.isDir &&
       e.path.toLowerCase().endsWith('.md') &&
       e.path !== source &&
-      !e.path.startsWith('.trash/') &&
-      !e.path.startsWith('.clarae/'),
+      !isTrashPath(e.path) &&
+      !isConfigPath(e.path),
   );
   const target = await dialog.pick(
     i18next.t('composer.mergePick', { name: stem(source) }),

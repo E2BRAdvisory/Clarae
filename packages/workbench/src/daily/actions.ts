@@ -7,6 +7,7 @@ import { useSettings } from '../state/settings';
 import { useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
 import { activeTab } from '../workspace/layout';
+import { isConfigPath, isTrashPath } from '../platform/vaultPaths';
 import { useNotesSettings } from './settings';
 
 /** "it" or "en": the language of month and weekday names in templates. */
@@ -146,7 +147,7 @@ export async function openRandomNote(): Promise<void> {
   const tree = await api.vault.listTree(id);
   const notes = tree
     .filter((e) => !e.isDir && e.path.toLowerCase().endsWith('.md'))
-    .filter((e) => !e.path.startsWith('.trash/') && !e.path.startsWith('.clarae/'))
+    .filter((e) => !isTrashPath(e.path) && !isConfigPath(e.path))
     .map((e) => e.path);
   const pick = pickRandom(notes, activePath());
   if (!pick) {

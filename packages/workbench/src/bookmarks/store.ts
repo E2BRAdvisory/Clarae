@@ -9,6 +9,7 @@ import { Events } from '../app/events';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 import { registerNoteFlusher } from '../workspaces/flush';
+import { configFile } from '../platform/vaultPaths';
 import {
   emptyBookmarks,
   parseBookmarks,
@@ -19,7 +20,6 @@ import {
 } from './model';
 
 export const BOOKMARKS_FILE = 'bookmarks.json';
-const FILE_PATH = '.clarae/' + BOOKMARKS_FILE;
 const SAVE_DELAY_MS = 300;
 
 interface BookmarksState {
@@ -69,7 +69,12 @@ export const useBookmarks = create<BookmarksState>((set, get) => {
     async load(vaultId) {
       off?.();
       off = api.on(Events.vaultFileChanged, (p) => {
-        if (p.vaultId !== get().vaultId || !p.paths.includes(FILE_PATH) || pending) return;
+        if (
+          p.vaultId !== get().vaultId ||
+          !p.paths.some((path) => configFile(path) === BOOKMARKS_FILE) ||
+          pending
+        )
+          return;
         void api.vault
           .readConfig(p.vaultId, BOOKMARKS_FILE)
           .then((text) => {

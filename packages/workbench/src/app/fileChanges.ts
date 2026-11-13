@@ -10,6 +10,7 @@ import { api, type Entry } from './api';
 import { Events, type FileChange, type FileChangedPayload } from './events';
 import { queryKeys } from '../state/queries';
 import { forgetMedia } from '../embeds/media';
+import { isConfigPath } from '../platform/vaultPaths';
 
 /** A coalesced set of changes of one vault. */
 export interface VaultChangeBatch {
@@ -107,7 +108,7 @@ export function onVaultChanges(listener: Listener): () => void {
 const TEXTUAL = /\.(md|canvas|excalidraw)$/i;
 const isNote = (path: string): boolean => /\.md$/i.test(path);
 /** Device and vault settings: never content of the index views. */
-const isConfig = (path: string): boolean => path === '.clarae' || path.startsWith('.clarae/');
+const isConfig = isConfigPath;
 const under = (path: string, dir: string): boolean => path === dir || path.startsWith(dir + '/');
 
 /**
