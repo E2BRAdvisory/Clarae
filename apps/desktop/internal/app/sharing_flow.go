@@ -111,4 +111,5 @@ func (a *App) applyConfig() {
 	a.sync.SetPathV2(pathV2Enabled(cur.Config))
 	a.sync.SetConfigDirV2(configDirV2Enabled(cur))
 	a.applyLockTimeout()
+	a.applyWebViewFlag(cur.Config)
 }

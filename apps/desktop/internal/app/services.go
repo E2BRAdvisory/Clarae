@@ -26,5 +26,6 @@ func (a *App) Services() []any {
 		NewImporterAPI(a),
 		NewUpdaterAPI(a),
 		NewAIAPI(a),
+		NewWebViewAPI(a),
 	}
 }

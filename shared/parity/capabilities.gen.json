@@ -10,7 +10,8 @@
     "ownsSession": true,
     "detachedCopies": true,
     "openWithSystemApp": true,
-    "aiAssistant": true
+    "aiAssistant": true,
+    "embeddedBrowser": true
   },
   "web": {
     "localFolders": false,
@@ -23,6 +24,7 @@
     "ownsSession": false,
     "detachedCopies": false,
     "openWithSystemApp": false,
-    "aiAssistant": false
+    "aiAssistant": false,
+    "embeddedBrowser": false
   }
 }

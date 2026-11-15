@@ -6,7 +6,7 @@
 // with a time limit (`coreClient(core, ms)`; 0 = no limit). The host never writes a service or
 // method name by hand: ESLint refuses them outside this file. A new binding appears here after
 // `task gen` (docs/desktop-web-sync.md, "Contratto degli eventi").
-import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, search, sync, updater, vault } from '@clarae/workbench/wailsjs/models';
+import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, search, sync, updater, vault, webview } from '@clarae/workbench/wailsjs/models';
 
 /** A model of the bindings as plain data: the core answers with JSON, not with model classes. */
 export type Data<T> = T extends (...args: never[]) => unknown
@@ -213,6 +213,21 @@ export interface CoreClient {
     SetPassphrase(arg1: string, arg2: string): Promise<void>;
     Unlock(arg1: string, arg2: string, arg3: boolean): Promise<boolean>;
   };
+  readonly WebViewAPI: {
+    Back(arg1: string, arg2: string): Promise<void>;
+    ClearData(arg1: string): Promise<void>;
+    Close(arg1: string, arg2: string): Promise<void>;
+    CloseVault(arg1: string): Promise<void>;
+    Focus(arg1: string, arg2: string): Promise<void>;
+    Forward(arg1: string, arg2: string): Promise<void>;
+    Navigate(arg1: string, arg2: string, arg3: string): Promise<void>;
+    Open(arg1: string, arg2: string, arg3: Data<webview.Bounds>): Promise<Data<app.WebViewOpened>>;
+    Reload(arg1: string, arg2: string): Promise<void>;
+    ReserveKeys(arg1: Array<string>): Promise<void>;
+    SetBounds(arg1: string, arg2: string, arg3: Data<webview.Bounds>): Promise<void>;
+    SetVisible(arg1: string, arg2: string, arg3: boolean): Promise<void>;
+    Status(): Promise<Data<app.WebViewStatus>>;
+  };
 }
 
 /** The services and methods of the bindings. */
@@ -238,6 +253,7 @@ export const BINDINGS = {
   UpdaterAPI: ['Check', 'GetSettings', 'Install', 'SetSettings', 'Skip', 'Status'],
   VaultAPI: ['CloseVault', 'CreateFolder', 'DownloadFile', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'MergeEdit', 'OpenVault', 'OpenWithSystemApp', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'RevealInFolder', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
   VaultCryptoAPI: ['Activity', 'ChangePassphrase', 'DiskEncryption', 'Lock', 'RegenerateRecoveryKey', 'SetPassphrase', 'Unlock'],
+  WebViewAPI: ['Back', 'ClearData', 'Close', 'CloseVault', 'Focus', 'Forward', 'Navigate', 'Open', 'Reload', 'ReserveKeys', 'SetBounds', 'SetVisible', 'Status'],
 } as const;
 
 export type ServiceName = keyof typeof BINDINGS;
@@ -474,6 +490,23 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         RegenerateRecoveryKey: (arg1: string, arg2: string) => call('VaultCryptoAPI', 'RegenerateRecoveryKey', [arg1, arg2]),
         SetPassphrase: (arg1: string, arg2: string) => call('VaultCryptoAPI', 'SetPassphrase', [arg1, arg2]),
         Unlock: (arg1: string, arg2: string, arg3: boolean) => call('VaultCryptoAPI', 'Unlock', [arg1, arg2, arg3]),
+      };
+    },
+    get WebViewAPI(): CoreClient['WebViewAPI'] {
+      return {
+        Back: (arg1: string, arg2: string) => call('WebViewAPI', 'Back', [arg1, arg2]),
+        ClearData: (arg1: string) => call('WebViewAPI', 'ClearData', [arg1]),
+        Close: (arg1: string, arg2: string) => call('WebViewAPI', 'Close', [arg1, arg2]),
+        CloseVault: (arg1: string) => call('WebViewAPI', 'CloseVault', [arg1]),
+        Focus: (arg1: string, arg2: string) => call('WebViewAPI', 'Focus', [arg1, arg2]),
+        Forward: (arg1: string, arg2: string) => call('WebViewAPI', 'Forward', [arg1, arg2]),
+        Navigate: (arg1: string, arg2: string, arg3: string) => call('WebViewAPI', 'Navigate', [arg1, arg2, arg3]),
+        Open: (arg1: string, arg2: string, arg3: Data<webview.Bounds>) => call('WebViewAPI', 'Open', [arg1, arg2, arg3]),
+        Reload: (arg1: string, arg2: string) => call('WebViewAPI', 'Reload', [arg1, arg2]),
+        ReserveKeys: (arg1: Array<string>) => call('WebViewAPI', 'ReserveKeys', [arg1]),
+        SetBounds: (arg1: string, arg2: string, arg3: Data<webview.Bounds>) => call('WebViewAPI', 'SetBounds', [arg1, arg2, arg3]),
+        SetVisible: (arg1: string, arg2: string, arg3: boolean) => call('WebViewAPI', 'SetVisible', [arg1, arg2, arg3]),
+        Status: () => call('WebViewAPI', 'Status', []),
       };
     },
   };

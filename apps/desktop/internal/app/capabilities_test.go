@@ -2,6 +2,7 @@ package app
 
 import (
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -94,9 +95,9 @@ func TestHostCapabilities(t *testing.T) {
 
 // The binding answers with the column of the running build.
 func TestSettingsCapabilitiesFollowTheBuild(t *testing.T) {
-	want, _ := CapabilitiesFor("desktop")
-	if isWeb {
-		want, _ = CapabilitiesFor("web")
+	want, err := capabilitiesAt(isWeb, runtime.GOOS)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if got := (&SettingsAPI{}).Capabilities(); got != want {
 		t.Fatalf("SettingsAPI.Capabilities() = %+v, want %+v", got, want)
@@ -110,5 +111,40 @@ func TestSettingsCapabilitiesFollowTheBuild(t *testing.T) {
 	}
 	if isWeb == want.AIAssistant {
 		t.Errorf("aiAssistant = %v with isWeb = %v: the WebAssembly core links no AI (bindings_ai_js.go)", want.AIAssistant, isWeb)
+	}
+}
+
+// A capability that depends on the system the desktop runs on is narrowed to it, and the tables that
+// `task gen` writes keep the column as declared (they are the same on every system).
+func TestEmbeddedBrowserFollowsTheSystem(t *testing.T) {
+	for goos, want := range map[string]bool{"darwin": true, "windows": false, "linux": false, "freebsd": false, "": true} {
+		c, err := capabilitiesAt(false, goos)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.EmbeddedBrowser != want {
+			t.Errorf("desktop on %q: embeddedBrowser = %v, want %v", goos, c.EmbeddedBrowser, want)
+		}
+		// Nothing else depends on the system.
+		other, _ := capabilitiesAt(false, "")
+		other.EmbeddedBrowser = c.EmbeddedBrowser
+		if c != other {
+			t.Errorf("desktop on %q: another capability changed: %+v", goos, c)
+		}
+	}
+	if web, _ := capabilitiesAt(true, "darwin"); web.EmbeddedBrowser {
+		t.Error("the browser has no embedded browser, whatever the system")
+	}
+	if declared, _ := CapabilitiesFor("desktop"); !declared.EmbeddedBrowser {
+		t.Error("the declared desktop column says what a desktop can offer: macOS can")
+	}
+	if declared, _ := CapabilitiesFor("web"); declared.EmbeddedBrowser {
+		t.Error("the declared web column has no embedded browser")
+	}
+	// Only a capability that names its systems is narrowed.
+	for _, s := range CapabilitySpecs() {
+		if (s.Name == CapEmbeddedBrowser) != (len(s.DesktopOS) > 0) {
+			t.Errorf("capability %s: DesktopOS %v", s.Name, s.DesktopOS)
+		}
 	}
 }

@@ -3,6 +3,8 @@ package app
 import (
 	"fmt"
 	"reflect"
+	"runtime"
+	"slices"
 )
 
 // The capabilities of the host, with one source (ADR-0045 §1). The same UI runs on the desktop
@@ -31,6 +33,7 @@ const (
 	CapDetachedCopies      Capability = "detachedCopies"
 	CapOpenWithSystemApp   Capability = "openWithSystemApp"
 	CapAIAssistant         Capability = "aiAssistant"
+	CapEmbeddedBrowser     Capability = "embeddedBrowser"
 )
 
 // Capabilities is what SettingsAPI.Capabilities returns: one bool per capability, the json tag
@@ -47,59 +50,73 @@ type Capabilities struct {
 	DetachedCopies      bool `json:"detachedCopies"`
 	OpenWithSystemApp   bool `json:"openWithSystemApp"`
 	AIAssistant         bool `json:"aiAssistant"`
+	EmbeddedBrowser     bool `json:"embeddedBrowser"`
 }
 
 // CapabilitySpec declares a capability: whether each host offers it, and what it gates (the doc
 // comment of the generated TypeScript).
+//
+// Desktop and Web say what a kind of host can offer. Most capabilities do not depend on the system
+// the desktop runs on; one that does lists the systems that offer it in DesktopOS (GOOS values), and
+// the core narrows the desktop column to the system it runs on (platformCapabilities). The generated
+// tables hold the column as declared: they are the same for every system, the core's own answer is not.
 type CapabilitySpec struct {
 	Name    Capability
 	Desktop bool
 	Web     bool
-	Doc     string
+	// DesktopOS limits Desktop to these systems; empty = every system.
+	DesktopOS []string
+	Doc       string
 }
 
 // capabilitySpecs is the table both builds share: the browser's column is written here, not in a
 // file of the js build, so that `task gen` (a native program) can write it for the UI and the
 // parity check. platformCapabilities picks the column of the running build.
 var capabilitySpecs = []CapabilitySpec{
-	{CapLocalFolders, true, false,
+	{CapLocalFolders, true, false, nil,
 		"Open a folder of the computer as a vault, pick a folder to import. The browser has cloud vaults only " +
 			"(Host.OpenDirectory fails there)."},
-	{CapUpdater, true, false,
+	{CapUpdater, true, false, nil,
 		"Automatic updates of the application. The Web UI is served by the cloud and is always current " +
 			"(every UpdaterAPI method fails in the browser)."},
-	{CapDiskEncryptionCheck, true, false,
+	{CapDiskEncryptionCheck, true, false, nil,
 		"Warn when the disk is not encrypted (a private vault's keys may end up on it). The browser cannot " +
 			"tell: VaultCryptoAPI.DiskEncryption always answers \"unknown\" there."},
-	{CapNativeWindow, true, false,
+	{CapNativeWindow, true, false, nil,
 		"The window itself (full screen through the OS, the system browser for external links). In the browser " +
 			"Host.ShowWindow does nothing and links open in a new tab."},
-	{CapOSTrash, true, false,
+	{CapOSTrash, true, false, nil,
 		"Deleted files can go to the system trash; the browser always uses the vault's `.trash/` (systemTrash " +
 			"fails there)."},
-	{CapMultiVault, true, false,
+	{CapMultiVault, true, false, nil,
 		"Several vaults over time in one window: recent vaults, switching from the vault menu. The browser opens " +
 			"one vault per page, chosen in the console."},
-	{CapUnlinkVault, true, false,
+	{CapUnlinkVault, true, false, nil,
 		"A local vault can be disconnected from the cloud and kept as a plain folder. In the browser the copy " +
 			"belongs to the cloud vault: it is removed from the browser instead."},
-	{CapOwnsSession, true, false,
+	{CapOwnsSession, true, false, nil,
 		"The application owns the cloud session (sign-in through the system browser, sign-out, choice of the " +
 			"server). In the browser the session is the page's OIDC one, managed by the console: the core takes its " +
 			"tokens from the page (SessionHost) and has no sign-in of its own."},
-	{CapDetachedCopies, true, false,
+	{CapDetachedCopies, true, false, nil,
 		"A copy that leaves the cloud can stay on this device as a folder of its own: the desktop keeps the mount " +
 			"of a revoked share as an ordinary vault. The browser has no place where such a folder could be opened " +
 			"again (SharingAPI.RemoveMount refuses keepCopy there): it offers to download the copy as a ZIP instead."},
-	{CapOpenWithSystemApp, true, false,
+	{CapOpenWithSystemApp, true, false, nil,
 		"A file the application cannot show (an archive, an office document) opens with the application of the " +
 			"system, and any file can be shown in the file manager (ADR-0047). The browser offers to download it " +
 			"instead (Host.OpenPath and Host.RevealPath fail there)."},
-	{CapAIAssistant, true, false,
+	{CapAIAssistant, true, false, nil,
 		"The writing assistant of the editor (ADR-0050): the model is reached from the Go core, which only the " +
 			"desktop links (AIAPI refuses every call in the browser, whose Content-Security-Policy allows no third " +
 			"party). Even on the desktop it is inactive: it also needs the `ai` flag of the profile, a build that " +
 			"enables it, a vault that is not private and a configured provider (AIAPI.Status)."},
+	{CapEmbeddedBrowser, true, false, []string{"darwin"},
+		"The page of an application (a `.webapp` file) opens in a browser embedded in the tab, a native web view " +
+			"that the shell adds to the window. Only the desktop on macOS has a driver for it (Windows and Linux " +
+			"have none: the page opens in the system browser), and the core also needs the flag `web_viewer` of the " +
+			"profile (WebViewAPI.Status). The table says macOS-capable desktop; SettingsAPI.Capabilities says what " +
+			"this device does. The browser opens the page in a tab of its own (WebViewAPI refuses every call there)."},
 }
 
 // CapabilitySpecs returns the declared capabilities, in order (for the generator and the tests).
@@ -107,16 +124,21 @@ func CapabilitySpecs() []CapabilitySpec {
 	return append([]CapabilitySpec(nil), capabilitySpecs...)
 }
 
-// CapabilitiesFor returns the capabilities of a host: "desktop" or "web".
+// CapabilitiesFor returns the capabilities of a host as the table declares them: "desktop" or "web".
+// The desktop column is what a desktop can offer on some system; capabilitiesAt narrows it to one.
 func CapabilitiesFor(platform string) (Capabilities, error) {
-	var web bool
 	switch platform {
 	case "desktop":
+		return capabilitiesAt(false, "")
 	case "web":
-		web = true
-	default:
-		return Capabilities{}, fmt.Errorf("capabilities: unknown platform %q", platform)
+		return capabilitiesAt(true, "")
 	}
+	return Capabilities{}, fmt.Errorf("capabilities: unknown platform %q", platform)
+}
+
+// capabilitiesAt returns the capabilities of the desktop (web false) running on goos, or of the
+// browser. An empty goos is no narrowing: the column as declared.
+func capabilitiesAt(web bool, goos string) (Capabilities, error) {
 	var c Capabilities
 	v := reflect.ValueOf(&c).Elem()
 	fields := capabilityFields()
@@ -128,6 +150,8 @@ func CapabilitiesFor(platform string) (Capabilities, error) {
 		on := s.Desktop
 		if web {
 			on = s.Web
+		} else if goos != "" && len(s.DesktopOS) > 0 {
+			on = on && slices.Contains(s.DesktopOS, goos)
 		}
 		v.Field(i).SetBool(on)
 	}
@@ -147,13 +171,10 @@ func capabilityFields() map[Capability]int {
 	return out
 }
 
-// platformCapabilities returns the capabilities of the running build (isWeb: host_native.go, host_web.go).
+// platformCapabilities returns the capabilities of the running build (isWeb: host_native.go,
+// host_web.go) on the system it runs on.
 func platformCapabilities() Capabilities {
-	platform := "desktop"
-	if isWeb {
-		platform = "web"
-	}
-	c, err := CapabilitiesFor(platform)
+	c, err := capabilitiesAt(isWeb, runtime.GOOS)
 	if err != nil {
 		panic(err) // a table out of step with the struct: TestCapabilityTable fails first
 	}
@@ -168,4 +189,13 @@ func (c Capabilities) Has(name Capability) bool {
 
 // Capabilities tells the UI what this host offers (ADR-0045 §1): the workbench reads it before its
 // first render, instead of keeping its own table per kind of host.
-func (s *SettingsAPI) Capabilities() Capabilities { return platformCapabilities() }
+//
+// embeddedBrowser also needs a driver, which the system of the table may still lack (a build without
+// cgo, a window that does not exist): the core says false then.
+func (s *SettingsAPI) Capabilities() Capabilities {
+	c := platformCapabilities()
+	if c.EmbeddedBrowser && s.app != nil && !s.app.webviewAvailable() {
+		c.EmbeddedBrowser = false
+	}
+	return c
+}

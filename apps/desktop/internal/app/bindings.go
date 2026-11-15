@@ -161,13 +161,9 @@ func (v *VaultAPI) OpenVault(path string) (VaultInfo, error) {
 
 // CloseVault closes an open vault.
 func (v *VaultAPI) CloseVault(vaultID string) error {
-	v.app.mu.Lock()
-	defer v.app.mu.Unlock()
-	ov, ok := v.app.vaults[vaultID]
-	if !ok {
+	if v.app.closeVaultsAndViews(vaultID) == 0 {
 		return ErrVaultNotOpen
 	}
-	v.app.closeVaultLocked(vaultID, ov)
 	return nil
 }
 

@@ -31,6 +31,7 @@ import (
 	"clarae/apps/desktop/internal/vault"
 	"clarae/apps/desktop/internal/vaultdir"
 	"clarae/apps/desktop/internal/watcher"
+	"clarae/apps/desktop/internal/webview"
 )
 
 // Options configure the application.
@@ -47,6 +48,9 @@ type Options struct {
 	// Host connects the application to its environment: the Wails window of internal/shell on the
 	// desktop, the page in the browser (nil = no window, host_native.go).
 	Host Host
+	// NativeViews returns the driver of the native web views (nil = ask the Host, if it is a
+	// NativeViewHost). Tests give a webview.Fake.
+	NativeViews func() webview.Driver
 }
 
 // App is the backend root. Bound API structs hold a pointer to it.
@@ -69,6 +73,7 @@ type App struct {
 	ready     bool                     // the frontend can receive events: DomReady was called (guarded by mu)
 	updates   updaterState             // the update channel (none in the browser build)
 	ai        aiState                  // the writing assistant (inactive; none in the browser build)
+	views     webviewState             // the browser inside the tab of an application (desktop with a driver; none in the browser build)
 	// reconciler runs the reconciles of the mounts one at a time (requestReconcile).
 	reconciler coalescer
 }
@@ -148,7 +153,10 @@ func New(opts Options) *App {
 		// The cloud refused this device: the session says so (auth:state device_revoked) and the
 		// workbench offers to register the device again.
 		DeviceRevoked: a.auth.DeviceRevoked,
+		// A private vault was locked: its applications go before the lock screen is shown.
+		Locked: a.closeLockedWebViews,
 	})
+	a.initWebViews()
 	return a
 }
 
@@ -225,6 +233,9 @@ func (a *App) DomReady(_ context.Context) {
 // idempotent: the shell may call it from more than one place.
 func (a *App) Shutdown(_ context.Context) {
 	a.shutdownAI()
+	// Before a.mu: closing a view waits for the UI thread, which on quitting is the one running this,
+	// and another goroutine may hold a.mu while it waits for that thread.
+	a.shutdownWebViews()
 	a.sync.Shutdown()
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -515,6 +526,35 @@ func (a *App) closeVaultLocked(id string, v *openVault) {
 	search.Forget(v.IndexDB)
 	_ = v.IndexDB.Close()
 	delete(a.vaults, id)
+}
+
+// testHookBeforeVaultRemoval runs in closeVaultsAndViews just before the vaults leave a.vaults (tests).
+var testHookBeforeVaultRemoval func()
+
+// closeVaultsAndViews closes the open ones among the vaults and then their native views, and returns
+// how many vaults were open. The views are closed AFTER the vaults are gone from a.vaults, and outside
+// a.mu (closing a view waits for the UI thread, which on quitting is the one running Shutdown while
+// another goroutine may hold a.mu): a view that an Open made while the vault was still there was
+// registered before WebViewAPI.Open checked the vault again, so it is registered before this closes
+// them; an Open that checks after the removal finds no vault and closes its own view. Closing the
+// views first would leave a window in which one is made that nothing closes any more.
+func (a *App) closeVaultsAndViews(ids ...string) int {
+	n := 0
+	if testHookBeforeVaultRemoval != nil {
+		testHookBeforeVaultRemoval()
+	}
+	a.mu.Lock()
+	for _, id := range ids {
+		if ov, ok := a.vaults[id]; ok {
+			a.closeVaultLocked(id, ov)
+			n++
+		}
+	}
+	a.mu.Unlock()
+	for _, id := range ids {
+		a.closeVaultWebViews(id)
+	}
+	return n
 }
 
 func (a *App) rememberVault(info VaultInfo) error {

@@ -217,6 +217,12 @@ tasks:
     cmds:
       - GOOS=js GOARCH=wasm go test -count=1 -exec "{{.ROOT_DIR}}/scripts/go-js-exec.sh" ./internal/... ./cmd/...
 
+  test-nativeview:
+    desc: 'By hand, on a Mac: the macOS driver of the native web views against a real window (M18-E2; not part of `task ci`: it opens a window and needs the network for two checks)'
+    dir: apps/desktop
+    cmds:
+      - go test -tags nativeviewtest -count=1 -v -timeout 600s ./internal/shell/nativeview/
+
   test-core:
     desc: 'The cloud panels on the Go core compiled to WebAssembly, in Node, against a fake cloud checked by api/openapi.yaml (ADR-0045 §7)'
     deps: [wasm-core, wailsjs]

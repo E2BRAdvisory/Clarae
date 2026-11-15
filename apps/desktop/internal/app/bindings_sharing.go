@@ -148,13 +148,15 @@ func (s *SharingAPI) RemoveMount(shareID string, keepCopy bool) (VaultInfo, erro
 	if abs, err := filepath.Abs(dir); err == nil {
 		open[vaultID(abs)] = true
 	}
-	a.mu.Lock()
+	ids := make([]string, 0, len(open))
 	for id := range open {
-		if ov, ok := a.vaults[id]; ok {
-			a.closeVaultLocked(id, ov)
-		}
+		ids = append(ids, id)
 	}
-	a.mu.Unlock()
+	a.closeVaultsAndViews(ids...)
+	// The mount goes for good (deleted, or moved to a folder that has an id of its own): its applications' sessions go too.
+	for _, id := range ids {
+		a.forgetWebViewData(id)
+	}
 	if !keepCopy {
 		return VaultInfo{}, bindingError(os.RemoveAll(dir))
 	}

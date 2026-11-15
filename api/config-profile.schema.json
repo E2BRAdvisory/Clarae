@@ -21,7 +21,7 @@
         "web_viewer": {
           "type": "boolean",
           "default": false,
-          "description": "Built-in web page viewer. Reserved: no client offers the function yet, so the flag has no visible effect."
+          "description": "Applications: a web page registered in the vault (a `.webapp` file) opens in a browser embedded in a tab. Off by default. Without it the commands that create, open and edit applications are not offered. The page is embedded only by a desktop client that can embed a browser (macOS); elsewhere, the browser workbench included, it opens in the system browser or in a new tab of the browser."
         },
         "chat": {
           "type": "boolean",

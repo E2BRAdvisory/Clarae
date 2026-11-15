@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"syscall/js"
 	"testing"
@@ -86,6 +87,17 @@ func TestWebCoreFunctionsFailWhereTheirCapabilityIsOff(t *testing.T) {
 	}
 	if caps.Updater {
 		t.Error("every UpdaterAPI method fails in the browser, but updater is true")
+	}
+	for name, err := range callAll(t, reflect.ValueOf(NewWebViewAPI(nil))) {
+		var ce *codedError
+		if err == nil {
+			t.Errorf("WebViewAPI.%s succeeds in the browser: embeddedBrowser has no driver there", name)
+		} else if !errors.As(err, &ce) || ce.code != ErrCodeWebViewUnavailable {
+			t.Errorf("WebViewAPI.%s fails with %v, want the code %s", name, err, ErrCodeWebViewUnavailable)
+		}
+	}
+	if caps.EmbeddedBrowser {
+		t.Error("every WebViewAPI method fails in the browser, but embeddedBrowser is true")
 	}
 	if got := (&VaultCryptoAPI{}).DiskEncryption(); got != "unknown" || caps.DiskEncryptionCheck {
 		t.Errorf("DiskEncryption = %q, diskEncryptionCheck %v: the browser cannot tell", got, caps.DiskEncryptionCheck)

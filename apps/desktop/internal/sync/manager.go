@@ -110,6 +110,11 @@ type Hooks struct {
 	// DeviceRevoked is called when the cloud refuses a commit because the device
 	// it was sent with is revoked; every engine using it has been stopped.
 	DeviceRevoked func(deviceID string)
+	// Locked is called, before EventLocked is sent, once the key of a private vault is gone from
+	// memory for the local vault: whatever the application shows of the vault (the native views of
+	// its applications) must go before the lock screen does. It runs on the goroutine that locked
+	// the vault, holding no lock of the manager: it may wait for the UI thread.
+	Locked func(localVaultID string)
 }
 
 // SetManagedPoll sets the polling interval distributed by the administrator (0 = none).
@@ -919,7 +924,7 @@ func (m *Manager) loop(ctx context.Context, mv *managed, eng *Engine, scope stri
 			// count of what waits for the next unlock is right.
 			var scanErr error
 			_ = eng.Exclusive(func() error { scanErr = eng.scan(ctx); return nil })
-			EventLocked.Send(m.emit, m.lockedEvent(ctx, mv.localID, eng, mv.db, LockReasonSync, scanErr))
+			m.sendLocked(m.lockedEvent(ctx, mv.localID, eng, mv.db, LockReasonSync, scanErr))
 			wait = maxPoll // an unlock kicks the loop
 		case errors.Is(err, ErrPaused):
 			wait = maxPoll // resume kicks the loop

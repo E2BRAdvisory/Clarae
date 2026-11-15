@@ -18,6 +18,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"clarae/apps/desktop/internal/app"
+	"clarae/apps/desktop/internal/shell/nativeview"
+	"clarae/apps/desktop/internal/webview"
 )
 
 // Host implements app.Host on the desktop with the Wails v3 application and its window.
@@ -37,6 +39,8 @@ type Host struct {
 	win     *application.WebviewWindow
 	started bool     // ApplicationStarted has fired: the loop of the platform runs and dialogs can show
 	waiting []dialog // error dialogs asked before that
+	// views are the native web views of the window, made on first use; nil on a system with no driver.
+	views webview.Driver
 
 	// showError displays an error dialog now (replaced in tests).
 	showError func(title, message string)
@@ -44,7 +48,10 @@ type Host struct {
 
 type dialog struct{ title, message string }
 
-var _ app.Host = (*Host)(nil)
+var (
+	_ app.Host           = (*Host)(nil)
+	_ app.NativeViewHost = (*Host)(nil)
+)
 
 // NewHost returns the Wails host.
 func NewHost() *Host {
@@ -78,6 +85,21 @@ func (h *Host) application() (*application.App, *application.WebviewWindow) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.app, h.win
+}
+
+// NativeViews returns the driver of the native web views of the window, or nil: on a system that has
+// none (anything but macOS with cgo), and before the window exists. It is not an app.Host method:
+// a host either offers it or does not (app.NativeViewHost).
+func (h *Host) NativeViews() webview.Driver {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.win == nil {
+		return nil
+	}
+	if h.views == nil {
+		h.views = nativeview.New(h.win)
+	}
+	return h.views
 }
 
 func (h *Host) Emit(_ context.Context, name string, payload any) {

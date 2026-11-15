@@ -52,6 +52,32 @@ export const Events = {
   appOpenRequest: 'app:open-request',
   /** Desktop: the window is closing; write the pending edits, then call the runtime Quit again. */
   appBeforeClose: 'app:before-close',
+  /** Desktop: what a view of an application shows changed (address, title, loading, history). */
+  webviewState: 'webview:state',
+  /** Desktop: a navigation of a view was cancelled (a scheme or a host that is not allowed). */
+  webviewBlocked: 'webview:blocked',
+  /**
+   * Desktop: the page of a view asked for a new window. Nothing opens in the application; `opened` says whether
+   * the address went to the system browser.
+   */
+  webviewNewWindow: 'webview:new-window',
+  /** Desktop: a view refused a download. */
+  webviewDownload: 'webview:download',
+  /** Desktop: a page asked for a permission (camera, microphone, location, files) and was denied. */
+  webviewPermission: 'webview:permission',
+  /** Desktop: a reserved key combination was pressed while a view had the focus (WebViewAPI.ReserveKeys): run it as the application's own. */
+  webviewKey: 'webview:key',
+  /** Desktop: a view could not load its page (a certificate error included: there is no way around it). */
+  webviewLoadError: 'webview:load-error',
+  /** Desktop: the process that renders a view ended. Reload it, or close it. */
+  webviewCrashed: 'webview:crashed',
+  /** Desktop: a view took the keyboard focus (a click in it). */
+  webviewFocus: 'webview:focus',
+  /**
+   * Desktop: the application closed views that the UI did not ask to close (the vault was closed or locked, its data
+   * were cleared, the application is quitting).
+   */
+  webviewClosed: 'webview:closed',
 } as const;
 
 /** A name the UI can subscribe to. */
@@ -78,6 +104,16 @@ export interface EventPayloads {
   'ai:done': AIDonePayload;
   'app:open-request': OpenRequestPayload;
   'app:before-close': undefined;
+  'webview:state': WebviewStatePayload;
+  'webview:blocked': WebviewBlockedPayload;
+  'webview:new-window': WebviewNewWindowPayload;
+  'webview:download': WebviewDownloadPayload;
+  'webview:permission': WebviewPermissionPayload;
+  'webview:key': WebviewKeyPayload;
+  'webview:load-error': WebviewLoadErrorPayload;
+  'webview:crashed': WebviewCrashedPayload;
+  'webview:focus': WebviewFocusPayload;
+  'webview:closed': WebviewClosedPayload;
 }
 
 /** The payload of the event `N`. */
@@ -316,4 +352,90 @@ export interface VaultEntry {
   kind: SyncprotoFileKind;
   size: number;
   mtime: string;
+}
+
+/** WebviewBlockReason (Go webview.BlockReason). */
+export type WebviewBlockReason = 'empty' | 'too-long' | 'characters' | 'malformed' | 'scheme' | 'credentials' | 'host' | 'port' | 'private-network' | 'throttled' | 'other';
+
+/** Go webview.BlockedPayload. */
+export interface WebviewBlockedPayload {
+  viewId: string;
+  vaultId: string;
+  url: string;
+  reason: WebviewBlockReason;
+  mainFrame: boolean;
+}
+
+/** WebviewCloseReason (Go webview.CloseReason). */
+export type WebviewCloseReason = 'vault-closed' | 'vault-locked' | 'data-cleared' | 'disabled' | 'quit';
+
+/** Go webview.ClosedPayload. */
+export interface WebviewClosedPayload {
+  viewId: string;
+  vaultId: string;
+  reason: WebviewCloseReason;
+}
+
+/** Go webview.CrashedPayload. */
+export interface WebviewCrashedPayload {
+  viewId: string;
+  vaultId: string;
+}
+
+/** Go webview.DownloadPayload. */
+export interface WebviewDownloadPayload {
+  viewId: string;
+  vaultId: string;
+  url: string;
+}
+
+/** Go webview.FocusPayload. */
+export interface WebviewFocusPayload {
+  viewId: string;
+  vaultId: string;
+}
+
+/** Go webview.KeyPayload. */
+export interface WebviewKeyPayload {
+  viewId: string;
+  vaultId: string;
+  accelerator: string;
+}
+
+/** Go webview.LoadErrorPayload. */
+export interface WebviewLoadErrorPayload {
+  viewId: string;
+  vaultId: string;
+  url: string;
+  message: string;
+  code: number;
+  certificate: boolean;
+}
+
+/** Go webview.NewWindowPayload. */
+export interface WebviewNewWindowPayload {
+  viewId: string;
+  vaultId: string;
+  url: string;
+  opened: boolean;
+  reason: WebviewBlockReason;
+}
+
+/** Go webview.PermissionPayload. */
+export interface WebviewPermissionPayload {
+  viewId: string;
+  vaultId: string;
+  permission: string;
+  origin: string;
+}
+
+/** Go webview.StatePayload. */
+export interface WebviewStatePayload {
+  viewId: string;
+  vaultId: string;
+  url: string;
+  title: string;
+  loading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
 }

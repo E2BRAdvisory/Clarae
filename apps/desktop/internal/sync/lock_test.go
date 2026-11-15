@@ -271,3 +271,50 @@ func TestActivityPostponesIdleLock(t *testing.T) {
 		t.Fatal("an active vault was locked")
 	}
 }
+
+// The application hears of a lock before the UI does (the native views of its applications must be
+// gone before the lock screen is shown), once the key is out of memory; VaultLocked follows the key.
+func TestLockedHookRunsBeforeTheEvent(t *testing.T) {
+	f := newLockFixture(t)
+	if f.m.VaultLocked(lockLocal) || f.m.VaultLocked("not-open") {
+		t.Fatal("an unlocked vault, and a vault that is not open, are not locked")
+	}
+	type seen struct {
+		vault         string
+		eventsSoFar   int
+		lockedAtHook  bool
+		keyGoneAtHook bool
+	}
+	var got []seen
+	var mu stdsync.Mutex
+	f.m.SetHooks(Hooks{Locked: func(id string) {
+		mu.Lock()
+		defer mu.Unlock()
+		got = append(got, seen{id, len(f.events.events()), f.m.VaultLocked(id), f.cm.Cipher(lockCloud).Locked()})
+	}})
+
+	if err := f.m.LockVault(context.Background(), lockLocal); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	want := []seen{{lockLocal, 0, true, true}}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("hook calls %+v, want %+v", got, want)
+	}
+	if n := len(f.events.events()); n != 1 {
+		t.Fatalf("vault:locked sent %d times", n)
+	}
+	if !f.m.VaultLocked(lockLocal) {
+		t.Fatal("the vault is locked")
+	}
+}
+
+// An idle timeout counts as locked as soon as it expires, before the sweep that forgets the key.
+func TestVaultLockedFollowsTheIdleTimeout(t *testing.T) {
+	f := newLockFixture(t)
+	f.advance(11 * time.Minute)
+	if !f.m.VaultLocked(lockLocal) {
+		t.Fatal("a vault idle past its timeout is locked for the user")
+	}
+}

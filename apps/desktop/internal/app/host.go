@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/webview"
 )
 
 // Host is everything the application needs from the environment that runs it: the Wails window on
@@ -67,6 +68,16 @@ var HostMethodCapability = map[string]Capability{
 // running the system-browser flow, and keeps vault keys in memory only.
 type SessionHost interface {
 	Session() *auth.Hosted
+}
+
+// NativeViewHost is implemented by a host whose window can carry native web views, the browser
+// inside the tab of an application (internal/webview). The desktop shell implements it where a driver
+// exists (macOS); the browser host and the other systems do not, and the capability
+// embeddedBrowser is false there.
+type NativeViewHost interface {
+	// NativeViews returns the driver, or nil while there is none (the window does not exist yet,
+	// or the system has no driver). The core asks again until it gets one.
+	NativeViews() webview.Driver
 }
 
 // FileFilter restricts a file dialog to a kind of file (Pattern: "*.zip", or "*.md;*.txt").

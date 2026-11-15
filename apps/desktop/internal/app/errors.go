@@ -41,6 +41,34 @@ const (
 	// The file would run as a program if the operating system opened it (VaultAPI.OpenWithSystemApp,
 	// ADR-0047): the frontend offers to show it in the file manager instead.
 	ErrCodeExecutable = "executable"
+	// The vault the call names is not open in this process, or is a private vault that is locked.
+	// Returned by the bindings of the applications (WebViewAPI); the text names which.
+	ErrCodeVaultNotOpen = "vault-not-open"
+	ErrCodeVaultLocked  = "vault-locked"
+)
+
+// Codes of WebViewAPI, the browser inside the tab of an application (internal/webview). A refused
+// address or accelerator carries its reason as the first word of the text, like weak-passphrase:
+// "webview-invalid-url: scheme: only http and https addresses can be opened".
+const (
+	// ErrCodeWebViewUnavailable: no embedded browser on this device (capability embeddedBrowser).
+	ErrCodeWebViewUnavailable = "webview-unavailable"
+	// ErrCodeWebViewDisabled: the configuration profile has features.web_viewer off.
+	ErrCodeWebViewDisabled = "webview-disabled"
+	// ErrCodeWebViewInvalidURL: not an address an application may open (webview.ValidateURL); the
+	// reason is one of webview.BlockReason: empty, too-long, characters, malformed, scheme,
+	// credentials, host, port.
+	ErrCodeWebViewInvalidURL = "webview-invalid-url"
+	// ErrCodeWebViewInvalidBounds: the rectangle is not a part of the window (values outside 0..1).
+	ErrCodeWebViewInvalidBounds = "webview-invalid-bounds"
+	// ErrCodeWebViewNotFound: no such view in this vault (closed, or never opened).
+	ErrCodeWebViewNotFound = "webview-not-found"
+	// ErrCodeWebViewLimit: too many views are open.
+	ErrCodeWebViewLimit = "webview-limit"
+	// ErrCodeWebViewFailed: the system could not do it; the details are in the log.
+	ErrCodeWebViewFailed = "webview-failed"
+	// ErrCodeWebViewInvalidKey: not an accelerator that can be reserved (webview.ParseAccelerator).
+	ErrCodeWebViewInvalidKey = "webview-invalid-accelerator"
 )
 
 // codedError is a binding error with a stable code; Unwrap keeps the cause

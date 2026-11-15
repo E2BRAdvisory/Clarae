@@ -70,6 +70,15 @@ export interface CoreCapabilities {
    * (AIAPI.Status).
    */
   aiAssistant: boolean;
+  /**
+   * The page of an application (a `.webapp` file) opens in a browser embedded in the tab, a native
+   * web view that the shell adds to the window. Only the desktop on macOS has a driver for it
+   * (Windows and Linux have none: the page opens in the system browser), and the core also needs
+   * the flag `web_viewer` of the profile (WebViewAPI.Status). The table says macOS-capable desktop;
+   * SettingsAPI.Capabilities says what this device does. The browser opens the page in a tab of its
+   * own (WebViewAPI refuses every call there).
+   */
+  embeddedBrowser: boolean;
 }
 
 /** The kinds of host. */
@@ -89,6 +98,7 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     detachedCopies: true,
     openWithSystemApp: true,
     aiAssistant: true,
+    embeddedBrowser: true,
   },
   web: {
     localFolders: false,
@@ -102,5 +112,6 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     detachedCopies: false,
     openWithSystemApp: false,
     aiAssistant: false,
+    embeddedBrowser: false,
   },
 };

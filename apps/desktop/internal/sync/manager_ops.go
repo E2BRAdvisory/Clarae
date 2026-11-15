@@ -664,9 +664,32 @@ func (m *Manager) drainAndLock(ctx context.Context, cloud string, reason LockRea
 		if errors.Is(scanErrs[i], ErrUnlinked) {
 			continue
 		}
-		EventLocked.Send(m.emit, m.lockedEvent(ctx, v.localID, v.engine, v.db, reason, scanErrs[i]))
+		m.sendLocked(m.lockedEvent(ctx, v.localID, v.engine, v.db, reason, scanErrs[i]))
 	}
 	return lockErr
+}
+
+// sendLocked tells the application (Hooks.Locked) and then the UI (EventLocked) that a vault is locked.
+func (m *Manager) sendLocked(ev LockedEvent) {
+	if hook := m.hooksSnapshot().Locked; hook != nil {
+		hook(ev.VaultID)
+	}
+	EventLocked.Send(m.emit, ev)
+}
+
+// VaultLocked reports whether the vault is private and its key is not available: locked by hand,
+// idle past the timeout, or never unlocked since the start. It is false for a vault that is not
+// open here, not linked, or not private. It reads memory only (no database), so a binding that is
+// called often may ask.
+func (m *Manager) VaultLocked(localID string) bool {
+	m.mu.Lock()
+	mv := m.vaults[localID]
+	var cloud, kind string
+	if mv != nil {
+		cloud, kind = mv.cloudID, mv.kind
+	}
+	m.mu.Unlock()
+	return kind == "private" && cloud != "" && m.crypto.IsLocked(cloud)
 }
 
 // lockedEvent counts what a locked vault still has to push and its open

@@ -5,8 +5,11 @@ export const Feature = {
   // Audio recorder in the editor. Reserved: no client offers the function yet, so the flag has no
   // visible effect.
   AudioRecorder: 'audio_recorder',
-  // Built-in web page viewer. Reserved: no client offers the function yet, so the flag has no
-  // visible effect.
+  // Applications: a web page registered in the vault (a `.webapp` file) opens in a browser embedded
+  // in a tab. Off by default. Without it the commands that create, open and edit applications are
+  // not offered. The page is embedded only by a desktop client that can embed a browser (macOS);
+  // elsewhere, the browser workbench included, it opens in the system browser or in a new tab of the
+  // browser.
   WebViewer: 'web_viewer',
   // Chat bar of the workbench (a disabled placeholder until the ACP integration exists, ADR-0026).
   Chat: 'chat',
