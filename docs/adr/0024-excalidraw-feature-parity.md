@@ -8,6 +8,8 @@
 | **Riferimenti spec**  | §2.7 (Excalidraw), §2.4 (indicizzazione), §3.4.5 (merge); V-02/D-01, V-08, D-04, D-06; ADR-0003, ADR-0005, ADR-0010, ADR-0021 |
 | **Devia dallo spec?** | sì, in modo puntuale: nuove funzioni di §2.7 (export, embed di parti, formule, azioni sulla scena), nuova dipendenza MathJax  |
 
+**Aggiornamento 2026-11-15.** [ADR-0054](0054-editor-dei-disegni-merge-undo-ricarica-libreria-ricerca.md) (proposta) emenda la decisione 5: l'auto-export non parte a ogni salvataggio ma 15 secondi dopo l'ultimo, e subito alla chiusura del disegno, del vault o dell'app.
+
 **Aggiornamento 2026-11-02.** Il sotto-flag citato in «Questioni aperte» come `drawing_scripts` è `drawing_actions` (decisione 26, schema del Config Profile); la dipendenza Excalidraw è il fork di ADR-0028.
 
 ## Contesto

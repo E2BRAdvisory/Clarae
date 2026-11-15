@@ -10,7 +10,7 @@ Fixture eseguite da **tre consumatori** con `task conformance` (che è parte di 
 shared/conformance/
 ├── markdown/        # <caso>.md + <caso>.expected.json   (parser OFM)
 ├── roundtrip/       # corpus dell'editor Live (demo/, cases/, commonmark/): vedi roundtrip/README.md
-├── merge/           # <caso>/{base,ours,theirs,expected}.md (+ meta.json)  — da M2
+├── merge/           # <caso>/{base,ours,theirs,expected}.<ext> + meta.json (kind: md, excalidraw, canvas, config, library) — da M2; vedi «Fixture di merge»
 ├── crypto/          # vectors.json                        — da M2 (§3.8.7)
 ├── passphrase/      # policy.json: politica della passphrase (§3.8.2), core Go e strength.ts
 ├── links/           # resolve.json: risoluzione dei link, core Go (links) e mock dei binding del workbench
@@ -82,6 +82,22 @@ Regole condivise:
 - La prima riga `Note:` (maiuscole indifferenti, fuori da codice e math) apre le note, fino alla fine della slide; un secondo `Note:` fa parte delle note.
 - `line` è la riga 1-based del file (frontmatter incluso) della prima riga non vuota della slide; `content` non ha righe vuote ai bordi; `notes` è tagliato. Le slide senza contenuto sono scartate.
 - `config` legge le chiavi piatte `slide-transition` (`none|fade|slide|zoom`), `slide-theme` (`auto|light|dark`), `slide-progress`, `slide-numbers`, `slide-notes` (booleani); un valore non valido dà il default.
+
+## Fixture di merge
+
+`merge/<caso>/` ha `base`, `ours`, `theirs` ed `expected` con l'estensione indicata da `meta.json` (`ext`), più:
+
+```jsonc
+{
+  "kind": "library", // md | excalidraw | canvas | config | library: la funzione di shared/go/merge che si prova
+  "clean": true, // il merge non lascia scelte
+  "copyOf": "", // "ours" o "theirs" se una parte va in una copia di conflitto
+  "oursNewer": true, // quale lato è più recente, per i tipi che decidono per tempo (canvas, config, library)
+  "ext": "json",
+}
+```
+
+Le esegue `TestConformance` di `shared/go/merge` (`task conformance`), solo in Go: il merge vive nel core Go, che il workbench web usa compilato in WebAssembly (nessun secondo motore da confrontare). I casi `library-*` provano `merge.LibraryByID`, la strategia `library-by-id` della libreria di forme (`.clarae/excalidraw-library.json`, ADR-0054): forme aggiunte, tolte e modificate da un lato o da entrambi, senza base (unione), con un lato senza `libraryItems`, ordine e altre chiavi di primo livello. Un caso nuovo è una cartella nuova col suo `meta.json`; il nome è `kebab-case` e inizia con il tipo (`library-no-base-union`).
 
 ## Esecuzione
 

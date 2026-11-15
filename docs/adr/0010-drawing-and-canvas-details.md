@@ -8,6 +8,8 @@
 | **Riferimenti spec**  | §2.2.1 (matrice funzioni), V-02/D-01, D-04, piano M3-WP1…WP4                                        |
 | **Devia dallo spec?** | sì, in modo puntuale (editor testo dei canvas, export, anteprime)                                   |
 
+**Aggiornamento 2026-11-15.** [ADR-0054](0054-editor-dei-disegni-merge-undo-ricarica-libreria-ricerca.md) (proposta) emenda le decisioni 5, 6 e 7: le anteprime hanno una variante per tema (`<hash>.dark.svg`) e il binding `DrawingAPI.Preview` calcola l'hash nel core al posto di `ReadPreview` (rimosso), la cache si pota all'apertura del vault; la libreria di forme si fonde per id nella sync; la ricerca indicizza il testo come scritto dall'utente e il TeX delle formule.
+
 **Aggiornamento 2026-11-02.** La versione `@excalidraw/excalidraw@0.18.1` è superata da ADR-0028 (alias `npm:@zsviczian/excalidraw@0.18.145`), e la rinomina riscrive ora anche i link dentro i disegni (ADR-0024, decisione 6); le regole offline restano quelle di questo ADR.
 
 ## Contesto

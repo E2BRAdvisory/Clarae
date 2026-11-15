@@ -11,6 +11,8 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Il pulsante chiaro/scuro cambia tema subito e il valore resta dopo un riavvio; «Sistema» nelle impostazioni segue ancora il tema del sistema.
 - [ ] Ridimensionando la finestra al minimo nulla si sovrappone e nessun pulsante esce dallo schermo; zoom dell'interfaccia al 200 % utilizzabile.
 - [ ] Un `workspace.json` creato prima di M8 (schede _Tag_ o _Segnalibri_ a sinistra, _Struttura_ a destra) si apre senza errori e senza perdere le schede aperte.
+- [ ] **Angoli e raccordi (M18, 1.6):** le schede hanno gli angoli superiori arrotondati e la scheda attiva si raccorda con una curva concava al contenuto, con l'indicatore in alto; il corpo del pannello ha gli angoli superiori arrotondati. Controllare a occhio, nei due temi: molte schede (la barra scorre), schede bloccate, trascinamento di una scheda (`over`), split a due pannelli, e in contrasto elevato (`forced-colors`: i raccordi non compaiono, resta il contorno della scheda attiva). La verifica visiva fatta durante lo sviluppo è con screenshot nei due temi e in split, **non con snapshot automatici**: non c'è un test di regressione visiva, e su una WebView reale resta da fare.
+- [ ] **Stato vuoto (M18, 1.6):** chiudere tutte le schede: il pannello offre _Nuova nota_, _Nuova lavagna_, _Nuovo disegno_, _Nuova presentazione_ e il selettore rapido, ciascuno con la scorciatoia in uso (una scorciatoia riassegnata compare aggiornata). Con due pannelli vuoti, un clic apre il file nel pannello cliccato. Con una funzione spenta dal profilo la voce non compare; su un vault in sola lettura le voci che creano sono disabilitate. Nessun elemento ha il focus all'apertura.
 
 ## Azioni rapide
 

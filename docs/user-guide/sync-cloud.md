@@ -34,7 +34,7 @@ Si sincronizzano le note, gli allegati e i file di tipo `.canvas`, `.base`, `.ex
 
 ## Conflitti
 
-Il merge avviene **sul vostro dispositivo**. Per le note Markdown le modifiche concorrenti in punti diversi si **uniscono automaticamente** (merge a tre vie); se le stesse righe cambiano da due parti, o per file di altro tipo, si crea una **copia di conflitto** (`nome (conflitto <dispositivo> <data ora>).ext`) e nessuna versione viene persa: _Risolvi conflitti di sincronizzazione_ mostra le due versioni affiancate (diff) e permette di tenere una, l'altra o unirle a mano. Le versioni scartate restano nella cronologia ([Cronologia e recupero](cronologia-recupero.md)).
+Il merge avviene **sul vostro dispositivo**. Per le note Markdown le modifiche concorrenti in punti diversi si **uniscono automaticamente** (merge a tre vie); se le stesse righe cambiano da due parti, o per file di altro tipo, si crea una **copia di conflitto** (`nome (conflitto <dispositivo> <data ora>).ext`) e nessuna versione viene persa: _Risolvi conflitti di sincronizzazione_ mostra le due versioni affiancate (diff) e permette di tenere una, l'altra o unirle a mano. Le versioni scartate restano nella cronologia ([Cronologia e recupero](cronologia-recupero.md)). Tra i file di altro tipo, i disegni si fondono per elemento quando i dispositivi sono dello stesso utente, e la **libreria di forme** dei disegni si fonde sempre forma per forma: se due dispositivi ne aggiungono di diverse restano entrambe.
 
 ## Più dispositivi
 
