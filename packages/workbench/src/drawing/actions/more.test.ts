@@ -184,10 +184,6 @@ describe('view actions', () => {
   });
   const t = el('t', 'text', 0, 0, 10, 10);
 
-  it('zoom-to-fit-selected asks to bring the selection into view', () => {
-    expect(run('zoom-to-fit-selected', [a, t], ['a']).view).toEqual({ zoomTo: ['a'] });
-  });
-
   it('toggle-grid and set-grid-size only touch the view', () => {
     expect(run('toggle-grid', [a], []).view).toEqual({ toggleGrid: true });
     expect(run('set-grid-size', [a], [], { gridSize: 10.4 }).view).toEqual({

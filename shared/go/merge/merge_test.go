@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"clarae/shared/merge"
+	"clarae/shared/pathrules"
 	"clarae/shared/syncproto"
 )
 
@@ -76,6 +78,8 @@ func TestConformance(t *testing.T) {
 				res, err = merge.Canvas(base, ours, theirs, opt)
 			case "config":
 				res, err = merge.ConfigLWW(base, ours, theirs, opt)
+			case "library":
+				res, err = merge.LibraryByID(base, ours, theirs, opt)
 			default:
 				t.Fatalf("unknown kind %q", m.Kind)
 			}
@@ -213,5 +217,114 @@ func TestJSONRejectsMalformedInput(t *testing.T) {
 	}
 	if _, err := merge.ConfigLWW(nil, []byte("[1]"), []byte("{}"), merge.Options{}); err == nil {
 		t.Error("config: want error for non-object")
+	}
+}
+
+// Only the shape library gets its own strategy; any other settings file stays on config-lww, and
+// the decision of every other kind of file is Decide's.
+func TestDecideByPathGivesTheShapeLibraryItsOwnStrategy(t *testing.T) {
+	mod := merge.ChangeModify
+	for path, want := range map[string]merge.Strategy{
+		".clarae/excalidraw-library.json":                      merge.StrategyLibraryByID,
+		pathrules.LegacyConfigDir + "/excalidraw-library.json": merge.StrategyLibraryByID, // folder of 1.x vaults (ADR-0052)
+		".clarae/editor.json":                                  merge.StrategyConfigLWW,
+		".clarae/sub/excalidraw-library.json":                  merge.StrategyConfigLWW,
+		"excalidraw-library.json":                              merge.StrategyLastWriteWins, // a user file at the root, not a setting
+	} {
+		kind := syncproto.KindOf(path)
+		if got := merge.DecideByPath(path, kind, true, mod, mod); got != want {
+			t.Errorf("%s (%s): got %s, want %s", path, kind, got, want)
+		}
+	}
+	// A delete against a modification is not a merge of the content: Decide's answer stands.
+	if got := merge.DecideByPath(".clarae/excalidraw-library.json", syncproto.KindConfig, true, merge.ChangeDelete, mod); got != merge.StrategyKeepModification {
+		t.Errorf("delete vs modify: got %s", got)
+	}
+}
+
+func TestLibraryByIDRejectsWhatItCannotRead(t *testing.T) {
+	good := []byte(`{"libraryItems":[{"id":"a"}]}`)
+	for name, c := range map[string]struct{ ours, theirs []byte }{
+		"ours not json":       {[]byte("{"), good},
+		"theirs not json":     {good, []byte("{")},
+		"top level array":     {[]byte(`[]`), good},
+		"items not an array":  {good, []byte(`{"libraryItems":"x"}`)},
+		"item without an id":  {[]byte(`{"libraryItems":[{"name":"n"}]}`), good},
+		"theirs item no id":   {good, []byte(`{"libraryItems":[{"id":""}]}`)},
+		"item is not objects": {good, []byte(`{"libraryItems":[1]}`)},
+	} {
+		if _, err := merge.LibraryByID(nil, c.ours, c.theirs, merge.Options{}); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+	// A base that cannot be read is no base: the libraries are united.
+	res, err := merge.LibraryByID([]byte("{"), []byte(`{"libraryItems":[{"id":"a"}]}`), []byte(`{"libraryItems":[{"id":"b"}]}`), merge.Options{})
+	if err != nil || !sameJSON(res.Merged, []byte(`{"libraryItems":[{"id":"a"},{"id":"b"}]}`)) {
+		t.Errorf("unreadable base: %s %v", res.Merged, err)
+	}
+}
+
+// No silent loss: whatever the three versions, a shape that only one side touched is never dropped
+// by the merge unless the other side removed it untouched.
+func TestLibraryByIDNeverDropsAShapeSomeoneChanged(t *testing.T) {
+	item := func(id string, v int) string { return `{"id":"` + id + `","v":` + strconv.Itoa(v) + `}` }
+	build := func(items map[string]int) []byte {
+		var parts []string
+		for _, id := range []string{"a", "b", "c"} {
+			if v, ok := items[id]; ok {
+				parts = append(parts, item(id, v))
+			}
+		}
+		return []byte(`{"libraryItems":[` + strings.Join(parts, ",") + `]}`)
+	}
+	// every state of one shape across base, ours and theirs: absent, version 1, version 2
+	states := []int{-1, 1, 2}
+	pick := func(v int) map[string]int {
+		if v < 0 {
+			return map[string]int{}
+		}
+		return map[string]int{"a": v}
+	}
+	for _, b := range states {
+		for _, o := range states {
+			for _, th := range states {
+				res, err := merge.LibraryByID(build(pick(b)), build(pick(o)), build(pick(th)), merge.Options{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var got struct {
+					Items []struct {
+						ID string `json:"id"`
+						V  int    `json:"v"`
+					} `json:"libraryItems"`
+				}
+				if err := json.Unmarshal(res.Merged, &got); err != nil {
+					t.Fatal(err)
+				}
+				present, v := len(got.Items) == 1, 0
+				if present {
+					v = got.Items[0].V
+				}
+				var want bool // the shape must be there
+				switch {
+				case o >= 0 && th >= 0:
+					want = true
+				case o >= 0: // theirs lacks it: removed (untouched by ours) or added by ours
+					want = b < 0 || o != b
+				case th >= 0:
+					want = b < 0 || th != b
+				}
+				if present != want {
+					t.Errorf("base %d ours %d theirs %d: present=%v, want %v", b, o, th, present, want)
+				}
+				if present && o >= 0 && th >= 0 && o != th && b >= 0 {
+					// changed on one side only: that change; on both: ours (newer by default)
+					switch {
+					case o == b && v != th, th == b && v != o, o != b && th != b && v != o:
+						t.Errorf("base %d ours %d theirs %d: version %d", b, o, th, v)
+					}
+				}
+			}
+		}
 	}
 }

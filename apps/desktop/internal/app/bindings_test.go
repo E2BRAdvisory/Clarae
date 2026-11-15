@@ -204,26 +204,88 @@ func TestPropertiesTagsTrash(t *testing.T) {
 func TestDrawingPreviewCache(t *testing.T) {
 	a, info, root := newTestApp(t)
 	d := NewDrawingAPI(a)
+	v := NewVaultAPI(a)
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg"></svg>`
+	written, err := v.WriteNote(info.ID, "Board.excalidraw", `{"type":"excalidraw","elements":[]}`, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Nothing cached yet: the hash of the drawing as it is on disk, no picture.
+	got, err := d.Preview(info.ID, "Board.excalidraw", "")
+	if err != nil || got.SVG != "" {
+		t.Fatalf("empty cache: %+v %v", got, err)
+	}
+	if got.Hash != written.Hash {
+		t.Fatalf("hash %q, the file has %q", got.Hash, written.Hash)
+	}
+	if err := d.SavePreview(info.ID, got.Hash, "", svg); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := d.Preview(info.ID, "Board.excalidraw", ""); again.Hash != got.Hash || again.SVG != svg {
+		t.Fatalf("round trip: %+v", again)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".clarae", "cache", "drawings", got.Hash+".svg")); err != nil {
+		t.Fatal(err)
+	}
+
+	// The dark variant has its own picture: neither sees the other.
+	const dark = `<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>`
+	if d0, err := d.Preview(info.ID, "Board.excalidraw", "dark"); err != nil || d0.SVG != "" || d0.Hash != got.Hash {
+		t.Fatalf("dark before it is saved: %+v %v", d0, err)
+	}
+	if err := d.SavePreview(info.ID, got.Hash, "dark", dark); err != nil {
+		t.Fatal(err)
+	}
+	if d1, _ := d.Preview(info.ID, "Board.excalidraw", "dark"); d1.SVG != dark {
+		t.Fatalf("dark round trip: %+v", d1)
+	}
+	if l, _ := d.Preview(info.ID, "Board.excalidraw", ""); l.SVG != svg {
+		t.Fatalf("the light preview was touched by the dark one: %+v", l)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".clarae", "cache", "drawings", got.Hash+".dark.svg")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Preview(info.ID, "Board.excalidraw", "sepia"); err == nil {
+		t.Error("an unknown variant must be refused")
+	}
+	if err := d.SavePreview(info.ID, got.Hash, "../x", svg); err == nil {
+		t.Error("an unknown variant must be refused on save")
+	}
+
+	// A drawing that changed has another hash: the cached picture is not its own.
+	changed, err := v.WriteNote(info.ID, "Board.excalidraw", `{"type":"excalidraw","elements":[{"id":"a"}]}`, written.Hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, err := d.Preview(info.ID, "Board.excalidraw", ""); err != nil || after.Hash != changed.Hash || after.SVG != "" {
+		t.Fatalf("after a change: %+v %v", after, err)
+	}
+
+	if _, err := v.WriteNote(info.ID, "Note.md", "# note", ""); err != nil {
+		t.Fatal(err)
+	}
+	for name, rel := range map[string]string{
+		"missing":       "Nowhere.excalidraw",
+		"not a drawing": "Note.md",
+		"traversal":     "../outside.excalidraw",
+	} {
+		if _, err := d.Preview(info.ID, rel, ""); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+	if _, err := d.Preview("no-such-vault", "Board.excalidraw", ""); err == nil {
+		t.Error("a vault that is not open must be refused")
+	}
+
 	hash := strings.Repeat("ab", 32)
-	if got, err := d.ReadPreview(info.ID, hash); err != nil || got != "" {
-		t.Fatalf("empty cache: %q %v", got, err)
-	}
-	if err := d.SavePreview(info.ID, hash, `<svg xmlns="http://www.w3.org/2000/svg"></svg>`); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := d.ReadPreview(info.ID, hash); !strings.HasPrefix(got, "<svg") {
-		t.Fatalf("round trip: %q", got)
-	}
-	if _, err := os.Stat(filepath.Join(root, ".clarae", "cache", "drawings", hash+".svg")); err != nil {
-		t.Fatal(err)
-	}
 	for name, c := range map[string]struct{ hash, svg string }{
 		"traversal": {"../../../etc/passwd", "<svg/>"},
 		"short":     {"abcd", "<svg/>"},
 		"not svg":   {hash, "hello"},
 		"script":    {hash, "<svg><script>alert(1)</script></svg>"},
 	} {
-		if err := d.SavePreview(info.ID, c.hash, c.svg); err == nil {
+		if err := d.SavePreview(info.ID, c.hash, "", c.svg); err == nil {
 			t.Errorf("%s must be refused", name)
 		}
 	}

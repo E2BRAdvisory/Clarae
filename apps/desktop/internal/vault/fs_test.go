@@ -280,3 +280,39 @@ func TestWriteFileFromStreams(t *testing.T) {
 		t.Fatal("a path outside the vault must be refused")
 	}
 }
+
+func TestListFilesSeesWhatWalkExcludes(t *testing.T) {
+	root := t.TempDir()
+	f, err := NewFS(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.ListFiles(".clarae/cache/drawings"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing folder: %v", err)
+	}
+	dir := filepath.Join(root, ".clarae", "cache", "drawings")
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"b.svg", "a.svg"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("<svg/>"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := f.ListFiles(".clarae/cache/drawings")
+	if err != nil || len(got) != 2 || got[0].Path != ".clarae/cache/drawings/a.svg" || got[1].Name != "b.svg" || got[0].Size != 6 {
+		t.Fatalf("list: %+v %v", got, err)
+	}
+	// Walk never shows the cache; ListFiles is how it is maintained. Still no way out of the vault.
+	if err := f.Walk(func(e Entry) error {
+		if strings.Contains(e.Path, "cache") {
+			t.Errorf("Walk reached %s", e.Path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.ListFiles("../"); err == nil {
+		t.Error("a folder outside the vault must be refused")
+	}
+}

@@ -1,0 +1,38 @@
+{
+  "type": "excalidrawlib",
+  "version": 2,
+  "libraryItems": [
+    {
+      "id": "b",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-b",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "B"
+    },
+    {
+      "id": "c",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-c",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "C"
+    }
+  ]
+}

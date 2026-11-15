@@ -11,6 +11,8 @@ export interface MockWindow {
     fileExports: { vaultId: string; name: string; mime: string; base64: string }[];
     drawingExports: Map<string, string>;
     exportCancelled: boolean;
+    /** VaultAPI.MergeEdit answers as for a change by this user (false: by another one). */
+    mergeSameAuthor: boolean;
     emit(name: string, payload: unknown): void;
   };
 }

@@ -172,7 +172,10 @@ export async function readVaultFile(page: Page, path: string): Promise<string> {
       if (!vault) return '';
       try {
         if (p.startsWith('.clarae/'))
-          return (await app['VaultAPI']!['ReadConfig']!(vault.id, p.slice(11))) as string;
+          return (await app['VaultAPI']!['ReadConfig']!(
+            vault.id,
+            p.slice('.clarae/'.length),
+          )) as string;
         return ((await app['VaultAPI']!['ReadNote']!(vault.id, p)) as { content: string }).content;
       } catch {
         return '';

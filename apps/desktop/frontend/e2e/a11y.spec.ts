@@ -291,6 +291,12 @@ for (const theme of ['light', 'dark'] as const) {
       );
       await scan(page, 'drawing');
 
+      // The navigation buttons next to the zoom control are in the scan above; the mini-map here.
+      await page.getByRole('button', { name: 'Mini-map' }).click();
+      await expect(page.locator('.drawing-minimap')).toBeVisible();
+      await scan(page, 'drawing mini-map');
+      await page.getByRole('button', { name: 'Mini-map' }).click();
+
       await page.getByRole('button', { name: 'Export', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await scan(page, 'drawing export dialog');

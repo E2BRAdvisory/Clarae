@@ -501,6 +501,7 @@ func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpRe
 			}
 		default:
 			row.ServerRev, row.BaseRev, row.ServerHash, row.Tombstoned = res.Rev, res.Rev, p.blobHash, false
+			row.HeadAuthor = e.cfg.UserID // our own commit: this account is the author of the head revision
 			row.LocalHash, row.LocalSize, row.LocalMtime = p.localHash, p.size, p.mtime
 			row.State, row.ConflictOf = StateSynced, ""
 			if p.op.Path != "" {
@@ -572,6 +573,7 @@ func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncpro
 			return true, e.cfg.DB.DeleteFile(ctx, row.FileID)
 		}
 		row.ServerRev, row.BaseRev, row.ServerHash, row.State, row.Tombstoned = 0, 0, "", StateLocalNew, false
+		row.HeadAuthor = ""
 		_ = e.cfg.DB.DeleteOutbox(ctx, row.Path)
 		return true, e.cfg.DB.PutFile(ctx, row)
 	default:

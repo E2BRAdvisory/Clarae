@@ -48,6 +48,8 @@ legacy	apps/desktop/build/assets_test.go	\bmemobrain(://|</string>|;|")	assertio
 legacy	apps/desktop/build/windows/installer/project.nsi	^!define LEGACY_(PRODUCT|UNINST_KEY) ".*"$	product name and Uninstall key of the 1.x installer: the new installer removes that installation by hand (never runs its uninstaller); dropped in 2.0
 legacy	apps/desktop/build/linux/nfpm.yaml	^  - memobrain$	package name of 1.x: replaces and conflicts, so installing the new .deb removes it; dropped in 2.0
 legacy	apps/desktop/build/installer_legacy_test.go	*	tests of the removal of the 1.x installation by the installers (the whole file is about it): dropped in 2.0
+legacy	apps/desktop/internal/drawing/drawing.go	memobrain	Excalidraw metadata key of 1.x in customData (the TeX of a formula), read by the indexer as long as 1.x files exist
+legacy	apps/desktop/internal/drawing/drawing_test.go	memobrain	tests of the indexing of drawings in the 1.x format
 legacy	packages/workbench/src/drawing/meta.ts	memobrain	Excalidraw metadata key of 1.x (top level and customData), read as long as 1.x files exist
 legacy	packages/workbench/src/drawing/**/*.test.ts	memobrain	tests of the reading of drawings in the 1.x format
 legacy	packages/workbench/src/marp/slides.ts	memobrain	hidden-slide marker and frontmatter keys (memobrain-loop, memobrain-notes) of 1.x presentations, read as long as 1.x files exist

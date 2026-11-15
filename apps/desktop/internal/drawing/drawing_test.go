@@ -92,3 +92,52 @@ func TestParseWarnsAboutOversizedImages(t *testing.T) {
 		t.Errorf("warnings = %v", doc.Warnings)
 	}
 }
+
+func TestParseIndexesTheTypedTextNotTheWrappedOne(t *testing.T) {
+	d, err := Parse([]byte(`{"elements":[
+		{"id":"a","type":"text","text":"anti\nconstitutional\nword","originalText":"anticonstitutional word"},
+		{"id":"b","type":"text","text":"no original","originalText":""},
+		{"id":"c","type":"text","text":"blank original","originalText":"  "},
+		{"id":"d","type":"text","text":"see [[Target\nNote]]","originalText":"see [[Target Note]]"}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"anticonstitutional word", "no original", "blank original"} {
+		if !strings.Contains(d.Text, want) {
+			t.Errorf("text %q lacks %q", d.Text, want)
+		}
+	}
+	if strings.Contains(d.Text, "anti\nconstitutional") {
+		t.Errorf("the wrapped text was indexed: %q", d.Text)
+	}
+	// The links come from the same text: a note name wrapped over two lines is still one name.
+	if len(d.Links) != 1 || d.Links[0].Target != "Target Note" {
+		t.Errorf("links = %+v", d.Links)
+	}
+}
+
+func TestParseIndexesFormulaTeX(t *testing.T) {
+	d, err := Parse([]byte(`{"elements":[
+		{"id":"a","type":"image","fileId":"f1","customData":{"clarae":{"kind":"latex","latex":"\\int_0^1 x\\,dx","w0":10}}},
+		{"id":"b","type":"image","fileId":"f2","customData":{"memobrain":{"kind":"latex","latex":"E = mc^2"}}},
+		{"id":"c","type":"image","fileId":"f3","customData":{"clarae":{"kind":"latex","latex":"new"},"memobrain":{"kind":"latex","latex":"old"}}},
+		{"id":"d","type":"image","fileId":"f4","customData":{"clarae":{"kind":"slide"},"memobrain":{"kind":"latex","latex":"hidden by the new key"}}},
+		{"id":"e","type":"image","fileId":"f5","customData":{"clarae":{"kind":"latex","latex":"deleted"}},"isDeleted":true},
+		{"id":"f","type":"image","fileId":"f6","customData":{"other":{"kind":"latex","latex":"foreign key"}}},
+		{"id":"g","type":"image","fileId":"f7","customData":"not an object"},
+		{"id":"h","type":"image","fileId":"f8","customData":{"clarae":{"kind":"latex","latex":42}}},
+		{"id":"i","type":"image","fileId":"f9","customData":{"clarae":{"kind":"latex","latex":"A_{[[1]]}"}}}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(d.Text, "\n")
+	want := []string{`\int_0^1 x\,dx`, "E = mc^2", "new", "A_{[[1]]}"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("text = %q, want %q", got, want)
+	}
+	if len(d.Links) != 0 {
+		t.Errorf("a formula is not a source of links: %+v", d.Links)
+	}
+}

@@ -238,6 +238,9 @@ const (
 	// DrawingSceneActions: Azioni sulla scena di un disegno (script Excalidraw)
 	DrawingSceneActions FeatureID = "drawing.scene-actions"
 
+	// DrawingNavigation: Navigazione di un disegno (zoom sulla selezione, mini-mappa)
+	DrawingNavigation FeatureID = "drawing.navigation"
+
 	// DrawingEmbeds: Immagini, note e disegni dentro un disegno
 	DrawingEmbeds FeatureID = "drawing.embeds"
 
@@ -361,6 +364,7 @@ var Features = []FeatureID{
 	Bases,
 	DrawingEdit,
 	DrawingSceneActions,
+	DrawingNavigation,
 	DrawingEmbeds,
 	DrawingLatexMermaid,
 	DrawingExport,

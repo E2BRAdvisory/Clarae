@@ -5,16 +5,27 @@ import '@excalidraw/excalidraw/index.css';
 import * as ExcalidrawLib from '@excalidraw/excalidraw';
 import { excalidrawLang } from './lang';
 import { ExcalidrawIsland } from './ExcalidrawIsland';
-import { Excalidraw, restoreElements, serializeAsJSON } from '@excalidraw/excalidraw';
+import {
+  CaptureUpdateAction,
+  Excalidraw,
+  restoreElements,
+  serializeAsJSON,
+} from '@excalidraw/excalidraw';
 import type { SceneElement } from './actions/types';
-import type { ExcalidrawImperativeAPI, LibraryItems } from '@excalidraw/excalidraw/types';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type {
+  ExcalidrawImperativeAPI,
+  ExcalidrawProps,
+  LibraryItems,
+} from '@excalidraw/excalidraw/types';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';
+import { Events } from '../app/events';
 import { invalidateVault } from '../app/actions';
 import { useNoteDocument } from '../editor/useNoteDocument';
 import { registerNoteFlusher } from '../workspaces/flush';
-import { effectiveTheme, type Theme } from '../app/theme';
+import { useEffectiveTheme } from '../app/useTheme';
+import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
 import { openOrCreate } from '../app/actions';
@@ -38,15 +49,18 @@ import {
 import { Icon } from '../shell/icons';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 import { bytesToBase64, copyExport, renderExport, type ExportInput } from './export/render';
+import { createAutoExporter, type AutoExporter } from './export/autoExport';
 import {
-  getSceneController,
   registerSceneController,
+  subscribeSceneController,
   unregisterSceneController,
 } from './actions/active';
 import type { SceneController, ToolKind } from './actions/active';
 import { dropVaultFile } from './embed/commands';
 import { latexOf, latexPatch } from './latex/insert';
-import { fileSettingsOf, normalizeFileExtra, withFileSetting } from './meta';
+import { documentAppState } from './externalReload';
+import { whenIdle } from './gesture';
+import { fileSettingsOf, withFileSetting } from './meta';
 import { mermaidPatch, parseMermaid } from './mermaid/insert';
 import { TextToolDialog } from './TextToolDialog';
 import { DescribeDialog } from './DescribeDialog';
@@ -55,40 +69,83 @@ import { ToolsPanel } from './ToolsPanel';
 import { moveSlide, playable, slideKey, slidesOf, type Slide } from './slides';
 import { useDrawingSlides } from './slidesStore';
 import { applyPatch } from './actions/apply';
+import { withFileExtra } from './serialize';
+import { isLibraryPath, libraryKey, useDrawingLibrary, type LibraryItem } from './library/store';
+import { NavigationTools } from './NavigationTools';
+import { Minimap } from './Minimap';
+import { useDrawingUi } from './uiPrefs';
+import { bottomBarInset, fitOffsets, zoomToSelection } from './viewport';
 import {
   folderOf,
-  isOverLimit,
   elementAt,
   linkedElementAt,
   parseElementLink,
   parseScene,
   sceneSignature,
+  sizeWarning,
+  type SizeWarning,
   type RawScene,
 } from './scene';
 import { DRAG_PATH } from '../util/dragTypes';
 
 const AUTOSAVE_MS = 2000;
+/** How long a merge waits for the gesture under way to end before leaving the choice to the user. */
+const MERGE_WAIT_MS = 20_000;
 /** App commands Excalidraw must not swallow while it has the focus. */
 const NAVIGATION_COMMANDS = new Set(['palette:open', 'switcher:open']);
-const LIBRARY_FILE = 'excalidraw-library.json';
 
 interface Props {
   vaultId: string;
   path: string;
 }
 
-/** Follows the app theme (data-theme attribute, or the OS preference for "system"). */
-function useAppTheme(): 'light' | 'dark' {
-  const read = (): 'light' | 'dark' =>
-    effectiveTheme((document.documentElement.getAttribute('data-theme') ?? 'system') as Theme);
-  const [theme, setTheme] = useState(read);
-  useEffect(() => {
-    const obs = new MutationObserver(() => setTheme(read()));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
-  return theme;
+/** What the automatic export draws: the scene as it was saved and the files to write of it. */
+interface AutoExportJob {
+  input: ExportInput;
+  plan: ReturnType<typeof autoExportPlan>;
+  base: ExportOptions;
 }
+
+/** A text the editor can show: a change of the file that is not one is never taken over. */
+const isScene = (text: string): boolean => {
+  try {
+    parseScene(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The file as the editor holds it: the scene it was mounted with (`scene`, of version `base`) and
+ * the one of the newest version read (`latest`), or why the newest version cannot be shown.
+ */
+type Opened = { path: string; version: number } & (
+  { scene: RawScene; base: number; latest: RawScene } | { error: string }
+);
+
+function openScene(prev: Opened | null, path: string, version: number, content: string): Opened {
+  try {
+    const latest = parseScene(content);
+    // The editor stays mounted on the scene it started from; later versions go through its API.
+    if (prev && prev.path === path && 'scene' in prev) return { ...prev, version, latest };
+    return { path, version, base: version, scene: latest, latest };
+  } catch (e) {
+    return { path, version, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// Always the desktop layout: the toolbar stays at the top, centred, at any width.
+const UI_OPTIONS: NonNullable<ExcalidrawProps['UIOptions']> = {
+  getFormFactor: () => 'desktop',
+  canvasActions: {
+    loadScene: false,
+    export: false,
+    saveAsImage: false,
+    saveToActiveFile: false,
+    toggleTheme: false,
+  },
+};
 
 /** Prints the drawing (the system dialog offers "Save as PDF"), on the app's print layer. */
 async function printDrawing(out: { base64: string }): Promise<void> {
@@ -107,11 +164,29 @@ async function printDrawing(out: { base64: string }): Promise<void> {
 
 export default function DrawingEditor({ vaultId, path }: Props) {
   const { t, i18n } = useTranslation();
-  const doc = useNoteDocument(vaultId, path, AUTOSAVE_MS);
+  // Unsaved edits and a newer version of the file (the sync, the other pane of this drawing):
+  // merged by the core, with the rules of the sync. What it does not merge (another user's change
+  // on a shared vault, D-04) is left to the conflict banner.
+  const editor = useRef<ExcalidrawImperativeAPI | null>(null);
+  const mergeEdits = useCallback(
+    async (base: string, ours: string, theirs: string): Promise<string | null> => {
+      // An emptied file is a drawing with nothing in it: merging would delete what is on screen.
+      if (theirs.trim() === '') return null;
+      // The merged scene replaces the one on screen: not under a gesture.
+      if (editor.current && !(await whenIdle(editor.current, MERGE_WAIT_MS))) return null;
+      const res = await api.vault.mergeEdit(vaultId, path, base, ours, theirs);
+      return res.clean && isScene(res.merged) ? res.merged : null;
+    },
+    [vaultId, path],
+  );
+  const doc = useNoteDocument(vaultId, path, AUTOSAVE_MS, { accept: isScene, merge: mergeEdits });
   const locked = useSync((s) => infoOf(s, vaultId).locked || infoOf(s, vaultId).readOnly);
-  const theme = useAppTheme();
+  const theme = useEffectiveTheme();
+  const minimap = useDrawingUi((s) => s.minimap);
   const [excalidraw, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
-  const [library, setLibrary] = useState<LibraryItems | null>(null);
+  useEffect(() => {
+    editor.current = excalidraw;
+  }, [excalidraw]);
   const [zen, setZen] = useState(
     () => useDrawingSettings.getState().settings.defaultMode === 'zen',
   );
@@ -132,6 +207,24 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // The export functions are defined further down: the scene controller reaches them from here.
   const exportHooks = useRef<{ print(): Promise<void> }>({ print: () => Promise.resolve() });
   const host = useRef<HTMLDivElement>(null);
+  const canvasHost = useRef<HTMLDivElement>(null);
+  // The same drawing can be open in two panes, each with its own editor. This one is named by an
+  // id, knows its pane, and reaches its own controller without asking the registry by path.
+  const editorId = useId();
+  const own = useRef<SceneController | null>(null);
+  const activePane = useAppStore((s) => s.layout.activePane);
+  const paneOf = useCallback(
+    (): string | null => host.current?.closest('[data-pane]')?.getAttribute('data-pane') ?? null,
+    [],
+  );
+  /** The frames for the Slideshow tab; another editor's stay there unless this one is in focus. */
+  const publishSlides = useCallback(
+    (slides: Slide[]) => {
+      const focused = paneOf() === useAppStore.getState().layout.activePane;
+      useDrawingSlides.getState().publish(editorId, path, slides, focused);
+    },
+    [editorId, path, paneOf],
+  );
   const signature = useRef('');
   // Top-level keys of the file other than Excalidraw's own (per-drawing settings): kept and
   // written back on every save.
@@ -141,71 +234,77 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     docRef.current = doc;
   });
   const shownVersion = useRef(0);
-  const libraryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // The library lives in the vault (.clarae/excalidraw-library.json) and syncs with it.
+  // The library lives in the vault (.clarae/excalidraw-library.json), syncs with it, and is
+  // shared by every editor open on the vault (drawing/library/store).
   useEffect(() => {
-    void api.vault
-      .readConfig(vaultId, LIBRARY_FILE)
-      .then((raw) => {
-        try {
-          const parsed = raw ? (JSON.parse(raw) as { libraryItems?: LibraryItems }) : {};
-          setLibrary(parsed.libraryItems ?? []);
-        } catch {
-          setLibrary([]);
-        }
-      })
-      .catch(() => setLibrary([]));
+    void useDrawingLibrary.getState().load(vaultId);
   }, [vaultId]);
 
-  // The scene the editor starts from: the file as first loaded. Later versions (sync, external
-  // edits) are applied through the Excalidraw API below, never by remounting the editor.
-  const parsed = useMemo<{ scene: RawScene } | { error: string }>(() => {
-    if (doc.status !== 'ready')
-      return { scene: { elements: [], appState: {}, files: {}, extra: {} } };
-    try {
-      return { scene: parseScene(doc.content) };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.status]);
+  // The scene the editor starts from: the first version of the file that parses. Later versions
+  // (sync, external edits) are applied through the Excalidraw API below, never by remounting the
+  // editor. Derived while rendering, once per version of the document.
+  const [opened, setOpened] = useState<Opened | null>(null);
+  if (doc.status === 'ready' && (!opened || opened.path !== path || opened.version !== doc.version))
+    setOpened(openScene(opened, path, doc.version, doc.content));
+  const initialScene = opened && 'scene' in opened ? opened.scene : null;
+  // What the editor is mounted with, built once per scene: Excalidraw reads it at mount only.
+  const initialData = useMemo(
+    () =>
+      initialScene
+        ? {
+            elements: restoreElements(initialScene.elements as never, null),
+            appState: {
+              ...defaultItemState(useDrawingSettings.getState().settings),
+              ...initialScene.appState,
+              collaborators: new Map(),
+            },
+            files: initialScene.files as never,
+            // what the store holds now; what it reads later reaches the editor through its API
+            libraryItems: (useDrawingLibrary.getState().vaultId === vaultId
+              ? useDrawingLibrary.getState().items
+              : []) as unknown as LibraryItems,
+            scrollToContent: true,
+          }
+        : null,
+    [initialScene, vaultId],
+  );
 
   useEffect(() => {
-    if ('scene' in parsed) extra.current = parsed.scene.extra;
-  }, [parsed]);
+    if (opened && 'scene' in opened) extra.current = opened.latest.extra;
+  }, [opened]);
 
   // A newer version of the file (sync or an external edit): show it in the open editor.
   useEffect(() => {
-    if (!excalidraw || doc.status !== 'ready' || doc.version === shownVersion.current) return;
-    shownVersion.current = doc.version;
-    if (doc.version <= 1) return;
-    try {
-      const scene = parseScene(doc.content);
-      signature.current = sceneSignature(scene.elements, Object.keys(scene.files).length);
-      extra.current = scene.extra;
-      excalidraw.updateScene({
-        elements: restoreElements(scene.elements as never, null),
-      });
-      const files = Object.values(scene.files);
-      if (files.length > 0) excalidraw.addFiles(files as never);
-    } catch {
-      /* an invalid file on disk is reported by the banner below on next load */
-    }
-  }, [excalidraw, doc.status, doc.version, doc.content]);
+    if (!excalidraw || !opened || !('scene' in opened)) return;
+    if (opened.path !== path || opened.version === shownVersion.current) return;
+    shownVersion.current = opened.version;
+    if (opened.version <= opened.base) return; // the scene the editor was mounted with
+    const scene = opened.latest;
+    const files = Object.values(scene.files);
+    if (files.length > 0) excalidraw.addFiles(files as never);
+    const appState = documentAppState(scene.appState);
+    excalidraw.updateScene({
+      elements: restoreElements(scene.elements as never, null),
+      ...(Object.keys(appState).length ? { appState: appState as never } : {}),
+      // Somebody else's change: not a step of this editor's undo history.
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
+    // What the editor holds now is the file: the change it reports for it is not an edit.
+    const now = excalidraw.getSceneElementsIncludingDeleted();
+    signature.current = sceneSignature(now, Object.keys(excalidraw.getFiles()).length);
+    publishSlides(slidesOf(now));
+  }, [excalidraw, opened, path, publishSlides]);
 
   /** The file text for a scene: Excalidraw's JSON plus the extra top-level keys. */
-  const serialize = (
-    elements: readonly { id: string; version: number }[],
-    appState: Parameters<typeof serializeAsJSON>[1],
-    files: Parameters<typeof serializeAsJSON>[2],
-  ): string => {
-    const json = serializeAsJSON(elements as never, appState, files, 'local');
-    // The settings are written under the current key only (a 1.x file keeps its legacy one until now).
-    const rest = normalizeFileExtra(extra.current);
-    if (Object.keys(rest).length === 0) return json;
-    return JSON.stringify({ ...(JSON.parse(json) as object), ...rest }, null, 2);
-  };
+  const serialize = useCallback(
+    (
+      elements: readonly { id: string; version: number }[],
+      appState: Parameters<typeof serializeAsJSON>[1],
+      files: Parameters<typeof serializeAsJSON>[2],
+    ): string =>
+      withFileExtra(serializeAsJSON(elements as never, appState, files, 'local'), extra.current),
+    [],
+  );
 
   const onChange = useCallback(
     (
@@ -218,54 +317,91 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       const first = signature.current === '';
       signature.current = sig;
       // The Slideshow tab of the right sidebar lists the frames.
-      useDrawingSlides.getState().publish(path, slidesOf(elements as unknown as SceneElement[]));
+      publishSlides(slidesOf(elements as unknown as SceneElement[]));
       if (first) return; // the initial render of the loaded file
-      doc.edit(serialize(elements, appState, files));
+      // The text is built when a save needs it, from what this change reported: a drag reports a
+      // change per frame, and the scene is megabytes with pictures in it.
+      docRef.current.edit(() => serialize(elements, appState, files));
     },
-    [doc, path],
+    [serialize, publishSlides],
   );
-  useEffect(() => () => useDrawingSlides.getState().clear(path), [path]);
+  useEffect(() => () => useDrawingSlides.getState().clear(editorId), [editorId, path]);
   // The frames of a freshly opened drawing (Excalidraw reports no change for the loaded scene).
   // The API can be handed over before the initial scene is applied: then the loaded file's
   // elements are published, otherwise the Slideshow tab would stay empty until the first edit.
-  useEffect(() => {
+  // Published again when the focus moves between panes: the editor that gets it takes the tab.
+  const publishCurrent = useCallback(() => {
     if (!excalidraw) return;
     const live = excalidraw.getSceneElements();
-    const loaded = 'scene' in parsed ? (parsed.scene.elements as unknown as SceneElement[]) : [];
-    useDrawingSlides.getState().publish(path, slidesOf(live.length > 0 ? live : loaded));
-  }, [excalidraw, path, parsed]);
+    const loaded = (initialScene?.elements ?? []) as unknown as SceneElement[];
+    publishSlides(slidesOf(live.length > 0 ? live : loaded));
+  }, [excalidraw, initialScene, publishSlides]);
+  useEffect(() => {
+    publishCurrent();
+  }, [publishCurrent, activePane]);
+  // Another editor went away (the other pane of this drawing closed): if it owned the Slideshow
+  // tab, the tab is free for this one. After the cleanups of that editor have all run.
+  useEffect(() => {
+    let mounted = true;
+    const off = subscribeSceneController(() =>
+      queueMicrotask(() => {
+        if (mounted) publishCurrent();
+      }),
+    );
+    return () => {
+      mounted = false;
+      off();
+    };
+  }, [publishCurrent]);
 
-  // The library write waiting for its delay: written at once when the drawing closes and before
-  // the vault is closed or switched or the app quits.
-  const libraryPending = useRef<(() => Promise<void>) | null>(null);
-  const flushLibrary = useCallback(async (): Promise<void> => {
-    clearTimeout(libraryTimer.current);
-    const write = libraryPending.current;
-    libraryPending.current = null;
-    await write?.();
-  }, []);
+  // The library on screen follows the store: another editor changed it, or the file did (the
+  // sync, another device). `shownLibrary` is what this editor holds, so that the library it
+  // reports back after being given one is not taken for a change.
+  const libraryKeyNow = useDrawingLibrary((l) => (l.vaultId === vaultId ? l.key : null));
+  const shownLibrary = useRef<string | null>(null);
+  useEffect(() => {
+    if (!excalidraw || libraryKeyNow === null) return;
+    if (shownLibrary.current === null) {
+      // mounted with the library as it was then
+      shownLibrary.current = libraryKey(initialData?.libraryItems as unknown as LibraryItem[]);
+    }
+    if (shownLibrary.current === libraryKeyNow) return;
+    shownLibrary.current = libraryKeyNow;
+    void excalidraw.updateLibrary({
+      libraryItems: useDrawingLibrary.getState().items as unknown as LibraryItems,
+      merge: false,
+    });
+  }, [excalidraw, libraryKeyNow, initialData]);
   const onLibraryChange = useCallback(
     (items: LibraryItems) => {
-      clearTimeout(libraryTimer.current);
-      const body = JSON.stringify({ type: 'excalidrawlib', version: 2, libraryItems: items });
-      libraryPending.current = async () => {
-        try {
-          await api.vault.writeConfig(vaultId, LIBRARY_FILE, body);
-        } catch {
-          // A read-only vault keeps the library for the session only.
-        }
-      };
-      libraryTimer.current = setTimeout(() => void flushLibrary(), 800);
+      const mine = items as unknown as LibraryItem[];
+      shownLibrary.current = libraryKey(mine);
+      useDrawingLibrary.getState().changed(vaultId, mine);
     },
-    [vaultId, flushLibrary],
+    [vaultId],
   );
+  // The file changed (the sync, another device), or the window is back in front: read it again.
   useEffect(() => {
-    const off = registerNoteFlusher(flushLibrary);
+    const reload = (): void => void useDrawingLibrary.getState().load(vaultId);
+    const off = api.on(Events.vaultFileChanged, (p) => {
+      if (p.vaultId === vaultId && p.paths.some(isLibraryPath)) reload();
+    });
+    window.addEventListener('focus', reload);
     return () => {
       off();
-      void flushLibrary();
+      window.removeEventListener('focus', reload);
     };
-  }, [flushLibrary]);
+  }, [vaultId]);
+  // Written at once when the drawing closes and before the vault is closed or switched or the app
+  // quits.
+  useEffect(() => {
+    const flush = (): Promise<void> => useDrawingLibrary.getState().flush();
+    const off = registerNoteFlusher(flush);
+    return () => {
+      off();
+      void flush();
+    };
+  }, []);
 
   // Scene-action commands (palette, hotkeys) act on the editor that is mounted.
   const canEdit = useRef(false);
@@ -294,6 +430,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           excalidraw.addFiles(Object.values(patch.files ?? {}) as never);
           excalidraw.updateScene({
             elements: applyPatch(excalidraw.getSceneElementsIncludingDeleted(), patch) as never,
+            captureUpdate: CaptureUpdateAction.NEVER,
           });
         }
       } catch {
@@ -328,10 +465,25 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     },
     [excalidraw],
   );
+  /** What Excalidraw's bottom bar covers of the canvas: a fit stays above it. */
+  const bottomInset = useCallback(
+    (): number | undefined =>
+      excalidraw ? bottomBarInset(canvasHost.current, excalidraw.getAppState().height) : undefined,
+    [excalidraw],
+  );
+  const zoomTo = useCallback(
+    (everything: boolean) => {
+      if (excalidraw) zoomToSelection(excalidraw, { everything, bottomInset: bottomInset() });
+    },
+    [excalidraw, bottomInset],
+  );
+  const zoomToSelected = useCallback(() => zoomTo(false), [zoomTo]);
+  const zoomToAll = useCallback(() => zoomTo(true), [zoomTo]);
   useEffect(() => {
     if (!excalidraw) return;
     const controller: SceneController = {
       vaultId,
+      paneId: paneOf,
       canEdit: () => canEdit.current,
       context: () => {
         const st = excalidraw.getAppState();
@@ -391,18 +543,15 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             ? { gridModeEnabled: !excalidraw.getAppState().gridModeEnabled }
             : {}),
         };
-        // The resulting onChange sees new element versions and schedules the autosave.
+        // The resulting onChange sees new element versions and schedules the autosave. An action
+        // that changes elements is one step of the undo history, taken now.
         excalidraw.updateScene({
-          ...(changesElements ? { elements: elements as never } : {}),
+          ...(changesElements
+            ? { elements: elements as never, captureUpdate: CaptureUpdateAction.IMMEDIATELY }
+            : {}),
           ...(Object.keys(appState).length ? { appState: appState as never } : {}),
         });
         if (view?.tool) excalidraw.setActiveTool({ type: view.tool as never });
-        if (view?.zoomTo?.length) {
-          const ids = new Set(view.zoomTo);
-          const targets = excalidraw.getSceneElements().filter((e) => ids.has(e.id));
-          if (targets.length)
-            excalidraw.setViewport({ target: targets, fit: 'contain', animation: true });
-        }
       },
       drawingPath: path,
       save: async () => {
@@ -450,8 +599,15 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       fileSettings: () => fileSettingsOf(extra.current),
       showFrame: (id) => {
         const frame = excalidraw.getSceneElements().find((e) => e.id === id);
-        if (frame) excalidraw.setViewport({ target: frame, fit: 'contain', animation: true });
+        if (frame)
+          excalidraw.setViewport({
+            target: frame,
+            fit: 'contain',
+            animation: true,
+            offsets: fitOffsets(bottomInset()),
+          });
       },
+      zoomToSelection: () => zoomToSelection(excalidraw, { bottomInset: bottomInset() }),
       slideThumbnail: async (id, width = 320) => {
         const els = excalidraw.getSceneElements();
         const frame = els.find((e) => e.id === id);
@@ -503,10 +659,14 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         }
       },
     };
+    own.current = controller;
     registerSceneController(controller);
-    return () => unregisterSceneController(controller);
+    return () => {
+      unregisterSceneController(controller);
+      if (own.current === controller) own.current = null;
+    };
     // `serialize` and the refs are read at call time.
-  }, [excalidraw, vaultId, path, startPresent]);
+  }, [excalidraw, vaultId, path, startPresent, serialize, bottomInset, paneOf]);
 
   // Clicking the link of an element: wikilinks open the note (Cmd/Ctrl = new tab, a missing note
   // is created like in the editor), web URLs go to the system browser. Excalidraw's own
@@ -578,7 +738,8 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           x: (e.clientX - st.offsetLeft) / st.zoom.value - st.scrollX,
           y: (e.clientY - st.offsetTop) / st.zoom.value - st.scrollY,
         },
-        path,
+        // this editor, not the one in focus: the file was dropped on this canvas
+        own.current ?? path,
       );
     },
     [excalidraw, path],
@@ -593,7 +754,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   // Double click on a LaTeX formula edits it.
   const onCanvasDoubleClick = useCallback(
     (e: React.MouseEvent) => {
-      const c = getSceneController(path);
+      const c = own.current;
       if (!excalidraw || !c?.canEdit() || !drawingFeatureOn('drawing_latex')) return;
       const st = excalidraw.getAppState();
       const x = (e.clientX - st.offsetLeft) / st.zoom.value - st.scrollX;
@@ -607,7 +768,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       );
       if (hit) setTool({ kind: 'latex', editId: hit.id });
     },
-    [excalidraw, path],
+    [excalidraw],
   );
 
   // Excalidraw consumes some Cmd/Ctrl shortcuts while elements are selected (Mod+P, Mod+O).
@@ -780,29 +941,48 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       );
   });
 
-  // Auto-export: after a save that followed an edit, write the PNG/SVG variants next to the
-  // drawing (overwriting the previous ones). A failure never blocks editing.
+  // Auto-export: the PNG/SVG variants next to the drawing (overwriting the previous ones), once
+  // the saves pause and when the drawing is closed, never at every save. A failure never blocks
+  // editing.
   const dirtySinceExport = useRef(false);
+  const autoExport = useRef<AutoExporter<AutoExportJob> | null>(null);
   useEffect(() => {
     if (doc.save === 'dirty' || doc.save === 'saving') dirtySinceExport.current = true;
   }, [doc.save]);
-  useEffect(() => {
-    if (doc.save !== 'saved' || !dirtySinceExport.current || locked) return;
-    if (!drawingFeatureOn('drawing_auto_export')) {
-      dirtySinceExport.current = false;
-      return;
-    }
+  /** Hands the scene as it is now to the exporter, when it was edited since the last time. */
+  const queueAutoExport = useCallback(() => {
+    if (!dirtySinceExport.current || locked) return;
+    dirtySinceExport.current = false;
     const cfg = useDrawingSettings.getState().settings;
     // A drawing can override the vault's auto-export choice (stored in the file itself).
     const own = fileSettingsOf(extra.current)['autoExport'];
     const mode =
       own === 'none' || own === 'png' || own === 'svg' || own === 'both' ? own : cfg.autoExport;
-    const plan = autoExportPlan(mode, cfg.autoExportTheme);
+    const plan = drawingFeatureOn('drawing_auto_export')
+      ? autoExportPlan(mode, cfg.autoExportTheme)
+      : [];
     const input = exportInput();
-    dirtySinceExport.current = false;
-    if (plan.length === 0 || !input) return;
-    const base = defaultExportOptions(cfg);
-    void (async () => {
+    if (plan.length === 0 || !input) {
+      autoExport.current?.cancel();
+      return;
+    }
+    // What the files would show: the scene, and which files in which themes.
+    const key = `${signature.current}|${mode}|${cfg.autoExportTheme}`;
+    autoExport.current?.saved(key, { input, plan, base: defaultExportOptions(cfg) });
+  }, [locked, exportInput]);
+  const queueRef = useRef(queueAutoExport);
+  useEffect(() => {
+    queueRef.current = queueAutoExport;
+  }, [queueAutoExport]);
+  useEffect(() => {
+    if (doc.save === 'saved') queueAutoExport();
+  }, [doc.save, queueAutoExport]);
+  useEffect(() => {
+    /** Files this editor has written: the first time, the explorer has a new file to show. */
+    const written = new Set<string>();
+    const exporter = createAutoExporter<AutoExportJob>(async ({ input, plan, base }) => {
+      let ok = true;
+      let fresh = false;
       for (const { variant, format } of plan) {
         try {
           const out = await renderExport(ExcalidrawLib, input, {
@@ -811,27 +991,49 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             dark: variant === 'dark',
             embedScene: false,
           });
-          await api.drawing.writeExport(vaultId, path, variant, format, out.base64);
+          const target = await api.drawing.writeExport(vaultId, path, variant, format, out.base64);
+          if (!written.has(target)) fresh = true;
+          written.add(target);
         } catch {
-          /* an export that fails (nothing drawn yet, disk) is retried at the next save */
+          ok = false; // nothing drawn yet, the disk: tried again at the next save
         }
       }
-      invalidateVault(vaultId);
-    })();
-  }, [doc.save, locked, exportInput, vaultId, path]);
+      if (fresh) invalidateVault(vaultId);
+      return ok;
+    });
+    autoExport.current = exporter;
+    // Closing the vault, switching workspace, quitting: what is waiting is exported first.
+    const closing = async (): Promise<void> => {
+      queueRef.current();
+      await exporter.flush();
+    };
+    const off = registerNoteFlusher(closing);
+    return () => {
+      off();
+      void closing();
+      autoExport.current = null;
+    };
+  }, [vaultId, path]);
 
-  if (doc.status === 'loading' || library === null)
-    return <div className="note-loading muted">…</div>;
+  // The size of the drawing as the file holds it: measured on what was loaded and on every save.
+  const [sized, setSized] = useState<{ of: string; warning: SizeWarning }>({
+    of: '',
+    warning: null,
+  });
+  if (doc.status === 'ready' && doc.save === 'saved' && doc.hash !== '' && sized.of !== doc.hash)
+    setSized({ of: doc.hash, warning: sizeWarning(doc.current()) });
+
+  if (doc.status === 'loading' || !opened) return <div className="note-loading muted">…</div>;
   if (doc.status === 'error')
     return (
       <div className="note-error" role="alert">
         {doc.error}
       </div>
     );
-  if ('error' in parsed)
+  if ('error' in opened || !initialData)
     return (
       <div className="note-error" role="alert">
-        {t('drawing.invalid', { error: parsed.error })}
+        {t('drawing.invalid', { error: 'error' in opened ? opened.error : '' })}
       </div>
     );
 
@@ -842,8 +1044,16 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     conflict: '',
     error: t('editor.saveError'),
   }[doc.save];
-  const { scene } = parsed;
   const readOnly = locked || present || viewing;
+  const keepBoth = async (): Promise<void> => {
+    try {
+      const copy = await doc.keepBoth();
+      if (copy) await dialog.alert(t('editor.keptBothTitle'), t('editor.keptBoth', { path: copy }));
+    } catch (e) {
+      await dialog.error(e);
+    }
+  };
+  const showMinimap = minimap && !zen && !present && excalidraw !== null;
 
   return (
     <div className="note-view drawing-view" ref={host}>
@@ -886,17 +1096,21 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       </div>
       {doc.save === 'conflict' && (
         <div className="banner" role="alert">
-          <span>{t('editor.conflict')}</span>
-          <button onClick={() => void doc.reload()}>{t('editor.reload')}</button>
+          <span>{t(doc.rejected ? 'drawing.invalidOnDisk' : 'editor.conflict')}</span>
+          {/* a file that is not a drawing has nothing to reload: overwrite it or repair it */}
+          {!doc.rejected && <button onClick={() => void doc.reload()}>{t('editor.reload')}</button>}
           <button onClick={() => void doc.overwrite()}>{t('editor.overwrite')}</button>
+          {/* neither side given up: this drawing in a copy next to the file, the file here */}
+          {!doc.rejected && <button onClick={() => void keepBoth()}>{t('editor.keepBoth')}</button>}
         </div>
       )}
-      {isOverLimit(doc.content) && (
+      {sized.warning && (
         <div className="banner" role="status">
-          {t('drawing.tooLarge')}
+          {t(sized.warning === 'slow' ? 'drawing.tooLarge' : 'drawing.tooLargeToSearch')}
         </div>
       )}
       <div
+        ref={canvasHost}
         className={`drawing-canvas${present ? ' presenting' : ''}`}
         onMouseMove={onCanvasMouseMove}
         onDoubleClick={onCanvasDoubleClick}
@@ -907,17 +1121,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
         <ExcalidrawIsland key={path}>
           <Excalidraw
             onExcalidrawAPI={setApi}
-            initialData={{
-              elements: restoreElements(scene.elements as never, null),
-              appState: {
-                ...defaultItemState(useDrawingSettings.getState().settings),
-                ...scene.appState,
-                collaborators: new Map(),
-              },
-              files: scene.files as never,
-              libraryItems: library,
-              scrollToContent: true,
-            }}
+            initialData={initialData}
             theme={theme}
             langCode={excalidrawLang(
               i18n.language,
@@ -928,19 +1132,13 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             onChange={onChange}
             onLibraryChange={onLibraryChange}
             onLinkOpen={onLinkOpen}
-            UIOptions={{
-              // Always the desktop layout: the toolbar stays at the top, centred, at any width.
-              getFormFactor: () => 'desktop',
-              canvasActions: {
-                loadScene: false,
-                export: false,
-                saveAsImage: false,
-                saveToActiveFile: false,
-                toggleTheme: false,
-              },
-            }}
+            UIOptions={UI_OPTIONS}
           />
         </ExcalidrawIsland>
+        {excalidraw && !zen && !present && (
+          <NavigationTools api={excalidraw} host={canvasHost} onZoom={zoomToSelected} />
+        )}
+        {showMinimap && <Minimap api={excalidraw} theme={theme} onShowAll={zoomToAll} />}
         {present && deck.length > 0 && (
           <div className="slideshow-bar" role="toolbar" aria-label={t('drawing.slideshow.label')}>
             <button
@@ -1007,7 +1205,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           submitLabel={t(tool.editId ? 'drawing.latex.update' : 'drawing.latex.insert')}
           onClose={() => setTool(null)}
           onSubmit={async (text) => {
-            const c = getSceneController(path);
+            const c = own.current;
             if (!c) return;
             const existing = tool.editId
               ? c.context().elements.find((e) => e.id === tool.editId)
@@ -1031,7 +1229,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
           submitLabel={t('drawing.mermaid.insert')}
           onClose={() => setTool(null)}
           onSubmit={async (text) => {
-            const c = getSceneController(path);
+            const c = own.current;
             if (!c) return;
             const patch = await mermaidPatch(text, c.viewportCenter(), {
               parse: parseMermaid,

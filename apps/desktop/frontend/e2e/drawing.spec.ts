@@ -1,5 +1,13 @@
 import type { Page } from '@playwright/test';
-import { appOrigin, expect, listVaultFiles, openVault, readVaultFile, test } from './support';
+import {
+  appOrigin,
+  expect,
+  listVaultFiles,
+  openVault,
+  readVaultFile,
+  seedVault,
+  test,
+} from './support';
 
 const SKETCH = JSON.stringify({
   type: 'excalidraw',
@@ -97,6 +105,56 @@ test('a drawing embedded in a note renders from its preview', async ({ page }) =
   await expect(img).toBeVisible({ timeout: 60_000 });
   await expect(img).toHaveAttribute('width', '300');
   expect(net.external).toEqual([]);
+});
+
+test('an embed whose preview is at hand does not read the drawing again', async ({ page }) => {
+  await openVault(page, {
+    'Sketch.excalidraw': SKETCH,
+    'Note.md': '# Note\n\n![[Sketch.excalidraw|300]]\n',
+  });
+  // Count how often the UI asks the core for the content of the drawing.
+  await page.evaluate(() => {
+    type Read = (id: string, path: string) => Promise<unknown>;
+    const w = window as unknown as {
+      go: { app: { VaultAPI: { ReadNote: Read } } };
+      __drawingReads: number;
+    };
+    const read = w.go.app.VaultAPI.ReadNote;
+    w.__drawingReads = 0;
+    w.go.app.VaultAPI.ReadNote = (id, path) => {
+      if (path === 'Sketch.excalidraw') w.__drawingReads++;
+      return read(id, path);
+    };
+  });
+  const reads = () =>
+    page.evaluate(() => (window as unknown as { __drawingReads: number }).__drawingReads);
+
+  await page.locator('.tree .node', { hasText: 'Note' }).click();
+  await page.getByRole('button', { name: 'Reading' }).click();
+  const img = page.locator('img.embed-drawing');
+  await expect(img).toBeVisible({ timeout: 60_000 });
+  // No picture of it yet: read once, to draw it.
+  expect(await reads()).toBe(1);
+
+  // The note is shown again, in the editor and back: the picture is the same, the drawing —
+  // megabytes, when it holds pictures — is not read to find that out.
+  await page.getByRole('button', { name: 'Live' }).click();
+  await expect(page.locator('img.embed-drawing')).toBeVisible();
+  await page.getByRole('button', { name: 'Reading' }).click();
+  await expect(img).toBeVisible();
+  expect(await reads()).toBe(1);
+
+  // A drawing that changed is read again, once.
+  await seedVault(page, {
+    files: { 'Sketch.excalidraw': SKETCH.replace('"x":100', '"x":140') },
+  });
+  const before = await reads(); // seeding the file may read it too (the web target does)
+  await page.getByRole('button', { name: 'Live' }).click();
+  await page.getByRole('button', { name: 'Reading' }).click();
+  await expect(img).toBeVisible();
+  await expect.poll(reads).toBe(before + 1);
+  await page.waitForTimeout(500);
+  expect(await reads()).toBe(before + 1);
 });
 
 test('New drawing and New canvas are in the file explorer menu', async ({ page }) => {

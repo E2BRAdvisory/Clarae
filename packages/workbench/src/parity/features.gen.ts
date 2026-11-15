@@ -84,6 +84,7 @@ export type FeatureId =
   | 'bases' // Basi (viste tabellari delle note)
   | 'drawing.edit' // Disegni Excalidraw
   | 'drawing.scene-actions' // Azioni sulla scena di un disegno (script Excalidraw)
+  | 'drawing.navigation' // Navigazione di un disegno (zoom sulla selezione, mini-mappa)
   | 'drawing.embeds' // Immagini, note e disegni dentro un disegno
   | 'drawing.latex-mermaid' // Formule LaTeX e diagrammi Mermaid nei disegni
   | 'drawing.export' // Esportazione di un disegno (PNG, SVG, PDF dal ribbon) ed esportazione automatica
@@ -179,6 +180,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'bases',
   'drawing.edit',
   'drawing.scene-actions',
+  'drawing.navigation',
   'drawing.embeds',
   'drawing.latex-mermaid',
   'drawing.export',

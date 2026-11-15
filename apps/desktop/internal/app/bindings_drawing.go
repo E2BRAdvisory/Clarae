@@ -27,24 +27,66 @@ const MaxPreviewBytes = 4 << 20
 
 var hashRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-func previewPath(hash string) (string, error) {
+// drawingCacheDir is where the previews of drawings are cached (never synchronized).
+const drawingCacheDir = pathrules.ConfigDir + "/cache/drawings"
+
+// previewVariantSuffix maps a preview variant to the suffix of its cache file: "" is the light
+// preview ("<hash>.svg"), "dark" the one rendered for the dark theme ("<hash>.dark.svg").
+var previewVariantSuffix = map[string]string{"": "", "dark": ".dark"}
+
+func previewPath(hash, variant string) (string, error) {
 	if !hashRe.MatchString(hash) {
 		return "", fmt.Errorf("invalid: %q is not a content hash", hash)
 	}
-	return pathrules.ConfigDir + "/cache/drawings/" + hash + ".svg", nil
+	suffix, ok := previewVariantSuffix[variant]
+	if !ok {
+		return "", fmt.Errorf("invalid: unknown preview variant %q", variant)
+	}
+	return drawingCacheDir + "/" + hash + suffix + ".svg", nil
 }
 
-// ReadPreview returns the cached SVG for a drawing hash ("" when there is none).
-func (d *DrawingAPI) ReadPreview(vaultID, hash string) (string, error) {
+// DrawingPreview is what Preview returns.
+type DrawingPreview struct {
+	// Hash is the content hash of the drawing as it is on disk (the one ReadNote gives).
+	Hash string `json:"hash"`
+	// SVG is the preview cached for that hash; empty when there is none.
+	SVG string `json:"svg"`
+}
+
+// Preview returns the content hash of the drawing at relPath and the SVG cached for it. The file
+// is streamed through the hash, never loaded: an embed whose preview is in the cache costs no
+// read of the drawing (megabytes, with pictures in it) on either side of the bridge. A drawing
+// that changed has another hash, so it simply misses the cache. variant is "" (light) or "dark":
+// each has its own cached picture.
+func (d *DrawingAPI) Preview(vaultID, relPath, variant string) (DrawingPreview, error) {
 	ov, err := d.app.vault(vaultID)
 	if err != nil {
-		return "", err
+		return DrawingPreview{}, err
 	}
-	p, err := previewPath(hash)
+	if _, ok := previewVariantSuffix[variant]; !ok {
+		return DrawingPreview{}, fmt.Errorf("invalid: unknown preview variant %q", variant)
+	}
+	if !strings.EqualFold(path.Ext(relPath), ".excalidraw") {
+		return DrawingPreview{}, fmt.Errorf("invalid: %q is not a drawing", relPath)
+	}
+	hash, _, err := ov.FS.HashFile(relPath)
+	if err != nil {
+		return DrawingPreview{}, bindingError(err)
+	}
+	svg, err := cachedPreview(ov.FS, hash, variant)
+	if err != nil {
+		return DrawingPreview{}, err
+	}
+	return DrawingPreview{Hash: hash, SVG: svg}, nil
+}
+
+// cachedPreview is the SVG cached for a drawing hash and variant ("" when there is none).
+func cachedPreview(fsys *vault.FS, hash, variant string) (string, error) {
+	p, err := previewPath(hash, variant)
 	if err != nil {
 		return "", err
 	}
-	c, err := ov.FS.ReadFile(p)
+	c, err := fsys.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
@@ -54,14 +96,14 @@ func (d *DrawingAPI) ReadPreview(vaultID, hash string) (string, error) {
 	return string(c.Data), nil
 }
 
-// SavePreview caches the SVG rendered for a drawing hash. The cache is local: it is
-// never synchronized (pathrules) and can be deleted at any time.
-func (d *DrawingAPI) SavePreview(vaultID, hash, svg string) error {
+// SavePreview caches the SVG rendered for a drawing hash, in the light ("") or "dark" variant. The
+// cache is local: it is never synchronized (pathrules) and can be deleted at any time.
+func (d *DrawingAPI) SavePreview(vaultID, hash, variant, svg string) error {
 	ov, err := d.app.vault(vaultID)
 	if err != nil {
 		return err
 	}
-	p, err := previewPath(hash)
+	p, err := previewPath(hash, variant)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ import type { GraphData, GraphOptions } from '../../graph/types';
 import { makeBasesAPI } from './bases';
 import { notesMock } from './notes';
 import { createHistoryAPI, newMockHistory, type MockHistory } from './history';
+import { mockMergeEdit, type MergeEditResult } from './mergeEdit';
 import { createImporterMock } from '../../importer/mock';
 import { createUpdaterMock } from '../../updater/mock';
 import type {
@@ -115,7 +116,7 @@ export interface WailsMock {
   history: MockHistory;
   /** The configuration of the (mock) server. */
   config: ConfigState;
-  /** SVG previews of drawings by content hash (DrawingAPI cache). */
+  /** SVG previews of drawings by content hash, "<hash>.dark" for the dark theme (DrawingAPI cache). */
   previews: Map<string, string>;
   vaults: Map<string, MockVault>;
   /** Vaults exported to ZIP (VaultAPI.ExportZip); set `exportCancelled` to simulate a cancelled dialog. */
@@ -131,6 +132,12 @@ export interface WailsMock {
   fileExports: { vaultId: string; name: string; mime: string; base64: string }[];
   /** DrawingAPI.WriteExport: auto-exported files by vault path. */
   drawingExports: Map<string, string>;
+  /**
+   * VaultAPI.MergeEdit: false stands for a change of the file by another user of a shared vault
+   * (only Markdown is merged then); the calls are recorded as "path".
+   */
+  mergeSameAuthor: boolean;
+  merges: string[];
   prints: number;
   /** Calls of the runtime Quit (the desktop window closing after a flush). */
   quits: number;
@@ -353,6 +360,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     htmlExports: [],
     fileExports: [],
     drawingExports: new Map<string, string>(),
+    mergeSameAuthor: true,
+    merges: [],
     prints: 0,
     quits: 0,
     activity: 0,
@@ -476,6 +485,17 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       v.files.set(path, content);
       changed(id, [path], current === undefined ? [path] : []);
       return Promise.resolve({ path, hash: hashOf(content), size: content.length });
+    },
+    MergeEdit: (
+      id: string,
+      path: string,
+      base: string,
+      ours: string,
+      theirs: string,
+    ): Promise<MergeEditResult> => {
+      vaultOf(id);
+      mock.merges.push(path);
+      return Promise.resolve(mockMergeEdit(path, base, ours, theirs, mock.mergeSameAuthor));
     },
     CreateFolder: (): Promise<void> => Promise.resolve(),
     Rename: (id: string, from: string, to: string): Promise<void> => VaultAPI.rename(id, from, to),
@@ -1518,11 +1538,18 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     Refresh: (): Promise<ConfigState> => Promise.resolve(mock.config),
   };
 
+  /** The cache key of a preview: the hash for the light one, "<hash>.dark" for the dark one. */
+  const previewKey = (hash: string, variant: string): string =>
+    variant ? `${hash}.${variant}` : hash;
   const DrawingAPI = {
-    ReadPreview: (_id: string, hash: string): Promise<string> =>
-      Promise.resolve(mock.previews.get(hash) ?? ''),
-    SavePreview: (_id: string, hash: string, svg: string): Promise<void> => {
-      mock.previews.set(hash, svg);
+    Preview: (id: string, path: string, variant = ''): Promise<{ hash: string; svg: string }> => {
+      const content = vaultOf(id).files.get(path);
+      if (content === undefined) return reject('not-found: no such file');
+      const hash = hashOf(content);
+      return Promise.resolve({ hash, svg: mock.previews.get(previewKey(hash, variant)) ?? '' });
+    },
+    SavePreview: (_id: string, hash: string, variant: string, svg: string): Promise<void> => {
+      mock.previews.set(previewKey(hash, variant), svg);
       return Promise.resolve();
     },
     WriteExport: (

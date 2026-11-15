@@ -1,0 +1,7 @@
+{
+  "kind": "library",
+  "clean": true,
+  "copyOf": "",
+  "oursNewer": true,
+  "ext": "json"
+}

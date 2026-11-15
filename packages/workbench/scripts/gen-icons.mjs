@@ -75,6 +75,7 @@ const ICONS = {
   starOff: 'StarBorder',
   mail: 'Mail',
   fit: 'FitScreen',
+  minimap: 'PictureInPictureAlt',
   grid: 'GridView',
   upgrade: 'Upgrade',
   sync: 'Sync',

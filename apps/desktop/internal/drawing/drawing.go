@@ -22,7 +22,8 @@ const MaxImageSize = 10 << 20
 
 // Document is what the index keeps of a drawing.
 type Document struct {
-	// Text is the text of the live text elements, one per line.
+	// Text is the text of the live text elements (the typed text, without the line breaks of the
+	// automatic wrapping), the frame names and the TeX of the formulas, one per line.
 	Text string
 	// Links are the [[wikilinks]] set on elements or written in their text.
 	Links []parser.Link
@@ -33,12 +34,68 @@ type Document struct {
 }
 
 type element struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	Text      string `json:"text"`
-	Name      string `json:"name"` // frames
-	Link      string `json:"link"`
-	IsDeleted bool   `json:"isDeleted"`
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Text string `json:"text"`
+	// OriginalText is what the user typed: Text has the line breaks of the automatic wrapping
+	// added, so a word split across two lines would not be found in it.
+	OriginalText string          `json:"originalText"`
+	CustomData   json.RawMessage `json:"customData"` // the product's metadata sit in it (formulas)
+	Name         string          `json:"name"`       // frames
+	Link         string          `json:"link"`
+	IsDeleted    bool            `json:"isDeleted"`
+}
+
+// typedText is the text of a text element as the user wrote it: originalText when there is one,
+// else text (files written by tools that do not set it).
+func (e element) typedText() string {
+	if strings.TrimSpace(e.OriginalText) != "" {
+		return e.OriginalText
+	}
+	return e.Text
+}
+
+// Keys of the product's metadata in an element's customData: the current one and the one of 1.x
+// files (packages/workbench/src/drawing/meta.ts: the current key wins when both are there).
+const (
+	metaKey       = "clarae"
+	legacyMetaKey = "memobrain"
+	latexKind     = "latex"
+)
+
+// latex is the TeX source of a formula element (customData.<key>.kind == "latex"), "" when the
+// element is not one. Mirrors latexOf in packages/workbench/src/drawing/latex/insert.ts.
+func (e element) latex() string {
+	if len(e.CustomData) == 0 {
+		return ""
+	}
+	var cd map[string]json.RawMessage
+	if json.Unmarshal(e.CustomData, &cd) != nil {
+		return ""
+	}
+	var meta struct {
+		Kind  string          `json:"kind"`
+		Latex json.RawMessage `json:"latex"`
+	}
+	found := false
+	for _, k := range []string{metaKey, legacyMetaKey} {
+		raw, ok := cd[k]
+		if !ok {
+			continue
+		}
+		var probe map[string]json.RawMessage
+		if json.Unmarshal(raw, &probe) != nil || probe == nil {
+			continue // not an object: the reader falls through to the legacy key
+		}
+		_ = json.Unmarshal(raw, &meta) // a field of another type stays empty: not a formula
+		found = true
+		break
+	}
+	var tex string
+	if !found || meta.Kind != latexKind || json.Unmarshal(meta.Latex, &tex) != nil {
+		return ""
+	}
+	return strings.TrimSpace(tex)
 }
 
 type file struct {
@@ -86,9 +143,15 @@ func Parse(data []byte) (Document, error) {
 			continue
 		}
 		doc.Elements++
-		if el.Type == "text" && strings.TrimSpace(el.Text) != "" {
-			texts = append(texts, el.Text)
-			linkSrc = append(linkSrc, el.Text)
+		if el.Type == "text" {
+			if t := el.typedText(); strings.TrimSpace(t) != "" {
+				texts = append(texts, t)
+				linkSrc = append(linkSrc, t)
+			}
+		}
+		// A formula is an image holding its TeX: searchable, but not a source of links.
+		if tex := el.latex(); tex != "" {
+			texts = append(texts, tex)
 		}
 		// A frame's name is its title on the canvas (and the slide name in a presentation).
 		if (el.Type == "frame" || el.Type == "magicframe") && strings.TrimSpace(el.Name) != "" {

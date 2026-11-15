@@ -145,7 +145,32 @@ test('Save to vault names the file after the options and cancelling the dialog w
   ).toBe(0);
 });
 
-test('auto-export writes the PNG and SVG variants next to the drawing after a save', async ({
+const exported = (page: Page): Promise<string[]> =>
+  page.evaluate(() => [...(window as unknown as MockWindow).__mock.drawingExports.keys()].sort());
+
+/** Turns the auto-export on in Settings > Drawings, in both formats. */
+async function autoExportBoth(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Drawings' }).click();
+  await page.getByLabel('Auto-export on save').selectOption('both');
+  await page.keyboard.press('Escape');
+}
+
+/** Draws a rectangle with the pointer and waits for the save that follows. */
+async function drawAndSave(page: Page, x: number, y: number): Promise<void> {
+  const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width - 6, box.y + box.height - 6);
+  await page.keyboard.press('r');
+  await page.mouse.move(box.x + x, box.y + y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + x + 120, box.y + y + 80, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator('.save-state')).not.toHaveText('Saved');
+  await waitSaved(page);
+}
+
+test('auto-export writes the PNG and SVG variants next to the drawing when it is closed', async ({
   page,
 }) => {
   skipOnWeb(
@@ -161,25 +186,15 @@ test('auto-export writes the PNG and SVG variants next to the drawing after a sa
   await page.getByLabel('Auto-export theme').selectOption('both');
   await page.keyboard.press('Escape');
 
-  // Draw a rectangle: the save that follows triggers the export.
-  const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
-  const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: 300, y: 450 } });
-  await page.keyboard.press('r');
-  await page.mouse.move(box.x + 400, box.y + 300);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 520, box.y + 380, { steps: 6 });
-  await page.mouse.up();
-  await waitSaved(page);
+  // A save alone exports nothing: the drawing is still being worked on.
+  await drawAndSave(page, 400, 300);
+  await page.waitForTimeout(2500);
+  expect(await exported(page)).toEqual([]);
 
+  // Closing it does, at once.
+  await page.keyboard.press('ControlOrMeta+w');
   await expect
-    .poll(
-      () =>
-        page.evaluate(() =>
-          [...(window as unknown as MockWindow).__mock.drawingExports.keys()].sort(),
-        ),
-      { timeout: 20_000 },
-    )
+    .poll(() => exported(page), { timeout: 10_000 })
     .toEqual([
       'Board.excalidraw.dark.png',
       'Board.excalidraw.dark.svg',
@@ -198,6 +213,45 @@ test('auto-export writes the PNG and SVG variants next to the drawing after a sa
     return [...w.__mock.vaults.values()][0]?.files.get('.clarae/drawing.json') ?? '';
   });
   expect(JSON.parse(cfg)).toMatchObject({ autoExport: 'both', autoExportTheme: 'both' });
+});
+
+test('auto-export waits for a pause in the work, and exports once', async ({ page }) => {
+  skipOnWeb(
+    'drawing.export',
+    'the spec reads the exports the Wails mock captures (window.__mock.drawingExports)',
+  );
+  test.setTimeout(60_000);
+  await openDrawing(page, WITH_FRAME);
+  await autoExportBoth(page);
+  // Count the files written, not only which ones: each save must not rewrite them.
+  await page.evaluate(() => {
+    const exports = (window as unknown as MockWindow).__mock.drawingExports;
+    const set = exports.set.bind(exports);
+    let writes = 0;
+    exports.set = (k: string, v: string) => {
+      (window as unknown as { __exportWrites: number }).__exportWrites = ++writes;
+      return set(k, v);
+    };
+  });
+  const writes = () =>
+    page.evaluate(() => (window as unknown as { __exportWrites?: number }).__exportWrites ?? 0);
+
+  // Three edits, each saved, a few seconds apart: no export in between.
+  for (const y of [200, 300, 400]) {
+    await drawAndSave(page, 400, y);
+    await page.waitForTimeout(1500);
+  }
+  expect(await writes()).toBe(0);
+
+  // Fifteen seconds after the last save: both files, written once.
+  await expect
+    .poll(() => exported(page), { timeout: 25_000 })
+    .toEqual(['Board.excalidraw.png', 'Board.excalidraw.svg']);
+  expect(await writes()).toBe(2);
+  // Closing the drawing afterwards has nothing more to export.
+  await page.keyboard.press('ControlOrMeta+w');
+  await page.waitForTimeout(1500);
+  expect(await writes()).toBe(2);
 });
 
 test('the ribbon exports a drawing: PNG and SVG open the dialog with the format chosen', async ({

@@ -234,6 +234,226 @@ describe('useNoteDocument', () => {
     expect(result.current.save).toBe('conflict');
   });
 
+  it('does not adopt a file the editor cannot show, and never saves over it', async () => {
+    await setup({ 'D.excalidraw': '{"ok":1}' });
+    const valid = (text: string): boolean => {
+      try {
+        JSON.parse(text);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const hook = renderHook(() => useNoteDocument(vaultId, 'D.excalidraw', 500, { accept: valid }));
+    await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+    const { result } = hook;
+    const shown = result.current.savedHash();
+
+    // Broken from outside with nothing unsaved: the editor keeps what it shows, as a conflict.
+    mock.vaults.get(vaultId)?.files.set('D.excalidraw', '{"ok":');
+    await act(async () => void (await result.current.refresh()));
+    expect(result.current.save).toBe('conflict');
+    expect(result.current.rejected).toBe(true);
+    expect(result.current.current()).toBe('{"ok":1}');
+    expect(result.current.savedHash()).toBe(shown);
+    expect(result.current.version).toBe(1);
+
+    // An edit made now is not written: the broken file is still what is on disk.
+    act(() => result.current.edit('{"ok":2}'));
+    expect(await result.current.flush()).toBe(false);
+    expect(disk('D.excalidraw')).toBe('{"ok":');
+
+    // The user's choice writes the editor's text over it.
+    await act(async () => void (await result.current.overwrite()));
+    expect(disk('D.excalidraw')).toBe('{"ok":2}');
+    expect(result.current.save).toBe('saved');
+    expect(result.current.rejected).toBe(false);
+  });
+
+  it('shows a refused file again once it has been repaired outside the app', async () => {
+    await setup({ 'D.excalidraw': '{"ok":1}' });
+    const hook = renderHook(() =>
+      useNoteDocument(vaultId, 'D.excalidraw', 500, { accept: (text) => text.endsWith('}') }),
+    );
+    await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+    const { result } = hook;
+    mock.vaults.get(vaultId)?.files.set('D.excalidraw', '{"ok":');
+    await act(async () => void (await result.current.refresh()));
+    expect(result.current.rejected).toBe(true);
+
+    mock.vaults.get(vaultId)?.files.set('D.excalidraw', '{"ok":3}');
+    await act(async () => void (await result.current.refresh()));
+    expect(result.current.save).toBe('saved');
+    expect(result.current.rejected).toBe(false);
+    expect(result.current.current()).toBe('{"ok":3}');
+    expect(result.current.version).toBe(2);
+  });
+
+  describe('with a merge', () => {
+    /** Lines added on each side of `base`, as a three-way merge of appended lines would give. */
+    const union = (base: string, ours: string, theirs: string): Promise<string | null> => {
+      const lines = (t: string) => t.split('\n').filter(Boolean);
+      const known = new Set(lines(base));
+      const added = (t: string) => lines(t).filter((l) => !known.has(l));
+      return Promise.resolve([...lines(base), ...added(theirs), ...added(ours)].join('\n'));
+    };
+    const withMerge = async (
+      path: string,
+      merge: (b: string, o: string, t: string) => Promise<string | null>,
+    ) => {
+      const hook = renderHook(() => useNoteDocument(vaultId, path, 500, { merge }));
+      await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+      return hook;
+    };
+
+    it('keeps unsaved edits and a new version of the file, and saves both', async () => {
+      await setup({ 'M.md': 'base' });
+      const calls: string[][] = [];
+      const { result } = await withMerge('M.md', (b, o, t) => {
+        calls.push([b, o, t]);
+        return union(b, o, t);
+      });
+      act(() => result.current.edit('base\nmine'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'base\ntheirs');
+      const theirs = await hashOf('M.md');
+      await act(async () => void (await result.current.refresh()));
+
+      expect(calls).toEqual([['base', 'base\nmine', 'base\ntheirs']]);
+      // The editor shows the merged text, based on the file as it is now; it is still to be saved.
+      expect(result.current.save).toBe('dirty');
+      expect(result.current.content).toBe('base\ntheirs\nmine');
+      expect(result.current.current()).toBe('base\ntheirs\nmine');
+      expect(result.current.version).toBe(2);
+      expect(result.current.savedHash()).toBe(theirs);
+      expect(disk('M.md')).toBe('base\ntheirs');
+
+      await act(async () => void (await result.current.flush()));
+      expect(disk('M.md')).toBe('base\ntheirs\nmine');
+      expect(result.current.save).toBe('saved');
+
+      // The next merge starts from what was saved, not from the first load.
+      act(() => result.current.edit('base\ntheirs\nmine\nmore'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'base\ntheirs\nmine\nelse');
+      await act(async () => void (await result.current.refresh()));
+      expect(calls[1]?.[0]).toBe('base\ntheirs\nmine');
+      expect(result.current.current()).toBe('base\ntheirs\nmine\nelse\nmore');
+    });
+
+    it('saves the merged text by itself after the delay', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      await setup({ 'M.md': 'base' });
+      const { result } = await withMerge('M.md', union);
+      act(() => result.current.edit('base\nmine'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'base\ntheirs');
+      await act(async () => void (await result.current.refresh()));
+      expect(disk('M.md')).toBe('base\ntheirs');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600);
+      });
+      await waitFor(() => expect(result.current.save).toBe('saved'));
+      expect(disk('M.md')).toBe('base\ntheirs\nmine');
+    });
+
+    it('has nothing to save when the file already holds the edits', async () => {
+      await setup({ 'M.md': 'base' });
+      const { result } = await withMerge('M.md', (_b, _o, t) => Promise.resolve(t));
+      act(() => result.current.edit('base\nsame'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'base\nsame');
+      await act(async () => void (await result.current.refresh()));
+      expect(result.current.save).toBe('saved');
+      expect(result.current.current()).toBe('base\nsame');
+    });
+
+    it('goes into conflict when the two cannot be merged, or the merge fails', async () => {
+      await setup({ 'M.md': 'base', 'N.md': 'base' });
+      const refused = await withMerge('M.md', () => Promise.resolve(null));
+      act(() => refused.result.current.edit('mine'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'theirs');
+      await act(async () => void (await refused.result.current.refresh()));
+      expect(refused.result.current.save).toBe('conflict');
+      expect(refused.result.current.current()).toBe('mine');
+      expect(disk('M.md')).toBe('theirs');
+
+      const failing = await withMerge('N.md', () => Promise.reject(new Error('boom')));
+      act(() => failing.result.current.edit('mine'));
+      mock.vaults.get(vaultId)?.files.set('N.md', 'theirs');
+      await act(async () => void (await failing.result.current.refresh()));
+      expect(failing.result.current.save).toBe('conflict');
+      expect(disk('N.md')).toBe('theirs');
+    });
+
+    it('merges again with the text typed while the merge was running', async () => {
+      await setup({ 'M.md': 'base' });
+      let release: (() => void) | undefined;
+      const seen: string[] = [];
+      const { result } = await withMerge('M.md', async (b, o, t) => {
+        seen.push(o);
+        if (seen.length === 1) await new Promise<void>((resolve) => (release = resolve));
+        return union(b, o, t);
+      });
+      act(() => result.current.edit('base\nmine'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'base\ntheirs');
+      let done: Promise<void> | undefined;
+      act(() => {
+        done = result.current.refresh();
+      });
+      await waitFor(() => expect(release).toBeDefined());
+      act(() => result.current.edit('base\nmine\nlater'));
+      release?.();
+      await act(async () => void (await done));
+      expect(seen).toEqual(['base\nmine', 'base\nmine\nlater']);
+      expect(result.current.current()).toBe('base\ntheirs\nmine\nlater');
+    });
+
+    it('merges when a save is refused because the file changed unannounced', async () => {
+      await setup({ 'M.md': 'base' });
+      const { result } = await withMerge('M.md', union);
+      act(() => result.current.edit('base\nmine'));
+      // changed on disk without the event that would have made the document look at it
+      mock.vaults.get(vaultId)?.files.set('M.md', 'base\ntheirs');
+      await act(async () => void (await result.current.flush()));
+      await waitFor(() => expect(result.current.current()).toBe('base\ntheirs\nmine'));
+      expect(result.current.save).not.toBe('conflict');
+      await act(async () => void (await result.current.flush()));
+      expect(disk('M.md')).toBe('base\ntheirs\nmine');
+      expect(result.current.save).toBe('saved');
+    });
+
+    it('never merges with a file the editor cannot show', async () => {
+      await setup({ 'M.md': 'base' });
+      const merge = vi.fn(union);
+      const hook = renderHook(() =>
+        useNoteDocument(vaultId, 'M.md', 500, { merge, accept: (t) => !t.includes('BROKEN') }),
+      );
+      await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+      act(() => hook.result.current.edit('base\nmine'));
+      mock.vaults.get(vaultId)?.files.set('M.md', 'BROKEN');
+      await act(async () => void (await hook.result.current.refresh()));
+      expect(merge).not.toHaveBeenCalled();
+      expect(hook.result.current.rejected).toBe(true);
+      expect(disk('M.md')).toBe('BROKEN');
+    });
+  });
+
+  it('keeps both sides of a conflict: the edits in a copy, the file in the editor', async () => {
+    await setup({ 'K.md': 'base' });
+    const { result } = await ready('K.md');
+    act(() => result.current.edit('mine'));
+    mock.vaults.get(vaultId)?.files.set('K.md', 'theirs');
+    await act(async () => void (await result.current.refresh()));
+    expect(result.current.save).toBe('conflict');
+
+    let copy: string | null = null;
+    await act(async () => {
+      copy = await result.current.keepBoth();
+    });
+    expect(copy).not.toBeNull();
+    expect(disk(copy!)).toBe('mine');
+    expect(disk('K.md')).toBe('theirs');
+    expect(result.current.save).toBe('saved');
+    expect(result.current.current()).toBe('theirs');
+  });
+
   it('recovers from a failed load when the file changes or the window gets the focus', async () => {
     await setup({});
     const { result } = renderHook(() => useNoteDocument(vaultId, 'Late.md'));

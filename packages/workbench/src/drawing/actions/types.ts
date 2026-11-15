@@ -42,13 +42,11 @@ export interface ScenePatch {
   remove?: string[];
   /** Binary files (images) the new elements refer to, by file id. */
   files?: Record<string, SceneFile>;
-  /** Changes to what is shown, not to the drawing: zoom, grid, selection, default styles. */
+  /** Changes to what is shown, not to the drawing: grid, selection, default styles. */
   view?: ViewPatch;
 }
 
 export interface ViewPatch {
-  /** Ids to bring into view (fit the viewport). */
-  zoomTo?: string[];
   /** Ids to select (replaces the selection). */
   select?: string[];
   /** Flips the grid on or off. */

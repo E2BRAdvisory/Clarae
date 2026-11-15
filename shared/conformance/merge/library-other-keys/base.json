@@ -1,0 +1,24 @@
+{
+  "type": "excalidrawlib",
+  "version": 2,
+  "source": "https://example.com/old",
+  "note": "same",
+  "libraryItems": [
+    {
+      "id": "a",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-a",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "A"
+    }
+  ]
+}

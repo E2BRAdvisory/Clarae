@@ -125,10 +125,19 @@ func TestDrawingsAndCanvasesAreIndexed(t *testing.T) {
 	write("Map.canvas", `{"nodes":[{"id":"n","type":"text","x":0,"y":0,"width":10,"height":10,"text":"roadmap ideas"},
 	  {"id":"f","type":"file","x":0,"y":0,"width":10,"height":10,"file":"Plan.md"}],"edges":[]}`)
 	write("Broken.excalidraw", `{not json`)
+	// Wrapped text is searched as typed; the TeX of a formula is searchable too.
+	write("Wrapped.excalidraw", `{"type":"excalidraw","elements":[
+	  {"id":"w","type":"text","text":"photosyn\nthesis chain","originalText":"photosynthesis chain"},
+	  {"id":"m","type":"image","fileId":"f","customData":{"clarae":{"kind":"latex","latex":"\\nabla \\times quaternionfield"}}}]}`)
 
 	ix := New(fsys, db, zerolog.Nop(), nil)
 	if err := ix.Full(ctx); err != nil {
 		t.Fatal(err)
+	}
+	for _, q := range []string{"photosynthesis", "quaternionfield"} {
+		if hits, err := ix.Search(ctx, q, 10); err != nil || len(hits) != 1 || hits[0].Path != "Wrapped.excalidraw" {
+			t.Fatalf("search %q: %v %v", q, hits, err)
+		}
 	}
 	count := func(q string, args ...any) int {
 		t.Helper()
@@ -207,6 +216,40 @@ func TestMarpPresentationIsIndexedAsMarkdown(t *testing.T) {
 	}
 	hits, err := ix.Search(ctx, "roadmap", 10)
 	if err != nil || len(hits) != 1 || hits[0].Path != "Talks/Review.marp" {
+		t.Fatalf("search: %v %v", hits, err)
+	}
+}
+
+// Migration 0005 marks the rows of drawings stale (mtime 0, empty hash): the next full pass must
+// parse them again, even though the files did not change, and store the hash back.
+func TestStaleDrawingRowsAreParsedAgain(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	fsys, err := vault.NewFS(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(ctx, filepath.Join(root, ".clarae", "index.db"), store.KindIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	c, err := fsys.WriteFile("D.excalidraw", []byte(`{"elements":[{"id":"a","type":"text","text":"wra\npped","originalText":"wrapped"}]}`), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix := New(fsys, db, zerolog.Nop(), nil)
+	if _, err := db.ExecContext(ctx, `INSERT INTO files (path, kind, mtime_ns, size, hash, title, word_count, indexed_at) VALUES ('D.excalidraw','excalidraw',0,0,'','D',0,'')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Full(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var hash string
+	if err := db.QueryRowContext(ctx, `SELECT hash FROM files WHERE path='D.excalidraw'`).Scan(&hash); err != nil || hash != c.Hash {
+		t.Fatalf("hash %q (%v), want %q", hash, err, c.Hash)
+	}
+	if hits, err := ix.Search(ctx, "wrapped", 10); err != nil || len(hits) != 1 {
 		t.Fatalf("search: %v %v", hits, err)
 	}
 }

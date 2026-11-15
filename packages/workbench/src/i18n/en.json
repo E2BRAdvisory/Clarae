@@ -68,6 +68,9 @@
     "conflict": "This note changed on disk. Reload to see the new content or overwrite it.",
     "reload": "Reload",
     "overwrite": "Overwrite",
+    "keepBoth": "Keep both",
+    "keptBothTitle": "Both versions kept",
+    "keptBoth": "Your version of the drawing is in a copy next to the file: {{path}}",
     "saving": "Saving…",
     "saved": "Saved",
     "unsaved": "Unsaved changes",
@@ -528,6 +531,7 @@
     "drawing_repeat_elements": "Drawing: repeat the selected elements",
     "drawing_convert_freedraw_to_line": "Drawing: convert freehand strokes into lines",
     "drawing_zoom_to_fit_selected": "Drawing: zoom to fit the selection",
+    "drawing_toggle_minimap": "Drawing: show or hide the mini-map",
     "drawing_toggle_grid": "Drawing: show or hide the grid",
     "drawing_set_grid_size": "Drawing: set the grid size",
     "drawing_select_elements_of_type": "Drawing: select all elements of a type",
@@ -765,7 +769,21 @@
       "notesPickFrame": "Select exactly one frame first."
     },
     "invalid": "This file is not a valid Excalidraw drawing: {{error}}",
-    "tooLarge": "This drawing is larger than 10 MB: saving and syncing may be slow. Consider splitting it.",
+    "invalidOnDisk": "The file on disk is no longer a valid drawing. Overwrite it with what you see here, or repair it outside the app.",
+    "footer": {
+      "label": "View",
+      "zoomSelection": "Zoom to the selection",
+      "zoomAll": "Zoom to the whole drawing",
+      "minimap": "Mini-map",
+      "minimapShow": "Show the mini-map",
+      "minimapHide": "Hide the mini-map"
+    },
+    "minimap": {
+      "label": "Mini-map of the drawing: click or drag to move the view, arrow keys to pan, Home for the whole drawing",
+      "empty": "The drawing is empty"
+    },
+    "tooLarge": "This drawing is larger than 10 MB: saving and syncing may be slow, and its text is not searchable any more. Consider splitting it.",
+    "tooLargeToSearch": "This drawing is larger than 8 MB: its text is not searchable any more and its links do not show in the backlinks. Consider splitting it.",
     "insert": "Insert drawing",
     "none": "There are no drawings in this vault yet.",
     "options": {

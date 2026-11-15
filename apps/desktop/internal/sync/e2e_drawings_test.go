@@ -5,6 +5,7 @@ package sync_test
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -274,5 +275,60 @@ func TestCanvasSameNodeEditedOnBothKeepsBothVersions(t *testing.T) {
 	}
 	if fmt.Sprint(sortedKeys(a.files())) != fmt.Sprint(sortedKeys(b.files())) {
 		t.Errorf("devices diverge: A %v B %v", sortedKeys(a.files()), sortedKeys(b.files()))
+	}
+}
+
+func libraryItem(id, name string) obj {
+	return obj{"id": id, "status": "unpublished", "created": 1, "name": name, "elements": []obj{el("e-"+id, 1, 0)}}
+}
+
+func libraryFile(items ...obj) string {
+	return mustJSON(obj{"type": "excalidrawlib", "version": 2, "libraryItems": items})
+}
+
+func libraryIDs(t *testing.T, s string) string {
+	t.Helper()
+	var ids []string
+	for _, raw := range parse(t, s)["libraryItems"].([]any) {
+		ids = append(ids, raw.(obj)["id"].(string))
+	}
+	return strings.Join(ids, ",")
+}
+
+// The shape library is merged by item id: two devices that each add a shape keep both, and a
+// shape one device removed (the other did not touch it) goes on both.
+func TestShapeLibraryMergesByID(t *testing.T) {
+	v := createVault(t, "ada", "library")
+	a := newDevice(t, "ada", "laptop", v, nil)
+	b := newDevice(t, "ada", "desktop", v, nil)
+	const lib = ".clarae/excalidraw-library.json"
+	a.write(lib, libraryFile(libraryItem("s1", "one")))
+	a.sync()
+	b.sync()
+	if !b.exists(lib) {
+		t.Fatal("the library did not sync")
+	}
+
+	a.write(lib, libraryFile(libraryItem("s1", "one"), libraryItem("s2", "two")))
+	b.write(lib, libraryFile(libraryItem("s1", "one"), libraryItem("s3", "three")))
+	a.sync()
+	b.sync()
+	a.sync()
+	for _, d := range []*device{a, b} {
+		ids := strings.Split(libraryIDs(t, d.read(lib)), ",")
+		sort.Strings(ids)
+		if strings.Join(ids, ",") != "s1,s2,s3" {
+			t.Errorf("%s: shapes %v", d.name, ids)
+		}
+	}
+
+	a.write(lib, libraryFile(libraryItem("s2", "two"), libraryItem("s3", "three")))
+	a.sync()
+	b.sync()
+	if got := libraryIDs(t, b.read(lib)); got != "s2,s3" && got != "s3,s2" {
+		t.Errorf("the removal did not reach the other device: %s", got)
+	}
+	if copies, _ := filepath.Glob(filepath.Join(b.dir, ".clarae", "excalidraw-library*")); len(copies) != 1 {
+		t.Errorf("no conflict copy expected: %v", copies)
 	}
 }

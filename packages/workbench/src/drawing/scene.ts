@@ -2,7 +2,15 @@
 // Excalidraw itself, so the helpers are cheap to load and easy to test.
 import { normalizeFileExtra } from './meta';
 
-/** Above this size the editor warns (§M3-WP1): the file is rewritten whole on every save. */
+/**
+ * Above this size the core does not index the content of a drawing (`maxParseBytes` of the
+ * indexer): its text is not searchable and its links are not in the backlinks or the graph.
+ */
+export const DRAWING_SEARCH_BYTES = 8 * 1024 * 1024;
+/**
+ * Above this size the editor warns that the drawing is heavy (§M3-WP1, `drawing.MaxSize` in the
+ * core): the file is rewritten whole on every save.
+ */
 export const DRAWING_WARN_BYTES = 10 * 1024 * 1024;
 
 export const EMPTY_DRAWING = JSON.stringify(
@@ -52,20 +60,62 @@ export function parseScene(text: string): RawScene {
 }
 
 /**
- * A cheap change signature of a scene: element ids and versions plus the number of files.
- * Excalidraw calls onChange for selection and scroll too; only a different signature is an edit.
+ * A cheap change signature of a scene: element ids and versions in order, plus the number of
+ * files. Excalidraw calls onChange for selection and scroll too; only a different signature is an
+ * edit. Two rolling hashes instead of the ids spelled out: this runs on every pointer move over a
+ * scene of thousands of elements. Never the empty string.
  */
 export function sceneSignature(
   elements: readonly { id?: unknown; version?: unknown }[],
   fileCount: number,
 ): string {
-  let s = `${fileCount}|`;
-  for (const e of elements) s += `${String(e.id)}:${String(e.version)},`;
-  return s;
+  let a = 0x811c9dc5;
+  let b = 5381;
+  for (const e of elements) {
+    const id = typeof e.id === 'string' ? e.id : String(e.id);
+    for (let i = 0; i < id.length; i++) {
+      const c = id.charCodeAt(i);
+      a = Math.imul(a ^ c, 0x01000193);
+      b = (Math.imul(b, 33) + c) | 0;
+    }
+    const v = typeof e.version === 'number' ? e.version | 0 : -1;
+    // the version, then a mark that ends the element
+    a = Math.imul(Math.imul(a ^ v, 0x01000193) ^ 0x2c, 0x01000193);
+    b = (Math.imul((Math.imul(b, 33) + v) | 0, 33) + 0x2c) | 0;
+  }
+  return `${fileCount}|${elements.length}|${a >>> 0}|${b >>> 0}`;
 }
 
-export function isOverLimit(text: string): boolean {
-  return text.length > DRAWING_WARN_BYTES;
+/** The size of a text as a file holds it (UTF-8), counted without encoding it. */
+export function utf8Bytes(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c < 0x80) bytes += 1;
+    else if (c < 0x800) bytes += 2;
+    else if (c >= 0xd800 && c < 0xdc00 && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      // a pair of surrogates is one character of four bytes
+      bytes += 4;
+      i++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+/** What the size of a drawing costs: `search` (not indexed any more), `slow` (heavy as well). */
+export type SizeWarning = 'search' | 'slow' | null;
+
+/**
+ * The warning for a drawing of this text, by its size on disk. Both limits are the core's, which
+ * compares the bytes of the file: a character is one to three bytes, so most drawings are
+ * settled by their length alone and only the large ones are counted.
+ */
+export function sizeWarning(text: string): SizeWarning {
+  if (text.length * 3 <= DRAWING_SEARCH_BYTES) return null;
+  if (text.length > DRAWING_WARN_BYTES) return 'slow';
+  const bytes = utf8Bytes(text);
+  if (bytes > DRAWING_WARN_BYTES) return 'slow';
+  return bytes > DRAWING_SEARCH_BYTES ? 'search' : null;
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0');

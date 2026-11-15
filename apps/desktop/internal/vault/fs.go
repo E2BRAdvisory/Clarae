@@ -725,6 +725,38 @@ func (f *FS) ListTree() ([]Entry, error) {
 	return out, err
 }
 
+// ListFiles returns the regular files directly inside the folder rel, sorted by name. Unlike Walk it
+// applies no exclusion rule, so the local, never-synchronized folders of the configuration folder
+// (caches) can be maintained; folders, symlinks and names that cannot be represented are left out.
+// A folder that does not exist gives an error satisfying errors.Is(err, fs.ErrNotExist).
+func (f *FS) ListFiles(rel string) ([]Entry, error) {
+	abs, normalized, err := f.Resolve(rel)
+	if err != nil {
+		return nil, err
+	}
+	des, err := os.ReadDir(abs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Entry, 0, len(des))
+	for _, de := range des {
+		if !de.Type().IsRegular() {
+			continue
+		}
+		p, err := pathrules.Normalize(normalized + "/" + de.Name())
+		if err != nil {
+			continue
+		}
+		info, err := de.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, Entry{Path: p, Name: de.Name(), Kind: syncproto.KindOf(p), Size: info.Size(), Mtime: info.ModTime()})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
 // HashFile streams a file through SHA-256 without loading it in memory.
 func (f *FS) HashFile(rel string) (string, int64, error) {
 	abs, _, err := f.Resolve(rel)

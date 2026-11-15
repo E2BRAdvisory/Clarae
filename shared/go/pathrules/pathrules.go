@@ -286,6 +286,17 @@ func ConfigRel(p string) (name string, ok bool) {
 	return p[len(dir)+1:], true
 }
 
+// ShapeLibraryFile is the name, inside the configuration folder, of the shape library of the
+// drawings.
+const ShapeLibraryFile = "excalidraw-library.json"
+
+// IsShapeLibrary reports whether a normalized path is the shape library of the vault, in the
+// configuration folder under any of its names. The sync merges it by item id.
+func IsShapeLibrary(p string) bool {
+	name, ok := ConfigRel(p)
+	return ok && name == ShapeLibraryFile
+}
+
 // IsExcluded reports whether a normalized path must never be synchronized
 // (§3.4.2): OS junk files, temporary files, device-specific workspace layout,
 // caches, snapshots and local databases. When excludeTrash is true the

@@ -21,6 +21,7 @@ import {
 } from './embed/tools';
 import { exportLibrary, importLegacyDrawing, importLibrary } from './library/commands';
 import { latexOf } from './latex/insert';
+import { useDrawingUi } from './uiPrefs';
 import { selectedElements, type SceneAction, type SceneContext } from './actions/types';
 
 /** Asks the action's parameters one by one; null when the user cancels or types a bad number. */
@@ -207,6 +208,23 @@ export const toolCommands: Command[] = [
     defaults: [],
     enabled: () => !!activeDrawing() && drawingFeature(),
     run: () => activeDrawing()?.printDrawing(),
+  },
+  // Navigation changes the view, not the drawing: it works on one that may not be changed, too.
+  {
+    id: 'drawing:zoom-to-fit-selected',
+    group: 'editor',
+    feature: 'drawing.navigation',
+    defaults: [],
+    enabled: () => !!activeDrawing() && drawingFeature(),
+    run: () => activeDrawing()?.zoomToSelection(),
+  },
+  {
+    id: 'drawing:toggle-minimap',
+    group: 'editor',
+    feature: 'drawing.navigation',
+    defaults: [],
+    enabled: () => !!activeDrawing() && drawingFeature(),
+    run: () => useDrawingUi.getState().toggleMinimap(),
   },
   {
     id: 'drawing:slideshow',

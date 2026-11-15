@@ -3,7 +3,7 @@
 import i18next from 'i18next';
 import { api } from '../../app/api';
 import { dialog } from '../../ui/dialogs';
-import { getSceneController } from '../actions/active';
+import { getSceneController, type SceneController } from '../actions/active';
 import { bytesToBase64 } from '../export/render';
 import { renderSvg } from '../preview';
 import { imagePatch, isImagePath, noteCardPatch } from './insert';
@@ -53,20 +53,29 @@ export function insertImageIntoDrawing(): Promise<void> {
 type Point = { x: number; y: number };
 
 /**
- * Adds the image at `path` to the open drawing (`drawingPath`, default: the active one), centered on
+ * Where an insertion goes: an editor, the drawing at a path, or (nothing given) the drawing in
+ * focus. A drawing open in two panes has two editors: only the editor itself names one of them.
+ */
+type Target = string | SceneController | undefined;
+
+const editorOf = (target: Target): SceneController | null =>
+  typeof target === 'object' ? target : getSceneController(target);
+
+/**
+ * Adds the image at `path` to an open drawing (`target`, default: the one in focus), centered on
  * `at` (default: the view).
  */
-export async function insertImageAt(path: string, at?: Point, drawingPath?: string): Promise<void> {
-  const c = getSceneController(drawingPath);
+export async function insertImageAt(path: string, at?: Point, target?: Target): Promise<void> {
+  const c = editorOf(target);
   if (!c?.canEdit()) return;
   const content = await api.vault.readBinary(c.vaultId, path);
   const natural = await imageSize(`data:${content.mime};base64,${content.data}`);
   c.apply(imagePatch(content, natural, at ?? c.viewportCenter()));
 }
 
-/** Adds the note at `path` to the drawing as a card; `at` and `drawingPath` as in insertImageAt. */
-export async function insertNoteAt(path: string, at?: Point, drawingPath?: string): Promise<void> {
-  const c = getSceneController(drawingPath);
+/** Adds the note at `path` to the drawing as a card; `at` and `target` as in insertImageAt. */
+export async function insertNoteAt(path: string, at?: Point, target?: Target): Promise<void> {
+  const c = editorOf(target);
   if (!c?.canEdit()) return;
   const note = await api.vault.readNote(c.vaultId, path);
   c.apply(noteCardPatch(path, note.content, at ?? c.viewportCenter()));
@@ -85,12 +94,8 @@ export function svgSize(svg: string): { width: number; height: number } {
 }
 
 /** Adds another drawing of the vault as a picture (SVG in `files`), centered on `at`. */
-export async function insertDrawingAt(
-  path: string,
-  at?: Point,
-  drawingPath?: string,
-): Promise<void> {
-  const c = getSceneController(drawingPath);
+export async function insertDrawingAt(path: string, at?: Point, target?: Target): Promise<void> {
+  const c = editorOf(target);
   if (!c?.canEdit()) return;
   if (path === c.drawingPath) {
     await dialog.alert(t('drawingTitle'), t('cannotSelf'));
@@ -123,14 +128,18 @@ export function insertDrawingIntoDrawing(): Promise<void> {
 }
 
 /**
- * What dropping a vault file on the drawing at `drawingPath` does: images and notes are added, the
- * rest is refused. The target is the drawing dropped on, which need not be the active tab.
+ * What dropping a vault file on a drawing does: images and notes are added, the rest is refused.
+ * The target is the editor dropped on (or the drawing at a path), which need not be in focus.
  */
-export function dropVaultFile(path: string, at: Point, drawingPath: string): Promise<void> {
+export function dropVaultFile(
+  path: string,
+  at: Point,
+  target: string | SceneController,
+): Promise<void> {
   return guard(async () => {
-    if (isImagePath(path)) return insertImageAt(path, at, drawingPath);
-    if (/\.md$/i.test(path)) return insertNoteAt(path, at, drawingPath);
-    if (/\.excalidraw$/i.test(path)) return insertDrawingAt(path, at, drawingPath);
+    if (isImagePath(path)) return insertImageAt(path, at, target);
+    if (/\.md$/i.test(path)) return insertNoteAt(path, at, target);
+    if (/\.excalidraw$/i.test(path)) return insertDrawingAt(path, at, target);
     await dialog.alert(t('dropTitle'), t('cannotDrop'));
   });
 }

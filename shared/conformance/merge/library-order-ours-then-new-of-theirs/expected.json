@@ -1,0 +1,70 @@
+{
+  "type": "excalidrawlib",
+  "version": 2,
+  "libraryItems": [
+    {
+      "id": "b",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-b",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "B"
+    },
+    {
+      "id": "a",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-a",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "A"
+    },
+    {
+      "id": "d",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-d",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "D"
+    },
+    {
+      "id": "c",
+      "status": "unpublished",
+      "elements": [
+        {
+          "id": "e-c",
+          "type": "rectangle",
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        }
+      ],
+      "created": 1,
+      "name": "C"
+    }
+  ]
+}

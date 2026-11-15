@@ -98,6 +98,7 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 			return err
 		}
 		row.ServerRev, row.BaseRev, row.ServerHash, row.LocalHash = max(row.ServerRev, c.Rev), c.Rev, c.BlobHash, cont.Hash
+		row.HeadAuthor = c.AuthorID
 		row.LocalSize, row.LocalMtime = cont.Size, cont.Mtime.UnixNano()
 		row.State, row.Tombstoned, row.Attempts = StateSynced, false, 0
 		return e.cfg.DB.PutFile(ctx, row)
@@ -133,6 +134,7 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 			return err
 		}
 		row.ServerRev, row.BaseRev, row.ServerHash, row.LocalHash = max(row.ServerRev, c.Rev), c.Rev, c.BlobHash, cont.Hash
+		row.HeadAuthor = c.AuthorID
 		row.LocalSize, row.LocalMtime = cont.Size, cont.Mtime.UnixNano()
 		return e.cfg.DB.PutFile(ctx, row)
 	}
@@ -140,6 +142,7 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 	// Identical content on both sides (e.g. our own change replayed): adopt.
 	if local.Hash == remoteHash {
 		row.ServerRev, row.BaseRev, row.ServerHash, row.LocalHash = max(row.ServerRev, c.Rev), c.Rev, c.BlobHash, local.Hash
+		row.HeadAuthor = c.AuthorID
 		row.LocalSize, row.LocalMtime = local.Size, local.Mtime.UnixNano()
 		switch {
 		case row.State == StateLocalMoved:
@@ -161,7 +164,7 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 		base = nil // history pruned: merge without ancestor (conflicts surface as such)
 	}
 	sameAuthor := c.AuthorID != "" && c.AuthorID == e.cfg.UserID
-	strategy := merge.Decide(kindOf(row.Path), sameAuthor, merge.ChangeModify, merge.ChangeModify)
+	strategy := merge.DecideByPath(row.Path, kindOf(row.Path), sameAuthor, merge.ChangeModify, merge.ChangeModify)
 	opt := merge.Options{TheirsTime: c.ServerTime}
 
 	var res merge.Result
@@ -174,6 +177,8 @@ func (e *Engine) resolveOne(ctx context.Context, row File, c transportChange) er
 		res, err = merge.Canvas(base, local.Data, remote, opt)
 	case merge.StrategyConfigLWW:
 		res, err = merge.ConfigLWW(base, local.Data, remote, opt)
+	case merge.StrategyLibraryByID:
+		res, err = merge.LibraryByID(base, local.Data, remote, opt)
 	case merge.StrategyLastWriteWins:
 		// The remote version was committed first, ours goes last and wins; the
 		// loser stays in the server history, nothing is lost.
@@ -236,6 +241,7 @@ func (e *Engine) finishMerge(ctx context.Context, row File, c transportChange, s
 		local = cont
 	}
 	row.ServerRev, row.BaseRev, row.ServerHash, row.LocalHash = max(row.ServerRev, c.Rev), c.Rev, c.BlobHash, local.Hash
+	row.HeadAuthor = c.AuthorID
 	row.LocalSize, row.LocalMtime = local.Size, local.Mtime.UnixNano()
 	identical := bytes.Equal(res.Merged, remote)
 	switch {

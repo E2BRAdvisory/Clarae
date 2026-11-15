@@ -448,12 +448,18 @@ func (a *App) doOpenVault(abs, id string) (VaultInfo, error) {
 		log.Warn().Err(err).Msg("sync state unavailable")
 	}
 	go func() {
+		indexed := true
 		if err := ix.Full(ctx); err != nil {
+			indexed = false
 			log.Error().Err(err).Msg("initial index")
 		}
 		// Load the search candidate cache now so the first search is fast.
 		if err := search.New(indexDB).Warm(ctx); err != nil && ctx.Err() == nil {
 			log.Warn().Err(err).Msg("search cache warm-up")
+		}
+		if indexed {
+			// Last, and only once the index agrees with the disk: its drawing hashes tell which cached previews are orphans.
+			pruneDrawingCacheLogged(ctx, log, fsys, indexDB)
 		}
 	}()
 	go a.watchLoop(ctx, v)

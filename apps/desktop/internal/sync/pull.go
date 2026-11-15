@@ -401,7 +401,7 @@ func (e *Engine) applyChange(ctx context.Context, c transport.Change) (bool, err
 				// The very blob this device holds: only the revision changes
 				// (e.g. the files of a mount whose share root was renamed,
 				// which "enter" the share again, §3.4.7).
-				row.ServerRev, row.BaseRev = c.Rev, c.Rev
+				row.ServerRev, row.BaseRev, row.HeadAuthor = c.Rev, c.Rev, c.AuthorID
 				return true, e.cfg.DB.PutFile(ctx, row)
 			}
 			if row.Path != path {
@@ -618,7 +618,7 @@ func (e *Engine) createFromRemote(ctx context.Context, c transport.Change, path 
 	}
 	return e.cfg.DB.PutFile(ctx, File{
 		Path: path, FileID: c.FileID, ServerRev: c.Rev, BaseRev: c.Rev, ServerHash: c.BlobHash, LocalHash: cont.Hash,
-		LocalSize: cont.Size, LocalMtime: cont.Mtime.UnixNano(), State: StateSynced,
+		LocalSize: cont.Size, LocalMtime: cont.Mtime.UnixNano(), State: StateSynced, HeadAuthor: c.AuthorID,
 	})
 }
 
@@ -646,6 +646,7 @@ func (e *Engine) overwriteFromRemote(ctx context.Context, row File, c transport.
 		return false, err
 	}
 	row.ServerRev, row.BaseRev, row.ServerHash, row.LocalHash = c.Rev, c.Rev, c.BlobHash, cont.Hash
+	row.HeadAuthor = c.AuthorID
 	row.LocalSize, row.LocalMtime = cont.Size, cont.Mtime.UnixNano()
 	row.State, row.Attempts, row.LastError = StateSynced, 0, ""
 	return true, e.cfg.DB.PutFile(ctx, row)
@@ -1030,6 +1031,7 @@ func (e *Engine) reconcileEntry(ctx context.Context, mode bootstrapMode, rf remo
 		if same {
 			oldID := local.FileID
 			local.FileID, local.ServerRev, local.BaseRev, local.ServerHash, local.State = rf.FileID, rf.Rev, rf.Rev, rf.Hash, StateSynced
+			local.HeadAuthor = "" // a bootstrap lists no author
 			return e.cfg.DB.WithTx(ctx, func(tx *DB) error {
 				if err := tx.DeleteFile(ctx, oldID); err != nil {
 					return err
@@ -1049,6 +1051,9 @@ func (e *Engine) reconcileEntry(ctx context.Context, mode bootstrapMode, rf remo
 // is sent against the restored revision.
 func (e *Engine) republish(ctx context.Context, row File, rev int, hash, serverPath string) error {
 	content := row.ServerHash != hash || row.Tombstoned
+	if content {
+		row.HeadAuthor = "" // the revision of the restored server is not known to us
+	}
 	row.ServerRev, row.BaseRev, row.ServerHash, row.Tombstoned = rev, rev, hash, false
 	row.Attempts, row.LastError = 0, ""
 	if row.State != StateLocalDeleted {
@@ -1083,7 +1088,7 @@ func (e *Engine) reupload(ctx context.Context, row File) error {
 	if row.State == StateLocalDeleted || !e.diskExists(row.Path) {
 		return e.cfg.DB.DeleteFile(ctx, row.FileID)
 	}
-	row.ServerRev, row.BaseRev, row.ServerHash, row.State = 0, 0, "", StateLocalNew
+	row.ServerRev, row.BaseRev, row.ServerHash, row.State, row.HeadAuthor = 0, 0, "", StateLocalNew, ""
 	row.MovedFrom, row.Dirty, row.Tombstoned, row.Attempts, row.LastError = "", false, false, 0, ""
 	return e.cfg.DB.PutFile(ctx, row)
 }

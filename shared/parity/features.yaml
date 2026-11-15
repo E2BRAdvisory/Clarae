@@ -1340,6 +1340,7 @@ features:
       desktop:
         - packages/workbench/src/workspace/layout.test.ts
         - packages/workbench/src/workspace/TabBar.test.tsx
+        - packages/workbench/src/workspace/EmptyPane.test.tsx
         - packages/workbench/src/shell/tabs.test.ts
         - apps/desktop/frontend/e2e/workflows.spec.ts
       workbench:
@@ -1622,7 +1623,7 @@ features:
     desktop:
       status: yes
       commands: [drawing:new, drawing:insert, drawing:tools-panel, drawing:describe]
-      bindings: [DrawingAPI.ReadPreview, DrawingAPI.SavePreview]
+      bindings: [DrawingAPI.Preview, DrawingAPI.SavePreview, VaultAPI.MergeEdit]
     workbench:
       status: yes
       note: Excalidraw offline è verificato anche sulla build di produzione, con la CSP del workbench (e2e-security)
@@ -1630,6 +1631,16 @@ features:
       desktop:
         - apps/desktop/frontend/e2e/drawing.spec.ts
         - apps/desktop/frontend/e2e/drawing-tools.spec.ts
+        - apps/desktop/frontend/e2e/drawing-lifecycle.spec.ts
+        - apps/desktop/frontend/e2e/drawing-split.spec.ts
+        - apps/desktop/frontend/e2e/drawing-merge.spec.ts
+        - apps/desktop/internal/app/bindings_merge_test.go
+        - apps/desktop/internal/sync/head_author_test.go
+        - packages/workbench/src/drawing/gesture.test.ts
+        - packages/workbench/src/drawing/actions/active.test.ts
+        - packages/workbench/src/drawing/slidesStore.test.ts
+        - packages/workbench/src/drawing/serialize.test.ts
+        - packages/workbench/src/drawing/externalReload.test.ts
         - packages/workbench/src/drawing/commands.test.tsx
         - packages/workbench/src/drawing/describe.test.ts
         - apps/desktop/internal/drawing/drawing_test.go
@@ -1637,6 +1648,9 @@ features:
         - web/e2e-security/excalidraw-offline.spec.ts
         - apps/desktop/frontend/e2e/drawing.spec.ts
         - apps/desktop/frontend/e2e/drawing-tools.spec.ts
+        - apps/desktop/frontend/e2e/drawing-lifecycle.spec.ts
+        - apps/desktop/frontend/e2e/drawing-split.spec.ts
+        - apps/desktop/frontend/e2e/drawing-merge.spec.ts
 
   - id: drawing.scene-actions
     title: Azioni sulla scena di un disegno (script Excalidraw)
@@ -1683,7 +1697,6 @@ features:
           drawing:convert-text-to-link,
           drawing:repeat-elements,
           drawing:convert-freedraw-to-line,
-          drawing:zoom-to-fit-selected,
           drawing:toggle-grid,
           drawing:set-grid-size,
           drawing:select-elements-of-type,
@@ -1716,6 +1729,23 @@ features:
         - apps/desktop/frontend/e2e/drawing-actions.spec.ts
         - apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts
 
+  - id: drawing.navigation
+    title: Navigazione di un disegno (zoom sulla selezione, mini-mappa)
+    desktop:
+      status: yes
+      commands: [drawing:zoom-to-fit-selected, drawing:toggle-minimap]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/drawing/viewport.test.ts
+        - packages/workbench/src/drawing/uiPrefs.test.ts
+        - packages/workbench/src/drawing/minimap/geometry.test.ts
+        - packages/workbench/src/drawing/minimap/model.test.ts
+        - apps/desktop/frontend/e2e/drawing-navigation.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/drawing-navigation.spec.ts
+
   - id: drawing.embeds
     title: Immagini, note e disegni dentro un disegno
     desktop:
@@ -1733,10 +1763,15 @@ features:
       status: yes
     tests:
       desktop:
+        - apps/desktop/internal/app/drawing_cache_test.go
+        - apps/desktop/frontend/e2e/drawing-theme.spec.ts
+        - packages/workbench/src/app/theme.test.ts
+        - packages/workbench/src/drawing/preview.test.ts
         - apps/desktop/frontend/e2e/drawing-embed.spec.ts
         - packages/workbench/src/drawing/embed/insert.test.ts
         - packages/workbench/src/drawing/embed/tools.test.ts
       workbench:
+        - apps/desktop/frontend/e2e/drawing-theme.spec.ts
         - apps/desktop/frontend/e2e/drawing-embed.spec.ts
 
   - id: drawing.latex-mermaid
@@ -1766,6 +1801,7 @@ features:
       reason: 'non verificata sul web: gli spec di esportazione leggono i file catturati dal mock di Wails e sono esclusi sul web (nel browser è un download); la UI e il codice Go sono quelli del desktop'
     tests:
       desktop:
+        - packages/workbench/src/drawing/export/autoExport.test.ts
         - apps/desktop/frontend/e2e/drawing-export.spec.ts
         - packages/workbench/src/drawing/export/options.test.ts
         - packages/workbench/src/drawing/exportCommands.test.ts
@@ -1794,8 +1830,12 @@ features:
       status: yes
     tests:
       desktop:
+        - shared/go/merge/merge_test.go
+        - packages/workbench/src/drawing/library/store.test.ts
+        - apps/desktop/frontend/e2e/drawing-library.spec.ts
         - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
       workbench:
+        - apps/desktop/frontend/e2e/drawing-library.spec.ts
         - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
 
   - id: drawing.legacy

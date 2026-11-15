@@ -55,6 +55,8 @@ export type VaultInfo = Plain<app.VaultInfo>;
 export type ExportResult = Plain<app.ExportResult>;
 export type NoteContent = Plain<app.NoteContent>;
 export type WriteResult = Plain<app.WriteResult>;
+export type MergeEditResult = Plain<app.MergeEditResult>;
+export type DrawingPreview = Plain<app.DrawingPreview>;
 export type AppSettings = Plain<app.AppSettings>;
 export type Entry = Plain<vault.Entry>;
 export type SearchHit = Plain<search.Hit>;
@@ -172,6 +174,17 @@ export const api = {
       content: string,
       expectedHash: string,
     ): Promise<WriteResult> => VaultAPI.WriteNote(vaultId, path, content, expectedHash),
+    /**
+     * The three-way merge of the sync for a file edited here (`ours`, from `base`) while it changed
+     * on disk (`theirs`). Nothing is read or written: `merged` is saved over `theirs` when `clean`.
+     */
+    mergeEdit: (
+      vaultId: string,
+      path: string,
+      base: string,
+      ours: string,
+      theirs: string,
+    ): Promise<MergeEditResult> => VaultAPI.MergeEdit(vaultId, path, base, ours, theirs),
     createFolder: (vaultId: string, path: string): Promise<void> =>
       VaultAPI.CreateFolder(vaultId, path),
     rename: (vaultId: string, from: string, to: string): Promise<void> =>
@@ -197,11 +210,20 @@ export const api = {
       VaultAPI.DownloadFile(vaultId, path),
   },
   drawing: {
-    /** SVG cached for a drawing content hash ("" when there is none). */
-    readPreview: (vaultId: string, hash: string): Promise<string> =>
-      DrawingAPI.ReadPreview(vaultId, hash),
-    savePreview: (vaultId: string, hash: string, svg: string): Promise<void> =>
-      DrawingAPI.SavePreview(vaultId, hash, svg),
+    /**
+     * The content hash of a drawing as it is on disk and the SVG cached for it ("" when there is
+     * none), in the light theme or the dark one. The core hashes the file: its content does not
+     * come over.
+     */
+    preview: (vaultId: string, path: string, variant: '' | 'dark' = ''): Promise<DrawingPreview> =>
+      DrawingAPI.Preview(vaultId, path, variant),
+    /** Caches the SVG of a drawing hash; `variant` "dark" is the picture of the dark theme. */
+    savePreview: (
+      vaultId: string,
+      hash: string,
+      variant: '' | 'dark',
+      svg: string,
+    ): Promise<void> => DrawingAPI.SavePreview(vaultId, hash, variant, svg),
     /** (Over)writes "<drawing>.[light.|dark.]png|svg" next to the drawing; returns its path. */
     writeExport: (
       vaultId: string,

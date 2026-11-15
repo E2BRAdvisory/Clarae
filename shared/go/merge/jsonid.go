@@ -362,10 +362,23 @@ func ConfigLWW(base, ours, theirs []byte, opt Options) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("theirs: %w", err)
 	}
+	out := lwwKeys(bo, oo, to, opt, "")
+	enc, err := encodeObject(out)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Merged: enc, Clean: true}, nil
+}
+
+// lwwKeys merges the top-level keys of three decoded objects by the rule of ConfigLWW, leaving out
+// the key skip ("" skips none).
+func lwwKeys(bo, oo, to rawObject, opt Options, skip string) rawObject {
 	keys := map[string]bool{}
 	for _, m := range []rawObject{bo, oo, to} {
 		for k := range m {
-			keys[k] = true
+			if k != skip {
+				keys[k] = true
+			}
 		}
 	}
 	sorted := make([]string, 0, len(keys))
@@ -398,6 +411,91 @@ func ConfigLWW(base, ours, theirs []byte, opt Options) (Result, error) {
 		if ok {
 			out[k] = v
 		}
+	}
+	return out
+}
+
+// libraryItemsKey is where an Excalidraw library file keeps its shapes.
+const libraryItemsKey = "libraryItems"
+
+// LibraryByID merges the shape library of a vault (an excalidrawlib JSON,
+// {"type":"excalidrawlib","version":2,"libraryItems":[{"id":…},…]}) by item id, three ways:
+//
+//   - a shape added on one side stays;
+//   - a shape one side removed and the other left as it was is removed;
+//   - a shape one side removed and the other changed stays, with the change (nothing is lost
+//     silently);
+//   - a shape changed on both sides takes the version of the newer side, decided like the keys of
+//     ConfigLWW (Options.OursTime against TheirsTime); the other version stays in the history;
+//   - without a base (history pruned) the two libraries are united: no shape is dropped.
+//
+// The order is that of ours, the shapes new from theirs follow in their order. The other top-level
+// keys are merged as ConfigLWW does. It never produces a conflict copy; a file that does not parse
+// (or whose items have no id) is an error, and the sync falls back to a copy of the file.
+func LibraryByID(base, ours, theirs []byte, opt Options) (Result, error) {
+	bo, err := decodeObject(base)
+	if err != nil {
+		bo = rawObject{}
+	}
+	oo, err := decodeObject(ours)
+	if err != nil {
+		return Result{}, fmt.Errorf("ours: %w", err)
+	}
+	to, err := decodeObject(theirs)
+	if err != nil {
+		return Result{}, fmt.Errorf("theirs: %w", err)
+	}
+	// A base that does not hold a readable item list counts as no base at all.
+	_, bEls, err := elementsByID(bo[libraryItemsKey])
+	if err != nil {
+		bEls = map[string]json.RawMessage{}
+	}
+	oOrder, oEls, err := elementsByID(oo[libraryItemsKey])
+	if err != nil {
+		return Result{}, fmt.Errorf("ours %s: %w", libraryItemsKey, err)
+	}
+	tOrder, tEls, err := elementsByID(to[libraryItemsKey])
+	if err != nil {
+		return Result{}, fmt.Errorf("theirs %s: %w", libraryItemsKey, err)
+	}
+
+	out := lwwKeys(bo, oo, to, opt, libraryItemsKey)
+	_, inO := oo[libraryItemsKey]
+	_, inT := to[libraryItemsKey]
+	if inO || inT {
+		order := make([]string, 0, len(oOrder)+len(tOrder))
+		merged := map[string]json.RawMessage{}
+		for _, id := range oOrder {
+			oel := oEls[id]
+			tel, inTheirs := tEls[id]
+			bel, inBase := bEls[id]
+			switch {
+			case !inTheirs && inBase && jsonEqual(oel, bel):
+				continue // theirs removed it, ours left it as it was
+			case !inTheirs, jsonEqual(oel, tel):
+				merged[id] = oel
+			case inBase && jsonEqual(oel, bel): // only theirs changed
+				merged[id] = tel
+			case inBase && jsonEqual(tel, bel): // only ours changed
+				merged[id] = oel
+			case opt.oursNewer(): // changed on both sides (or no base to tell)
+				merged[id] = oel
+			default:
+				merged[id] = tel
+			}
+			order = append(order, id)
+		}
+		for _, id := range tOrder {
+			if _, ok := oEls[id]; ok {
+				continue
+			}
+			if bel, inBase := bEls[id]; inBase && jsonEqual(tEls[id], bel) {
+				continue // ours removed it, theirs left it as it was
+			}
+			order = append(order, id)
+			merged[id] = tEls[id]
+		}
+		out[libraryItemsKey] = marshalElements(order, merged)
 	}
 	enc, err := encodeObject(out)
 	if err != nil {

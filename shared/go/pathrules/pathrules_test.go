@@ -311,3 +311,19 @@ func TestIsExecutable(t *testing.T) {
 		}
 	}
 }
+
+func TestIsShapeLibrary(t *testing.T) {
+	for p, want := range map[string]bool{
+		".clarae/excalidraw-library.json":            true,
+		LegacyConfigDir + "/excalidraw-library.json": true, // folder of 1.x vaults (ADR-0052)
+		".clarae/excalidraw-library.json.bak":        false,
+		".clarae/sub/excalidraw-library.json":        false,
+		"excalidraw-library.json":                    false,
+		"Notes/.clarae/excalidraw-library.json":      false,
+		".clarae":                                    false,
+	} {
+		if got := IsShapeLibrary(p); got != want {
+			t.Errorf("%q: got %v, want %v", p, got, want)
+		}
+	}
+}

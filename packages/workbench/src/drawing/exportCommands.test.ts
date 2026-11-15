@@ -14,7 +14,7 @@ const fake = (drawingPath = 'Board.excalidraw') => {
   const openExport = vi.fn();
   const printDrawing = vi.fn(() => Promise.resolve());
   return {
-    c: { openExport, printDrawing, drawingPath } as unknown as SceneController,
+    c: { openExport, printDrawing, drawingPath, paneId: () => null } as unknown as SceneController,
     openExport,
     printDrawing,
   };

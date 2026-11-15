@@ -231,15 +231,17 @@ test('the auto-export of one drawing overrides the vault setting and lives in th
       { timeout: 15_000 },
     )
     .toBe('png');
+  // Everything else in the file is intact.
+  expect((await savedDrawing(page)).elements.map((e) => e.id)).toEqual(['a']);
+  // The export runs when the work pauses or, as here, when the drawing is closed.
+  await page.keyboard.press('ControlOrMeta+w');
   await expect
     .poll(
       () =>
         page.evaluate(() => [...(window as unknown as MockWindow).__mock.drawingExports.keys()]),
-      { timeout: 20_000 },
+      { timeout: 10_000 },
     )
     .toEqual(['Board.excalidraw.png']);
-  // Everything else in the file is intact.
-  expect((await savedDrawing(page)).elements.map((e) => e.id)).toEqual(['a']);
 });
 
 test('Print / PDF puts the drawing on the print layer and asks the system to print', async ({

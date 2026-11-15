@@ -1,4 +1,4 @@
-// "View" actions: they change what is shown (zoom, grid, selection, the styles new elements get),
+// "View" actions: they change what is shown (grid, selection, the styles new elements get),
 // not the drawing, so they return a `view` patch and no element changes.
 import { arrangeable } from './geometry';
 import type { SceneAction } from './types';
@@ -14,13 +14,6 @@ const TYPES = [
   'image',
   'frame',
 ] as const;
-
-const zoomToSelection: SceneAction = {
-  id: 'zoom-to-fit-selected',
-  group: 'view',
-  needs: 1,
-  run: (ctx) => ({ view: { zoomTo: [...ctx.selected] } }),
-};
 
 const toggleGrid: SceneAction = {
   id: 'toggle-grid',
@@ -118,7 +111,6 @@ export const PEN_ACTIONS: readonly SceneAction[] = [
 ];
 
 export const VIEW_ACTIONS: readonly SceneAction[] = [
-  zoomToSelection,
   toggleGrid,
   setGridSize,
   selectOfType,

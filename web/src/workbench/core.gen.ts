@@ -60,8 +60,8 @@ export interface CoreClient {
   };
   readonly DrawingAPI: {
     ImportLegacy(arg1: string, arg2: string): Promise<string>;
-    ReadPreview(arg1: string, arg2: string): Promise<string>;
-    SavePreview(arg1: string, arg2: string, arg3: string): Promise<void>;
+    Preview(arg1: string, arg2: string, arg3: string): Promise<Data<app.DrawingPreview>>;
+    SavePreview(arg1: string, arg2: string, arg3: string, arg4: string): Promise<void>;
     WriteExport(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string): Promise<string>;
   };
   readonly ExportAPI: {
@@ -189,6 +189,7 @@ export interface CoreClient {
     ListOpen(): Promise<Data<Array<app.VaultInfo>>>;
     ListRecent(): Promise<Data<Array<app.VaultInfo>>>;
     ListTree(arg1: string): Promise<Data<Array<vault.Entry>>>;
+    MergeEdit(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string): Promise<Data<app.MergeEditResult>>;
     OpenVault(arg1: string): Promise<Data<app.VaultInfo>>;
     OpenWithSystemApp(arg1: string, arg2: string): Promise<void>;
     PickFolder(arg1: string): Promise<string>;
@@ -221,7 +222,7 @@ export const BINDINGS = {
   BasesAPI: ['Load', 'NewBaseContent', 'Run', 'UpdateProperty', 'UpdateView'],
   ComposerAPI: ['ApplyMerge', 'Extract', 'PlanMerge', 'SuggestTitle'],
   ConfigAPI: ['Effective', 'Refresh'],
-  DrawingAPI: ['ImportLegacy', 'ReadPreview', 'SavePreview', 'WriteExport'],
+  DrawingAPI: ['ImportLegacy', 'Preview', 'SavePreview', 'WriteExport'],
   ExportAPI: ['Print', 'SaveFile', 'SaveHTML'],
   GraphAPI: ['Build'],
   HistoryAPI: ['GetSettings', 'List', 'ListDeleted', 'Read', 'Restore', 'SetSettings'],
@@ -235,7 +236,7 @@ export const BINDINGS = {
   TagsAPI: ['List'],
   TemplatesAPI: ['CreateFromTemplate', 'DailyAdjacent', 'Expand', 'List', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
   UpdaterAPI: ['Check', 'GetSettings', 'Install', 'SetSettings', 'Skip', 'Status'],
-  VaultAPI: ['CloseVault', 'CreateFolder', 'DownloadFile', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'OpenVault', 'OpenWithSystemApp', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'RevealInFolder', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
+  VaultAPI: ['CloseVault', 'CreateFolder', 'DownloadFile', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'MergeEdit', 'OpenVault', 'OpenWithSystemApp', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'RevealInFolder', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
   VaultCryptoAPI: ['Activity', 'ChangePassphrase', 'DiskEncryption', 'Lock', 'RegenerateRecoveryKey', 'SetPassphrase', 'Unlock'],
 } as const;
 
@@ -291,8 +292,8 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
     get DrawingAPI(): CoreClient['DrawingAPI'] {
       return {
         ImportLegacy: (arg1: string, arg2: string) => call('DrawingAPI', 'ImportLegacy', [arg1, arg2]),
-        ReadPreview: (arg1: string, arg2: string) => call('DrawingAPI', 'ReadPreview', [arg1, arg2]),
-        SavePreview: (arg1: string, arg2: string, arg3: string) => call('DrawingAPI', 'SavePreview', [arg1, arg2, arg3]),
+        Preview: (arg1: string, arg2: string, arg3: string) => call('DrawingAPI', 'Preview', [arg1, arg2, arg3]),
+        SavePreview: (arg1: string, arg2: string, arg3: string, arg4: string) => call('DrawingAPI', 'SavePreview', [arg1, arg2, arg3, arg4]),
         WriteExport: (arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) => call('DrawingAPI', 'WriteExport', [arg1, arg2, arg3, arg4, arg5]),
       };
     },
@@ -448,6 +449,7 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         ListOpen: () => call('VaultAPI', 'ListOpen', []),
         ListRecent: () => call('VaultAPI', 'ListRecent', []),
         ListTree: (arg1: string) => call('VaultAPI', 'ListTree', [arg1]),
+        MergeEdit: (arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) => call('VaultAPI', 'MergeEdit', [arg1, arg2, arg3, arg4, arg5]),
         OpenVault: (arg1: string) => call('VaultAPI', 'OpenVault', [arg1]),
         OpenWithSystemApp: (arg1: string, arg2: string) => call('VaultAPI', 'OpenWithSystemApp', [arg1, arg2]),
         PickFolder: (arg1: string) => call('VaultAPI', 'PickFolder', [arg1]),

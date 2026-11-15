@@ -21,6 +21,7 @@ const fake = (drawingPath: string) => {
   const c = {
     vaultId: 'v1',
     drawingPath,
+    paneId: () => null,
     apply,
     canEdit: () => true,
     viewportCenter: () => ({ x: 0, y: 0 }),
@@ -45,5 +46,20 @@ describe('dropVaultFile', () => {
     await dropVaultFile('Note.md', { x: 10, y: 20 }, 'Other.excalidraw');
     expect(other.apply).toHaveBeenCalledTimes(1);
     expect(board.apply).not.toHaveBeenCalled();
+  });
+
+  it('adds to the editor dropped on when the drawing is open in two panes', async () => {
+    const first = fake('Board.excalidraw'); // the pane the file is dropped on
+    const second = fake('Board.excalidraw'); // registered last: the one a path alone would find
+    for (const { c } of [first, second]) {
+      registerSceneController(c);
+      registered.push(c);
+    }
+    useAppStore.setState({
+      layout: openPath(emptyLayout(), 'Board.excalidraw', { mode: 'source' }),
+    });
+    await dropVaultFile('Note.md', { x: 10, y: 20 }, first.c);
+    expect(first.apply).toHaveBeenCalledTimes(1);
+    expect(second.apply).not.toHaveBeenCalled();
   });
 });

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestClassifyChangesUsesTheIndexAsThePreviousState(t *testing.T) {
@@ -145,5 +146,53 @@ func TestReconcileEmitsFileChangesAndFeedsTheHistory(t *testing.T) {
 	a.reconcile(ctx, ov)
 	if got := collected(); len(got) != 0 {
 		t.Fatalf("unchanged vault: %+v", got)
+	}
+}
+
+// The frontend reloads the shape library of the open editors when vault:file-changed names it:
+// the event comes both for the write the app makes itself (WriteConfig) and, on the desktop, for one
+// made by someone else (another program: the sync engine writes through vault.FS, which the browser
+// build reports itself).
+func TestShapeLibraryWritesEmitFileChanged(t *testing.T) {
+	a, info, root := newTestApp(t)
+	var mu sync.Mutex
+	var paths []string
+	a.setEmitter(func(name string, p any) {
+		if name == EventVaultFileChanged.Name() {
+			mu.Lock()
+			paths = append(paths, p.(FileChangedPayload).Paths...)
+			mu.Unlock()
+		}
+	})
+	saw := func() bool {
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			mu.Lock()
+			for _, p := range paths {
+				if p == ".clarae/excalidraw-library.json" {
+					paths = nil
+					mu.Unlock()
+					return true
+				}
+			}
+			mu.Unlock()
+			time.Sleep(20 * time.Millisecond)
+		}
+		return false
+	}
+	if err := NewVaultAPI(a).WriteConfig(info.ID, "excalidraw-library.json", `{"libraryItems":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	if !saw() {
+		t.Error("WriteConfig of the library did not emit vault:file-changed")
+	}
+	if isWeb {
+		return // the browser has no file watcher: only the writes of the core itself are reported
+	}
+	if err := os.WriteFile(filepath.Join(root, ".clarae", "excalidraw-library.json"), []byte(`{"libraryItems":[{"id":"x"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !saw() {
+		t.Error("an external write of the library did not emit vault:file-changed")
 	}
 }

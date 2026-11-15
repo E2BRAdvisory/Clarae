@@ -9,6 +9,45 @@ import { renderPdf } from './pdf';
 import { renderMath, renderMermaid } from './typeset';
 import type { LinkSpec } from '../editor/types';
 import { parseDrawingRef, type DrawingRef } from '../drawing/embed/ref';
+import { currentTheme, watchTheme } from '../app/theme';
+
+/**
+ * The pictures of drawings on the page, each with the way to get it again: a drawing has a light
+ * and a dark picture, so when the theme changes the ones shown are fetched again.
+ */
+const themed = new Map<
+  HTMLImageElement,
+  (theme: 'light' | 'dark') => Promise<string | undefined> | undefined
+>();
+let watchingTheme = false;
+
+function followTheme(
+  img: HTMLImageElement,
+  picture: (theme: 'light' | 'dark') => Promise<string | undefined> | undefined,
+): void {
+  for (const known of themed.keys()) if (!known.isConnected) themed.delete(known);
+  themed.set(img, picture);
+  if (watchingTheme) return;
+  watchingTheme = true;
+  let shown = currentTheme();
+  watchTheme(() => {
+    const theme = currentTheme();
+    if (theme === shown) return;
+    shown = theme;
+    for (const [el, again] of themed) {
+      if (!el.isConnected) {
+        themed.delete(el);
+        continue;
+      }
+      void Promise.resolve(again(theme))
+        .then((url) => {
+          // the theme may have changed again while the picture was drawn
+          if (url && el.isConnected && currentTheme() === theme) el.src = url;
+        })
+        .catch(() => undefined);
+    }
+  });
+}
 
 /** What embeds need from the backend (a subset of `api`, so tests can fake it). */
 export interface EmbedBackend {
@@ -23,7 +62,8 @@ export interface EmbedBackend {
   readNote(path: string): Promise<string>;
   readBinary(path: string): Promise<BinaryContent>;
   /** Blob URL of the SVG preview of a drawing (cached by content hash). */
-  drawingPreview?(path: string, ref?: DrawingRef | null): Promise<string>;
+  /** The picture of a drawing (or of a part of it), light unless `theme` asks for the dark one. */
+  drawingPreview?(path: string, ref?: DrawingRef | null, theme?: 'light' | 'dark'): Promise<string>;
   /** Blob URL of the static picture of a canvas. */
   canvasPreview?(path: string): Promise<string>;
   /** Mounts the live view of a `.base` file (optionally a named view) into el; returns its unmount. */
@@ -210,7 +250,7 @@ async function fill(
         const ref = parseDrawingRef(spec.heading, spec.block);
         let url: string | undefined;
         try {
-          url = await deps.backend.drawingPreview?.(path, ref);
+          url = await deps.backend.drawingPreview?.(path, ref, currentTheme());
         } catch (e) {
           if (ref && e instanceof Error && e.name === 'MissingPartError')
             return notice(
@@ -236,6 +276,7 @@ async function fill(
         );
         el.className = `embed-drawing-wrap${align ? ` align-${align}` : ''}`;
         el.replaceChildren(img);
+        followTheme(img, (theme) => deps.backend.drawingPreview?.(path, ref, theme));
         return;
       }
       case 'canvas': {

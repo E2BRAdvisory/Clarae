@@ -14,6 +14,11 @@ export interface NoteDocument {
   version: number;
   hash: string;
   save: SaveState;
+  /**
+   * The conflict in `save` is a file on disk the editor cannot show (see `accept`): there is
+   * nothing to reload, the choices are to overwrite it or to repair it outside the app.
+   */
+  rejected: boolean;
   error: string;
   /** The latest text, including edits not yet saved. */
   current: () => string;
@@ -36,6 +41,11 @@ export interface NoteDocument {
   refresh: () => Promise<void>;
   /** Saves ignoring a conflict: the editor wins. Resolves true once written. */
   overwrite: () => Promise<boolean>;
+  /**
+   * Ends a conflict keeping both sides: the editor's text goes to a copy next to the file and the
+   * document shows the file. Resolves the path of the copy (null: there was nothing to keep).
+   */
+  keepBoth: () => Promise<string | null>;
 }
 
 /** Default autosave delay; drawings use a longer one (they are written whole). */
@@ -49,6 +59,23 @@ const OVERWRITE_ATTEMPTS = 3;
 const REFRESH_ATTEMPTS = 5;
 
 type Outcome = 'saved' | 'dirty' | 'failed';
+
+export interface NoteDocumentOptions {
+  /**
+   * Whether a text read from disk after the first load is one the editor can show. A change of the
+   * file that fails it is not adopted: the document goes into conflict with its hash unchanged, so
+   * the next autosave cannot write over a file the editor never displayed. Must be stable across
+   * renders or read through a ref by the caller.
+   */
+  accept?: (content: string) => boolean;
+  /**
+   * Merges unsaved edits with a version of the file that appeared on disk meanwhile: `base` is the
+   * text the edits started from, `ours` the editor's text, `theirs` the file now. Resolves the
+   * merged text, which becomes the editor's and is saved over `theirs`; null when the two cannot be
+   * merged (the document then goes into conflict, as without this option). Read through a ref.
+   */
+  merge?: (base: string, ours: string, theirs: string) => Promise<string | null>;
+}
 
 /**
  * Loads a note and keeps it saved. Writes carry the hash of the last read
@@ -64,7 +91,14 @@ export function useNoteDocument(
   vaultId: string,
   path: string,
   debounceMs: number = NOTE_DEBOUNCE_MS,
+  options: NoteDocumentOptions = {},
 ): NoteDocument {
+  const accept = useRef(options.accept);
+  const merge = useRef(options.merge);
+  useEffect(() => {
+    accept.current = options.accept;
+    merge.current = options.merge;
+  });
   const [state, setState] = useState<{
     status: NoteDocument['status'];
     content: string;
@@ -77,8 +111,11 @@ export function useNoteDocument(
     error: '',
   });
   const [save, setSave] = useState<SaveState>('saved');
+  const [rejectedOnDisk, setRejectedOnDisk] = useState(false);
   const [hash, setHash] = useState('');
   const hashRef = useRef('');
+  /** The text `hashRef` is the hash of: what the unsaved edits started from (the base of a merge). */
+  const baseText = useRef('');
   /** The latest text, or a getter of it not called yet (see edit). */
   const latest = useRef<string | (() => string)>('');
   const textNow = useCallback((): string => {
@@ -107,8 +144,10 @@ export function useNoteDocument(
   const accepted = useCallback(
     (newHash: string, text: string) => {
       hashRef.current = newHash;
+      baseText.current = text;
       generation.current++;
       conflict.current = false;
+      setRejectedOnDisk(false);
       setHash(newHash);
       if (textNow() === text) {
         dirty.current = false;
@@ -137,11 +176,13 @@ export function useNoteDocument(
         try {
           const note = await api.vault.readNote(vaultId, path);
           hashRef.current = note.hash;
+          baseText.current = note.content;
           latest.current = note.content;
           dirty.current = false;
           conflict.current = false;
           generation.current++;
           failed.current = false;
+          setRejectedOnDisk(false);
           setHash(note.hash);
           setSave('saved');
           setState((s) => ({
@@ -162,6 +203,10 @@ export function useNoteDocument(
     void load();
   }, [load]);
 
+  // refresh and saveOnce call each other (a refused write merges, a merge saves): through refs.
+  const refreshRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const saveRef = useRef<() => Promise<unknown>>(() => Promise.resolve());
+
   // One write of the latest text with the latest hash, after whatever is in flight.
   const saveOnce = useCallback(
     (): Promise<Outcome> =>
@@ -176,12 +221,27 @@ export function useNoteDocument(
           accepted(res.hash, text);
           return dirty.current ? 'dirty' : 'saved';
         } catch (e) {
+          if (merge.current && errorCode(e) === 'conflict') {
+            // The file changed before the event of it got here: the same merge as for that event,
+            // once this job is over. A merge that cannot be made ends in the conflict below.
+            setSave('dirty');
+            const based = hashRef.current;
+            void Promise.resolve().then(async () => {
+              await refreshRef.current();
+              if (dirty.current && !conflict.current && hashRef.current === based) rejected(e);
+            });
+            return 'failed';
+          }
           rejected(e);
           return 'failed';
         }
       }),
     [vaultId, path, enqueue, accepted, rejected, textNow],
   );
+
+  useEffect(() => {
+    saveRef.current = saveOnce;
+  }, [saveOnce]);
 
   const edit = useCallback(
     (text: string | (() => string)) => {
@@ -256,20 +316,69 @@ export function useNoteDocument(
       // A load or write was queued or landed while reading: the read may predate it.
       if (chain.current !== before || gen !== generation.current) continue;
       if (note.hash === hashRef.current) return;
-      if (!dirty.current) {
-        // Nothing unsaved: just show the new content.
+      if (accept.current && !accept.current(note.content)) {
+        // Not something the editor can show: the hash stays the one of the text it displays, so
+        // nothing is written over this file until the user chooses to.
+        conflict.current = true;
+        setRejectedOnDisk(true);
+        setSave('conflict');
+      } else if (!dirty.current) {
+        // Nothing unsaved: just show the new content. A file that had been refused is fine again.
         hashRef.current = note.hash;
+        baseText.current = note.content;
         latest.current = note.content;
         generation.current++;
+        conflict.current = false;
+        setRejectedOnDisk(false);
         setHash(note.hash);
+        setSave('saved');
         setState((s) => ({ ...s, content: note.content, version: s.version + 1 }));
       } else {
+        // Unsaved edits and a new version of the file: both are kept when they can be merged.
+        if (merge.current && !conflict.current) {
+          const ours = textNow();
+          // the save that was waiting would only be refused: the merged text is what gets saved
+          clearTimeout(timer.current);
+          let merged: string | null = null;
+          try {
+            merged = await merge.current(baseText.current, ours, note.content);
+          } catch {
+            merged = null; // a merge that fails is a merge that cannot be made
+          }
+          // A write of ours landed, or the user went on editing, while merging: start over.
+          if (chain.current !== before || gen !== generation.current || textNow() !== ours)
+            continue;
+          if (merged !== null) {
+            hashRef.current = note.hash;
+            baseText.current = note.content;
+            latest.current = merged;
+            generation.current++;
+            setRejectedOnDisk(false);
+            setHash(note.hash);
+            // The merged text is the editor's now; what it adds to the file is still to be saved.
+            dirty.current = merged !== note.content;
+            setSave(dirty.current ? 'dirty' : 'saved');
+            setState((s) => ({ ...s, content: merged, version: s.version + 1 }));
+            clearTimeout(timer.current);
+            if (dirty.current) timer.current = setTimeout(() => void saveRef.current(), debounceMs);
+            return;
+          }
+        }
         conflict.current = true;
+        setRejectedOnDisk(false);
         setSave('conflict');
       }
       return;
     }
-  }, [vaultId, path, load]);
+    // The file or the text kept changing under the merge: the user decides.
+    if (dirty.current && merge.current && !conflict.current) {
+      conflict.current = true;
+      setSave('conflict');
+    }
+  }, [vaultId, path, load, textNow, debounceMs]);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   // Keeps edits that cannot be saved in the file in a copy next to it.
   const rescue = useCallback(
@@ -283,6 +392,13 @@ export function useNoteDocument(
       }),
     [vaultId, path, enqueue, textNow],
   );
+
+  const keepBoth = useCallback(async (): Promise<string | null> => {
+    clearTimeout(timer.current);
+    const copy = await rescue();
+    await load();
+    return copy;
+  }, [rescue, load]);
 
   // Lets "load workspace", closing the vault, renaming and quitting write every pending edit first.
   useEffect(
@@ -335,6 +451,7 @@ export function useNoteDocument(
     version: state.version,
     hash,
     save,
+    rejected: rejectedOnDisk,
     error: state.error,
     current: textNow,
     savedHash: () => hashRef.current,
@@ -343,5 +460,6 @@ export function useNoteDocument(
     reload: load,
     refresh,
     overwrite,
+    keepBoth,
   };
 }

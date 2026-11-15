@@ -6,6 +6,8 @@ import type { SceneContext, ScenePatch, SceneFile } from './types';
 
 export interface SceneController {
   vaultId: string;
+  /** The pane this editor is in (the same drawing can be open in two); null while unmounted. */
+  paneId(): string | null;
   /** Current elements and selection. */
   context(): SceneContext;
   /** Applies a patch to the open scene (the editor's own autosave then writes the file). */
@@ -37,6 +39,8 @@ export interface SceneController {
   slideThumbnail(id: string, width?: number): Promise<string>;
   /** Brings a frame into view. */
   showFrame(id: string): void;
+  /** Fits the selection in the view, or the whole drawing when nothing is selected. */
+  zoomToSelection(): void;
   /** Prints the included slides, one per page (the system dialog offers "Save as PDF"). */
   printSlides(): Promise<void>;
   /** Opens the export dialog with the format preselected. */
@@ -75,15 +79,20 @@ export function subscribeSceneController(listener: () => void): () => void {
 }
 
 /**
- * The editor of the drawing at `path` (the last one registered when a drawing is shown twice); null
- * when it is not open. Without a path: the editor of the active tab's drawing, else (a note is in
+ * The editor of the drawing at `path`; null when it is not open. A drawing shown in two panes has
+ * two editors: the one of the pane in focus is meant, else the one that registered last. Without a
+ * path: the editor of the pane in focus, else of the active tab's drawing, else (a note is in
  * focus) the one that registered last.
  */
 export function getSceneController(path?: string | null): SceneController | null {
-  const of = (p: string | null): SceneController | null =>
-    p === null ? null : ([...controllers].reverse().find((c) => c.drawingPath === p) ?? null);
+  const state = useAppStore.getState();
+  const newestFirst = [...controllers].reverse();
+  const focused = newestFirst.find((c) => c.paneId() === state.layout.activePane) ?? null;
+  const of = (p: string | null): SceneController | null => {
+    if (p === null) return null;
+    if (focused?.drawingPath === p) return focused;
+    return newestFirst.find((c) => c.drawingPath === p) ?? null;
+  };
   if (path !== undefined) return of(path);
-  return (
-    of(selectActivePath(useAppStore.getState())) ?? controllers[controllers.length - 1] ?? null
-  );
+  return focused ?? of(selectActivePath(state)) ?? newestFirst[0] ?? null;
 }

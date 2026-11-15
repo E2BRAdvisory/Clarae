@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DRAWING_SEARCH_BYTES,
   DRAWING_WARN_BYTES,
   drawingBaseName,
   embedMarkdown,
@@ -9,7 +10,8 @@ import {
   elementAt,
   linkedElementAt,
   parseElementLink,
-  isOverLimit,
+  sizeWarning,
+  utf8Bytes,
   parseScene,
   sceneSignature,
 } from './scene';
@@ -86,11 +88,51 @@ describe('drawing helpers', () => {
     expect(sceneSignature([{ id: 'x', version: 2 }], 0)).not.toBe(a);
     expect(sceneSignature([{ id: 'x', version: 1 }], 1)).not.toBe(a);
     expect(sceneSignature([], 0)).not.toBe(a);
+    expect(sceneSignature([], 0)).not.toBe('');
   });
 
-  it('flags drawings above 10 MB', () => {
-    expect(isOverLimit('x'.repeat(DRAWING_WARN_BYTES))).toBe(false);
-    expect(isOverLimit('x'.repeat(DRAWING_WARN_BYTES + 1))).toBe(true);
+  it('signs the order of the elements and where one ends', () => {
+    const x = { id: 'x', version: 1 };
+    const y = { id: 'y', version: 7 };
+    expect(sceneSignature([x, y], 0)).not.toBe(sceneSignature([y, x], 0));
+    expect(sceneSignature([{ id: 'ab', version: 1 }], 0)).not.toBe(
+      sceneSignature([{ id: 'a', version: 1 }], 0),
+    );
+    expect(sceneSignature([{ id: 'a', version: 12 }], 0)).not.toBe(
+      sceneSignature([{ id: 'a', version: 1 }], 0),
+    );
+  });
+
+  it('counts the bytes a text takes in a file', () => {
+    const encoded = (t: string) => new TextEncoder().encode(t).length;
+    for (const t of [
+      '',
+      'plain',
+      'città',
+      '日本語',
+      '😀 a',
+      'a\u{1F600}\u{1F600}',
+      '\ud83d',
+      '\ud83dx',
+      '\ude00',
+    ])
+      expect(utf8Bytes(t)).toBe(encoded(t));
+  });
+
+  it('warns above 8 MB that the drawing is not searchable, above 10 MB that it is heavy too', () => {
+    expect(sizeWarning('x'.repeat(1000))).toBeNull();
+    expect(sizeWarning('x'.repeat(DRAWING_SEARCH_BYTES))).toBeNull();
+    expect(sizeWarning('x'.repeat(DRAWING_SEARCH_BYTES + 1))).toBe('search');
+    expect(sizeWarning('x'.repeat(DRAWING_WARN_BYTES))).toBe('search');
+    expect(sizeWarning('x'.repeat(DRAWING_WARN_BYTES + 1))).toBe('slow');
+  });
+
+  it('measures the size in bytes, not in characters', () => {
+    // three bytes each: under both limits by length, over them on disk
+    const wide = '日'.repeat(Math.floor(DRAWING_SEARCH_BYTES / 3) + 1);
+    expect(wide.length).toBeLessThan(DRAWING_SEARCH_BYTES);
+    expect(sizeWarning(wide)).toBe('search');
+    expect(sizeWarning('日'.repeat(Math.floor(DRAWING_WARN_BYTES / 3) + 1))).toBe('slow');
   });
 
   it('names files', () => {

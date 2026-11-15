@@ -49,6 +49,9 @@ type File struct {
 	ConflictOf string
 	Attempts   int
 	LastError  string
+	// HeadAuthor is the account that made the revision the content of the row comes from (what ServerHash
+	// names); "" when not known. Only a change that brings content sets it: a move keeps it.
+	HeadAuthor string
 }
 
 // querier is what *sql.DB and *sql.Tx have in common.
@@ -88,13 +91,13 @@ func (d *DB) WithTx(ctx context.Context, fn func(tx *DB) error) error {
 	return tx.Commit()
 }
 
-const fileCols = `path, file_id, server_rev, base_rev, server_hash, local_hash, local_size, local_mtime, state, moved_from, dirty, tombstoned, conflict_of, attempts, last_error`
+const fileCols = `path, file_id, server_rev, base_rev, server_hash, local_hash, local_size, local_mtime, state, moved_from, dirty, tombstoned, conflict_of, attempts, last_error, head_author`
 
 func scanFile(sc interface{ Scan(...any) error }) (File, error) {
 	var f File
 	var state string
 	var dirty, tomb int
-	err := sc.Scan(&f.Path, &f.FileID, &f.ServerRev, &f.BaseRev, &f.ServerHash, &f.LocalHash, &f.LocalSize, &f.LocalMtime, &state, &f.MovedFrom, &dirty, &tomb, &f.ConflictOf, &f.Attempts, &f.LastError)
+	err := sc.Scan(&f.Path, &f.FileID, &f.ServerRev, &f.BaseRev, &f.ServerHash, &f.LocalHash, &f.LocalSize, &f.LocalMtime, &state, &f.MovedFrom, &dirty, &tomb, &f.ConflictOf, &f.Attempts, &f.LastError, &f.HeadAuthor)
 	f.State, f.Dirty, f.Tombstoned = State(state), dirty != 0, tomb != 0
 	return f, err
 }
@@ -179,13 +182,13 @@ func (d *DB) FilesUnder(ctx context.Context, dir string) ([]File, error) {
 // PutFile inserts or replaces a row (keyed by file_id so a path change is an update).
 func (d *DB) PutFile(ctx context.Context, f File) error {
 	_, err := d.db.ExecContext(ctx, `
-		INSERT INTO sync_files (`+fileCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		INSERT INTO sync_files (`+fileCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(file_id) DO UPDATE SET path=excluded.path, server_rev=excluded.server_rev, base_rev=excluded.base_rev, server_hash=excluded.server_hash,
 		  local_hash=excluded.local_hash, local_size=excluded.local_size, local_mtime=excluded.local_mtime, state=excluded.state,
 		  moved_from=excluded.moved_from, dirty=excluded.dirty, tombstoned=excluded.tombstoned, conflict_of=excluded.conflict_of,
-		  attempts=excluded.attempts, last_error=excluded.last_error`,
+		  attempts=excluded.attempts, last_error=excluded.last_error, head_author=excluded.head_author`,
 		f.Path, f.FileID, f.ServerRev, f.BaseRev, f.ServerHash, f.LocalHash, f.LocalSize, f.LocalMtime, string(f.State), f.MovedFrom,
-		b2i(f.Dirty), b2i(f.Tombstoned), f.ConflictOf, f.Attempts, f.LastError)
+		b2i(f.Dirty), b2i(f.Tombstoned), f.ConflictOf, f.Attempts, f.LastError, f.HeadAuthor)
 	return err
 }
 
