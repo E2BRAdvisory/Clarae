@@ -20,6 +20,7 @@ const ITEMS: Item[] = [
   { command: 'bases:new', icon: 'table' },
   { command: 'marp:new', icon: 'slides' },
   { command: 'separator:insert', icon: 'separator', gap: true },
+  { command: 'graph:open-3d', icon: 'cube', gap: true },
 ];
 
 /** The export buttons of each kind of file in focus (none for the other kinds). */

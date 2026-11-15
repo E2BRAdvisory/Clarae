@@ -48,6 +48,30 @@ export function readPalette(el: Element, groups: string[]): Palette {
   };
 }
 
+/** The colour of a class of nodes (model.cls): a colour group, or the kind of node. */
+export function classColor(p: Palette, c: number): string {
+  if (c >= CLASS_GROUP) return p.groups[c - CLASS_GROUP] ?? p.accent;
+  switch (c) {
+    case CLASS_GHOST:
+      return p.faint;
+    case CLASS_ATTACHMENT:
+      return p.success;
+    case CLASS_TAG:
+      return p.accent;
+    case CLASS_NOTE:
+    default:
+      return p.muted;
+  }
+}
+
+/** A node and its neighbours, as a mask over the nodes. */
+export function neighbourSet(m: GraphModel, i: number): Uint8Array {
+  const set = new Uint8Array(m.n);
+  set[i] = 1;
+  for (let k = m.off[i] as number; k < (m.off[i + 1] as number); k++) set[m.adj[k] as number] = 1;
+  return set;
+}
+
 export interface FrameStats {
   ms: number;
   nodes: number;
@@ -127,11 +151,7 @@ export class GraphRenderer {
       this.focusSet = null;
       return;
     }
-    const m = this.model;
-    const set = new Uint8Array(m.n);
-    set[i] = 1;
-    for (let k = m.off[i] as number; k < (m.off[i + 1] as number); k++) set[m.adj[k] as number] = 1;
-    this.focusSet = set;
+    this.focusSet = neighbourSet(this.model, i);
   }
 
   get hovered(): number {
@@ -149,19 +169,7 @@ export class GraphRenderer {
   }
 
   private colorOf(c: number): string {
-    const p = this.palette;
-    if (c >= CLASS_GROUP) return p.groups[c - CLASS_GROUP] ?? p.accent;
-    switch (c) {
-      case CLASS_GHOST:
-        return p.faint;
-      case CLASS_ATTACHMENT:
-        return p.success;
-      case CLASS_TAG:
-        return p.accent;
-      case CLASS_NOTE:
-      default:
-        return p.muted;
-    }
+    return classColor(this.palette, c);
   }
 
   private snap: HTMLCanvasElement | null = null;

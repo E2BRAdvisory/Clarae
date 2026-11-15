@@ -1,4 +1,5 @@
 import type { BinaryContent } from '../app/api';
+import type { IconName } from '../shell/icons';
 
 export type EmbedKind =
   | 'note'
@@ -38,6 +39,20 @@ const EXT: Record<string, EmbedKind> = {
   canvas: 'canvas',
   base: 'base',
   marp: 'presentation',
+};
+
+/** The icon of each kind of file (file explorer, graph). */
+export const KIND_ICON: Record<EmbedKind, IconName> = {
+  note: 'note',
+  image: 'image',
+  pdf: 'pdf',
+  audio: 'media',
+  video: 'media',
+  drawing: 'pencil',
+  canvas: 'canvas',
+  base: 'table',
+  presentation: 'slides',
+  other: 'attach',
 };
 
 export function classify(path: string): EmbedKind {

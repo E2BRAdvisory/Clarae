@@ -20,6 +20,8 @@ export interface GraphSettings {
   showGhosts: boolean;
   showAttachments: boolean;
   showTags: boolean;
+  /** Drawings, canvases and bases as nodes, with the links they hold. */
+  showDocuments: boolean;
   forces: Forces;
   /** Multiplier of node radius, 0.5..3. */
   nodeSize: number;
@@ -30,7 +32,20 @@ export interface GraphSettings {
   localDirection: GraphDirection;
   /** Duration of the timelapse, in seconds. */
   timelapseSeconds: number;
+  /** 3D: links between two nodes that link each other are drawn as two arcs. */
+  curvedLinks: boolean;
+  /** 3D: the most connected nodes shown, GRAPH3D_MIN_NODES..GRAPH3D_MAX_NODES. */
+  maxNodes3d: number;
+  /** 3D: the legend of the kinds of document is shown. */
+  showLegend: boolean;
 }
+
+/**
+ * The ceiling of the 3D graph: a scene object per node and a layout in three dimensions cost
+ * more than the 2D canvas (measured in the M18-D0 spike), so it draws the most connected nodes.
+ */
+export const GRAPH3D_MAX_NODES = 5000;
+export const GRAPH3D_MIN_NODES = 500;
 
 export const defaultGraphSettings: GraphSettings = {
   query: '',
@@ -40,6 +55,7 @@ export const defaultGraphSettings: GraphSettings = {
   showGhosts: false,
   showAttachments: false,
   showTags: false,
+  showDocuments: true,
   forces: defaultForces,
   nodeSize: 1,
   labelZoom: 1.2,
@@ -47,6 +63,9 @@ export const defaultGraphSettings: GraphSettings = {
   localDepth: 1,
   localDirection: 'both',
   timelapseSeconds: 10,
+  curvedLinks: true,
+  maxNodes3d: GRAPH3D_MAX_NODES,
+  showLegend: true,
 };
 
 /** Colours offered to new groups, cycled (readable on both built-in themes). */
@@ -90,6 +109,7 @@ export function mergeGraphSettings(raw: unknown): GraphSettings {
     showGhosts: bool(raw['showGhosts'], d.showGhosts),
     showAttachments: bool(raw['showAttachments'], d.showAttachments),
     showTags: bool(raw['showTags'], d.showTags),
+    showDocuments: bool(raw['showDocuments'], d.showDocuments),
     forces,
     nodeSize: clamp(raw['nodeSize'], 0.5, 3, d.nodeSize),
     labelZoom: clamp(raw['labelZoom'], 0.2, 4, d.labelZoom),
@@ -97,6 +117,11 @@ export function mergeGraphSettings(raw: unknown): GraphSettings {
     localDepth: Math.round(clamp(raw['localDepth'], 1, 5, d.localDepth)),
     localDirection: dir === 'in' || dir === 'out' || dir === 'both' ? dir : d.localDirection,
     timelapseSeconds: clamp(raw['timelapseSeconds'], 2, 120, d.timelapseSeconds),
+    curvedLinks: bool(raw['curvedLinks'], d.curvedLinks),
+    maxNodes3d: Math.round(
+      clamp(raw['maxNodes3d'], GRAPH3D_MIN_NODES, GRAPH3D_MAX_NODES, d.maxNodes3d),
+    ),
+    showLegend: bool(raw['showLegend'], d.showLegend),
   };
 }
 

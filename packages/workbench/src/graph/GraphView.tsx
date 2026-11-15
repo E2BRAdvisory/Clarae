@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Component,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { i18next } from '../i18n';
 import { api } from '../app/api';
@@ -8,19 +17,49 @@ import { infoOf, useSync } from '../state/sync';
 import { useAppStore } from '../state/store';
 import { errorMessage } from '../util/errors';
 import { GraphPanel } from './GraphPanel';
-import { startLayout, type LayoutHost } from './layoutHost';
-import { edgePairs, WARM_ALPHA } from './layoutEngine';
-import { graphNeedsReload, sameGraph, seedPositions, type PreviousLayout } from './incremental';
+import { Graph2D } from './Graph2D';
+import { graphNeedsReload, sameGraph } from './incremental';
+import { kindCounts, kindIcon } from './kinds';
+import { useGraphMode } from './mode';
 import { buildModel, timelapseTime, visibleAt, type GraphModel } from './model';
 import { graphCenter } from './paths';
-import { GraphRenderer, readPalette } from './renderer';
 import { useGraphSettings, type GraphSettings } from './settings';
 import type { GraphData, GraphOptions } from './types';
-import { fitView, panBy, zoomAt } from './view';
+import type { GraphSurfaceHandle, Unavailable3D } from './surface';
+import { MAX_3D_SURFACES, webgl2Available } from './webgl';
 import { Icon } from '../shell/icons';
+import { lazyView, resetFailedViews } from '../ui/lazyView';
 
-/** Options sent to GraphAPI.Build for the current settings. */
-export function optionsFor(s: GraphSettings, center: string | null): GraphOptions {
+/** three.js and 3d-force-graph: a chunk of its own, downloaded when the 3D view first opens. */
+const Graph3D = lazyView(() => import('./three/Graph3D'));
+
+/** A 3D surface that throws (its chunk did not load, the scene failed) leaves the graph in 2D. */
+class SurfaceBoundary extends Component<
+  { onError: () => void; children: ReactNode },
+  { failed: boolean }
+> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  override componentDidCatch(): void {
+    // A chunk that did not download is asked for again the next time 3D is chosen.
+    resetFailedViews();
+    this.props.onError();
+  }
+
+  override render(): ReactNode {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+/**
+ * Options sent to GraphAPI.Build for the current settings. `maxNodes` is the ceiling of the
+ * surface that draws the answer (0: the core's own); beyond it the core keeps the most connected.
+ */
+export function optionsFor(s: GraphSettings, center: string | null, maxNodes = 0): GraphOptions {
   return {
     query: s.query,
     tags: s.tags,
@@ -30,25 +69,13 @@ export function optionsFor(s: GraphSettings, center: string | null): GraphOption
     showGhosts: s.showGhosts,
     showAttachments: s.showAttachments,
     showTags: s.showTags,
+    showDocuments: s.showDocuments,
     center: center ?? '',
     depth: center ? s.localDepth : 0,
     direction: center ? s.localDirection : 'both',
     groups: s.groups.map((g) => g.query),
-    maxNodes: 0,
+    maxNodes,
   };
-}
-
-declare global {
-  interface Window {
-    /** Frame statistics, exposed to the benchmark harness in E2E builds only. */
-    __graphStats?: {
-      frames: number[];
-      layoutMs: number;
-      nodes: number;
-      edges: number;
-      ticks: number;
-    };
-  }
 }
 
 export function GraphView({ vaultId, path }: { vaultId: string; path: string }) {
@@ -61,14 +88,30 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
   const search = useAppStore((s) => s.search);
   const readOnly = useSync((s) => infoOf(s, vaultId).readOnly);
 
-  const wrap = useRef<HTMLDivElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const renderer = useRef<GraphRenderer | null>(null);
-  const dirty = useRef(true);
-  const host = useRef<LayoutHost | null>(null);
-  const userMoved = useRef(false);
-  const gestureTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [data, setData] = useState<GraphData | null>(null);
+  // ---- 2D or 3D: the user's choice for this device, unless the 3D surface cannot draw
+  const mode = useGraphMode((s) => s.mode);
+  const setMode = useGraphMode((s) => s.setMode);
+  /** Why the 3D surface gave up; forgotten when the mode is chosen again (another try). */
+  const [gaveUp, setGaveUp] = useState<Unavailable3D | null>(null);
+  const [seenMode, setSeenMode] = useState(mode);
+  if (seenMode !== mode) {
+    setSeenMode(mode);
+    setGaveUp(null);
+  }
+  const no3d = mode !== '3d' ? null : !webgl2Available() ? 'webgl' : gaveUp;
+  const threeD = mode === '3d' && no3d === null;
+  /** Nodes the user dragged in 3D and left held in place. */
+  const [held, setHeld] = useState(0);
+
+  const surface = useRef<GraphSurfaceHandle>(null);
+  /**
+   * The answer on screen, whether its layout continues from the one before (a refresh), and the
+   * surface it was asked for: the 3D one has a ceiling of its own, so it never draws a 2D answer.
+   */
+  const [graph, setGraph] = useState<{ data: GraphData; warm: boolean; threeD: boolean } | null>(
+    null,
+  );
+  const data = graph && graph.threeD === threeD ? graph.data : null;
   const [error, setError] = useState('');
   const [panel, setPanel] = useState(true);
   const [progress, setProgress] = useState(1);
@@ -76,22 +119,18 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
   const [reload, setReload] = useState(0);
   /** The node walked to with [ and ], by id: indexes change when the graph does. */
   const [focusId, setFocusId] = useState<string | null>(null);
-  /** The next layout continues from the current one (a refresh, not new options). */
-  const warmNext = useRef(false);
   /** The answer on screen and the vault and options it was built for. */
   const onScreen = useRef<{ key: string; data: GraphData } | null>(null);
-  /** The nodes the renderer's positions belong to, and the heat of their layout (0 = settled). */
-  const laidOut = useRef<readonly string[]>([]);
-  const layoutAlpha = useRef(0);
-  /** A layout from scratch fits the view once it settles, unless the user moved it first. */
-  const fitWhenDone = useRef(false);
 
   useEffect(() => {
     void useGraphSettings.getState().load(vaultId);
   }, [vaultId]);
 
   // ---- data (debounced while the user types a query)
-  const options = useMemo(() => optionsFor(settings, center), [settings, center]);
+  const options = useMemo(
+    () => optionsFor(settings, center, threeD ? settings.maxNodes3d : 0),
+    [settings, center, threeD],
+  );
   const optionsKey = JSON.stringify(options);
   useEffect(() => {
     if (!loaded) return;
@@ -108,9 +147,8 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
           const prev = onScreen.current;
           const refresh = prev?.key === key;
           if (refresh && sameGraph(prev.data, d)) return;
-          warmNext.current = refresh;
           onScreen.current = { key, data: d };
-          setData(d);
+          setGraph({ data: d, warm: refresh, threeD });
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(errorMessage(e));
@@ -120,7 +158,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [vaultId, optionsKey, loaded, reload]);
+  }, [vaultId, optionsKey, loaded, reload, threeD]);
 
   // The index changed (note created, renamed, edited): rebuild, coalescing bursts. Changes that
   // cannot alter nodes or links (settings under .clarae/, an edited attachment) are ignored.
@@ -147,160 +185,14 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     modelRef.current = model;
   });
 
-  // ---- renderer lifecycle
-  useEffect(() => {
-    const el = canvas.current;
-    const box = wrap.current;
-    if (!el || !box) return;
-    let r: GraphRenderer;
-    try {
-      r = new GraphRenderer(el);
-    } catch {
-      return; // no 2D canvas (unit tests): the view still renders its controls and status
-    }
-    renderer.current = r;
-    const size = (): void => {
-      r.resize(box.clientWidth, box.clientHeight, window.devicePixelRatio || 1);
-      dirty.current = true;
-    };
-    size();
-    const ro = new ResizeObserver(size);
-    ro.observe(box);
-    let raf = 0;
-    const loop = (): void => {
-      raf = requestAnimationFrame(loop);
-      if (!dirty.current) return;
-      dirty.current = false;
-      const t0 = performance.now();
-      const f = r.gesturing ? r.quickDraw() : r.draw();
-      const st = window.__graphStats;
-      if (st) {
-        r.flush(); // benchmark mode: include raster time
-        st.frames.push(performance.now() - t0);
-        st.nodes = f.nodes;
-        st.edges = f.edges;
-      }
-    };
-    raf = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-      renderer.current = null;
-    };
-  }, []);
-
-  // Theme-aware colours: read from CSS tokens, again whenever the theme changes.
-  const groupColors = settings.groups.map((g) => g.color).join(',');
-  useEffect(() => {
-    const apply = (): void => {
-      const r = renderer.current;
-      const el = wrap.current;
-      if (!r || !el) return;
-      r.palette = readPalette(el, groupColors ? groupColors.split(',') : []);
-      dirty.current = true;
-    };
-    apply();
-    const mo = new MutationObserver(apply);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-    mq?.addEventListener('change', apply);
-    return () => {
-      mo.disconnect();
-      mq?.removeEventListener('change', apply);
-    };
-  }, [groupColors]);
-
-  useEffect(() => {
-    const r = renderer.current;
-    if (!r) return;
-    r.labelZoom = settings.labelZoom;
-    dirty.current = true;
-  }, [settings.labelZoom]);
-
-  // ---- layout (restarts when the nodes or links change, not when only the node size does)
-  const forcesRef = useRef(settings.forces);
-  useEffect(() => {
-    forcesRef.current = settings.forces;
-  });
-  useEffect(() => {
-    const r = renderer.current;
-    const m = modelRef.current;
-    if (!r || !m) return;
-    // A refresh keeps the nodes where they are and the view where the user left it; new options
-    // (filters, depth, another centre) lay the graph out from scratch and fit it.
-    const prev: PreviousLayout = { ids: laidOut.current, positions: r.positions };
-    const seed = warmNext.current ? seedPositions(prev, m) : null;
-    warmNext.current = false;
-    laidOut.current = m.data.nodes.map((nd) => nd.id);
-    r.setModel(m);
-    // Never draw the new model with the old indexes: until the layout posts, the kept nodes stay
-    // where they were (the others appear with the first post).
-    r.positions = seed ?? new Float32Array(0);
-    if (!seed) {
-      userMoved.current = false;
-      fitWhenDone.current = true;
-    }
-    if (m.n === 0) {
-      r.positions = new Float32Array(0);
-      dirty.current = true;
-      return;
-    }
-    const t0 = performance.now();
-    let first = !seed;
-    const onPositions = (pos: Float32Array, alpha: number, done: boolean): void => {
-      r.positions = pos;
-      layoutAlpha.current = done ? 0 : alpha;
-      if ((first || (done && fitWhenDone.current)) && !userMoved.current) {
-        const { w, h: hh } = r.size;
-        r.view = fitView(pos, m.n, w, hh);
-      }
-      first = false;
-      if (done) fitWhenDone.current = false;
-      const st = window.__graphStats;
-      if (st) {
-        st.ticks++;
-        if (done) st.layoutMs = performance.now() - t0;
-      }
-      dirty.current = true;
-    };
-    // A layout interrupted while still spreading out continues at its own heat.
-    const warm = seed
-      ? { positions: seed, alpha: Math.max(WARM_ALPHA, layoutAlpha.current) }
-      : undefined;
-    const h = startLayout(m.n, edgePairs(m.data.edges), forcesRef.current, onPositions, warm);
-    host.current = h;
-    return () => {
-      h.dispose();
-      host.current = null;
-    };
-  }, [data]);
-
-  // The radius depends on nodeSize: same layout, new model.
-  useEffect(() => {
-    if (model) renderer.current?.setModel(model);
-    dirty.current = true;
-  }, [model]);
-
   // The node walked to with the keyboard, found again in a changed graph (-1 once it is gone).
   const focusNode = useMemo(
     () => (model && focusId !== null ? model.data.nodes.findIndex((nd) => nd.id === focusId) : -1),
     [model, focusId],
   );
-  useEffect(() => {
-    renderer.current?.setSelected(focusNode);
-    dirty.current = true;
-  }, [model, focusNode]);
-
-  useEffect(() => {
-    host.current?.setForces(settings.forces);
-  }, [settings.forces]);
 
   // ---- timelapse
-  useEffect(() => {
-    if (!model) return;
-    renderer.current?.setVisible(visibleAt(model, progress));
-    dirty.current = true;
-  }, [model, progress]);
+  const visible = useMemo(() => (model ? visibleAt(model, progress) : null), [model, progress]);
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -318,7 +210,7 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- progress is the clock, not an input
   }, [playing, settings.timelapseSeconds]);
 
-  // ---- interaction
+  // ---- what a node opens
   const openNodeAt = useCallback(
     (i: number, newTab: boolean) => {
       const nd = modelRef.current?.data.nodes[i];
@@ -332,68 +224,23 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     [center, openNote, search, readOnly],
   );
 
-  const point = (e: { clientX: number; clientY: number }): { x: number; y: number } => {
-    const b = wrap.current?.getBoundingClientRect();
-    return { x: e.clientX - (b?.left ?? 0), y: e.clientY - (b?.top ?? 0) };
-  };
-  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const setHover = (i: number): void => {
-    const r = renderer.current;
-    if (!r || r.hovered === i) return;
-    r.setHover(i);
-    dirty.current = true;
-  };
-  const move = (v: ReturnType<typeof panBy>): void => {
-    const r = renderer.current;
-    if (!r) return;
-    r.startGesture();
-    r.view = v;
-    userMoved.current = true;
-    dirty.current = true;
-    clearTimeout(gestureTimer.current);
-    gestureTimer.current = setTimeout(() => {
-      renderer.current?.endGesture();
-      dirty.current = true;
-    }, 150);
-  };
+  const focusNodeAt = useCallback((i: number) => {
+    setFocusId(modelRef.current?.data.nodes[i]?.id ?? null);
+  }, []);
 
-  const onKeyDown = (e: React.KeyboardEvent): void => {
-    const r = renderer.current;
-    const m = modelRef.current;
-    if (!r || !m) return;
-    const { w, h } = r.size;
-    const step = 60;
-    const key = e.key;
-    if (key === 'ArrowLeft') move(panBy(r.view, step, 0));
-    else if (key === 'ArrowRight') move(panBy(r.view, -step, 0));
-    else if (key === 'ArrowUp') move(panBy(r.view, 0, step));
-    else if (key === 'ArrowDown') move(panBy(r.view, 0, -step));
-    else if (key === '+' || key === '=') move(zoomAt(r.view, w / 2, h / 2, 1.25));
-    else if (key === '-') move(zoomAt(r.view, w / 2, h / 2, 0.8));
-    else if (key === '0') {
-      userMoved.current = false;
-      r.view = fitView(r.positions, m.n, w, h);
-      dirty.current = true;
-    } else if (key === '[' || key === ']') {
-      // Walk the nodes from the most to the least connected one.
-      const order = Array.from({ length: m.n }, (_, i) => i).sort(
-        (a, b) => (m.degree[b] as number) - (m.degree[a] as number),
-      );
-      const at = order.indexOf(focusNode);
-      const next = order[(at + (key === ']' ? 1 : -1) + order.length) % order.length] ?? -1;
-      setFocusId(m.data.nodes[next]?.id ?? null);
-      r.setSelected(next);
-      setHover(next);
-      const x = r.positions[2 * next] as number;
-      const y = r.positions[2 * next + 1] as number;
-      move({
-        k: Math.max(r.view.k, settings.labelZoom),
-        x: w / 2 - x * Math.max(r.view.k, settings.labelZoom),
-        y: h / 2 - y * Math.max(r.view.k, settings.labelZoom),
-      });
-    } else if (key === 'Enter' && focusNode >= 0) openNodeAt(focusNode, e.metaKey || e.ctrlKey);
-    else return;
-    e.preventDefault();
+  const legend = useMemo(
+    () => (threeD && settings.showLegend && data ? kindCounts(data.nodes) : []),
+    [threeD, settings.showLegend, data],
+  );
+  const surfaceProps = {
+    ref: surface,
+    model,
+    warm: graph?.warm ?? false,
+    settings,
+    visible,
+    focusNode,
+    onFocusNode: focusNodeAt,
+    onOpenNode: openNodeAt,
   };
 
   const shown = model?.n ?? 0;
@@ -401,53 +248,21 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
 
   return (
     <div className="graph-view">
-      <div className="graph-canvas" ref={wrap}>
-        <canvas
-          ref={canvas}
-          tabIndex={0}
-          role="application"
-          aria-label={t('graph.canvasLabel')}
-          data-testid="graph-canvas"
-          onKeyDown={onKeyDown}
-          onWheel={(e) => {
-            const r = renderer.current;
-            if (!r) return;
-            const p = point(e);
-            move(zoomAt(r.view, p.x, p.y, Math.exp(-e.deltaY * 0.0015)));
-          }}
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId);
-            drag.current = { x: e.clientX, y: e.clientY, moved: false };
-          }}
-          onPointerMove={(e) => {
-            const r = renderer.current;
-            if (!r) return;
-            const d = drag.current;
-            if (d) {
-              const dx = e.clientX - d.x;
-              const dy = e.clientY - d.y;
-              if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-              if (d.moved) {
-                move(panBy(r.view, dx, dy));
-                d.x = e.clientX;
-                d.y = e.clientY;
-              }
-              return;
-            }
-            const p = point(e);
-            setHover(r.hit(p.x, p.y));
-          }}
-          onPointerUp={(e) => {
-            const d = drag.current;
-            drag.current = null;
-            const r = renderer.current;
-            if (!d || d.moved || !r) return;
-            const p = point(e);
-            const i = r.hit(p.x, p.y);
-            if (i >= 0) openNodeAt(i, e.metaKey || e.ctrlKey);
-          }}
-          onPointerLeave={() => setHover(-1)}
-        />
+      <div className="graph-canvas">
+        {threeD ? (
+          <SurfaceBoundary onError={() => setGaveUp('failed')}>
+            <Suspense fallback={null}>
+              <Graph3D
+                {...surfaceProps}
+                label={t('graph.sceneLabel')}
+                onHeldNodes={setHeld}
+                onUnavailable={setGaveUp}
+              />
+            </Suspense>
+          </SurfaceBoundary>
+        ) : (
+          <Graph2D {...surfaceProps} label={t('graph.canvasLabel')} />
+        )}
         <div className="graph-toolbar">
           <button
             type="button"
@@ -477,16 +292,31 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
             type="button"
             title={t('graph.fit')}
             aria-label={t('graph.fit')}
-            onClick={() => {
-              const r = renderer.current;
-              if (!r || !model) return;
-              userMoved.current = false;
-              r.view = fitView(r.positions, model.n, r.size.w, r.size.h);
-              dirty.current = true;
-            }}
+            onClick={() => surface.current?.fit()}
           >
             <Icon name="fit" />
           </button>
+          <button
+            type="button"
+            className={mode === '3d' ? 'active' : undefined}
+            title={t('graph.mode3d')}
+            aria-label={t('graph.mode3d')}
+            aria-pressed={mode === '3d'}
+            data-testid="graph-mode"
+            onClick={() => setMode(mode === '3d' ? '2d' : '3d')}
+          >
+            <Icon name="cube" />
+          </button>
+          {threeD && held > 0 && (
+            <button
+              type="button"
+              title={t('graph.releaseNodes', { n: held })}
+              aria-label={t('graph.releaseNodes', { n: held })}
+              onClick={() => surface.current?.releaseNodes()}
+            >
+              <Icon name="unlock" />
+            </button>
+          )}
           <button
             type="button"
             title={t('graph.settings')}
@@ -497,6 +327,22 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
             <Icon name="settings" />
           </button>
         </div>
+        {no3d && (
+          <div className="graph-notice" role="status">
+            {t(`graph.no3d.${no3d}`, { max: MAX_3D_SURFACES })}
+          </div>
+        )}
+        {legend.length > 0 && (
+          <ul className="graph-legend" aria-label={t('graph.legend')}>
+            {legend.map(({ kind, count }) => (
+              <li key={kind}>
+                <Icon name={kindIcon(kind)} size={14} />
+                <span>{t(`graph.kind.${kind}`)}</span>
+                <span className="count">{count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="graph-status" aria-live="polite">
           {error
             ? t('graph.error', { message: error })
@@ -509,7 +355,9 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
                   : t('graph.stats', { nodes: shown, edges: data.edges.length })}
         </div>
       </div>
-      {panel && <GraphPanel settings={settings} local={center !== null} update={update} />}
+      {panel && (
+        <GraphPanel settings={settings} local={center !== null} threeD={threeD} update={update} />
+      )}
     </div>
   );
 }

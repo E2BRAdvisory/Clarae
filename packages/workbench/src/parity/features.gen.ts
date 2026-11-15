@@ -72,6 +72,7 @@ export type FeatureId =
   | 'properties' // Proprietà delle note
   | 'note.stats' // Statistiche della nota
   | 'graph' // Grafo del vault e grafo locale
+  | 'graph.3d' // Grafo del vault in 3D, con le icone dei tipi di documento
   | 'slides' // Presentazioni da una nota
   | 'bookmarks' // Segnalibri
   | 'workspaces' // Workspace salvati
@@ -168,6 +169,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'properties',
   'note.stats',
   'graph',
+  'graph.3d',
   'slides',
   'bookmarks',
   'workspaces',

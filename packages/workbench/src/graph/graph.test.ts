@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildMockGraph, type MockSource } from './mockBuild';
+import { kindCounts, kindIcon, nodeKind as documentKind } from './kinds';
+import { buildMockGraph, nodeKind, type MockSource } from './mockBuild';
 import { buildModel, CLASS_GHOST, CLASS_GROUP, timelapseTime, visibleAt } from './model';
-import { graphCenter, graphTitle, isGraphPath, localGraphPath } from './paths';
+import { canCenterGraph, graphCenter, graphTitle, isGraphPath, localGraphPath } from './paths';
 import { LayoutEngine, edgePairs } from './layoutEngine';
 import { mergeGraphSettings, parseGraphSettings } from './settings';
 import { syntheticGraph } from './synthetic';
@@ -17,6 +18,12 @@ describe('graph paths', () => {
     expect(graphCenter(p)).toBe('dir/A note.md');
     expect(graphCenter('graph://global')).toBeNull();
     expect(graphTitle(p)).toEqual({ key: 'graph.localTitle', name: 'A note' });
+    // a drawing, a canvas and a presentation hold links too; a base and a picture do not
+    for (const path of ['a.md', 'Deck.marp', 'Sketch.excalidraw', 'Board.canvas'])
+      expect(canCenterGraph(path)).toBe(true);
+    for (const path of ['People.base', 'img.png', 'graph://global'])
+      expect(canCenterGraph(path)).toBe(false);
+    expect(graphTitle(localGraphPath('dir/Sketch.excalidraw')).name).toBe('Sketch');
   });
 });
 
@@ -39,6 +46,15 @@ describe('graph settings', () => {
     expect(s.groups[0]?.color).toMatch(/^#[0-9a-f]{6}$/i);
     expect(s.groups[1]?.color).toBe('#00ff00');
     expect(s.tags).toEqual(['a']);
+    // the 3D graph draws at most 5 000 nodes, whatever a hand-edited file says
+    expect(parseGraphSettings('').maxNodes3d).toBe(5000);
+    expect(mergeGraphSettings({ maxNodes3d: 90000 }).maxNodes3d).toBe(5000);
+    expect(mergeGraphSettings({ maxNodes3d: 3 }).maxNodes3d).toBe(500);
+    expect(parseGraphSettings('').showDocuments).toBe(true);
+    expect(mergeGraphSettings({ showDocuments: false, curvedLinks: 'no' })).toMatchObject({
+      showDocuments: false,
+      curvedLinks: true,
+    });
   });
 });
 
@@ -156,5 +172,110 @@ describe('mock graph builder', () => {
     expect(local.nodes.map((n) => n.id)).toEqual(['a.md', 'b.md']);
     const grouped = buildMockGraph(src, { ...base, groups: ['tag:t'] });
     expect(grouped.nodes[0]?.groups).toEqual([0]);
+  });
+});
+
+describe('mock graph builder: drawings, canvases and bases', () => {
+  const links: Record<string, { path: string; raw: string }[]> = {
+    'Note.md': [
+      { path: 'Sketch.excalidraw', raw: 'Sketch.excalidraw' },
+      { path: 'People.base', raw: 'People.base' },
+    ],
+    'Sketch.excalidraw': [
+      { path: 'Note.md', raw: 'Note' },
+      { path: '', raw: 'Missing' },
+    ],
+    'Board.canvas': [{ path: 'Sketch.excalidraw', raw: 'Sketch.excalidraw' }],
+    // a base holds no links the index knows of, whatever its text says
+    'People.base': [{ path: 'Note.md', raw: 'Note' }],
+  };
+  const src: MockSource = {
+    paths: ['Note.md', 'Deck.marp', 'Sketch.excalidraw', 'Board.canvas', 'People.base', 'img.png'],
+    links: (path) => links[path] ?? [],
+    tags: () => [],
+    text: () => '',
+  };
+  const all = { showOrphans: true, showDocuments: true };
+  const kinds = (o: Parameters<typeof buildMockGraph>[1]) =>
+    Object.fromEntries(buildMockGraph(src, o).nodes.map((n) => [n.id, n.kind]));
+  const edges = (o: Parameters<typeof buildMockGraph>[1]) => {
+    const g = buildMockGraph(src, o);
+    return g.edges.map((e) => `${g.nodes[e.source]?.id}>${g.nodes[e.target]?.id}`).sort();
+  };
+
+  it('are nodes of their own kind, a presentation being a note', () => {
+    expect(kinds(all)).toEqual({
+      'Note.md': 'note',
+      'Deck.marp': 'note',
+      'Sketch.excalidraw': 'drawing',
+      'Board.canvas': 'canvas',
+      'People.base': 'base',
+    });
+    expect(nodeKind('img.png')).toBe('attachment');
+    expect(buildMockGraph(src, all).nodes.find((n) => n.id === 'Sketch.excalidraw')?.label).toBe(
+      'Sketch',
+    );
+  });
+
+  it('link like notes do, except a base, which is only ever a target', () => {
+    expect(edges(all)).toEqual([
+      'Board.canvas>Sketch.excalidraw',
+      'Note.md>People.base',
+      'Note.md>Sketch.excalidraw',
+      'Sketch.excalidraw>Note.md',
+    ]);
+    expect(edges({ ...all, showGhosts: true })).toContain('Sketch.excalidraw>ghost:missing');
+  });
+
+  it('go away with their links when they are turned off', () => {
+    const off = { showOrphans: true, showDocuments: false, showGhosts: true };
+    expect(Object.keys(kinds(off)).sort()).toEqual(['Deck.marp', 'Note.md']);
+    expect(edges(off)).toEqual([]);
+  });
+
+  it('can be the centre of a local graph', () => {
+    const local = buildMockGraph(src, { ...all, center: 'Sketch.excalidraw', depth: 1 });
+    expect(local.nodes.map((n) => n.id).sort()).toEqual([
+      'Board.canvas',
+      'Note.md',
+      'Sketch.excalidraw',
+    ]);
+  });
+});
+
+describe('kinds of document in the graph', () => {
+  const node = (kind: string, path: string) => ({ kind, path });
+
+  it('names the kind a node stands for, from the kind of node and the file', () => {
+    expect(documentKind(node('note', 'a/Note.md'))).toBe('note');
+    expect(documentKind(node('note', 'Deck.marp'))).toBe('presentation');
+    expect(documentKind(node('drawing', 'Sketch.excalidraw'))).toBe('drawing');
+    expect(documentKind(node('canvas', 'Board.canvas'))).toBe('canvas');
+    expect(documentKind(node('base', 'People.base'))).toBe('base');
+    expect(documentKind(node('attachment', 'img/pic.PNG'))).toBe('image');
+    expect(documentKind(node('attachment', 'paper.pdf'))).toBe('pdf');
+    expect(documentKind(node('attachment', 'data.bin'))).toBe('other');
+    expect(documentKind(node('tag', ''))).toBe('tag');
+    expect(documentKind(node('ghost', ''))).toBe('ghost');
+  });
+
+  it('gives each kind the icon of the file explorer, and counts them in the order of the legend', () => {
+    expect(kindIcon('drawing')).toBe('pencil');
+    expect(kindIcon('base')).toBe('table');
+    expect(kindIcon('tag')).toBe('tag');
+    expect(
+      kindCounts([
+        node('ghost', ''),
+        node('drawing', 'S.excalidraw'),
+        node('note', 'A.md'),
+        node('note', 'B.md'),
+        node('note', 'D.marp'),
+      ]),
+    ).toEqual([
+      { kind: 'note', count: 2 },
+      { kind: 'presentation', count: 1 },
+      { kind: 'drawing', count: 1 },
+      { kind: 'ghost', count: 1 },
+    ]);
   });
 });

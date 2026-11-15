@@ -3,15 +3,28 @@
 import type { GraphData, GraphNode, GraphOptions } from './types';
 
 export interface MockSource {
-  /** Vault paths of notes (.md) and attachments. */
+  /** Vault paths of notes (.md, .marp), drawings, canvases, bases and attachments. */
   paths: string[];
-  /** Outgoing links of a note: resolved vault path ('' when unresolved) and the raw target. */
+  /** Outgoing links of a file: resolved vault path ('' when unresolved) and the raw target. */
   links: (path: string) => { path: string; raw: string }[];
   tags: (path: string) => string[];
   text: (path: string) => string;
 }
 
-const stem = (p: string): string => p.slice(p.lastIndexOf('/') + 1).replace(/\.md$/, '');
+const stem = (p: string): string =>
+  p.slice(p.lastIndexOf('/') + 1).replace(/\.(md|marp|excalidraw|canvas|base)$/i, '');
+
+/** The kind of node a file is, as graph.Build names it (a presentation is a note). */
+export function nodeKind(path: string): 'note' | 'drawing' | 'canvas' | 'base' | 'attachment' {
+  if (/\.(md|marp)$/i.test(path)) return 'note';
+  if (/\.excalidraw$/i.test(path)) return 'drawing';
+  if (/\.canvas$/i.test(path)) return 'canvas';
+  if (/\.base$/i.test(path)) return 'base';
+  return 'attachment';
+}
+const DOCUMENTS: ReadonlySet<string> = new Set(['drawing', 'canvas', 'base']);
+/** The kinds of node whose file holds links (a base is only ever a target). */
+const LINKED: ReadonlySet<string> = new Set(['note', 'drawing', 'canvas']);
 
 /** A tiny evaluator of the search language: AND of terms, `-` negation, file:/path:/tag:. */
 export function matchesQuery(src: MockSource, path: string, query: string): boolean {
@@ -61,8 +74,10 @@ export function buildMockGraph(src: MockSource, o: Partial<GraphOptions>): Graph
   };
   const tagWant = (o.tags ?? []).map((t) => t.replace(/^#/, '').toLowerCase());
   for (const p of [...src.paths].sort()) {
-    const attachment = !p.endsWith('.md');
+    const kind = nodeKind(p);
+    const attachment = kind === 'attachment';
     if (attachment && !o.showAttachments) continue;
+    if (DOCUMENTS.has(kind) && !o.showDocuments) continue;
     if (o.query?.trim() && !matchesQuery(src, p, o.query)) continue;
     if (o.folders?.length && !under(p, o.folders)) continue;
     if (o.excludeFolders?.length && under(p, o.excludeFolders)) continue;
@@ -73,7 +88,7 @@ export function buildMockGraph(src: MockSource, o: Partial<GraphOptions>): Graph
     add({
       id: p,
       label: attachment ? p.slice(p.lastIndexOf('/') + 1) : stem(p),
-      kind: attachment ? 'attachment' : 'note',
+      kind,
       path: p,
       degree: 0,
       // The mock has no timestamps: one day per file, in path order.
@@ -92,7 +107,7 @@ export function buildMockGraph(src: MockSource, o: Partial<GraphOptions>): Graph
     index.get(id) ?? add({ id, label, kind, path: '', degree: 0, created: 0 });
   for (const p of src.paths) {
     const s = index.get(p);
-    if (s === undefined || nodes[s]?.kind !== 'note') continue;
+    if (s === undefined || !LINKED.has(nodes[s]?.kind ?? '')) continue;
     for (const l of src.links(p)) {
       if (l.path) {
         const t = index.get(l.path);
@@ -102,7 +117,8 @@ export function buildMockGraph(src: MockSource, o: Partial<GraphOptions>): Graph
         if (name) edge(s, aux('ghost:' + name.toLowerCase(), name, 'ghost'));
       }
     }
-    if (o.showTags)
+    // only notes carry tags
+    if (o.showTags && nodes[s]?.kind === 'note')
       for (const t of new Set(src.tags(p).map((x) => x.toLowerCase())))
         edge(s, aux('tag:' + t, '#' + t, 'tag'));
   }

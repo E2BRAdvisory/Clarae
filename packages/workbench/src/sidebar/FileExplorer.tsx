@@ -19,7 +19,7 @@ import { useSettings } from '../state/settings';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { dialog } from '../ui/dialogs';
 import { useExpanded } from './expanded';
-import { classify, openTarget, type EmbedKind } from '../embeds/media';
+import { classify, KIND_ICON, openTarget } from '../embeds/media';
 import { Icon, type IconName } from '../shell/icons';
 import { DRAG_PATH } from '../util/dragTypes';
 
@@ -87,19 +87,6 @@ export function flattenTree(nodes: TreeNode[], open: ReadonlySet<string>): FlatR
   walk(nodes, 0, null);
   return out;
 }
-
-const KIND_ICON: Record<EmbedKind, IconName> = {
-  note: 'note',
-  image: 'image',
-  pdf: 'pdf',
-  audio: 'media',
-  video: 'media',
-  drawing: 'pencil',
-  canvas: 'canvas',
-  base: 'table',
-  presentation: 'slides',
-  other: 'attach',
-};
 
 /** The icon of a file in the tree: its kind, or a paper clip for a file the app does not show. */
 export const fileIcon = (path: string): IconName =>

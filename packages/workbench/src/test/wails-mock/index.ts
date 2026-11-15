@@ -9,7 +9,7 @@ import { extract, splitFrontmatter } from '@clarae/markdown';
 import { linkInfo } from '../../app/api';
 import type { FileChange } from '../../app/events';
 import { Events } from '../../app/events';
-import { buildMockGraph } from '../../graph/mockBuild';
+import { buildMockGraph, nodeKind } from '../../graph/mockBuild';
 import { capabilitiesFor, type Capabilities } from '../../platform';
 import { checkPassphrase } from '../../sync/strength';
 import { syntheticGraph } from '../../graph/synthetic';
@@ -1640,16 +1640,20 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         .__CLARAE_GRAPH_FIXTURE__;
       if (fixture) return Promise.resolve(syntheticGraph(fixture));
       const v = vaultOf(id);
-      const notes = [...v.files.keys()].filter(isNote);
+      // What the index knows as nodes: notes and presentations, drawings, canvases and bases.
+      const inGraph = (p: string): boolean => nodeKind(p) !== 'attachment';
+      const documents = [...v.files.keys()].filter(inGraph);
       return Promise.resolve(
         buildMockGraph(
           {
-            paths: [...notes, ...v.binaries.keys()],
+            paths: [...documents, ...v.binaries.keys()],
             links: (p) =>
               outgoing(v, p)
-                .filter((l) => l.path === '' || isNote(l.path) || v.binaries.has(l.path))
+                .filter((l) => l.path === '' || inGraph(l.path) || v.binaries.has(l.path))
                 .map((l) => ({ path: l.path, raw: l.raw })),
-            tags: (p) => extract(stem(p), v.files.get(p) ?? '').tags.map((t) => t.name),
+            // only notes carry tags
+            tags: (p) =>
+              isNote(p) ? extract(stem(p), v.files.get(p) ?? '').tags.map((t) => t.name) : [],
             text: (p) => v.files.get(p) ?? '',
           },
           o,

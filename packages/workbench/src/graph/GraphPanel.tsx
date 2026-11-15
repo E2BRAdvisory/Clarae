@@ -1,7 +1,7 @@
 // Filter, group, display and force controls of the graph view. Native inputs only, so every
 // control is reachable and operable from the keyboard.
 import { useTranslation } from 'react-i18next';
-import { GROUP_COLORS, type GraphSettings } from './settings';
+import { GRAPH3D_MAX_NODES, GRAPH3D_MIN_NODES, GROUP_COLORS, type GraphSettings } from './settings';
 import { forceRanges, type Forces } from './types';
 import { Icon } from '../shell/icons';
 
@@ -45,12 +45,23 @@ function Range({
 interface Props {
   settings: GraphSettings;
   local: boolean;
+  /** The graph is drawn in 3D: its own options are offered. */
+  threeD: boolean;
   update: (patch: Partial<GraphSettings>) => void;
 }
 
-export function GraphPanel({ settings: s, local, update }: Props) {
+export function GraphPanel({ settings: s, local, threeD, update }: Props) {
   const { t } = useTranslation();
-  const toggle = (key: 'showOrphans' | 'showGhosts' | 'showAttachments' | 'showTags') => (
+  const toggle = (
+    key:
+      | 'showOrphans'
+      | 'showGhosts'
+      | 'showAttachments'
+      | 'showTags'
+      | 'showDocuments'
+      | 'curvedLinks'
+      | 'showLegend',
+  ) => (
     <label className="graph-row check">
       <input
         type="checkbox"
@@ -102,6 +113,7 @@ export function GraphPanel({ settings: s, local, update }: Props) {
         </label>
         {toggle('showOrphans')}
         {toggle('showGhosts')}
+        {toggle('showDocuments')}
         {toggle('showAttachments')}
         {toggle('showTags')}
       </details>
@@ -209,6 +221,21 @@ export function GraphPanel({ settings: s, local, update }: Props) {
           onChange={(v) => update({ timelapseSeconds: v })}
         />
       </details>
+      {threeD && (
+        <details open>
+          <summary>{t('graph.mode3d')}</summary>
+          {toggle('curvedLinks')}
+          {toggle('showLegend')}
+          <Range
+            label={t('graph.maxNodes3d')}
+            value={s.maxNodes3d}
+            min={GRAPH3D_MIN_NODES}
+            max={GRAPH3D_MAX_NODES}
+            step={500}
+            onChange={(v) => update({ maxNodes3d: v })}
+          />
+        </details>
+      )}
       <details>
         <summary>{t('graph.forces')}</summary>
         {(['center', 'repel', 'linkStrength', 'linkDistance'] as const).map(force)}

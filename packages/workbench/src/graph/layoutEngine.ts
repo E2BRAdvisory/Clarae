@@ -31,6 +31,7 @@ const LARGE = 3000;
 
 export class LayoutEngine {
   readonly n: number;
+  readonly dims = 2;
   private readonly sim: Simulation<SimNode, SimLink>;
   private readonly nodes: SimNode[];
   private readonly links: SimLink[];

@@ -298,6 +298,43 @@ export const lazyStyles = (options) => ({
   },
 });
 
+/** The packages of the 3D graph: a chunk that holds one of them must not build code at run time. */
+const GRAPH3D_PACKAGES =
+  /node_modules\/(three|3d-force-graph|three-forcegraph|three-render-objects|d3-force-3d)\//;
+/** `eval(…)` and `new Function(…)`: what `script-src` without 'unsafe-eval' refuses to run. */
+const RUNTIME_CODE = /\bnew\s+Function\s*\(|\beval\s*\(/g;
+
+/**
+ * Fails the build when a chunk that carries the 3D graph (three.js, 3d-force-graph and what they
+ * bring) contains `eval(` or `new Function(`: the production CSP has no 'unsafe-eval', so such a
+ * chunk would break in the released application only, when the 3D view opens. The known source is
+ * ngraph, replaced by a stub (see the aliases of baseOptions); this guard is for the next one, an
+ * upgrade included. It needs the metafile, which the builds of the applications ask for.
+ */
+export const noRuntimeCode = {
+  name: 'no-runtime-code',
+  setup(build) {
+    build.onEnd(async (result) => {
+      if (result.errors.length || !result.metafile) return;
+      const root = build.initialOptions.absWorkingDir ?? process.cwd();
+      const found = [];
+      for (const [file, out] of Object.entries(result.metafile.outputs)) {
+        if (!file.endsWith('.js')) continue;
+        if (!Object.keys(out.inputs).some((input) => GRAPH3D_PACKAGES.test(input))) continue;
+        const text = await readFile(resolve(root, file), 'utf8').catch(() => '');
+        const hits = text.match(RUNTIME_CODE);
+        if (hits) found.push(`${file}: ${[...new Set(hits)].join(', ')}`);
+      }
+      if (found.length) {
+        throw new Error(
+          `The 3D graph chunk builds code at run time, which the CSP forbids:\n  ${found.join('\n  ')}\n` +
+            'Alias the package that does it to a stub (packages/workbench/build/stubs).',
+        );
+      }
+    });
+  },
+};
+
 /** Build options that do not depend on the app: bundle, target, loaders, aliases. */
 export function baseOptions({ dev }) {
   return {
@@ -307,8 +344,15 @@ export function baseOptions({ dev }) {
     target: ['es2022', 'chrome100', 'safari15'],
     tsconfig,
     conditions: [dev ? 'development' : 'production'],
-    // One KaTeX for the whole app: mermaid and Excalidraw each depend on their own copy.
-    alias: { katex: dirname(require.resolve('katex/package.json')) },
+    alias: {
+      // One KaTeX for the whole app: mermaid and Excalidraw each depend on their own copy.
+      katex: dirname(require.resolve('katex/package.json')),
+      // The 3D graph (ADR-0055): the ngraph layouts build code at run time, which the CSP forbids,
+      // and `three/webgpu` is a second renderer nobody asks for. noRuntimeCode checks the result.
+      'ngraph.forcelayout': join(workbenchRoot, 'build/stubs/ngraph.mjs'),
+      'ngraph.graph': join(workbenchRoot, 'build/stubs/ngraph.mjs'),
+      'three/webgpu': join(workbenchRoot, 'build/stubs/three-webgpu.mjs'),
+    },
     legalComments: 'none',
     loader: {
       '.woff': 'file',
@@ -321,6 +365,6 @@ export function baseOptions({ dev }) {
     define: {
       'process.env.NODE_ENV': JSON.stringify(dev ? 'development' : 'production'),
     },
-    plugins: [urlImports, excalidrawFork],
+    plugins: [urlImports, excalidrawFork, noRuntimeCode],
   };
 }

@@ -35,9 +35,12 @@ describe('graph refresh', () => {
       false,
     );
     expect(graphNeedsReload(batch([{ type: 'create', path: '.clarae/graph.json' }]))).toBe(false);
-    // An edited attachment or canvas has no links in the graph.
+    // An edited attachment or base has no links in the graph.
     expect(graphNeedsReload(batch([{ type: 'modify', path: 'img/a.png' }]))).toBe(false);
-    expect(graphNeedsReload(batch([{ type: 'modify', path: 'board.canvas' }]))).toBe(false);
+    expect(graphNeedsReload(batch([{ type: 'modify', path: 'People.base' }]))).toBe(false);
+    // A drawing, a canvas and a presentation hold links like a note does.
+    for (const path of ['board.canvas', 'Sketch.excalidraw', 'Deck.marp'])
+      expect(graphNeedsReload(batch([{ type: 'modify', path }]))).toBe(true);
     // An edited note may have new links, tags or properties; files come and go.
     expect(graphNeedsReload(batch([{ type: 'modify', path: 'A.md' }]))).toBe(true);
     expect(graphNeedsReload(batch([{ type: 'create', path: 'img/b.png' }]))).toBe(true);
@@ -79,6 +82,29 @@ describe('graph refresh', () => {
     expect(Number.isNaN(s[4] as number)).toBe(true);
     expect(Math.hypot((s[6] as number) - 100, s[7] as number)).toBeLessThan(20);
     expect(seedPositions({ ids: ['X.md'], positions: Float32Array.of(1, 1) }, m)).toBeNull();
+  });
+
+  it('seeds a layout in three dimensions from x,y,z triples', () => {
+    const m = buildModel(
+      graph(
+        ['A.md', 'B.md', 'New.md', 'Lone.md'],
+        [
+          [0, 1],
+          [2, 1],
+        ],
+      ),
+    );
+    const prev = { ids: ['A.md', 'B.md'], positions: Float32Array.of(0, 0, 0, 100, 50, -20) };
+    const s = seedPositions(prev, m, 3) as Float32Array;
+    expect(s).toHaveLength(12);
+    expect(Array.from(s.subarray(0, 6))).toEqual([0, 0, 0, 100, 50, -20]);
+    // The new note starts next to B, in space; the one without neighbours is left to the engine.
+    expect(
+      Math.hypot((s[6] as number) - 100, (s[7] as number) - 50, (s[8] as number) + 20),
+    ).toBeCloseTo(12);
+    expect(Number.isNaN(s[9] as number)).toBe(true);
+    // A 2D layout is no seed for a 3D one: the triples would be read across nodes.
+    expect(seedPositions({ ids: ['A.md'], positions: Float32Array.of(1, 1) }, m, 3)).toBeNull();
   });
 
   it('starts a warm layout from the given positions and barely moves a settled graph', () => {

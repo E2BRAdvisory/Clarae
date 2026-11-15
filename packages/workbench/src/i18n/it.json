@@ -551,6 +551,8 @@
     "sharing_share": "Condividi la nota corrente…",
     "graph_open": "Apri vista grafo",
     "graph_open_local": "Apri grafo locale",
+    "graph_open_3d": "Apri vista grafo in 3D",
+    "graph_toggle_3d": "Grafo: passa tra 2D e 3D",
     "bases_new": "Nuova base",
     "daily_open_today": "Apri la nota giornaliera di oggi",
     "daily_previous": "Apri la nota giornaliera precedente",
@@ -1089,6 +1091,7 @@
     "showOrphans": "Orfane",
     "showGhosts": "Link non risolti",
     "showAttachments": "Allegati",
+    "showDocuments": "Disegni, lavagne e basi",
     "showTags": "Tag come nodi",
     "groups": "Gruppi",
     "addGroup": "Aggiungi gruppo",
@@ -1109,7 +1112,34 @@
     "both": "Link e backlink",
     "in": "Backlink",
     "out": "Link in uscita",
-    "openGraph": "Apri grafo globale"
+    "openGraph": "Apri grafo globale",
+    "mode3d": "Vista 3D",
+    "sceneLabel": "Grafo di note e link in 3D. Le frecce ruotano la vista, più e meno regolano lo zoom, 0 adatta, le parentesi quadre passano da un nodo all’altro, Invio apre il nodo, Esc toglie la selezione.",
+    "releaseNodes": "Sblocca i nodi fissati ({{n}})",
+    "curvedLinks": "Link reciproci curvi",
+    "showLegend": "Legenda",
+    "maxNodes3d": "Nodi mostrati (massimo)",
+    "legend": "Tipi di documento",
+    "no3d": {
+      "webgl": "La vista 3D richiede WebGL2, che questo dispositivo non offre: il grafo è mostrato in 2D.",
+      "lost": "Il contesto grafico è andato perso: il grafo è mostrato in 2D. Scegli di nuovo la vista 3D per riprovare.",
+      "limit": "Ci sono già {{max}} grafi aperti in 3D: questo è mostrato in 2D.",
+      "failed": "La vista 3D non si è avviata: il grafo è mostrato in 2D."
+    },
+    "kind": {
+      "note": "Note",
+      "presentation": "Presentazioni",
+      "drawing": "Disegni",
+      "canvas": "Lavagne",
+      "base": "Basi",
+      "image": "Immagini",
+      "pdf": "PDF",
+      "audio": "Audio",
+      "video": "Video",
+      "other": "Altri file",
+      "tag": "Tag",
+      "ghost": "Note non ancora create"
+    }
   },
   "bases": {
     "new": "Nuova base",

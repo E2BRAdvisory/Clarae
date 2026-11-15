@@ -551,6 +551,8 @@
     "sharing_share": "Share the current note…",
     "graph_open": "Open graph view",
     "graph_open_local": "Open local graph",
+    "graph_open_3d": "Open graph view in 3D",
+    "graph_toggle_3d": "Graph: switch between 2D and 3D",
     "bases_new": "New base",
     "daily_open_today": "Open today's daily note",
     "daily_previous": "Open previous daily note",
@@ -1089,6 +1091,7 @@
     "showOrphans": "Orphans",
     "showGhosts": "Unresolved links",
     "showAttachments": "Attachments",
+    "showDocuments": "Drawings, canvases and bases",
     "showTags": "Tags as nodes",
     "groups": "Groups",
     "addGroup": "Add group",
@@ -1109,7 +1112,34 @@
     "both": "Links and backlinks",
     "in": "Backlinks",
     "out": "Outgoing links",
-    "openGraph": "Open global graph"
+    "openGraph": "Open global graph",
+    "mode3d": "3D view",
+    "sceneLabel": "Graph of notes and links in 3D. Arrow keys turn the view, plus and minus zoom, 0 fits, brackets move between nodes, Enter opens the node, Escape clears the selection.",
+    "releaseNodes": "Release the nodes held in place ({{n}})",
+    "curvedLinks": "Curved two-way links",
+    "showLegend": "Legend",
+    "maxNodes3d": "Nodes shown (max)",
+    "legend": "Kinds of document",
+    "no3d": {
+      "webgl": "The 3D view needs WebGL2, which this device does not provide: the graph is shown in 2D.",
+      "lost": "The graphics context was lost: the graph is shown in 2D. Choose the 3D view again to retry.",
+      "limit": "{{max}} graphs are already open in 3D: this one is shown in 2D.",
+      "failed": "The 3D view could not start: the graph is shown in 2D."
+    },
+    "kind": {
+      "note": "Notes",
+      "presentation": "Presentations",
+      "drawing": "Drawings",
+      "canvas": "Canvases",
+      "base": "Bases",
+      "image": "Images",
+      "pdf": "PDF",
+      "audio": "Audio",
+      "video": "Video",
+      "other": "Other files",
+      "tag": "Tags",
+      "ghost": "Notes not created yet"
+    }
   },
   "bases": {
     "new": "New base",

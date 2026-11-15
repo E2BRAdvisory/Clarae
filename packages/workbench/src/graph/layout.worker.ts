@@ -1,6 +1,7 @@
 // Web Worker running the layout (§M6-WP1): the UI thread only receives position buffers.
-import { LayoutEngine } from './layoutEngine';
-import type { WorkerIn, WorkerOut } from './layoutHost';
+import type { LayoutEngine } from './layoutEngine';
+import { LayoutEngine3D } from './layoutEngine3d';
+import { createEngine, type WorkerIn, type WorkerOut } from './layoutHost';
 
 interface WorkerScope {
   onmessage: ((e: MessageEvent<WorkerIn>) => void) | null;
@@ -10,7 +11,7 @@ const scope = self as unknown as WorkerScope;
 
 /** Time spent computing between two posts: about one frame. */
 const BUDGET_MS = 14;
-let engine: LayoutEngine | null = null;
+let engine: LayoutEngine | LayoutEngine3D | null = null;
 let running = false;
 let generation = 0;
 
@@ -45,7 +46,7 @@ scope.onmessage = (e) => {
     case 'init':
       generation++;
       running = false;
-      engine = new LayoutEngine(m.n, m.edges, m.forces, m.warm);
+      engine = createEngine(m.n, m.edges, m.forces, m.warm, m.dims ?? 2);
       post(false);
       run();
       break;
@@ -55,6 +56,14 @@ scope.onmessage = (e) => {
       break;
     case 'reheat':
       engine?.reheat();
+      run();
+      break;
+    case 'fix':
+      if (engine instanceof LayoutEngine3D) engine.fix(m.index, m.x, m.y, m.z);
+      run();
+      break;
+    case 'release':
+      if (engine instanceof LayoutEngine3D) engine.release(m.index);
       run();
       break;
     case 'stop':

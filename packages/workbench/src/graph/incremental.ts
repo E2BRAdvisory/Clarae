@@ -10,16 +10,18 @@ import { isConfigPath } from '../platform/vaultPaths';
 
 /** Device and vault settings (the configuration folder): never part of the graph. */
 const isConfig = isConfigPath;
-const isNote = (path: string): boolean => /\.md$/i.test(path);
+/** Files whose content holds links: a note, a presentation, a drawing, a canvas. */
+const hasLinks = (path: string): boolean => /\.(md|marp|excalidraw|canvas)$/i.test(path);
 
 /**
  * Whether a batch of file changes can alter the graph. Creations, deletions and renames add or
  * remove nodes; an edited note may have gained or lost links, tags or the properties the filters
- * and groups match. An edited attachment or canvas, and any change under .clarae/, cannot.
+ * and groups match, and an edited drawing or canvas the links it holds. An edited attachment or
+ * base, and any change under .clarae/, cannot.
  */
 export function graphNeedsReload(batch: VaultChangeBatch): boolean {
   if (batch.unknown) return true;
-  return batch.changes.some((c) => !isConfig(c.path) && (c.type !== 'modify' || isNote(c.path)));
+  return batch.changes.some((c) => !isConfig(c.path) && (c.type !== 'modify' || hasLinks(c.path)));
 }
 
 const sameGroups = (
@@ -58,7 +60,7 @@ export function sameGraph(a: GraphData, b: GraphData): boolean {
 /** Where the previous layout left its nodes. */
 export interface PreviousLayout {
   ids: readonly string[];
-  /** x0,y0,x1,y1,… in the order of ids. */
+  /** x0,y0,x1,y1,… in the order of ids (x0,y0,z0,… for a layout in three dimensions). */
   positions: Float32Array;
 }
 
@@ -68,44 +70,50 @@ const NEW_NODE_OFFSET = 12;
 /**
  * Starting positions for a new model from the previous layout: a node that was already shown keeps
  * its place, a new one starts next to its placed neighbours (NaN: no neighbour, the layout engine
- * places it). Null when no node is left in common (lay out from scratch).
+ * places it). Null when no node is left in common (lay out from scratch). `dims` is the number of
+ * coordinates of a node, in the previous layout and in the answer.
  */
-export function seedPositions(prev: PreviousLayout, m: GraphModel): Float32Array | null {
+export function seedPositions(
+  prev: PreviousLayout,
+  m: GraphModel,
+  dims: 2 | 3 = 2,
+): Float32Array | null {
   const was = new Map<string, number>();
   prev.ids.forEach((id, i) => {
-    if (2 * i + 1 < prev.positions.length) was.set(id, i);
+    if (dims * i + dims - 1 < prev.positions.length) was.set(id, i);
   });
-  const out = new Float32Array(m.n * 2).fill(NaN);
+  const out = new Float32Array(m.n * dims).fill(NaN);
   let kept = 0;
   for (let i = 0; i < m.n; i++) {
     const j = was.get((m.data.nodes[i] as { id: string }).id);
     if (j === undefined) continue;
-    const x = prev.positions[2 * j] as number;
-    const y = prev.positions[2 * j + 1] as number;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    out[2 * i] = x;
-    out[2 * i + 1] = y;
+    let finite = true;
+    for (let d = 0; d < dims; d++) finite &&= Number.isFinite(prev.positions[dims * j + d]);
+    if (!finite) continue;
+    for (let d = 0; d < dims; d++) out[dims * i + d] = prev.positions[dims * j + d] as number;
     kept++;
   }
   if (kept === 0) return null;
   // New nodes: next to the mean of their placed neighbours, each at its own angle.
+  const sum = [0, 0, 0];
   for (let i = 0; i < m.n; i++) {
-    if (!Number.isNaN(out[2 * i])) continue;
-    let sx = 0;
-    let sy = 0;
+    if (!Number.isNaN(out[dims * i])) continue;
+    sum.fill(0);
     let c = 0;
     for (let k = m.off[i] as number; k < (m.off[i + 1] as number); k++) {
       const nb = m.adj[k] as number;
-      const x = out[2 * nb] as number;
-      if (Number.isNaN(x) || nb === i) continue;
-      sx += x;
-      sy += out[2 * nb + 1] as number;
+      if (Number.isNaN(out[dims * nb]) || nb === i) continue;
+      for (let d = 0; d < dims; d++) sum[d] = (sum[d] as number) + (out[dims * nb + d] as number);
       c++;
     }
     if (c === 0) continue;
     const angle = i * 2.399963; // golden angle: neighbours of one node fan out
-    out[2 * i] = sx / c + Math.cos(angle) * NEW_NODE_OFFSET;
-    out[2 * i + 1] = sy / c + Math.sin(angle) * NEW_NODE_OFFSET;
+    // In space the same angle walks a sphere: the height goes from pole to pole as i grows.
+    const h = dims === 3 ? ((i * 0.618034) % 1) * 2 - 1 : 0;
+    const ring = Math.sqrt(1 - h * h) * NEW_NODE_OFFSET;
+    out[dims * i] = (sum[0] as number) / c + Math.cos(angle) * ring;
+    out[dims * i + 1] = (sum[1] as number) / c + Math.sin(angle) * ring;
+    if (dims === 3) out[dims * i + 2] = (sum[2] as number) / c + h * NEW_NODE_OFFSET;
   }
   return out;
 }

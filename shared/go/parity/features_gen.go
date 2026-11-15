@@ -202,6 +202,9 @@ const (
 	// Graph: Grafo del vault e grafo locale
 	Graph FeatureID = "graph"
 
+	// Graph3d: Grafo del vault in 3D, con le icone dei tipi di documento
+	Graph3d FeatureID = "graph.3d"
+
 	// Slides: Presentazioni da una nota
 	Slides FeatureID = "slides"
 
@@ -352,6 +355,7 @@ var Features = []FeatureID{
 	Properties,
 	NoteStats,
 	Graph,
+	Graph3d,
 	Slides,
 	Bookmarks,
 	Workspaces,

@@ -1433,6 +1433,23 @@ features:
         - web/e2e/workbench.spec.ts
         - apps/desktop/frontend/e2e/graph.spec.ts
 
+  - id: graph.3d
+    title: Grafo del vault in 3D, con le icone dei tipi di documento
+    desktop:
+      status: yes
+      commands: [graph:open-3d, graph:toggle-3d]
+    workbench:
+      status: yes
+    tests:
+      desktop:
+        - packages/workbench/src/graph/geometry3d.test.ts
+        - packages/workbench/src/graph/layoutEngine3d.test.ts
+        - packages/workbench/src/graph/GraphView.3d.test.tsx
+        - apps/desktop/frontend/e2e/graph-3d.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/graph-3d.spec.ts
+        - web/e2e-security/graph3d-csp.spec.ts
+
   - id: slides
     title: Presentazioni da una nota
     desktop:

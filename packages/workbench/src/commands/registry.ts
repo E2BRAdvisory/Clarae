@@ -9,7 +9,8 @@ import { getActiveEditor } from '../editor/registry';
 import { headingCommand, type EditorCommand } from '../editor/handle';
 import { dialog } from '../ui/dialogs';
 import { newCanvas } from '../canvas/commands';
-import { openGraph, openLocalGraph } from '../graph/commands';
+import { openGraph, openGraph3D, openLocalGraph, toggleGraph3D } from '../graph/commands';
+import { canCenterGraph } from '../graph/paths';
 import { newBase } from '../bases/commands';
 import { insertDrawing, newDrawing } from '../drawing/commands';
 import { sceneCommands, toolCommands } from '../drawing/sceneCommands';
@@ -651,8 +652,24 @@ export const commands: Command[] = [
     group: 'view',
     feature: 'graph',
     defaults: [],
-    enabled: () => hasVault() && /\.md$/i.test(activePath() ?? ''),
+    enabled: () => hasVault() && canCenterGraph(activePath() ?? ''),
     run: () => void openLocalGraph(),
+  },
+  {
+    id: 'graph:open-3d',
+    group: 'view',
+    feature: 'graph.3d',
+    defaults: [],
+    enabled: hasVault,
+    run: () => openGraph3D(),
+  },
+  {
+    id: 'graph:toggle-3d',
+    group: 'view',
+    feature: 'graph.3d',
+    defaults: [],
+    enabled: hasVault,
+    run: () => toggleGraph3D(),
   },
   {
     id: 'sidebar:properties',

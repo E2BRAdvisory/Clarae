@@ -266,6 +266,7 @@ for (const theme of ['light', 'dark'] as const) {
       ['sharing and invitations', 'Sharing and invitations'],
       ['import wizard', 'Import…'],
       ['graph view', 'Open graph view'],
+      ['graph view in 3D', 'Open graph view in 3D'],
       ['new base', 'New base'],
     ];
     for (const [name, query] of dialogs) {

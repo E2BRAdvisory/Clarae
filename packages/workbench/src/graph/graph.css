@@ -11,6 +11,11 @@
   min-width: 0;
   overflow: hidden;
 }
+/* the surface that draws the graph (2D canvas or 3D scene) fills the area around the controls */
+.graph-surface {
+  position: absolute;
+  inset: 0;
+}
 .graph-canvas canvas {
   display: block;
   width: 100%;
@@ -86,4 +91,77 @@
 .graph-group input[type='text'] {
   flex: 1;
   min-width: 0;
+}
+/* 3D surface: the scene's canvas, with the labels drawn over it as text */
+.graph3d:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.graph3d.hovering canvas {
+  cursor: pointer;
+}
+.graph3d-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.graph3d-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-shadow:
+    0 0 3px var(--bg),
+    0 0 3px var(--bg);
+  white-space: nowrap;
+}
+.graph3d-label.current {
+  color: var(--text);
+  font-weight: 600;
+}
+.graph-toolbar button.active {
+  background: var(--bg-active);
+  box-shadow: inset 0 -2px 0 var(--accent-bright);
+}
+.graph-notice {
+  position: absolute;
+  top: 48px;
+  left: 8px;
+  max-width: min(420px, calc(100% - 16px));
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 12px;
+}
+.graph-legend {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  list-style: none;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.graph-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.6;
+}
+.graph-legend .count {
+  margin-left: auto;
+  padding-left: 12px;
+  font-variant-numeric: tabular-nums;
 }
