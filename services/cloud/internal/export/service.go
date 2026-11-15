@@ -276,7 +276,7 @@ func (s *Service) Create(ctx context.Context, user, vaultID uuid.UUID) (exportdb
 	var j exportdb.ExportJob
 	err = s.db.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		q := exportdb.New(tx)
-		// The name of 1.x first, then the current one (db.AdvisoryLockKeys): a pod of 1.4 only knows the first.
+		// Serializes the requests of this user (db.AdvisoryLockKeys).
 		for _, key := range db.AdvisoryLockKeys("exports", user.String()) {
 			if err := q.LockExportRequests(ctx, key); err != nil {
 				return err

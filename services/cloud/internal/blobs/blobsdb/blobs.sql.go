@@ -453,8 +453,7 @@ SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
 // its object by the garbage collector until the transaction ends: under this
 // lock a row is inserted only once its object is verified, and the collector
 // deletes an object only when no row exists (see ingestFile and LockObject).
-// The key is "<prefix>blob:<hash>": the caller takes the one of 1.x and then the current one
-// (db.AdvisoryLockKeys), so that pods of 1.4 and of 1.5 exclude each other during an upgrade.
+// The key is "clarae.blob:<hash>" (db.AdvisoryLockKeys).
 func (q *Queries) LockBlobHash(ctx context.Context, key string) error {
 	_, err := q.db.Exec(ctx, lockBlobHash, key)
 	return err

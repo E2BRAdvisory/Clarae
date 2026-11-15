@@ -155,8 +155,8 @@ func (s *Service) checkSums(ctx context.Context, tx db.DBTX, v access.Vault, siz
 	return nil
 }
 
-// lockOwner serializes the quota checks of one owner until tx ends. It takes the lock under the name
-// of 1.x and then under the current one (db.AdvisoryLockKeys): a pod of 1.4 only knows the first.
+// lockOwner serializes the quota checks of one owner until tx ends, under the key of
+// db.AdvisoryLockKeys.
 func lockOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) error {
 	q := blobsdb.New(tx)
 	for _, key := range db.AdvisoryLockKeys("uploads", ownerID.String()) {
@@ -167,8 +167,8 @@ func lockOwner(ctx context.Context, tx db.DBTX, ownerID uuid.UUID) error {
 	return nil
 }
 
-// lockBlob takes the per-hash lock of the publication of a blob until tx ends, under the name of 1.x
-// and then under the current one (db.AdvisoryLockKeys).
+// lockBlob takes the per-hash lock of the publication of a blob until tx ends, under the key of
+// db.AdvisoryLockKeys.
 func lockBlob(ctx context.Context, q *blobsdb.Queries, hash string) error {
 	for _, key := range db.AdvisoryLockKeys("blob", hash) {
 		if err := q.LockBlobHash(ctx, key); err != nil {
