@@ -8,7 +8,7 @@ Il codice 1.5 **non** richiede migrazioni del database (nessuna migrazione nuova
 
 | Voce                                              | 1.x                                                                           | 1.5                                                                                                                                                                                    |
 | ------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Binario e immagine                                | `memobrain-cloud` (`ghcr.io/<owner>/memobrain-cloud`)                         | `clarae-cloud`; la 1.5 pubblica l'immagine **anche** con il vecchio nome (rimozione del vecchio nome nella 1.6)                                                                        |
+| Binario e immagine                                | `memobrain-cloud` (`ghcr.io/<owner>/memobrain-cloud`)                         | `clarae-cloud`; la 1.5 e la 1.6 pubblicano l'immagine **anche** con il vecchio nome (rimozione del vecchio nome nella 1.7)                                                             |
 | Chart Helm                                        | `memobrain` (`oci://ghcr.io/<owner>/charts/memobrain`)                        | `clarae` (`oci://ghcr.io/<owner>/charts/clarae`); per non cambiare nomi e selector degli oggetti: `nameOverride: memobrain`                                                            |
 | Realm Keycloak                                    | `memobrain`                                                                   | un realm esistente **non cambia** e resta `memobrain`; un'installazione nuova importa `clarae`                                                                                         |
 | Client OIDC                                       | `memobrain-desktop`, `memobrain-web`, `memobrain-admin-svc`                   | invariati nel realm esistente (valgono da soli se il realm è `memobrain`); `clarae-*` nei realm nuovi                                                                                  |
@@ -38,7 +38,7 @@ Il codice 1.5 **non** richiede migrazioni del database (nessuna migrazione nuova
 
    Se nel `.env` della 1.x avevate già un `COMPOSE_PROJECT_NAME` diverso, tenete quello: il nome del progetto prefissa i volumi (`<progetto>_pgdata`, `<progetto>_s3data`) e un altro nome ne creerebbe di vuoti (`docker volume ls` mostra quelli esistenti). Utente e database di PostgreSQL sono fissati alla creazione del volume.
 
-3. **Immagine e versione.** Con `MEMOBRAIN_IMAGE` e `MEMOBRAIN_VERSION` nel `.env` basta cambiare `MEMOBRAIN_VERSION` a `1.5.1` (la 1.5.0 non è stata pubblicata): la 1.5 è pubblicata anche come `memobrain-cloud`. Prima della 1.6 passate ai nomi nuovi: `CLARAE_IMAGE=ghcr.io/<owner>/clarae-cloud` e `CLARAE_VERSION=1.5.1` (`CLARAE_*` vince su `MEMOBRAIN_*`). Lo stesso vale per `MEMOBRAIN_HOST` → `CLARAE_HOST` e `MEMOBRAIN_SITE` → `CLARAE_SITE`.
+3. **Immagine e versione.** Con `MEMOBRAIN_IMAGE` e `MEMOBRAIN_VERSION` nel `.env` basta cambiare `MEMOBRAIN_VERSION` a `1.5.1` (la 1.5.0 non è stata pubblicata): la 1.5 e la 1.6 sono pubblicate anche come `memobrain-cloud`. Prima della 1.7 passate ai nomi nuovi: `CLARAE_IMAGE=ghcr.io/<owner>/clarae-cloud` e `CLARAE_VERSION=1.5.1` (`CLARAE_*` vince su `MEMOBRAIN_*`). Lo stesso vale per `MEMOBRAIN_HOST` → `CLARAE_HOST` e `MEMOBRAIN_SITE` → `CLARAE_SITE`.
 4. **Non cambiate** `KC_REALM`, i bucket, i segreti, i volumi. Con `KC_REALM=memobrain` il servizio usa da solo audience, client e bucket della 1.x, e il namespace delle metriche `memobrain`: non serve impostare altro.
 5. `docker compose config -q`, poi `docker compose pull && docker compose up -d`.
 
@@ -66,7 +66,7 @@ Differenze dei valori rispetto alla 1.x:
 
 - `config:` non elenca più `OIDC_AUDIENCE`, `OIDC_ALLOWED_AZP`, `S3_BUCKET_BLOBS`, `S3_BUCKET_EXPORTS`, `KC_REALM`, `KC_ADMIN_CLIENT_ID`: li decide il servizio dall'issuer (realm `memobrain` → nomi della 1.x, altrimenti `clarae-*`). Un valore impostato nei vostri `values` continua a vincere. **Attenzione:** se il vostro realm **non** si chiama `memobrain` ma i client usano i nomi `memobrain-*` e vi affidavate ai default del chart 1.x, impostate esplicitamente in `config:` `OIDC_AUDIENCE`, `OIDC_ALLOWED_AZP`, `OIDC_DESKTOP_CLIENT_ID`, `OIDC_WEB_CLIENT_ID`, `KC_ADMIN_CLIENT_ID` e i bucket: all'avvio il servizio scrive nel log il riepilogo `names in use` con i nomi effettivi.
 - `ingress.grpc.legacyPath` (default `/memobrain.v1.NotifyService`): con `ingress.grpc.mode: path` l'Ingress gRPC instrada anche il servizio della 1.x; con `mode: host` ogni path va al servizio. Vuoto = non instradato.
-- `image.repository` di default è `ghcr.io/e2br/clarae-cloud`. Se i vostri valori impostano `ghcr.io/<owner>/memobrain-cloud` continua a funzionare per la 1.5, ma passate al nome nuovo prima della 1.6.
+- `image.repository` di default è `ghcr.io/e2br/clarae-cloud`. Se i vostri valori impostano `ghcr.io/<owner>/memobrain-cloud` continua a funzionare per la 1.5 e la 1.6, ma passate al nome nuovo prima della 1.7.
 - `config.CLARAE_ALLOW_PLACEHOLDER_SECRETS` (e, fino alla 2.0, `config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS`) per le prove con segreti segnaposto.
 - `values.schema.json` accetta `nameOverride`, `fullnameOverride` e `ingress.grpc.legacyPath`.
 
@@ -95,7 +95,7 @@ Con il realm `memobrain` il servizio **mantiene il namespace `memobrain`** (`mem
 Il cloud non aggiorna i client. Le build desktop pubblicate non hanno l'aggiornamento automatico: ogni utente installa la 1.5 a mano (passi per sistema operativo in [Aggiornare dalla 1.x](../user-guide/installazione.md#aggiornare-dalla-1x)), e un client 1.4.0 e uno 1.5 possono usare lo stesso vault cloud nello stesso periodo.
 
 - **Cartella di configurazione dei vault.** La 1.5 la chiama `.clarae/` (prima `.memobrain/`). All'apertura di un vault sposta nella nuova la parte locale (indice, stato di sincronizzazione, snapshot, layout), che non viaggia nel cloud. Le **impostazioni sincronizzate** (editor, scorciatoie, aspetto, template, …) di un vault **collegato** restano nella vecchia cartella, perché un client 1.4.0 dello stesso vault le legge e le scrive lì: spostarle subito gliele farebbe ricreare, con conflitti.
-- **Lo spostamento lo comanda il Config Profile**, con la chiave `features.config_dir_v2` (default `false` nella 1.5.0, vedi [la tabella delle chiavi](profili-quote-audit.md)). Acceso, il client sposta ogni impostazione sincronizzata nella cartella nuova come un normale spostamento di file (stesso id e stessa cronologia), a fine ciclo, solo per file senza modifiche locali, in modo ripristinabile dopo un'interruzione. **Accendetelo solo dopo che ogni dispositivo di ogni vault collegato ha la 1.5 o successiva**: un client 1.4.0 non vedrebbe più le impostazioni. Spegnerlo ferma gli spostamenti, e quelli fatti restano. Nella 1.6 il default diventa acceso.
+- **Lo spostamento lo comanda il Config Profile**, con la chiave `features.config_dir_v2` (default `false` nella 1.5.0, vedi [la tabella delle chiavi](profili-quote-audit.md)). Acceso, il client sposta ogni impostazione sincronizzata nella cartella nuova come un normale spostamento di file (stesso id e stessa cronologia), a fine ciclo, solo per file senza modifiche locali, in modo ripristinabile dopo un'interruzione. **Accendetelo solo dopo che ogni dispositivo di ogni vault collegato ha la 1.5 o successiva**: un client 1.4.0 non vedrebbe più le impostazioni. Spegnerlo ferma gli spostamenti, e quelli fatti restano. Il default diventa acceso nella 1.7 (non nella 1.6: la rimozione era prevista per la 1.6 ed è stata spostata).
 - **Un vault non collegato** sposta le sue impostazioni all'apertura; se poi si collega al cloud con la chiave spenta, il client le rimette nella cartella vecchia (un file già presente lì resta com'è).
 - **Cosa non entra nel cloud:** i client non scrivono mai in locale un percorso remoto che non sincronizzano (database, cache, layout del dispositivo): un `sync.db` caricato in un vault privato da un client vecchio viene ignorato.
 - **File dei vault:** i disegni (`.excalidraw`) e le presentazioni (`.marp`) scritti dalla 1.x si leggono sempre. La 1.5 scrive i nomi nuovi solo quando un file viene modificato, e un client 1.4.0 non li riconosce: su un disegno toccato dalla 1.5 non vede più le formule modificabili né l'ordine delle diapositive, su una presentazione mostra le slide escluse. Per questo conviene aggiornare tutti i dispositivi insieme.
@@ -105,16 +105,16 @@ Il cloud non aggiorna i client. Le build desktop pubblicate non hanno l'aggiorna
 
 | Che cosa                                                                                        | Rimozione |
 | ----------------------------------------------------------------------------------------------- | --------- |
-| Immagine pubblicata anche come `memobrain-cloud`                                                | 1.6       |
-| Advisory lock con il nome `memobrain.*` (presi prima di quelli nuovi)                           | 1.6       |
-| Default `false` di `features.config_dir_v2` (diventa acceso)                                    | 1.6       |
+| Immagine pubblicata anche come `memobrain-cloud`                                                | 1.7       |
+| Advisory lock con il nome `memobrain.*` (presi prima di quelli nuovi)                           | 1.7       |
+| Default `false` di `features.config_dir_v2` (diventa acceso)                                    | 1.7       |
 | Variabili `MEMOBRAIN_HOST`, `_SITE`, `_IMAGE`, `_VERSION`, `_ALLOW_PLACEHOLDER_SECRETS`         | 2.0       |
 | Default della 1.x per il realm `memobrain` (audience, client, bucket, namespace delle metriche) | 2.0       |
 | Ruolo admin `memobrain-admin` nel default di `OIDC_ADMIN_ROLES`                                 | 2.0       |
 | Servizio gRPC `memobrain.v1.NotifyService` e `ingress.grpc.legacyPath`                          | 2.0       |
 | Redirect `memobrain://` nei realm                                                               | 2.0       |
 
-Le release di rimozione sono quelle scritte nei commenti del codice e in `scripts/rebrand/allowlist.tsv`; se cambiano, cambiano lì e qui.
+Le release di rimozione sono quelle scritte nei commenti del codice e in `scripts/rebrand/allowlist.tsv`; se cambiano, cambiano lì e qui. Le tre rimozioni che la 1.5.0 indicava per la **1.6** sono passate alla **1.7** (decisione del 2026-11-15): la 1.6.0 non toglie nulla.
 
 ## Rollback
 

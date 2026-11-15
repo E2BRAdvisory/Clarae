@@ -7,12 +7,12 @@ package db
 //
 // During a rolling upgrade pods of 1.4 and of 1.5 run together on the same database. A pod of 1.4
 // takes the old name only, so a pod of 1.5 that took the new name only would not exclude it: two
-// uploads of the same blob, or two quota checks of the same owner, could run at once. For the whole
-// 1.5 line a pod therefore takes the OLD lock first and the NEW one second, always in this order (a
+// uploads of the same blob, or two quota checks of the same owner, could run at once. For the 1.5 and
+// 1.6 lines a pod therefore takes the OLD lock first and the NEW one second, always in this order (a
 // fixed order cannot deadlock: whoever holds the old lock is the only one that proceeds to the new
 // one), and both are released when the transaction ends.
 //
-// Dropped in 1.6, when no pod of 1.x can be running any more: AdvisoryLockKeys then returns the new
+// Dropped in 1.7, when no pod of 1.x can be running any more: AdvisoryLockKeys then returns the new
 // name alone. Nothing else changes (the keys are passed to the generated Lock* queries).
 
 // legacyLockPrefix and lockPrefix start the names of the string-keyed advisory locks.
