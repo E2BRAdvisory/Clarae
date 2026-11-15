@@ -64,6 +64,7 @@
   },
   "editor": {
     "empty": "Seleziona una nota o creane una nuova.",
+    "emptyActions": "Per iniziare",
     "conflict": "Questa nota è cambiata su disco. Ricarica per vedere il nuovo contenuto oppure sovrascrivilo.",
     "reload": "Ricarica",
     "overwrite": "Sovrascrivi",

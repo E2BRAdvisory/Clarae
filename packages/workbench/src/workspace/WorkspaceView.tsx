@@ -1,13 +1,12 @@
 import { useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../state/store';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
+import { EmptyPane } from './EmptyPane';
 import type { LayoutNode, Pane } from './layout';
 import { NoteView } from './NoteView';
 import { TabBar } from './TabBar';
 
 function PaneView({ vaultId, pane }: { vaultId: string; pane: Pane }) {
-  const { t } = useTranslation();
   const activePane = useAppStore((s) => s.layout.activePane);
   const focusPane = useAppStore((s) => s.focusPane);
   const tab = pane.tabs.find((x) => x.id === pane.active);
@@ -31,7 +30,7 @@ function PaneView({ vaultId, pane }: { vaultId: string; pane: Pane }) {
             />
           </ErrorBoundary>
         ) : (
-          <div className="editor-empty">{t('editor.empty')}</div>
+          <EmptyPane paneId={pane.id} />
         )}
       </div>
     </div>

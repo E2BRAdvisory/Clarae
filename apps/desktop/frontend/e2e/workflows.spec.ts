@@ -69,7 +69,21 @@ test('split panes and the command palette', async ({ page }) => {
   await page.locator('.tree .node', { hasText: 'One' }).click();
   await page.keyboard.press('ControlOrMeta+\\');
   await expect(page.locator('.pane')).toHaveCount(2);
-  await page.locator('.pane.focused .editor-empty, .pane.focused').first().click();
+  await page.locator('.pane.focused').click();
   await page.locator('.tree .node', { hasText: 'Two' }).click();
   await expect(page.getByRole('tab', { name: /Two/ })).toBeVisible();
+});
+
+test('a pane with nothing open offers what to put in it', async ({ page }) => {
+  await openVault(page, { 'One.md': '# One' });
+  const start = page.getByRole('group', { name: 'Start here' });
+  await expect(start.getByRole('button')).toHaveCount(5);
+  await start.getByRole('button', { name: /New note/ }).click();
+  await expect(page.getByRole('tab', { name: /Untitled/ })).toBeVisible();
+  await expect(start).toHaveCount(0);
+
+  // With the last tab closed the pane offers the commands again; the switcher opens from there.
+  await page.keyboard.press('ControlOrMeta+w');
+  await start.getByRole('button', { name: /Quick switcher/ }).click();
+  await expect(page.getByPlaceholder('Find or create a note…')).toBeVisible();
 });

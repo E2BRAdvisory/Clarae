@@ -200,6 +200,8 @@ for (const theme of ['light', 'dark'] as const) {
 
     test('shell with a note open, sidebar panels and status bar', async ({ page }) => {
       await openVault(page, theme);
+      await expect(page.getByRole('group', { name: 'Start here' })).toBeVisible();
+      await scan(page, 'empty pane');
       await page.keyboard.press('ControlOrMeta+n');
       await expect(page.getByLabel('Note editor')).toBeVisible();
       await scan(page, 'shell');

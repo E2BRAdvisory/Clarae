@@ -64,6 +64,7 @@
   },
   "editor": {
     "empty": "Select a note or create a new one.",
+    "emptyActions": "Start here",
     "conflict": "This note changed on disk. Reload to see the new content or overwrite it.",
     "reload": "Reload",
     "overwrite": "Overwrite",

@@ -286,11 +286,67 @@ button.icon[aria-pressed='true'] {
 .editor-host[data-mode='source'] .cm-focused {
   outline: none;
 }
-.editor-empty {
+/* a pane with nothing open: the commands that put something in it, one pill each */
+.empty-pane {
   flex: 1;
-  display: grid;
-  place-items: center;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
   color: var(--text-muted);
+}
+.empty-pane p {
+  margin: 0;
+}
+.empty-pane ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 260px);
+}
+.empty-pane li.gap {
+  margin-top: 8px;
+}
+.empty-pane button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+}
+.empty-pane button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.empty-pane button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+.empty-pane button .label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.empty-pane kbd {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 12px;
 }
 .banner {
   padding: 8px 16px;
