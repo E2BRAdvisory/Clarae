@@ -440,6 +440,22 @@ func (m *Manager) ClearData(vaultID string) error {
 	return nil
 }
 
+// RemoveStore deletes the session data kept under a data store identifier, for a vault the
+// application no longer knows (the sweep of the orphaned stores). Unlike ClearData it names the
+// store and not the vault, closes no view and does not create the identifier of a vault that never had
+// one: the caller has made sure that no view of the Manager uses it. A store the platform never
+// created is not an error. ErrUnavailable when there is no driver (yet).
+func (m *Manager) RemoveStore(store string) error {
+	d := m.driver()
+	if d == nil {
+		return ErrUnavailable
+	}
+	if err := d.RemoveData(store); err != nil {
+		return fmt.Errorf("%w: %w", ErrDriver, err)
+	}
+	return nil
+}
+
 // storeOf is the identifier of the session data of a vault.
 func (m *Manager) storeOf(vaultID string) (string, error) {
 	if m.opts.DataStore != nil {

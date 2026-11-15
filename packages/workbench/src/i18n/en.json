@@ -400,7 +400,17 @@
   },
   "switcher": {
     "title": "Quick switcher",
-    "placeholder": "Find or create a note…",
+    "placeholder": "Find a file or create a note…",
+    "kind": {
+      "note": "Note",
+      "presentation": "Presentation",
+      "alias": "Alias of a note",
+      "heading": "Heading",
+      "webapp": "Application",
+      "canvas": "Canvas",
+      "base": "Base",
+      "drawing": "Drawing"
+    },
     "create": "Create \"{{name}}\""
   },
   "hotkeys": {

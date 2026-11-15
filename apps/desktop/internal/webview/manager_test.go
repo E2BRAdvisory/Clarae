@@ -774,6 +774,29 @@ func TestClearData(t *testing.T) {
 	}
 }
 
+func TestRemoveStore(t *testing.T) {
+	e := newEnv(t)
+	live := e.open("v1", "https://example.com/")
+	const orphan = "0198a1b2-0000-7000-8000-00000000abcd"
+	if err := e.m.RemoveStore(orphan); err != nil { // a store the platform never created is not an error
+		t.Fatal(err)
+	}
+	if got := e.f.RemovedStores(); len(got) != 1 || got[0] != orphan {
+		t.Fatalf("removed %v", got)
+	}
+	if _, ok := e.f.View(live); !ok {
+		t.Fatal("removing the data of a vault that is gone closed a view")
+	}
+	e.f.Fail(errors.New("store busy"))
+	if err := e.m.RemoveStore(orphan); !errors.Is(err, ErrDriver) {
+		t.Fatalf("RemoveStore with a failing platform: %v", err)
+	}
+	none := NewManager(Options{})
+	if err := none.RemoveStore(orphan); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("RemoveStore without a driver: %v", err)
+	}
+}
+
 func TestReserveKeys(t *testing.T) {
 	e := newEnv(t)
 	if err := e.m.ReserveKeys([]string{"CMD+W", "cmd+w", "ctrl+shift+tab", "cmd+alt+left"}); err != nil {

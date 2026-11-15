@@ -255,7 +255,7 @@ for (const theme of ['light', 'dark'] as const) {
       await scan(page, 'palette');
       await page.keyboard.press('Escape');
       await page.keyboard.press('ControlOrMeta+o');
-      await expect(page.getByPlaceholder('Find or create a note…')).toBeVisible();
+      await expect(page.getByPlaceholder('Find a file or create a note…')).toBeVisible();
       await scan(page, 'switcher');
     });
 

@@ -102,6 +102,11 @@ func (h *Host) NativeViews() webview.Driver {
 	return h.views
 }
 
+// NativeViewsSupported says whether this build has a driver at all (app.NativeViewsSupport): NativeViews
+// answers nil both before the window exists and for good on a system without one, and the core must
+// tell the two apart before it forgets anything about the session data of the applications.
+func (h *Host) NativeViewsSupported() bool { return nativeview.Supported }
+
 func (h *Host) Emit(_ context.Context, name string, payload any) {
 	a, _ := h.application()
 	if a == nil {

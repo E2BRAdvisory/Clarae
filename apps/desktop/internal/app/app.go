@@ -203,6 +203,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.sync.Start(ctx)
 	a.auth.Restore(ctx)
 	a.startUpdater(ctx)
+	a.startWebViewSweep(ctx) // in the background: the start does not wait for it
 	a.logger.Info().Str("version", a.opts.Version).Str("data_dir", a.opts.DataDir).Msg("started")
 }
 

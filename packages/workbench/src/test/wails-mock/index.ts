@@ -202,6 +202,24 @@ const baseName = (p: string): string => p.slice(p.lastIndexOf('/') + 1);
 const stem = (p: string): string => baseName(p).replace(/\.md$/, '');
 const dirOf = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
 const lower = (s: string): string => s.toLowerCase();
+/** The extension of a file name, without the dot and in lower case; "" for a name that has none. */
+const extOf = (p: string): string => {
+  const name = baseName(p);
+  const i = name.lastIndexOf('.');
+  return i <= 0 ? '' : lower(name.slice(i + 1));
+};
+
+/**
+ * The Suggestion.Kind the core gives, in the quick switcher, to the files that are not Markdown
+ * notes (links.SuggestFiles): by extension, whatever its case. A presentation is a note for the index.
+ */
+const SWITCHER_FILE_KINDS = new Map<string, string>([
+  ['marp', 'note'],
+  ['webapp', 'webapp'],
+  ['canvas', 'canvas'],
+  ['base', 'base'],
+  ['excalidraw', 'drawing'],
+]);
 
 function entriesOf(v: MockVault): Entry[] {
   const out: Entry[] = [];
@@ -737,7 +755,12 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     ): Promise<Suggestion[]> => {
       const v = vaultOf(id);
       const out: Suggestion[] = [];
-      const notes = [...v.files.entries()].filter(([p]) => isNote(p));
+      // The quick switcher ('all') lists nothing of the trash or of a hidden folder (a path with a
+      // segment that starts with a dot: .trash, .clarae, .git), as the core does.
+      const hidden = (p: string): boolean => p.split('/').some((seg) => seg.startsWith('.'));
+      const notes = [...v.files.entries()].filter(
+        ([p]) => isNote(p) && !(kind === 'all' && hidden(p)),
+      );
       if (kind === 'notes' || kind === 'all') {
         for (const [p, c] of notes) {
           const s = Math.max(fuzzy(query, stem(p)), Math.floor(fuzzy(query, p) / 2));
@@ -755,6 +778,18 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
             if (sa > 0)
               out.push({ kind: 'alias', label: a, path: p, detail: stem(p), line: 0, score: sa });
           }
+        }
+      }
+      if (kind === 'all') {
+        // What the quick switcher opens that is not a note (links.SuggestFiles): presentations count
+        // as notes, and the files that open in a tab of their own come with a kind of their own.
+        // Nothing else (a .txt, a .zip) is listed, and the wikilink completion ('notes') never sees these.
+        for (const p of v.files.keys()) {
+          const fileKind = hidden(p) ? undefined : SWITCHER_FILE_KINDS.get(extOf(p));
+          const name = baseName(p).replace(/\.[^.]*$/, '');
+          const s = Math.max(fuzzy(query, name), Math.floor(fuzzy(query, p) / 2));
+          if (fileKind && s > 0)
+            out.push({ kind: fileKind, label: name, path: p, detail: dirOf(p), line: 0, score: s });
         }
       }
       if (kind === 'headings' || (kind === 'all' && query.length >= 2)) {

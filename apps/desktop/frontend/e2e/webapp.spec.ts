@@ -176,6 +176,41 @@ test('an application is created from the empty pane too', async ({ page, cloud }
   await expect(tab(page, 'example.org.webapp')).toBeVisible();
 });
 
+test('the quick switcher finds an application by its name and opens it in its tab', async ({
+  page,
+  cloud,
+}) => {
+  await open(page, cloud, {
+    'Status board.webapp': APP,
+    'Readme.md': '# Readme\n',
+    'Status.txt': 'not something the switcher opens',
+  });
+  await page.keyboard.press('ControlOrMeta+o');
+  const input = page.getByRole('combobox', { name: 'Find a file or create a note…' });
+  await input.fill('status');
+  // the kind is in the name of the option; a text file is not listed
+  await expect(page.getByRole('option', { name: /Status board, Application/ })).toBeVisible();
+  await expect(page.getByRole('option', { name: /Status\.txt|Status, / })).toHaveCount(0);
+  await input.press('Enter');
+  await expect(tab(page, 'Status board.webapp')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Find a file or create a note…' })).toBeHidden();
+
+  if (onWeb()) {
+    // no browser inside the tab: the card, which opens the page in a tab of the browser
+    await expect(page.getByRole('heading', { name: 'Status board' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open in the browser' })).toBeVisible();
+    return;
+  }
+  // the application's own tab, with the question about the origin, and not the system's application
+  await expect(page.getByRole('heading', { name: 'Open https://example.com here?' })).toBeVisible();
+  expect(await opens(page)).toBe(0);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __mock: { systemOpens: string[] } }).__mock.systemOpens,
+    ),
+  ).toEqual([]);
+});
+
 test('an address that is not http or https is refused, and nothing is written', async ({
   page,
   cloud,
@@ -325,7 +360,7 @@ test('the view hides under the command palette, a dialog and a menu, and comes b
 
   // the quick switcher
   await page.keyboard.press('ControlOrMeta+o');
-  await expect(page.getByRole('combobox', { name: 'Find or create a note…' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Find a file or create a note…' })).toBeVisible();
   await visible(page, false);
   await page.keyboard.press('Escape');
   await visible(page, true);

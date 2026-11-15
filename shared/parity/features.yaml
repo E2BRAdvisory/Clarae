@@ -1162,14 +1162,18 @@ features:
     desktop:
       status: yes
       commands: [switcher:open, note:random]
+      note: il selettore trova anche applicazioni, lavagne, basi e disegni (per nome, con il tipo letto dai lettori di schermo) e li apre nella loro vista; la creazione di una nota resta offerta se con quel nome c'è solo un file di un altro tipo
     workbench:
       status: yes
     tests:
       desktop:
         - packages/workbench/src/commands/registry.test.ts
+        - packages/workbench/src/commands/QuickSwitcher.test.tsx
         - apps/desktop/frontend/e2e/workflows.spec.ts
+        - apps/desktop/frontend/e2e/quick-switcher.spec.ts
       workbench:
         - apps/desktop/frontend/e2e/workflows.spec.ts
+        - apps/desktop/frontend/e2e/quick-switcher.spec.ts
 
   - id: search
     title: Ricerca nel vault
@@ -1455,7 +1459,7 @@ features:
     title: Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
     desktop:
       status: yes
-      note: dietro il flag `features.web_viewer` del profilo (spento di default). Un'applicazione è un file `.webapp` (`{"version":1,"url":"https://…"}`) del vault, quindi rinomina, eliminazione, segnalibri e ripristino delle tab valgono come per ogni file (il selettore rapido, che cerca solo le note, non li trova, per questo c'è `app:open`). Alla prima apertura di un'origine su questo dispositivo la UI chiede conferma (per dispositivo e per vault, fuori dal vault). Dove non c'è il browser incorporato (vedi webapp.embedded) la tab è una scheda con il pulsante che apre la pagina nel browser di sistema
+      note: dietro il flag `features.web_viewer` del profilo (spento di default). Un'applicazione è un file `.webapp` (`{"version":1,"url":"https://…"}`) del vault, quindi rinomina, eliminazione, segnalibri e ripristino delle tab valgono come per ogni file (il selettore rapido li trova per nome, come note, lavagne, basi e disegni, e li apre nella loro tab; `app:open` elenca solo le applicazioni). Alla prima apertura di un'origine su questo dispositivo la UI chiede conferma (per dispositivo e per vault, fuori dal vault). Dove non c'è il browser incorporato (vedi webapp.embedded) la tab è una scheda con il pulsante che apre la pagina nel browser di sistema
       commands: [app:new, app:open, app:edit-url, app:open-in-browser]
     workbench:
       status: yes

@@ -281,3 +281,82 @@ func TestRenameRewritesLinksInsideDrawings(t *testing.T) {
 		t.Errorf("drawing is no longer valid JSON:\n%s", got.Data)
 	}
 }
+
+func TestSuggestFilesListsApplicationsAndOtherOpenableFiles(t *testing.T) {
+	ix, ctx := setup(t, map[string]string{
+		"Notes/Road trip.md":          "# Trip\n",
+		"Decks/Roadshow.marp":         "---\nmarp: true\n---\n# Slide\n",
+		"Apps/Road status.webapp":     `{"version":1,"url":"https://status.example.com/"}`,
+		"Roadmap.WEBAPP":              `{"version":1,"url":"https://example.com/"}`,
+		"Boards/Road board.canvas":    `{"nodes":[],"edges":[]}`,
+		"Views/Road view.base":        "views: []\n",
+		"Draw/Road sketch.excalidraw": `{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}`,
+		"Road.txt":                    "not openable here",
+		"Road.zip":                    "not openable here",
+		"Apps/Other.webapp.bak":       "no",
+		// Hidden: the file explorer does not show them, so the switcher does not offer them.
+		".trash/Road old.md":           "---\naliases: [Zebra]\n---\n# Old\n",
+		".obsidian/Road.canvas":        `{"nodes":[],"edges":[]}`,
+		"Apps/.cache/Road page.webapp": `{"version":1,"url":"https://example.com/"}`,
+	})
+	db := ix.DB()
+	var hidden int
+	_ = db.QueryRow(`SELECT count(*) FROM files WHERE path LIKE '.%' OR path LIKE '%/.%'`).Scan(&hidden)
+	if hidden < 3 {
+		t.Fatalf("the test needs the hidden files in the index, found %d", hidden)
+	}
+	got, err := links.SuggestFiles(ctx, db, "zebra", 50)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("an alias of a note in the trash was offered: %+v %v", got, err)
+	}
+	got, err = links.SuggestFiles(ctx, db, "road", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]links.Suggestion{}
+	for _, s := range got {
+		byPath[s.Path] = s
+	}
+	want := map[string]struct{ kind, label, detail string }{
+		"Notes/Road trip.md":          {"note", "Road trip", "Notes"},
+		"Decks/Roadshow.marp":         {"note", "Roadshow", "Decks"},
+		"Apps/Road status.webapp":     {links.KindWebapp, "Road status", "Apps"},
+		"Roadmap.WEBAPP":              {links.KindWebapp, "Roadmap", ""},
+		"Boards/Road board.canvas":    {links.KindCanvas, "Road board", "Boards"},
+		"Views/Road view.base":        {links.KindBase, "Road view", "Views"},
+		"Draw/Road sketch.excalidraw": {links.KindDrawing, "Road sketch", "Draw"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d suggestions, want %d: %+v", len(got), len(want), got)
+	}
+	for p, w := range want {
+		s, ok := byPath[p]
+		if !ok || s.Kind != w.kind || s.Label != w.label || s.Detail != w.detail || s.Score <= 0 {
+			t.Errorf("%s: got %+v, want %+v", p, s, w)
+		}
+	}
+
+	// An application is found by name and by path, and a query that matches nothing finds nothing.
+	apps, _ := links.SuggestFiles(ctx, db, "status", 10)
+	if len(apps) != 1 || apps[0].Kind != links.KindWebapp {
+		t.Fatalf("status: %+v", apps)
+	}
+	if none, _ := links.SuggestFiles(ctx, db, "zzzz", 10); len(none) != 0 {
+		t.Fatalf("zzzz: %+v", none)
+	}
+	// The limit cuts the whole list, not the notes before the others are added.
+	if cut, _ := links.SuggestFiles(ctx, db, "road", 3); len(cut) != 3 {
+		t.Fatalf("limit: %+v", cut)
+	}
+
+	// SuggestNotes (the completion of a wikilink) is not changed: notes and presentations only.
+	notes, err := links.SuggestNotes(ctx, db, "road", 50)
+	if err != nil || len(notes) != 2 {
+		t.Fatalf("SuggestNotes must not list applications, whiteboards, bases or drawings: %+v %v", notes, err)
+	}
+	for _, s := range notes {
+		if s.Kind != "note" {
+			t.Errorf("SuggestNotes: %+v", s)
+		}
+	}
+}

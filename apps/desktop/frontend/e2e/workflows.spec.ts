@@ -13,7 +13,7 @@ test('create notes, link them, see the backlink, rename with link update', async
 
   // Second note, created from the quick switcher.
   await page.keyboard.press('ControlOrMeta+o');
-  await page.getByPlaceholder('Find or create a note…').fill('Second');
+  await page.getByPlaceholder('Find a file or create a note…').fill('Second');
   await page.getByText('Create "Second"').click();
   await expect(page.getByRole('tab', { name: /Second/ })).toBeVisible();
 
@@ -85,5 +85,5 @@ test('a pane with nothing open offers what to put in it', async ({ page }) => {
   // With the last tab closed the pane offers the commands again; the switcher opens from there.
   await page.keyboard.press('ControlOrMeta+w');
   await start.getByRole('button', { name: /Quick switcher/ }).click();
-  await expect(page.getByPlaceholder('Find or create a note…')).toBeVisible();
+  await expect(page.getByPlaceholder('Find a file or create a note…')).toBeVisible();
 });

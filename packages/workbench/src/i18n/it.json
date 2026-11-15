@@ -400,7 +400,17 @@
   },
   "switcher": {
     "title": "Selettore rapido",
-    "placeholder": "Trova o crea una nota…",
+    "placeholder": "Trova un file o crea una nota…",
+    "kind": {
+      "note": "Nota",
+      "presentation": "Presentazione",
+      "alias": "Alias di una nota",
+      "heading": "Titolo",
+      "webapp": "Applicazione",
+      "canvas": "Lavagna",
+      "base": "Base",
+      "drawing": "Disegno"
+    },
     "create": "Crea «{{name}}»"
   },
   "hotkeys": {

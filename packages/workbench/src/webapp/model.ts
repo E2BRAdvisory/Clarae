@@ -1,8 +1,8 @@
 // An application (M18, track E) is a file of the vault: `Name.webapp`, a small JSON document
 // `{"version":1,"url":"https://…"}`. Being an ordinary file, it is renamed, deleted, bookmarked,
 // restored with the tabs and synchronized like any other; two people who add an application at the
-// same time never overwrite each other. (The quick switcher lists notes only, so it does not find
-// one: "Open application…", the command `app:open`, lists them.)
+// same time never overwrite each other. (The quick switcher finds them by name, like the notes, the
+// canvases, the bases and the drawings; "Open application…", the command `app:open`, lists only them.)
 //
 // The file is not trusted: it may come from the sync, or from another user of a shared vault. Its
 // address is checked here (the same rules as `webview.ValidateURL` in the Go core, which checks it

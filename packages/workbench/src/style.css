@@ -1022,6 +1022,21 @@ button.icon[aria-pressed='true'] {
 .palette .result.selected {
   background: var(--bg-active);
 }
+.palette .result .name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.palette .result .name .svg-icon {
+  flex: none;
+  color: var(--text-faint);
+}
+.palette .result .name .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .palette .result .keys {
   color: var(--text-faint);
   font-size: 12px;

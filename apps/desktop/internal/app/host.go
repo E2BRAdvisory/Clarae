@@ -80,6 +80,13 @@ type NativeViewHost interface {
 	NativeViews() webview.Driver
 }
 
+// NativeViewsSupport is implemented by a NativeViewHost that can say whether its build has a driver at
+// all: NativeViews answers nil both while the window does not exist yet and for good where there is none.
+// Without it the core must assume that a driver may still come.
+type NativeViewsSupport interface {
+	NativeViewsSupported() bool
+}
+
 // FileFilter restricts a file dialog to a kind of file (Pattern: "*.zip", or "*.md;*.txt").
 type FileFilter struct {
 	DisplayName string

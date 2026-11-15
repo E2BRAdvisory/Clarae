@@ -501,8 +501,10 @@ func (l *LinksAPI) Resolve(vaultID, fromPath, target string) (string, error) {
 
 // Suggest returns completion candidates. kind is "notes" (titles, paths,
 // aliases), "headings" (of notePath, or of every note when empty), "blocks"
-// (ids in notePath), "tags", "properties" or "all" (notes + headings, for the
-// quick switcher).
+// (ids in notePath), "tags", "properties" or "all" (for the quick switcher:
+// notes, aliases, applications, whiteboards, bases and drawings, plus headings;
+// the Kind of a result tells them apart, see links.SuggestFiles). "notes" stays
+// limited to notes: it feeds wikilink completion.
 func (l *LinksAPI) Suggest(vaultID, kind, query, notePath string, limit int) ([]links.Suggestion, error) {
 	ov, err := l.app.vault(vaultID)
 	if err != nil {
@@ -521,7 +523,7 @@ func (l *LinksAPI) Suggest(vaultID, kind, query, notePath string, limit int) ([]
 	case "properties":
 		return links.SuggestPropertyKeys(ctx, db, query, limit)
 	case "all":
-		notes, err := links.SuggestNotes(ctx, db, query, limit)
+		notes, err := links.SuggestFiles(ctx, db, query, limit)
 		if err != nil {
 			return nil, err
 		}

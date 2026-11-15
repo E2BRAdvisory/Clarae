@@ -120,9 +120,10 @@ func (a *App) webviewStore(vaultID string) (string, error) {
 }
 
 // forgetWebViewData deletes the session data of a vault that goes for good (a mount that is removed) and
-// forgets their identifier, so that nothing opened at that path later inherits them. The data of a folder
-// that the user deletes outside the application cannot be told about: the same path then reuses the
-// identifier until WebViewAPI.ClearData.
+// forgets their identifier, so that nothing opened at that path later inherits them. A folder that the
+// user deletes outside the application cannot be told about: sweepWebViewStores finds its entry at a
+// later start (webviews_sweep.go), after a period, and until then the same path reuses the identifier
+// (or WebViewAPI.ClearData deletes it).
 func (a *App) forgetWebViewData(vaultID string) {
 	if a.appDB == nil {
 		return

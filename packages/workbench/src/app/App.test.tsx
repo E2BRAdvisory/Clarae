@@ -137,7 +137,7 @@ describe('App shell', () => {
       const { mock, info } = await openDemo();
       renderApp();
       useAppStore.getState().setSwitcherOpen(true);
-      const input = await screen.findByPlaceholderText('Find or create a note…');
+      const input = await screen.findByPlaceholderText('Find a file or create a note…');
       fireEvent.change(input, { target: { value: 'idea' } });
       await screen.findByRole('option', { name: /Ideas/ });
       fireEvent.keyDown(input, { key: 'Enter' });
@@ -146,7 +146,7 @@ describe('App shell', () => {
       );
 
       useAppStore.getState().setSwitcherOpen(true);
-      const input2 = await screen.findByPlaceholderText('Find or create a note…');
+      const input2 = await screen.findByPlaceholderText('Find a file or create a note…');
       fireEvent.change(input2, { target: { value: 'Brand new' } });
       fireEvent.click(await screen.findByText('Create "Brand new"'));
       await waitFor(() => expect(mock.vaults.get(info.id)?.files.has('Brand new.md')).toBe(true));
