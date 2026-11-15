@@ -261,3 +261,156 @@ func TestBuildScales(t *testing.T) {
 		t.Errorf("Build took %s", d)
 	}
 }
+
+// documentsVault holds one of each kind of document next to the notes.
+func documentsVault(t testing.TB) *sql.DB {
+	return indexVault(t, map[string]string{
+		"Plan.md":    "# Plan\n![[Table.base]] [[Deck.marp]]\n",
+		"Other.md":   "# Other\n",
+		"Deck.marp":  "---\nmarp: true\n---\n# Slide\n",
+		"pic.png":    "x",
+		"Table.base": "views: []\n",
+		"Sketch.excalidraw": `{"type":"excalidraw","elements":[
+		  {"id":"r","type":"rectangle","link":"[[Plan]]"},
+		  {"id":"t","type":"text","text":"see [[Other]] and [[Missing sketch target]]"}]}`,
+		"Map.canvas": `{"nodes":[
+		  {"id":"f","type":"file","x":0,"y":0,"width":10,"height":10,"file":"Plan.md"},
+		  {"id":"s","type":"file","x":0,"y":0,"width":10,"height":10,"file":"Sketch.excalidraw"},
+		  {"id":"t","type":"text","x":0,"y":0,"width":10,"height":10,"text":"link to [[Other]]"}],"edges":[]}`,
+		"Alone.canvas": `{"nodes":[],"edges":[]}`,
+	})
+}
+
+func hasEdge(g graph.Graph, from, to string) bool {
+	for _, e := range g.Edges {
+		if g.Nodes[e.Source].ID == from && g.Nodes[e.Target].ID == to {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBuildDocuments(t *testing.T) {
+	db := documentsVault(t)
+	ctx := context.Background()
+	build := func(o graph.Options) graph.Graph {
+		t.Helper()
+		g, err := graph.Build(ctx, db, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g
+	}
+
+	// Off by default: no document, no edge to one.
+	g := build(graph.Options{ShowOrphans: true, ShowGhosts: true, ShowAttachments: true})
+	for id, n := range ids(g) {
+		switch n.Kind {
+		case graph.KindDrawing, graph.KindCanvas, graph.KindBase:
+			t.Errorf("document %s shown without ShowDocuments", id)
+		}
+	}
+	if _, ok := ids(g)["ghost:missing sketch target"]; ok {
+		t.Error("a drawing must not feed ghosts while it is hidden")
+	}
+	if hasEdge(g, "Plan.md", "Table.base") || hasEdge(g, "Plan.md", "Deck.marp") != true {
+		t.Errorf("edges: %v", g.Edges)
+	}
+
+	g = build(graph.Options{ShowDocuments: true, ShowGhosts: true})
+	m := ids(g)
+	for id, kind := range map[string]string{
+		"Sketch.excalidraw": graph.KindDrawing, "Map.canvas": graph.KindCanvas, "Table.base": graph.KindBase,
+		"Deck.marp": graph.KindNote, "Plan.md": graph.KindNote, "ghost:missing sketch target": graph.KindGhost,
+	} {
+		if n, ok := m[id]; !ok || n.Kind != kind {
+			t.Errorf("%s: %+v (want kind %s)", id, n, kind)
+		}
+	}
+	if _, ok := m["Alone.canvas"]; ok {
+		t.Error("an orphan canvas is hidden without ShowOrphans")
+	}
+	if _, ok := m["pic.png"]; ok {
+		t.Error("attachments stay off")
+	}
+	for _, e := range [][2]string{
+		{"Sketch.excalidraw", "Plan.md"},  // the link field of an element
+		{"Sketch.excalidraw", "Other.md"}, // a link inside a text
+		{"Sketch.excalidraw", "ghost:missing sketch target"},
+		{"Map.canvas", "Plan.md"}, // a file node
+		{"Map.canvas", "Sketch.excalidraw"},
+		{"Map.canvas", "Other.md"}, // a link inside a text node
+		{"Plan.md", "Table.base"},  // a base embedded by a note
+		{"Plan.md", "Deck.marp"},
+	} {
+		if !hasEdge(g, e[0], e[1]) {
+			t.Errorf("missing edge %s -> %s", e[0], e[1])
+		}
+	}
+	for _, e := range g.Edges {
+		if g.Nodes[e.Source].ID == "Table.base" {
+			t.Errorf("a base is never a link source: %v", e)
+		}
+	}
+	if d := m["Plan.md"].Degree; d != 4 { // sketch, map, base, deck
+		t.Errorf("degree of Plan.md = %d", d)
+	}
+	if g = build(graph.Options{ShowDocuments: true, ShowOrphans: true}); ids(g)["Alone.canvas"].Kind != graph.KindCanvas {
+		t.Error("ShowOrphans keeps the empty canvas")
+	}
+
+	// Local graph centred on a drawing, then on a canvas.
+	g = build(graph.Options{ShowDocuments: true, Center: "Sketch.excalidraw", Depth: 1, Direction: graph.DirBoth})
+	m = ids(g)
+	for _, w := range []string{"Sketch.excalidraw", "Plan.md", "Other.md", "Map.canvas"} {
+		if _, ok := m[w]; !ok {
+			t.Errorf("local graph of the drawing misses %s: %v", w, m)
+		}
+	}
+	if len(m) != 4 {
+		t.Errorf("local graph of the drawing: %v", m)
+	}
+	g = build(graph.Options{ShowDocuments: true, Center: "Sketch.excalidraw", Depth: 1, Direction: graph.DirIn})
+	if m = ids(g); len(m) != 2 || m["Map.canvas"].Kind != graph.KindCanvas {
+		t.Errorf("incoming links of the drawing: %v", m)
+	}
+	g = build(graph.Options{ShowDocuments: true, Center: "Map.canvas", Depth: 1, Direction: graph.DirOut})
+	if m = ids(g); len(m) != 4 { // the canvas, Plan, Sketch, Other
+		t.Errorf("outgoing links of the canvas: %v", m)
+	}
+	g = build(graph.Options{ShowDocuments: true, Center: "Table.base", Depth: 1, Direction: graph.DirBoth})
+	if m = ids(g); len(m) != 2 || !hasEdge(g, "Plan.md", "Table.base") {
+		t.Errorf("local graph of the base: %v", m)
+	}
+	if g = build(graph.Options{Center: "Sketch.excalidraw"}); len(g.Nodes) != 0 {
+		t.Errorf("a hidden document is not a valid centre: %v", g.Nodes)
+	}
+
+	// Attachments and documents switch independently.
+	g = build(graph.Options{ShowAttachments: true, ShowOrphans: true})
+	if m = ids(g); m["pic.png"].Kind != graph.KindAttachment || m["Table.base"].Path != "" {
+		t.Errorf("attachments only: %v", m)
+	}
+	g = build(graph.Options{ShowAttachments: true, ShowDocuments: true, ShowOrphans: true})
+	if m = ids(g); m["pic.png"].Kind != graph.KindAttachment || m["Table.base"].Kind != graph.KindBase {
+		t.Errorf("both: %v", m)
+	}
+
+	// Filters reach the documents like any other file.
+	g = build(graph.Options{ShowDocuments: true, Folders: []string{"nowhere"}, ShowOrphans: true})
+	if len(g.Nodes) != 0 {
+		t.Errorf("folder filter: %v", ids(g))
+	}
+	g = build(graph.Options{ShowDocuments: true, Query: "file:Sketch OR file:Plan"})
+	if m = ids(g); len(m) != 2 || !hasEdge(g, "Sketch.excalidraw", "Plan.md") {
+		t.Errorf("query filter: %v", m)
+	}
+	g = build(graph.Options{ShowDocuments: true, Groups: []string{"file:Map", "file:Table"}})
+	if m = ids(g); len(m["Map.canvas"].Groups) != 1 || m["Map.canvas"].Groups[0] != 0 || len(m["Table.base"].Groups) != 1 || m["Table.base"].Groups[0] != 1 {
+		t.Errorf("groups: %v", m)
+	}
+	g = build(graph.Options{ShowDocuments: true, MaxNodes: 3})
+	if !g.Truncated || len(g.Nodes) != 3 {
+		t.Errorf("truncation: %d nodes", len(g.Nodes))
+	}
+}

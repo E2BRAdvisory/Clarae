@@ -21,6 +21,11 @@ const (
 	KindGhost      = "ghost"
 	KindAttachment = "attachment"
 	KindTag        = "tag"
+	// Documents other than notes, named as the frontend names its embeds
+	// (packages/workbench/src/embeds/media.ts). A Marp presentation is a note.
+	KindDrawing = "drawing"
+	KindCanvas  = "canvas"
+	KindBase    = "base"
 )
 
 // Directions of a local graph.
@@ -49,6 +54,9 @@ type Options struct {
 	ShowGhosts      bool `json:"showGhosts"`
 	ShowAttachments bool `json:"showAttachments"`
 	ShowTags        bool `json:"showTags"`
+	// ShowDocuments adds drawings (.excalidraw), canvases (.canvas) and bases
+	// (.base) as nodes. Like attachments they carry no tags: a Tags filter hides them.
+	ShowDocuments bool `json:"showDocuments"`
 	// Center, Depth and Direction restrict the graph to the neighbourhood of one file (local graph).
 	Center    string `json:"center"`
 	Depth     int    `json:"depth"`
@@ -64,7 +72,7 @@ type Node struct {
 	ID    string `json:"id"` // path for files, "ghost:<name>" / "tag:<name>" otherwise
 	Label string `json:"label"`
 	Kind  string `json:"kind"`
-	// Path is the vault path of a note or attachment ("" for ghosts and tags).
+	// Path is the vault path of a file ("" for ghosts and tags); the extension tells a .marp note from a .md one.
 	Path   string `json:"path"`
 	Degree int    `json:"degree"`
 	// Created is the creation time in Unix milliseconds: the frontmatter
@@ -89,6 +97,10 @@ type Graph struct {
 	// Total is the number of nodes before truncation.
 	Total int `json:"total"`
 }
+
+// documentKinds maps files.kind (index schema) to the node kind of the documents
+// that are not notes.
+var documentKinds = map[string]string{"excalidraw": KindDrawing, "canvas": KindCanvas, "base": KindBase}
 
 type file struct {
 	path, title, kind string
@@ -126,6 +138,9 @@ func Build(ctx context.Context, db *sql.DB, o Options) (Graph, error) {
 		if f.kind == "attachment" && !o.ShowAttachments {
 			return false
 		}
+		if _, doc := documentKinds[f.kind]; doc && !o.ShowDocuments {
+			return false
+		}
 		if queryMatch != nil && !queryMatch[f.path] {
 			return false
 		}
@@ -154,6 +169,8 @@ func Build(ctx context.Context, db *sql.DB, o Options) (Graph, error) {
 		kind := KindNote
 		if f.kind == "attachment" {
 			kind = KindAttachment
+		} else if k, ok := documentKinds[f.kind]; ok {
+			kind = k
 		}
 		created := f.mtime / int64(time.Millisecond)
 		if f.created != 0 {
@@ -299,7 +316,8 @@ func (b *builder) edge(s, t int) {
 	b.edges = append(b.edges, Edge{s, t})
 }
 
-// addLinks scans the links table once. Only notes are link sources.
+// addLinks scans the links table once. Notes, drawings and canvases are link
+// sources; a base has no indexed links, so it is only ever a target.
 func (b *builder) addLinks(ctx context.Context, db *sql.DB, ghosts bool) error {
 	rows, err := db.QueryContext(ctx, `SELECT path, target_resolved, target_raw FROM links WHERE kind != 'external'`)
 	if err != nil {
@@ -313,7 +331,10 @@ func (b *builder) addLinks(ctx context.Context, db *sql.DB, ghosts bool) error {
 			return err
 		}
 		si, ok := b.index[src]
-		if !ok || b.nodes[si].Kind != KindNote {
+		if !ok {
+			continue
+		}
+		if k := b.nodes[si].Kind; k != KindNote && k != KindDrawing && k != KindCanvas {
 			continue
 		}
 		if resolved.Valid && resolved.String != "" {
@@ -378,7 +399,7 @@ func (b *builder) neighbourhood(c, depth int, dir string) []bool {
 }
 
 func loadFiles(ctx context.Context, db *sql.DB) (map[string]*file, error) {
-	rows, err := db.QueryContext(ctx, `SELECT path, kind, title, mtime_ns FROM files WHERE kind IN ('md','attachment')`)
+	rows, err := db.QueryContext(ctx, `SELECT path, kind, title, mtime_ns FROM files WHERE kind IN ('md','attachment','excalidraw','canvas','base')`)
 	if err != nil {
 		return nil, err
 	}
