@@ -4,6 +4,48 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Il grafo del vault in 3D, con i disegni, le lavagne e le basi tra i nodi (milestone M18, traccia D, [roadmap](docs/roadmap.md) §13-undecies, ADR-0055). **Il lavoro è fatto sul ramo `m18/graph-3d` e non è ancora rilasciato.** ADR-0055 è in stato proposta: è un'aggiunta a ADR-0013 e a `Specifications.md` (§2.2.1, Appendice A, §3.4.6); lo spec non è toccato e lo aggiorna il proprietario, a partire dall'elenco in fondo all'ADR. **Il protocollo di sync, le operazioni delle API e il database del cloud non cambiano.** **Non provato sull'applicazione desktop reale** (WKWebView, WebView2, WebKitGTK): le prove sono in Chromium e sul core WebAssembly; serve una verifica manuale con `task run-desktop` prima del rilascio (vedi _Lavoro successivo_).
+
+### Compatibilità
+
+- **Nessuna migrazione.** Le chiavi nuove di `.clarae/graph.json` (`showDocuments`, `curvedLinks`, `showLegend`, `maxNodes3d`) hanno un valore predefinito: un vault senza di esse si apre come prima, con i disegni, le lavagne e le basi tra i nodi.
+- **La scelta 2D/3D è per dispositivo**: sta nello spazio locale del browser o della WebView (chiave `clarae.graph.mode`), non nel vault e non si sincronizza. Su un dispositivo nuovo il grafo si apre in 2D.
+- **Il tetto di 5.000 nodi vale solo per il 3D.** Il 2D mantiene il tetto di prima, con l'obiettivo di 10.000 nodi a 30 fps di M6; il 3D non lo eredita (misure in [docs/qa/graph-3d-benchmark.md](docs/qa/graph-3d-benchmark.md)).
+- **La CSP non cambia** e il budget del bundle nemmeno: il codice 3D sta in un file a parte (791 kB sul desktop, 792 kB sul web) che si scarica solo alla prima apertura del 3D.
+
+### Client desktop e workbench
+
+- **Grafo in 3D.** Nella barra del grafo, un pulsante passa tra 2D e 3D nella stessa vista: filtri, gruppi, timelapse e grafo locale valgono per entrambe. Si apre anche dal ribbon (icona a cubo) e dalla palette: _Apri vista grafo in 3D_ (`graph:open-3d`) e _Grafo: passa tra 2D e 3D_ (`graph:toggle-3d`), senza scorciatoia di default. Funziona uguale sul desktop e nel workbench web.
+- **Come si usa.** Un click su un nodo lo seleziona e porta la camera su di lui; un click sul nodo già selezionato, il doppio click o Invio lo aprono, Ctrl/Cmd+click lo apre in una nuova scheda. Dalla tastiera: frecce per ruotare, `+` e `-` per lo zoom, `0` per adattare, `[` e `]` per passare da un nodo all'altro (dal più connesso), Esc per togliere la selezione. Passando sopra un nodo, lui e i suoi vicini restano accesi e gli altri si attenuano. I link tra due note che si rimandano l'una all'altra sono disegnati come due archi (opzione _Link reciproci curvi_).
+- **Icone per tipo di documento.** Ogni nodo ha l'icona del suo tipo (le stesse dell'esploratore dei file) sul colore del suo gruppo o del suo tipo, e una legenda con il conteggio per tipo (si spegne dalle impostazioni del grafo). Le etichette sono al massimo 40 alla volta: il nodo corrente, i suoi vicini e i più connessi vicini alla camera.
+- **Fino a 2.000 nodi** ogni nodo si può trascinare e resta **fisso** dove lo si lascia, anche quando il grafo si aggiorna; _Sblocca i nodi fissati_ li libera. **Oltre 2.000** i nodi sono punti e non si trascinano.
+- **Fino a 5.000 nodi.** Se il vault ne ha di più, il 3D mostra i più connessi e la riga di stato lo dice («Mostrati N nodi su M»). Il limite si abbassa da _Nodi mostrati (massimo)_, da 500 a 5.000. Con più nodi usate il 2D.
+- **Senza WebGL2 il grafo resta in 2D**, con un avviso: succede se il dispositivo non lo offre, se il contesto grafico va perso, se ci sono già quattro grafi 3D aperti o se la vista non parte. Scegliere di nuovo il 3D riprova. A riposo la scena smette di disegnare; con «riduci movimento» attivo del sistema la camera salta invece di muoversi.
+- **Disegni, lavagne e basi nel grafo, anche in 2D.** Prima il grafo mostrava solo note e allegati. Ora i disegni (`.excalidraw`), le lavagne (`.canvas`) e le basi (`.base`) compaiono come nodi: disegni e lavagne con i link che contengono, una base solo come destinazione. I tag restano solo delle note, quindi un filtro per tag li nasconde. Si spengono con _Disegni, lavagne e basi_ nei filtri. Il grafo locale si può centrare anche su un disegno, una lavagna o una presentazione.
+
+### Build e sviluppo
+
+- **Il codice 3D non costruisce codice a runtime.** Due dipendenze della libreria lo facevano con `new Function`, vietato dalla CSP: sono sostituite da uno stub (anche `three/webgpu`, per non portare nel bundle un secondo renderer). Un controllo nella build (`noRuntimeCode` in `packages/workbench/build/esbuild.mjs`) la fa **fallire** se un file che contiene three.js ha `eval(` o `new Function(`, anche dopo un aggiornamento.
+- **Dipendenze nuove, pinnate:** `3d-force-graph` 1.80.2, `three` 0.187.0, `d3-force-3d` 3.0.6, `@types/three` 0.187.0.
+- **Benchmark opzionale:** `CLARAE_GRAPH3D_BENCH=<nodi> CLARAE_GRAPH3D_GL=metal|swiftshader yarn workspace @clarae/desktop-frontend exec playwright test e2e/graph-3d-bench.spec.ts` (si salta senza la variabile).
+- **Prove nuove:** vitest (`geometry3d`, `layoutEngine3d`, `GraphView.3d`, più `graph` e `incremental`); `TestBuildDocuments` in `apps/desktop/internal/graph`; e2e `graph-3d.spec.ts` sul mock dei binding e sul core WASM; scansione di accessibilità della vista 3D in `a11y.spec.ts`; `web/e2e-security/graph3d-csp.spec.ts` sulla CSP di produzione. La voce `graph.3d` del registro di parità è «sì» su desktop e workbench.
+
+### Contratti
+
+- `api/openapi.yaml` e `api/config-profile.schema.json` non cambiano.
+- **Binding del core** (desktop e core WASM): `GraphAPI.Build` accetta l'opzione `showDocuments`; i nodi del grafo possono essere di tipo `drawing`, `canvas` e `base`. Nel layout worker, nuovi messaggi `fix` e `release` e il parametro `dims` (3 per il 3D).
+
+### Documentazione
+
+- ADR-0055 (grafo 3D), in stato proposta; `docs/qa/graph-3d-benchmark.md` (metodo, misure e limiti); roadmap §13-undecies (stato della traccia D); guida utente della vista grafo e dell'accessibilità; `docs/web-workbench-parity.md` rigenerato.
+
+### Lavoro successivo (non in questa release)
+
+- **Verifica manuale sull'applicazione desktop reale** (macOS, Windows, Linux): prestazioni, WebGL2 e rilascio del contesto nella WebView non sono stati misurati. Non misurati nemmeno GPU integrate e vault reali (solo un grafo sintetico, su un MacBook Apple M4).
+- **Applicazioni in una tab (webview nativa)** (traccia E): non iniziata, vedi la roadmap.
+
 ## [1.6.0] - 2026-11-15
 
 Una shell più morbida, lo stato vuoto con i comandi di creazione e un editor dei disegni più sicuro e più veloce (milestone M18, [roadmap](docs/roadmap.md) §13-undecies, ADR-0053 e ADR-0054). **La milestone è eseguita in parte:** il grafo 3D e le applicazioni in una tab (webview nativa) non ci sono ancora; di entrambi sono finiti i soli spike di fattibilità, con esito sotto, e il lavoro resta da fare. Gli ADR 0053 e 0054 sono in stato proposta: ADR-0054 devia da `Specifications.md` (§3.4.5 e §3.4.6: la libreria di forme si fonde per id) e ADR-0053 aggiunge un punto a §2.7.2; lo spec non è toccato e lo aggiorna il proprietario, a partire dall'elenco in fondo a ogni ADR. **Il protocollo di sync, le operazioni delle API e il database del cloud non cambiano.** Le rimozioni della compatibilità con la 1.x che la 1.5.0 fissava alla 1.6 **passano alla 1.7** (vedi _Compatibilità_).

@@ -47,4 +47,28 @@ _Nuova base_ crea un file `.base`: una **vista tabellare** sulle note del vault,
 
 ## Vista grafo
 
-_Apri vista grafo_ (`Mod+Maiusc+G`) mostra le note come nodi e i link come archi: filtri per tag, cartella o ricerca, colori per gruppo, dimensione per numero di link, cursore del tempo. _Apri grafo locale_ mostra solo il vicinato della nota corrente, con la profondità regolabile. Il grafo si sposta e si ingrandisce con mouse o tastiera (frecce e `+`/`-`); il grafo del vault non include altri vault.
+_Apri vista grafo_ (`Mod+Maiusc+G`) mostra i documenti del vault come nodi e i link come archi: filtri per tag, cartella o ricerca, colori per gruppo, dimensione per numero di link, cursore del tempo. _Apri grafo locale_ mostra solo il vicinato del documento corrente, con la profondità regolabile; si può centrare su una nota, una presentazione, un disegno o una lavagna. Il grafo si sposta e si ingrandisce con mouse o tastiera (frecce e `+`/`-`); il grafo del vault non include altri vault.
+
+### Disegni, lavagne e basi come nodi
+
+Oltre alle note, il grafo mostra i **disegni** (`.excalidraw`), le **lavagne** (`.canvas`) e le **basi** (`.base`). Un disegno o una lavagna ha come link quelli dei suoi elementi; una base compare solo come destinazione, perché non contiene link. I tag restano delle sole note: un filtro per tag nasconde questi nodi, come nasconde gli allegati. Si tolgono tutti insieme con la casella _Disegni, lavagne e basi_ nei filtri (nelle impostazioni del grafo).
+
+### Vista 3D
+
+Il pulsante a forma di cubo nella barra del grafo (o _Apri vista grafo in 3D_ dalla palette e dal ribbon, _Grafo: passa tra 2D e 3D_ per alternare) disegna lo stesso grafo nello spazio. Filtri, gruppi, timelapse e grafo locale funzionano come nel 2D. Funziona sul desktop e nel workbench web.
+
+- **Per dispositivo.** La scelta 2D/3D vale per questo dispositivo (o questo browser): dipende dalla scheda grafica e dallo schermo, quindi non entra nel vault e non si sincronizza. Su un dispositivo nuovo il grafo si apre in 2D.
+- **Icone e legenda.** Ogni nodo ha l'icona del suo tipo (le stesse dell'esploratore dei file: nota, presentazione, disegno, lavagna, base, immagine, PDF, audio, video, altri file, tag, nota non ancora creata) sul colore del suo gruppo o del suo tipo. Una legenda mostra quanti nodi ci sono per tipo; si spegne dalle impostazioni.
+- **Con il mouse.** Trascinare lo sfondo ruota la vista, la rotella ingrandisce. Un click su un nodo lo seleziona e porta la camera su di lui; un click sul nodo già selezionato, o un doppio click, lo apre; Ctrl o Cmd+click lo apre in una nuova scheda. Passando sopra un nodo, lui e i suoi vicini restano accesi, gli altri si attenuano e i suoi link si evidenziano.
+- **Con la tastiera.** Con il focus sul grafo: frecce per ruotare, `+` e `-` per lo zoom, `0` per adattare tutto allo schermo, `[` e `]` per passare da un nodo all'altro (si parte dal più connesso), Invio per aprire il nodo selezionato, Esc per togliere la selezione.
+- **Nodi fissati.** Fino a 2.000 nodi ogni nodo si può **trascinare**: resta dove lo lasciate, anche quando il grafo si aggiorna. Il pulsante _Sblocca i nodi fissati_ (con il numero) li libera tutti.
+- **Etichette.** Compaiono per il nodo selezionato e i suoi vicini e per i più connessi vicini alla camera, al massimo 40 alla volta.
+- **Opzioni del 3D** (impostazioni del grafo, sezione _Vista 3D_, salvate nel vault): _Link reciproci curvi_ (due note che si rimandano l'una all'altra hanno due archi invece di una linea), _Legenda_, _Nodi mostrati (massimo)_ da 500 a 5.000.
+- **Con «riduci movimento»** attivo nel sistema la camera salta alla nuova posizione invece di muoversi.
+
+**Limiti.**
+
+- **Al massimo 5.000 nodi** (o il numero scelto in _Nodi mostrati (massimo)_): se il vault ne ha di più, il 3D mostra i più connessi e la riga di stato in basso dice «Mostrati N nodi su M». Per un vault grande usate il 2D, che regge più nodi.
+- **Oltre 2.000 nodi** i nodi sono punti: non si trascinano.
+- **Senza WebGL2** il grafo resta in 2D e un avviso lo dice. Succede anche se il contesto grafico va perso, se ci sono già quattro grafi 3D aperti o se la vista non parte; scegliere di nuovo il 3D riprova.
+- **Su un dispositivo senza scheda grafica** la vista 3D è più lenta (nelle nostre misure, da circa 11 a 29 fotogrammi al secondo con il rasterizzatore software contro i 60 con una GPU). Le misure sono su un solo computer e un grafo sintetico; sulla finestra reale dell'applicazione desktop non sono ancora state fatte. I dettagli sono in `docs/qa/graph-3d-benchmark.md`.
