@@ -38,4 +38,6 @@ _Cerca nella nota_ apre la barra di ricerca dell'editor, con espressioni regolar
 
 Senza scorciatoia predefinita, ma nella palette e assegnabili da _Scorciatoie_: cambio vault, passaggio chiaro/scuro, blocca/sblocca scheda e chiusure delle schede (a destra, a sinistra, altre, tutte), nuova cartella, inserisci separatore, esporta come immagine, avvio della presentazione (dall'inizio o dalla slide corrente), mostra le schede della barra destra (proprietà, link, slide, statistiche).
 
+**Applicazioni** (solo dove c'è il browser incorporato, cioè su macOS, e con la funzione accesa dal profilo): _Applicazione: indietro_ `Mod+[`, _Applicazione: avanti_ `Mod+]`, _Applicazione: ricarica_ `Mod+R`; _Nuova applicazione_, _Apri applicazione…_, _Cambia l'indirizzo dell'applicazione_, _Apri l'applicazione nel browser_ ed _Elimina i dati delle applicazioni_ non hanno scorciatoia. Vedi [Applicazioni](applicazioni.md).
+
 Nell'**albero dei file**: frecce per muoversi, `→`/`←` per espandere/chiudere, `Invio` per aprire, `F2` per rinominare, `Canc` per spostare nel cestino, tasto Menu o `Maiusc+F10` per il menu contestuale. Vedi anche [Accessibilità](accessibilita.md).
