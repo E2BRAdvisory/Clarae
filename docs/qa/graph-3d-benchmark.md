@@ -2,6 +2,8 @@
 
 Riguarda la vista 3D del grafo ([ADR-0055](../adr/0055-grafo-3d.md)). Riporta ciò che è stato misurato, il metodo e i limiti. Non è il benchmark del grafo 2D, che resta in [`m6-graph-benchmark.md`](m6-graph-benchmark.md): l'obiettivo di quello (10.000 nodi a ≥ 30 fps, M6/ADR-0013) vale per il 2D e non cambia. **Il 3D non lo eredita:** ha un inviluppo suo, quello qui sotto, e un tetto di 5.000 nodi.
 
+**Stato:** il grafo 3D è implementato e rilasciato con la 1.7.0; `task ci` completo è verde sull'albero rilasciato (2026-11-15). La revisione del codice ha corretto, con una prova e2e ciascuno, la selezione nel livello a punti (un click apriva il nodo), un nodo nascosto dal timelapse ancora cliccabile e trascinabile nel livello a sprite, la selezione riferita al grafo precedente dopo un aggiornamento, la texture dell'anello di selezione non rilasciata al cambio di tema e il nuovo download del chunk dopo un errore. Ciò che non è provato resta in _Cosa NON è stato verificato_.
+
 Nessun valore è stato stimato. Ogni riga della tabella è **una sola esecuzione**, su una macchina non isolata: i numeri indicano l'ordine di grandezza, non una garanzia.
 
 ## Ambiente
@@ -52,7 +54,7 @@ Lettura:
 
 ## Il punto di partenza: lo spike D0
 
-Lo spike (ramo `spike/m18-d0-graph3d`, non fuso; misure grezze in `scripts/spikes/graph3d/` su quel ramo) ha misurato, a 3.000 nodi con i link di serie della libreria, 19 fps in orbita; con il layout della libreria sul thread principale, 5.000 nodi si assestavano in 23 s a 13,8 fps. Da lì le tre condizioni dell'ADR (link in un solo `LineSegments`, layout in un worker, tetto di 5.000 nodi). Sul costo dei nodi: a 5.000 nodi su Apple M4 con Metal, 12,9 ms di CPU per frame con gli sprite e 9,3 ms con le sfere, in entrambi i casi 5.001 draw call; il livello a punti ne faceva 7 a qualunque dimensione. Per questo i livelli di dettaglio sono due e non i tre del piano.
+Lo spike (un prototipo usa-e-getta, non fuso nel prodotto; le sue misure grezze sono in [`docs/qa/graph-3d-spike-d0/`](graph-3d-spike-d0/)) ha misurato, a 3.000 nodi con i link di serie della libreria, 19 fps in orbita; con il layout della libreria sul thread principale, 5.000 nodi si assestavano in 23 s a 13,8 fps. Da lì le tre condizioni dell'ADR (link in un solo `LineSegments`, layout in un worker, tetto di 5.000 nodi). Sul costo dei nodi: a 5.000 nodi su Apple M4 con Metal, 12,9 ms di CPU per frame con gli sprite e 9,3 ms con le sfere, in entrambi i casi 5.001 draw call; il livello a punti ne faceva 7 a qualunque dimensione. Per questo i livelli di dettaglio sono due e non i tre del piano.
 
 ## Dimensioni (build di produzione, minificate)
 
@@ -62,7 +64,7 @@ Lo spike (ramo `spike/m18-d0-graph3d`, non fuso; misure grezze in `scripts/spike
 
 ## Cosa NON è stato verificato
 
-- **L'applicazione desktop reale.** Le prove automatiche girano in Chromium (con i binding simulati e sul core WASM). La WebView del desktop è WKWebView su macOS, WebView2 su Windows, WebKitGTK su Linux: prestazioni, WebGL2 e rilascio del contesto lì non sono stati misurati. Serve una verifica manuale con `task run-desktop` prima del rilascio: aprire un vault con qualche migliaio di note, passare al 3D dal pulsante della barra del grafo e dal ribbon, orbitare, trascinare un nodo, chiudere e riaprire il grafo più volte, e controllare che non compaiano avvisi sui contesti WebGL.
+- **L'applicazione desktop reale.** Le prove automatiche girano in Chromium (con i binding simulati e sul core WASM). La WebView del desktop è WKWebView su macOS, WebView2 su Windows, WebKitGTK su Linux: prestazioni, WebGL2 e rilascio del contesto lì non sono stati misurati. La verifica manuale con `task run-desktop` non è stata fatta e resta da fare: aprire un vault con qualche migliaio di note, passare al 3D dal pulsante della barra del grafo e dal ribbon, orbitare, trascinare un nodo, chiudere e riaprire il grafo più volte, e controllare che non compaiano avvisi sui contesti WebGL.
 - **GPU integrate, Windows e Linux.** Si è misurato solo un Apple M4, con Metal e con il rasterizzatore software.
 - **Vault reali.** Solo un grafo sintetico di soli nodi «nota»: la distribuzione dei gradi, il numero di tipi di documento (quindi di draw call nel livello a punti) e le etichette di un vault vero non sono misurati.
 - **Ripetibilità.** Una sola esecuzione per riga, macchina non isolata, nessuna media su più prove.
