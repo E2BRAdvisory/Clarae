@@ -5,7 +5,13 @@
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --font-size: 14px;
-  --radius: 6px;
+  /* The radius scale. --radius is the control radius every existing rule reads. */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+  --radius: var(--radius-md);
   --sidebar-width: 280px;
 
   /* The accent in its three roles. --accent is the one that carries text: as a text colour on every
@@ -141,6 +147,11 @@ summary:focus-visible,
   }
   .tab .close {
     visibility: visible;
+  }
+  /* the curved joins are painted with the theme colours: the outline above marks the tab alone */
+  .tab.active::before,
+  .tab.active::after {
+    display: none;
   }
 }
 

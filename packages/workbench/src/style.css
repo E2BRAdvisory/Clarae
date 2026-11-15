@@ -573,6 +573,8 @@ button.icon[aria-pressed='true'] {
   min-height: 0;
   flex: 1;
   border: 1px solid transparent;
+  /* the frame the tabs sit on; the body below is a sheet with soft top corners */
+  background: var(--bg-secondary);
 }
 .split .pane.focused {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
@@ -582,12 +584,21 @@ button.icon[aria-pressed='true'] {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  /* what the body holds paints its own background: keep it inside the corners */
+  overflow: hidden;
 }
 .tabbar {
   display: flex;
   align-items: stretch;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  /* Room on the left for the body's corner and for the first tab's join. The bar overlaps the
+     rule on top of the body by one pixel, so the active tab covers it and opens onto the body. */
+  padding: 4px var(--radius-lg) 0 calc(var(--radius-lg) + var(--radius-md) + 2px);
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 1;
   overflow-x: auto;
   flex: none;
 }
@@ -599,20 +610,73 @@ button.icon[aria-pressed='true'] {
   flex: 1;
 }
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 12px;
   max-width: 200px;
   color: var(--text-muted);
-  border-right: 1px solid var(--border);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   cursor: default;
   white-space: nowrap;
+}
+.tab:not(.active):hover {
+  background: var(--bg-hover);
+}
+/* a hairline between two tabs at rest; the active tab and the one under the pointer have an edge */
+.tab:not(.active) + .tab:not(.active)::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: var(--border);
+}
+.tab:hover::before,
+.tab:hover + .tab::before {
+  display: none;
 }
 .tab.active {
   background: var(--bg);
   color: var(--text);
-  box-shadow: inset 0 -2px 0 var(--accent-bright);
+  border-color: var(--border);
+  /* the mark of the active tab: the change of surface alone is too faint a state */
+  box-shadow: inset 0 2px 0 var(--accent-bright);
+}
+/* The joins: a quarter circle on each side that carries the tab's edge down into the rule on top
+   of the body, filled with the body's surface outside the curve. */
+.tab.active::before,
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: var(--radius-md);
+  height: var(--radius-md);
+  pointer-events: none;
+}
+.tab.active::before {
+  right: calc(100% + 1px);
+  background: radial-gradient(
+    circle at 0 0,
+    transparent calc(var(--radius-md) - 1px),
+    var(--border) calc(var(--radius-md) - 1px),
+    var(--border) var(--radius-md),
+    var(--bg) var(--radius-md)
+  );
+}
+.tab.active::after {
+  left: calc(100% + 1px);
+  background: radial-gradient(
+    circle at 100% 0,
+    transparent calc(var(--radius-md) - 1px),
+    var(--border) calc(var(--radius-md) - 1px),
+    var(--border) var(--radius-md),
+    var(--bg) var(--radius-md)
+  );
 }
 .tab.over {
   box-shadow: inset 2px 0 0 var(--accent-bright);
