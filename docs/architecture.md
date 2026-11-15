@@ -103,19 +103,19 @@ Ogni modulo è un pacchetto `services/cloud/internal/<modulo>` con interfacce es
 
 ## Dove sta cosa
 
-| Area                                         | Percorso                                                                                                               |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Entry del desktop (Wails)                    | `apps/desktop/main.go`, `apps/desktop/frontend` (solo entry e e2e)                                                     |
-| Core Go (desktop e WASM)                     | `apps/desktop/internal/{app,vault,indexer,links,search,sync,crypto,webview,…}`                                         |
-| Vista nativa delle applicazioni (solo macOS) | `apps/desktop/internal/shell/nativeview`, `apps/desktop/internal/webview` (gestore, indipendente dalla piattaforma)    |
-| Core in WebAssembly                          | `apps/desktop/cmd/clarae-core`                                                                                         |
-| UI condivisa                                 | `packages/workbench`                                                                                                   |
-| Gestione dei vault cloud (UI)                | `packages/cloud-features` (ADR-0037)                                                                                   |
-| Console e host del browser                   | `web/src/pages`, `web/src/workbench`                                                                                   |
-| Cloud                                        | `services/cloud/cmd/clarae-cloud`, `services/cloud/internal/<modulo>`                                                  |
-| Codice Go condiviso                          | `shared/go` (`merge`, `vaultcrypto`, `syncproto`, `pathrules`, `apiclient`, `features`, `parity`, `updatemanifest`, …) |
-| Fixture condivise                            | `shared/conformance`, registro di parità `shared/parity`                                                               |
-| Contratti                                    | `api/openapi.yaml`, `api/proto`, `api/config-profile.schema.json`                                                      |
-| Distribuzione                                | `deploy/{helm,compose,docker,keycloak,observability}`, `.github/workflows`                                             |
+| Area                                                              | Percorso                                                                                                               |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Entry del desktop (Wails)                                         | `apps/desktop/main.go`, `apps/desktop/frontend` (solo entry e e2e)                                                     |
+| Core Go (desktop e WASM)                                          | `apps/desktop/internal/{app,vault,indexer,links,search,sync,crypto,webview,…}`                                         |
+| Vista nativa delle applicazioni (macOS; Windows scritto e spento) | `apps/desktop/internal/shell/nativeview`, `apps/desktop/internal/webview` (gestore, indipendente dalla piattaforma)    |
+| Core in WebAssembly                                               | `apps/desktop/cmd/clarae-core`                                                                                         |
+| UI condivisa                                                      | `packages/workbench`                                                                                                   |
+| Gestione dei vault cloud (UI)                                     | `packages/cloud-features` (ADR-0037)                                                                                   |
+| Console e host del browser                                        | `web/src/pages`, `web/src/workbench`                                                                                   |
+| Cloud                                                             | `services/cloud/cmd/clarae-cloud`, `services/cloud/internal/<modulo>`                                                  |
+| Codice Go condiviso                                               | `shared/go` (`merge`, `vaultcrypto`, `syncproto`, `pathrules`, `apiclient`, `features`, `parity`, `updatemanifest`, …) |
+| Fixture condivise                                                 | `shared/conformance`, registro di parità `shared/parity`                                                               |
+| Contratti                                                         | `api/openapi.yaml`, `api/proto`, `api/config-profile.schema.json`                                                      |
+| Distribuzione                                                     | `deploy/{helm,compose,docker,keycloak,observability}`, `.github/workflows`                                             |
 
 ADR principali: [0002](adr/0002-sqlite-fts5-trigram.md) (FTS5), [0009](adr/0009-sync-protocol-details.md) (sync), [0029](adr/0029-web-workbench.md) e [0030](adr/0030-desktop-core-wasm.md) (workbench web), [0033](adr/0033-sqlc-per-module.md) (moduli e tabelle), [0036](adr/0036-verifiche-locali-senza-ci.md) (verifiche locali), [0037](adr/0037-registro-funzioni-e-cloud-features.md) (parità e contratti), [0038](adr/0038-retention-e-finestra-changelog.md) (retention), [0039](adr/0039-sync-db-candidati-e-quarantena.md) (sync.db), [0045](adr/0045-parita-per-costruzione.md) (parità per costruzione), [0046](adr/0046-bootstrap-server-indietro.md) (bootstrap dopo un ripristino del cloud).

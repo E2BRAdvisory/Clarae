@@ -21,6 +21,6 @@ _Apri cartella come vault_ nella schermata iniziale; i vault recenti sono elenca
 1. `Mod+N` crea una nota; il titolo è il nome del file.
 2. Scrivete: il salvataggio è automatico e **atomico** (non si ottengono file a metà anche se il computer si spegne).
 3. Se modificate un file con un altro programma, l'app se ne accorge; non sovrascrive mai una modifica esterna senza avvisarvi.
-4. `Mod+O` apre il **selettore rapido**: digitate parte del nome per aprire una nota, o per crearla se non esiste.
+4. `Mod+O` apre il **selettore rapido**: digitate parte del nome per aprire una nota (o un'applicazione, una lavagna, una base, un disegno), o per crearla se non esiste.
 
 Cartelle e note si possono spostare e rinominare dall'albero: i link che puntano alla nota vengono aggiornati (l'app mostra quanti link in quante note verranno modificati prima di procedere).

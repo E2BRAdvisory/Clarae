@@ -4,7 +4,7 @@ La ricerca è **locale** e **per vault**: l'indice è sul vostro computer (è ri
 
 ## Selettore rapido (`Mod+O`)
 
-Cerca per **nome** (anche parziale, tollera piccoli salti di lettere). `Invio` apre la nota, `Mod+Invio` in una nuova scheda; se il nome non esiste, la prima voce la crea.
+Cerca per **nome** (anche parziale, tollera piccoli salti di lettere): note e presentazioni, e dalla 1.7.1 anche **applicazioni** (file `.webapp`), **lavagne**, **basi** e **disegni**, per nome senza l'estensione. Ogni voce ha l'icona del suo tipo e i lettori di schermo ne leggono il tipo accanto al nome. `Invio` apre il file nella sua vista, `Mod+Invio` in una nuova scheda. Se non c'è una nota con quel nome, in fondo all'elenco compare la voce «Crea …», che la crea; una lavagna, una base, un disegno o un'applicazione con lo stesso nome (la lavagna «Road» e la nota «Road» che ancora non c'è) non la toglie. Le note nel cestino (`.trash/`) e i file nelle cartelle nascoste (con un nome che inizia per punto) non compaiono, come nell'esploratore dei file: questo vale anche per i suggerimenti dei link `[[`, che restano di sole note. Una presentazione (`.marp`) o un alias con lo stesso nome toglie la voce «Crea …» (crearla riassegnerebbe i link esistenti).
 
 ## Cerca nel vault (`Mod+Maiusc+F`)
 

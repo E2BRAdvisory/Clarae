@@ -35,7 +35,8 @@ Un `.webapp` è **un file come gli altri**: si rinomina, si sposta, si elimina, 
 ## Aprire un'applicazione
 
 - Dall'esploratore dei file, con un clic sul file `.webapp`.
-- Dalla palette: **_Apri applicazione…_** elenca le applicazioni del vault. **Il selettore rapido (`Mod+O`) non le trova**: cerca solo le note.
+- Dal **selettore rapido** (`Mod+O`): digitate parte del nome dell'applicazione; la trova insieme alle note, alle lavagne, alle basi e ai disegni (dalla 1.7.1). Il tipo è scritto accanto al nome e letto dai lettori di schermo.
+- Dalla palette: **_Apri applicazione…_** elenca le sole applicazioni del vault.
 - Un `.webapp` incorporato in una nota (`![[Nome.webapp]]`) non carica nulla: mostra solo un avviso.
 
 ### La conferma alla prima apertura
@@ -98,13 +99,13 @@ Cookie, accessi e archivio locale delle pagine restano **su questo dispositivo**
 
 - **Su macOS 14 o successivo** la sessione dura nel tempo: chiudendo e riaprendo l'app siete ancora connessi. **Su macOS 13** dura finché l'app è aperta, e **l'app non vi avvisa**.
 - **_Elimina i dati delle applicazioni_** (palette) chiude le pagine del vault e cancella cookie, sessioni e cache delle sue applicazioni su questo dispositivo; ogni applicazione chiederà di nuovo la conferma dell'indirizzo. I file `.webapp` restano. Non tocca gli altri vault né gli altri dispositivi.
-- Se una condivisione ricevuta viene rimossa dall'app, i suoi dati di sessione vengono cancellati. Se invece cancellate la cartella di un vault fuori dall'app, i dati restano (l'app non può saperlo) finché non eseguite _Elimina i dati_ da un vault aperto allo stesso percorso.
+- Se una condivisione ricevuta viene rimossa dall'app, i suoi dati di sessione vengono cancellati. Se invece cancellate la cartella di un vault fuori dall'app, l'app non lo sa subito: se ne accorge da sola, **all'avvio e in background**, e cancella i dati di quel vault solo quando è sicura che non esiste più. Cioè quando il vault non è aperto, non è una condivisione ricevuta e non è tra i vault recenti, oppure vi è ma non lo aprite da più di 30 giorni e la sua cartella non esiste più mentre quella che la conteneva c'è e **non è vuota** (una cartella madre vuota è tipica di un punto di mount, per esempio di rclone, sshfs o Cryptomator, non montato: il vault si tiene). Se il vault era l'unica cosa nella sua cartella, i suoi dati restano (qualche megabyte): eliminateli con _Elimina i dati_. **Un vault solo chiuso, su un disco esterno scollegato o su un disco di rete non montato non perde mai i dati.** Fino ad allora, o se volete cancellarli subito, eseguite _Elimina i dati_ da un vault aperto allo stesso percorso.
 
 ## Limiti
 
 - **L'autenticazione HTTP di base** (la finestra del browser che chiede nome utente e password) **non è supportata**: la richiesta è annullata e la pagina non si carica. Idem per NTLM e certificato client. Usate un sito con un accesso in una pagina web.
 - **I login che si aprono in un popup** e comunicano con la pagina che li ha aperti (`window.opener`) **non funzionano**: i popup non si aprono nell'app, vanno al browser di sistema.
-- Il browser incorporato c'è **solo su macOS**. Windows e Linux aprono la pagina nel browser di sistema.
+- Il browser incorporato c'è **solo su macOS**. Windows e Linux aprono la pagina nel browser di sistema. Per Windows esiste un driver in preparazione, **spento e mai provato su un computer Windows**: non cambia ciò che vedete.
 - **Non provato sulla finestra reale** per alcune cose: il posizionamento della pagina con lo zoom dell'app diverso da 100%, lo sfarfallio nel nascondere e mostrare la pagina, il fuoco da tastiera, il trascinamento di una scheda sopra la pagina. Una matrice di prove manuali ([`docs/qa/m18-webview-matrice.md`](../qa/m18-webview-matrice.md)) non è ancora stata eseguita: per questo la funzione è spenta di default. Segnalate ciò che vedete.
 - Al massimo **32 applicazioni aperte** per vault (64 in tutto). Oltre, la scheda lo dice e propone «Apri nel browser».
 
