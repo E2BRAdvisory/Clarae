@@ -18,8 +18,10 @@ import { useAppStore } from '../state/store';
 import { errorMessage } from '../util/errors';
 import { GraphPanel } from './GraphPanel';
 import { Graph2D } from './Graph2D';
+import { ShapeGlyph } from './ShapeGlyph';
 import { graphNeedsReload, sameGraph } from './incremental';
 import { kindCounts, kindIcon } from './kinds';
+import { kindShape, lodFor } from './lod';
 import { useGraphMode } from './mode';
 import { buildModel, timelapseTime, visibleAt, type GraphModel } from './model';
 import { graphCenter } from './paths';
@@ -232,6 +234,8 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
     () => (threeD && settings.showLegend && data ? kindCounts(data.nodes) : []),
     [threeD, settings.showLegend, data],
   );
+  // At the instanced level a node is a solid, not an icon: the legend shows the solid.
+  const solids = useMemo(() => (data ? lodFor(data.nodes.length) === 'instanced' : false), [data]);
   const surfaceProps = {
     ref: surface,
     model,
@@ -336,7 +340,11 @@ export function GraphView({ vaultId, path }: { vaultId: string; path: string }) 
           <ul className="graph-legend" aria-label={t('graph.legend')}>
             {legend.map(({ kind, count }) => (
               <li key={kind}>
-                <Icon name={kindIcon(kind)} size={14} />
+                {solids ? (
+                  <ShapeGlyph shape={kindShape(kind)} size={14} />
+                ) : (
+                  <Icon name={kindIcon(kind)} size={14} />
+                )}
                 <span>{t(`graph.kind.${kind}`)}</span>
                 <span className="count">{count}</span>
               </li>

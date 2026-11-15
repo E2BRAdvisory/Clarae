@@ -4,34 +4,56 @@
 //  - the links are one LineSegments, not an object each: a draw call for all of them;
 //  - the layout is not the library's: positions come from the layout worker (layoutHost), and the
 //    library's own simulation is left without forces and never ticks;
-//  - above SPRITE_NODES nodes the nodes are a Points per look instead of a Sprite each.
+//  - the nodes are drawn by how many there are (lod.ts): a Sprite each, an InstancedMesh per shape
+//    of solid, or a Points per look.
 // Nothing here is React: Graph3D.tsx owns the instance and feeds it.
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject } from '3d-force-graph';
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  Color,
+  ConeGeometry,
+  CylinderGeometry,
+  DynamicDrawUsage,
+  IcosahedronGeometry,
+  InstancedBufferAttribute,
+  InstancedMesh,
   LineBasicMaterial,
   LineSegments,
+  MeshLambertMaterial,
+  OctahedronGeometry,
   type PerspectiveCamera,
+  Plane,
   Points,
   PointsMaterial,
+  Raycaster,
+  SphereGeometry,
   Spherical,
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
+  TorusGeometry,
+  Vector2,
   Vector3,
 } from 'three';
 import { ICON_DATA, type IconPath } from '../../shell/iconData';
 import type { IconName } from '../../shell/icons';
 import { boundsOf, fitDistance, planLinks, writeLinks, type LinkPlan } from '../geometry3d';
 import { kindIcon, nodeKind } from '../kinds';
+import {
+  DIM_MIX,
+  groupByShape,
+  kindShape,
+  lodFor,
+  shownPrefix,
+  writeInstanceMatrices,
+  type Lod,
+  type Shape,
+} from '../lod';
 import type { GraphModel } from '../model';
 import { classColor, fallbackPalette, neighbourSet, type Palette } from '../renderer';
-
-/** Up to this many nodes each one is a sprite the user can drag; beyond, points (a draw call per look). */
-export const SPRITE_NODES = 2000;
-export type Lod = 'sprite' | 'points';
 
 const TEXTURE_PX = 64;
 const LINK_OPACITY = 0.8;
@@ -44,7 +66,7 @@ const MAX_LABELS = 40;
 const LABEL_CANDIDATES = 200;
 /** Distance from the camera within which labels show, at label zoom 1. */
 const LABEL_RANGE = 520;
-/** How close to a point, in px, the pointer picks it. */
+/** How close to a point, in px, the pointer picks it (of a node drawn smaller than that). */
 const PICK_PX = 12;
 /** Distance of the camera from a node it flies to. */
 const FOCUS_DISTANCE = 220;
@@ -66,9 +88,17 @@ export interface Graph3DProbe {
   lod(): Lod;
   nodes(): number;
   drawCalls(): number;
+  /** Triangles of the last frame. */
+  triangles(): number;
+  /** Milliseconds of CPU each render call took since the last call. */
+  takeRenders(): number[];
+  /** The solids of the instanced level, with the nodes of each (empty at the other levels). */
+  solids(): { shape: string; nodes: number }[];
   contextLost(): boolean;
   /** Frames the renderer has drawn so far: the count stands still while the scene is at rest. */
   rendered(): number;
+  /** The scene has stopped for lack of change and nothing is waiting to wake it (not just a late frame). */
+  asleep(): boolean;
   /** Where a node is on the page, null when it is behind the camera. */
   pageOf(index: number): { x: number; y: number } | null;
   /** Milliseconds between the frames rendered since the last call. */
@@ -91,6 +121,33 @@ interface PointGroup {
   obj: Points;
   /** The nodes of the group, oldest first: the timelapse shows a prefix of them. */
   nodes: Int32Array;
+}
+
+interface SolidGroup {
+  shape: Shape;
+  obj: InstancedMesh;
+  /** The nodes of the group, oldest first: instance k is node nodes[k]. */
+  nodes: Int32Array;
+}
+
+/** The geometry of a solid, about 1 across: scaled per instance to the diameter of the node. */
+function solidGeometry(shape: Shape): BufferGeometry {
+  switch (shape) {
+    case 'cube':
+      return new BoxGeometry(0.82, 0.82, 0.82);
+    case 'octahedron':
+      return new OctahedronGeometry(0.58);
+    case 'cylinder':
+      return new CylinderGeometry(0.42, 0.42, 0.8, 8);
+    case 'cone':
+      return new ConeGeometry(0.5, 1, 8);
+    case 'torus':
+      return new TorusGeometry(0.38, 0.14, 4, 8);
+    case 'icosahedron':
+      return new IcosahedronGeometry(0.55);
+    default:
+      return new SphereGeometry(0.5, 8, 6);
+  }
 }
 
 const reducedMotion = (): boolean =>
@@ -120,6 +177,16 @@ export class GraphScene {
   // sprite level
   private nodes: SceneNode[] = [];
   private sprites: (Sprite | undefined)[] = [];
+  // instanced level
+  private solids: SolidGroup[] = [];
+  private solidMaterial: MeshLambertMaterial | null = null;
+  /** Colour of each class of node, as linear RGB: [class × 2 + (1 if it stands back)]. */
+  private readonly classRgb: (Float32Array | undefined)[] = [];
+  /** The node the user holds, with where it is held: what the layout says about it is out of date. */
+  private grab: { i: number; plane: Plane; offset: Vector3; moving: boolean } | null = null;
+  private dragAt: Vector3 | null = null;
+  private readonly raycaster = new Raycaster();
+  private readonly ndc = new Vector2();
   // points level
   private groups: PointGroup[] = [];
   /** Look of each node: the key of its texture. */
@@ -145,6 +212,7 @@ export class GraphScene {
   private pointer: { x: number; y: number } | null = null;
   private lastFrame = 0;
   private frames: number[] = [];
+  private renders: number[] = [];
   private disposed = false;
   private readonly v = new Vector3();
   private readonly probe: Graph3DProbe | null = null;
@@ -180,9 +248,9 @@ export class GraphScene {
     // The library reports the object it last found under the pointer, which it looks for a few
     // times a second: a click right after the pointer moved is "on the background" for it.
     g.onBackgroundClick((e) => {
-      // Points are not the library's objects: their clicks are all "on the background" for it,
-      // and are reported once, by onPointerUp.
-      if (this.lod === 'points') return;
+      // Points and solids are not the library's objects: their clicks are all "on the background"
+      // for it, and are reported once, by onPointerUp.
+      if (this.lod !== 'sprite') return;
       const p = this.local(e);
       this.events.onClick(this.pick(p.x, p.y), e.metaKey || e.ctrlKey);
     });
@@ -208,6 +276,7 @@ export class GraphScene {
     el.addEventListener('pointerdown', this.onPointerDown, true);
     el.addEventListener('pointermove', this.onPointerMove, true);
     el.addEventListener('pointerup', this.onPointerUp, true);
+    el.addEventListener('pointercancel', this.onPointerCancel, true);
     el.addEventListener('pointerleave', this.onPointerLeave);
     el.addEventListener('wheel', this.onWheel, { capture: true, passive: true });
     this.resizeObserver = new ResizeObserver(() => {
@@ -219,12 +288,25 @@ export class GraphScene {
     this.resizeObserver.observe(el);
 
     if (import.meta.env.CLARAE_E2E) {
+      // CPU time of each render call (what the page spends to hand a frame to the GPU): on a GPU
+      // that keeps up the frame rate stands at the display's, and this is what tells levels apart.
+      const renderer = g.renderer();
+      const render = renderer.render.bind(renderer);
+      renderer.render = (scene, camera) => {
+        const t = performance.now();
+        render(scene, camera);
+        this.renders.push(performance.now() - t);
+      };
       this.probe = {
         lod: () => this.lod,
         nodes: () => this.model?.n ?? 0,
         drawCalls: () => g.renderer().info.render.calls,
+        triangles: () => g.renderer().info.render.triangles,
+        takeRenders: () => this.renders.splice(0),
+        solids: () => this.solids.map((grp) => ({ shape: grp.shape, nodes: grp.nodes.length })),
         contextLost: () => g.renderer().getContext().isContextLost(),
         rendered: () => g.renderer().info.render.frame,
+        asleep: () => !this.running && this.raf === 0,
         pageOf: (i) => {
           const p = this.screenOf(i);
           if (!p) return null;
@@ -260,7 +342,7 @@ export class GraphScene {
     const now = performance.now();
     if (this.probe && this.lastFrame > 0) this.frames.push(now - this.lastFrame);
     this.lastFrame = now;
-    if (this.lod === 'points' && this.pointer && !this.pointerDown) {
+    if (this.lod !== 'sprite' && this.pointer && !this.pointerDown) {
       this.setHover(this.pick(this.pointer.x, this.pointer.y));
     }
     this.updateLabels();
@@ -291,8 +373,13 @@ export class GraphScene {
     this.ring?.material.map?.dispose();
     this.ring?.material.dispose();
     if (this.ring) this.ring.material = this.ringMaterial();
+    this.classRgb.length = 0;
     this.restyleNodes();
     this.wake();
+  }
+
+  private lookOfEach(): string[] {
+    return Array.from({ length: (this.model as GraphModel).n }, (_, i) => this.look(i));
   }
 
   private look(i: number): string {
@@ -409,14 +496,18 @@ export class GraphScene {
     this.lit = null;
     this.visible = null;
     this.dragging = -1;
-    this.lod = model.n > SPRITE_NODES ? 'points' : 'sprite';
+    this.lod = lodFor(model.n);
     this.el.dataset['graphLod'] = this.lod;
-    this.looks = Array.from({ length: model.n }, (_, i) => this.look(i));
+    // A node held while the graph changed is let go (its index may mean another node now), and
+    // the camera's controls, which holding it switched off, come back whatever the level.
+    this.endGrab();
+    this.looks = this.lod === 'instanced' ? [] : this.lookOfEach();
     this.byDegree = Int32Array.from({ length: model.n }, (_, i) => i).sort(
       (a, b) => (model.degree[b] as number) - (model.degree[a] as number),
     );
     this.labelStamp = new Uint32Array(model.n);
     this.clearGroups();
+    this.clearSolids();
     this.sprites = new Array<Sprite | undefined>(model.n);
     if (this.lod === 'sprite') {
       this.nodes = model.data.nodes.map((nd, i) => {
@@ -430,7 +521,8 @@ export class GraphScene {
       });
     } else {
       this.nodes = [];
-      this.buildGroups();
+      if (this.lod === 'instanced') this.buildSolids();
+      else this.buildGroups();
     }
     this.g.graphData({ nodes: this.nodes, links: [] });
     this.buildLinks();
@@ -446,6 +538,7 @@ export class GraphScene {
       const size = this.size(i);
       s?.scale.set(size, size, 1);
     });
+    this.writeSolids();
     for (const grp of this.groups) (grp.obj.material as PointsMaterial).size = this.pointSize();
     this.placeMarks();
     this.wake();
@@ -455,6 +548,80 @@ export class GraphScene {
     // Points have one size per group: that of a node with a few links.
     const m = this.model;
     return m && m.n > 0 ? 2 * (m.radius[this.byDegree[m.n >> 1] as number] as number) + 2 : 10;
+  }
+
+  // ---- solids: an InstancedMesh per shape, coloured and sized per instance
+
+  /** One material for all the solids: the colour comes with each instance. */
+  private solid(): MeshLambertMaterial {
+    this.solidMaterial ??= new MeshLambertMaterial();
+    return this.solidMaterial;
+  }
+
+  private buildSolids(): void {
+    const m = this.model as GraphModel;
+    const shapes = m.data.nodes.map((nd) => kindShape(nodeKind(nd)));
+    for (const grp of groupByShape(shapes, m.rank)) {
+      const obj = new InstancedMesh(solidGeometry(grp.shape), this.solid(), grp.nodes.length);
+      obj.instanceMatrix.setUsage(DynamicDrawUsage);
+      obj.instanceColor = new InstancedBufferAttribute(new Float32Array(3 * grp.nodes.length), 3);
+      obj.instanceColor.setUsage(DynamicDrawUsage);
+      // The instances move with every answer of the layout: the box of the first ones is no box.
+      obj.frustumCulled = false;
+      this.g.scene().add(obj);
+      this.solids.push({ shape: grp.shape, obj, nodes: grp.nodes });
+    }
+    this.writeSolids();
+  }
+
+  private clearSolids(): void {
+    for (const grp of this.solids) {
+      this.g.scene().remove(grp.obj);
+      grp.obj.geometry.dispose();
+      grp.obj.dispose();
+    }
+    this.solids = [];
+  }
+
+  /** Linear RGB of a class of node, taken towards the background when it stands back. */
+  private rgbOf(cls: number, back: boolean): Float32Array {
+    const key = 2 * cls + (back ? 1 : 0);
+    let rgb = this.classRgb[key];
+    if (!rgb) {
+      const c = new Color(cssHex(classColor(this.palette, cls)));
+      if (back) c.lerp(new Color(cssHex(this.palette.bg)), DIM_MIX);
+      rgb = Float32Array.of(c.r, c.g, c.b);
+      this.classRgb[key] = rgb;
+    }
+    return rgb;
+  }
+
+  /** Matrices, colours and number of instances again: after a move, a restyle, a new lit node or timelapse. */
+  private writeSolids(): void {
+    const m = this.model;
+    if (!m || this.solids.length === 0) return;
+    const lit = this.lit;
+    for (const grp of this.solids) {
+      const mesh = grp.obj;
+      const matrices = mesh.instanceMatrix;
+      writeInstanceMatrices(
+        matrices.array as Float32Array,
+        grp.nodes,
+        this.positions,
+        this.visible,
+        lit,
+        (i) => this.size(i),
+      );
+      matrices.needsUpdate = true;
+      const colours = mesh.instanceColor as InstancedBufferAttribute;
+      const out = colours.array as Float32Array;
+      grp.nodes.forEach((i, k) => {
+        out.set(this.rgbOf(m.cls[i] as number, !!lit && !lit[i]), 3 * k);
+      });
+      colours.needsUpdate = true;
+      // The nodes are in creation order, so the ones the timelapse shows are the first ones.
+      mesh.count = this.positions.length === 0 ? 0 : shownPrefix(grp.nodes, this.visible);
+    }
   }
 
   private buildGroups(): void {
@@ -519,7 +686,11 @@ export class GraphScene {
   /** Materials again after a change of colours, or of the lit neighbourhood. */
   private restyleNodes(): void {
     if (!this.model) return;
-    this.looks = Array.from({ length: this.model.n }, (_, i) => this.look(i));
+    if (this.lod === 'instanced') {
+      this.writeSolids();
+      return;
+    }
+    this.looks = this.lookOfEach();
     if (this.lod === 'sprite') {
       this.sprites.forEach((s, i) => {
         if (s) s.material = this.material(this.looks[i] as string, !!this.lit && !this.lit[i]);
@@ -597,6 +768,15 @@ export class GraphScene {
         node.z = z;
         this.sprites[i]?.position.set(x, y, z);
       }
+    } else if (this.lod === 'instanced') {
+      // What the layout says of the node in the user's hand is older than where it is held.
+      const at = this.dragAt;
+      if (at && this.dragging >= 0 && 3 * this.dragging + 2 < pos.length) {
+        pos[3 * this.dragging] = at.x;
+        pos[3 * this.dragging + 1] = at.y;
+        pos[3 * this.dragging + 2] = at.z;
+      }
+      this.writeSolids();
     } else this.writeGroups();
     this.writeLinks();
     this.placeMarks();
@@ -609,6 +789,7 @@ export class GraphScene {
     this.positions[3 * i] = x;
     this.positions[3 * i + 1] = y;
     this.positions[3 * i + 2] = z;
+    if (this.lod === 'instanced') this.writeSolids();
     this.writeLinks();
     this.placeMarks();
     this.wake();
@@ -621,7 +802,8 @@ export class GraphScene {
       this.sprites.forEach((s, i) => {
         if (s) this.show(s, !mask || !!mask[i]);
       });
-    } else this.writeGroups();
+    } else if (this.lod === 'instanced') this.writeSolids();
+    else this.writeGroups();
     this.writeLinks();
     this.placeMarks();
     this.wake();
@@ -663,7 +845,7 @@ export class GraphScene {
       this.sprites.forEach((s, i) => {
         if (s) s.material = this.material(this.looks[i] as string, !!lit && !lit[i]);
       });
-    }
+    } else if (changed && this.lod === 'instanced') this.writeSolids();
     if (this.links) this.links.material.opacity = lit ? DIM_LINK_OPACITY : LINK_OPACITY;
     this.placeMarks();
     this.wake();
@@ -681,7 +863,7 @@ export class GraphScene {
         this.ring.renderOrder = 10;
         this.g.scene().add(this.ring);
       }
-      const size = (this.lod === 'sprite' ? this.size(sel) : this.pointSize()) * 1.7;
+      const size = (this.lod === 'points' ? this.pointSize() : this.size(sel)) * 1.7;
       this.ring.scale.set(size, size, 1);
       this.ring.position.set(pos[3 * sel] as number, pos[3 * sel + 1] as number, pos[3 * sel + 2]);
       this.ring.visible = true;
@@ -785,6 +967,7 @@ export class GraphScene {
     const pos = this.positions;
     const cam = this.camera.position;
     const perPx = (2 * Math.tan((this.camera.fov * Math.PI) / 360)) / this.height;
+    // A point is as big for all nodes; a sprite or a solid is as big as its node.
     const flat = this.lod === 'points' ? this.pointSize() : 0;
     let best = -1;
     let bestD = Infinity;
@@ -883,7 +1066,16 @@ export class GraphScene {
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    this.pointerDown = { x: e.clientX, y: e.clientY, onNode: this.hover >= 0 };
+    let onNode = this.hover >= 0;
+    if (this.lod === 'instanced' && e.button === 0) {
+      // A solid is held where the pointer went down, not where it last hovered: the node itself is
+      // picked, and the camera's controls sit this gesture out (they would turn the view as well).
+      const p = this.local(e);
+      const at = this.pick(p.x, p.y);
+      onNode = at >= 0;
+      if (at >= 0) this.startGrab(at, p.x, p.y, e);
+    }
+    this.pointerDown = { x: e.clientX, y: e.clientY, onNode };
     this.wake();
   };
 
@@ -894,6 +1086,11 @@ export class GraphScene {
     if (camera && Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 3) {
       this.events.onUserMove();
     }
+    const g = this.grab;
+    if (g && d) {
+      if (!g.moving && Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 3) g.moving = true;
+      if (g.moving) this.dragGrab(g, this.pointer);
+    }
     this.wake();
   };
 
@@ -901,17 +1098,101 @@ export class GraphScene {
     const d = this.pointerDown;
     this.pointerDown = null;
     this.wake();
-    // Points are picked here; sprites are the library's, which reports their clicks itself.
-    if (this.lod !== 'points' || !d || e.button !== 0) return;
+    const held = this.endGrab();
+    if (held?.moving) {
+      // A drag: the node stays where it was dropped, and the gesture is not a click.
+      this.events.onDragEnd(
+        held.i,
+        this.positions[3 * held.i] as number,
+        this.positions[3 * held.i + 1] as number,
+        this.positions[3 * held.i + 2] as number,
+      );
+      return;
+    }
+    // Points and solids are picked here; sprites are the library's, which reports their clicks itself.
+    if (this.lod === 'sprite' || !d || e.button !== 0) return;
     if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 3) return;
     const p = this.local(e);
     this.events.onClick(this.pick(p.x, p.y), e.metaKey || e.ctrlKey);
   };
 
+  /** The gesture was taken away (the browser's, a system dialog): a held node is let go where it is. */
+  private readonly onPointerCancel = (): void => {
+    this.pointerDown = null;
+    const held = this.endGrab();
+    if (held?.moving) {
+      this.events.onDragEnd(
+        held.i,
+        this.positions[3 * held.i] as number,
+        this.positions[3 * held.i + 1] as number,
+        this.positions[3 * held.i + 2] as number,
+      );
+    }
+    this.wake();
+  };
+
   private readonly onPointerLeave = (): void => {
     this.pointer = null;
-    if (this.lod === 'points') this.setHover(-1);
+    if (this.lod !== 'sprite') this.setHover(-1);
   };
+
+  // ---- dragging a solid (the library drags sprites; solids are not its objects)
+
+  /** The point of a plane a ray from the camera through a point of the surface meets. */
+  private rayOnPlane(x: number, y: number, plane: Plane): Vector3 | null {
+    this.raycaster.setFromCamera(
+      this.ndc.set((x / this.width) * 2 - 1, 1 - (y / this.height) * 2),
+      this.camera,
+    );
+    return this.raycaster.ray.intersectPlane(plane, new Vector3());
+  }
+
+  private startGrab(i: number, x: number, y: number, e: PointerEvent): void {
+    if (!this.shown(i)) return;
+    const at = new Vector3(
+      this.positions[3 * i],
+      this.positions[3 * i + 1],
+      this.positions[3 * i + 2],
+    );
+    // The node moves in the plane it is in, facing the camera: it follows the pointer.
+    const plane = new Plane().setFromNormalAndCoplanarPoint(
+      this.camera.getWorldDirection(new Vector3()),
+      at,
+    );
+    const hit = this.rayOnPlane(x, y, plane);
+    this.grab = { i, plane, offset: hit ? at.sub(hit) : new Vector3(), moving: false };
+    this.controlsEnabled(false);
+    try {
+      this.g.renderer().domElement.setPointerCapture(e.pointerId);
+    } catch {
+      /* no capture where it is not supported: the pointer is then lost outside the surface */
+    }
+  }
+
+  private dragGrab(g: { i: number; plane: Plane; offset: Vector3 }, at: { x: number; y: number }) {
+    const hit = this.rayOnPlane(at.x, at.y, g.plane);
+    if (!hit) return;
+    hit.add(g.offset);
+    this.dragging = g.i;
+    this.dragAt = hit;
+    this.moveNode(g.i, hit.x, hit.y, hit.z);
+    this.events.onDrag(g.i, hit.x, hit.y, hit.z);
+  }
+
+  /** Lets go of the node in hand (null when there was none); the camera's controls come back. */
+  private endGrab(): { i: number; moving: boolean } | null {
+    const g = this.grab;
+    this.grab = null;
+    if (!g) return null;
+    this.controlsEnabled(true);
+    this.dragging = -1;
+    this.dragAt = null;
+    return g;
+  }
+
+  private controlsEnabled(on: boolean): void {
+    (this.g.controls() as { enabled: boolean }).enabled = on;
+  }
 
   private readonly onWheel = (): void => {
     this.events.onUserMove();
@@ -928,6 +1209,7 @@ export class GraphScene {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.endGrab();
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.resizeObserver.disconnect();
@@ -935,6 +1217,7 @@ export class GraphScene {
     el.removeEventListener('pointerdown', this.onPointerDown, true);
     el.removeEventListener('pointermove', this.onPointerMove, true);
     el.removeEventListener('pointerup', this.onPointerUp, true);
+    el.removeEventListener('pointercancel', this.onPointerCancel, true);
     el.removeEventListener('pointerleave', this.onPointerLeave);
     el.removeEventListener('wheel', this.onWheel, true);
     el.classList.remove('hovering');
@@ -943,6 +1226,8 @@ export class GraphScene {
     renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     g.pauseAnimation();
     this.clearGroups();
+    this.clearSolids();
+    this.solidMaterial?.dispose();
     for (const obj of [this.links, this.glow]) {
       obj?.geometry.dispose();
       obj?.material.dispose();

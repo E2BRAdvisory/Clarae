@@ -1448,7 +1448,7 @@ features:
         - apps/desktop/frontend/e2e/graph-3d.spec.ts
       workbench:
         - apps/desktop/frontend/e2e/graph-3d.spec.ts
-        - web/e2e-security/graph3d-csp.spec.ts
+        - web/e2e-security/workbench-csp.spec.ts
 
   # ---- applicazioni (M18, traccia E) -------------------------------------------------------------
   - id: webapp

@@ -7,6 +7,7 @@ import { useAppStore } from '../state/store';
 import { installWailsMock } from '../test/wails-mock';
 import { activeTab, emptyLayout } from '../workspace/layout';
 import { GraphView } from './GraphView';
+import { SPRITE_NODES } from './lod';
 import { useGraphMode } from './mode';
 import { GRAPH3D_MAX_NODES, useGraphSettings } from './settings';
 import type { GraphSurfaceProps } from './surface';
@@ -120,6 +121,38 @@ describe('GraphView in 3D', () => {
     expect(screen.getByTestId('graph-3d')).toHaveAttribute('data-nodes', '-1');
     await waitFor(() => expect(screen.getByTestId('graph-3d')).toHaveAttribute('data-nodes', '3'));
     expect(surface.drawn.map((d) => ceilings.get(d as GraphData))).not.toContain(0);
+  });
+
+  it('shows in the legend the solid of each kind from the size that draws solids, and the icon below it', async () => {
+    useGraphMode.setState({ mode: '3d' });
+    // More nodes than the level of sprites draws, of several kinds of document.
+    const w = window as unknown as Record<string, unknown>;
+    w['__CLARAE_GRAPH_FIXTURE__'] = SPRITE_NODES + 1;
+    w['__CLARAE_GRAPH_KINDS__'] = true;
+    try {
+      await openGraphOf('Solids');
+      const legend = await screen.findByRole('list', { name: 'Kinds of document' });
+      await waitFor(() => expect(surface.props?.model?.n).toBe(SPRITE_NODES + 1));
+      expect(legend.querySelector('[data-shape="sphere"]')).not.toBeNull(); // the notes
+      expect(legend.querySelector('[data-shape="cube"]')).not.toBeNull(); // the drawings
+      expect(legend.querySelector('[data-shape="torus"]')).not.toBeNull(); // the tags
+      // Every row has a solid and no icon.
+      const rows = legend.querySelectorAll('li');
+      expect(rows.length).toBeGreaterThan(3);
+      for (const row of rows) expect(row.querySelectorAll('svg[data-shape]')).toHaveLength(1);
+      expect(legend.querySelectorAll('svg:not([data-shape])')).toHaveLength(0);
+    } finally {
+      delete w['__CLARAE_GRAPH_FIXTURE__'];
+      delete w['__CLARAE_GRAPH_KINDS__'];
+    }
+  });
+
+  it('keeps the icons in the legend for a graph of sprites', async () => {
+    useGraphMode.setState({ mode: '3d' });
+    await openGraphOf('Icons');
+    const legend = await screen.findByRole('list', { name: 'Kinds of document' });
+    expect(legend.querySelectorAll('svg')).toHaveLength(legend.querySelectorAll('li').length);
+    expect(legend.querySelector('[data-shape]')).toBeNull();
   });
 
   it('offers to release the nodes held in place, and asks the surface to', async () => {

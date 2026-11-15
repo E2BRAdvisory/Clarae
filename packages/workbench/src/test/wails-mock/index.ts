@@ -1662,7 +1662,10 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       // Benchmarks and e2e runs can ask for a synthetic graph of a given size.
       const fixture = (window as unknown as { __CLARAE_GRAPH_FIXTURE__?: number })
         .__CLARAE_GRAPH_FIXTURE__;
-      if (fixture) return Promise.resolve(syntheticGraph(fixture));
+      // __CLARAE_GRAPH_KINDS__: the same graph with a mix of kinds of document, not only notes.
+      const kinds = !!(window as unknown as { __CLARAE_GRAPH_KINDS__?: boolean })
+        .__CLARAE_GRAPH_KINDS__;
+      if (fixture) return Promise.resolve(syntheticGraph(fixture, 3, 1, kinds));
       const v = vaultOf(id);
       // What the index knows as nodes: notes and presentations, drawings, canvases and bases.
       const inGraph = (p: string): boolean => nodeKind(p) !== 'attachment';

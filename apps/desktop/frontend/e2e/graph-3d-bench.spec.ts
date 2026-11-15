@@ -5,13 +5,22 @@
 //     yarn workspace @clarae/desktop-frontend exec playwright test e2e/graph-3d-bench.spec.ts
 //
 // CLARAE_GRAPH3D_GL chooses the WebGL backend: `metal` (the GPU of a Mac), `swiftshader` (software,
-// the default: what a machine without a GPU gives). The synthetic graph comes from the Wails mock
-// (window.__CLARAE_GRAPH_FIXTURE__); the layout runs in the real Web Worker, in three dimensions.
+// the default: what a machine without a GPU gives). CLARAE_GRAPH3D_KINDS=mixed makes the graph one
+// of several kinds of document (notes, drawings, canvases, bases, attachments, tags, ghosts) instead
+// of notes only, which is what tells the levels of detail apart. The synthetic graph comes from the
+// Wails mock (window.__CLARAE_GRAPH_FIXTURE__); the layout runs in the real Web Worker, in three
+// dimensions.
 // See docs/qa/graph-3d-benchmark.md.
 import { expect, skipOnWeb, test } from './support';
 
 const N = Number(process.env['CLARAE_GRAPH3D_BENCH'] ?? 0);
 const GL = process.env['CLARAE_GRAPH3D_GL'] === 'metal' ? 'metal' : 'swiftshader';
+const KINDS = process.env['CLARAE_GRAPH3D_KINDS'] === 'mixed' ? 'mixed' : 'notes';
+// CLARAE_GRAPH3D_LOD=sprite|instanced|points draws the nodes at that level whatever their number
+// (E2E builds only); unset, the level is the one the number of nodes calls for.
+const LOD = ['sprite', 'instanced', 'points'].includes(process.env['CLARAE_GRAPH3D_LOD'] ?? '')
+  ? process.env['CLARAE_GRAPH3D_LOD']
+  : '';
 
 test.skip(!N, 'set CLARAE_GRAPH3D_BENCH=<nodes> to run the 3D graph benchmark');
 
@@ -40,7 +49,9 @@ interface Stats {
 interface Probe {
   lod(): string;
   drawCalls(): number;
+  triangles(): number;
   takeFrames(): number[];
+  takeRenders(): number[];
 }
 
 const summary = (xs: number[]): { n: number; median: number; p95: number; max: number } => {
@@ -54,14 +65,19 @@ const summary = (xs: number[]): { n: number; median: number; p95: number; max: n
   };
 };
 
-test(`3D graph of ${N} nodes on ${GL}: layout time and frame rate`, async ({ page }) => {
+test(`3D graph of ${N} nodes (${KINDS}) on ${GL}: layout time and frame rate`, async ({ page }) => {
   test.setTimeout(300_000);
-  await page.addInitScript((n) => {
-    const w = window as unknown as Record<string, unknown>;
-    w['__CLARAE_GRAPH_FIXTURE__'] = n;
-    w['__graphStats'] = { frames: [], layoutMs: 0, nodes: 0, edges: 0, ticks: 0 };
-    localStorage.setItem('clarae.graph.mode', '3d');
-  }, N);
+  await page.addInitScript(
+    ([n, kinds, lod]) => {
+      const w = window as unknown as Record<string, unknown>;
+      w['__CLARAE_GRAPH_FIXTURE__'] = n;
+      w['__CLARAE_GRAPH_KINDS__'] = kinds === 'mixed';
+      if (lod) w['__CLARAE_GRAPH3D_LOD__'] = lod;
+      w['__graphStats'] = { frames: [], layoutMs: 0, nodes: 0, edges: 0, ticks: 0 };
+      localStorage.setItem('clarae.graph.mode', '3d');
+    },
+    [N, KINDS, LOD] as const,
+  );
   await page.goto('/');
   await page.getByRole('button', { name: 'Open folder as vault' }).click();
   await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
@@ -83,6 +99,7 @@ test(`3D graph of ${N} nodes on ${GL}: layout time and frame rate`, async ({ pag
       nodes: s.nodes,
       edges: s.edges,
       frames: p.takeFrames(),
+      renders: p.takeRenders(),
     };
   });
 
@@ -102,13 +119,21 @@ test(`3D graph of ${N} nodes on ${GL}: layout time and frame rate`, async ({ pag
   await page.mouse.up();
   const orbit = await page.evaluate(() => {
     const p = (window as unknown as { __graph3d: Probe }).__graph3d;
-    return { frames: p.takeFrames(), drawCalls: p.drawCalls(), lod: p.lod() };
+    return {
+      frames: p.takeFrames(),
+      renders: p.takeRenders(),
+      drawCalls: p.drawCalls(),
+      triangles: p.triangles(),
+      lod: p.lod(),
+    };
   });
   const fps = (frames: number[]): number =>
     frames.length ? +((frames.length * 1000) / frames.reduce((a, b) => a + b, 0)).toFixed(1) : 0;
   const out = {
     requestedNodes: N,
     gl: GL,
+    kinds: KINDS,
+    forced: LOD,
     lod: orbit.lod,
     nodes: during.nodes,
     edges: during.edges,
@@ -120,7 +145,11 @@ test(`3D graph of ${N} nodes on ${GL}: layout time and frame rate`, async ({ pag
     frameDuringLayoutMs: summary(during.frames),
     orbitFps: fps(orbit.frames),
     frameDuringOrbitMs: summary(orbit.frames),
+    // CPU time of a render call, mediana and p95 (ms): what the page spends handing a frame over.
+    renderCpuDuringLayoutMs: summary(during.renders),
+    renderCpuDuringOrbitMs: summary(orbit.renders),
     drawCalls: orbit.drawCalls,
+    triangles: orbit.triangles,
   };
   process.stdout.write('GRAPH3D_BENCH ' + JSON.stringify(out) + '\n');
   expect(orbit.frames.length).toBeGreaterThan(10);
