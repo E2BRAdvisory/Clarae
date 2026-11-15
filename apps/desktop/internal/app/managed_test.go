@@ -156,3 +156,41 @@ func TestPathV2FromProfile(t *testing.T) {
 		t.Fatal("removing the flag must restore the default (on)")
 	}
 }
+
+// ADR-0052, release 1.7: the move of the settings of linked vaults is on by default
+// (features.config_dir_v2), but only once a profile from the server has been read, fresh or
+// cached: before that, an administrator who turned it off on purpose has not been heard yet. A
+// profile can turn it off, and a profile without the key takes the default again.
+func TestConfigDirV2FromProfile(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	// moves reports whether the settings of a linked vault are moved to the current folder: a
+	// file that is in neither folder is created in the former one while the move is off.
+	moves := func() bool { return !a.sync.ConfigInLegacy("unknown", true) }
+	if moves() {
+		t.Fatal("the move must be off before any profile is read")
+	}
+	// Signed in to a server whose profile was never fetched (nothing cached, offline): the
+	// configuration in force is empty and not managed, which must not read as "default on".
+	a.applyConfig()
+	if moves() {
+		t.Fatal("the move started before a profile was read")
+	}
+	refreshWith(t, a, map[string]any{})
+	if !moves() {
+		t.Fatal("a profile without the key must take the default (on)")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"config_dir_v2": false}})
+	if moves() {
+		t.Fatal("features.config_dir_v2 false not applied")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"config_dir_v2": "no"}})
+	if !moves() {
+		t.Fatal("a non-boolean value must take the default (on)")
+	}
+	refreshWith(t, a, map[string]any{"features": map[string]any{"config_dir_v2": false}})
+	a.config.Load(context.Background(), "https://other.test") // another server, nothing cached
+	a.applyConfig()
+	if moves() {
+		t.Fatal("the move must stop when the profile in force is not read")
+	}
+}

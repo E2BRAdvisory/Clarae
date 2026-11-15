@@ -51,10 +51,10 @@ export const Feature = {
   PathV2: 'path_v2',
   // Move the synchronized settings of a linked vault (editor, hotkeys, appearance, templates, ...)
   // from the former configuration folder to the current one (ADR-0052), as an ordinary move that
-  // keeps the file ids and the history. Off by default in 1.5.0: clients of 1.x still read and write
-  // the former folder and would recreate every setting, so turn it on only after every device of the
-  // vault is updated. Turning it off stops the move only: a setting already moved stays where it is,
-  // and the client reads both folders.
+  // keeps the file ids and the history. On by default since 1.7.0: clients of 1.4 and earlier still
+  // read and write the former folder and would recreate every setting, so update every device of the
+  // vault before the cloud or set false until then. Turning it off stops the move only: a setting
+  // already moved stays where it is, and the client reads both folders.
   ConfigDirV2: 'config_dir_v2',
 } as const;
 
@@ -100,7 +100,7 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.DrawingActions]: true,
   [Feature.EnvelopeV2]: true,
   [Feature.PathV2]: true,
-  [Feature.ConfigDirV2]: false,
+  [Feature.ConfigDirV2]: true,
 };
 
 /** The sections of a Config Profile: the top-level keys the schema allows, in schema order. */

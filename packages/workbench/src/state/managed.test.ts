@@ -45,6 +45,9 @@ describe('managed configuration', () => {
     expect(featureOn({}, Feature.Chat)).toBe(false);
     expect(featureOn({}, Feature.EnvelopeV2)).toBe(true);
     expect(featureOn({}, Feature.PathV2)).toBe(true);
+    // The move of the synchronized settings to the current folder (ADR-0052): on since 1.7.0.
+    expect(featureOn({}, Feature.ConfigDirV2)).toBe(true);
+    expect(featureOn({ config_dir_v2: false }, Feature.ConfigDirV2)).toBe(false);
     expect(featureOn({ envelope_v2: false }, Feature.EnvelopeV2)).toBe(false);
     expect(featureOn({ chat: true }, Feature.Chat)).toBe(true);
     for (const f of FEATURES) expect(featureOn({}, f)).toBe(FEATURE_DEFAULTS[f]);

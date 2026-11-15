@@ -43,12 +43,12 @@ func TestEveryFlagHasADefault(t *testing.T) {
 		t.Fatalf("Known %d, Defaults %d, Descriptions %d", len(features.Known), len(features.Defaults), len(features.Descriptions))
 	}
 	// The flags whose default is off: functions not offered yet. The format switches of ADR-0034
-	// and ADR-0042 are on by default since release N+1.
+	// and ADR-0042 are on by default since release N+1, and so is config_dir_v2 (ADR-0052) since
+	// 1.7.0: it moves the synchronized settings of linked vaults to the new configuration folder,
+	// and an instance that still has devices of 1.4 or earlier turns it off.
 	// ai and collab (ADR-0050) are functions not offered yet that the code already reads: a flag the
 	// schema did not declare would be on, so both must stay declared and off.
-	// config_dir_v2 (ADR-0052) moves the synchronized settings of linked vaults to the new configuration
-	// folder: off until every device of a vault runs 2.x.
-	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.Ai, features.Collab, features.ConfigDirV2}
+	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.Ai, features.Collab}
 	for _, k := range features.Known {
 		want := true
 		for _, o := range off {
@@ -96,10 +96,14 @@ func TestFlags(t *testing.T) {
 	if features.Enabled(cfg, features.Drawings) || !features.Enabled(cfg, features.Chat) || !features.Enabled(nil, features.EnvelopeV2) || !features.Enabled(nil, features.PathV2) {
 		t.Fatal("Enabled disagrees with the configuration or the defaults")
 	}
-	// An administrator can still turn the v2 formats off (ADR-0034, ADR-0042).
-	off := map[string]any{"features": map[string]any{features.EnvelopeV2: false, features.PathV2: false}}
-	if features.Enabled(off, features.EnvelopeV2) || features.Enabled(off, features.PathV2) {
-		t.Fatal("an explicit false must turn a v2 format off")
+	// An administrator can still turn the v2 formats off (ADR-0034, ADR-0042) and the move of the
+	// settings to the current configuration folder (ADR-0052, on by default since 1.7.0).
+	if !features.Enabled(nil, features.ConfigDirV2) || !features.Enabled(map[string]any{}, features.ConfigDirV2) {
+		t.Fatal("config_dir_v2 is on by default")
+	}
+	off := map[string]any{"features": map[string]any{features.EnvelopeV2: false, features.PathV2: false, features.ConfigDirV2: false}}
+	if features.Enabled(off, features.EnvelopeV2) || features.Enabled(off, features.PathV2) || features.Enabled(off, features.ConfigDirV2) {
+		t.Fatal("an explicit false must turn a v2 format or the move of the settings off")
 	}
 	if !features.Enabled(nil, "unheard_of") || features.Enabled(cfg, "mystery") {
 		t.Fatal("an unknown flag is on unless the configuration switches it off")

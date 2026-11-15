@@ -107,21 +107,31 @@ func TestConfigMoveOfTheWholeFolderIsOneFolderRename(t *testing.T) {
 	}
 }
 
+// The flag is off when the engine was not given one and when it says false, which is what an
+// administrator who turned config_dir_v2 off (the default is on since 1.7.0) makes the manager say.
 func TestConfigStaysWhereItIsWithTheFlagOff(t *testing.T) {
-	ctx := context.Background()
-	remote := newScriptRemote()
-	e, dir := newTestEngine(t, remote, 0)
-	f := syncedFile(t, e, remote, dir, oldCfg+"/editor.json", []byte("{}"))
-	for i := 0; i < 2; i++ {
-		if err := e.Sync(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if !exists(dir, oldCfg+"/editor.json") || exists(dir, newCfg+"/editor.json") || rowOf(t, e, f.FileID).Path != oldCfg+"/editor.json" {
-		t.Fatal("a setting moved with features.config_dir_v2 off")
-	}
-	if n := len(remote.committed(syncproto.OpMove, "")); n != 0 {
-		t.Fatalf("%d moves were committed", n)
+	for name, flag := range map[string]func() bool{
+		"no flag":        nil,
+		"explicit false": func() bool { return false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			remote := newScriptRemote()
+			e, dir := newTestEngine(t, remote, 0)
+			e.cfg.ConfigDirV2 = flag
+			f := syncedFile(t, e, remote, dir, oldCfg+"/editor.json", []byte("{}"))
+			for i := 0; i < 2; i++ {
+				if err := e.Sync(ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !exists(dir, oldCfg+"/editor.json") || exists(dir, newCfg+"/editor.json") || rowOf(t, e, f.FileID).Path != oldCfg+"/editor.json" {
+				t.Fatal("a setting moved with features.config_dir_v2 off")
+			}
+			if n := len(remote.committed(syncproto.OpMove, "")); n != 0 {
+				t.Fatalf("%d moves were committed", n)
+			}
+		})
 	}
 }
 

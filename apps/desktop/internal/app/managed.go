@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"clarae/apps/desktop/internal/auth"
+	"clarae/apps/desktop/internal/config"
 	"clarae/apps/desktop/internal/history"
 	flags "clarae/shared/features"
 )
@@ -101,9 +102,15 @@ func pathV2Enabled(cfg map[string]any) bool {
 
 // configDirV2Enabled reads features.config_dir_v2, which lets the sync engine move the synchronized
 // settings of a linked vault from the former configuration folder to the current one (ADR-0052).
-// Off by default in 1.5.0: clients of 1.x sharing the vault still use the former folder.
-func configDirV2Enabled(cfg map[string]any) bool {
-	return flags.Enabled(cfg, flags.ConfigDirV2)
+// On by default since 1.7.0, like path_v2: clients of 1.4 and earlier sharing the vault still use
+// the former folder, so an instance that has such devices sets it to false until they are updated.
+//
+// A default that is on must not act before the profile of the organization was read: without one
+// (not signed in, first start offline, nothing cached) the configuration in force is empty, and
+// an empty configuration reads as the default. The move therefore starts only for a managed
+// configuration, the one of a server, fresh or cached; until then the settings stay where they are.
+func configDirV2Enabled(cur config.Effective) bool {
+	return cur.Managed && flags.Enabled(cur.Config, flags.ConfigDirV2)
 }
 
 // envRedirectMode is the redirect mode forced from the environment

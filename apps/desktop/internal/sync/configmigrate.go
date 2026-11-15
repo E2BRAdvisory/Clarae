@@ -13,9 +13,10 @@ import (
 //
 // A vault linked to the cloud keeps its settings (editor.json, hotkeys.json, ...) in the former
 // folder as long as a 1.x client may share it: that client does not know the new name and would
-// recreate every file it does not find. When features.config_dir_v2 is on, which an administrator
-// does once every device of the vault runs 2.x, the engine moves them, one file at a time, as the
-// move of a user: same file id, same history, a move op with base_rev at the next cycle.
+// recreate every file it does not find. When features.config_dir_v2 is on, which is the default
+// since 1.7.0 (an administrator whose vault still has devices of 1.4 or earlier turns it off until
+// they are updated), the engine moves them, one file at a time, as the move of a user: same file
+// id, same history, a move op with base_rev at the next cycle.
 //
 // Like the migration of the path tokens (pathmigrate.go) it never gets in the way of the
 // synchronization and needs no state of its own:
