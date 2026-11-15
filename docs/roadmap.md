@@ -1121,21 +1121,21 @@ Le tre rimozioni di compatibilità con la 1.x che M17 fissava alla 1.6 e che l'o
 **Criteri di uscita** (esito registrato)
 
 - **Eseguito:** `task gen` e `task check-gen`; test Go di sync, app, vault e features (compreso `TestAdminGuideDocumentsEveryKey`); test del cloud dei pacchetti toccati; sottoinsieme dei test d'integrazione su lock, blob, tus, quota ed export con Docker (verde); `task test-wasm`; vitest di workbench e web; `golangci-lint` con 0 rilievi. `task ci` completo è verde sull'albero del grafo 3D (traccia D) del 2026-11-15; non è registrato qui un `task ci` ripetuto sull'albero con le rimozioni.
-- **Non eseguito:** l'intera `task test-integration`; il workflow di release (R2).
+- **Non eseguito al momento della 1.7.0:** l'intera `task test-integration` e il workflow di release (R2). **Aggiornamento:** `task test-integration` è verde sull'albero della 1.7.1 (M20); il workflow di release con la modifica di R2 è stato eseguito dal push del tag `v1.7.0` (2026-11-15, 14:21 UTC, esito positivo, 13 minuti) e ha pubblicato la release «Clarae notanda 1.7.0».
 - **Anche nella 1.7.0:** la traccia E di M18 (applicazioni in una scheda, vista nativa su macOS, `features.web_viewer` spento di default): stato e prove in §13-undecies. Non è registrato qui un `task ci` ripetuto sull'albero con le applicazioni e le rimozioni insieme.
 
 ---
 
 ## 13-terdecies. M20 — Versione 1.7.1: chiusura dei sospesi di M18
 
-Piano del 2026-11-15 (non versionato). Parte da `main` = `v1.7.0`, locale e mai pubblicata: le tredici voci rimaste dopo la 1.7.0 (suite complete, prove manuali, livello intermedio del grafo 3D, selettore rapido, dati di sessione, driver Windows, ADR e spec, push). Sigle dei commit: `[M20-S1]` … `[M20-S7]`, autore Efrem Ropelato, senza `Co-Authored-By`. Il lavoro delle sessioni S2…S6 è nel working tree, **non ancora committato** (i commit sono di S7), e **la revisione del codice della 1.7.1 è in corso** al momento di questa scrittura: può portare piccole correzioni, e la roadmap non ne descrive i dettagli.
+Piano del 2026-11-15 (non versionato). Parte da `main` = `v1.7.0`, che il piano credeva solo locale: `main` e il tag `v1.7.0` erano invece già stati pubblicati (push del 2026-11-15, 14:21 UTC, non fatto da questa sessione), con la release «Clarae notanda 1.7.0»; le tredici voci rimaste dopo la 1.7.0 (suite complete, prove manuali, livello intermedio del grafo 3D, selettore rapido, dati di sessione, driver Windows, ADR e spec, push). Sigle dei commit: `[M20-S1]` … `[M20-S7]`, autore Efrem Ropelato, senza `Co-Authored-By`. Il lavoro delle sessioni S2…S6 è nel working tree, **non ancora committato** (i commit sono di S7), e **la revisione del codice della 1.7.1 è in corso** al momento di questa scrittura: può portare piccole correzioni, e la roadmap non ne descrive i dettagli.
 
 **Stato: eseguita in parte (2026-11-15), versione 1.7.1 non ancora rilasciata.** Fatte le sessioni S1…S6; S7 (rilascio) da fare.
 
 **Decisioni dell'owner**
 
 - **ADR e spec (voce 10):** gli ADR 0053, 0054, 0055 e 0056 sono accettati e `Specifications.md` è aggiornato dagli elenchi in fondo agli ADR, per richiesta esplicita (in deroga alla regola che vieta di modificarlo in automatico). Lo spec passa alla **v1.6**.
-- **Push (voce 12):** solo alla fine, con `task ci` verde: `main` e il tag `v1.7.1` (`v1.7.0` resta locale); conferma finale prima del push.
+- **Push (voce 12):** solo alla fine, con `task ci` verde: `main` e il tag `v1.7.1`; conferma finale prima del push. (`v1.7.0` risultava già pubblicato: vedi sopra.)
 - **Prove manuali e misure su finestra reale (voci 2, 3, 11):** le esegue l'owner; si preparano strumenti e istruzioni (runbook [`docs/qa/verifica-manuale-1.7.md`](qa/verifica-manuale-1.7.md)).
 - **`features.web_viewer` (voce 9):** resta **spento di default**: la matrice manuale non è eseguita.
 - **Livelli di dettaglio del 3D (voce 4):** livello intermedio istanziato (`InstancedMesh` per tipo) tra sprite e punti, con misura prima e dopo; se non migliorava si toglieva e si scriveva. Migliora: resta.
