@@ -255,6 +255,7 @@ describe('kinds of document in the graph', () => {
     expect(documentKind(node('attachment', 'img/pic.PNG'))).toBe('image');
     expect(documentKind(node('attachment', 'paper.pdf'))).toBe('pdf');
     expect(documentKind(node('attachment', 'data.bin'))).toBe('other');
+    expect(documentKind(node('attachment', 'Tools/GitHub.webapp'))).toBe('webapp');
     expect(documentKind(node('tag', ''))).toBe('tag');
     expect(documentKind(node('ghost', ''))).toBe('ghost');
   });
@@ -263,6 +264,7 @@ describe('kinds of document in the graph', () => {
     expect(kindIcon('drawing')).toBe('pencil');
     expect(kindIcon('base')).toBe('table');
     expect(kindIcon('tag')).toBe('tag');
+    expect(kindIcon('webapp')).toBe('webapp');
     expect(
       kindCounts([
         node('ghost', ''),
@@ -270,10 +272,12 @@ describe('kinds of document in the graph', () => {
         node('note', 'A.md'),
         node('note', 'B.md'),
         node('note', 'D.marp'),
+        node('attachment', 'Tools/GitHub.webapp'),
       ]),
     ).toEqual([
       { kind: 'note', count: 2 },
       { kind: 'presentation', count: 1 },
+      { kind: 'webapp', count: 1 },
       { kind: 'drawing', count: 1 },
       { kind: 'ghost', count: 1 },
     ]);

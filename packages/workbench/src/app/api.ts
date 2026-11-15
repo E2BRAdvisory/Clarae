@@ -36,6 +36,7 @@ import * as DrawingAPI from '../../wailsjs/go/app/DrawingAPI';
 import * as SharingAPI from '../../wailsjs/go/app/SharingAPI';
 import * as ConfigAPI from '../../wailsjs/go/app/ConfigAPI';
 import * as GraphAPI from '../../wailsjs/go/app/GraphAPI';
+import * as WebViewAPI from '../../wailsjs/go/app/WebViewAPI';
 import type { GraphData, GraphOptions } from '../graph/types';
 import * as BasesAPI from '../../wailsjs/go/app/BasesAPI';
 import type { BaseInfo, BaseResult, ViewPatch } from '../bases/types';
@@ -53,6 +54,15 @@ type Plain<T> = Omit<T, 'convertValues'>;
 
 export type VaultInfo = Plain<app.VaultInfo>;
 export type ExportResult = Plain<app.ExportResult>;
+export type WebViewStatus = Plain<app.WebViewStatus>;
+export type WebViewOpened = Plain<app.WebViewOpened>;
+/** A rectangle of the window as fractions (0..1) of its content view, origin top-left (WebViewAPI). */
+export interface ViewBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 export type NoteContent = Plain<app.NoteContent>;
 export type WriteResult = Plain<app.WriteResult>;
 export type MergeEditResult = Plain<app.MergeEditResult>;
@@ -526,6 +536,33 @@ export const api = {
     /** Nodes and edges of the vault (or the neighbourhood of options.center) from the local index. */
     build: (vaultId: string, options: GraphOptions): Promise<GraphData> =>
       GraphAPI.Build(vaultId, options),
+  },
+  /**
+   * The browser inside the tab of an application (a native view above the page: desktop with the
+   * capability `embeddedBrowser` only; elsewhere every call is refused with `webview-unavailable`).
+   * Only webapp/nativeViews.ts talks to it.
+   */
+  webview: {
+    status: (): Promise<WebViewStatus> => WebViewAPI.Status(),
+    open: (vaultId: string, url: string, bounds: ViewBounds): Promise<WebViewOpened> =>
+      WebViewAPI.Open(vaultId, url, bounds),
+    setBounds: (vaultId: string, viewId: string, bounds: ViewBounds): Promise<void> =>
+      WebViewAPI.SetBounds(vaultId, viewId, bounds),
+    setVisible: (vaultId: string, viewId: string, visible: boolean): Promise<void> =>
+      WebViewAPI.SetVisible(vaultId, viewId, visible),
+    navigate: (vaultId: string, viewId: string, url: string): Promise<void> =>
+      WebViewAPI.Navigate(vaultId, viewId, url),
+    back: (vaultId: string, viewId: string): Promise<void> => WebViewAPI.Back(vaultId, viewId),
+    forward: (vaultId: string, viewId: string): Promise<void> =>
+      WebViewAPI.Forward(vaultId, viewId),
+    reload: (vaultId: string, viewId: string): Promise<void> => WebViewAPI.Reload(vaultId, viewId),
+    focus: (vaultId: string, viewId: string): Promise<void> => WebViewAPI.Focus(vaultId, viewId),
+    close: (vaultId: string, viewId: string): Promise<void> => WebViewAPI.Close(vaultId, viewId),
+    closeVault: (vaultId: string): Promise<void> => WebViewAPI.CloseVault(vaultId),
+    /** The key combinations a view hands to the application (accelerators of the core's grammar). */
+    reserveKeys: (accelerators: string[]): Promise<void> => WebViewAPI.ReserveKeys(accelerators),
+    /** Deletes the session data of the vault's applications on this device. */
+    clearData: (vaultId: string): Promise<void> => WebViewAPI.ClearData(vaultId),
   },
   /**
    * Subscribes to a backend event (`Events.<key>`; names and payload types are generated from the Go

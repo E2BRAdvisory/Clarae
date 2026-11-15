@@ -15,6 +15,7 @@ beforeAll(() => {
 });
 
 const notes: Record<string, string> = {
+  'Tools/GitHub.webapp': '{"version":1,"url":"https://github.com/"}',
   'A.md': '# A\n\nSee ![[B]]\n',
   'B.md': '---\nx: 1\n---\n# B\n\nBack to ![[A]]\n\n## Part\nonly this ^blk\n',
   'Deep.md': '![[Deep]]',
@@ -24,7 +25,7 @@ const notes: Record<string, string> = {
 const backend: EmbedBackend = {
   resolve: (_from, target) => {
     const p = target.includes('.') ? target : target + '.md';
-    return Promise.resolve(p in notes || p === 'pic.png' ? p : '');
+    return Promise.resolve(p in notes || p === 'pic.png' || p === 'Tools/GitHub.webapp' ? p : '');
   },
   readNote: (p) => (p in notes ? Promise.resolve(notes[p] ?? '') : Promise.reject(new Error('nf'))),
   readBinary: (p) => Promise.resolve({ path: p, mime: 'image/png', data: btoa('PNG'), size: 3 }),
@@ -42,6 +43,23 @@ const spec = (
   extra: Partial<{ heading: string; block: string; alias: string }> = {},
 ) => ({ target, heading: '', block: '', alias: '', embed: true, ...extra });
 const wait = () => new Promise((r) => setTimeout(r, 20));
+
+describe('an application embedded in a note', () => {
+  it('loads nothing: it shows its name as text and no frame, link, image or script', async () => {
+    const el = document.createElement('div');
+    const readBinary = vi.fn((p: string) => backend.readBinary(p));
+    const readNote = vi.fn((p: string) => backend.readNote(p));
+    await renderEmbedInto(
+      el,
+      spec('Tools/GitHub.webapp'),
+      deps({ backend: { ...backend, readBinary, readNote } }),
+    );
+    expect(el.textContent).toBe('Application “GitHub”: it opens in its own tab');
+    expect(el.querySelector('iframe, a, img, script, webview, object, embed')).toBeNull();
+    expect(readBinary).not.toHaveBeenCalled();
+    expect(readNote).not.toHaveBeenCalled();
+  });
+});
 
 describe('embeds', () => {
   it('stops the query blocks it rendered when disposed', () => {

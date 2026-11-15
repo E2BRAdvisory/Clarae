@@ -170,6 +170,7 @@
   },
   "status": {
     "kindPresentation": "Presentazione",
+    "kindWebapp": "Applicazione",
     "indexing": "Indicizzazione {{done}}/{{total}}",
     "indexed": "Indice aggiornato",
     "position": "Rg {{line}}, Col {{col}}",
@@ -554,6 +555,14 @@
     "graph_open_3d": "Apri vista grafo in 3D",
     "graph_toggle_3d": "Grafo: passa tra 2D e 3D",
     "bases_new": "Nuova base",
+    "app_new": "Nuova applicazione",
+    "app_open": "Apri applicazione…",
+    "app_edit_url": "Cambia l'indirizzo dell'applicazione",
+    "app_open_in_browser": "Apri l'applicazione nel browser",
+    "app_back": "Applicazione: indietro",
+    "app_forward": "Applicazione: avanti",
+    "app_reload": "Applicazione: ricarica",
+    "app_clear_data": "Elimina i dati delle applicazioni",
     "daily_open_today": "Apri la nota giornaliera di oggi",
     "daily_previous": "Apri la nota giornaliera precedente",
     "daily_next": "Apri la nota giornaliera successiva",
@@ -1129,6 +1138,7 @@
     "kind": {
       "note": "Note",
       "presentation": "Presentazioni",
+      "webapp": "Applicazioni",
       "drawing": "Disegni",
       "canvas": "Lavagne",
       "base": "Basi",
@@ -1543,7 +1553,121 @@
     "ai-private-vault": "L'assistente AI non viene mai usato in un vault privato: le sue note sono cifrate end-to-end e non vengono inviate a nessun provider.",
     "ai-not-configured": "L'assistente AI non ha un provider o una chiave configurati.",
     "ai-busy": "Ci sono troppe richieste in corso all'assistente AI: attendi che una finisca.",
-    "ai-invalid": "La richiesta all'assistente AI non è valida o è troppo grande."
+    "ai-invalid": "La richiesta all'assistente AI non è valida o è troppo grande.",
+    "vault-not-open": "Il vault non è aperto.",
+    "vault-locked": "Il vault è bloccato: sbloccalo prima.",
+    "webview-unavailable": "Il browser dentro la scheda non è disponibile su questo dispositivo.",
+    "webview-disabled": "Le applicazioni sono disattivate dal profilo di configurazione.",
+    "webview-invalid-url": "Questo indirizzo non si può aprire.",
+    "webview-invalid-url_empty": "Inserisci un indirizzo.",
+    "webview-invalid-url_too-long": "L'indirizzo è troppo lungo.",
+    "webview-invalid-url_characters": "L'indirizzo contiene spazi, caratteri di controllo o barre rovesciate.",
+    "webview-invalid-url_malformed": "Non è un indirizzo completo (per esempio https://example.com).",
+    "webview-invalid-url_scheme": "Si possono aprire solo indirizzi http e https.",
+    "webview-invalid-url_credentials": "Un indirizzo con nome utente o password non è accettato.",
+    "webview-invalid-url_host": "Il nome del server non è valido.",
+    "webview-invalid-url_port": "La porta non è valida (da 1 a 65535).",
+    "webview-invalid-bounds": "Non è stato possibile collocare la pagina nella finestra.",
+    "webview-not-found": "La pagina non è più aperta.",
+    "webview-limit": "Ci sono troppe applicazioni aperte: chiudine una e riprova.",
+    "webview-failed": "Il sistema non è riuscito a farlo: vedi il registro.",
+    "webview-invalid-accelerator": "Questa combinazione di tasti non si può usare in un'applicazione."
+  },
+  "webapp": {
+    "new": {
+      "title": "Nuova applicazione",
+      "url": "Indirizzo",
+      "urlHint": "Un indirizzo http o https, per esempio https://example.com",
+      "name": "Nome",
+      "nameHint": "Facoltativo: il nome del file. Se manca, quello del sito."
+    },
+    "edit": "Cambia indirizzo",
+    "editTitle": "Cambia l'indirizzo",
+    "pick": {
+      "title": "Applicazioni",
+      "none": "Questo vault non ha ancora applicazioni. Creane una con «Nuova applicazione»."
+    },
+    "clear": {
+      "title": "Elimina i dati delle applicazioni",
+      "message": "Vengono eliminati i cookie, le sessioni e gli altri dati che le applicazioni di questo vault hanno salvato su questo dispositivo, e ogni applicazione chiederà di nuovo conferma alla prossima apertura. Le applicazioni restano nel vault.",
+      "confirm": "Elimina i dati"
+    },
+    "bar": "Applicazione",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "reopen": "Apri di nuovo",
+    "readOnly": "Questo vault è in sola lettura: l'indirizzo non si può cambiare.",
+    "openInBrowser": "Apri nel browser",
+    "notices": "Messaggi della pagina",
+    "back": "Indietro",
+    "forward": "Avanti",
+    "reload": "Ricarica",
+    "card": {
+      "unavailable": "Questa applicazione si apre nel browser: il browser dentro la scheda non è disponibile qui.",
+      "off": "Il browser dentro la scheda è disattivato dal profilo di configurazione. Questa applicazione si apre nel browser."
+    },
+    "confirm": {
+      "title": "Aprire {{origin}} qui?",
+      "message": "La pagina di questa applicazione viene caricata dentro Clarae notanda, con cookie e sessioni separati dalle tue note. Il file potrebbe arrivare da un altro dispositivo o da un'altra persona: aprilo solo se ti fidi dell'indirizzo.",
+      "open": "Apri qui"
+    },
+    "invalid": {
+      "title": "Impossibile aprire questa applicazione",
+      "json": "Il file non è un JSON valido.",
+      "shape": "Il file non ha la forma {\"version\":1,\"url\":\"https://…\"}.",
+      "version": "Il file è stato scritto da una versione più recente dell'applicazione.",
+      "empty": "Inserisci un indirizzo.",
+      "too-long": "L'indirizzo è troppo lungo.",
+      "characters": "L'indirizzo contiene spazi, caratteri di controllo o barre rovesciate.",
+      "malformed": "Non è un indirizzo completo (per esempio https://example.com).",
+      "scheme": "Si possono aprire solo indirizzi http e https.",
+      "credentials": "Un indirizzo con nome utente o password non è accettato.",
+      "host": "Il nome del server non è valido.",
+      "port": "La porta non è valida (da 1 a 65535)."
+    },
+    "problem": {
+      "empty": "Inserisci un indirizzo.",
+      "too-long": "L'indirizzo è troppo lungo.",
+      "characters": "L'indirizzo contiene spazi, caratteri di controllo o barre rovesciate.",
+      "malformed": "Non è un indirizzo completo (per esempio https://example.com).",
+      "scheme": "Si possono aprire solo indirizzi http e https.",
+      "credentials": "Un indirizzo con nome utente o password non è accettato.",
+      "host": "Il nome del server non è valido.",
+      "port": "La porta non è valida (da 1 a 65535)."
+    },
+    "crashed": {
+      "title": "La pagina ha smesso di funzionare",
+      "message": "Il processo che mostra questa pagina è terminato. Ricaricala per ripartire."
+    },
+    "certificate": {
+      "title": "Il certificato del sito non è valido",
+      "message": "La pagina non è stata aperta perché il suo certificato di sicurezza è stato rifiutato. Non c'è modo di proseguire comunque: apri l'indirizzo nel browser se ti fidi."
+    },
+    "loadError": {
+      "title": "Impossibile caricare la pagina",
+      "message": "Controlla la connessione e l'indirizzo, poi riprova."
+    },
+    "closed": {
+      "vault-closed": "Il vault è stato chiuso.",
+      "vault-locked": "Il vault è bloccato: sbloccalo per aprire di nuovo l'applicazione.",
+      "data-cleared": "I dati delle applicazioni sono stati eliminati.",
+      "disabled": "Le applicazioni sono state disattivate dal profilo di configurazione.",
+      "quit": "L'applicazione si sta chiudendo.",
+      "gone": "La pagina non è più aperta."
+    },
+    "limit": {
+      "title": "Ci sono troppe applicazioni aperte"
+    },
+    "failed": {
+      "title": "Impossibile aprire la pagina"
+    },
+    "notice": {
+      "blocked": "Una navigazione è stata bloccata: {{url}}",
+      "newWindowOpened": "La pagina ha chiesto una nuova finestra; il suo indirizzo è stato aperto nel browser: {{url}}",
+      "newWindowBlocked": "La pagina ha chiesto una nuova finestra ed è stata rifiutata: {{url}}",
+      "download": "Un download è stato rifiutato: {{url}}",
+      "permission": "{{origin}} ha chiesto il permesso «{{permission}}»: negato."
+    }
   },
   "embeds": {
     "depthLimit": "{{label}} (limite di incorporamento)",
@@ -1552,6 +1676,7 @@
     "blockMissing": "{{label}} (blocco non trovato)",
     "partMissing": "{{label}} ({{part}} non trovato)",
     "loadFailed": "{{label}} (impossibile caricare)",
+    "webapp": "Applicazione «{{name}}»: si apre nella sua scheda",
     "pdfPrev": "Pagina precedente",
     "pdfNext": "Pagina successiva"
   }

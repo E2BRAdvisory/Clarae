@@ -2602,3 +2602,125 @@ textarea.merge {
   z-index: 150; /* above the workspace and menus, below the dialogs (200) */
   background: var(--bg);
 }
+
+/* ---- applications: the tab of a .webapp file (webapp/BrowserView.tsx) ---- */
+.browser-view {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.browser-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.browser-bar .browser-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 12px;
+  user-select: text;
+}
+.browser-bar .browser-loading {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.browser-notices {
+  flex: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.browser-notices li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--mark);
+  color: var(--text);
+  font-size: 12px;
+}
+.browser-notices li span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* the rectangle the native view takes: it has no content of its own while the page shows over it */
+.browser-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+}
+.browser-stage .app-waiting {
+  margin: 0;
+}
+.app-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 440px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text);
+}
+.app-card h2 {
+  margin: 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.app-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.app-card .app-url,
+.app-card .app-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+  user-select: text;
+}
+.app-card .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.browser-view.card-only {
+  align-items: center;
+  justify-content: center;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.form-field input {
+  width: 100%;
+}
+/* the message is text colour on a tint of the danger colour, with a bar of it: the danger colour itself is
+   not a text colour in the dark theme (it does not reach AA on the dark background) */
+.form-problem {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg));
+  color: var(--text);
+}

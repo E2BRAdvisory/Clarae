@@ -170,6 +170,7 @@
   },
   "status": {
     "kindPresentation": "Presentation",
+    "kindWebapp": "Application",
     "indexing": "Indexing {{done}}/{{total}}",
     "indexed": "Index up to date",
     "position": "Ln {{line}}, Col {{col}}",
@@ -554,6 +555,14 @@
     "graph_open_3d": "Open graph view in 3D",
     "graph_toggle_3d": "Graph: switch between 2D and 3D",
     "bases_new": "New base",
+    "app_new": "New application",
+    "app_open": "Open application…",
+    "app_edit_url": "Change the address of the application",
+    "app_open_in_browser": "Open the application in the browser",
+    "app_back": "Application: back",
+    "app_forward": "Application: forward",
+    "app_reload": "Application: reload",
+    "app_clear_data": "Clear the data of the applications",
     "daily_open_today": "Open today's daily note",
     "daily_previous": "Open previous daily note",
     "daily_next": "Open next daily note",
@@ -1129,6 +1138,7 @@
     "kind": {
       "note": "Notes",
       "presentation": "Presentations",
+      "webapp": "Applications",
       "drawing": "Drawings",
       "canvas": "Canvases",
       "base": "Bases",
@@ -1543,7 +1553,121 @@
     "ai-private-vault": "The AI assistant is never used in a private vault: its notes are end-to-end encrypted and are not sent to any provider.",
     "ai-not-configured": "The AI assistant has no provider or key set up.",
     "ai-busy": "Too many requests to the AI assistant are running: wait for one to finish.",
-    "ai-invalid": "The request to the AI assistant is not valid or is too large."
+    "ai-invalid": "The request to the AI assistant is not valid or is too large.",
+    "vault-not-open": "The vault is not open.",
+    "vault-locked": "The vault is locked: unlock it first.",
+    "webview-unavailable": "The browser inside the tab is not available on this device.",
+    "webview-disabled": "Applications are turned off by the configuration profile.",
+    "webview-invalid-url": "That address cannot be opened.",
+    "webview-invalid-url_empty": "Enter an address.",
+    "webview-invalid-url_too-long": "The address is too long.",
+    "webview-invalid-url_characters": "The address has spaces, control characters or backslashes.",
+    "webview-invalid-url_malformed": "That is not a complete address (for example https://example.com).",
+    "webview-invalid-url_scheme": "Only http and https addresses can be opened.",
+    "webview-invalid-url_credentials": "An address with a user name or password is not accepted.",
+    "webview-invalid-url_host": "The host name is not valid.",
+    "webview-invalid-url_port": "The port is not valid (1 to 65535).",
+    "webview-invalid-bounds": "The page could not be placed in the window.",
+    "webview-not-found": "The page is no longer open.",
+    "webview-limit": "Too many applications are open: close one and try again.",
+    "webview-failed": "The system could not do it: see the log.",
+    "webview-invalid-accelerator": "That key combination cannot be used in an application."
+  },
+  "webapp": {
+    "new": {
+      "title": "New application",
+      "url": "Address",
+      "urlHint": "An http or https address, for example https://example.com",
+      "name": "Name",
+      "nameHint": "Optional: the name of the file. Default: the name of the site."
+    },
+    "edit": "Change address",
+    "editTitle": "Change the address",
+    "pick": {
+      "title": "Applications",
+      "none": "This vault has no applications yet. Create one with “New application”."
+    },
+    "clear": {
+      "title": "Clear the data of the applications",
+      "message": "The cookies, sessions and other data that the applications of this vault stored on this device are deleted, and each application asks for confirmation again the next time it opens. The applications themselves stay in the vault.",
+      "confirm": "Clear data"
+    },
+    "bar": "Application",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "reopen": "Open again",
+    "readOnly": "This vault is read-only: the address cannot be changed.",
+    "openInBrowser": "Open in the browser",
+    "notices": "Messages of the page",
+    "back": "Back",
+    "forward": "Forward",
+    "reload": "Reload",
+    "card": {
+      "unavailable": "This application opens in your browser: the browser inside the tab is not available here.",
+      "off": "The browser inside the tab is turned off by the configuration profile. This application opens in your browser."
+    },
+    "confirm": {
+      "title": "Open {{origin}} here?",
+      "message": "The page of this application loads inside Clarae notanda, with cookies and sessions kept apart from your notes. The file may have come from another device or person: open it only if you trust the address.",
+      "open": "Open here"
+    },
+    "invalid": {
+      "title": "This application cannot be opened",
+      "json": "The file is not valid JSON.",
+      "shape": "The file does not have the form {\"version\":1,\"url\":\"https://…\"}.",
+      "version": "The file was written by a newer version of the application.",
+      "empty": "Enter an address.",
+      "too-long": "The address is too long.",
+      "characters": "The address has spaces, control characters or backslashes.",
+      "malformed": "That is not a complete address (for example https://example.com).",
+      "scheme": "Only http and https addresses can be opened.",
+      "credentials": "An address with a user name or password is not accepted.",
+      "host": "The host name is not valid.",
+      "port": "The port is not valid (1 to 65535)."
+    },
+    "problem": {
+      "empty": "Enter an address.",
+      "too-long": "The address is too long.",
+      "characters": "The address has spaces, control characters or backslashes.",
+      "malformed": "That is not a complete address (for example https://example.com).",
+      "scheme": "Only http and https addresses can be opened.",
+      "credentials": "An address with a user name or password is not accepted.",
+      "host": "The host name is not valid.",
+      "port": "The port is not valid (1 to 65535)."
+    },
+    "crashed": {
+      "title": "The page stopped working",
+      "message": "The process that shows this page ended. Reload it to start again."
+    },
+    "certificate": {
+      "title": "The certificate of the site is not valid",
+      "message": "The page was not opened because its security certificate was refused. There is no way to continue anyway: open the address in your browser if you trust it."
+    },
+    "loadError": {
+      "title": "The page could not be loaded",
+      "message": "Check your connection and the address, then try again."
+    },
+    "closed": {
+      "vault-closed": "The vault was closed.",
+      "vault-locked": "The vault is locked: unlock it to open the application again.",
+      "data-cleared": "The data of the applications were cleared.",
+      "disabled": "Applications were turned off by the configuration profile.",
+      "quit": "The application is closing.",
+      "gone": "The page is no longer open."
+    },
+    "limit": {
+      "title": "Too many applications are open"
+    },
+    "failed": {
+      "title": "The page could not be opened"
+    },
+    "notice": {
+      "blocked": "A navigation was blocked: {{url}}",
+      "newWindowOpened": "The page asked for a new window; its address opened in your browser: {{url}}",
+      "newWindowBlocked": "The page asked for a new window and was refused: {{url}}",
+      "download": "A download was refused: {{url}}",
+      "permission": "{{origin}} asked for the permission “{{permission}}”: denied."
+    }
   },
   "embeds": {
     "depthLimit": "{{label}} (embed depth limit)",
@@ -1552,6 +1676,7 @@
     "blockMissing": "{{label}} (block not found)",
     "partMissing": "{{label}} ({{part}} not found)",
     "loadFailed": "{{label}} (could not be loaded)",
+    "webapp": "Application “{{name}}”: it opens in its own tab",
     "pdfPrev": "Previous page",
     "pdfNext": "Next page"
   }

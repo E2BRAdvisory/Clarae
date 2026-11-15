@@ -30,7 +30,27 @@ type Request =
       title: string;
       items: readonly PickItem[];
       resolve: (v: string | null) => void;
+    }
+  | {
+      kind: 'form';
+      title: string;
+      fields: readonly FormField[];
+      validate?: (values: Record<string, string>) => string | null;
+      resolve: (v: Record<string, string> | null) => void;
     };
+
+/** A line of text of a form dialog. */
+export interface FormField {
+  /** The key of the value in the result. */
+  name: string;
+  label: string;
+  initial?: string;
+  placeholder?: string;
+  /** Shown to the right of the label as a hint (a sentence, translated by the caller). */
+  hint?: string;
+  /** `url` gives an address keyboard where there is one. */
+  type?: 'text' | 'url';
+}
 
 export interface PickItem {
   value: string;
@@ -74,6 +94,18 @@ export const dialog = {
   /** Asks to choose one of the items (with a filter); resolves its value, null when cancelled. */
   pick: (title: string, items: readonly PickItem[]): Promise<string | null> =>
     new Promise((resolve) => enqueue({ kind: 'pick', title, items, resolve })),
+  /**
+   * Asks for several lines of text at once; resolves their values by field name, null when cancelled.
+   * `validate` returns the message that keeps the dialog open (shown under the fields), or null.
+   */
+  form: (
+    title: string,
+    fields: readonly FormField[],
+    validate?: (values: Record<string, string>) => string | null,
+  ): Promise<Record<string, string> | null> =>
+    new Promise((resolve) =>
+      enqueue({ kind: 'form', title, fields, ...(validate ? { validate } : {}), resolve }),
+    ),
   /** Shows a failure from the backend. */
   error: (e: unknown): Promise<void> => dialog.alert(i18next.t('common.error'), errorMessage(e)),
 };
@@ -177,6 +209,80 @@ function PromptBody({
   );
 }
 
+function FormBody({
+  request,
+  onDone,
+}: {
+  request: Extract<Request, { kind: 'form' }>;
+  onDone: (v: Record<string, string> | null) => void;
+}) {
+  const { t } = useTranslation();
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(request.fields.map((f) => [f.name, f.initial ?? ''])),
+  );
+  const [problem, setProblem] = useState<string | null>(null);
+  const first = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    first.current?.focus();
+    first.current?.select();
+  }, []);
+  return (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        const message = request.validate?.(values) ?? null;
+        if (message) setProblem(message);
+        else onDone(values);
+      }}
+    >
+      {request.fields.map((f, i) => (
+        <div className="form-field" key={f.name}>
+          <label htmlFor={`dialog-field-${f.name}`}>{f.label}</label>
+          <input
+            id={`dialog-field-${f.name}`}
+            ref={i === 0 ? first : undefined}
+            type={f.type === 'url' ? 'url' : 'text'}
+            inputMode={f.type === 'url' ? 'url' : undefined}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={f.placeholder}
+            aria-describedby={
+              [f.hint ? `dialog-hint-${f.name}` : '', problem ? 'dialog-problem' : '']
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+            aria-invalid={problem ? true : undefined}
+            value={values[f.name] ?? ''}
+            onChange={(e) => {
+              setValues({ ...values, [f.name]: e.target.value });
+              setProblem(null);
+            }}
+          />
+          {f.hint && (
+            <small id={`dialog-hint-${f.name}`} className="muted">
+              {f.hint}
+            </small>
+          )}
+        </div>
+      ))}
+      {problem && (
+        <p id="dialog-problem" className="form-problem" role="alert">
+          {problem}
+        </p>
+      )}
+      <div className="actions">
+        <button type="button" onClick={() => onDone(null)}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="primary">
+          {t('common.ok')}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** The workbench look of the imperative dialogs (style.css `.modal.dialog`). */
 const DIALOG_CLASSES = { backdrop: 'modal-backdrop', dialog: 'modal dialog' };
 
@@ -189,15 +295,20 @@ export function DialogHost() {
   const current = useDialogs((s) => s.current);
   if (!current) return null;
 
-  const finish = (value: string | boolean | null): void => {
+  const finish = (value: string | boolean | Record<string, string> | null): void => {
     if (current.kind === 'prompt' || current.kind === 'pick')
       current.resolve(value as string | null);
+    else if (current.kind === 'form') current.resolve(value as Record<string, string> | null);
     else if (current.kind === 'confirm') current.resolve(value === true);
     else current.resolve();
     next();
   };
   const cancel = (): void =>
-    finish(current.kind === 'prompt' || current.kind === 'pick' ? null : false);
+    finish(
+      current.kind === 'prompt' || current.kind === 'pick' || current.kind === 'form'
+        ? null
+        : false,
+    );
 
   return (
     <Dialog
@@ -206,7 +317,12 @@ export function DialogHost() {
       classNames={DIALOG_CLASSES}
       closeOnBackdrop
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && current.kind !== 'prompt' && current.kind !== 'pick') {
+        if (
+          e.key === 'Enter' &&
+          current.kind !== 'prompt' &&
+          current.kind !== 'pick' &&
+          current.kind !== 'form'
+        ) {
           e.preventDefault();
           finish(true);
         }
@@ -214,6 +330,8 @@ export function DialogHost() {
     >
       {current.kind === 'prompt' ? (
         <PromptBody key={current.title + current.initial} request={current} onDone={finish} />
+      ) : current.kind === 'form' ? (
+        <FormBody key={current.title} request={current} onDone={finish} />
       ) : current.kind === 'pick' ? (
         <PickBody key={current.title} request={current} onDone={finish} />
       ) : (

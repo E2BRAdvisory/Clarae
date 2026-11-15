@@ -25,6 +25,7 @@ const ITEMS: Item[] = [
   { command: 'canvas:new', icon: 'canvas', flag: Feature.Canvas },
   { command: 'drawing:new', icon: 'pencil', flag: Feature.Drawings },
   { command: 'marp:new', icon: 'slides', flag: Feature.Presentations },
+  { command: 'app:new', icon: 'webapp', flag: Feature.WebViewer },
   { command: 'switcher:open', icon: 'search', gap: true },
 ];
 

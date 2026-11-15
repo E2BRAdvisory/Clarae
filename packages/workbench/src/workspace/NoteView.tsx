@@ -22,6 +22,7 @@ import { backendFor, ReadingView } from '../reading/ReadingView';
 import { commandForEvent } from '../commands/registry';
 import { useSettings, type NoteMode } from '../state/settings';
 import { BaseView } from '../bases/BaseView';
+import { BrowserView } from '../webapp/BrowserView';
 import { DrawingView } from '../drawing/DrawingView';
 import { isGraphPath } from '../graph/paths';
 import { useMarpDeck } from '../marp/deckStore';
@@ -168,6 +169,8 @@ export function NoteView({ vaultId, pane, tab, visible }: Props) {
       </Suspense>
     );
   if (kind === 'base') return <BaseView key={tab.path} vaultId={vaultId} path={tab.path} />;
+  if (kind === 'webapp')
+    return <BrowserView key={tab.path} vaultId={vaultId} pane={pane} tab={tab} />;
   if (kind === 'other') return <ExternalFileView path={tab.path} />;
   if (kind !== 'note' && kind !== 'presentation')
     return <AttachmentView vaultId={vaultId} path={tab.path} />;

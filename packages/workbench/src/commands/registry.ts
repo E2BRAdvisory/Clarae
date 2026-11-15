@@ -37,6 +37,17 @@ import {
   newPresentation,
   presentDeck,
 } from '../marp/commands';
+import {
+  activeWebappTab,
+  canEditWebapps,
+  clearApplicationData,
+  editApplicationUrl,
+  navigation,
+  newApplication,
+  openApplicationInBrowser,
+  pickApplication,
+  webappsOn,
+} from '../webapp/commands';
 import i18next from 'i18next';
 import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import { can, type Capabilities } from '../platform';
@@ -256,6 +267,75 @@ export const commands: Command[] = [
     defaults: [],
     enabled: hasDeck,
     run: exportDeckPptx,
+  },
+  // ---- applications (M18, track E): a .webapp file opens in a browser inside the tab ----
+  {
+    id: 'app:new',
+    group: 'file',
+    feature: 'webapp',
+    defaults: [],
+    enabled: canEditWebapps,
+    run: () => guard(newApplication().then(() => undefined)),
+  },
+  {
+    id: 'app:open',
+    group: 'file',
+    feature: 'webapp',
+    defaults: [],
+    enabled: () => hasVault() && webappsOn(),
+    run: () => guard(pickApplication()),
+  },
+  {
+    id: 'app:edit-url',
+    group: 'file',
+    feature: 'webapp',
+    defaults: [],
+    enabled: () => activeWebappTab() !== null && canEditWebapps(),
+    run: () => guard(editApplicationUrl()),
+  },
+  {
+    id: 'app:open-in-browser',
+    group: 'view',
+    feature: 'webapp',
+    defaults: [],
+    enabled: () => activeWebappTab() !== null,
+    run: () => guard(openApplicationInBrowser()),
+  },
+  {
+    id: 'app:back',
+    group: 'view',
+    feature: 'webapp.embedded',
+    defaults: ['Mod-['],
+    requires: ['embeddedBrowser'],
+    enabled: navigation.canGoBack,
+    run: navigation.back,
+  },
+  {
+    id: 'app:forward',
+    group: 'view',
+    feature: 'webapp.embedded',
+    defaults: ['Mod-]'],
+    requires: ['embeddedBrowser'],
+    enabled: navigation.canGoForward,
+    run: navigation.forward,
+  },
+  {
+    id: 'app:reload',
+    group: 'view',
+    feature: 'webapp.embedded',
+    defaults: ['Mod-r'],
+    requires: ['embeddedBrowser'],
+    enabled: navigation.has,
+    run: navigation.reload,
+  },
+  {
+    id: 'app:clear-data',
+    group: 'app',
+    feature: 'webapp.embedded',
+    defaults: [],
+    requires: ['embeddedBrowser'],
+    enabled: () => hasVault() && webappsOn(),
+    run: () => guard(clearApplicationData()),
   },
   {
     id: 'bases:new',

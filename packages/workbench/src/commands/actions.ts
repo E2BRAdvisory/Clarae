@@ -5,6 +5,7 @@
 // hides it where the host lacks them, so no panel tests the platform itself. scripts/parity.mjs
 // reads this registry at runtime (commands/parity.test.ts) and applies the rules of the commands:
 // every action belongs to a feature that lists it, and a surface that says `yes` offers it.
+import { forgetOrigins } from '../webapp/origins';
 import type { QueryClient } from '@tanstack/react-query';
 import i18next from 'i18next';
 import type { CloudMount } from '@clarae/cloud-features/port';
@@ -161,6 +162,8 @@ const removeMount = defineAction({
     }
     try {
       await api.sharing.removeMount(m.share_id, keep);
+      // what the applications of the mount were let to open here goes with it
+      if (!keep && openId) forgetOrigins(openId);
       mountRemoved?.(m.share_id);
       if (isOpen) useAppStore.getState().setVault(null);
       refreshMounts(queryClient);
@@ -187,6 +190,7 @@ async function finishRevoked(
   }
   try {
     const kept = await api.sharing.removeMount(r.shareId, keep);
+    if (!keep) forgetOrigins(r.vaultId);
     mountRemoved?.(r.shareId);
     if (isOpen) useAppStore.getState().setVault(null);
     refreshMounts(queryClient);

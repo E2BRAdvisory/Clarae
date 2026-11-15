@@ -10,6 +10,7 @@ export type NodeKind = EmbedKind | 'tag' | 'ghost';
 export const NODE_KINDS: readonly NodeKind[] = [
   'note',
   'presentation',
+  'webapp',
   'drawing',
   'canvas',
   'base',

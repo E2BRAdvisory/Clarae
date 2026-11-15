@@ -1450,6 +1450,62 @@ features:
         - apps/desktop/frontend/e2e/graph-3d.spec.ts
         - web/e2e-security/graph3d-csp.spec.ts
 
+  # ---- applicazioni (M18, traccia E) -------------------------------------------------------------
+  - id: webapp
+    title: Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
+    desktop:
+      status: yes
+      note: dietro il flag `features.web_viewer` del profilo (spento di default). Un'applicazione è un file `.webapp` (`{"version":1,"url":"https://…"}`) del vault, quindi rinomina, eliminazione, segnalibri e ripristino delle tab valgono come per ogni file (il selettore rapido, che cerca solo le note, non li trova, per questo c'è `app:open`). Alla prima apertura di un'origine su questo dispositivo la UI chiede conferma (per dispositivo e per vault, fuori dal vault). Dove non c'è il browser incorporato (vedi webapp.embedded) la tab è una scheda con il pulsante che apre la pagina nel browser di sistema
+      commands: [app:new, app:open, app:edit-url, app:open-in-browser]
+    workbench:
+      status: yes
+      note: sul web la pagina si apre sempre in una scheda del browser, mai in una vista incorporata (vedi webapp.embedded); creazione, modifica dell'indirizzo, selettore e conferma dell'origine sono quelle del desktop
+    tests:
+      desktop:
+        - packages/workbench/src/webapp/model.test.ts
+        - packages/workbench/src/webapp/origins.test.ts
+        - packages/workbench/src/webapp/commands.test.ts
+        - packages/workbench/src/webapp/BrowserView.test.tsx
+        - apps/desktop/frontend/e2e/webapp.spec.ts
+        - apps/desktop/internal/webview/url_test.go
+      workbench:
+        - apps/desktop/frontend/e2e/webapp.spec.ts
+
+  - id: webapp.embedded
+    title: Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
+    desktop:
+      status: yes
+      note: solo su macOS (WKWebView, capability embeddedBrowser, `internal/shell/nativeview`); su Windows e Linux non c'è un driver e la pagina si apre nel browser di sistema. Dietro il flag `features.web_viewer` del profilo (spento di default). Sessioni persistenti per vault e locali al dispositivo, nel contenitore di WebKit e fuori dal vault; solo http e https; nessun bridge, download, permesso o finestra nuova nell'app
+      capability: embeddedBrowser
+      bindings:
+        - WebViewAPI.Status
+        - WebViewAPI.Open
+        - WebViewAPI.SetBounds
+        - WebViewAPI.SetVisible
+        - WebViewAPI.Navigate
+        - WebViewAPI.Back
+        - WebViewAPI.Forward
+        - WebViewAPI.Reload
+        - WebViewAPI.Focus
+        - WebViewAPI.Close
+        - WebViewAPI.CloseVault
+        - WebViewAPI.ReserveKeys
+        - WebViewAPI.ClearData
+      commands: [app:back, app:forward, app:reload, app:clear-data]
+    workbench:
+      status: exception
+      reason: una pagina web non può contenerne un'altra che lo vieta (X-Frame-Options, frame-ancestors) e il browser non ha una vista nativa da mettere nella tab; nel workbench l'applicazione si apre in una scheda del browser e WebViewAPI rifiuta ogni chiamata (webview-unavailable)
+    tests:
+      desktop:
+        - apps/desktop/internal/webview/manager_test.go
+        - apps/desktop/internal/webview/url_test.go
+        - apps/desktop/internal/app/bindings_webview_test.go
+        - apps/desktop/internal/shell/nativeview/driver_darwin_live_test.go
+        - packages/workbench/src/webapp/nativeViews.test.ts
+        - packages/workbench/src/webapp/accelerators.test.ts
+        - packages/workbench/src/webapp/BrowserView.test.tsx
+        - apps/desktop/frontend/e2e/webapp.spec.ts
+
   - id: slides
     title: Presentazioni da una nota
     desktop:

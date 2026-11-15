@@ -26,3 +26,45 @@ describe('dialog.pick', () => {
     await expect(picked).resolves.toBe('n4999.md');
   });
 });
+
+describe('dialog.form', () => {
+  it('asks for several lines, validates before it closes, and answers with the values', async () => {
+    initI18n('en');
+    render(<DialogHost />);
+    let answer: Promise<Record<string, string> | null> = Promise.resolve(null);
+    act(() => {
+      answer = dialog.form(
+        'Two fields',
+        [
+          { name: 'a', label: 'First', initial: 'one' },
+          { name: 'b', label: 'Second', hint: 'a hint' },
+        ],
+        (v) => (v['b'] === '' ? 'Second is needed' : null),
+      );
+    });
+    const first = await screen.findByLabelText('First');
+    expect(first).toHaveValue('one');
+    expect(first).toHaveFocus();
+    expect(screen.getByLabelText('Second')).toHaveAccessibleDescription('a hint');
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Second is needed');
+    expect(screen.getByRole('dialog', { name: 'Two fields' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Second'), { target: { value: 'two' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.submit(
+      screen.getByRole('dialog', { name: 'Two fields' }).querySelector('form') as HTMLFormElement,
+    );
+    await expect(answer).resolves.toEqual({ a: 'one', b: 'two' });
+  });
+
+  it('answers null when it is cancelled', async () => {
+    initI18n('en');
+    render(<DialogHost />);
+    let answer: Promise<Record<string, string> | null> = Promise.resolve({});
+    act(() => {
+      answer = dialog.form('Cancelled', [{ name: 'a', label: 'Only' }]);
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await expect(answer).resolves.toBeNull();
+  });
+});

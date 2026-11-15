@@ -11,6 +11,7 @@ export type EmbedKind =
   | 'canvas'
   | 'base'
   | 'presentation'
+  | 'webapp'
   | 'other';
 
 const EXT: Record<string, EmbedKind> = {
@@ -39,6 +40,7 @@ const EXT: Record<string, EmbedKind> = {
   canvas: 'canvas',
   base: 'base',
   marp: 'presentation',
+  webapp: 'webapp',
 };
 
 /** The icon of each kind of file (file explorer, graph). */
@@ -52,6 +54,7 @@ export const KIND_ICON: Record<EmbedKind, IconName> = {
   canvas: 'canvas',
   base: 'table',
   presentation: 'slides',
+  webapp: 'webapp',
   other: 'attach',
 };
 
@@ -61,7 +64,11 @@ export function classify(path: string): EmbedKind {
   return EXT[path.slice(i + 1).toLowerCase()] ?? 'other';
 }
 
-/** The kinds of file the application shows in a tab of its own (ADR-0047). */
+/**
+ * The kinds of file the application shows in a tab of its own (ADR-0047). An application (`.webapp`)
+ * has a tab too: its page, in a browser inside the tab or, where there is none, a card that opens it
+ * in the system's browser.
+ */
 const IN_APP: ReadonlySet<EmbedKind> = new Set<EmbedKind>([
   'note',
   'image',
@@ -72,6 +79,7 @@ const IN_APP: ReadonlySet<EmbedKind> = new Set<EmbedKind>([
   'canvas',
   'base',
   'presentation',
+  'webapp',
 ]);
 
 /**

@@ -89,3 +89,15 @@ describe('a pane with nothing open', () => {
     expect(allPanes(layout.root).find((p) => p.id === first)?.tabs).toHaveLength(1);
   });
 });
+
+describe('a pane with nothing open and applications', () => {
+  it('offers "New application" only with the flag of the profile', () => {
+    act(() => useManaged.setState({ features: {} }));
+    render(<EmptyPane paneId={paneId()} />);
+    expect(screen.queryByRole('button', { name: /New application/ })).toBeNull();
+    cleanup();
+    act(() => useManaged.setState({ features: { web_viewer: true } }));
+    render(<EmptyPane paneId={paneId()} />);
+    expect(screen.getByRole('button', { name: /New application/ })).toBeEnabled();
+  });
+});

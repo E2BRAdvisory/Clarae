@@ -87,6 +87,12 @@ const ICONS = {
   zoomIn: 'ZoomIn',
   zoomOut: 'ZoomOut',
   noColor: 'FormatColorReset',
+  // applications (the browser inside a tab)
+  webapp: 'Public',
+  back: 'ArrowBack',
+  forward: 'ArrowForward',
+  refresh: 'Refresh',
+  openInBrowser: 'OpenInNew',
   // sync
   cloud: 'Cloud',
   cloudOff: 'CloudOff',

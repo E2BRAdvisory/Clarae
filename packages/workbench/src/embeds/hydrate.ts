@@ -307,6 +307,15 @@ async function fill(
           if (unmount) own(unmount);
         }
         return;
+      case 'webapp':
+        // An application is a page to open in its own tab: embedding it loads nothing, whatever its address.
+        return notice(
+          el,
+          'embed-other',
+          i18next.t('embeds.webapp', {
+            name: (path.split('/').pop() ?? path).replace(/\.webapp$/i, ''),
+          }),
+        );
       default:
         return notice(el, 'embed-other', path);
     }

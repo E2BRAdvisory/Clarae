@@ -20,6 +20,7 @@ import { createHistoryAPI, newMockHistory, type MockHistory } from './history';
 import { mockMergeEdit, type MergeEditResult } from './mergeEdit';
 import { createImporterMock } from '../../importer/mock';
 import { createUpdaterMock } from '../../updater/mock';
+import { createWebViewMock, type MockWebView } from './webview';
 import type {
   AppSettings,
   ConfigState,
@@ -110,6 +111,8 @@ export interface MockSharing {
 }
 
 export interface WailsMock {
+  /** The native views of the applications (WebViewAPI): what the UI asked for, and a way to answer. */
+  webview: MockWebView;
   sync: MockSync;
   sharing: MockSharing;
   /** Local file snapshots (HistoryAPI). */
@@ -376,10 +379,26 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     },
     emit: (name, payload) => {
       for (const h of handlers.get(name) ?? []) h(payload);
+      // The profile turns applications off: the core closes their views (webview:closed, `disabled`).
+      if (name === Events.configUpdated && !(payload as ConfigState).features?.['web_viewer'])
+        mock.webview?.endViews(null, 'disabled');
     },
     listeners: (name) => handlers.get(name)?.size ?? 0,
     deleteCloudVaultElsewhere: () => undefined, // set with the SyncAPI below
+    webview: undefined as unknown as MockWebView, // set with the WebViewAPI below
   };
+  // A run that wants the desktop of a system without a driver says so before the page loads:
+  // `window.__CLARAE_WEBVIEW__ = { available: false }`.
+  const webviewSeed = (window as unknown as { __CLARAE_WEBVIEW__?: { available?: boolean } })
+    .__CLARAE_WEBVIEW__;
+  const seeded = webviewSeed ? { seed: webviewSeed } : {};
+  const webviews = createWebViewMock({
+    emit: (name, payload) => mock.emit(name, payload),
+    vaultOpen: (id) => mock.vaults.has(id),
+    enabled: () => mock.config.features?.['web_viewer'] === true,
+    ...seeded,
+  });
+  mock.webview = webviews.state;
   const vaultOf = (id: string): MockVault => {
     const v = mock.vaults.get(id);
     if (!v) throw new Error('vault is not open');
@@ -461,6 +480,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       });
     },
     CloseVault: (id: string): Promise<void> => {
+      // the core ends the views of a vault that closes, and says so
+      mock.webview.endViews(id, 'vault-closed');
       mock.vaults.delete(id);
       return Promise.resolve();
     },
@@ -949,7 +970,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     Info: (): Promise<Record<string, string>> =>
       Promise.resolve({ version: 'test', dataDir: '/mock/data' }),
     // The mock stands for the desktop core, which declares the desktop column (capabilities.go).
-    Capabilities: (): Promise<Capabilities> => Promise.resolve(capabilitiesFor('desktop')),
+    // embeddedBrowser also needs a driver, which the core checks (SettingsAPI.Capabilities).
+    Capabilities: (): Promise<Capabilities> =>
+      Promise.resolve({ ...capabilitiesFor('desktop'), embeddedBrowser: mock.webview.available }),
   };
 
   const AuthAPI = {
@@ -1595,6 +1618,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     Lock: (id: string): Promise<void> => {
       const l = linkOf(id);
       sy.links.set(id, { ...l, locked: true });
+      mock.webview.endViews(id, 'vault-locked');
       setStatus(id, { phase: 'locked' });
       mock.emit(Events.vaultLocked, { vaultId: id, reason: 'manual', pending: 0, conflicts: 0 });
       return Promise.resolve();
@@ -1680,6 +1704,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       SharingAPI,
       ConfigAPI,
       GraphAPI,
+      WebViewAPI: webviews.api,
       ...notesMock({ vaultOf, resolve, changed }),
       HistoryAPI: createHistoryAPI(mock.history, {
         files: (id) => vaultOf(id).files,

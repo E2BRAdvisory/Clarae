@@ -28,6 +28,8 @@ function kindLabel(path: string): string {
       return 'status.kindBase';
     case 'presentation':
       return 'status.kindPresentation';
+    case 'webapp':
+      return 'status.kindWebapp';
     default:
       return 'status.kindFile';
   }

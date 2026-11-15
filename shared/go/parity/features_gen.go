@@ -205,6 +205,12 @@ const (
 	// Graph3d: Grafo del vault in 3D, con le icone dei tipi di documento
 	Graph3d FeatureID = "graph.3d"
 
+	// Webapp: Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
+	Webapp FeatureID = "webapp"
+
+	// WebappEmbedded: Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
+	WebappEmbedded FeatureID = "webapp.embedded"
+
 	// Slides: Presentazioni da una nota
 	Slides FeatureID = "slides"
 
@@ -356,6 +362,8 @@ var Features = []FeatureID{
 	NoteStats,
 	Graph,
 	Graph3d,
+	Webapp,
+	WebappEmbedded,
 	Slides,
 	Bookmarks,
 	Workspaces,

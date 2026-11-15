@@ -73,6 +73,8 @@ export type FeatureId =
   | 'note.stats' // Statistiche della nota
   | 'graph' // Grafo del vault e grafo locale
   | 'graph.3d' // Grafo del vault in 3D, con le icone dei tipi di documento
+  | 'webapp' // Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
+  | 'webapp.embedded' // Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
   | 'slides' // Presentazioni da una nota
   | 'bookmarks' // Segnalibri
   | 'workspaces' // Workspace salvati
@@ -170,6 +172,8 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'note.stats',
   'graph',
   'graph.3d',
+  'webapp',
+  'webapp.embedded',
   'slides',
   'bookmarks',
   'workspaces',

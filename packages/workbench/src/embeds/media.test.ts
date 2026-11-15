@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { BinaryContent } from '../app/api';
-import { forgetMedia, loadMedia, mediaLimits, mediaStats, releaseVaultMedia } from './media';
+import {
+  classify,
+  forgetMedia,
+  KIND_ICON,
+  loadMedia,
+  mediaLimits,
+  mediaStats,
+  openTarget,
+  releaseVaultMedia,
+} from './media';
 
 let reads: number;
 let revoked: string[];
@@ -92,5 +101,18 @@ describe('attachment cache', () => {
     expect(mediaStats().liveUrls).toBe(base + 1);
     releaseVaultMedia('v');
     expect(mediaStats()).toMatchObject({ entries: 0, liveUrls: base });
+  });
+});
+
+describe('applications', () => {
+  it('are a kind of file of their own, shown in a tab of the application', () => {
+    expect(classify('Tools/GitHub.webapp')).toBe('webapp');
+    expect(classify('Tools/GitHub.WEBAPP')).toBe('webapp');
+    expect(openTarget('Tools/GitHub.webapp')).toBe('in-app');
+    expect(KIND_ICON.webapp).toBe('webapp');
+    // a name that only contains the word is not one
+    expect(classify('webapp.txt')).toBe('other');
+    expect(classify('webapp')).toBe('note');
+    expect(openTarget('.webapp')).toBe('external');
   });
 });

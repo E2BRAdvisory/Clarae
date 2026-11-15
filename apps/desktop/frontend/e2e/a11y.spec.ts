@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { appendFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, onWeb, openVault as openVaultOn, proseMirror, test } from './support';
+import { expect, onWeb, openVault as openVaultOn, proseMirror, skipOnWeb, test } from './support';
 import { openDrawing, runCommand, scene, shape } from './drawingHelpers';
 
 // Automated WCAG 2.1 A/AA scan of the app chrome on the Wails mock, light and dark.
@@ -327,6 +327,87 @@ for (const theme of ['light', 'dark'] as const) {
       await runCommand(page, 'start the slideshow');
       await expect(page.getByRole('toolbar', { name: 'Slideshow' })).toBeVisible();
       await scan(page, 'drawing slideshow');
+    });
+
+    // An application (M18, track E): the card that asks about the origin, the bar of the browser with what
+    // the page was refused, the cards of an error, and the form that creates one. The page itself is a native
+    // view, not part of this document.
+    test('an application: the confirmation, the bar with its messages, the errors and the form', async ({
+      page,
+    }) => {
+      skipOnWeb(
+        'webapp.embedded',
+        'the browser has no native view: its card is the one of the unit tests',
+      );
+      await openVault(page, theme);
+      await openVaultOn(page, {
+        'Docs.webapp': `${JSON.stringify({ version: 1, url: 'https://example.com/docs' })}\n`,
+      });
+      await page.evaluate(() => {
+        const m = (
+          window as unknown as {
+            __mock: { config: Record<string, unknown>; emit(n: string, p: unknown): void };
+          }
+        ).__mock;
+        m.config = { ...m.config, version: 2, managed: true, features: { web_viewer: true } };
+        m.emit('config:updated', m.config);
+      });
+      await page.locator('.tree .node', { hasText: 'Docs.webapp' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Open https://example.com here?' }),
+      ).toBeVisible();
+      await scan(page, `application confirmation (${theme})`);
+      await page.getByRole('button', { name: 'Open here' }).click();
+      await expect(page.getByRole('toolbar', { name: 'Application' })).toBeVisible();
+      const send = (name: string, payload: Record<string, unknown>) =>
+        page.evaluate(
+          ([n, p]) => {
+            const m = (
+              window as unknown as {
+                __mock: {
+                  vaults: Map<string, { info: { id: string } }>;
+                  webview: { views: Map<string, { id: string }> };
+                  emit(n: string, p: unknown): void;
+                };
+              }
+            ).__mock;
+            const view = [...m.webview.views.values()][0];
+            const vaultId = [...m.vaults.values()][0]?.info.id;
+            m.emit(n, { viewId: view?.id, vaultId, ...(p as object) });
+          },
+          [name, payload] as const,
+        );
+      await send('webview:state', {
+        url: 'https://example.com/docs/next',
+        title: 'Next',
+        loading: true,
+        canGoBack: true,
+        canGoForward: true,
+      });
+      await send('webview:blocked', {
+        url: 'file:///etc/passwd',
+        reason: 'scheme',
+        mainFrame: true,
+      });
+      await send('webview:permission', { permission: 'camera', origin: 'https://example.com' });
+      await expect(page.getByRole('list', { name: 'Messages of the page' })).toBeVisible();
+      await scan(page, `application bar and messages (${theme})`);
+      await send('webview:load-error', {
+        url: 'https://example.com/docs',
+        message: 'The certificate is not trusted',
+        code: -1202,
+        certificate: true,
+      });
+      await expect(page.getByRole('alert')).toContainText(
+        'The certificate of the site is not valid',
+      );
+      await scan(page, `application certificate error (${theme})`);
+      await command(page, 'New application');
+      const dialog = page.getByRole('dialog', { name: 'New application' });
+      await dialog.getByLabel('Address').fill('javascript:alert(1)');
+      await dialog.getByRole('button', { name: 'OK' }).click();
+      await expect(dialog.getByRole('alert')).toBeVisible();
+      await scan(page, `new application form (${theme})`);
     });
 
     test('recovery view and history for a note', async ({ page }) => {

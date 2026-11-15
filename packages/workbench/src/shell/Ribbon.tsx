@@ -1,15 +1,16 @@
 import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Feature } from '@clarae/api-client/features';
 import { classify, type EmbedKind } from '../embeds/media';
 import { commandById, commandTitle, isEnabled, runCommand } from '../commands/registry';
 import { getSceneController, subscribeSceneController } from '../drawing/actions/active';
-import { useManaged } from '../state/managed';
+import { featureOn, useManaged } from '../state/managed';
 import { selectActivePath, useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import { AccountButton } from './AccountButton';
 import { Icon, type IconName } from './icons';
 
-type Item = { command: string; icon: IconName; gap?: boolean };
+type Item = { command: string; icon: IconName; gap?: boolean; flag?: Feature };
 
 /** Quick actions, top to bottom. Each one is a registry command (palette and hotkeys included). */
 const ITEMS: Item[] = [
@@ -19,6 +20,8 @@ const ITEMS: Item[] = [
   { command: 'drawing:new', icon: 'pencil' },
   { command: 'bases:new', icon: 'table' },
   { command: 'marp:new', icon: 'slides' },
+  // off by default: the profile turns applications on (features.web_viewer)
+  { command: 'app:new', icon: 'webapp', flag: Feature.WebViewer },
   { command: 'separator:insert', icon: 'separator', gap: true },
   { command: 'graph:open-3d', icon: 'cube', gap: true },
 ];
@@ -51,11 +54,12 @@ export function Ribbon() {
   useSyncExternalStore(subscribeSceneController, getSceneController);
   useAppStore((s) => s.vault);
   useSync((s) => s);
-  useManaged((s) => s.features);
+  const features = useManaged((s) => s.features);
   const exports = activePath ? (EXPORTS[classify(activePath)] ?? []) : [];
+  const shown = ITEMS.filter((i) => !i.flag || featureOn(features, i.flag));
   const items = exports.length
-    ? [...ITEMS, ...exports.map((x, i) => (i ? x : { ...x, gap: true }))]
-    : ITEMS;
+    ? [...shown, ...exports.map((x, i) => (i ? x : { ...x, gap: true }))]
+    : shown;
   return (
     <nav className="ribbon" aria-label={t('ribbon.label')}>
       {items.map(({ command, icon, gap }) => {

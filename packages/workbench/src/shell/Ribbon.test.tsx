@@ -4,6 +4,7 @@ import { Ribbon } from './Ribbon';
 import { api } from '../app/api';
 import { initI18n } from '../i18n';
 import { installWailsMock } from '../test/wails-mock';
+import { useManaged } from '../state/managed';
 import { useAppStore } from '../state/store';
 
 beforeEach(async () => {
@@ -55,5 +56,16 @@ describe('ribbon exports by kind of file', () => {
     expect(labels()).toEqual([]);
     open('data.csv');
     expect(labels()).toEqual([]);
+  });
+});
+
+describe('ribbon applications', () => {
+  it('has "New application" only where the profile turns applications on', () => {
+    act(() => useManaged.setState({ features: {} }));
+    render(<Ribbon />);
+    expect(screen.queryByRole('button', { name: 'New application' })).toBeNull();
+    act(() => useManaged.setState({ features: { web_viewer: true } }));
+    expect(screen.getByRole('button', { name: 'New application' })).toBeEnabled();
+    act(() => useManaged.setState({ features: {} }));
   });
 });

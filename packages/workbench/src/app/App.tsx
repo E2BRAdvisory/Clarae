@@ -31,6 +31,7 @@ import { Welcome } from '../shell/Welcome';
 import { can, useCan, usePlatform } from '../platform';
 import { followLinkPath } from './open';
 import { applyVaultChanges, onVaultChanges } from './fileChanges';
+import { startWebapps } from '../webapp/start';
 
 // The import wizard, the settings and the file recovery are fetched the first time they open: they
 // stay out of the startup bundle (ADR-0020).
@@ -203,6 +204,10 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  // The browser inside the tabs of applications (desktop with the capability; elsewhere nothing starts):
+  // its events, the tabs it follows, and the keys of the application it hands back (M18, track E).
+  useEffect(() => startWebapps(), []);
 
   // Application hotkeys. Editors handle theirs first (they call preventDefault).
   useEffect(() => {
