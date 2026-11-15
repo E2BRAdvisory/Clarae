@@ -175,6 +175,29 @@ tasks:
     cmds:
       - for m in {{.GO_MODULES}}; do echo "==> $m"; (cd $m && golangci-lint run {{if .WAILS_TAGS}}--build-tags {{.WAILS_TAGS}} {{end}}./...) || exit 1; done
 
+  # The Windows code (apps/desktop/internal/shell/nativeview: driver, WebView2 binding) is never compiled by the tasks
+  # above on another system: vet it (which also type-checks the tests), compile the tests without running them, and
+  # lint it, for the two architectures of the Windows build. CGO is off, as in the release build.
+  vet-windows:
+    desc: go vet, test compile and golangci-lint of apps/desktop for GOOS=windows (amd64, arm64; no cgo)
+    silent: true
+    deps: [frontend-placeholder]
+    dir: '{{.DESKTOP}}'
+    env:
+      GOOS: windows
+      CGO_ENABLED: '0'
+    cmds:
+      - |
+        for a in amd64 arm64; do
+          echo "==> windows/$a"
+          export GOARCH=$a
+          go vet ./... || exit 1
+          for p in $(go list -f '{{"{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}"}}' ./internal/shell/...); do
+            go test -c -o /dev/null "$p" || exit 1
+          done
+          golangci-lint run ./... || exit 1
+        done
+
   lint-ts:
     desc: ESLint + Prettier
     cmds:
@@ -329,6 +352,7 @@ tasks:
     desc: Full local verification before merging or tagging (ADR-0036)
     cmds:
       - task: lint
+      - task: vet-windows
       - task: typecheck
       - task: vuln
       - task: wailsjs

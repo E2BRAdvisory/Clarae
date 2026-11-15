@@ -1,4 +1,4 @@
-//go:build !js && !(darwin && cgo)
+//go:build !js && !(darwin && cgo) && !windows
 
 package nativeview
 
