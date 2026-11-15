@@ -87,7 +87,6 @@ legacy	deploy/compose/README.md	memobrain|Memobrain|MemoBrain|MEMOBRAIN	document
 legacy	services/cloud/internal/config/compose_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the compose file for installations made before 1.5; dropped in 2.0
 legacy	services/cloud/internal/observability/namespace.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	metrics namespace of 1.x for the realm memobrain; dropped in 2.0
 legacy	services/cloud/internal/observability/namespace_test.go	memobrain|Memobrain|MemoBrain|MEMOBRAIN	tests of the metrics namespace of 1.x; dropped in 2.0
-legacy	.github/workflows/release.yml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	publishes the cloud image also under the name of 1.x; dropped in 1.7
 legacy	Taskfile.yml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	helm-check asserts that nameOverride: memobrain keeps the names and selectors of 1.x; dropped in 2.0
 legacy	deploy/helm/clarae/ci/values-legacy.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	values of an in-place upgrade of an installation made by the chart of 1.x; dropped in 2.0
 legacy	deploy/helm/clarae/values.yaml	memobrain|Memobrain|MemoBrain|MEMOBRAIN	documents nameOverride: memobrain and the legacy gRPC path; dropped in 2.0
