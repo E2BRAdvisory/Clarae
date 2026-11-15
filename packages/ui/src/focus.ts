@@ -15,6 +15,9 @@ const FOCUSABLE = [
 
 const MODAL = '[aria-modal="true"]';
 
+/** The events of the user acting on a modal (see keepInside). */
+const ACTIONS = ['keydown', 'mousedown', 'click', 'submit'] as const;
+
 /** How many recent focus targets are remembered to find a dialog's opener. */
 const HISTORY = 16;
 
@@ -111,12 +114,63 @@ function attach(doc: Document): Pick<Installed, 'uninstall' | 'sync'> {
     }
   };
 
+  // Focus taken by a component outside the open modal, without the user asking for it: a widget
+  // that focuses its own field a frame after it mounted (Excalidraw does so with the search box of
+  // its library panel), a view that reclaims focus after an update. The modal is aria-modal, so
+  // focus goes back where it was in it (or to its first control). Left alone: a target inside any
+  // open modal (dialogs open over dialogs, and the order in the page is not always the stacking),
+  // and what the handling of the user's own action in the modal does (the Enter that answers a
+  // dialog resolves its promise, and the command goes on to focus the editor while the dialog is
+  // still on screen for the few ms before it unmounts).
+  let restoring = false;
+  let acting = false;
+  // From the start of the event in the modal (capture) to the end of its dispatch (bubble, which a
+  // handler that stops the event does not reach: the timer is for that case).
+  const onAction = (e: Event): void => {
+    const t = e.target;
+    if (!(t instanceof Node) || !modals(doc).some((m) => m.contains(t))) return;
+    acting = true;
+    setTimeout(() => {
+      acting = false;
+    }, 0);
+  };
+  const onActionEnd = (): void => {
+    acting = false;
+  };
+  const keepInside = (e: FocusEvent): boolean => {
+    if (restoring || acting) return false;
+    const all = modals(doc);
+    const top = all[all.length - 1];
+    const target = e.target;
+    if (!top || !(target instanceof Node)) return false;
+    if (all.some((m) => m.contains(target))) return false;
+    const from = e.relatedTarget;
+    const back =
+      from instanceof HTMLElement && from.isConnected && top.contains(from)
+        ? from
+        : (focusables(top)[0] ?? top);
+    restoring = true;
+    try {
+      back.focus();
+    } finally {
+      restoring = false;
+    }
+    return true;
+  };
+
   const observer = new MutationObserver(sync);
-  const onFocusIn = (e: FocusEvent): void => remember(e.target as Element | null);
+  // What took the focus and was sent back is not an opener to remember.
+  const onFocusIn = (e: FocusEvent): void => {
+    if (!keepInside(e)) remember(e.target as Element | null);
+  };
 
   remember(doc.activeElement);
   doc.addEventListener('keydown', onKeyDown, true);
   doc.addEventListener('focusin', onFocusIn, true);
+  for (const type of ACTIONS) {
+    doc.addEventListener(type, onAction, true);
+    doc.addEventListener(type, onActionEnd);
+  }
   observer.observe(doc.body, { childList: true, subtree: true });
   sync();
   return {
@@ -125,6 +179,10 @@ function attach(doc: Document): Pick<Installed, 'uninstall' | 'sync'> {
       sync(); // settle the modals removed in this same task before stopping
       doc.removeEventListener('keydown', onKeyDown, true);
       doc.removeEventListener('focusin', onFocusIn, true);
+      for (const type of ACTIONS) {
+        doc.removeEventListener(type, onAction, true);
+        doc.removeEventListener(type, onActionEnd);
+      }
       observer.disconnect();
     },
   };

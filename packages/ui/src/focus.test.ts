@@ -67,6 +67,73 @@ describe('installModalFocus', () => {
     off();
   });
 
+  it('sends focus back when a component outside takes it while the modal is open', async () => {
+    const off = installModalFocus();
+    const outside = button('outside');
+    const { buttons } = modal('a', 'b');
+    await flush();
+    const [a, b] = buttons as [HTMLButtonElement, HTMLButtonElement];
+    b.focus();
+    // a widget that focuses its own field on its own time (Excalidraw's library search box)
+    outside.focus();
+    expect(document.activeElement).toBe(b);
+    // focus that lands outside from nowhere in particular goes to the first control
+    (document.activeElement as HTMLElement).blur();
+    outside.focus();
+    expect(document.activeElement).toBe(a);
+    off();
+  });
+
+  it('lets the handling of the user action in the modal move the focus out (an answer → the editor)', async () => {
+    const off = installModalFocus();
+    const editor = button('editor');
+    const { buttons } = modal('ok');
+    await flush();
+    const ok = buttons[0] as HTMLButtonElement;
+    ok.focus();
+    // Enter on the button: the command that was waiting for the answer focuses the editor while
+    // handling it, with the dialog still in the page for the render that removes it.
+    ok.addEventListener('keydown', () => editor.focus());
+    ok.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(document.activeElement).toBe(editor);
+    // once the event is handled it is not that action any more
+    ok.focus();
+    editor.focus();
+    expect(document.activeElement).toBe(ok);
+    off();
+  });
+
+  it('leaves focus alone inside any open modal, and once the modals are closed', async () => {
+    const off = installModalFocus();
+    const first = modal('first');
+    const second = modal('second');
+    await flush();
+    first.buttons[0]?.focus();
+    expect(document.activeElement).toBe(first.buttons[0]);
+    second.el.remove();
+    first.el.remove();
+    await flush();
+    const outside = button('outside');
+    outside.focus();
+    expect(document.activeElement).toBe(outside);
+    off();
+  });
+
+  it('does not take what was sent back for the opener of the modal', async () => {
+    const off = installModalFocus();
+    const opener = button('open');
+    const thief = button('thief');
+    opener.focus();
+    const { el, buttons } = modal('ok');
+    await flush();
+    buttons[0]?.focus();
+    thief.focus();
+    el.remove();
+    await flush();
+    expect(document.activeElement).toBe(opener);
+    off();
+  });
+
   it('gives focus back to the opener when the modal closes', async () => {
     const off = installModalFocus();
     const opener = button('open');

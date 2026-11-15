@@ -97,3 +97,21 @@ test('the command palette is operated by keyboard and returns focus', async ({ p
   await page.keyboard.press('Escape');
   await expect(input).toHaveCount(0);
 });
+
+test('a component that takes the focus while the palette is open does not keep it', async ({
+  page,
+}) => {
+  await openVault(page, { 'Alpha.md': '# Alpha' });
+  const item = page.getByRole('tree').getByRole('treeitem', { name: /Alpha/ });
+  await expect(item).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+p');
+  const input = page.getByRole('combobox', { name: 'Type a command…' });
+  await expect(input).toBeFocused();
+  // What Excalidraw does with the search box of its library panel, a frame after it was mounted.
+  await item.evaluate((el) => el.focus());
+  await expect(input).toBeFocused();
+  await page.keyboard.type('settings');
+  await expect(input).toHaveValue('settings');
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveCount(0);
+});
