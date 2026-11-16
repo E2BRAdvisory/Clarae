@@ -107,6 +107,7 @@ history	docs/qa/m*-*.md	*	QA records of past milestones
 history	docs/release/rebrand-inventory.md	*	record of the previous rename
 history	docs/release/v1.0.0-checklist.md	*	checklist of the 1.0.0 release
 history	docs/spec-v1.2-proposta.md	*	proposal of the 1.2 specification
+history	docs/spec-v1.7-proposta.md	*	proposal of the 1.7 specification: it quotes the text of Specifications.md 1.6 and the frozen cryptographic labels
 history	docs/roadmap.md	^\| F[0-6] .*$|^.*«Clarae notanda».*$	the M17 section states the old and the new names side by side
 
 # The GitHub repository has not been renamed.

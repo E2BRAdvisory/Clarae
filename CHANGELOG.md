@@ -4,6 +4,16 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Gli ADR 0057, 0058, 0059, 0060 e 0061 della 1.7.2 e l'ADR-0052 (rebrand) sono **accettati** dall'owner il 2026-11-16 (milestone M21, [roadmap](docs/roadmap.md) §13-quaterdecies). Nessuna modifica al prodotto: la 1.7.2 resta com'è. `Specifications.md` passa alla **v1.7**, che li recepisce con la nomenclatura _Clarae notanda_ in tutto lo spec; lo spec lo aggiorna l'owner.
+
+### Documentazione
+
+- ADR **0057** (dispositivo per nome del computer), **0058** (uscita completa da Keycloak), **0059** (pulizia della cartella di configurazione legacy e ZIP coerente), **0060** (`features.web_viewer` acceso di default) e **0061** (budget iniziale della console a 720 kB) in stato _accettata_; ADR-0056 e ADR-0020 portano le note dei loro emendamenti (ADR-0060 e ADR-0061), ADR-0052 quella di ADR-0059. L'indice degli ADR è allineato.
+- **`Specifications.md` v1.7**: recepisce ADR-0052 (nome del prodotto e identificatori in tutto lo spec; restano le etichette crittografiche congelate `memobrain/v1/*` e `memobrain/v2/*` e i riferimenti alla 1.x) e gli ADR 0057–0061 (§1.3, §1.6, §1.7, §2.2.1, §2.6.1, §2.6.6 con la riga di `features.config_dir_v2`, §2.8.2, §3.2.2, §3.3.1, §3.4.6, §3.5.1, §3.5.2, §3.8.2, §4.4, C.2, C.4). Il recepimento segue [`docs/spec-v1.7-proposta.md`](docs/spec-v1.7-proposta.md), che resta come storia; gli ADR 0052 e 0057–0061 portano la riga «Recepito in».
+- Guida admin, runbook e roadmap non dicono più «in proposta» per questi ADR.
+
 ## [1.7.2] - 2026-11-16
 
 Dodici **correttivi** su console web, desktop, cloud e workbench (milestone M21, [roadmap](docs/roadmap.md) §13-quaterdecies, ADR-0057, ADR-0058, ADR-0059 e ADR-0060): **il testo dei disegni si scrive e gli oggetti si spostano di nuovo**; le **presentazioni a tutto schermo** non finiscono più in un angolo su macOS; **«Esci» esce davvero** (console e desktop) e il desktop **non aggiunge più un dispositivo a ogni accesso**; la cartella di configurazione della 1.x (`.memobrain/`) si **ripulisce** e lo ZIP ha solo `.clarae/`; le **applicazioni** sono **accese di default** e si creano dall'esploratore dei file; il cloud ha una **guardia contro un aggiornamento che riparte da un database vuoto**. **Questa versione ha una migrazione del cloud** (`0016_device_hostname`, che revoca i dispositivi desktop duplicati) **e un default che cambia** (`features.web_viewer`): leggere _Compatibilità_ prima di aggiornare. Gli ADR 0057, 0058, 0059, 0060 e 0061 sono in stato _proposta_ e **non sono ancora recepiti in `Specifications.md`**, che non è toccato: li accetta e li recepisce l'owner. **Nulla è provato su un Keycloak vero né sulla finestra reale del desktop** (vedi _Non provato e lavoro successivo_).
