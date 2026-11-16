@@ -8,9 +8,23 @@ package auditdb
 import (
 	"context"
 	"net/netip"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const countAudit = `-- name: CountAudit :one
+SELECT count(*)::bigint FROM audit_log
+`
+
+// Size and age of the log (with OldestAudit), written to the log at start so an
+// upgrade that came up on an emptied database is noticed.
+func (q *Queries) CountAudit(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAudit)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
 
 const insertAudit = `-- name: InsertAudit :exec
 
@@ -38,4 +52,16 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error 
 		arg.Ip,
 	)
 	return err
+}
+
+const oldestAudit = `-- name: OldestAudit :one
+SELECT at FROM audit_log ORDER BY at LIMIT 1
+`
+
+// No rows when the log is empty.
+func (q *Queries) OldestAudit(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRow(ctx, oldestAudit)
+	var at time.Time
+	err := row.Scan(&at)
+	return at, err
 }

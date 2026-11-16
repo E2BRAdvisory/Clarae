@@ -43,6 +43,9 @@ x-cloud-env: &cloud-env
   GRPC_LISTEN_ADDR: 0.0.0.0:18082
   METRICS_LISTEN_ADDR: 0.0.0.0:18083 # worker only: /metrics, /healthz, /readyz
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # "true" once the database holds the schema: an API that finds it empty refuses to start instead of
+  # creating a new one (a changed COMPOSE_PROJECT_NAME or volume would otherwise lose every record).
+  DB_EXPECT_INITIALIZED: ${DB_EXPECT_INITIALIZED:-}
   # Caddy reaches the API from a Docker bridge address and replaces any client-supplied X-Forwarded-For,
   # so the bridge ranges can be trusted: without this all users would share one per-IP rate-limit bucket.
   TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}

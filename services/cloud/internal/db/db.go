@@ -142,6 +142,34 @@ func (d *DB) SchemaVersion(ctx context.Context) (current, expected int64, err er
 	return current, expected, err
 }
 
+// ErrNotInitialized reports a database without a schema where the operator said there is one
+// (DB_EXPECT_INITIALIZED, set by the Helm chart on an upgrade).
+var ErrNotInitialized = errors.New("the database has no schema")
+
+// RequireInitialized fails with ErrNotInitialized when the database holds no migration yet (no
+// goose_db_version table, or version 0). It is the guard of an upgrade: the process was told that the
+// database exists, so an empty one means that it was lost or replaced (a PVC, a namespace or a compose
+// project that changed) and creating a fresh schema would silently start the service with no data and
+// an empty audit log. It only reads.
+func (d *DB) RequireInitialized(ctx context.Context) error {
+	current, _, err := d.SchemaVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+	return requireInitialized(current)
+}
+
+func requireInitialized(current int64) error {
+	if current > 0 {
+		return nil
+	}
+	return fmt.Errorf("%w: DB_EXPECT_INITIALIZED is set but the database is empty (no applied migration). "+
+		"This is an upgrade, yet the database it found is new: refusing to create a fresh schema, which would start the service "+
+		"with no data and an empty audit log. Check that DATABASE_URL points at the existing database (same namespace, release, "+
+		"PVC or COMPOSE_PROJECT_NAME as the running installation) or restore it from a pg_dump; "+
+		"unset DB_EXPECT_INITIALIZED only for a deliberate new installation", ErrNotInitialized)
+}
+
 // CheckSchema fails with ErrSchemaBehind while the database lacks migrations
 // this binary needs. A newer schema is accepted: during a rolling upgrade the
 // new API migrates while old workers still run, and migrations stay

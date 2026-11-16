@@ -6,9 +6,12 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/netip"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"clarae/services/cloud/internal/audit/auditdb"
 	"clarae/services/cloud/internal/db"
@@ -58,4 +61,30 @@ func Record(ctx context.Context, tx db.DBTX, actor uuid.UUID, action, targetType
 	return auditdb.New(tx).InsertAudit(ctx, auditdb.InsertAuditParams{
 		ActorID: &actor, Action: action, TargetType: &targetType, TargetID: &targetID, Details: raw, Ip: ip,
 	})
+}
+
+// Summary is the size of the log: how many rows it holds and when the oldest one was written.
+type Summary struct {
+	Rows int64
+	// First is the time of the oldest row; zero when the log is empty.
+	First time.Time
+}
+
+// Summarize reads the size of the log. The service writes it to its own log at start: the oldest row
+// never moves forward, so a date that jumped to the day of the upgrade shows that the database was
+// recreated.
+func Summarize(ctx context.Context, q db.DBTX) (Summary, error) {
+	queries := auditdb.New(q)
+	n, err := queries.CountAudit(ctx)
+	if err != nil {
+		return Summary{}, err
+	}
+	first, err := queries.OldestAudit(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Summary{Rows: n}, nil
+	}
+	if err != nil {
+		return Summary{}, err
+	}
+	return Summary{Rows: n, First: first}, nil
 }

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"strings"
@@ -29,5 +30,23 @@ func TestLatestMigration(t *testing.T) {
 	}
 	if !found || v < 7 {
 		t.Fatalf("latest migration %d (file %s* found: %v)", v, prefix, found)
+	}
+}
+
+// The upgrade guard: a database without any applied migration is refused, one with a schema passes.
+func TestRequireInitializedRefusesAnEmptyDatabase(t *testing.T) {
+	err := requireInitialized(0)
+	if !errors.Is(err, ErrNotInitialized) {
+		t.Fatalf("version 0: %v, want ErrNotInitialized", err)
+	}
+	for _, want := range []string{"DB_EXPECT_INITIALIZED", "pg_dump", "audit log"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not mention %q: %v", want, err)
+		}
+	}
+	for _, v := range []int64{1, 15, 16} {
+		if err := requireInitialized(v); err != nil {
+			t.Errorf("version %d: %v", v, err)
+		}
 	}
 }

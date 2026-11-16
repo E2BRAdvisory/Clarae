@@ -147,3 +147,27 @@ func TestWorkerWaitsForTheSchema(t *testing.T) {
 		t.Fatalf("cancelled wait: %v", err)
 	}
 }
+
+// DB_EXPECT_INITIALIZED (set by Helm on an upgrade): an empty database is refused and stays empty, a migrated one
+// passes. The service calls RequireInitialized before Migrate, so the refusal never creates a schema.
+func TestRequireInitializedOnARealDatabase(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.Open(ctx, freshDatabase(t, "expect_init"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.Close)
+	if err := d.RequireInitialized(ctx); !errors.Is(err, db.ErrNotInitialized) {
+		t.Fatalf("empty database: %v, want ErrNotInitialized", err)
+	}
+	var tables int
+	if err := d.Pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'").Scan(&tables); err != nil || tables != 0 {
+		t.Fatalf("the guard left %d tables in the database (%v)", tables, err)
+	}
+	if err := d.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RequireInitialized(ctx); err != nil {
+		t.Fatalf("migrated database: %v", err)
+	}
+}

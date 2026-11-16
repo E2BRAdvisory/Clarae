@@ -134,6 +134,14 @@ config:
   # The default trusts the private ranges; narrow it to the pod CIDR of the ingress controller if you can.
   TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7
   LOG_LEVEL: info
+  # DB_EXPECT_INITIALIZED: 'true' makes the API refuse to create the schema on an empty database and exit with
+  # an error: it protects an installation from coming up on a new database (another namespace, release or PVC)
+  # with no data and an empty audit log. The chart sets it by itself on every `helm upgrade`
+  # (.Release.IsUpgrade), so you do not have to; set it here to force it, and to 'false' to start a new
+  # installation on an empty database through an upgrade (for example the retry of a first install that failed).
+  # The same goes for a reinstall: keep the namespace, the release name and the PostgreSQL PVC, and take a
+  # pg_dump first (docs/admin-guide/backup-upgrade.md).
+  # DB_EXPECT_INITIALIZED: 'true'
 
 # Secrets. Three ways, in order of preference:
 #   1. secret.existingSecret: a Secret you manage (sealed-secrets, SOPS, Vault injector...).

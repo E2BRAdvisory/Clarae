@@ -10,11 +10,22 @@ spec:
   selector: { app: postgres }
   ports: [{ port: 5432 }]
 ---
+# The database lives on a volume that outlives the pod: `down` scales the Deployment to zero and `up` brings
+# it back, and the Helm release of the second `up` is an upgrade, which refuses to start on an empty database
+# (DB_EXPECT_INITIALIZED). `delete` removes the namespace, and the volume with it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: postgres-data }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 2Gi } }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: postgres }
 spec:
   replicas: 1
+  strategy: { type: Recreate } # one pod at a time on the ReadWriteOnce volume
   selector: { matchLabels: { app: postgres } }
   template:
     metadata: { labels: { app: postgres } }
@@ -32,7 +43,7 @@ spec:
             exec: { command: [pg_isready, -U, clarae, -d, clarae] }
             periodSeconds: 3
           volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
-      volumes: [{ name: data, emptyDir: {} }]
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: postgres-data } }]
 ---
 apiVersion: v1
 kind: Service

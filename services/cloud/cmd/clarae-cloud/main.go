@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"clarae/services/cloud/internal/app"
+	"clarae/services/cloud/internal/audit"
 	"clarae/services/cloud/internal/auth"
 	"clarae/services/cloud/internal/config"
 	"clarae/services/cloud/internal/db"
@@ -124,10 +125,17 @@ func run(role config.Role) error {
 	defer database.Close()
 	observability.RegisterPool(prometheus.DefaultRegisterer, database.Pool)
 	if cfg.ServesAPI() {
+		if cfg.ExpectInitialized {
+			if err := database.RequireInitialized(ctx); err != nil {
+				return fail(err)
+			}
+		}
 		if err := database.Migrate(ctx); err != nil {
 			return fail(err)
 		}
 		logger.Info().Msg("database migrated")
+		// Counting a large audit log takes a while: the service does not wait for it to listen.
+		go logDatabaseState(ctx, logger, database)
 	}
 
 	sweepSpool(os.TempDir(), time.Now(), logger)
@@ -262,6 +270,30 @@ func run(role config.Role) error {
 	err = g.Wait()
 	logger.Info().Msg("stopped")
 	return err
+}
+
+// logDatabaseState writes what an operator needs to tell, after an upgrade, that the database is the one
+// that was running: the schema version and the size and age of the audit log. The oldest audit row never
+// moves forward, so a first date that is the day of the upgrade means the database was recreated. A read
+// that fails is reported, not fatal: it only informs.
+func logDatabaseState(ctx context.Context, logger zerolog.Logger, database *db.DB) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	current, expected, err := database.SchemaVersion(ctx)
+	if err != nil {
+		logger.Warn().Err(err).Msg("database state: cannot read the schema version")
+		return
+	}
+	summary, err := audit.Summarize(ctx, database.Pool)
+	if err != nil {
+		logger.Warn().Err(err).Int64("schema_version", current).Msg("database state: cannot read the audit log")
+		return
+	}
+	ev := logger.Info().Int64("schema_version", current).Int64("schema_expected", expected).Int64("audit_rows", summary.Rows)
+	if !summary.First.IsZero() {
+		ev = ev.Time("audit_first_at", summary.First)
+	}
+	ev.Msg("database state")
 }
 
 // connectOIDC retries discovery so the service survives starting before the

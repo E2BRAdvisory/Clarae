@@ -7,6 +7,10 @@ data:
   LISTEN_ADDR: "0.0.0.0:{{ .Values.service.httpPort }}"
   GRPC_LISTEN_ADDR: "0.0.0.0:{{ .Values.service.grpcPort }}"
   METRICS_LISTEN_ADDR: "0.0.0.0:{{ .Values.worker.metricsPort }}"
+  {{- if and .Release.IsUpgrade (not (hasKey .Values.config "DB_EXPECT_INITIALIZED")) }}
+  # An upgrade finds a database that already holds the schema: an empty one is refused, not recreated.
+  DB_EXPECT_INITIALIZED: "true"
+  {{- end }}
   {{- range $k, $v := .Values.config }}
   {{ $k }}: {{ $v | quote }}
   {{- end }}

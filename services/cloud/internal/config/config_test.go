@@ -159,3 +159,22 @@ func TestLoadAcceptsWellFormedValues(t *testing.T) {
 		t.Fatalf("got %+v", c)
 	}
 }
+
+// DB_EXPECT_INITIALIZED defaults to off (a first installation creates the schema), reads the usual
+// booleans, and a value that does not parse refuses to start instead of silently turning the guard off.
+func TestLoadReadsDBExpectInitialized(t *testing.T) {
+	for value, want := range map[string]bool{"": false, "false": false, "0": false, "true": true, "1": true} {
+		minimalEnv(t)
+		t.Setenv("DB_EXPECT_INITIALIZED", value)
+		c, err := Load(RoleAll, "test")
+		if err != nil || c.ExpectInitialized != want {
+			t.Errorf("DB_EXPECT_INITIALIZED=%q: ExpectInitialized = %v (%v), want %v", value, c.ExpectInitialized, err, want)
+		}
+	}
+	minimalEnv(t)
+	t.Setenv("DB_EXPECT_INITIALIZED", "yes")
+	_, err := Load(RoleAll, "test")
+	if err == nil || !strings.Contains(err.Error(), "DB_EXPECT_INITIALIZED") {
+		t.Fatalf("malformed value: %v", err)
+	}
+}

@@ -44,6 +44,10 @@ type Config struct {
 	TrustedProxies []netip.Prefix
 
 	DatabaseURL string
+	// ExpectInitialized (DB_EXPECT_INITIALIZED) says that the database already holds the schema:
+	// an API process that finds it empty refuses to create it and exits (the Helm chart sets it on
+	// an upgrade, so a database that was lost or replaced is noticed instead of silently recreated).
+	ExpectInitialized bool
 
 	S3 S3Config
 
@@ -192,6 +196,7 @@ func Load(role Role, version string) (Config, error) {
 	if legacy := legacyFamily + "-exports"; c.S3.BucketExportsDefaulted && c.S3.BucketExports != legacy {
 		c.S3.LegacyBucketExports = legacy
 	}
+	c.ExpectInitialized = envBool("DB_EXPECT_INITIALIZED", false)
 	c.MetricsNamespace = MetricsNamespaceFromEnv()
 
 	// The escape hatch for the placeholder check below: never set it in production.
