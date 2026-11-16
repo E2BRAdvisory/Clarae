@@ -2,7 +2,7 @@
 
 Un'**applicazione** è una pagina web registrata nel vault, per esempio uno strumento che usate ogni giorno (una chat, un calendario, una dashboard, un servizio interno). Si apre in una scheda, accanto alle vostre note, senza uscire da Clarae notanda.
 
-> **La funzione è spenta di default.** La accende chi amministra il cloud, con il flag `features.web_viewer` nel vostro profilo di configurazione. Se nel ribbon e nel pannello vuoto non c'è _Nuova applicazione_, è spenta per voi. Senza un cloud (un vault solo locale) non c'è un profilo e quindi non si può accendere. Una funzione nuova, ancora poco provata: vedi [Limiti](#limiti).
+> **La funzione è accesa di default.** Chi amministra il cloud può spegnerla, con il flag `features.web_viewer` nel vostro profilo di configurazione: se nel ribbon, nel pannello vuoto e nell'esploratore dei file non c'è _Nuova applicazione_, è spenta per voi. Senza un cloud (un vault solo locale) non c'è un profilo e la funzione resta accesa. Fino alla 1.7.1 era spenta di default. È una funzione ancora poco provata sulla finestra reale: vedi [Limiti](#limiti).
 
 ## Dove funziona
 
@@ -17,12 +17,12 @@ Nei casi senza browser incorporato tutto il resto della guida vale ugualmente (c
 
 ## Creare un'applicazione
 
-_Nuova applicazione_ dal ribbon, dal pannello vuoto o dalla palette comandi (`Mod+P`). Il dialogo chiede:
+_Nuova applicazione_ dall'**esploratore dei file** (il pulsante nella sua barra, o la voce del menu che si apre con il tasto destro su una cartella, su un file o sullo spazio vuoto), dal ribbon, dal pannello vuoto o dalla palette comandi (`Mod+P`). Dall'esploratore il file nasce **nella cartella della riga selezionata** (o accanto al file selezionato; in cima al vault se non c'è una selezione). Il dialogo chiede:
 
 - **Indirizzo:** un indirizzo `http` o `https`, per esempio `https://example.com`. Se scrivete `example.com` o `localhost:3000` senza schema, aggiunge `https://`. Non sono accettati altri schemi (`file:`, `javascript:`, `mailto:`…), indirizzi con nome utente e password, spazi o caratteri di controllo.
 - **Nome** (facoltativo): il nome del file. Se manca, quello del sito (senza `www.`).
 
-Il comando scrive un file `Nome.webapp` accanto al file attivo e lo apre in una nuova scheda. Su un vault in sola lettura _Nuova applicazione_ e _Cambia indirizzo_ sono disabilitati.
+Il comando scrive un file `Nome.webapp` (dal ribbon, dal pannello vuoto e dalla palette: accanto al file attivo; dall'esploratore: nella cartella scelta) e lo apre in una nuova scheda. L'esploratore e le schede mostrano il **nome senza `.webapp`**: `Mio sito.webapp` compare come «Mio sito». Su un vault in sola lettura _Nuova applicazione_ e _Cambia indirizzo_ sono disabilitati.
 
 Il file è un piccolo JSON, che potete anche scrivere a mano:
 
@@ -106,12 +106,12 @@ Cookie, accessi e archivio locale delle pagine restano **su questo dispositivo**
 - **L'autenticazione HTTP di base** (la finestra del browser che chiede nome utente e password) **non è supportata**: la richiesta è annullata e la pagina non si carica. Idem per NTLM e certificato client. Usate un sito con un accesso in una pagina web.
 - **I login che si aprono in un popup** e comunicano con la pagina che li ha aperti (`window.opener`) **non funzionano**: i popup non si aprono nell'app, vanno al browser di sistema.
 - Il browser incorporato c'è **solo su macOS**. Windows e Linux aprono la pagina nel browser di sistema. Per Windows esiste un driver in preparazione, **spento e mai provato su un computer Windows**: non cambia ciò che vedete.
-- **Non provato sulla finestra reale** per alcune cose: il posizionamento della pagina con lo zoom dell'app diverso da 100%, lo sfarfallio nel nascondere e mostrare la pagina, il fuoco da tastiera, il trascinamento di una scheda sopra la pagina. Una matrice di prove manuali ([`docs/qa/m18-webview-matrice.md`](../qa/m18-webview-matrice.md)) non è ancora stata eseguita: per questo la funzione è spenta di default. Segnalate ciò che vedete.
+- **Non provato sulla finestra reale** per alcune cose: il posizionamento della pagina con lo zoom dell'app diverso da 100%, lo sfarfallio nel nascondere e mostrare la pagina, il fuoco da tastiera, il trascinamento di una scheda sopra la pagina. Una matrice di prove manuali ([`docs/qa/m18-webview-matrice.md`](../qa/m18-webview-matrice.md)) non è ancora stata eseguita, anche se dalla versione che ha il pulsante nell'esploratore la funzione è accesa di default. Segnalate ciò che vedete.
 - Al massimo **32 applicazioni aperte** per vault (64 in tutto). Oltre, la scheda lo dice e propone «Apri nel browser».
 
 ## Se qualcosa non va
 
-- **Non vedo _Nuova applicazione_.** La funzione è spenta nel vostro profilo di configurazione: chiedete a chi amministra il cloud ([guida per chi amministra](../admin-guide/profili-quote-audit.md#chiavi-del-profilo)).
+- **Non vedo _Nuova applicazione_.** La funzione è spenta nel vostro profilo di configurazione (o il vault è in sola lettura): chiedete a chi amministra il cloud ([guida per chi amministra](../admin-guide/profili-quote-audit.md#chiavi-del-profilo)).
 - **La scheda mostra un riquadro invece della pagina.** Senza browser incorporato (Windows, Linux, workbench web) è normale: usate «Apri nel browser». Su macOS potrebbe esserci un errore: leggete il messaggio, poi «Riprova».
 - **Il file non si apre («Impossibile aprire questa applicazione»).** Il JSON non è valido, l'indirizzo non è `http` o `https`, ha credenziali, o il file è stato scritto da una versione più recente: correggete l'indirizzo con «Cambia indirizzo» (o a mano nel file).
 - **Una pagina chiede un accesso e non funziona.** Vedi [Limiti](#limiti): autenticazione di base e login con popup non sono supportati.

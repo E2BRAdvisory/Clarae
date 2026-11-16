@@ -6,7 +6,13 @@ La sincronizzazione è **facoltativa**. Serve un server Clarae notanda (fornito 
 
 1. _Impostazioni → Cloud_: inserite l'**URL del server** (il resto della configurazione si scarica da lì) e scegliete _Accedi_.
 2. Il login si completa nel **browser di sistema** (non nell'app): se il collegamento locale non è possibile, l'app ripiega sullo schema `clarae://` (se il realm del server è stato creato per la 1.x e non ha il redirect nuovo, ricade da sola su quello precedente). Il token di rinnovo è custodito nel **portachiavi** del sistema.
-3. Sotto _Cloud_ vedete il profilo, lo spazio usato e i **dispositivi** collegati (si possono revocare).
+3. Sotto _Cloud_ vedete il profilo, lo spazio usato e i **dispositivi** collegati (si possono revocare). Nell'elenco dello spazio, ogni vault mostra la **percentuale rispetto al vostro limite** (non rispetto alla somma dei vault); con spazio illimitato mostra «—». Un suggerimento sulla cella dice il limite.
+
+### Uscire
+
+_Esci_ (nel menu dell'account) ferma la sincronizzazione, **revoca questo dispositivo** sul cloud, chiude la vostra sessione sul servizio di accesso e cancella la sessione locale; i vault e le modifiche non ancora inviate restano sul computer. Se manca la rete l'uscita avviene comunque: il dispositivo resta registrato e al prossimo accesso viene ripreso. **Il successivo _Accedi_ chiede di nuovo la password**, anche se il browser di sistema ricorda ancora l'accesso.
+
+Un computer è identificato dal **nome** con cui il sistema lo conosce (e dalla piattaforma): dopo _Esci_ e un nuovo accesso compare **la stessa riga** nell'elenco dei dispositivi, non una nuova. Due computer con lo stesso nome diventano un solo dispositivo: rinominatene uno. Un dispositivo che avete revocato dalla Web UI e che poi si ricollega **con lo stesso nome** viene riattivato.
 
 ## Collegare un vault
 
@@ -38,7 +44,7 @@ Il merge avviene **sul vostro dispositivo**. Per le note Markdown le modifiche c
 
 ## Più dispositivi
 
-Accedete con lo stesso account sull'altro dispositivo e collegate lo stesso vault. Per un vault **privato** serve la passphrase (o la chiave di recupero) su ogni dispositivo. Un dispositivo smarrito si revoca da _Cloud_ (o dalla Web UI, pagina _Dispositivi_).
+Accedete con lo stesso account sull'altro dispositivo e collegate lo stesso vault. Per un vault **privato** serve la passphrase (o la chiave di recupero) su ogni dispositivo. Un dispositivo smarrito si revoca da _Cloud_ (o dalla Web UI, pagina _Dispositivi_). Se un dispositivo risulta revocato, la sincronizzazione si ferma e compare «Registra di nuovo questo dispositivo»: riattiva la stessa riga.
 
 ## Sospeso, quota, offline
 

@@ -1,6 +1,6 @@
 # Matrice manuale — applicazioni in una vista nativa (M18, traccia E)
 
-Da eseguire a mano, con la finestra vera del client desktop, prima di accendere per default `features.web_viewer` ([ADR-0056](../adr/0056-applicazioni-in-vista-nativa.md), accettato il 2026-11-15; per la 1.7.1 l'owner ha deciso di lasciare il flag spento). Le prove automatiche non vedono la vista nativa: qui si verifica ciò che solo una finestra reale mostra. **Come prepararle, in che ordine eseguirle e dove registrare gli esiti:** il runbook [`verifica-manuale-1.7.md`](verifica-manuale-1.7.md).
+Da eseguire a mano, con la finestra vera del client desktop, prima di accendere per default `features.web_viewer` ([ADR-0056](../adr/0056-applicazioni-in-vista-nativa.md), accettato il 2026-11-15; per la 1.7.1 l'owner ha deciso di lasciare il flag spento; **in M21 l'owner lo ha acceso di default**, [ADR-0060](../adr/0060-web-viewer-acceso-di-default.md) in proposta, quindi questa matrice resta da eseguire con la funzione già visibile a tutti). Le prove automatiche non vedono la vista nativa: qui si verifica ciò che solo una finestra reale mostra. **Come prepararle, in che ordine eseguirle e dove registrare gli esiti:** il runbook [`verifica-manuale-1.7.md`](verifica-manuale-1.7.md).
 
 **Stato al 2026-11-15: nessun caso di questa matrice è stato eseguito.** La colonna «Esito» è vuota di proposito. Per ogni caso si scrive l'esito (`ok`, `ko` con una riga sul difetto e il suo livello P0, P1, P2, oppure `n/d`), con data, sistema operativo e versione provata, nel registro in fondo.
 
@@ -20,10 +20,10 @@ Da eseguire a mano, con la finestra vera del client desktop, prima di accendere 
 
 ## Come accendere la funzione
 
-La funzione è spenta di default e **serve `features.web_viewer` in un Config Profile**: senza un cloud non si può accendere. In sviluppo:
+Dalla versione di M21 la funzione è **accesa di default** (`features.web_viewer` vale `true` anche senza un profilo: un vault solo locale la vede). Per le prove con il flag **spento** o per provare un profilo di gruppo serve un cloud, con `features.web_viewer` in un Config Profile. Fino alla 1.7.1 era spenta di default. In sviluppo:
 
 1. `task stack-up` (PostgreSQL, S3, Keycloak) e `task dev-cloud` (cloud su `:18081`); oppure `scripts/run-desktop-with-cloud.sh`, che avvia stack, cloud e desktop insieme (`--help` elenca le opzioni; utenti `admin`, `user1`, `user2`, password `clarae-dev-password`).
-2. Nella console web, come `admin`, nel profilo globale (o in un profilo assegnato a un gruppo di `user1`) impostare `{"features": {"web_viewer": true}}`.
+2. Nella console web, come `admin`, nel profilo globale (o in un profilo assegnato a un gruppo di `user1`) impostare `{"features": {"web_viewer": true}}` (con la versione di M21 non serve: è il default; `false` la spegne).
 3. Sul client desktop, collegare il vault al cloud con `user1` (_Impostazioni → Cloud_): il profilo arriva al collegamento e a ogni aggiornamento. Con il flag acceso compaiono _Nuova applicazione_ nel ribbon e nello stato vuoto.
 4. Per i casi sul workbench web: aprire lo stesso vault dalla console del cloud, con lo stesso profilo.
 

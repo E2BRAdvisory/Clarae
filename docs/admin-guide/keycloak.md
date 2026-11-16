@@ -33,7 +33,19 @@ Il realm di produzione `deploy/keycloak-prod/realm-clarae.json` (importato dallo
 | Valid post logout redirect URIs | `https://clarae.example.com/*` (oppure `+`, che riusa i redirect URI) |
 | Web origins                     | `https://clarae.example.com` (uguale a `WEB_UI_ORIGIN`)               |
 
-Il post-logout redirect URI è obbligatorio: all'uscita la Web UI chiede a Keycloak di tornare su `https://<host>/`, e se l'indirizzo non è ammesso Keycloak mostra «Invalid redirect uri» **senza chiudere la sessione SSO**. La Web UI sembra disconnessa, ma chi preme di nuovo _Accedi_ dallo stesso browser entra senza password con l'utente precedente (fino a `ssoSessionIdleTimeout`). Non lasciare origini di sviluppo (`localhost`, `127.0.0.1`) nel client della Web UI; il test `services/cloud/internal/keycloak/realm_test.go` lo verifica sul realm di produzione.
+Il post-logout redirect URI è obbligatorio: all'uscita la Web UI chiede a Keycloak di tornare su `https://<host>/signed-out`, una pagina pubblica che dice «Sei uscito da Clarae notanda» e non rifà il login da sola. Se l'indirizzo non è ammesso Keycloak mostra «Invalid redirect uri» **senza chiudere la sessione SSO**: la Web UI sembra disconnessa, ma chi preme di nuovo _Accedi_ dallo stesso browser potrebbe entrare senza password con l'utente precedente (fino a `ssoSessionIdleTimeout`). Non lasciare origini di sviluppo (`localhost`, `127.0.0.1`) nel client della Web UI; il test `services/cloud/internal/keycloak/realm_test.go` verifica sul realm di produzione che `${WEB_UI_ORIGIN}/signed-out` (oltre a `${WEB_UI_ORIGIN}/`) sia ammesso.
+
+**Uscita e password.** La Web UI chiude la sessione su Keycloak (revoca i token e passa `id_token_hint` e `client_id`), e il primo accesso dopo un'uscita esplicita chiede sempre le credenziali (`prompt=login`), anche se Keycloak ricorda ancora l'utente. Lo stesso vale per il client desktop, che esce senza aprire il browser: invia al `end_session_endpoint` il token di rinnovo, poi lo revoca dal `revocation_endpoint` della discovery. Se dopo «Esci» si rientra comunque senza password, controllare il client come sotto.
+
+### Controllare un realm già importato
+
+Keycloak parte con `--import-realm`, che **salta un realm già esistente**: le modifiche al file `realm-clarae.json` (anche quelle che arrivano con un aggiornamento) **non hanno effetto** su un realm creato prima. Per questo, dopo un aggiornamento e quando «Esci» non si comporta come descritto, controllare dalla console di Keycloak (realm `clarae`, _Clients_ → `clarae-web` → _Settings_ → _Access settings_) che:
+
+- _Valid post logout redirect URIs_ ammetta `https://<origine pubblica>/signed-out` (va bene `https://<origine pubblica>/*`, oppure `+`);
+- _Valid redirect URIs_ ammetta `https://<origine pubblica>/*` e _Web origins_ l'origine;
+- non ci siano un _identity provider_ o un broker che mantenga una sessione propria (in quel caso l'uscita dalla Web UI non chiude la sessione di quel provider: l'utente rientra con le credenziali ma non necessariamente con quelle di Clarae notanda).
+
+Lo stesso controllo sul client `clarae-desktop`: _Valid post logout redirect URIs_ può contenere `clarae://auth/logout` e `http://127.0.0.1/*`; il logout del desktop non ne ha bisogno, ma resta registrato.
 
 I nomi dei client e dell'audience sono configurabili (`OIDC_DESKTOP_CLIENT_ID`, `OIDC_WEB_CLIENT_ID`, `OIDC_AUDIENCE`, `OIDC_ALLOWED_AZP`, `KC_ADMIN_CLIENT_ID`).
 

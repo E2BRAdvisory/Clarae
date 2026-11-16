@@ -19,7 +19,8 @@ Garanzie: l'importazione **non sovrascrive mai** note esistenti (in caso di nome
 ## Esportare un vault
 
 - **Vault locale:** i file sono già normali file nella cartella: copiatela dove volete.
-- **Vault del cloud, dalla Web UI** (pagina _Vault_): _Scarica ZIP_.
+- **Vault del cloud, dalla Web UI** (pagina _Vault_): _Scarica ZIP_, con lo stesso testo per ogni vault (per un vault privato i lettori di schermo leggono anche «decifrato nel tuo browser»).
   - _Condiviso:_ lo ZIP è generato dal server (per vault grandi in background: lo stato passa da "in coda" a "pronto" e il download parte da solo).
   - _Privato:_ lo ZIP è costruito **nel vostro browser**, dopo aver inserito passphrase o chiave di recupero; il server non vede mai i contenuti. Non chiudete la scheda finché non termina.
+- **Come è fatto lo ZIP.** Contiene i file correnti del vault con i loro percorsi, senza le parti che appartengono al dispositivo (indice di ricerca, stato di sincronizzazione, disposizione delle schede, cache e istantanee locali). Le impostazioni condivise stanno in **`.clarae/`**: se un vault era stato usato con la versione 1.x e ha ancora la cartella di configurazione di allora (il nome è in [Aggiornare dalla 1.x](installazione.md#aggiornare-dalla-1x)), i suoi file escono sotto `.clarae/` e, se lo stesso nome esiste in entrambe, **vince `.clarae/`**. Vale per lo ZIP del server e per quello di un vault privato costruito nel browser.
 - Dall'app: _Esporta vault come ZIP_.
