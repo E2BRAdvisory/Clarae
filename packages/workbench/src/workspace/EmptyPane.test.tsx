@@ -32,7 +32,8 @@ describe('a pane with nothing open', () => {
   it('offers the commands that create or open something, with their hotkeys', () => {
     render(<EmptyPane paneId={paneId()} />);
     expect(screen.getByRole('group', { name: 'Start here' })).toBeInTheDocument();
-    expect(names()).toHaveLength(5);
+    // note, canvas, drawing, presentation, base, and the applications that are on by default
+    expect(names()).toHaveLength(6);
     const note = screen.getByRole('button', { name: /New note/ });
     expect(note).toBeEnabled();
     expect(note).toHaveTextContent(formatCombo('Mod-n'));
@@ -91,13 +92,13 @@ describe('a pane with nothing open', () => {
 });
 
 describe('a pane with nothing open and applications', () => {
-  it('offers "New application" only with the flag of the profile', () => {
-    act(() => useManaged.setState({ features: {} }));
-    render(<EmptyPane paneId={paneId()} />);
-    expect(screen.queryByRole('button', { name: /New application/ })).toBeNull();
-    cleanup();
-    act(() => useManaged.setState({ features: { web_viewer: true } }));
+  it('offers "New application" unless the profile turns applications off', () => {
+    // on by default (ADR-0060)
     render(<EmptyPane paneId={paneId()} />);
     expect(screen.getByRole('button', { name: /New application/ })).toBeEnabled();
+    cleanup();
+    act(() => useManaged.setState({ features: { web_viewer: false } }));
+    render(<EmptyPane paneId={paneId()} />);
+    expect(screen.queryByRole('button', { name: /New application/ })).toBeNull();
   });
 });

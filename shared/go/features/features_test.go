@@ -46,9 +46,10 @@ func TestEveryFlagHasADefault(t *testing.T) {
 	// and ADR-0042 are on by default since release N+1, and so is config_dir_v2 (ADR-0052) since
 	// 1.7.0: it moves the synchronized settings of linked vaults to the new configuration folder,
 	// and an instance that still has devices of 1.4 or earlier turns it off.
+	// web_viewer (the applications, ADR-0056) is on by default since 1.7.2 (ADR-0060): a profile turns it off.
 	// ai and collab (ADR-0050) are functions not offered yet that the code already reads: a flag the
 	// schema did not declare would be on, so both must stay declared and off.
-	off := []string{features.AudioRecorder, features.WebViewer, features.Chat, features.Ai, features.Collab}
+	off := []string{features.AudioRecorder, features.Chat, features.Ai, features.Collab}
 	for _, k := range features.Known {
 		want := true
 		for _, o := range off {

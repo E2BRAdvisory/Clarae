@@ -398,7 +398,10 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     emit: (name, payload) => {
       for (const h of handlers.get(name) ?? []) h(payload);
       // The profile turns applications off: the core closes their views (webview:closed, `disabled`).
-      if (name === Events.configUpdated && !(payload as ConfigState).features?.['web_viewer'])
+      if (
+        name === Events.configUpdated &&
+        (payload as ConfigState).features?.['web_viewer'] === false
+      )
         mock.webview?.endViews(null, 'disabled');
     },
     listeners: (name) => handlers.get(name)?.size ?? 0,
@@ -413,7 +416,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const webviews = createWebViewMock({
     emit: (name, payload) => mock.emit(name, payload),
     vaultOpen: (id) => mock.vaults.has(id),
-    enabled: () => mock.config.features?.['web_viewer'] === true,
+    // on unless a profile turns it off (the default of `web_viewer`, ADR-0060)
+    enabled: () => mock.config.features?.['web_viewer'] !== false,
     ...seeded,
   });
   mock.webview = webviews.state;

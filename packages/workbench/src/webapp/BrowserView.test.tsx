@@ -57,8 +57,8 @@ async function setup(opts: { file?: string; flag?: boolean } = {}): Promise<void
   configurePlatform();
   useSettings.getState().reset();
   useSync.setState({ info: {} });
-  useManaged.setState({ features: opts.flag === false ? {} : { web_viewer: true } });
-  mock.config = { ...mock.config, features: opts.flag === false ? {} : { web_viewer: true } };
+  useManaged.setState({ features: { web_viewer: opts.flag !== false } });
+  mock.config = { ...mock.config, features: { web_viewer: opts.flag !== false } };
   vault = await api.vault.open('/vaults/Apps');
   mock.vaults.get(vault.id)?.files.set(PATH, opts.file ?? FILE);
   useAppStore.getState().setVault(vault);
@@ -418,7 +418,7 @@ describe('the browser of the tab', () => {
 
   it('opens again after the profile turned the browser off and on', async () => {
     await shown();
-    act(() => useManaged.setState({ features: {} }));
+    act(() => useManaged.setState({ features: { web_viewer: false } }));
     act(() => mock.webview.endViews(vault.id, 'disabled'));
     expect(await screen.findByText(/turned off by the configuration profile/)).toBeInTheDocument();
     act(() => useManaged.setState({ features: { web_viewer: true } }));

@@ -14,6 +14,10 @@ export const WEBAPP_EXT = '.webapp';
 /** A file of the vault that stands for an application. */
 export const isWebapp = (path: string): boolean => /\.webapp$/i.test(path);
 
+/** The name of an application as the interface shows it: the file's name without the extension. */
+export const nameOf = (path: string): string =>
+  (path.split('/').pop() ?? path).replace(new RegExp(`\\${WEBAPP_EXT}$`, 'i'), '');
+
 /** Longest address accepted (webview.MaxURLBytes). */
 export const MAX_URL_LENGTH = 16 * 1024;
 

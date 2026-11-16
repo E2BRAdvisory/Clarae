@@ -9,10 +9,10 @@ const (
 	AudioRecorder = "audio_recorder"
 
 	// WebViewer: Applications: a web page registered in the vault (a `.webapp` file) opens in a
-	// browser embedded in a tab. Off by default. Without it the commands that create, open and edit
-	// applications are not offered. The page is embedded only by a desktop client that can embed a
-	// browser (macOS); elsewhere, the browser workbench included, it opens in the system browser or in
-	// a new tab of the browser.
+	// browser embedded in a tab. On by default since 1.7.2; a profile turns it off. Without it the
+	// commands that create, open and edit applications are not offered. The page is embedded only by a
+	// desktop client that can embed a browser (macOS); elsewhere, the browser workbench included, it
+	// opens in the system browser or in a new tab of the browser.
 	WebViewer = "web_viewer"
 
 	// Chat: Chat bar of the workbench (a disabled placeholder until the ACP integration exists,
@@ -106,7 +106,7 @@ var Known = []string{
 // Defaults is the value of each flag when no profile sets it.
 var Defaults = map[string]bool{
 	AudioRecorder:     false,
-	WebViewer:         false,
+	WebViewer:         true,
 	Chat:              false,
 	Ai:                false,
 	Collab:            false,
@@ -127,7 +127,7 @@ var Defaults = map[string]bool{
 // Descriptions documents each flag (the schema's description).
 var Descriptions = map[string]string{
 	AudioRecorder:     "Audio recorder in the editor. Reserved: no client offers the function yet, so the flag has no visible effect.",
-	WebViewer:         "Applications: a web page registered in the vault (a `.webapp` file) opens in a browser embedded in a tab. Off by default. Without it the commands that create, open and edit applications are not offered. The page is embedded only by a desktop client that can embed a browser (macOS); elsewhere, the browser workbench included, it opens in the system browser or in a new tab of the browser.",
+	WebViewer:         "Applications: a web page registered in the vault (a `.webapp` file) opens in a browser embedded in a tab. On by default since 1.7.2; a profile turns it off. Without it the commands that create, open and edit applications are not offered. The page is embedded only by a desktop client that can embed a browser (macOS); elsewhere, the browser workbench included, it opens in the system browser or in a new tab of the browser.",
 	Chat:              "Chat bar of the workbench (a disabled placeholder until the ACP integration exists, ADR-0026).",
 	Ai:                "Reserved: AI writing assistant of the editor (ADR-0050). Implemented but inactive: it also needs a build that enables it, so a profile alone cannot switch it on in a released build.",
 	Collab:            "Reserved: real-time collaboration in the editor (ADR-0050). Implemented but off: it also needs a build that enables it and a registered provider, and none exists.",
@@ -167,7 +167,7 @@ func productDefaults() map[string]any {
 			"path_v2":             true,
 			"presentations":       true,
 			"sharing":             true,
-			"web_viewer":          false,
+			"web_viewer":          true,
 			"web_workbench":       true,
 		},
 		"sync": map[string]any{

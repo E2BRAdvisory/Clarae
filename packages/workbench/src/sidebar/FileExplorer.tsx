@@ -11,6 +11,8 @@ import { newCanvas } from '../canvas/commands';
 import { newBase } from '../bases/commands';
 import { newPresentation } from '../marp/commands';
 import { newDrawing } from '../drawing/commands';
+import { newApplication } from '../webapp/commands';
+import { isWebapp, nameOf } from '../webapp/model';
 import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
 import { selectActivePath, useAppStore } from '../state/store';
 import { useTree } from '../state/queries';
@@ -97,8 +99,15 @@ export const isHidden = (path: string): boolean => path.split('/').some((s) => s
 
 const parentDir = (path: string | null): string =>
   path && path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-const display = (e: Entry): string =>
-  e.isDir || !e.name.endsWith('.md') ? e.name : e.name.slice(0, -3);
+/** A row's text: a note without `.md`, an application without `.webapp`, any other file as it is. */
+export const display = (e: Entry): string =>
+  e.isDir
+    ? e.name
+    : isWebapp(e.name)
+      ? nameOf(e.name)
+      : e.name.endsWith('.md')
+        ? e.name.slice(0, -3)
+        : e.name;
 
 async function guard(p: Promise<unknown>): Promise<void> {
   try {
@@ -128,6 +137,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const drawingsOn = useManaged((m) => featureOn(m.features, 'drawings'));
   const canvasOn = useManaged((m) => featureOn(m.features, 'canvas'));
   const presentationsOn = useManaged((m) => featureOn(m.features, 'presentations'));
+  // The same condition as the command `app:new` (canEditWebapps): the flag, and a vault that may be written
+  // (the menus below are only built for one that may; the toolbar button checks it itself).
+  const webappsOn = useManaged((m) => featureOn(m.features, 'web_viewer'));
   const canShare = sharingOn && info.linked && info.kind === 'shared' && !info.mount;
   const tree = useMemo(
     () =>
@@ -153,6 +165,8 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     return () => ro.disconnect();
   }, []);
 
+  // The folder a new file goes to when nothing was asked for: the one of the row the user is on.
+  const focusEntry = focusPath ? entries.find((e) => e.path === focusPath) : undefined;
   const dirForNew = (entry?: Entry): string =>
     entry ? (entry.isDir ? entry.path : parentDir(entry.path)) : parentDir(activePath);
 
@@ -167,6 +181,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   };
   const newPresentationIn = async (dir: string) => {
     await guard(newPresentation({ dir }));
+  };
+  const newApplicationIn = async (dir: string) => {
+    await guard(newApplication({ dir }));
   };
   const newBaseIn = async (dir: string) => {
     await guard(newBase({ dir }));
@@ -284,6 +301,14 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                 {
                   label: t('sidebar.newPresentation'),
                   onSelect: () => void newPresentationIn(dirForNew(entry)),
+                },
+              ]
+            : []),
+          ...(webappsOn
+            ? [
+                {
+                  label: t('commands.app_new'),
+                  onSelect: () => void newApplicationIn(dirForNew(entry)),
                 },
               ]
             : []),
@@ -452,6 +477,18 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   return (
     <>
       <div className="toolbar">
+        {webappsOn && !readOnly && (
+          <button
+            type="button"
+            className="icon"
+            data-testid="explorer-new-application"
+            title={t('commands.app_new')}
+            aria-label={t('commands.app_new')}
+            onClick={() => void newApplicationIn(dirForNew(focusEntry))}
+          >
+            <Icon name="webapp" />
+          </button>
+        )}
         <span className="spacer" />
         <select
           aria-label={t('sidebar.sort')}
@@ -490,6 +527,9 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
                       onSelect: () => void newPresentationIn(''),
                     },
                   ]
+                : []),
+              ...(webappsOn
+                ? [{ label: t('commands.app_new'), onSelect: () => void newApplicationIn('') }]
                 : []),
               { label: t('bases.new'), onSelect: () => void newBaseIn('') },
               { label: t('sidebar.newFolder'), onSelect: () => void newFolder('') },

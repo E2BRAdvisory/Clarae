@@ -4,6 +4,7 @@ import {
   completeUrl,
   fileNameOf,
   isWebapp,
+  nameOf,
   parseWebapp,
   serializeWebapp,
   suggestName,
@@ -140,5 +141,15 @@ describe('names and typed addresses', () => {
       reason: 'scheme',
     });
     expect(checkWebappUrl(completeUrl('mailto:a@b.c'))).toEqual({ ok: false, reason: 'scheme' });
+  });
+});
+
+describe('nameOf', () => {
+  it('is the name of the file without the extension, in any folder and any case', () => {
+    expect(nameOf('Docs.webapp')).toBe('Docs');
+    expect(nameOf('Tools/Status board.webapp')).toBe('Status board');
+    expect(nameOf('Tools/GitHub.WEBAPP')).toBe('GitHub');
+    expect(nameOf('example.com.webapp')).toBe('example.com');
+    expect(nameOf('Notes/a.md')).toBe('a.md');
   });
 });

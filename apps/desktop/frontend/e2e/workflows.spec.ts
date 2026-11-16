@@ -77,7 +77,8 @@ test('split panes and the command palette', async ({ page }) => {
 test('a pane with nothing open offers what to put in it', async ({ page }) => {
   await openVault(page, { 'One.md': '# One' });
   const start = page.getByRole('group', { name: 'Start here' });
-  await expect(start.getByRole('button')).toHaveCount(5);
+  // the applications are on by default (ADR-0060): their button is among the others
+  await expect(start.getByRole('button')).toHaveCount(6);
   await start.getByRole('button', { name: /New note/ }).click();
   await expect(page.getByRole('tab', { name: /Untitled/ })).toBeVisible();
   await expect(start).toHaveCount(0);

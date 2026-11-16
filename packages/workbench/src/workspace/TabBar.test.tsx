@@ -71,3 +71,23 @@ describe('tab context menu', () => {
     expect(activeTab(l)?.path).toBe('b.md');
   });
 });
+
+describe('tab labels', () => {
+  beforeEach(() => {
+    initI18n('en');
+    useSettings.getState().reset();
+  });
+
+  it('drop .md and .webapp, and keep any other extension', () => {
+    useAppStore.setState({
+      layout: layoutOf('Notes/a.md', 'Apps/GitHub.webapp', 'Apps/Road.WEBAPP', 'pic.png'),
+    });
+    render(<TabBar pane={pane()} />);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'a',
+      'GitHub',
+      'Road',
+      'pic.png',
+    ]);
+  });
+});

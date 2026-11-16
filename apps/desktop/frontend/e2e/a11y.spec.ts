@@ -352,7 +352,7 @@ for (const theme of ['light', 'dark'] as const) {
         m.config = { ...m.config, version: 2, managed: true, features: { web_viewer: true } };
         m.emit('config:updated', m.config);
       });
-      await page.locator('.tree .node', { hasText: 'Docs.webapp' }).click();
+      await page.locator('.tree .node', { hasText: 'Docs' }).click();
       await expect(
         page.getByRole('heading', { name: 'Open https://example.com here?' }),
       ).toBeVisible();

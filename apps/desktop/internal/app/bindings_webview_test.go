@@ -278,11 +278,11 @@ func TestWebViewAPIFollowsTheFlag(t *testing.T) {
 	if st, _ := h.api().Status(); st.Enabled || !st.Available {
 		t.Fatalf("Status = %+v", st)
 	}
-	// Without any profile, the default is off.
+	// Without any profile, the default is on (ADR-0060).
 	a, info, _ := newTestApp(t)
 	a.opts.NativeViews = func() webview.Driver { return webview.NewFake() }
 	t.Cleanup(a.shutdownWebViews)
-	if _, err := NewWebViewAPI(a).Open(info.ID, "https://example.com/", wvBounds); codeOf(err) != ErrCodeWebViewDisabled {
+	if _, err := NewWebViewAPI(a).Open(info.ID, "https://example.com/", wvBounds); err != nil {
 		t.Fatalf("Open with no profile = %v", err)
 	}
 }

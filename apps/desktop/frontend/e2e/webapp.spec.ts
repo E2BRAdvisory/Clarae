@@ -6,7 +6,8 @@ import { expect, test, uuid, vault, type Cloud } from './cloud';
 // the page runs in a native view placed above the tab (here a stand-in on the Wails mock records what
 // the UI asks of it: `window.__mock.webview`); in the browser, and wherever the desktop has no such view,
 // the tab is a card that opens the page in the system browser. The profile turns the function on
-// (features.web_viewer, off by default).
+// (features.web_viewer, on by default since ADR-0060; a profile can turn it off). The explorer and the tabs
+// show an application by its name, without `.webapp`.
 
 const HOME = uuid(1);
 const APP = `${JSON.stringify({ version: 1, url: 'https://example.com/docs' })}\n`;
@@ -41,6 +42,16 @@ async function enableApplications(page: Page): Promise<void> {
   await page.evaluate(() => {
     const m = (window as unknown as MockWindow).__mock;
     const features = { ...(m.config['features'] as object), web_viewer: true };
+    m.config = { ...m.config, version: 2, managed: true, features };
+    m.emit('config:updated', m.config);
+  });
+}
+
+/** The profile turns applications off (the flag is on unless it says otherwise). */
+async function disableApplications(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const m = (window as unknown as MockWindow).__mock;
+    const features = { ...(m.config['features'] as object), web_viewer: false };
     m.config = { ...m.config, version: 2, managed: true, features };
     m.emit('config:updated', m.config);
   });
@@ -98,8 +109,10 @@ const openVaultId = (page: Page): Promise<string> =>
       ][0]?.info.id as string,
   );
 
-const tab = (page: Page, name: string) => page.locator('.tabbar .tab', { hasText: name });
-const tree = (page: Page, name: string) => page.locator('.tree .node', { hasText: name });
+/** What the interface calls an application: the name of its file without `.webapp`. */
+const shown = (file: string): string => file.replace(/\.webapp$/, '');
+const tab = (page: Page, file: string) => page.locator('.tabbar .tab', { hasText: shown(file) });
+const tree = (page: Page, file: string) => page.locator('.tree .node', { hasText: shown(file) });
 /** A click in the explorer replaces the tab in front; with the modifier it opens a tab of its own. */
 const inNewTab = (page: Page, name: string) =>
   tree(page, name).click({ modifiers: ['ControlOrMeta'] });
@@ -176,6 +189,51 @@ test('an application is created from the empty pane too', async ({ page, cloud }
   await expect(tab(page, 'example.org.webapp')).toBeVisible();
 });
 
+test('the explorer creates an application in the chosen folder, by name, and opens it', async ({
+  page,
+  cloud,
+}) => {
+  await open(page, cloud, { 'Projects/Plan.md': '# Plan\n', 'Readme.md': '# Readme\n' });
+  const rows = () => page.locator('.tree .node').allTextContents();
+  const dialogFor = async () => {
+    const dialog = page.getByRole('dialog', { name: 'New application' });
+    await expect(dialog).toBeVisible();
+    return dialog;
+  };
+
+  // the toolbar button, with the folder in focus
+  await tree(page, 'Projects').click();
+  await page.locator('.sidebar .toolbar').getByRole('button', { name: 'New application' }).click();
+  let dialog = await dialogFor();
+  await dialog.getByLabel('Address').fill('https://example.com/docs');
+  await dialog.getByLabel('Name').fill('Wiki');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(tab(page, 'Wiki')).toBeVisible();
+  // inside the folder (its children come before what follows it), and named without `.webapp`
+  await expect.poll(rows).toEqual(['Projects', 'Plan', 'Wiki', 'Readme']);
+  expect((await rows()).join('|')).not.toContain('.webapp');
+
+  // the menu of the empty space: the top of the vault
+  await page.locator('.tree').click({ button: 'right', position: { x: 20, y: 300 } });
+  await page.getByRole('menuitem', { name: 'New application' }).click();
+  dialog = await dialogFor();
+  await dialog.getByLabel('Address').fill('https://example.org/');
+  await dialog.getByLabel('Name').fill('Top');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(tab(page, 'Top')).toBeVisible();
+  await expect.poll(rows).toEqual(['Projects', 'Plan', 'Wiki', 'Readme', 'Top']);
+
+  // the menu of a folder
+  await tree(page, 'Projects').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New application' }).click();
+  dialog = await dialogFor();
+  await dialog.getByLabel('Address').fill('https://example.net/');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(tab(page, 'example.net')).toBeVisible();
+  // sorted by name inside the folder
+  await expect.poll(rows).toEqual(['Projects', 'example.net', 'Plan', 'Wiki', 'Readme', 'Top']);
+});
+
 test('the quick switcher finds an application by its name and opens it in its tab', async ({
   page,
   cloud,
@@ -226,10 +284,11 @@ test('an address that is not http or https is refused, and nothing is written', 
   await expect(dialog.getByRole('alert')).toContainText('Only http and https');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('.tabbar .tab')).toHaveCount(0);
-  await expect(page.locator('.tree .node', { hasText: '.webapp' })).toHaveCount(0);
+  // nothing was written: the explorer lists the note alone
+  await expect(page.locator('.tree .node')).toHaveCount(1);
 });
 
-test('without the flag of the profile there is no way to create an application', async ({
+test('with the flag of the profile off there is no way to create an application', async ({
   page,
 }) => {
   skipOnWeb(
@@ -237,8 +296,12 @@ test('without the flag of the profile there is no way to create an application',
     'the card for a profile that turns the browser off needs a desktop that has one; the web has the other card',
   );
   await openVault(page, { 'Docs.webapp': APP });
+  await disableApplications(page);
   await expect(
     page.locator('nav.ribbon').getByRole('button', { name: 'New application' }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('.sidebar .toolbar').getByRole('button', { name: 'New application' }),
   ).toHaveCount(0);
   await expect(
     page.locator('.empty-pane').getByRole('button', { name: /New application/ }),

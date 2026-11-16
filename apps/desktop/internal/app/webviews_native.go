@@ -71,7 +71,7 @@ func (a *App) applyWebViewFlag(cfg map[string]any) {
 	}
 }
 
-// webViewEnabled reads features.web_viewer, which is off unless the administrator turns it on. The
+// webViewEnabled reads features.web_viewer, which is on unless the administrator turns it off (ADR-0060). The
 // function is also gated by the capability embeddedBrowser (a driver exists): both must hold.
 func webViewEnabled(cfg map[string]any) bool { return flags.Enabled(cfg, flags.WebViewer) }
 

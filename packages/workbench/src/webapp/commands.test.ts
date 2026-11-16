@@ -23,7 +23,7 @@ const files = (): Map<string, string> => mock.vaults.get(vault.id)?.files as Map
 const webapps = (): string[] => [...files().keys()].filter((p) => p.endsWith('.webapp')).sort();
 const enabled = (id: string): boolean => isEnabled(commandById.get(id) as never);
 const flag = (on: boolean): void => {
-  useManaged.setState({ features: on ? { web_viewer: true } : {} });
+  useManaged.setState({ features: { web_viewer: on } });
 };
 const open = (path: string): void =>
   useAppStore.setState({

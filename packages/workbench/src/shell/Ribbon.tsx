@@ -20,7 +20,7 @@ const ITEMS: Item[] = [
   { command: 'drawing:new', icon: 'pencil' },
   { command: 'bases:new', icon: 'table' },
   { command: 'marp:new', icon: 'slides' },
-  // off by default: the profile turns applications on (features.web_viewer)
+  // on by default; a profile can turn applications off (features.web_viewer)
   { command: 'app:new', icon: 'webapp', flag: Feature.WebViewer },
   { command: 'separator:insert', icon: 'separator', gap: true },
   { command: 'graph:open-3d', icon: 'cube', gap: true },

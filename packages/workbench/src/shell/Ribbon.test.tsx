@@ -60,12 +60,13 @@ describe('ribbon exports by kind of file', () => {
 });
 
 describe('ribbon applications', () => {
-  it('has "New application" only where the profile turns applications on', () => {
+  it('has "New application" unless the profile turns applications off', () => {
+    // on by default (ADR-0060)
     act(() => useManaged.setState({ features: {} }));
     render(<Ribbon />);
-    expect(screen.queryByRole('button', { name: 'New application' })).toBeNull();
-    act(() => useManaged.setState({ features: { web_viewer: true } }));
     expect(screen.getByRole('button', { name: 'New application' })).toBeEnabled();
+    act(() => useManaged.setState({ features: { web_viewer: false } }));
+    expect(screen.queryByRole('button', { name: 'New application' })).toBeNull();
     act(() => useManaged.setState({ features: {} }));
   });
 });

@@ -24,7 +24,7 @@ import { errorCodeOf, errorMessage } from '../util/errors';
 import { openExternal } from '../util/external';
 import type { Pane, Tab } from '../workspace/layout';
 import { useWebappFile } from './files';
-import { checkWebappUrl, WEBAPP_EXT } from './model';
+import { checkWebappUrl, nameOf } from './model';
 import { nativeViews, useViewState, type ViewNotice } from './nativeViews';
 import { confirmOrigin, useOriginConfirmed } from './origins';
 
@@ -33,9 +33,6 @@ interface Props {
   pane: Pane;
   tab: Tab;
 }
-
-const nameOf = (path: string): string =>
-  (path.split('/').pop() ?? path).replace(new RegExp(`\\${WEBAPP_EXT}$`, 'i'), '');
 
 /** Page text that is shown, never longer than a line of the interface can use. */
 const clip = (text: string, max = 160): string =>
