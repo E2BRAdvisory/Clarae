@@ -15,6 +15,7 @@ import {
   type KdfParams,
   type Subkeys,
 } from './keys';
+import { archivePath } from './configdir';
 import { checkZipName, zipStream, type ZipEntry, type ZipLimits } from './zip';
 
 export interface Envelope {
@@ -265,11 +266,21 @@ export const DEFAULT_MAX_BYTES_AHEAD = 64 * 1024 * 1024;
 /** Pauses between the attempts at a blob that failed for the network or the server. */
 export const DEFAULT_RETRY_MS: readonly number[] = [1000, 3000, 10_000];
 
-/** One manifest entry, made ready for the ZIP ahead of time (see exportPrivateVault). */
+/**
+ * What the manifest says about one entry before any blob is fetched: its decrypted path and the name
+ * it gets in the archive (a path of the former configuration folder is renamed, see archivePath), or why
+ * it is left out.
+ */
+type Resolved = { skip: Skipped } | { path: string; name: string; twin?: true };
+
+/**
+ * One manifest entry, made ready for the ZIP ahead of time (see exportPrivateVault). `path` is the
+ * decrypted path (what the report names); `name` is the name in the archive.
+ */
 type Prepared =
   | { skip: Skipped }
-  | { path: string; skip: Skipped }
-  | { path: string; plain: Uint8Array[]; size: number };
+  | { path: string; name: string; skip: Skipped }
+  | { path: string; name: string; plain: Uint8Array[]; size: number };
 
 async function sha256Hex(b: Uint8Array): Promise<string> {
   // Hashed in place when the bytes are a plain ArrayBuffer view (what fetch returns): no copy.
@@ -350,13 +361,8 @@ export function exportPrivateVault(opts: ExportOptions): {
     }
   }
 
-  /**
-   * Decrypts the path, fetches the blob, checks its hash and decrypts it: everything about one file
-   * that does not depend on the others. Several run at once; only an abort or a download that failed
-   * for good (ExportInterruptedError) rejects. The ciphertext is released when it returns: what waits
-   * for the writer is the plaintext alone, as chunks (never copied into one buffer).
-   */
-  async function prepare(item: TreeItem): Promise<Prepared> {
+  /** The decrypted path of an entry, checked, and the name it gets in the archive. Nothing is fetched. */
+  async function resolve(item: TreeItem): Promise<Resolved> {
     let path: string;
     try {
       path = (
@@ -367,18 +373,52 @@ export function exportPrivateVault(opts: ExportOptions): {
     }
     const unsafe = checkZipName(path);
     if (unsafe) return { skip: { path, reason: 'unsafe_path', detail: unsafe } };
+    return { path, name: archivePath(path) };
+  }
+
+  /**
+   * Fetches the blob of a resolved entry, checks its hash and decrypts it: everything about one file
+   * that does not depend on the others. Several run at once; only an abort or a download that failed
+   * for good (ExportInterruptedError) rejects. The ciphertext is released when it returns: what waits
+   * for the writer is the plaintext alone, as chunks (never copied into one buffer).
+   */
+  async function prepare(item: TreeItem, r: { path: string; name: string }): Promise<Prepared> {
+    const { path, name } = r;
     const cipher = await fetchBlob(item, path);
-    if (!cipher) return { path, skip: { path, reason: 'blob_missing' } };
+    if (!cipher) return { path, name, skip: { path, reason: 'blob_missing' } };
     if ((await sha256Hex(cipher)) !== item.hash)
-      return { path, skip: { path, reason: 'blob_corrupt' } };
+      return { path, name, skip: { path, reason: 'blob_corrupt' } };
     try {
       // Every chunk is authenticated before the file goes into the archive: one that fails leaves no
       // partial entry behind, only a line in the report.
       const plain = await decryptBlobChunks(opts.keys, vaultId, uuidBytes(item.file_id), cipher);
-      return { path, plain, size: plain.reduce((n, c) => n + c.length, 0) };
+      return { path, name, plain, size: plain.reduce((n, c) => n + c.length, 0) };
     } catch {
-      return { path, skip: { path, reason: 'decrypt_failed' } };
+      return { path, name, skip: { path, reason: 'decrypt_failed' } };
     }
+  }
+
+  /**
+   * Resolves every entry, and marks the ones that the current configuration folder may replace: a file
+   * of a former folder (`<former>/x`) whose `.clarae/x` twin is in the manifest is a `twin`. Whether it
+   * is left out depends on the `.clarae/x` copy really being written, which is only known after that
+   * entry is processed: twins are therefore handled last, whatever the manifest order (see entries;
+   * ADR-0059). Paths are decrypted a few at a time: it takes no request, but a large vault has many.
+   */
+  async function resolveAll(items: readonly TreeItem[]): Promise<Resolved[]> {
+    const out: Resolved[] = [];
+    const batch = 64;
+    for (let i = 0; i < items.length; i += batch) {
+      inner.signal.throwIfAborted();
+      out.push(...(await Promise.all(items.slice(i, i + batch).map(resolve))));
+    }
+    const current = new Set<string>();
+    for (const r of out) if ('path' in r && r.path === r.name) current.add(r.path);
+    return out.map((r) =>
+      'path' in r && r.path !== r.name && current.has(r.name)
+        ? { path: r.path, name: r.name, twin: true }
+        : r,
+    );
   }
 
   /**
@@ -386,44 +426,67 @@ export function exportPrivateVault(opts: ExportOptions): {
    * `maxBytesAhead` bytes counting the file being written (bounded memory whatever the file sizes), so
    * a large vault costs about one round trip per `concurrency` files instead of one per file. What
    * depends on the files before (a duplicate path) is decided here, in order, so the archive and the
-   * report are the same as with one file at a time.
+   * report are the same as with one file at a time. The twins of the current configuration folder
+   * come after everything else and are fetched only when their target name is still free, so a
+   * `.clarae/` copy that cannot be exported does not take its healthy former-folder twin with it.
    */
   async function* entries(): AsyncGenerator<ZipEntry> {
     try {
       const items = await opts.source.tree(inner.signal);
       report.total = items.length;
       opts.onProgress?.(report);
+      const resolved = await resolveAll(items);
       const width = Math.max(1, Math.floor(opts.concurrency ?? DEFAULT_CONCURRENCY));
       const budget = Math.max(1, opts.maxBytesAhead ?? DEFAULT_MAX_BYTES_AHEAD);
-      const ahead: { job: Promise<Prepared>; bytes: number }[] = [];
+      // Every entry in processing order: the twins of the current folder go last (stable otherwise).
+      const all = items.map((item, i) => ({ item, r: resolved[i] as Resolved }));
+      const isTwin = (e: { r: Resolved }) => 'twin' in e.r;
+      const order = [...all.filter((e) => !isTwin(e)), ...all.filter(isTwin)];
+      const seen = new Set<string>();
+      // A job is already running, or (a twin) starts when it reaches the head, once `seen` is complete.
+      const ahead: { job: Promise<Prepared> | (() => Promise<Prepared>); bytes: number }[] = [];
       let held = 0; // manifest bytes of the files in `ahead` and of the one being written
       let next = 0;
       const fill = () => {
-        while (next < items.length && ahead.length < width) {
-          const item = items[next] as TreeItem;
+        while (next < order.length && ahead.length < width) {
+          const { item, r } = order[next] as { item: TreeItem; r: Resolved };
           const bytes = Number.isFinite(item.size) && item.size > 0 ? item.size : 0;
           // With nothing held a file goes even when it is larger than the budget (it is then alone).
           if (held > 0 && held + bytes > budget) return;
           next++;
           held += bytes;
-          const job = prepare(item);
+          if ('twin' in r) {
+            // A file the archive leaves out is not downloaded.
+            ahead.push({
+              job: () =>
+                seen.has(r.name)
+                  ? Promise.resolve({
+                      path: r.path,
+                      name: r.name,
+                      skip: { path: r.path, reason: 'duplicate_path' },
+                    })
+                  : prepare(item, r),
+              bytes,
+            });
+            continue;
+          }
+          const job: Promise<Prepared> = 'name' in r ? prepare(item, r) : Promise.resolve(r);
           job.catch(() => undefined); // awaited in order below; an abort must not be reported twice
           ahead.push({ job, bytes });
         }
       };
-      const seen = new Set<string>();
       for (;;) {
         fill();
         const head = ahead.shift();
         if (!head) break;
         try {
           signal?.throwIfAborted();
-          const r = await head.job;
+          const r = await (typeof head.job === 'function' ? head.job() : head.job);
           if (!('path' in r)) {
             skip(r.skip);
             continue;
           }
-          if (seen.has(r.path)) {
+          if (seen.has(r.name)) {
             skip({ path: r.path, reason: 'duplicate_path' });
             continue;
           }
@@ -431,12 +494,12 @@ export function exportPrivateVault(opts: ExportOptions): {
             skip(r.skip);
             continue;
           }
-          seen.add(r.path);
+          seen.add(r.name);
           report.exported++;
           report.bytes += r.size;
           opts.onProgress?.(report);
           // Resumed once the writer took the whole entry: its bytes are released just below.
-          yield { name: r.path, data: drain(r.plain), mtime: (opts.now ?? (() => new Date()))() };
+          yield { name: r.name, data: drain(r.plain), mtime: (opts.now ?? (() => new Date()))() };
         } finally {
           held -= head.bytes;
         }

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"clarae/shared/pathrules"
 )
 
 func readZip(t *testing.T, resp *http.Response) map[string]string {
@@ -172,5 +174,40 @@ func TestExportJobFailureIsRecorded(t *testing.T) {
 	got := decode[map[string]any](t, ada.json(http.MethodGet, "/vaults/"+v+"/exports/"+id, nil))
 	if got["status"] != "failed" || got["error"] == nil || got["download_url"] != nil {
 		t.Fatalf("failed job: %v", got)
+	}
+}
+
+// ADR-0059: the settings of a vault still written under the legacy folder (a 1.x client, or a cloud that
+// has not moved them yet) leave in the archive under .clarae/, so the exported vault has one settings
+// folder. When both exist .clarae/ wins. (The files that are never synchronized, workspace and caches,
+// cannot be in the vault under either name.)
+func TestExportRewritesTheLegacyConfigFolder(t *testing.T) {
+	e := newEnv(t)
+	ada := e.user("ada-legacy-export")
+	v := ada.createVault("Legacy", "shared")
+	legacy := pathrules.LegacyConfigDir
+	ada.seed(v, map[string]string{
+		"Home.md":                 "# Home",
+		".clarae/editor.json":     `{"fontSize":14}`,
+		legacy + "/editor.json":   `{"fontSize":12}`, // collision: the current folder wins
+		legacy + "/hotkeys.json":  `{"a":"b"}`,       // no twin: moved
+		legacy + "/themes/x.json": `{"nested":true}`,
+	})
+	want := map[string]string{
+		"Home.md":               "# Home",
+		".clarae/editor.json":   `{"fontSize":14}`,
+		".clarae/hotkeys.json":  `{"a":"b"}`,
+		".clarae/themes/x.json": `{"nested":true}`,
+	}
+	resp := ada.json(http.MethodGet, "/vaults/"+v+"/export.zip", nil)
+	expect(t, resp, http.StatusOK)
+	got := readZip(t, resp)
+	if len(got) != len(want) {
+		t.Fatalf("entries %v, want %v", got, want)
+	}
+	for p, body := range want {
+		if got[p] != body {
+			t.Fatalf("%s = %q, want %q", p, got[p], body)
+		}
 	}
 }

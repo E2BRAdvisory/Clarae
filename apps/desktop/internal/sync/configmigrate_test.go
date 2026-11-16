@@ -146,8 +146,8 @@ func TestConfigMoveLeavesWhatIsNotSafe(t *testing.T) {
 		{"the current folder has the file", func(t *testing.T, e *Engine, remote *scriptRemote, dir string, f File) {
 			writeFile(t, dir, newCfg+"/editor.json", []byte("current"))
 		}},
-		{"the current folder has a row of that name", func(t *testing.T, e *Engine, remote *scriptRemote, dir string, f File) {
-			g := File{Path: newCfg + "/editor.json", FileID: newFileID(), ServerRev: 1, BaseRev: 1, State: StateSynced, LocalHash: "x"}
+		{"the current folder has a row of that name that is not synced", func(t *testing.T, e *Engine, remote *scriptRemote, dir string, f File) {
+			g := File{Path: newCfg + "/editor.json", FileID: newFileID(), ServerRev: 1, BaseRev: 1, State: StateLocalNew, LocalHash: "x"}
 			if err := e.cfg.DB.PutFile(ctx, g); err != nil {
 				t.Fatal(err)
 			}
@@ -332,6 +332,144 @@ func TestPullDoesNotWriteAPathThatIsNeverSynchronized(t *testing.T) {
 			}
 			if mode == "pull" && cursor(t, e) != int64(len(excluded)+1) {
 				t.Fatalf("cursor = %d: the change that is not written must not hold the pull", cursor(t, e))
+			}
+		})
+	}
+}
+
+// The current folder has the file and the former one is a clean leftover: the leftover's row is
+// deleted on the server (an ordinary delete on its base revision, so the revision stays in the
+// history there), the file leaves the disk, and the current settings are untouched. A copy that
+// differs from the current one goes to the vault's trash first.
+func TestConfigDropsTheShadowedFormerFile(t *testing.T) {
+	for _, same := range []bool{true, false} {
+		name := "same content"
+		if !same {
+			name = "different content"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			remote := newScriptRemote()
+			e, dir := newTestEngine(t, remote, 0)
+			moveOn(e)
+			legacyContent := []byte(`{"font":14}`)
+			curContent := legacyContent
+			if !same {
+				curContent = []byte(`{"font":18}`)
+			}
+			old := syncedFile(t, e, remote, dir, oldCfg+"/editor.json", legacyContent)
+			cur := syncedFile(t, e, remote, dir, newCfg+"/editor.json", curContent)
+			other := syncedFile(t, e, remote, dir, oldCfg+"/hotkeys.json", []byte("{}")) // moves, not dropped
+
+			if err := e.Sync(ctx); err != nil { // the pass runs at the end of this idle cycle
+				t.Fatal(err)
+			}
+			if exists(dir, oldCfg+"/editor.json") {
+				t.Fatal("the shadowed file is still in the former folder")
+			}
+			if readFile(t, dir, newCfg+"/editor.json") != string(curContent) {
+				t.Fatal("the current settings changed")
+			}
+			trashed := ".trash/" + oldCfg + "/editor.json"
+			if same && exists(dir, trashed) {
+				t.Fatal("an identical copy was kept in the trash")
+			}
+			if !same && readFile(t, dir, trashed) != string(legacyContent) {
+				t.Fatal("the differing version was not kept in the trash")
+			}
+			row := rowOf(t, e, old.FileID)
+			if row.State != StateLocalDeleted || row.ServerRev != 1 {
+				t.Fatalf("row of the leftover: %+v", row)
+			}
+
+			if err := e.Sync(ctx); err != nil { // the next cycle pushes it
+				t.Fatal(err)
+			}
+			dels := remote.committed(syncproto.OpDelete, old.FileID)
+			if len(dels) != 1 || dels[0].BaseRev == nil || *dels[0].BaseRev != 1 {
+				t.Fatalf("delete commits of the leftover: %+v", dels)
+			}
+			if n := len(remote.committed(syncproto.OpDelete, cur.FileID)); n != 0 {
+				t.Fatalf("the current settings were deleted on the server (%d)", n)
+			}
+			if got := rowOf(t, e, cur.FileID); got.State != StateSynced || got.Path != newCfg+"/editor.json" {
+				t.Fatalf("row of the current settings: %+v", got)
+			}
+			if got := rowOf(t, e, other.FileID); got.Path != newCfg+"/hotkeys.json" {
+				t.Fatalf("the other file did not move: %+v", got)
+			}
+		})
+	}
+}
+
+// Nothing is dropped unless both copies are what sync.db knows: an unsent edit of the former file,
+// or of the current one, an unsynced current row, a flag that is off, a read-only share.
+func TestConfigDropLeavesWhatIsNotSafe(t *testing.T) {
+	ctx := context.Background()
+	type tc struct {
+		name  string
+		setup func(t *testing.T, e *Engine, dir string, old, cur File)
+	}
+	for _, c := range []tc{
+		{"unsent edit of the former file", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			writeFile(t, dir, old.Path, []byte("edited, not yet scanned"))
+		}},
+		{"unsent edit of the current file", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			writeFile(t, dir, cur.Path, []byte("edited, not yet scanned"))
+		}},
+		{"the current file is gone from the disk", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			if err := os.Remove(filepath.Join(dir, cur.Path)); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"the current row has a local change", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			cur.State = StateLocalModify
+			if err := e.cfg.DB.PutFile(ctx, cur); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"the current row is a tombstone", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			cur.Tombstoned = true
+			if err := e.cfg.DB.PutFile(ctx, cur); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"the former row has a local change", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			old.State = StateLocalModify
+			if err := e.cfg.DB.PutFile(ctx, old); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"a remote change of the former file is parked", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			e.candidates[old.FileID] = transportChange{}
+		}},
+		{"the flag is off", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			e.cfg.ConfigDirV2 = func() bool { return false }
+		}},
+		{"the share is read-only", func(t *testing.T, e *Engine, dir string, old, cur File) {
+			e.cfg.ReadOnly = true
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			remote := newScriptRemote()
+			e, dir := newTestEngine(t, remote, 0)
+			moveOn(e)
+			old := syncedFile(t, e, remote, dir, oldCfg+"/editor.json", []byte(`{"font":14}`))
+			cur := syncedFile(t, e, remote, dir, newCfg+"/editor.json", []byte(`{"font":18}`))
+			c.setup(t, e, dir, old, cur)
+			before := rowOf(t, e, old.FileID)
+			e.migrateConfigDir(ctx)
+			if !exists(dir, old.Path) {
+				t.Fatal("the former file left the disk")
+			}
+			if c.name == "unsent edit of the former file" && readFile(t, dir, old.Path) != "edited, not yet scanned" {
+				t.Fatal("an unsent edit was lost")
+			}
+			if exists(dir, ".trash") {
+				t.Fatal("something went to the trash")
+			}
+			if got := rowOf(t, e, old.FileID); got != before {
+				t.Fatalf("row changed: %+v -> %+v", before, got)
 			}
 		})
 	}

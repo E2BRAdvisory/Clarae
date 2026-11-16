@@ -417,6 +417,17 @@ func (a *App) doOpenVault(abs, id string) (VaultInfo, error) {
 	if err != nil {
 		return VaultInfo{}, err
 	}
+	// What the moves above left in the former folder because the current one has it too goes now,
+	// once per version (ADR-0059); a linked vault's settings are left to the sync engine.
+	if res, err := vaultdir.CleanupLegacy(fsys.Root(), vaultdir.CleanupOptions{
+		Version: a.opts.Version,
+		Linked:  linkedAtOpen,
+		Trash:   func(rel string) error { _, err := fsys.Trash(rel); return err },
+	}); err != nil {
+		a.logger.Warn().Err(err).Str("vault", abs).Msg("cannot clean up the former configuration folder")
+	} else if res != (vaultdir.CleanupResult{}) {
+		a.logger.Info().Str("vault", abs).Int("deleted", res.Deleted).Int("moved", res.Moved).Int("trashed", res.Trashed).Int("kept", res.Kept).Msg("former configuration folder cleaned up")
+	}
 	indexDB, err := store.Open(a.ctx, indexPath, store.KindIndex)
 	if err != nil {
 		return VaultInfo{}, err

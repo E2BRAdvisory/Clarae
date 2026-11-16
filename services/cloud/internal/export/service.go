@@ -139,21 +139,51 @@ var compressible = map[string]bool{
 // Sync already refuses them; this keeps old or foreign rows out of the archive too.
 func skipped(p string) bool { return pathrules.IsExcluded(p, false) }
 
+// archivePath is the name a file gets in the archive: a file of the legacy configuration folder
+// (pathrules.LegacyConfigDir, up to 1.4.0) is written under .clarae/, so that a vault exported after the rename
+// has one settings folder (ADR-0059). Any other path is unchanged.
+func archivePath(p string) string {
+	if pathrules.HasPrefix(p, pathrules.ConfigDir) {
+		return p
+	}
+	if name, ok := pathrules.ConfigRel(p); ok {
+		return pathrules.ConfigDir + "/" + name
+	}
+	return p
+}
+
+// exportable reports whether a file takes part in the archive at all.
+func exportable(f sync.ListExportFilesRow) bool {
+	return !skipped(f.Path) && f.BlobHash != nil && path.Clean(f.Path) == f.Path && !strings.HasPrefix(f.Path, "/") && !strings.HasPrefix(f.Path, "../")
+}
+
 func (s *Service) writeZip(ctx context.Context, w io.Writer, vaultID uuid.UUID) error {
 	files, err := sync.ListExportFiles(ctx, s.db.Pool, vaultID)
 	if err != nil {
 		return err
 	}
+	// Names that exist as they are: a legacy settings file whose .clarae/ twin exists is dropped, the
+	// current folder wins (the same rule as the client, vaultdir.Ensure).
+	present := make(map[string]bool, len(files))
+	for _, f := range files {
+		if exportable(f) {
+			present[f.Path] = true
+		}
+	}
 	zw := zip.NewWriter(w)
 	for _, f := range files {
-		if skipped(f.Path) || f.BlobHash == nil || path.Clean(f.Path) != f.Path || strings.HasPrefix(f.Path, "/") || strings.HasPrefix(f.Path, "../") {
+		if !exportable(f) {
+			continue
+		}
+		name := archivePath(f.Path)
+		if name != f.Path && present[name] {
 			continue
 		}
 		method := zip.Store
 		if compressible[strings.ToLower(path.Ext(f.Path))] {
 			method = zip.Deflate
 		}
-		fw, err := zw.CreateHeader(&zip.FileHeader{Name: f.Path, Method: method, Modified: f.UpdatedAt})
+		fw, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: method, Modified: f.UpdatedAt})
 		if err != nil {
 			return err
 		}

@@ -260,6 +260,66 @@ func (f *FS) moveConfigLocked(from, toRel, expectedHash string) (bool, error) {
 	return true, nil
 }
 
+// RemoveShadowedConfig takes the settings file at fromRel, in a former configuration folder, off
+// the disk because the current folder has the file of that name already (the sync engine, when it
+// deletes the shadowed row on the server, features.config_dir_v2). With keepCopy the file goes to
+// the vault's .trash/ (a version that differs from the current one is never lost), else it is
+// deleted. The source must still hash to expectedHash (ErrHashMismatch otherwise: it changed since
+// the engine last saw it, and an unsent edit is never removed). removed is false, with no error,
+// when there is nothing to do: the source is gone, is not a regular file, is in the current folder
+// or is a local-only name. Folders left empty behind the file are removed.
+func (f *FS) RemoveShadowedConfig(fromRel, expectedHash string, keepCopy bool) (removed bool, err error) {
+	from, err := pathrules.Normalize(fromRel)
+	if err != nil {
+		return false, err
+	}
+	name, ok := pathrules.ConfigRel(from)
+	if !ok || strings.HasPrefix(from, pathrules.ConfigDir+"/") || localOnly(name) || expectedHash == "" {
+		return false, nil
+	}
+	removed, err = f.removeShadowedLocked(from, expectedHash, keepCopy)
+	if err != nil || !removed {
+		return false, err
+	}
+	f.changed(from) // outside the locks: the callback may call back into the FS
+	return true, nil
+}
+
+func (f *FS) removeShadowedLocked(from, expectedHash string, keepCopy bool) (bool, error) {
+	f.cfgMu.Lock()
+	defer f.cfgMu.Unlock()
+	fromAbs, _, err := f.Resolve(from)
+	if err != nil {
+		return false, err
+	}
+	if st, err := os.Lstat(fromAbs); errors.Is(err, fs.ErrNotExist) || (err == nil && !st.Mode().IsRegular()) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	h, _, err := f.HashFile(from)
+	if err != nil {
+		return false, err
+	}
+	if h != expectedHash {
+		return false, ErrHashMismatch
+	}
+	if keepCopy {
+		if _, err := f.trash(fromAbs, from); err != nil {
+			return false, err
+		}
+	} else {
+		unlock := f.lockTree()
+		err := os.Remove(fromAbs)
+		unlock()
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return false, err
+		}
+	}
+	removeEmptyDirs(filepath.Dir(fromAbs), filepath.Join(f.root, filepath.FromSlash(strings.SplitN(from, "/", 2)[0])))
+	return true, nil
+}
+
 // removeEmptyDirs removes dir and its parents up to root (included) while they are empty
 // (os.Remove refuses any other).
 func removeEmptyDirs(dir, root string) {

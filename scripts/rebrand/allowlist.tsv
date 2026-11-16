@@ -61,6 +61,7 @@ legacy	packages/workbench/src/drawing/ToolsPanel.tsx	memobrain\.drawing\.tools\.
 legacy	shared/go/pathrules/pathrules.go	"\.memobrain(-tmp-)?"	former names of the configuration folder and of the staging prefix of 1.x: dropped in 2.0
 legacy	shared/go/pathrules/pathrules_test.go	"\.memobrain(-tmp-)?"	pins the former names of the configuration folder and of the staging prefix of 1.x
 legacy	packages/workbench/src/platform/vaultPaths.gen.ts	'\.memobrain'	LEGACY_CONFIG_DIRS, generated from pathrules.LegacyConfigDirs: dropped in 2.0
+legacy	packages/vaultcrypto-web/src/configdir.ts	'\.memobrain'	former name of the configuration folder, as pathrules.LegacyConfigDirs: the ZIP of a private vault writes its files under .clarae/ (ADR-0059); dropped in 2.0
 
 # Compatibility of the cloud, of the deployments and of the installers with 1.x (M17 F3).
 legacy	shared/go/envcompat/**	MEMOBRAIN_	environment variables of 1.x, read when the new name is not set: dropped in 2.0

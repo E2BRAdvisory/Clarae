@@ -29,6 +29,13 @@ import (
 //   - the progress is the disk: a crash, or a restart in the middle, leaves files in one folder or
 //     in the other, each with its row; the next pass takes up what is left;
 //   - a failure is logged and never fails the cycle.
+//
+// A file whose name the current folder already has is not moved (the current one wins). When both
+// are synced files of the vault, the former one is a leftover that 1.5 or 1.6 devices keep alive
+// on the server: its row is deleted there (ADR-0059), by an ordinary delete op with base_rev, so
+// the revision stays in the history of the server. On disk the file is deleted when its content is
+// the current one's, and goes to the vault's .trash/ when it differs, so no version is lost
+// silently (D-04).
 
 const (
 	// configMoveBatch is the largest number of files moved in one pass.
@@ -51,33 +58,42 @@ func (e *Engine) migrateConfigDir(ctx context.Context) {
 	if now.Before(e.configNext) {
 		return
 	}
-	moved, err := e.moveConfigFiles(ctx)
+	moved, dropped, err := e.moveConfigFiles(ctx)
 	if err != nil && ctx.Err() == nil {
 		e.log.Warn().Err(err).Msg("sync: move the settings to the current configuration folder")
 	}
-	if moved > 0 {
+	if moved+dropped > 0 {
 		e.configNext = time.Time{} // the next idle cycle takes up what is left, after the moves are pushed
-		e.log.Info().Int("files", moved).Msg("sync: settings moved to the current configuration folder")
+		e.log.Info().Int("moved", moved).Int("dropped", dropped).Msg("sync: settings moved to the current configuration folder")
 		return
 	}
 	e.configNext = now.Add(configMoveRecheck)
 }
 
 // moveConfigFiles moves the files of the former folders that may move now and returns how many it
-// moved.
-func (e *Engine) moveConfigFiles(ctx context.Context) (int, error) {
-	moved := 0
+// moved, and how many shadowed ones it dropped (dropShadowedConfig).
+func (e *Engine) moveConfigFiles(ctx context.Context) (moved, dropped int, err error) {
 	var errs []error
 	for _, legacy := range pathrules.LegacyConfigDirs {
 		rows, err := e.cfg.DB.FilesUnder(ctx, legacy)
 		if err != nil {
-			return moved, err
+			return moved, dropped, err
 		}
 		for _, row := range rows {
-			if moved >= configMoveBatch || ctx.Err() != nil {
-				return moved, errors.Join(errs...)
+			if moved+dropped >= configMoveBatch || ctx.Err() != nil {
+				return moved, dropped, errors.Join(errs...)
 			}
-			to, ok := e.configMoveTarget(ctx, row)
+			to, ok, shadowed := e.configMoveTarget(ctx, row)
+			if shadowed {
+				did, err := e.dropShadowedConfig(ctx, row, to)
+				if err != nil {
+					errs = append(errs, err)
+				}
+				if did {
+					dropped++
+				}
+				continue
+			}
 			if !ok {
 				continue
 			}
@@ -102,25 +118,70 @@ func (e *Engine) moveConfigFiles(ctx context.Context) (int, error) {
 			moved++
 		}
 	}
-	return moved, errors.Join(errs...)
+	return moved, dropped, errors.Join(errs...)
 }
 
 // configMoveTarget returns the path in the current folder a file of a former folder moves to, and
-// whether it may move now.
-func (e *Engine) configMoveTarget(ctx context.Context, row File) (string, bool) {
+// whether it may move now. shadowed is set when the file may not move because the current folder
+// has a row of that name: to is that path (see dropShadowedConfig).
+func (e *Engine) configMoveTarget(ctx context.Context, row File) (to string, ok, shadowed bool) {
 	name, ok := pathrules.ConfigRel(row.Path)
 	if !ok || pathrules.IsExcluded(row.Path, false) {
-		return "", false
+		return "", false, false
 	}
-	if row.State != StateSynced || row.Attempts > 0 || row.LastError != "" || row.Tombstoned || row.ConflictOf != "" || row.LocalHash == "" {
-		return "", false
+	if !cleanSyncedRow(row) {
+		return "", false, false
 	}
 	if _, parked := e.candidates[row.FileID]; parked {
-		return "", false
+		return "", false, false
 	}
-	to := pathrules.ConfigDir + "/" + name
+	to = pathrules.ConfigDir + "/" + name
 	if _, has, err := e.cfg.DB.GetFile(ctx, to); err != nil || has {
-		return "", false // the current folder has a file of that name (or its state cannot be read)
+		// The current folder has a file of that name (or its state cannot be read).
+		return to, false, err == nil
 	}
-	return to, true
+	return to, true, false
+}
+
+// cleanSyncedRow tells whether a row is a plain synced file: nothing to send, nothing parked.
+func cleanSyncedRow(row File) bool {
+	return row.State == StateSynced && row.Attempts == 0 && row.LastError == "" && !row.Tombstoned && row.ConflictOf == "" && row.LocalHash != ""
+}
+
+// dropShadowedConfig deletes the row of a settings file of a former folder whose name the current
+// folder has as well (to). Both must be clean synced files whose content on disk is the one
+// sync.db knows: the current one is the settings of the vault, the former one is its leftover. The
+// file leaves the disk (with a copy in .trash/ when its content differs from the current one's)
+// and the row becomes a local deletion, which the push sends as a delete op on base_rev. Nothing
+// is done, and nothing is lost, when any of this does not hold: a later pass looks again.
+func (e *Engine) dropShadowedConfig(ctx context.Context, row File, to string) (bool, error) {
+	cur, has, err := e.cfg.DB.GetFile(ctx, to)
+	if err != nil || !has || !cleanSyncedRow(cur) {
+		return false, err
+	}
+	if _, parked := e.candidates[cur.FileID]; parked {
+		return false, nil
+	}
+	// The current file must still be the one sync.db knows: an edit not yet scanned is no reason
+	// to take the other copy away, and a current file that is gone is no replacement for it.
+	h, _, err := e.cfg.FS.HashFile(to)
+	if err != nil || h != cur.LocalHash {
+		return false, nil //nolint:nilerr // a missing or changed current file only postpones the cleanup
+	}
+	keep := row.LocalHash != cur.LocalHash
+	removed, err := e.cfg.FS.RemoveShadowedConfig(row.Path, row.LocalHash, keep)
+	switch {
+	case errors.Is(err, vault.ErrHashMismatch):
+		return false, nil // changed since the last scan: the scan takes it
+	case err != nil:
+		return false, err
+	case !removed:
+		return false, nil
+	}
+	row.State, row.Dirty = StateLocalDeleted, false
+	if err := e.cfg.DB.PutFile(ctx, row); err != nil {
+		return false, err
+	}
+	e.log.Info().Str("path", row.Path).Bool("copy_kept", keep).Msg("sync: deleted the settings file of the former configuration folder, the current folder has it")
+	return true, nil
 }

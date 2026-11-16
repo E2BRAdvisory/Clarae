@@ -33,6 +33,7 @@ import {
   type VaultSource,
 } from './export';
 import { uuidBytes } from './bytes';
+import { CONFIG_DIR, LEGACY_CONFIG_DIRS } from './configdir';
 import { collect, readZip } from './zipreader.testutil';
 
 const VAULT = '0190a3b4-1111-7222-8333-444455556666';
@@ -239,6 +240,142 @@ describe('exportPrivateVault', () => {
       'bad.md': 'blob_corrupt',
       'gone.md': 'blob_missing',
       'enc1:not-valid': 'path_undecryptable',
+    });
+  });
+
+  describe('the configuration folder of a vault made by 1.x (ADR-0059)', () => {
+    const LEGACY = LEGACY_CONFIG_DIRS[0] as string;
+    const fresh = () => ({
+      tree: [] as TreeItem[],
+      blobs: new Map<string, Uint8Array>(),
+      keys: fx.keys,
+    });
+    const run = async (f: ReturnType<typeof fresh>) => {
+      const fetched: string[] = [];
+      const { stream, report } = exportPrivateVault({
+        vaultId: VAULT,
+        keys: fx.keys,
+        source: source(f, {
+          blob: (h) => {
+            fetched.push(h);
+            const b = f.blobs.get(h);
+            return b ? Promise.resolve(b) : Promise.reject(new BlobNotFoundError(h));
+          },
+        }),
+      });
+      const z = readZip(await collect(stream));
+      return {
+        got: Object.fromEntries(z.entries.map((e) => [e.name, dec(e.data)])),
+        report,
+        fetched,
+      };
+    };
+
+    it('writes a file of the former folder under the current one', async () => {
+      const f = fresh();
+      await addFile(
+        f,
+        `${LEGACY}/editor.json`,
+        'legacy only',
+        '0190a3b4-eeee-7222-8333-000000000001',
+      );
+      await addFile(f, 'notes/a.md', 'note', '0190a3b4-eeee-7222-8333-000000000002');
+      const { got, report } = await run(f);
+      expect(got).toEqual({ [`${CONFIG_DIR}/editor.json`]: 'legacy only', 'notes/a.md': 'note' });
+      expect(report.skipped).toEqual([]);
+    });
+
+    it.each([
+      ['the former folder first', true],
+      ['the current folder first', false],
+    ])('the current folder wins a collision, %s', async (_name, legacyFirst) => {
+      const f = fresh();
+      const add = async (dir: string, content: string, id: string) =>
+        addFile(f, `${dir}/hotkeys.json`, content, id);
+      const legacy = () => add(LEGACY, 'old', '0190a3b4-eeee-7222-8333-000000000003');
+      const current = () => add(CONFIG_DIR, 'new', '0190a3b4-eeee-7222-8333-000000000004');
+      if (legacyFirst) {
+        await legacy();
+        await current();
+      } else {
+        await current();
+        await legacy();
+      }
+      const { got, report, fetched } = await run(f);
+      expect(got).toEqual({ [`${CONFIG_DIR}/hotkeys.json`]: 'new' });
+      expect(Object.keys(got)).toHaveLength(1);
+      // Counted as left out (the progress reaches the total), reported under its own path, not downloaded.
+      expect(report.skipped).toEqual([
+        { path: `${LEGACY}/hotkeys.json`, reason: 'duplicate_path' },
+      ]);
+      expect(fetched).toHaveLength(1);
+      expect(report.exported + report.skipped.length).toBe(report.total);
+    });
+
+    it.each([
+      ['the former folder first', true],
+      ['the current folder first', false],
+    ])(
+      'writes the former copy under the current folder when the current copy cannot be exported, %s',
+      async (_name, legacyFirst) => {
+        const f = fresh();
+        const legacy = () =>
+          addFile(f, `${LEGACY}/x.json`, 'old', '0190a3b4-eeee-7222-8333-00000000000b');
+        const current = async () => {
+          await addFile(f, `${CONFIG_DIR}/x.json`, 'new', '0190a3b4-eeee-7222-8333-00000000000c');
+          f.blobs.delete((f.tree[f.tree.length - 1] as TreeItem).hash); // blob_missing
+        };
+        if (legacyFirst) {
+          await legacy();
+          await current();
+        } else {
+          await current();
+          await legacy();
+        }
+        const { got, report, fetched } = await run(f);
+        expect(got).toEqual({ [`${CONFIG_DIR}/x.json`]: 'old' });
+        expect(report.skipped).toEqual([{ path: `${CONFIG_DIR}/x.json`, reason: 'blob_missing' }]);
+        expect(fetched).toHaveLength(2);
+        expect(report.exported + report.skipped.length).toBe(report.total);
+      },
+    );
+
+    it('writes the former copy too when the current copy fails to decrypt', async () => {
+      const f = fresh();
+      await addFile(f, `${LEGACY}/y.json`, 'old', '0190a3b4-eeee-7222-8333-00000000000d');
+      await addFile(f, `${CONFIG_DIR}/y.json`, 'new', '0190a3b4-eeee-7222-8333-00000000000e');
+      const cur = f.tree[f.tree.length - 1] as TreeItem;
+      f.tree[f.tree.length - 1] = { ...cur, file_id: '0190a3b4-eeee-7222-8333-0000000000ff' };
+      const { got, report } = await run(f);
+      expect(got).toEqual({ [`${CONFIG_DIR}/y.json`]: 'old' });
+      expect(report.skipped).toEqual([{ path: `${CONFIG_DIR}/y.json`, reason: 'decrypt_failed' }]);
+      expect(report.exported + report.skipped.length).toBe(report.total);
+    });
+
+    it('keeps the files of the former folder that have no twin, next to the current ones', async () => {
+      const f = fresh();
+      await addFile(f, `${LEGACY}/a.json`, 'old a', '0190a3b4-eeee-7222-8333-000000000005');
+      await addFile(f, `${LEGACY}/b.json`, 'old b', '0190a3b4-eeee-7222-8333-000000000006');
+      await addFile(f, `${CONFIG_DIR}/a.json`, 'new a', '0190a3b4-eeee-7222-8333-000000000007');
+      const { got } = await run(f);
+      expect(got).toEqual({
+        [`${CONFIG_DIR}/a.json`]: 'new a',
+        [`${CONFIG_DIR}/b.json`]: 'old b',
+      });
+    });
+
+    it('still skips what cannot be exported, and exports the other of two equal paths', async () => {
+      const f = fresh();
+      await addFile(f, `${LEGACY}/gone.json`, 'x', '0190a3b4-eeee-7222-8333-000000000008');
+      f.blobs.delete((f.tree[f.tree.length - 1] as TreeItem).hash);
+      await addFile(f, 'dup.md', 'first', '0190a3b4-eeee-7222-8333-000000000009');
+      await addFile(f, 'dup.md', 'second', '0190a3b4-eeee-7222-8333-00000000000a');
+      const { got, report } = await run(f);
+      expect(got).toEqual({ 'dup.md': 'first' });
+      expect(report.skipped).toEqual([
+        { path: `${LEGACY}/gone.json`, reason: 'blob_missing' },
+        { path: 'dup.md', reason: 'duplicate_path' },
+      ]);
     });
   });
 

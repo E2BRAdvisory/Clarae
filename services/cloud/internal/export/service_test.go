@@ -10,6 +10,7 @@ import (
 
 	"clarae/services/cloud/internal/httpproblem"
 	"clarae/services/cloud/internal/storage"
+	"clarae/shared/pathrules"
 	"clarae/shared/syncproto"
 )
 
@@ -73,5 +74,24 @@ func TestAcquireStreamBoundsTheStreamsOfAUser(t *testing.T) {
 	}
 	if _, err := s.acquireStream(ada, 2); err == nil {
 		t.Fatal("a double release freed two slots")
+	}
+}
+
+// ADR-0059: a file of the legacy configuration folder is written under .clarae/ in the archive.
+func TestArchivePathMovesTheLegacyConfigFolder(t *testing.T) {
+	legacy := pathrules.LegacyConfigDir
+	for p, want := range map[string]string{
+		"Notes/a.md":                  "Notes/a.md",
+		".clarae/editor.json":         ".clarae/editor.json",
+		legacy + "/editor.json":       ".clarae/editor.json",
+		legacy + "/themes/x.json":     ".clarae/themes/x.json",
+		legacy:                        legacy, // a file of that name is not the folder
+		legacy + "-notes/a.md":        legacy + "-notes/a.md",
+		"Notes/" + legacy + "/a.json": "Notes/" + legacy + "/a.json", // only the folder at the vault root counts
+		legacy + "/" + legacy + "/a":  ".clarae/" + legacy + "/a",
+	} {
+		if got := archivePath(p); got != want {
+			t.Errorf("archivePath(%q) = %q, want %q", p, got, want)
+		}
 	}
 }

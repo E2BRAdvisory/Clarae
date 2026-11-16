@@ -7,3 +7,4 @@ export * from './path';
 export { hex, unhex, b64, unb64, uuidBytes, equal } from './bytes';
 export * from './zip';
 export * from './export';
+export { CONFIG_DIR, LEGACY_CONFIG_DIRS, archivePath } from './configdir';
