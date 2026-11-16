@@ -174,7 +174,7 @@ I test Go `TestBuiltIndexPinsEverySubresourceWithSRI` e `TestBuiltWorkbenchPinsE
 
 | Parte              | Misura                                                                         | Limite                                |
 | ------------------ | ------------------------------------------------------------------------------ | ------------------------------------- |
-| Console            | kB minificati raggiungibili da `src/main.tsx`: import statici / anche dinamici | iniziale ≤ 700 kB, totale ≤ 1000 kB   |
+| Console            | kB minificati raggiungibili da `src/main.tsx`: import statici / anche dinamici | iniziale ≤ 720 kB, totale ≤ 1000 kB   |
 | Workbench JS       | kB minificati da `src/workbench/main.tsx` (CSS compreso), totale con il worker | iniziale ≤ 2500 kB, totale ≤ 23000 kB |
 | WASM `clarae-core` | dimensione gzip (livello 9)                                                    | ≤ 8192 kB                             |
 | WASM `sqlite3`     | dimensione gzip                                                                | ≤ 1536 kB                             |

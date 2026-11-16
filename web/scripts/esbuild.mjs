@@ -344,7 +344,8 @@ async function buildWorker(shared, name, entry) {
  * not charged for what only the workbench loads. The WebAssembly files have their own limits.
  */
 const BUDGET = {
-  console: { initialKB: 700, totalKB: 1000 },
+  // 720 since M21 (ADR-0061, proposta): one file covered by SRI, so a lazy import cannot shrink it.
+  console: { initialKB: 720, totalKB: 1000 },
   // The desktop's limit (2000 kB of script) plus what only the web page loads: the OIDC client, the
   // worker bridge and the style sheet (about 370 kB, which the desktop budget does not count).
   workbench: { initialKB: 2500, totalKB: 23000 },
