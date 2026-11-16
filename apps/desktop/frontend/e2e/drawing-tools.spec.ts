@@ -1,9 +1,11 @@
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './support';
 import {
   openDrawing,
   runCommand,
   savedDrawing,
   scene,
+  shape,
   waitSaved,
   watchNetwork,
 } from './drawingHelpers';
@@ -98,4 +100,158 @@ test('double click on a LaTeX formula opens it for editing', async ({ page }) =>
   const edit = page.getByRole('dialog', { name: 'Edit the LaTeX formula' });
   await expect(edit).toBeVisible();
   await expect(edit.getByRole('textbox')).toHaveValue('E = mc^2');
+});
+
+// Editing a text and moving shapes work only if the Excalidraw fork has its host (drawing/excalidrawHost.ts):
+// without one its text editor throws as it opens, the text stays hidden and nothing can be dragged after.
+const canvasOf = (page: Page): Locator =>
+  page.locator('.drawing-canvas .excalidraw canvas.interactive');
+const editor = (page: Page): Locator => page.locator('textarea.excalidraw-wysiwyg');
+const textOf = (
+  id: string,
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): ReturnType<typeof shape> =>
+  shape(
+    id,
+    x,
+    y,
+    w,
+    h,
+    {
+      text,
+      originalText: text,
+      fontSize: 20,
+      fontFamily: 5,
+      textAlign: 'left',
+      verticalAlign: 'top',
+      containerId: null,
+      autoResize: true,
+      lineHeight: 1.25,
+    },
+    'text',
+  );
+const zoomReadout = async (page: Page): Promise<number> =>
+  parseInt(
+    (await page.locator('.excalidraw').getByRole('button', { name: 'Reset zoom' }).innerText()) ||
+      '100',
+    10,
+  ) / 100;
+
+test('a double click on the empty canvas opens a text editor that takes what is typed', async ({
+  page,
+}) => {
+  const external = watchNetwork(page);
+  await openDrawing(page, EMPTY);
+  const box = (await canvasOf(page).boundingBox())!;
+  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(editor(page)).toBeVisible();
+  await expect(editor(page)).toBeFocused();
+  await page.keyboard.type('Hello Clarae');
+  await expect(editor(page)).toHaveValue('Hello Clarae');
+  await page.keyboard.press('Escape');
+  await expect(editor(page)).toHaveCount(0);
+
+  await waitSaved(page);
+  const texts = (await savedDrawing(page)).elements.filter((e) => e.type === 'text');
+  expect(texts).toHaveLength(1);
+  expect(texts[0]?.['text']).toBe('Hello Clarae');
+  expect(external).toEqual([]);
+});
+
+test('a double click on a text edits it, and a shape can be dragged afterwards', async ({
+  page,
+}) => {
+  await openDrawing(
+    page,
+    scene([
+      textOf('t', 'Old text', 0, 0, 120, 25),
+      shape('r', 0, 200, 200, 120, { backgroundColor: '#ffd8a8' }),
+    ]),
+  );
+  const canvas = canvasOf(page);
+  const box = (await canvas.boundingBox())!;
+  const z = await zoomReadout(page);
+  // The content is centered on open: its middle is the middle of the canvas (scene 100,160).
+  const at = (sx: number, sy: number) => ({
+    x: box.x + box.width / 2 + (sx - 100) * z,
+    y: box.y + box.height / 2 + (sy - 160) * z,
+  });
+  const onText = at(60, 12);
+  await page.mouse.dblclick(onText.x, onText.y);
+  await expect(editor(page)).toBeVisible();
+  await expect(editor(page)).toHaveValue('Old text');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('New text');
+  await page.keyboard.press('Escape');
+  await expect(editor(page)).toHaveCount(0);
+  await waitSaved(page);
+  const after = (await savedDrawing(page)).elements.find((e) => e.id === 't');
+  expect(after?.['text']).toBe('New text');
+
+  // A text was being edited: nothing may stay "under edit" and block the dragging.
+  const before = (await savedDrawing(page)).elements.find((e) => e.id === 'r')!;
+  const from = at(100, 260);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 80 * z, from.y + 50 * z, { steps: 8 });
+  await page.mouse.up();
+  await waitSaved(page);
+  await expect
+    .poll(async () => (await savedDrawing(page)).elements.find((e) => e.id === 'r')?.x)
+    .not.toBe(before.x);
+  const dragged = (await savedDrawing(page)).elements.find((e) => e.id === 'r')!;
+  expect(dragged.x - before.x).toBeCloseTo(80, 0);
+  expect(dragged.y - before.y).toBeCloseTo(50, 0);
+});
+
+test('a shape is resized by its handle and the new size is saved', async ({ page }) => {
+  await openDrawing(page, scene([shape('r', 0, 0, 240, 140, { backgroundColor: '#a5d8ff' })]));
+  const canvas = canvasOf(page);
+  const box = (await canvas.boundingBox())!;
+  const z = await zoomReadout(page);
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.click(centre.x, centre.y); // selects it (inside the fill)
+  // The bottom-right corner handle.
+  const corner = { x: centre.x + 120 * z, y: centre.y + 70 * z };
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  await page.mouse.move(corner.x + 60 * z, corner.y + 40 * z, { steps: 8 });
+  await page.mouse.up();
+  await waitSaved(page);
+  await expect
+    .poll(async () => (await savedDrawing(page)).elements.find((e) => e.id === 'r')?.width)
+    .toBeGreaterThan(280);
+  const r = (await savedDrawing(page)).elements.find((e) => e.id === 'r')!;
+  expect(r.width).toBeCloseTo(300, -1);
+  expect(r.height).toBeCloseTo(180, -1);
+});
+
+test('the text editor keeps the focus while a style panel of the fork is open', async ({
+  page,
+}) => {
+  // The panels of the fork are aria-modal: the focus keeper of the application must not pull the
+  // focus away from the text being typed.
+  await openDrawing(page, scene([textOf('t', 'Old', 0, 0, 120, 25)]));
+  const box = (await canvasOf(page).boundingBox())!;
+  const z = await zoomReadout(page);
+  const onText = { x: box.x + box.width / 2 - 40 * z, y: box.y + box.height / 2 };
+  await page.mouse.click(onText.x, onText.y); // selects the text
+  await page
+    .locator('.excalidraw .App-toolbar-content')
+    .getByRole('button', { name: 'Edit' })
+    .click();
+  await expect(page.locator('.excalidraw .color-picker-container')).toBeVisible();
+  await page.mouse.dblclick(onText.x, onText.y);
+  await expect(editor(page)).toBeFocused();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Typed');
+  await expect(editor(page)).toBeFocused();
+  await expect(editor(page)).toHaveValue('Typed');
+  await page.keyboard.press('Escape');
+  await waitSaved(page);
+  expect((await savedDrawing(page)).elements.find((e) => e.id === 't')?.['text']).toBe('Typed');
 });

@@ -5,6 +5,7 @@ import '@excalidraw/excalidraw/index.css';
 import * as ExcalidrawLib from '@excalidraw/excalidraw';
 import { excalidrawLang } from './lang';
 import { ExcalidrawIsland } from './ExcalidrawIsland';
+import { ensureExcalidrawHost, setHostActionHandler } from './excalidrawHost';
 import {
   CaptureUpdateAction,
   Excalidraw,
@@ -87,6 +88,10 @@ import {
   type RawScene,
 } from './scene';
 import { DRAG_PATH } from '../util/dragTypes';
+
+// The fork needs its host before it mounts (its text editor throws without one): registered here, as
+// soon as this module (which imports the fork) is evaluated, whatever loaded the library first.
+ensureExcalidrawHost(ExcalidrawLib);
 
 const AUTOSAVE_MS = 2000;
 /** How long a merge waits for the gesture under way to end before leaving the choice to the user. */
@@ -769,6 +774,16 @@ export default function DrawingEditor({ vaultId, path }: Props) {
       if (hit) setTool({ kind: 'latex', editId: hit.id });
     },
     [excalidraw],
+  );
+
+  // The LaTeX entry of the fork's own insert menu opens the dialog of the application.
+  useEffect(
+    () =>
+      setHostActionHandler((action) => {
+        if (action === 'LaTeX' && own.current?.canEdit() && drawingFeatureOn('drawing_latex'))
+          setTool({ kind: 'latex' });
+      }),
+    [],
   );
 
   // Excalidraw consumes some Cmd/Ctrl shortcuts while elements are selected (Mod+P, Mod+O).

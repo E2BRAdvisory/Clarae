@@ -15,6 +15,20 @@ const FOCUSABLE = [
 
 const MODAL = '[aria-modal="true"]';
 
+/**
+ * A widget that looks after the focus of its own parts. The Excalidraw fork marks its style panels
+ * `aria-modal`, and its text editor (a textarea) sits next to them: trapping the focus inside such a
+ * panel would take it from the text being typed, so a modal of the widget does not hold the focus
+ * against the widget's own elements. A dialog of the application over it still does.
+ */
+const SELF_MANAGED = '.excalidraw';
+
+/** Whether `node` is in the same self-managed widget as `modal` (and so out of its reach). */
+function inSameWidget(modal: HTMLElement, node: Node | null): boolean {
+  const widget = modal.closest(SELF_MANAGED);
+  return widget !== null && node !== null && widget.contains(node);
+}
+
 /** The events of the user acting on a modal (see keepInside). */
 const ACTIONS = ['keydown', 'mousedown', 'click', 'submit'] as const;
 
@@ -73,6 +87,7 @@ function attach(doc: Document): Pick<Installed, 'uninstall' | 'sync'> {
     }
     const active = doc.activeElement;
     if (!top.contains(active)) {
+      if (inSameWidget(top, active)) return; // the widget's own text editor takes its Tab
       e.preventDefault();
       first.focus();
     } else if (e.shiftKey && active === first) {
@@ -144,6 +159,7 @@ function attach(doc: Document): Pick<Installed, 'uninstall' | 'sync'> {
     const target = e.target;
     if (!top || !(target instanceof Node)) return false;
     if (all.some((m) => m.contains(target))) return false;
+    if (inSameWidget(top, target)) return false;
     const from = e.relatedTarget;
     const back =
       from instanceof HTMLElement && from.isConnected && top.contains(from)

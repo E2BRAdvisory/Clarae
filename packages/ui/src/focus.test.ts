@@ -84,6 +84,44 @@ describe('installModalFocus', () => {
     off();
   });
 
+  it('leaves a text editor of a self-managed widget alone while one of its panels is modal', async () => {
+    // Excalidraw: its style panels are aria-modal and its text editor is a sibling of them.
+    const off = installModalFocus();
+    const widget = document.createElement('div');
+    widget.className = 'excalidraw';
+    document.body.append(widget);
+    const panel = document.createElement('div');
+    panel.setAttribute('aria-modal', 'true');
+    const swatch = button('swatch', panel);
+    widget.append(panel);
+    swatch.focus();
+    await flush();
+    const editor = document.createElement('textarea');
+    widget.append(editor);
+    editor.focus();
+    expect(document.activeElement).toBe(editor);
+    expect(tab().defaultPrevented).toBe(false); // the editor's own Tab
+    // Inside the panel the Tab is still kept in it.
+    swatch.focus();
+    expect(tab().defaultPrevented).toBe(true);
+    off();
+  });
+
+  it('still keeps a widget out while a dialog of the application is open over it', async () => {
+    const off = installModalFocus();
+    const widget = document.createElement('div');
+    widget.className = 'excalidraw';
+    const field = document.createElement('input');
+    widget.append(field);
+    document.body.append(widget);
+    const { buttons } = modal('ok');
+    await flush();
+    buttons[0]?.focus();
+    field.focus();
+    expect(document.activeElement).toBe(buttons[0]);
+    off();
+  });
+
   it('lets the handling of the user action in the modal move the focus out (an answer → the editor)', async () => {
     const off = installModalFocus();
     const editor = button('editor');

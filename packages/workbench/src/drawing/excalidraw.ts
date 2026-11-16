@@ -1,5 +1,6 @@
 // Loads Excalidraw lazily and points it at the fonts bundled with the app, so a drawing
 // opens with no network at all (vite serves and copies them: see vite.config.ts).
+import { ensureExcalidrawHost } from './excalidrawHost';
 
 declare global {
   interface Window {
@@ -20,6 +21,10 @@ let loaded: Promise<ExcalidrawModule> | undefined;
 /** The Excalidraw module, loaded once and only when a drawing is first needed. */
 export function loadExcalidraw(): Promise<ExcalidrawModule> {
   configureExcalidrawAssets();
-  loaded ??= importExcalidraw();
+  // The fork needs its host before anything is mounted or edited (excalidrawHost.ts).
+  loaded ??= importExcalidraw().then((lib) => {
+    ensureExcalidrawHost(lib);
+    return lib;
+  });
   return loaded;
 }
