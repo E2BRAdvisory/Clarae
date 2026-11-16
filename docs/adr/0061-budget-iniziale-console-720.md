@@ -1,12 +1,13 @@
 # ADR-0061 — Budget iniziale della console a 720 kB (M21)
 
-|                       |                                                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                                                          |
-| **Data**              | 2026-11-16                                                                                                                                                                                        |
-| **Riferimenti spec**  | ADR-0020 (budget della Web UI, tabella «Console»: iniziale ≤ 700 kB, totale ≤ 1000 kB); ADR-0025; ADR-0029 (la console resta senza code splitting); `docs/web-ui.md` (tabella dei budget)         |
-| **Devia dallo spec?** | no: il budget non è nello spec. **Emenda ADR-0020** nel solo limite iniziale della console. **Decisione dell'owner del 2026-11-16**                                                               |
-| **Superfici**         | console (prova: `task web-budget`, dentro `task ci`, che misura gli import statici di `src/main.tsx` con `checkBudget` di `web/scripts/esbuild.mjs`) · workbench, desktop e WebAssembly invariati |
+|                       |                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata (2026-11-16, decisione dell'owner); recepita in `Specifications.md` v1.7 (2026-11-16); implementata e rilasciata con la 1.7.2. Emenda [ADR-0020](0020-performance-details.md) (il limite iniziale della console)                                                                                                                                |
+| **Recepito in**       | `Specifications.md` v1.7 (2026-11-16): §4.4 e Appendice C.4 (riga di ADR-0020)                                                                                                                                                                                                                                                                            |
+| **Data**              | 2026-11-16                                                                                                                                                                                                                                                                                                                                                |
+| **Riferimenti spec**  | §4.4 (budget di build della Web UI: «console iniziale ≤ 700 kB», `Specifications.md:1870`); Appendice C.4, riga di ADR-0020 (`:2001`); ADR-0020 (budget della Web UI, tabella «Console»: iniziale ≤ 700 kB, totale ≤ 1000 kB); ADR-0025; ADR-0029 (la console resta senza code splitting); `docs/web-ui.md` (tabella dei budget)                          |
+| **Devia dallo spec?** | **sì, in un punto:** §4.4 dice «console iniziale ≤ 700 kB» (`Specifications.md:1870`) e la riga di ADR-0020 in C.4 lo riassume; con questo ADR il limite è 720 kB. **Emenda ADR-0020** nel solo limite iniziale della console. Da recepire nello spec v1.7 ([`spec-v1.7-proposta.md`](../spec-v1.7-proposta.md)). **Decisione dell'owner del 2026-11-16** |
+| **Superfici**         | console (prova: `task web-budget`, dentro `task ci`, che misura gli import statici di `src/main.tsx` con `checkBudget` di `web/scripts/esbuild.mjs`) · workbench, desktop e WebAssembly invariati                                                                                                                                                         |
 
 ## Contesto
 
@@ -27,4 +28,4 @@ La console si compila **in un solo file, senza code splitting** (`splitting: fal
 
 - `task ci` torna verde con 701 kB su 720.
 - Il budget iniziale della console non è più lo stesso del desktop (ADR-0025, 700 kB): i due numeri restano indipendenti.
-- Da aggiornare all'accettazione: la tabella «Console» di ADR-0020 e quella di `docs/web-ui.md` (iniziale ≤ 720 kB).
+- Allineati con l'accettazione: ADR-0020 (revisione del 2026-11-16, che rinvia a questo ADR) e la tabella dei budget di [`docs/web-ui.md`](../web-ui.md) (iniziale ≤ 720 kB). Lo spec cita il limite in §4.4: la v1.7 lo porta a 720 kB.

@@ -61,3 +61,7 @@ Decisione: il client gRPC è in `notify_grpc.go` (`//go:build !js`); nel core We
 | dopo (`notify_grpc.go` solo nativo) | 30,7 MB       | 6751 kB |
 
 Il limite di 8192 kB resta invariato. Candidati successivi, se servisse altro margine: il client OIDC del desktop (`go-oidc`, `go-jose`, `oauth2`, circa 105 kB gzip di codice: nel browser il token arriva dalla pagina) e `goose` con `text/template` per le migrazioni di `internal/store` (circa 60 kB). Entrambi richiedono di separare il codice nativo dietro build tag in pacchetti con più chiamanti.
+
+## Revisione 2026-11-16 — Budget iniziale della console a 720 kB (M21, ADR-0061)
+
+[ADR-0061](0061-budget-iniziale-console-720.md), accettata il 2026-11-16 per decisione dell'owner, porta il limite **iniziale della console** da 700 a **720 kB** (`BUDGET.console.initialKB` in `web/scripts/esbuild.mjs`): con le aggiunte di M21 la console pesa 701 kB. Il totale (1000 kB), il budget del workbench e quelli del WASM non cambiano, e la console resta un file unico coperto da SRI. Nella tabella «Console» sopra, il limite iniziale vale ora **≤ 720 kB**; il testo della revisione del 2026-10-29 resta lo storico.

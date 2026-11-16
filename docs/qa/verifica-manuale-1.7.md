@@ -68,7 +68,7 @@ Costruisce il desktop in modalità produzione e ne avvia due istanze, con dati i
 
 ### 1.4 Accendere `features.web_viewer` per le applicazioni
 
-> **Dalla versione di M21 il flag è acceso di default** ([ADR-0060](../adr/0060-web-viewer-acceso-di-default.md), in proposta): questa sezione serve ancora per **spegnerlo** (`false`) e per provare i profili di gruppo; con una build precedente alla M21 va acceso come descritto.
+> **Dalla versione di M21 il flag è acceso di default** ([ADR-0060](../adr/0060-web-viewer-acceso-di-default.md), accettata il 2026-11-16): questa sezione serve ancora per **spegnerlo** (`false`) e per provare i profili di gruppo; con una build precedente alla M21 va acceso come descritto.
 
 Il flag è spento di default e resta spento di default nella 1.7.1 (decisione dell'owner). Per la prova si accende in un profilo, dalla console di amministrazione.
 
