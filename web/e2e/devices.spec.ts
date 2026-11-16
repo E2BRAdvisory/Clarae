@@ -71,5 +71,5 @@ test('the storage page shows the level of the server and the space of each vault
   await expect(page.getByText('Your space is running low.')).toBeVisible();
   const byVault = page.getByRole('table', { name: 'Space by vault' });
   await expect(byVault.getByRole('rowheader')).toHaveText(['Diary', 'Notes']);
-  await expect(byVault.getByRole('row', { name: /Diary/ })).toContainText('71%');
+  await expect(byVault.getByRole('row', { name: /Diary/ })).toContainText('50%');
 });

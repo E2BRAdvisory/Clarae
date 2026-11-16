@@ -11,7 +11,9 @@ div.marpit > svg { display: block; width: 100%; height: auto; }
 /** Layout of the full-screen presentation (inside its shadow root): only the current slide shows. */
 export const SHOW_CSS = `
 :host { display: block; width: 100%; height: 100%; }
+div.marp-body { width: 100%; height: 100%; }
 div.marpit { width: 100%; height: 100%; }
+/* The slide keeps its proportions (the default preserveAspectRatio is "meet"): centered, with bars on the longer side. */
 div.marpit > svg { display: none; width: 100%; height: 100%; }
 div.marpit > svg.current { display: block; }
 `;

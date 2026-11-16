@@ -384,7 +384,6 @@
     "column": "Scarica",
     "download": "Scarica ZIP",
     "downloadAria": "Scarica ZIP: {{name}}",
-    "downloadPrivate": "Scarica ZIP (decifrato nel tuo browser)",
     "downloadPrivateAria": "Scarica ZIP, decifrato nel tuo browser: {{name}}",
     "title": "Scarica {{name}}",
     "sharedNote": "I vault grandi vengono preparati in background: questa finestra li attende.",

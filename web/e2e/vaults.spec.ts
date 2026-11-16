@@ -139,3 +139,74 @@ test('a private vault is created in the browser workbench', async ({ page }) => 
   expect(url.searchParams.get('kind')).toBe('private');
   expect(url.searchParams.get('name')).toBe('My diary');
 });
+
+test('the text of the download dialog wraps instead of overflowing the table cell', async ({
+  page,
+}) => {
+  await signedIn(page);
+  await page.setViewportSize({ width: 600, height: 800 });
+  await mockApi(page, {
+    'GET /config/effective': { version: 1, config: {}, locked_keys: [] },
+    'GET /shares': { items: [] },
+    'GET /vaults': {
+      items: [
+        {
+          id: '0198f1c2-aaaa-7bbb-8ccc-000000000001',
+          owner_id: ME,
+          name: 'Secrets',
+          kind: 'private',
+          last_seq: 1,
+          total_bytes: 10,
+          file_count: 1,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      mounts: [],
+    },
+  });
+  await page.goto('/vaults');
+  await page
+    .getByRole('button', { name: 'Download ZIP, decrypted in your browser: Secrets' })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  // The button of the cell is labelled like the other vaults, the dialog keeps the encryption note.
+  await expect(dialog).toContainText('Secrets');
+  const { scroll, client, whiteSpace } = await dialog.evaluate((el) => ({
+    scroll: el.scrollWidth,
+    client: el.clientWidth,
+    whiteSpace: getComputedStyle(el).whiteSpace,
+  }));
+  expect(whiteSpace).toBe('normal');
+  expect(scroll).toBeLessThanOrEqual(client);
+});
+
+test('the download button of a private vault reads like the one of a shared vault', async ({
+  page,
+}) => {
+  await signedIn(page);
+  await mockApi(page, {
+    'GET /config/effective': { version: 1, config: {}, locked_keys: [] },
+    'GET /shares': { items: [] },
+    'GET /vaults': {
+      items: [
+        {
+          id: '0198f1c2-aaaa-7bbb-8ccc-000000000001',
+          owner_id: ME,
+          name: 'Secrets',
+          kind: 'private',
+          last_seq: 1,
+          total_bytes: 10,
+          file_count: 1,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      mounts: [],
+    },
+  });
+  await page.goto('/vaults');
+  const button = page.getByRole('button', {
+    name: 'Download ZIP, decrypted in your browser: Secrets',
+  });
+  await expect(button).toHaveText('Download ZIP');
+});

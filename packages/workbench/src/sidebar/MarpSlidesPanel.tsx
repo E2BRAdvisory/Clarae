@@ -14,6 +14,7 @@ import { exportDeckPdf } from '../marp/commands';
 import { applyEdit, goToSlide, type EditResult } from '../marp/controller';
 import { useMarpDeck } from '../marp/deckStore';
 import { THUMB_CSS } from '../marp/document';
+import { fitSlides } from '../marp/polyfill';
 import type { Deck } from '../marp/engine';
 import { useMarpShow } from '../marp/showStore';
 import {
@@ -92,6 +93,8 @@ function Thumb({ svg, css }: { svg: string; css: string }) {
     body.className = 'marpit';
     body.innerHTML = svg; // sanitized by renderDeck
     root.replaceChildren(style, body);
+    // Where WebKit leaves the text of a slide in the corner at its natural size, Marp's polyfill fixes it.
+    return fitSlides(el, root);
   }, [svg, css]);
   return <div ref={host} className="slide-thumb" />;
 }

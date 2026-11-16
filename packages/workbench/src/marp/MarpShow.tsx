@@ -13,6 +13,7 @@ import { previewAssets } from './assets';
 import { deckSource } from './commands';
 import { SHOW_CSS } from './document';
 import type { Deck } from './engine';
+import { observeSlides } from './polyfill';
 import { useMarpShow } from './showStore';
 import { deckSettings, deckSlides, displayNote, renumberPages } from './slides';
 
@@ -83,9 +84,12 @@ function Running({ vaultId, path, from }: { vaultId: string; path: string; from:
     const style = document.createElement('style');
     style.textContent = `${model.deck.css}\n${SHOW_CSS}`;
     const body = document.createElement('div');
+    body.className = 'marp-body'; // as tall as the screen, so that the slide is centered in it
     body.innerHTML = model.deck.html; // sanitized by sanitizeMarpHtml
     renumberPages(body, model.deck.hidden, model.deck.advances); // the slides left out leave no gap in the page numbers
     shadow.replaceChildren(style, body);
+    // Where WebKit leaves the text of a slide in the corner at its natural size, Marp's polyfill fixes it.
+    return observeSlides(el, shadow);
   }, [model]);
   useEffect(() => {
     const svgs = host.current?.shadowRoot?.querySelectorAll('div.marpit > svg') ?? [];

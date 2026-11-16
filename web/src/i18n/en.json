@@ -384,7 +384,6 @@
     "column": "Download",
     "download": "Download ZIP",
     "downloadAria": "Download ZIP: {{name}}",
-    "downloadPrivate": "Download ZIP (decrypted in your browser)",
     "downloadPrivateAria": "Download ZIP, decrypted in your browser: {{name}}",
     "title": "Download {{name}}",
     "sharedNote": "Large vaults are prepared in the background; this window waits for them.",

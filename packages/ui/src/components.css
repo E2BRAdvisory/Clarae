@@ -255,6 +255,10 @@
   max-width: 480px;
   max-height: calc(100vh - 32px);
   overflow: auto;
+  overflow-x: hidden;
+  /* A dialog mounted in a table cell must not inherit `white-space: nowrap` from it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: 20px;
   border: 1px solid var(--nd-border);
   border-radius: var(--nd-radius);

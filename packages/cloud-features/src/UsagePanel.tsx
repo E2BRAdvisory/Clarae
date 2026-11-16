@@ -34,9 +34,14 @@ export function UsagePanel({ port, lang }: UsagePanelProps) {
   const percent =
     unlimited || u.quota_bytes === 0 ? 0 : Math.round((u.used_bytes / u.quota_bytes) * 100);
   const rows = [...(vaults.data ?? [])].sort((a, b) => b.total_bytes - a.total_bytes);
-  const total = rows.reduce((n, v) => n + v.total_bytes, 0);
+  // Each vault is shown against the limit of the user, not against the sum of the vaults. Without a
+  // limit (or with a zero one) there is nothing to compare with.
+  const comparable = !unlimited && u.quota_bytes > 0;
   const shareOf = (bytes: number) =>
-    t('usage.percent', { percent: total > 0 ? Math.round((bytes / total) * 100) : 0 });
+    comparable ? t('usage.percent', { percent: Math.round((bytes / u.quota_bytes) * 100) }) : '—';
+  const shareTitle = unlimited
+    ? t('usage.shareUnlimited')
+    : t('usage.shareOfQuota', { quota: formatBytes(u.quota_bytes, lang) });
 
   return (
     <div className="mbcf mbcf-usage">
@@ -96,7 +101,9 @@ export function UsagePanel({ port, lang }: UsagePanelProps) {
                 </td>
                 <td className="nd-num">{v.file_count.toLocaleString(lang)}</td>
                 <td className="nd-num">{formatBytes(v.total_bytes, lang)}</td>
-                <td className="nd-num">{shareOf(v.total_bytes)}</td>
+                <td className="nd-num" title={shareTitle}>
+                  {shareOf(v.total_bytes)}
+                </td>
               </tr>
             ))}
           </tbody>

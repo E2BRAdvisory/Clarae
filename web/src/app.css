@@ -60,6 +60,11 @@
   margin: 0 auto;
   padding: 24px 16px 64px;
 }
+/* The administration console: the whole width, with the menu at the left edge. */
+.app__main--wide {
+  max-width: none;
+  margin: 0;
+}
 .app__skip {
   position: absolute;
   left: -9999px;

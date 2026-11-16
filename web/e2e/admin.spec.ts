@@ -117,3 +117,21 @@ test('downloading a shared vault as ZIP triggers a browser download', async ({ p
   expect(download.suggestedFilename()).toBe('notes-export.zip');
   await expect(page.getByText('The download of notes-export.zip started.')).toBeVisible();
 });
+
+test('the administration console uses the whole width, with its menu at the left edge', async ({
+  page,
+}) => {
+  await signedIn(page, ['clarae-admin']);
+  await mockApi(page, { 'GET /admin/storage/overview': overview });
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/admin/storage');
+  const nav = page.getByRole('navigation', { name: 'Administration sections' });
+  await expect(nav).toBeVisible();
+  expect((await nav.boundingBox())?.x ?? Infinity).toBeLessThan(32);
+  expect((await page.locator('.admin-body').boundingBox())?.width ?? 0).toBeGreaterThan(1200);
+  // The other pages keep their readable column.
+  await mockApi(page, { 'GET /me/usage': { used_bytes: 1, quota_bytes: 100, level: 'ok' } });
+  await page.goto('/usage');
+  await expect(page.getByRole('heading', { name: 'Storage used' })).toBeVisible();
+  expect((await page.locator('main').boundingBox())?.width ?? 0).toBeLessThanOrEqual(1000);
+});

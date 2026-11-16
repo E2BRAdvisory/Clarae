@@ -563,6 +563,7 @@ __metadata:
     "@lezer/highlight": "npm:^1.2.5"
     "@lezer/markdown": "npm:^1.8.1"
     "@marp-team/marp-core": "npm:5.0.2"
+    "@marp-team/marpit-svg-polyfill": "npm:^2.1.0"
     "@milkdown/crepe": "npm:7.23.0"
     "@milkdown/kit": "npm:7.23.0"
     "@milkdown/plugin-collab": "npm:7.23.0"

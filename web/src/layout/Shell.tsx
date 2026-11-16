@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useMatch } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { BrandMark, Button } from '@clarae/ui';
 import { useSharingAllowed } from '../api/cloud';
@@ -18,6 +18,8 @@ export function Shell() {
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdminAccess();
   const [theme, setTheme] = useState<Theme>(loadTheme);
+  // The administration console uses the whole width: its menu sits at the left edge.
+  const adminRoute = useMatch('/admin/*') !== null;
   const lang = isLanguage(i18n.language) ? i18n.language : 'en';
   const sharingOn = useSharingAllowed();
   // A shared computer must not keep a clear-text copy of the vaults opened in the browser: signing out
@@ -90,7 +92,7 @@ export function Shell() {
         </div>
       </header>
       {forget.dialogs}
-      <main id="main" className="app__main">
+      <main id="main" className={adminRoute ? 'app__main app__main--wide' : 'app__main'}>
         <Outlet />
       </main>
     </div>

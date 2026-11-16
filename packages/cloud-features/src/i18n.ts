@@ -122,6 +122,8 @@ const en = {
   'usage.byVault': 'Space by vault',
   'usage.colVault': 'Vault',
   'usage.colShare': 'Share of the space used',
+  'usage.shareOfQuota': 'Relative to your limit of {{quota}}',
+  'usage.shareUnlimited': 'Your space has no limit: there is no percentage to show',
   'usage.noVaults': 'You have no cloud vaults yet.',
 
   'shares.ownedTitle': 'Shared by me',
@@ -374,6 +376,8 @@ const it: Messages = {
   'usage.byVault': 'Spazio per vault',
   'usage.colVault': 'Vault',
   'usage.colShare': 'Quota dello spazio occupato',
+  'usage.shareOfQuota': 'Rispetto al tuo limite di {{quota}}',
+  'usage.shareUnlimited': 'Il tuo spazio non ha limite: non c’è una percentuale da mostrare',
   'usage.noVaults': 'Non hai ancora vault nel cloud.',
 
   'shares.ownedTitle': 'Condivisi da me',

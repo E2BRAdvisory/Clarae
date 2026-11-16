@@ -626,7 +626,7 @@ function PrivateExport({ vault }: { vault: VaultRef }) {
         aria-label={t('vaultExport.downloadPrivateAria', { name: vault.name })}
         onClick={() => setOpen(true)}
       >
-        {t('vaultExport.downloadPrivate')}
+        {t('vaultExport.download')}
       </Button>
       {open && <PrivateExportDialog vault={vault} onClose={() => setOpen(false)} />}
     </>

@@ -173,7 +173,12 @@ export function cloudAccountSuite(h: AccountHarness): void {
         .getAllByRole('rowheader')
         .map((r) => r.textContent);
       expect(rows).toEqual(['Big', 'Small']);
-      expect(within(row(table, 'Big')).getByText('86%')).toBeInTheDocument();
+      expect(within(row(table, 'Big')).getByText('60%')).toBeInTheDocument();
+      // The share is relative to the limit of the user, not to the sum of the vaults.
+      expect(within(row(table, 'Small')).getByText('10%')).toHaveAttribute(
+        'title',
+        'Relative to your limit of 100 MB',
+      );
       expect(within(row(table, 'Big')).getByText('Private (encrypted)')).toBeInTheDocument();
     });
 
@@ -184,6 +189,23 @@ export function cloudAccountSuite(h: AccountHarness): void {
       expect(await screen.findByText('2 MB used, no limit')).toBeInTheDocument();
       expect(screen.getByText('Plenty of space left.')).toBeInTheDocument();
       expect(await screen.findByText('You have no cloud vaults yet.')).toBeInTheDocument();
+    });
+
+    it('shows no percentage per vault when the quota is unlimited', async () => {
+      await mount(
+        {
+          usage: { used_bytes: 5 * MB, quota_bytes: -1, level: 'ok' },
+          vaults: [{ name: 'Notes', kind: 'shared', total_bytes: 5 * MB, file_count: 3 }],
+        },
+        (port) => <UsagePanel port={port} lang="en" />,
+      );
+      const table = await screen.findByRole('table', { name: 'Space by vault' });
+      const cell = within(row(table, 'Notes')).getByText('—');
+      expect(cell).toHaveAttribute(
+        'title',
+        'Your space has no limit: there is no percentage to show',
+      );
+      expect(within(row(table, 'Notes')).queryByText(/%/)).toBeNull();
     });
   });
 
