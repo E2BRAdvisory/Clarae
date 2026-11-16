@@ -56,6 +56,7 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 		Endpoint: provider.Endpoint(),
 		Scopes:   []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess},
 	}
+	meta := s.discoveredMeta(provider, cc.Issuer)
 
 	att := &attempt{state: randomString(24), verifier: oauth2.GenerateVerifier(), result: make(chan url.Values, 1)}
 	mode := s.redirectMode()
@@ -100,7 +101,13 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	if att.listener != nil {
 		go s.serveLoopback(att)
 	}
-	authURL := cfg.AuthCodeURL(att.state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(att.verifier))
+	opts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(att.verifier)}
+	if explicitLogoutPending(s.opts.DataDir) {
+		// After an explicit sign-out the identity provider asks for the credentials again, even if
+		// it still holds a session of the user (ADR-0058).
+		opts = append(opts, oauth2.SetAuthURLParam("prompt", "login"))
+	}
+	authURL := cfg.AuthCodeURL(att.state, opts...)
 	if err := s.opts.OpenURL(authURL); err != nil {
 		return fmt.Errorf("open browser: %w", err)
 	}
@@ -130,7 +137,7 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	}
 
 	s.mu.Lock()
-	s.idp = cfg
+	s.idp, s.idpMeta = cfg, meta
 	s.access, s.expiry, s.refresh = tok.AccessToken, tok.Expiry, tok.RefreshToken
 	s.refreshUnsaved, s.keychainTried = false, time.Time{}
 	s.session = &persisted{ServerURL: serverURL, Issuer: cc.Issuer, ClientID: cc.DesktopClientId, Audience: cc.Audience, GRPCEndpoint: cc.GrpcEndpoint}
@@ -139,7 +146,11 @@ func (s *Service) login(ctx context.Context, serverURL string) error {
 	if err := s.secrets.Set(serverURL, tok.RefreshToken); err != nil {
 		return fmt.Errorf("store refresh token: %w", err)
 	}
-	return s.completeSession(ctx)
+	if err := s.completeSession(ctx); err != nil {
+		return err
+	}
+	clearExplicitLogout(s.opts.DataDir) // the credentials were asked for: the marker has done its job
+	return nil
 }
 
 // schemeRedirectURI picks the custom-scheme redirect URI: SchemeRedirectURI, or, when the identity
@@ -276,19 +287,82 @@ func (s *Service) refreshToken(ctx context.Context) (string, error) {
 	return tok.AccessToken, nil
 }
 
-// revokeRefresh revokes the refresh token at the identity provider on sign out (best effort).
-func (s *Service) revokeRefresh(ctx context.Context, sess *persisted, cfg *idpClient, refresh string) {
-	revoke := strings.TrimSuffix(sess.Issuer, "/") + "/protocol/openid-connect/revoke"
-	form := url.Values{"client_id": {cfg.ClientID}, "token": {refresh}, "token_type_hint": {"refresh_token"}}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, revoke, strings.NewReader(form.Encode()))
+// discoveredMeta reads the endpoints of the discovery document that oauth2 does not carry. The
+// revocation endpoint falls back to the one of Keycloak, derived from the issuer, when the
+// document does not announce it; the end-session endpoint has no fallback. An endpoint that
+// is not https (or http on this computer) is dropped, like the ones of checkEndpoint.
+func (s *Service) discoveredMeta(provider *oidc.Provider, issuer string) idpMeta {
+	var claims struct {
+		Revocation string `json:"revocation_endpoint"`
+		EndSession string `json:"end_session_endpoint"`
+	}
+	if err := provider.Claims(&claims); err != nil {
+		s.logger.Debug().Err(err).Msg("discovery: optional endpoints unreadable")
+	}
+	meta := idpMeta{RevocationEndpoint: claims.Revocation, EndSessionEndpoint: claims.EndSession}
+	if meta.RevocationEndpoint == "" {
+		meta.RevocationEndpoint = strings.TrimSuffix(issuer, "/") + "/protocol/openid-connect/revoke"
+	}
+	if transport.CheckSecureURL(meta.RevocationEndpoint) != nil {
+		meta.RevocationEndpoint = ""
+	}
+	if transport.CheckSecureURL(meta.EndSessionEndpoint) != nil {
+		meta.EndSessionEndpoint = ""
+	}
+	return meta
+}
+
+// endIdentityProviderSession ends the session of the user at the identity provider on sign out
+// (best effort, ADR-0058). Without a browser: first a back-channel logout on the
+// end_session_endpoint with the refresh token (Keycloak accepts it from a public client and
+// ends the whole SSO session, the offline session of the token included), then the revocation
+// of the token, which a provider without a back-channel logout still honours. The logout goes
+// first because a revoked token no longer identifies the session it belongs to.
+func (s *Service) endIdentityProviderSession(ctx context.Context, sess *persisted, refresh string) {
+	if refresh == "" {
+		return // nothing to present: the keychain was never read in this run
+	}
+	s.mu.Lock()
+	cfg, meta := s.idp, s.idpMeta
+	s.mu.Unlock()
+	if cfg == nil {
+		// Restored and not used yet: discovery has not run.
+		if err := s.ensureOAuth(ctx, sess); err != nil {
+			s.logger.Debug().Err(err).Msg("sign-out: identity provider unreachable (ignored)")
+			return
+		}
+		s.mu.Lock()
+		cfg, meta = s.idp, s.idpMeta
+		s.mu.Unlock()
+		if cfg == nil {
+			return
+		}
+	}
+	if meta.EndSessionEndpoint != "" {
+		s.postIdP(ctx, "end session", meta.EndSessionEndpoint, url.Values{"client_id": {cfg.ClientID}, "refresh_token": {refresh}})
+	}
+	if meta.RevocationEndpoint != "" {
+		s.postIdP(ctx, "token revocation", meta.RevocationEndpoint, url.Values{"client_id": {cfg.ClientID}, "token": {refresh}, "token_type_hint": {"refresh_token"}})
+	}
+}
+
+// postIdP posts a form to an endpoint of the identity provider and logs what it answers: a
+// failure never stops the sign-out.
+func (s *Service) postIdP(ctx context.Context, what, endpoint string, form url.Values) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if resp, err := s.hc.Do(req); err == nil {
-		_ = resp.Body.Close()
-	} else {
-		s.logger.Debug().Err(err).Msg("token revocation failed (ignored)")
+	resp, err := s.hc.Do(req)
+	if err != nil {
+		s.logger.Debug().Err(err).Msgf("sign-out: %s failed (ignored)", what)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
+		s.logger.Warn().Int("status", resp.StatusCode).Str("body", string(body)).Msgf("sign-out: %s refused (ignored)", what)
 	}
 }
 
@@ -336,13 +410,14 @@ func (s *Service) ensureOAuth(ctx context.Context, sess *persisted) error {
 		return err
 	}
 	cfg := &oauth2.Config{ClientID: sess.ClientID, Endpoint: provider.Endpoint(), Scopes: []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess}}
+	meta := s.discoveredMeta(provider, sess.Issuer)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.session != sess {
 		return errors.New("not signed in")
 	}
 	if s.idp == nil {
-		s.idp = cfg
+		s.idp, s.idpMeta = cfg, meta
 	}
 	return nil
 }

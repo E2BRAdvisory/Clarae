@@ -135,6 +135,8 @@ func New(opts Options) *App {
 			a.host.OpenURL(ctx, u)
 			return nil
 		},
+		// Sign-out stops the synchronization before it revokes the device on the cloud.
+		BeforeLogout: func(ctx context.Context) { a.sync.PauseAll(ctx) },
 		OnState: func(st auth.State) {
 			EventAuthState.Send(a.emit, st)
 			a.sync.SessionChanged()

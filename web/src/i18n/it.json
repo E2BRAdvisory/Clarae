@@ -33,6 +33,11 @@
   "errors": {
     "loadFailed": "Impossibile caricare i dati."
   },
+  "signedOut": {
+    "title": "Sei uscito da Clarae notanda",
+    "body": "La sessione è terminata. Accedi di nuovo per continuare.",
+    "signIn": "Accedi"
+  },
   "auth": {
     "callbackFailed": "Non è stato possibile completare l'accesso.",
     "backToStart": "Riprova"

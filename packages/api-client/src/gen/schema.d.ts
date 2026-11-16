@@ -92,7 +92,16 @@ export interface paths {
         /** Registered devices of the current user */
         get: operations["listMyDevices"];
         put?: never;
-        /** Register this device and obtain its device_id */
+        /**
+         * Register this device and obtain its device_id
+         * @description For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+         *     identifies the device: the host name, compared without case and surrounding spaces,
+         *     is unique per user and platform. Registering it again (the next login after a logout,
+         *     say) returns the same device with the same `id`, reactivated if it had been revoked,
+         *     and its name and `app_version` are updated. Two machines of one user with the same
+         *     host name and platform are therefore one device. A `web` registration always creates
+         *     a new device. The response is `201` in both cases.
+         */
         post: operations["registerDevice"];
         delete?: never;
         options?: never;
@@ -1287,7 +1296,11 @@ export interface components {
             last_login_at?: string;
         };
         DeviceRegistration: {
-            /** @description Human readable device name (host name by default) */
+            /**
+             * @description Human readable device name (host name by default). For the desktop platforms it is
+             *     the host name and identifies the device (see POST /me/devices); for `web` it is
+             *     only a label.
+             */
             name: string;
             /** @enum {string} */
             platform: "windows" | "macos" | "linux" | "web";

@@ -72,7 +72,11 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
     setStatus('loading');
     setAttempt((n) => n + 1);
   }, []);
-  const signOut = useCallback(() => void service.signOut(), [service]);
+  const signOut = useCallback(() => {
+    // The service ends the local session itself when the identity provider cannot be reached; what is
+    // left to fail is shown like any other auth error rather than lost as an unhandled rejection.
+    service.signOut().catch((e: unknown) => setError(asError(e)));
+  }, [service]);
   const completeSignIn = useCallback(async () => {
     const to = await service.completeSignIn();
     setUser(await service.getUser());

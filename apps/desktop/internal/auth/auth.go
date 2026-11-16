@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +68,11 @@ func ParseRedirectMode(v string) RedirectMode {
 	return ""
 }
 
+// DeviceNameEnv overrides the name this computer registers with. The cloud identifies a desktop
+// device by its name and platform (ADR-0057): two instances on one host (tests, two devices on
+// the same machine) must tell themselves apart with it.
+const DeviceNameEnv = "CLARAE_DEVICE_NAME"
+
 // SchemeRedirectURI is the custom-scheme callback registered in Keycloak.
 const SchemeRedirectURI = "clarae://auth/callback"
 
@@ -115,6 +121,9 @@ type Options struct {
 	LoginTimeout time.Duration
 	// Hosted makes the page that runs the core the owner of the session (browser build, ADR-0029).
 	Hosted *Hosted
+	// BeforeLogout runs first when the user signs out: the application stops the synchronization
+	// there, so no cycle runs against a device that is about to be revoked (nil = nothing).
+	BeforeLogout func(ctx context.Context)
 }
 
 // Hosted describes a session owned by the host page. The page already signed in with OIDC, so there
@@ -145,7 +154,9 @@ type Service struct {
 	session *persisted
 	// idp is the identity provider of a desktop session (nil until discovery; always nil in the
 	// browser build).
-	idp     *idpClient
+	idp *idpClient
+	// idpMeta holds the endpoints of the discovery document that oauth2 does not carry.
+	idpMeta idpMeta
 	access  string
 	expiry  time.Time
 	refresh string
@@ -160,6 +171,20 @@ type Service struct {
 	rejected *persisted
 	// managedMode is the redirect mode of the Config Profile ("" = none).
 	managedMode RedirectMode
+	// loggingOut is set from the start of Logout until clearSession: no change of state may turn
+	// the session ready meanwhile. A token renewed to revoke the device would otherwise reconnect
+	// a disconnected session, and OnState would restart the synchronization that BeforeLogout
+	// just stopped.
+	loggingOut bool
+}
+
+// idpMeta is what the discovery document announces beyond the OAuth endpoints (empty in the
+// browser build, which never runs discovery).
+type idpMeta struct {
+	// RevocationEndpoint is the revocation_endpoint of RFC 7009 ("" = not announced).
+	RevocationEndpoint string
+	// EndSessionEndpoint is the end_session_endpoint of OpenID Connect RP-Initiated Logout.
+	EndSessionEndpoint string
 }
 
 type attempt struct {
@@ -187,6 +212,9 @@ func New(opts Options) *Service {
 	}
 	if opts.OnState == nil {
 		opts.OnState = func(State) {}
+	}
+	if opts.DeviceName == "" {
+		opts.DeviceName = strings.TrimSpace(os.Getenv(DeviceNameEnv))
 	}
 	if opts.DeviceName == "" {
 		if h, err := os.Hostname(); err == nil {
@@ -223,7 +251,13 @@ func (s *Service) State() State {
 
 func (s *Service) setState(mutate func(*State)) {
 	s.mu.Lock()
-	mutate(&s.state)
+	next := s.state
+	mutate(&next)
+	if s.loggingOut && next.Status == StatusReady {
+		s.mu.Unlock() // signing out: the session does not come back to life (see loggingOut)
+		return
+	}
+	s.state = next
 	st := s.state
 	s.mu.Unlock()
 	s.opts.OnState(st)
@@ -614,20 +648,62 @@ func (s *Service) Restore(ctx context.Context) {
 	}()
 }
 
-// Logout revokes the refresh token (best effort), clears the keychain and
-// the persisted session.
+// logoutNetworkTimeout bounds everything Logout asks of the network (the device on the cloud, the
+// session and the token at the identity provider): signing out never waits for a dead network.
+const logoutNetworkTimeout = 8 * time.Second
+
+// Logout signs out (ADR-0057, ADR-0058): the synchronization stops; this device is revoked on the
+// cloud, so signing in again reactivates the same registration instead of adding a new one; the
+// session and the refresh token end at the identity provider; the keychain and the persisted
+// session are cleared. The network steps are best effort and in this order because each needs
+// what the next one ends (the access token, then the refresh token). A failure of any of them
+// is logged and never keeps the user signed in. The next interactive sign-in asks for the
+// credentials again (prompt=login), whatever the identity provider remembers.
 func (s *Service) Logout(ctx context.Context) error {
 	s.mu.Lock()
-	sess, refresh, idp := s.session, s.refresh, s.idp
+	sess := s.session
+	if sess != nil {
+		s.loggingOut = true // until clearSession: see loggingOut
+	}
 	s.mu.Unlock()
 	if sess == nil {
 		return nil
 	}
-	if idp != nil && refresh != "" && s.opts.Hosted == nil {
-		s.revokeRefresh(ctx, sess, idp, refresh)
+	if s.opts.BeforeLogout != nil {
+		s.opts.BeforeLogout(ctx)
+	}
+	if s.opts.Hosted == nil {
+		nctx, cancel := context.WithTimeout(ctx, logoutNetworkTimeout)
+		s.revokeThisDevice(nctx, sess)
+		s.mu.Lock()
+		refresh := s.refresh // after the device: obtaining the access token may have rotated it
+		s.mu.Unlock()
+		s.endIdentityProviderSession(nctx, sess, refresh)
+		cancel()
+		if err := markExplicitLogout(s.opts.DataDir); err != nil {
+			s.logger.Warn().Err(err).Msg("could not remember the sign-out; the next sign-in may not ask for the password")
+		}
 	}
 	s.clearSession()
 	return nil
+}
+
+// revokeThisDevice revokes the device of the session on the cloud while the access token is still
+// valid (best effort). A device that is already revoked, or never registered, is left alone.
+func (s *Service) revokeThisDevice(ctx context.Context, sess *persisted) {
+	s.mu.Lock()
+	id, revoked := sess.DeviceID, sess.DeviceRevoked
+	s.mu.Unlock()
+	if id == "" || revoked {
+		return
+	}
+	client := s.Client()
+	if client == nil {
+		return
+	}
+	if err := client.RevokeDevice(ctx, id); err != nil {
+		s.logger.Warn().Err(err).Str("device", id).Msg("sign-out: could not revoke the device on the cloud (ignored)")
+	}
 }
 
 func (s *Service) clearSession() {
@@ -639,6 +715,7 @@ func (s *Service) clearSession() {
 	s.session, s.idp = nil, nil
 	s.access, s.refresh, s.expiry = "", "", time.Time{}
 	s.refreshUnsaved, s.keychainTried, s.rejected = false, time.Time{}, nil
+	s.loggingOut = false
 	s.mu.Unlock()
 	if server != "" {
 		_ = s.secrets.Delete(server)

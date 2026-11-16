@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // A UserManager stand-in: the test sets the stored user and what a silent renewal returns.
 interface FakeUser {
   access_token: string;
+  id_token?: string;
   refresh_token?: string;
   expires_in?: number;
   expired?: boolean;
@@ -16,6 +17,14 @@ const state = vi.hoisted(() => ({
   silent: 0,
   removed: 0,
   expiredHandlers: [] as (() => void)[],
+  /** The settings the last UserManager was made with. */
+  settings: null as Record<string, unknown> | null,
+  signinArgs: [] as Record<string, unknown>[],
+  signoutArgs: [] as Record<string, unknown>[],
+  callbackState: undefined as { returnTo?: string } | undefined,
+  revoked: 0,
+  revokeError: null as Error | null,
+  signoutError: null as Error | null,
 }));
 
 vi.mock('oidc-client-ts', () => {
@@ -28,6 +37,24 @@ vi.mock('oidc-client-ts', () => {
     }
   }
   class UserManager {
+    constructor(settings: Record<string, unknown>) {
+      state.settings = settings;
+    }
+    signinRedirect(args: Record<string, unknown>) {
+      state.signinArgs.push(args);
+      return Promise.resolve();
+    }
+    signinRedirectCallback() {
+      return Promise.resolve({ state: state.callbackState });
+    }
+    signoutRedirect(args: Record<string, unknown>) {
+      state.signoutArgs.push(args);
+      return state.signoutError ? Promise.reject(state.signoutError) : Promise.resolve();
+    }
+    revokeTokens() {
+      state.revoked++;
+      return state.revokeError ? Promise.reject(state.revokeError) : Promise.resolve();
+    }
     events = {
       addAccessTokenExpired: (cb: () => void) => state.expiredHandlers.push(cb),
       addUserLoaded: () => undefined,
@@ -60,7 +87,8 @@ vi.mock('oidc-client-ts', () => {
 });
 
 const { ErrorResponse } = await import('oidc-client-ts');
-const { createOidcAuth, SessionUnavailableError, sessionEnded } = await import('./oidc');
+const { createOidcAuth, FORCE_LOGIN_KEY, SessionUnavailableError, navigation, sessionEnded } =
+  await import('./oidc');
 
 /** An OAuth error answer of the identity provider (`invalid_grant`: the session is over). */
 const oauthError = (error: string) => new ErrorResponse({ error });
@@ -84,6 +112,14 @@ beforeEach(() => {
   state.silent = 0;
   state.removed = 0;
   state.expiredHandlers = [];
+  state.settings = null;
+  state.signinArgs = [];
+  state.signoutArgs = [];
+  state.callbackState = undefined;
+  state.revoked = 0;
+  state.revokeError = null;
+  state.signoutError = null;
+  window.localStorage.clear();
 });
 
 describe('createOidcAuth getUser', () => {
@@ -250,5 +286,115 @@ describe('createOidcAuth client configuration', () => {
   it('lets a sign-in that cannot start fail instead of hanging', async () => {
     const auth = createOidcAuth(() => Promise.reject(new Error('offline')), []);
     await expect(auth.signIn('/vaults')).rejects.toThrow('offline');
+  });
+});
+
+describe('createOidcAuth sign-out', () => {
+  it('returns to the public signed-out page, and revokes the tokens apart from the library sign-out', async () => {
+    state.user = user({});
+    await auth().getUser();
+    expect(state.settings).toMatchObject({
+      post_logout_redirect_uri: `${window.location.origin}/signed-out`,
+      client_id: 'clarae-web',
+    });
+    // Revoking inside the library's sign-out would abort it, and keep the user, when the revocation fails.
+    expect(state.settings).not.toHaveProperty('revokeTokensOnSignout');
+    await auth().signOut();
+    expect(state.revoked).toBe(1);
+    expect(state.signoutArgs).toHaveLength(1);
+  });
+
+  it('still signs out when the revocation fails', async () => {
+    state.user = user({ id_token: 'the.id.token' });
+    state.revokeError = new Error('network down');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(auth().signOut()).resolves.toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(state.revoked).toBe(1);
+    expect(state.signoutArgs).toHaveLength(1);
+    expect(state.signoutArgs[0]).toMatchObject({ id_token_hint: 'the.id.token' });
+    expect(window.localStorage.getItem(FORCE_LOGIN_KEY)).not.toBeNull();
+  });
+
+  it('removes the user and goes to the signed-out page when the redirect cannot be made', async () => {
+    state.user = user({});
+    state.signoutError = new Error('discovery unreachable');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const assign = vi.spyOn(navigation, 'assign').mockImplementation(() => undefined);
+    try {
+      const a = auth();
+      await expect(a.signOut()).resolves.toBeUndefined();
+      expect(state.removed).toBe(1);
+      expect(state.user).toBeNull();
+      expect(assign).toHaveBeenCalledExactlyOnceWith('/signed-out');
+      // The next sign-in still asks for the credentials.
+      expect(window.localStorage.getItem(FORCE_LOGIN_KEY)).not.toBeNull();
+      await a.signIn('/');
+      expect(state.signinArgs[0]).toMatchObject({ prompt: 'login' });
+    } finally {
+      warn.mockRestore();
+      assign.mockRestore();
+    }
+  });
+
+  it('names the ID token, the client and the return page explicitly', async () => {
+    state.user = user({ id_token: 'the.id.token' });
+    await auth().signOut();
+    expect(state.signoutArgs).toEqual([
+      {
+        id_token_hint: 'the.id.token',
+        post_logout_redirect_uri: `${window.location.origin}/signed-out`,
+        extraQueryParams: { client_id: 'clarae-web' },
+      },
+    ]);
+  });
+
+  it('still signs out, without a hint, when the user is already gone', async () => {
+    await auth().signOut();
+    expect(state.signoutArgs).toHaveLength(1);
+    expect(state.signoutArgs[0]).not.toHaveProperty('id_token_hint');
+    expect(state.signoutArgs[0]).toMatchObject({ extraQueryParams: { client_id: 'clarae-web' } });
+  });
+
+  it('asks for the credentials on the next sign-in after an explicit sign-out, until one completes', async () => {
+    const a = auth();
+    await a.signIn('/vaults');
+    expect(state.signinArgs[0]).not.toHaveProperty('prompt'); // an expiry is not a sign-out
+
+    await a.signOut();
+    expect(window.localStorage.getItem(FORCE_LOGIN_KEY)).not.toBeNull();
+    await a.signIn('/vaults');
+    expect(state.signinArgs[1]).toMatchObject({ prompt: 'login', state: { returnTo: '/vaults' } });
+    // The user did not finish signing in: the next attempt still asks.
+    await a.signIn('/');
+    expect(state.signinArgs[2]).toMatchObject({ prompt: 'login' });
+
+    state.callbackState = { returnTo: '/devices' };
+    expect(await a.completeSignIn()).toBe('/devices');
+    expect(window.localStorage.getItem(FORCE_LOGIN_KEY)).toBeNull();
+    await a.signIn('/');
+    expect(state.signinArgs[3]).not.toHaveProperty('prompt');
+  });
+
+  it('works when localStorage is blocked', async () => {
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      const a = auth();
+      await a.signOut();
+      await a.signIn('/');
+      expect(state.signoutArgs).toHaveLength(1);
+      expect(state.signinArgs[0]).not.toHaveProperty('prompt');
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
   });
 });

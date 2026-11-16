@@ -44,7 +44,7 @@ func (q *Queries) CountActiveAdmins(ctx context.Context) (int32, error) {
 const createDevice = `-- name: CreateDevice :one
 INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at, idempotency_key)
 VALUES ($1, $2, $3, $4, $5, now(), $6)
-RETURNING id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key
+RETURNING id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key, hostname
 `
 
 type CreateDeviceParams struct {
@@ -76,12 +76,13 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Dev
 		&i.LastSeenAt,
 		&i.RevokedAt,
 		&i.IdempotencyKey,
+		&i.Hostname,
 	)
 	return i, err
 }
 
 const getDevice = `-- name: GetDevice :one
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices WHERE id = $1 AND user_id = $2
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key, hostname FROM devices WHERE id = $1 AND user_id = $2
 `
 
 type GetDeviceParams struct {
@@ -102,12 +103,13 @@ func (q *Queries) GetDevice(ctx context.Context, arg GetDeviceParams) (Device, e
 		&i.LastSeenAt,
 		&i.RevokedAt,
 		&i.IdempotencyKey,
+		&i.Hostname,
 	)
 	return i, err
 }
 
 const getDeviceByIdempotencyKey = `-- name: GetDeviceByIdempotencyKey :one
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices WHERE user_id = $1 AND idempotency_key = $2
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key, hostname FROM devices WHERE user_id = $1 AND idempotency_key = $2
 `
 
 type GetDeviceByIdempotencyKeyParams struct {
@@ -129,6 +131,7 @@ func (q *Queries) GetDeviceByIdempotencyKey(ctx context.Context, arg GetDeviceBy
 		&i.LastSeenAt,
 		&i.RevokedAt,
 		&i.IdempotencyKey,
+		&i.Hostname,
 	)
 	return i, err
 }
@@ -283,7 +286,7 @@ func (q *Queries) IsSubjectPurged(ctx context.Context, subHash []byte) (bool, er
 }
 
 const listDevices = `-- name: ListDevices :many
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key, hostname FROM devices
 WHERE user_id = $1 AND revoked_at IS NULL
 ORDER BY created_at
 `
@@ -307,6 +310,7 @@ func (q *Queries) ListDevices(ctx context.Context, userID uuid.UUID) ([]Device, 
 			&i.LastSeenAt,
 			&i.RevokedAt,
 			&i.IdempotencyKey,
+			&i.Hostname,
 		); err != nil {
 			return nil, err
 		}
@@ -555,6 +559,57 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.DeletedAt,
 		&i.PurgedAt,
 		&i.RoleChangedAt,
+	)
+	return i, err
+}
+
+const upsertDesktopDevice = `-- name: UpsertDesktopDevice :one
+INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at, idempotency_key, hostname)
+VALUES ($1, $2, $3, $4, $5, now(), $6, lower(btrim($3)))
+ON CONFLICT (user_id, platform, hostname) WHERE hostname IS NOT NULL DO UPDATE
+SET revoked_at = NULL,
+    last_seen_at = now(),
+    name = EXCLUDED.name,
+    app_version = COALESCE(EXCLUDED.app_version, devices.app_version),
+    idempotency_key = COALESCE(EXCLUDED.idempotency_key, devices.idempotency_key)
+RETURNING id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key, hostname
+`
+
+type UpsertDesktopDeviceParams struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Name           string
+	Platform       string
+	AppVersion     *string
+	IdempotencyKey *string
+}
+
+// Registers a desktop device by its host name (ADR-0057): the row of the same
+// (user, platform, host name) is reactivated instead of a new one created. The
+// host name is the trimmed, lower-cased device name, the same expression the
+// migration 0016 used. An Idempotency-Key replaces the one the row had (the
+// caller already looked the key up, so no other row of the user holds it).
+func (q *Queries) UpsertDesktopDevice(ctx context.Context, arg UpsertDesktopDeviceParams) (Device, error) {
+	row := q.db.QueryRow(ctx, upsertDesktopDevice,
+		arg.ID,
+		arg.UserID,
+		arg.Name,
+		arg.Platform,
+		arg.AppVersion,
+		arg.IdempotencyKey,
+	)
+	var i Device
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Platform,
+		&i.AppVersion,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.RevokedAt,
+		&i.IdempotencyKey,
+		&i.Hostname,
 	)
 	return i, err
 }

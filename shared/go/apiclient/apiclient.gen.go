@@ -661,7 +661,9 @@ type Device struct {
 type DeviceRegistration struct {
 	AppVersion *string `json:"app_version,omitempty"`
 
-	// Name Human readable device name (host name by default)
+	// Name Human readable device name (host name by default). For the desktop platforms it is
+	// the host name and identifies the device (see POST /me/devices); for `web` it is
+	// only a label.
 	Name     string                     `json:"name"`
 	Platform DeviceRegistrationPlatform `json:"platform"`
 }
@@ -1386,12 +1388,28 @@ type ClientInterface interface {
 
 	// RegisterDeviceWithBody Register this device and obtain its device_id
 	//
+	// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+	// identifies the device: the host name, compared without case and surrounding spaces,
+	// is unique per user and platform. Registering it again (the next login after a logout,
+	// say) returns the same device with the same `id`, reactivated if it had been revoked,
+	// and its name and `app_version` are updated. Two machines of one user with the same
+	// host name and platform are therefore one device. A `web` registration always creates
+	// a new device. The response is `201` in both cases.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /me/devices (the `RegisterDevice` operationId).
 	RegisterDeviceWithBody(ctx context.Context, params *RegisterDeviceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RegisterDevice Register this device and obtain its device_id
+	//
+	// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+	// identifies the device: the host name, compared without case and surrounding spaces,
+	// is unique per user and platform. Registering it again (the next login after a logout,
+	// say) returns the same device with the same `id`, reactivated if it had been revoked,
+	// and its name and `app_version` are updated. Two machines of one user with the same
+	// host name and platform are therefore one device. A `web` registration always creates
+	// a new device. The response is `201` in both cases.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1828,6 +1846,14 @@ func (c *Client) ListMyDevices(ctx context.Context, reqEditors ...RequestEditorF
 
 // RegisterDeviceWithBody Register this device and obtain its device_id
 //
+// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+// identifies the device: the host name, compared without case and surrounding spaces,
+// is unique per user and platform. Registering it again (the next login after a logout,
+// say) returns the same device with the same `id`, reactivated if it had been revoked,
+// and its name and `app_version` are updated. Two machines of one user with the same
+// host name and platform are therefore one device. A `web` registration always creates
+// a new device. The response is `201` in both cases.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /me/devices (the `RegisterDevice` operationId).
@@ -1844,6 +1870,14 @@ func (c *Client) RegisterDeviceWithBody(ctx context.Context, params *RegisterDev
 }
 
 // RegisterDevice Register this device and obtain its device_id
+//
+// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+// identifies the device: the host name, compared without case and surrounding spaces,
+// is unique per user and platform. Registering it again (the next login after a logout,
+// say) returns the same device with the same `id`, reactivated if it had been revoked,
+// and its name and `app_version` are updated. Two machines of one user with the same
+// host name and platform are therefore one device. A `web` registration always creates
+// a new device. The response is `201` in both cases.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4887,12 +4921,28 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterDeviceWithBodyWithResponse Register this device and obtain its device_id
 	//
+	// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+	// identifies the device: the host name, compared without case and surrounding spaces,
+	// is unique per user and platform. Registering it again (the next login after a logout,
+	// say) returns the same device with the same `id`, reactivated if it had been revoked,
+	// and its name and `app_version` are updated. Two machines of one user with the same
+	// host name and platform are therefore one device. A `web` registration always creates
+	// a new device. The response is `201` in both cases.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /me/devices (the `RegisterDevice` operationId).
 	RegisterDeviceWithBodyWithResponse(ctx context.Context, params *RegisterDeviceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterDeviceReply, error)
 
 	// RegisterDeviceWithResponse Register this device and obtain its device_id
+	//
+	// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+	// identifies the device: the host name, compared without case and surrounding spaces,
+	// is unique per user and platform. Registering it again (the next login after a logout,
+	// say) returns the same device with the same `id`, reactivated if it had been revoked,
+	// and its name and `app_version` are updated. Two machines of one user with the same
+	// host name and platform are therefore one device. A `web` registration always creates
+	// a new device. The response is `201` in both cases.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9528,6 +9578,14 @@ func (c *ClientWithResponses) ListMyDevicesWithResponse(ctx context.Context, req
 
 // RegisterDeviceWithBodyWithResponse Register this device and obtain its device_id
 //
+// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+// identifies the device: the host name, compared without case and surrounding spaces,
+// is unique per user and platform. Registering it again (the next login after a logout,
+// say) returns the same device with the same `id`, reactivated if it had been revoked,
+// and its name and `app_version` are updated. Two machines of one user with the same
+// host name and platform are therefore one device. A `web` registration always creates
+// a new device. The response is `201` in both cases.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /me/devices (the `RegisterDevice` operationId).
@@ -9540,6 +9598,14 @@ func (c *ClientWithResponses) RegisterDeviceWithBodyWithResponse(ctx context.Con
 }
 
 // RegisterDeviceWithResponse Register this device and obtain its device_id
+//
+// For the desktop platforms (`windows`, `macos`, `linux`) `name` is the host name and
+// identifies the device: the host name, compared without case and surrounding spaces,
+// is unique per user and platform. Registering it again (the next login after a logout,
+// say) returns the same device with the same `id`, reactivated if it had been revoked,
+// and its name and `app_version` are updated. Two machines of one user with the same
+// host name and platform are therefore one device. A `web` registration always creates
+// a new device. The response is `201` in both cases.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

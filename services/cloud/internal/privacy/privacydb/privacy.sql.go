@@ -114,7 +114,7 @@ func (q *Queries) ExpireUploadsOfUser(ctx context.Context, userID uuid.UUID) (in
 }
 
 const listAllDevicesOfUser = `-- name: ListAllDevicesOfUser :many
-SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key FROM devices WHERE user_id = $1 ORDER BY created_at
+SELECT id, user_id, name, platform, app_version, created_at, last_seen_at, revoked_at, idempotency_key, hostname FROM devices WHERE user_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListAllDevicesOfUser(ctx context.Context, userID uuid.UUID) ([]Device, error) {
@@ -136,6 +136,7 @@ func (q *Queries) ListAllDevicesOfUser(ctx context.Context, userID uuid.UUID) ([
 			&i.LastSeenAt,
 			&i.RevokedAt,
 			&i.IdempotencyKey,
+			&i.Hostname,
 		); err != nil {
 			return nil, err
 		}

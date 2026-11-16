@@ -43,9 +43,39 @@ describe('auth guard', () => {
 
   it('keeps the callback route public', async () => {
     const auth = fakeAuth(null);
+    // Still exchanging the code: once it ends, the user would be sent on to the guarded routes.
+    auth.completeSignIn.mockReturnValue(new Promise(() => undefined));
     renderApp({ path: '/auth/callback', auth });
     await waitFor(() => expect(auth.completeSignIn).toHaveBeenCalled());
     expect(auth.signIn).not.toHaveBeenCalled();
+  });
+});
+
+describe('signed-out page', () => {
+  it('is public, shows that the user left and does not sign in by itself', async () => {
+    const auth = fakeAuth(null);
+    const { api } = renderApp({ path: '/signed-out', auth });
+    expect(
+      await screen.findByRole('heading', { name: 'You have signed out of Clarae notanda' }),
+    ).toBeInTheDocument();
+    // Let the provider read the (empty) session: nothing restarts the login.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(auth.signIn).not.toHaveBeenCalled();
+    expect(api.calls).toHaveLength(0);
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  it('signs in, from the root, only when the button is pressed', async () => {
+    const auth = fakeAuth(null);
+    renderApp({ path: '/signed-out', auth });
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+    expect(auth.signIn).toHaveBeenCalledExactlyOnceWith('/');
+  });
+
+  it('does not make the other pages public', async () => {
+    const auth = fakeAuth(null);
+    renderApp({ path: '/usage', auth, routes: usage });
+    await waitFor(() => expect(auth.signIn).toHaveBeenCalledWith('/usage'));
   });
 });
 

@@ -610,6 +610,38 @@ func (m *Manager) Shutdown() {
 	}
 }
 
+// pauseWait bounds how long PauseAll waits for the cycles in flight to return.
+const pauseWait = 5 * time.Second
+
+// PauseAll stops every vault's loop and waits (at most pauseWait, or until ctx is done) for the
+// cycle in flight to return. The engines stay as they are: nothing local is touched, and the
+// next SessionChanged restarts them if the session still allows it. Sign-out calls it before it
+// revokes the device, so no commit is sent with a device that is about to be refused.
+func (m *Manager) PauseAll(ctx context.Context) {
+	m.mu.Lock()
+	dones := make([]<-chan struct{}, 0, len(m.vaults))
+	for _, mv := range m.vaults {
+		if mv.engine != nil {
+			dones = append(dones, m.stopLocked(mv))
+		}
+	}
+	m.mu.Unlock()
+	timeout := time.NewTimer(pauseWait)
+	defer timeout.Stop()
+	for _, d := range dones {
+		if d == nil {
+			continue
+		}
+		select {
+		case <-d:
+		case <-ctx.Done():
+			return
+		case <-timeout.C:
+			return
+		}
+	}
+}
+
 // stopLocked cancels the vault's loop (m.mu held) and returns the channel
 // closed when it has returned; callers that free or replace what the loop uses
 // wait on it with waitLoop after releasing m.mu. The loop itself must not wait.

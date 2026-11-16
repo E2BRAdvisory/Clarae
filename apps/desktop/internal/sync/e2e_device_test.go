@@ -50,7 +50,8 @@ func TestManagerDeviceRevokedAndRegisteredAgain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dev, err := c.RegisterDevice(ctx, transport.DeviceRegistration{Name: "rita-laptop", Platform: "linux"})
+	regName := uniqueDeviceName("rita-laptop")
+	dev, err := c.RegisterDevice(ctx, transport.DeviceRegistration{Name: regName, Platform: "linux"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,9 @@ func TestManagerDeviceRevokedAndRegisteredAgain(t *testing.T) {
 	}
 
 	// Registered again: the pending file goes out with the new device.
-	dev2, err := c.RegisterDevice(ctx, transport.DeviceRegistration{Name: "rita-laptop", Platform: "linux"})
+	// The cloud identifies a desktop device by its name (ADR-0057): registering the same name again
+	// reactivates the revoked device, which is what the application does at the next sign-in.
+	dev2, err := c.RegisterDevice(ctx, transport.DeviceRegistration{Name: regName, Platform: "linux"})
 	if err != nil {
 		t.Fatal(err)
 	}

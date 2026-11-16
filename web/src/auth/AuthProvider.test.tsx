@@ -1,5 +1,5 @@
 import { act, render, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createClient } from '@clarae/api-client';
 import { fakeAuth } from '../test/utils';
 import { AuthProvider, useAuth, type AuthState } from './AuthProvider';
@@ -56,5 +56,25 @@ describe('AuthProvider getAccessToken', () => {
     expect(seen).toEqual(['Bearer first', 'Bearer second']);
     // The getter does not change with the token: the client (and what captured it) stays the same.
     expect((states.at(-1) as AuthState).getAccessToken).toBe(getAccessToken);
+  });
+});
+
+describe('AuthProvider signOut', () => {
+  it('shows a failed sign-out as an error instead of leaving an unhandled rejection', async () => {
+    const auth = fakeAuth();
+    vi.spyOn(auth, 'signOut').mockRejectedValue(new Error('end-session failed'));
+    const states: AuthState[] = [];
+    function Capture() {
+      states.push(useAuth());
+      return null;
+    }
+    render(
+      <AuthProvider service={auth}>
+        <Capture />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(states.at(-1)?.status).toBe('ready'));
+    act(() => (states.at(-1) as AuthState).signOut());
+    await waitFor(() => expect(states.at(-1)?.error?.message).toBe('end-session failed'));
   });
 });

@@ -88,3 +88,22 @@ func (s *MemoryStore) Get(server string) (string, error) { return s.m[server], n
 
 // Delete implements SecretStore.
 func (s *MemoryStore) Delete(server string) error { delete(s.m, server); return nil }
+
+// loggedOutFile is the marker of an explicit sign-out in the data directory: while it exists,
+// the next interactive sign-in asks for the credentials (prompt=login), so a session that
+// survives at the identity provider (a broker, a realm that kept it) does not sign the user
+// back in without a password. A successful sign-in removes it.
+const loggedOutFile = "auth-logged-out"
+
+func markExplicitLogout(dataDir string) error {
+	return os.WriteFile(filepath.Join(dataDir, loggedOutFile), []byte("1\n"), 0o600)
+}
+
+func explicitLogoutPending(dataDir string) bool {
+	_, err := os.Stat(filepath.Join(dataDir, loggedOutFile))
+	return err == nil
+}
+
+func clearExplicitLogout(dataDir string) {
+	_ = os.Remove(filepath.Join(dataDir, loggedOutFile))
+}

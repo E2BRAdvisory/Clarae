@@ -32,6 +32,15 @@ type tokens struct{ user string }
 
 func (t tokens) Token(context.Context) (string, error) { return issuer.Token(t.user), nil }
 
+// uniqueDeviceName makes the name a test registers its device with unique in the run: the cloud
+// identifies a desktop device by user, platform and name (ADR-0057), so tests of one run that
+// share a name would share one device (and the revocation of one would revoke the others).
+func uniqueDeviceName(name string) string {
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%s-%x", name, b)
+}
+
 func newClient(t *testing.T, user string) *transport.Client {
 	t.Helper()
 	c, err := transport.New(serverURL, tokens{user}, &http.Client{Timeout: 2 * time.Minute}, "e2e")
@@ -114,7 +123,7 @@ func newDeviceRef(t *testing.T, user, name, cloudRef string, readOnly bool, ciph
 	if err != nil {
 		t.Fatal(err)
 	}
-	dev, err := client.RegisterDevice(ctx, transport.DeviceRegistration{Name: name, Platform: "linux"})
+	dev, err := client.RegisterDevice(ctx, transport.DeviceRegistration{Name: uniqueDeviceName(name), Platform: "linux"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -82,7 +82,9 @@ if [ "$TWO" = 1 ]; then
     d="$DEV_DIR/with-cloud-$n"; mkdir -p "$d/vaults"
     [ "$DEMO" = 1 ] && seed_demo_vault "$d/vaults/Demo"
     log "Starting device $n (data: ${d#$ROOT/})"
-    CLARAE_DATA_DIR="$d" "$BIN" --log-level debug >/dev/null 2>&1 &
+    # The cloud identifies a desktop device by its name (ADR-0057): two instances on this host
+    # need two names, or they would be one device.
+    CLARAE_DEVICE_NAME="$(hostname -s)-dev$n" CLARAE_DATA_DIR="$d" "$BIN" --log-level debug >/dev/null 2>&1 &
     DESKTOP_PIDS="$DESKTOP_PIDS $!"
   done
   log "Two devices running. Sign in with user1 on both; press Ctrl-C to stop"

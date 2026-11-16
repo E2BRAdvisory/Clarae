@@ -36,6 +36,26 @@ type fakeIdP struct {
 	rejectURI sync.Map
 	// authRequests counts the requests to the authorization endpoint (the probes included).
 	authRequests atomic.Int32
+	// announceEndpoints makes discovery announce revocation_endpoint (/custom/revoke) and
+	// end_session_endpoint (/custom/logout), which the code must use instead of the Keycloak paths.
+	announceEndpoints atomic.Bool
+	// calls records, in order, the sign-out requests and the prompt of the authorization requests.
+	callsMu sync.Mutex
+	calls   []string
+	// lastPrompt is the prompt parameter of the last authorization request.
+	lastPrompt atomic.Pointer[string]
+}
+
+func (f *fakeIdP) record(call string) {
+	f.callsMu.Lock()
+	f.calls = append(f.calls, call)
+	f.callsMu.Unlock()
+}
+
+func (f *fakeIdP) recorded() []string {
+	f.callsMu.Lock()
+	defer f.callsMu.Unlock()
+	return append([]string(nil), f.calls...)
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -43,17 +63,24 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	f := &fakeIdP{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		doc := map[string]any{
 			"issuer":                 f.srv.URL,
 			"authorization_endpoint": f.srv.URL + "/auth",
 			"token_endpoint":         f.srv.URL + "/token",
 			"jwks_uri":               f.srv.URL + "/jwks",
-		})
+		}
+		if f.announceEndpoints.Load() {
+			doc["revocation_endpoint"] = f.srv.URL + "/custom/revoke"
+			doc["end_session_endpoint"] = f.srv.URL + "/custom/logout"
+		}
+		_ = json.NewEncoder(w).Encode(doc)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"keys":[]}`)) })
 	mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		f.authRequests.Add(1)
+		prompt := q.Get("prompt")
+		f.lastPrompt.Store(&prompt)
 		if q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {
 			http.Error(w, "pkce required", http.StatusBadRequest)
 			return
@@ -108,7 +135,19 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	})
 	mux.HandleFunc("/protocol/openid-connect/revoke", func(w http.ResponseWriter, _ *http.Request) {
 		f.revoked.Add(1)
+		f.record("revoke:keycloak-default")
 		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/custom/revoke", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		f.revoked.Add(1)
+		f.record("revoke:" + r.Form.Get("client_id") + ":" + r.Form.Get("token"))
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/custom/logout", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		f.record("logout:" + r.Form.Get("client_id") + ":" + r.Form.Get("refresh_token"))
+		w.WriteHeader(http.StatusNoContent)
 	})
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)

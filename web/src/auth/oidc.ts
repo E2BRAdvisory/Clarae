@@ -52,6 +52,39 @@ export function sessionEnded(err: unknown): boolean {
   return err instanceof ErrorResponse && !TRANSIENT_OAUTH_ERRORS.has(err.error ?? '');
 }
 
+/**
+ * Set by an explicit sign-out and read by the next sign-in, which then asks the identity provider for the
+ * credentials (`prompt=login`) even when an SSO session survived (a broker, an older realm). localStorage,
+ * not sessionStorage: it must outlive the tab. Cleared when a sign-in completes (ADR-0058).
+ */
+export const FORCE_LOGIN_KEY = 'clarae.auth.forceLogin';
+
+/** localStorage may be blocked (privacy modes, a full quota): the marker is then simply not kept. */
+function markerSet(): boolean {
+  try {
+    return window.localStorage.getItem(FORCE_LOGIN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+function setMarker(): void {
+  try {
+    window.localStorage.setItem(FORCE_LOGIN_KEY, '1');
+  } catch {
+    // not kept: the next sign-in simply does not force the prompt
+  }
+}
+function clearMarker(): void {
+  try {
+    window.localStorage.removeItem(FORCE_LOGIN_KEY);
+  } catch {
+    // nothing to clear
+  }
+}
+
+/** Where the page goes without the identity provider's help (a seam: tests cannot navigate). */
+export const navigation = { assign: (href: string) => window.location.assign(href) };
+
 type Renewal =
   { kind: 'ok'; user: User } | { kind: 'ended' } | { kind: 'unavailable'; error: unknown };
 
@@ -75,6 +108,8 @@ export function createOidcAuth(
   renewRetryMs: readonly number[] = RENEW_RETRY_MS,
 ): AuthService {
   let manager: Promise<UserManager> | undefined;
+  /** The client id of the configuration the manager was made with (the sign-out request names it). */
+  let webClientId = '';
 
   /** The client configuration, retried a few times; a failure is not remembered (see getManager). */
   const loadConfig = async (): Promise<ClientConfig> => {
@@ -119,12 +154,15 @@ export function createOidcAuth(
 
   const getManager = (): Promise<UserManager> => {
     manager ??= loadConfig().then((cfg) => {
+      webClientId = cfg.webClientId;
       const store = new WebStorageStateStore({ store: window.sessionStorage });
       const mgr = new UserManager({
         authority: cfg.issuer,
         client_id: cfg.webClientId,
         redirect_uri: `${window.location.origin}/auth/callback`,
-        post_logout_redirect_uri: `${window.location.origin}/`,
+        // Where the identity provider sends the browser back after the sign-out: a public page that does
+        // not sign in again by itself, so that signing out is visible (the guard would restart the login).
+        post_logout_redirect_uri: `${window.location.origin}/signed-out`,
         response_type: 'code',
         scope: 'openid profile email',
         userStore: store,
@@ -175,11 +213,15 @@ export function createOidcAuth(
     },
     async signIn(returnTo) {
       const mgr = await getManager();
-      await mgr.signinRedirect({ state: { returnTo } });
+      await mgr.signinRedirect({
+        state: { returnTo },
+        ...(markerSet() ? { prompt: 'login' } : {}),
+      });
     },
     async completeSignIn() {
       const mgr = await getManager();
       const u = await mgr.signinRedirectCallback();
+      clearMarker();
       const state = u.state as { returnTo?: unknown } | undefined;
       const to = state?.returnTo;
       // Only same-origin paths: never an absolute URL smuggled through state.
@@ -187,7 +229,36 @@ export function createOidcAuth(
     },
     async signOut() {
       const mgr = await getManager();
-      await mgr.signoutRedirect();
+      // The parameters are explicit, not left to what the library remembers: Keycloak gets the same
+      // request with an ID token, and `client_id` which the library only adds when there is no hint.
+      const u = await mgr.getUser();
+      setMarker();
+      // The refresh token dies with the session: a sign-out that leaves it valid would be a pretence.
+      // But best effort, and apart from the sign-out: with `revokeTokensOnSignout` a revocation that
+      // fails (offline, a 5xx, CORS) aborts the library's sign-out before it removes the user, which
+      // would leave the user signed in. The identity provider's session ends in any case.
+      try {
+        await mgr.revokeTokens();
+      } catch (e) {
+        console.warn('the tokens could not be revoked; signing out anyway', e);
+      }
+      try {
+        await mgr.signoutRedirect({
+          ...(u?.id_token ? { id_token_hint: u.id_token } : {}),
+          post_logout_redirect_uri: `${window.location.origin}/signed-out`,
+          extraQueryParams: { client_id: webClientId },
+        });
+      } catch (e) {
+        // The identity provider cannot be reached (discovery, the end-session endpoint): the user is
+        // signed out here all the same, and the marker makes the next sign-in ask for the credentials.
+        console.warn('the identity provider could not be asked to end the session', e);
+        try {
+          await mgr.removeUser();
+        } catch {
+          // storage unavailable: the page is left all the same
+        }
+        navigation.assign('/signed-out');
+      }
     },
     onUserChange(cb) {
       let off: (() => void) | undefined;

@@ -21,4 +21,4 @@ func (s *Service) login(context.Context, string) error { return errDesktopSignIn
 
 func (s *Service) refreshToken(context.Context) (string, error) { return "", errDesktopSignIn }
 
-func (s *Service) revokeRefresh(context.Context, *persisted, *idpClient, string) {}
+func (s *Service) endIdentityProviderSession(context.Context, *persisted, string) {}

@@ -15,6 +15,31 @@ test('anonymous visitors are sent to sign in and the target path is remembered',
   expect(url.searchParams.get('returnTo')).toBe('/vaults');
 });
 
+test('signing out lands on a public page that does not sign in again by itself', async ({
+  page,
+}) => {
+  let signInRequests = 0;
+  await page.route('**/e2e-signin**', (route) => {
+    signInRequests++;
+    return route.fulfill({ contentType: 'text/html', body: '<h1>Identity provider</h1>' });
+  });
+  await signedIn(page);
+  await mockApi(page, { 'GET /me/usage': { used_bytes: 1, quota_bytes: 100, level: 'ok' } });
+  await page.goto('/usage');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/signed-out$/);
+  await expect(
+    page.getByRole('heading', { name: 'You have signed out of Clarae notanda' }),
+  ).toBeVisible();
+  // Reading the page again does not restart the login: the sign-out stays visible.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  expect(signInRequests).toBe(0);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Identity provider' })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('returnTo')).toBe('/');
+});
+
 test('the usage page shows the quota bar and its warning level', async ({ page }) => {
   await signedIn(page);
   await mockApi(page, { 'GET /me/usage': { used_bytes: 96, quota_bytes: 100, level: 'critical' } });

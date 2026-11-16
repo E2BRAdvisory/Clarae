@@ -8,7 +8,10 @@ import (
 	"testing"
 )
 
-const prodRealm = "../../../../deploy/keycloak-prod/realm-clarae.json"
+const (
+	prodRealm = "../../../../deploy/keycloak-prod/realm-clarae.json"
+	devRealm  = "../../../../deploy/keycloak/realm-clarae.json"
+)
 
 // realmClient loads one client of a realm export as a generic JSON object.
 func realmClient(t *testing.T, path, clientID string) map[string]any {
@@ -95,7 +98,18 @@ func TestProductionRealmWebClientUsesPublicOrigin(t *testing.T) {
 		t.Errorf("webOrigins = %q, want [${WEB_UI_ORIGIN}]", got)
 	}
 
-	// web/src/auth/oidc.ts signs out with post_logout_redirect_uri = window.location.origin + "/".
+	// web/src/auth/oidc.ts signs out with post_logout_redirect_uri = window.location.origin + "/signed-out"
+	// (ADR-0058); the sign-out of 1.7 and earlier returned to window.location.origin + "/".
+	for _, uri := range []string{"${WEB_UI_ORIGIN}/signed-out", "${WEB_UI_ORIGIN}/"} {
+		if !postLogoutAllows(t, c, uri) {
+			t.Errorf("post.logout.redirect.uris does not cover %s: Keycloak would refuse the Web UI logout", uri)
+		}
+	}
+}
+
+// postLogoutAllows reports whether the client's post.logout.redirect.uris accept uri.
+func postLogoutAllows(t *testing.T, c map[string]any, uri string) bool {
+	t.Helper()
 	attrs, _ := c["attributes"].(map[string]any)
 	post, _ := attrs["post.logout.redirect.uris"].(string)
 	var allowed []string
@@ -106,8 +120,18 @@ func TestProductionRealmWebClientUsesPublicOrigin(t *testing.T) {
 		}
 		allowed = append(allowed, p)
 	}
-	if !uriAllowed("${WEB_UI_ORIGIN}/", allowed) {
-		t.Errorf("post.logout.redirect.uris = %q does not cover ${WEB_UI_ORIGIN}/: Keycloak would refuse the Web UI logout", post)
+	return uriAllowed(uri, allowed)
+}
+
+// The development realm (deploy/keycloak, imported by task stack-up) serves the Web UI from the Vite
+// dev server and from the cloud itself: the page the console returns to after a logout must be allowed
+// on both, or the sign-out ends on a Keycloak error page.
+func TestDevelopmentRealmWebClientAllowsTheSignedOutPage(t *testing.T) {
+	c := realmClient(t, devRealm, "clarae-web")
+	for _, origin := range []string{"http://localhost:5174", "http://localhost:18081"} {
+		if !postLogoutAllows(t, c, origin+"/signed-out") {
+			t.Errorf("post.logout.redirect.uris does not cover %s/signed-out", origin)
+		}
 	}
 }
 

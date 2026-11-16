@@ -49,6 +49,22 @@ INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at, ide
 VALUES ($1, $2, $3, $4, $5, now(), sqlc.narg('idempotency_key'))
 RETURNING *;
 
+-- name: UpsertDesktopDevice :one
+-- Registers a desktop device by its host name (ADR-0057): the row of the same
+-- (user, platform, host name) is reactivated instead of a new one created. The
+-- host name is the trimmed, lower-cased device name, the same expression the
+-- migration 0016 used. An Idempotency-Key replaces the one the row had (the
+-- caller already looked the key up, so no other row of the user holds it).
+INSERT INTO devices (id, user_id, name, platform, app_version, last_seen_at, idempotency_key, hostname)
+VALUES ($1, $2, $3, $4, $5, now(), sqlc.narg('idempotency_key'), lower(btrim($3)))
+ON CONFLICT (user_id, platform, hostname) WHERE hostname IS NOT NULL DO UPDATE
+SET revoked_at = NULL,
+    last_seen_at = now(),
+    name = EXCLUDED.name,
+    app_version = COALESCE(EXCLUDED.app_version, devices.app_version),
+    idempotency_key = COALESCE(EXCLUDED.idempotency_key, devices.idempotency_key)
+RETURNING *;
+
 -- name: GetDeviceByIdempotencyKey :one
 -- The device a POST /me/devices carrying this Idempotency-Key registered.
 SELECT * FROM devices WHERE user_id = $1 AND idempotency_key = $2;

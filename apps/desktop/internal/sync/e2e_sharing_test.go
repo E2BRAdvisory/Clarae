@@ -283,7 +283,7 @@ func newManagerEnv(t *testing.T, user string) *managerEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dev, err := c.RegisterDevice(ctx, transport.DeviceRegistration{Name: user + "-mgr", Platform: "linux"})
+	dev, err := c.RegisterDevice(ctx, transport.DeviceRegistration{Name: uniqueDeviceName(user + "-mgr"), Platform: "linux"})
 	if err != nil {
 		t.Fatal(err)
 	}

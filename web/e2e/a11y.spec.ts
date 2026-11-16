@@ -21,6 +21,7 @@ const routes: [string, string][] = [
   ['admin config', '/admin/config'],
   ['admin config detail', `/admin/config/${P}`],
   ['admin audit', '/admin/audit'],
+  ['signed out', '/signed-out'],
   ['not found', '/does-not-exist'],
 ];
 

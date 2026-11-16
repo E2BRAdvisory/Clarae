@@ -20,6 +20,7 @@ type Device struct {
 	LastSeenAt     *time.Time
 	RevokedAt      *time.Time
 	IdempotencyKey *string
+	Hostname       *string
 }
 
 type User struct {

@@ -15,6 +15,13 @@ const testDeviceID = "0190a0a0-0000-7000-8000-0000000000d1"
 // fakeCloud serves /client-config, /me and /me/devices.
 func newFakeCloud(t *testing.T, issuer string) *httptest.Server {
 	t.Helper()
+	return newFakeCloudWith(t, issuer, nil)
+}
+
+// newFakeCloudWith is newFakeCloud that also serves DELETE /me/devices/{id} (revoke) and reports
+// every revoked id to onRevoke (nil: ignored).
+func newFakeCloudWith(t *testing.T, issuer string, onRevoke func(id string)) *httptest.Server {
+	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/client-config", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "desktop_client_id": "clarae-desktop", "audience": "clarae-api", "grpc_endpoint": "127.0.0.1:18082", "api_version": "test"})
@@ -40,6 +47,15 @@ func newFakeCloud(t *testing.T, issuer string) *httptest.Server {
 		}
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": testDeviceID, "name": "x", "platform": "macos", "created_at": time.Now()})
+	})
+	mux.HandleFunc("DELETE /api/v1/me/devices/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !authed(w, r) {
+			return
+		}
+		if onRevoke != nil {
+			onRevoke(r.PathValue("id"))
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)

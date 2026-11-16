@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -211,9 +212,26 @@ func (s *Service) ListDevices(ctx context.Context, userID uuid.UUID) ([]usersdb.
 // MaxIdempotencyKey is the longest Idempotency-Key accepted (api/openapi.yaml).
 const MaxIdempotencyKey = 128
 
-// RegisterDevice creates a device and returns it. A non-empty
+// isDesktopPlatform reports the platforms whose device is identified by its
+// host name (ADR-0057). A web device has no host name: every registration is a
+// new device.
+func isDesktopPlatform(platform string) bool {
+	switch platform {
+	case "windows", "macos", "linux":
+		return true
+	}
+	return false
+}
+
+// RegisterDevice registers a device and returns it. A non-empty
 // idempotencyKey makes the request safe to retry: the device an earlier
 // attempt registered with the same key is returned instead of a second one.
+//
+// For a desktop platform (windows, macos, linux) the name is the host name and
+// identifies the device (ADR-0057): registering it again, for instance at the
+// next login, returns the same device, reactivated if it had been revoked. Two
+// machines of one user with the same host name and platform are therefore one
+// device. A web device is always a new one.
 func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, idempotencyKey, name, platform string, appVersion *string) (usersdb.Device, error) {
 	if len(idempotencyKey) > MaxIdempotencyKey {
 		return usersdb.Device{}, httpproblem.Errorf(syncproto.CodeValidationFailed, "Idempotency-Key must be at most %d characters", MaxIdempotencyKey)
@@ -229,14 +247,27 @@ func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, idempote
 	if idempotencyKey != "" {
 		key = &idempotencyKey
 	}
-	d, err := usersdb.New(s.db.Pool).CreateDevice(ctx, usersdb.CreateDeviceParams{
-		ID:             id,
-		UserID:         userID,
-		Name:           name,
-		Platform:       platform,
-		AppVersion:     appVersion,
-		IdempotencyKey: key,
-	})
+	q := usersdb.New(s.db.Pool)
+	var d usersdb.Device
+	if isDesktopPlatform(platform) && strings.TrimSpace(name) != "" {
+		d, err = q.UpsertDesktopDevice(ctx, usersdb.UpsertDesktopDeviceParams{
+			ID:             id,
+			UserID:         userID,
+			Name:           name,
+			Platform:       platform,
+			AppVersion:     appVersion,
+			IdempotencyKey: key,
+		})
+	} else {
+		d, err = q.CreateDevice(ctx, usersdb.CreateDeviceParams{
+			ID:             id,
+			UserID:         userID,
+			Name:           name,
+			Platform:       platform,
+			AppVersion:     appVersion,
+			IdempotencyKey: key,
+		})
+	}
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == "devices_idempotency_key_uq" {
 		// A concurrent attempt with the same key committed first.

@@ -26,7 +26,8 @@ export function createE2EAuth(): AuthService {
     completeSignIn: () => Promise.resolve('/'),
     signOut: () => {
       window.sessionStorage.removeItem(E2E_USER_KEY);
-      window.location.assign('/e2e-signed-out');
+      // The page the identity provider returns to after a real sign-out (oidc.ts).
+      window.location.assign('/signed-out');
       return Promise.resolve();
     },
     onUserChange: () => () => {},

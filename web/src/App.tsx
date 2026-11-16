@@ -28,6 +28,7 @@ import { AccountPage } from './pages/Account';
 import { CallbackPage } from './pages/Callback';
 import { DevicesPage } from './pages/Devices';
 import { SharesPage } from './pages/Shares';
+import { SignedOutPage } from './pages/SignedOut';
 import { UsagePage } from './pages/Usage';
 import { VaultsPage } from './pages/Vaults';
 
@@ -40,6 +41,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
+      <Route path="/signed-out" element={<SignedOutPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
           <Route index element={<Navigate to="/usage" replace />} />
