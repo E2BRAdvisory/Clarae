@@ -1093,6 +1093,7 @@ features:
         - web/e2e/workbench.spec.ts
         - apps/desktop/frontend/e2e/workflows.spec.ts
         - apps/desktop/frontend/e2e/keyboard.spec.ts
+    notes: la rinomina non mostra né cambia l'estensione dei file che si aprono in una scheda (`promptRename`, ADR-0063)
 
   - id: note.delete
     title: Eliminazione di note e file
@@ -1120,9 +1121,12 @@ features:
       desktop:
         - packages/workbench/src/sidebar/trees.test.ts
         - packages/workbench/src/sidebar/explorerCollapsed.test.tsx
+        - packages/workbench/src/embeds/media.test.ts
+        - packages/workbench/src/app/rename.test.ts
         - apps/desktop/frontend/e2e/keyboard.spec.ts
       workbench:
         - apps/desktop/frontend/e2e/keyboard.spec.ts
+    notes: i nomi senza estensione per tutti i file che si aprono in una scheda (`openTarget`, `splitName`), solo per gli altri l'estensione resta visibile (ADR-0063)
 
   - id: attachments
     title: Allegati e media
@@ -1482,7 +1486,7 @@ features:
     title: Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
     desktop:
       status: yes
-      note: solo su macOS (WKWebView, capability embeddedBrowser, `internal/shell/nativeview`); su Windows e Linux non c'è un driver e la pagina si apre nel browser di sistema. Dietro il flag `features.web_viewer` del profilo (acceso di default, ADR-0060). Sessioni persistenti per vault e locali al dispositivo, nel contenitore di WebKit e fuori dal vault; solo http e https; nessun bridge, download, permesso o finestra nuova nell'app
+      note: macOS (WKWebView), Windows (WebView2) e Linux (WebKitGTK, build GTK3), capability embeddedBrowser, `internal/shell/nativeview` (ADR-0056, ADR-0062). Su Windows e Linux è acceso di default con ripiego automatico alla pagina nel browser di sistema (runtime assente o troppo vecchio, innesto non riuscito) e `CLARAE_WEBVIEW=off` per spegnerlo; su Linux serve anche bubblewrap (la sandbox di WebKit è obbligatoria, altrimenti ripiego); i driver di Windows e Linux non sono provati su una finestra reale. Dietro il flag `features.web_viewer` del profilo (acceso di default, ADR-0060). Sessioni persistenti per vault e locali al dispositivo (contenitore di WebKit su macOS, cartella `webapps/<vault>` su Windows e Linux) e fuori dal vault; solo http e https; nessun bridge, download, permesso o finestra nuova nell'app
       capability: embeddedBrowser
       bindings:
         - WebViewAPI.Status
@@ -1508,6 +1512,11 @@ features:
         - apps/desktop/internal/webview/url_test.go
         - apps/desktop/internal/app/bindings_webview_test.go
         - apps/desktop/internal/shell/nativeview/driver_darwin_live_test.go
+        - apps/desktop/internal/shell/nativeview/driver_linux_live_test.go
+        - apps/desktop/internal/shell/nativeview/driver_windows_test.go
+        - apps/desktop/internal/shell/nativeview/switch_test.go
+        - apps/desktop/internal/shell/nativeview/datafolders_test.go
+        - apps/desktop/internal/app/capabilities_test.go
         - packages/workbench/src/webapp/nativeViews.test.ts
         - packages/workbench/src/webapp/accelerators.test.ts
         - packages/workbench/src/webapp/BrowserView.test.tsx

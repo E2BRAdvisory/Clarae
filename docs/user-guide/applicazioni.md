@@ -2,18 +2,22 @@
 
 Un'**applicazione** è una pagina web registrata nel vault, per esempio uno strumento che usate ogni giorno (una chat, un calendario, una dashboard, un servizio interno). Si apre in una scheda, accanto alle vostre note, senza uscire da Clarae notanda.
 
-> **La funzione è accesa di default.** Chi amministra il cloud può spegnerla, con il flag `features.web_viewer` nel vostro profilo di configurazione: se nel ribbon, nel pannello vuoto e nell'esploratore dei file non c'è _Nuova applicazione_, è spenta per voi. Senza un cloud (un vault solo locale) non c'è un profilo e la funzione resta accesa. Fino alla 1.7.1 era spenta di default. È una funzione ancora poco provata sulla finestra reale: vedi [Limiti](#limiti).
+> **La funzione è accesa di default.** Chi amministra il cloud può spegnerla, con il flag `features.web_viewer` nel vostro profilo di configurazione: se nel ribbon, nel pannello vuoto e nell'esploratore dei file non c'è _Nuova applicazione_, è spenta per voi. Senza un cloud (un vault solo locale) non c'è un profilo e la funzione resta accesa. Fino alla 1.7.1 era spenta di default. È una funzione ancora poco provata sulla finestra reale, e **su Windows e su Linux non è mai stata provata su una finestra vera**: vedi [Limiti](#limiti).
 
 ## Dove funziona
 
-| Dove                          | Che cosa succede                                                                                                                                                            |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Client desktop su macOS**   | La pagina si apre **dentro la scheda**, in un browser incorporato (quello del sistema, WebKit).                                                                             |
-| **Client desktop su Windows** | Per ora non c'è un browser incorporato: la scheda mostra un riquadro con il pulsante **«Apri nel browser»**, che apre la pagina nel browser predefinito del sistema.        |
-| **Client desktop su Linux**   | Come su Windows.                                                                                                                                                            |
-| **Workbench web**             | La pagina non può stare dentro un'altra pagina web (molti siti lo vietano): la scheda mostra il riquadro con **«Apri nel browser»**, che apre una nuova scheda del browser. |
+| Dove                          | Che cosa succede                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Client desktop su macOS**   | La pagina si apre **dentro la scheda**, in un browser incorporato (quello del sistema, WebKit).                                                                                                                                                                                                                                                                                                                                      |
+| **Client desktop su Windows** | Come su macOS, con **WebView2** (il motore di Microsoft Edge). Serve il _WebView2 Runtime_ dalla versione **1.0.2210.55**; senza, o con uno più vecchio, vale il ripiego descritto sotto.                                                                                                                                                                                                                                            |
+| **Client desktop su Linux**   | Come su macOS, con **WebKitGTK**. Serve `webkit2gtk-4.1` dalla versione **2.40**, il pacchetto ufficiale (costruito per GTK 3) e **bubblewrap (`bwrap`)** installato e funzionante: WebKit mette la pagina in una sandbox e l'app non la apre senza. Senza questi requisiti, o in un ambiente che non permette la sandbox (un container, un sistema con i namespace utente spenti, Flatpak o Snap), vale il ripiego descritto sotto. |
+| **Workbench web**             | La pagina non può stare dentro un'altra pagina web (molti siti lo vietano): la scheda mostra il riquadro con **«Apri nel browser»**, che apre una nuova scheda del browser.                                                                                                                                                                                                                                                          |
 
-Nei casi senza browser incorporato tutto il resto della guida vale ugualmente (creare, rinominare, cambiare indirizzo, aprire dal browser), tranne le sezioni che parlano della barra, delle scorciatoie e dei dati di sessione.
+**Il ripiego.** Se il computer non può mostrare la pagina nella scheda (manca il runtime o è troppo vecchio, su Linux manca `bwrap` o la sandbox non si può creare, la finestra non ha la struttura che il driver si aspetta, oppure la vista integrata è stata spenta), la scheda mostra il riquadro con il pulsante **«Apri nel browser»**, che apre la pagina nel browser predefinito del sistema. Non compaiono errori: se la prima apertura trova il sistema incapace, per il resto della sessione le applicazioni mostrano direttamente il riquadro.
+
+**Spegnere la vista integrata su un computer.** Su Windows e su Linux si può avviare l'app con la variabile d'ambiente `CLARAE_WEBVIEW=off` (vale solo il valore `off`): le applicazioni si aprono allora nel browser di sistema. Serve a chi ha un computer dove la vista si comporta male. Su macOS la variabile non esiste.
+
+Nei casi senza browser incorporato (workbench web, o ripiego) tutto il resto della guida vale ugualmente (creare, rinominare, cambiare indirizzo, aprire dal browser), tranne le sezioni che parlano della barra, delle scorciatoie e dei dati di sessione.
 
 ## Creare un'applicazione
 
@@ -45,7 +49,7 @@ La prima volta che un indirizzo si apre **su questo dispositivo** (per ogni vaul
 
 ## La barra della scheda
 
-Sopra la pagina, nei client con il browser incorporato (macOS):
+Sopra la pagina, nei client con il browser incorporato (macOS, Windows, Linux; dove nel testo compare `Mod`, è `Cmd` su macOS e `Ctrl` sugli altri sistemi):
 
 | Elemento         | Che cosa fa                                                                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -91,28 +95,31 @@ La pagina gira in una vista **separata** dall'app, come una scheda di un browser
 - Un sito con un **certificato non valido** non si apre e non c'è modo di forzarlo.
 - **Rete locale.** Potete registrare un indirizzo privato (`localhost`, un NAS, uno strumento self-hosted). Ma una pagina arrivata da un sito pubblico **non può portarvi** su un indirizzo locale: ci sono servizi del vostro computer (compreso l'accesso al cloud) che non devono essere raggiungibili da un sito. La regola riguarda la pagina nel suo insieme, non ciò che incorpora o richiede dietro le quinte; non protegge da un nome che, risolto, punta a un indirizzo locale.
 - Gli avvisi `alert`, `confirm` e `prompt` della pagina non compaiono: `alert` è confermato da solo, gli altri rispondono «no» e nulla. L'audio e il video partono solo dopo un vostro gesto e il pieno schermo di un elemento della pagina è disattivato.
-- L'aspetto e il tema dell'app non si applicano alla pagina, e la pagina si presenta come Safari.
+- L'aspetto e il tema dell'app non si applicano alla pagina. La pagina si presenta come Safari su macOS e su Linux (con il nome del motore, WebKitGTK) e come Edge su Windows.
 
 ## Dati di sessione
 
-Cookie, accessi e archivio locale delle pagine restano **su questo dispositivo**: non sono nel vault, non si sincronizzano e non sono visibili ad altri dispositivi. Sono **separati per vault**: lo stesso sito aperto da due vault ha due sessioni diverse. Su macOS i dati stanno nel contenitore di WebKit (non in una cartella del vault).
+Cookie, accessi e archivio locale delle pagine restano **su questo dispositivo**: non sono nel vault, non si sincronizzano e non sono visibili ad altri dispositivi. Sono **separati per vault**: lo stesso sito aperto da due vault ha due sessioni diverse. Su macOS i dati stanno nel contenitore di WebKit (non in una cartella del vault). Su Windows e su Linux stanno nella cartella dei dati dell'app, sotto `webapps/`, **una cartella per vault**, e **restano anche dopo il riavvio** (cookie compresi).
 
+- **Su Windows e su Linux** la sessione dura nel tempo, su ogni versione.
 - **Su macOS 14 o successivo** la sessione dura nel tempo: chiudendo e riaprendo l'app siete ancora connessi. **Su macOS 13** dura finché l'app è aperta, e **l'app non vi avvisa**.
 - **_Elimina i dati delle applicazioni_** (palette) chiude le pagine del vault e cancella cookie, sessioni e cache delle sue applicazioni su questo dispositivo; ogni applicazione chiederà di nuovo la conferma dell'indirizzo. I file `.webapp` restano. Non tocca gli altri vault né gli altri dispositivi.
 - Se una condivisione ricevuta viene rimossa dall'app, i suoi dati di sessione vengono cancellati. Se invece cancellate la cartella di un vault fuori dall'app, l'app non lo sa subito: se ne accorge da sola, **all'avvio e in background**, e cancella i dati di quel vault solo quando è sicura che non esiste più. Cioè quando il vault non è aperto, non è una condivisione ricevuta e non è tra i vault recenti, oppure vi è ma non lo aprite da più di 30 giorni e la sua cartella non esiste più mentre quella che la conteneva c'è e **non è vuota** (una cartella madre vuota è tipica di un punto di mount, per esempio di rclone, sshfs o Cryptomator, non montato: il vault si tiene). Se il vault era l'unica cosa nella sua cartella, i suoi dati restano (qualche megabyte): eliminateli con _Elimina i dati_. **Un vault solo chiuso, su un disco esterno scollegato o su un disco di rete non montato non perde mai i dati.** Fino ad allora, o se volete cancellarli subito, eseguite _Elimina i dati_ da un vault aperto allo stesso percorso.
 
 ## Limiti
 
-- **L'autenticazione HTTP di base** (la finestra del browser che chiede nome utente e password) **non è supportata**: la richiesta è annullata e la pagina non si carica. Idem per NTLM e certificato client. Usate un sito con un accesso in una pagina web.
+- **L'autenticazione HTTP di base** (la finestra del browser che chiede nome utente e password) **non è supportata**: la richiesta è annullata e la pagina non si carica. Idem per il certificato client, e per NTLM su macOS e su Linux (su Windows NTLM e Kerberos li gestisce il runtime WebView2). Usate un sito con un accesso in una pagina web.
 - **I login che si aprono in un popup** e comunicano con la pagina che li ha aperti (`window.opener`) **non funzionano**: i popup non si aprono nell'app, vanno al browser di sistema.
-- Il browser incorporato c'è **solo su macOS**. Windows e Linux aprono la pagina nel browser di sistema. Per Windows esiste un driver in preparazione, **spento e mai provato su un computer Windows**: non cambia ciò che vedete.
+- Il browser incorporato c'è su **macOS, Windows e Linux**. Il workbench web, e un computer senza il runtime richiesto, aprono la pagina nel browser di sistema. **I driver di Windows e di Linux non sono mai stati provati su una finestra vera** (a Linux manca la prova su Wayland e con una scheda grafica reale): una matrice di prove manuali ([`docs/qa/m18-webview-matrice.md`](../qa/m18-webview-matrice.md)) li copre ed è a carico di chi sviluppa. Se la vista si comporta male, spegnetela con `CLARAE_WEBVIEW=off` e segnalate ciò che vedete.
+- **Su Linux** il selettore di file della pagina è annullato (come su macOS) e, per sicurezza, una pagina pubblica che incorpora un frame verso un indirizzo locale lo vede rifiutato, come un reindirizzamento verso un indirizzo locale dopo una pagina pubblica. **La sandbox di WebKit è obbligatoria:** se per qualche motivo il processo che disegna la pagina non riesce a partire dopo che il controllo iniziale è riuscito, l'app può chiudersi senza altri avvisi; Flatpak e Snap non sono provati. Se aprite un'applicazione mentre eliminate i dati delle applicazioni dello stesso vault, la scheda mostra un errore con «Riprova».
+- **Su Windows** lavorare dentro la pagina conta, per il blocco automatico dei vault privati, solo per i tasti e il fuoco: chi legge e scorre soltanto è considerato inattivo. Il selettore di file della pagina non si può negare.
 - **Non provato sulla finestra reale** per alcune cose: il posizionamento della pagina con lo zoom dell'app diverso da 100%, lo sfarfallio nel nascondere e mostrare la pagina, il fuoco da tastiera, il trascinamento di una scheda sopra la pagina. Una matrice di prove manuali ([`docs/qa/m18-webview-matrice.md`](../qa/m18-webview-matrice.md)) non è ancora stata eseguita, anche se dalla versione che ha il pulsante nell'esploratore la funzione è accesa di default. Segnalate ciò che vedete.
 - Al massimo **32 applicazioni aperte** per vault (64 in tutto). Oltre, la scheda lo dice e propone «Apri nel browser».
 
 ## Se qualcosa non va
 
 - **Non vedo _Nuova applicazione_.** La funzione è spenta nel vostro profilo di configurazione (o il vault è in sola lettura): chiedete a chi amministra il cloud ([guida per chi amministra](../admin-guide/profili-quote-audit.md#chiavi-del-profilo)).
-- **La scheda mostra un riquadro invece della pagina.** Senza browser incorporato (Windows, Linux, workbench web) è normale: usate «Apri nel browser». Su macOS potrebbe esserci un errore: leggete il messaggio, poi «Riprova».
+- **La scheda mostra un riquadro invece della pagina.** Senza browser incorporato (workbench web, oppure un computer Windows o Linux senza il runtime richiesto, o con `CLARAE_WEBVIEW=off`) è normale: usate «Apri nel browser». Dove il browser incorporato c'è potrebbe esserci un errore: leggete il messaggio, poi «Riprova».
 - **Il file non si apre («Impossibile aprire questa applicazione»).** Il JSON non è valido, l'indirizzo non è `http` o `https`, ha credenziali, o il file è stato scritto da una versione più recente: correggete l'indirizzo con «Cambia indirizzo» (o a mano nel file).
 - **Una pagina chiede un accesso e non funziona.** Vedi [Limiti](#limiti): autenticazione di base e login con popup non sono supportati.
 - **Troppe applicazioni aperte.** Chiudete qualche scheda e usate «Riprova».

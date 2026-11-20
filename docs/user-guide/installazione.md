@@ -8,6 +8,8 @@ L'app desktop è distribuita per macOS, Windows e Linux. Le modalità di distrib
 | Windows | Windows 10/11 con **WebView2 Runtime**          | L'installer registra anche lo schema `clarae://` (necessario per aprire link e per il login). |
 | Linux   | `webkit2gtk-4.1` installato                     | Il pacchetto registra `x-scheme-handler/clarae` nel file `.desktop`.                          |
 
+**Per le [applicazioni](applicazioni.md) nella scheda** servono il _WebView2 Runtime_ dalla versione 1.0.2210.55 (Windows) e `webkit2gtk-4.1` dalla versione 2.40 (Linux). Se mancano, le applicazioni si aprono nel browser di sistema; il resto dell'app funziona lo stesso.
+
 ## Primo avvio
 
 1. Avviate l'app: compare la schermata **Apri un vault**.
