@@ -4,9 +4,9 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.8.0] - 2026-11-20
 
-L'owner **accetta il 2026-11-20 gli ADR 0051, 0062, 0063 e 0064** e `Specifications.md` passa alla **v1.8**: il client desktop su Wails v3.1.0 (ADR-0051, già rilasciato dalla 1.4.0: lo spec lo recepisce, opzione A della proposta; la matrice manuale B-W8 su Windows e Linux resta da eseguire), la vista integrata delle applicazioni su Windows e Linux (ADR-0062) e i nomi dei file senza estensione (ADR-0063), già rilasciati nella 1.7.3 (milestone M22, [roadmap](docs/roadmap.md) §13-quindecies), e il terminale integrato con la finestra separata (ADR-0064, milestone M23, [roadmap](docs/roadmap.md) §13-sedecies). **Il terminale integrato è nuovo e non ancora rilasciato**: è implementato (Onde A, B e C) ma **nulla è provato su una finestra reale**, e il driver di Windows (ConPTY, Job Object) è provato solo in compilazione. `Specifications.md` è ora alla **v1.8** (20 novembre 2026) e dichiara M23 «1.8.0»: il tag seguirà.
+L'owner **accetta il 2026-11-20 gli ADR 0051, 0062, 0063 e 0064** e `Specifications.md` passa alla **v1.8**: il client desktop su Wails v3.1.0 (ADR-0051, già rilasciato dalla 1.4.0: lo spec lo recepisce, opzione A della proposta; la matrice manuale B-W8 su Windows e Linux resta da eseguire), la vista integrata delle applicazioni su Windows e Linux (ADR-0062) e i nomi dei file senza estensione (ADR-0063), già rilasciati nella 1.7.3 (milestone M22, [roadmap](docs/roadmap.md) §13-quindecies), e il terminale integrato con la finestra separata (ADR-0064, milestone M23, [roadmap](docs/roadmap.md) §13-sedecies). **La 1.8.0 porta il terminale integrato** (pulsante nella ribbon, più tab, pannello ancorabile, finestra separata senza riavviare le shell; non nei vault in sola lettura; non nel workbench web), ma **nulla del terminale è provato su una finestra reale**, e il driver di Windows (ConPTY, Job Object) è provato solo in compilazione. Nessuna migrazione del cloud e nessuna modifica delle API del cloud: il cloud 1.8.0 è la 1.7.3 con la versione aggiornata.
 
 ### Compatibilità
 
@@ -28,7 +28,7 @@ L'owner **accetta il 2026-11-20 gli ADR 0051, 0062, 0063 e 0064** e `Specificati
 
 ### Contratti
 
-- Nessuna modifica di `api/openapi.yaml` né dello schema del Config Profile. Binding nuovo `TerminalAPI` (`Open`, `CanOpen`, `Write`, `Resize`, `Close`, `List`, `Snapshot`, `State`, `Undock`, `Dock`), eventi `terminal:output`, `terminal:exit` (con il campo `reason`) e `terminal:layout`, capability `terminal` (desktop su macOS, Windows e Linux; web falsa), metodi `Host.OpenTerminalWindow` e `Host.CloseTerminalWindow` (e `app.TerminalWindowHost`), codici d'errore `terminal-unavailable`, `terminal-read-only`, `terminal-not-found`, `terminal-limit`, `terminal-busy`, `terminal-too-large`, `terminal-failed`. Voce `terminal` del registro di parità (`exception` sul workbench); `task gen` rigenerato.
+- `api/openapi.yaml`: solo `info.version` a 1.8.0 (stub rigenerati); lo schema del Config Profile non cambia. Binding nuovo `TerminalAPI` (`Open`, `CanOpen`, `Write`, `Resize`, `Close`, `List`, `Snapshot`, `State`, `Undock`, `Dock`), eventi `terminal:output`, `terminal:exit` (con il campo `reason`) e `terminal:layout`, capability `terminal` (desktop su macOS, Windows e Linux; web falsa), metodi `Host.OpenTerminalWindow` e `Host.CloseTerminalWindow` (e `app.TerminalWindowHost`), codici d'errore `terminal-unavailable`, `terminal-read-only`, `terminal-not-found`, `terminal-limit`, `terminal-busy`, `terminal-too-large`, `terminal-failed`. Voce `terminal` del registro di parità (`exception` sul workbench); `task gen` rigenerato.
 
 ### Build e sviluppo
 
@@ -44,10 +44,16 @@ L'owner **accetta il 2026-11-20 gli ADR 0051, 0062, 0063 e 0064** e `Specificati
 - **Licenze del terminale controllate** (2026-11-20): `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0, `@xterm/addon-web-links` 0.12.0 e `creack/pty` v1.1.24 sono MIT (campo `license` dei pacchetti e `LICENSE`).
 - **Ancora da fare:** le prove manuali su macOS, Windows e Linux.
 
+### Verificato
+
+- `task ci` verde sull'albero di M23 (559 s): lint, `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (120 pacchetti, compreso `internal/terminal`), vitest (2650 test), conformance, `test-wasm`, `test-core`, parità e `check-gen`; `task e2e` verde (413 passati: desktop 262, bundle di produzione 48, console web 103). Dopo il passaggio alla versione 1.8.0 rieseguiti `check-gen`, parità e i controlli dei file toccati.
+- Una revisione avversariale del diff del terminale (esito Fail: due rilievi medi confermati, link OSC 8 e copertura dei vault bloccati, più un rilievo medio plausibile e quattro bassi), tutti corretti.
+- **Non eseguiti su questo albero:** `task test-integration` e `task test-desktop-e2e` (nessuna modifica del cloud né della sync, a parte l'hook `ReadOnly` dei mount, coperto dai test di `internal/sync`).
+
 ### Non provato e lavoro successivo
 
 - **Il terminale non è mai stato eseguito su una finestra reale**, né su ConPTY e Job Object (Windows: solo `task vet-windows`). Le prove sono a carico dell'owner: [`docs/qa/m23-terminale.md`](docs/qa/m23-terminale.md) (shell e cartella, cambio vault, schede, posizioni, sgancio con `top` che continua, riaggancio, chiusure senza orfani, sola lettura, vault privato bloccato, scorciatoie su layout americano e italiano).
-- **Da fare (owner):** le prove manuali di M23 e B-W8, e il tag 1.8.0.
+- **Da fare (owner):** le prove manuali di M23 e B-W8.
 
 ## [1.7.3] - 2026-11-20
 
