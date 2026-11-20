@@ -10,6 +10,8 @@
 
 **Aggiornamento 2026-11-02.** Lo spec registra lo **stato attuale** (sezione «Stato attuale»): `release.yml` costruisce e pubblica immagine, chart e installer da un tag senza firme né controlli; installer desktop non firmati come deviazione temporanea; firma, cosign, SBOM e manifest di aggiornamento da riattivare (ADR-0023 resta _proposta_); verifiche locali (ADR-0036). I punti 3, 6 e 7 della decisione valgono quando la firma sarà riattivata.
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** La CLI di Wails è **v3** (`task wails-cli`, `scripts/install-wails.sh`, versione di `apps/desktop/go.mod`; serve solo per `task dev-desktop` e per la build Windows), non più `wails@v2.12.0`; su Linux la build non passa più `-tags webkit2_41` ma `-tags production,gtk3` (GTK 3 e WebKit2GTK 4.1). Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 `release.yml` (installer desktop) e `release-images.yml` (immagine cloud e chart, poi assorbito in `release.yml`) sono stati scritti in M7-WP3 ma non sono mai stati eseguiti (ADR-0023, "Verificato e non"). Una lettura del codice ha trovato questi problemi:

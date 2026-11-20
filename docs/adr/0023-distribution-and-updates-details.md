@@ -7,6 +7,8 @@
 | **Riferimenti spec**  | §4 (modulo `updater`, supply chain, release), tabella rischi (scheme `memobrain://`), M7; ADR-0001 |
 | **Devia dallo spec?** | no. Chiarisce: chiave di firma del manifest distinta dai certificati di code signing               |
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** Le parti che dicono «Wails v2», il template NSIS di Wails e `wails.json` sono superate: il client si costruisce con `scripts/build-desktop-bin.sh` e `scripts/release/build-desktop.sh` su Wails v3.1.0, e i metadati del prodotto stanno in `apps/desktop/build/project.json` (vedi [`docs/release/README.md`](../release/README.md)). Il manifest firmato e gli installer firmati di questo ADR non sono mai stati attivati. Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 M7 richiede installer firmati, aggiornamento automatico dal canale firmato, immagini OCI e chart Helm. Mancano le credenziali reali (Authenticode, Apple Developer ID, cosign, chiave del manifest): la pipeline deve firmare quando i segreti ci sono e fallire in modo esplicito quando mancano.

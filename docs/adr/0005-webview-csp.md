@@ -7,6 +7,8 @@
 | **Riferimenti spec**  | §3.7 (CSP restrittiva, niente `unsafe-eval`), D-01                    |
 | **Devia dallo spec?** | no                                                                    |
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** Il tag di build `production` non lo imposta più `wails build`: lo passa `go build -tags production` (`scripts/build-desktop-bin.sh`, più `gtk3` su Linux). Le due CSP e la regola per sviluppo e produzione restano quelle descritte. Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 Il frontend è servito dall'asset server di Wails; in sviluppo passa dal dev server Vite (HMR via WebSocket, stili inline). Serve una CSP stretta in produzione senza rompere lo sviluppo.

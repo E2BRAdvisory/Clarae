@@ -8,6 +8,8 @@
 | **Riferimenti spec**  | §0.1 punto 3, A-03, §2.8, §3.4.1, §3.8.1, §4.4, tabella rischi (Web UI anello debole dell'E2EE); D-02, D-04, D-06; V-02; ADR-0020, ADR-0025, ADR-0030                                                           |
 | **Devia dallo spec?** | sì (A-03, §0.1, §2.8, §4.4, tabella rischi) → richiede aggiornamento di `Specifications.md` da parte dell'owner; testo proposto in "Proposta di modifica dello spec"                                            |
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** I binding sono generati da `internal/app/gen/bindings` in `packages/workbench/wailsjs` (`task gen-wails`, senza la CLI di Wails) e l'ABI per il frontend resta `window.go.app.*` e gli eventi `window.runtime.*`: ciò che l'ADR descrive di `src/app/api.ts` e del mock e2e è ancora vero. Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 Lo spec limita la Web UI del cloud a console amministrativa e area utente (quota, dispositivi, condivisioni, download ZIP): A-03 dice esplicitamente che "la Web UI del cloud non è un editor". L'owner chiede che dalla Web UI si possa gestire il vault **con le stesse funzioni e le stesse interfacce del client desktop** (`apps/desktop/frontend`), funzionanti e con lo stesso comportamento.

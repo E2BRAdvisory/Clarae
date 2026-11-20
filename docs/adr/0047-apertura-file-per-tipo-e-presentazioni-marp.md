@@ -8,7 +8,7 @@
 | **Devia dallo spec?** | sì (§3.4.5: `.marp` entra nella riga «Markdown»; §3.4.6: `.marp` nel contenuto sincronizzato; §2.2.1: nuove righe «Apertura file per tipo» e «Presentazioni Marp»; supera in parte ADR-0027, alternativa «file di slide dedicati») → richiede aggiornamento di `Specifications.md` da parte dell'owner |
 | **Superfici**         | desktop (binding, host Wails, comandi) · workbench web (core WASM, download, comandi) · cloud: nessuna modifica (il server non interpreta il contenuto né il tipo) · console: nessuna                                                                                                                  |
 
-> **Nota (M22, 2026-11-19).** [ADR-0063](0063-nomi-file-senza-estensione.md), **in proposta**, usa il predicato di questo ADR («si apre in una scheda», `openTarget(path) === 'in-app'`) per nascondere l'estensione dei file supportati in tutta l'interfaccia e per far conservare l'estensione alla rinomina. La tabella di apertura qui sotto non cambia.
+> **Nota (M22, 2026-11-20).** [ADR-0063](0063-nomi-file-senza-estensione.md), **accettata** il 2026-11-20 (recepita in `Specifications.md` v1.8, 2026-11-20; [`../spec-v1.8-proposta.md`](../spec-v1.8-proposta.md) resta come storia), usa il predicato di questo ADR («si apre in una scheda», `openTarget(path) === 'in-app'`) per nascondere l'estensione dei file supportati in tutta l'interfaccia e per far conservare l'estensione alla rinomina. La tabella di apertura qui sotto non cambia.
 
 ## Contesto
 

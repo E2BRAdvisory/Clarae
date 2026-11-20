@@ -2,6 +2,8 @@
 
 Da eseguire sui **binari di rilascio** (non sul dev server) di macOS, Windows 11 e Ubuntu 22.04 e 24.04, prima di accettare [ADR-0051](../adr/0051-wails-v3.md). Gli automatismi (vitest dello shim, `go test -race`, e2e su mock dei binding, smoke del binario) non vedono la finestra nativa: qui si verifica quello che solo un sistema operativo vero può dire. Uscita della milestone: **zero P0 e P1**. P0 = perdita di dati alla chiusura, login o deep link rotti, installazione sopra la 1.3.4 fallita (o aggiornamento fallito, per le build con chiave), crash all'avvio. **Nessun rollback a Wails v2** (decisione dell'owner, 2026-11-11, [ADR-0051](../adr/0051-wails-v3.md)): un P0 si corregge in avanti su v3.
 
+> **Nota (2026-11-20).** [ADR-0051](../adr/0051-wails-v3.md) è stato **accettato lo stesso giorno senza che questa matrice fosse eseguita** (decisione dell'owner, opzione A della proposta di spec v1.8; `Specifications.md` v1.8 dice Wails v3.1.0). La matrice resta da eseguire e il rischio su Windows e Linux resta dichiarato; il testo qui sotto è quello originale.
+
 Segnare `[x]` con data, sistema operativo e versione provata; un difetto va annotato sotto la voce con il suo livello (P0, P1, P2).
 
 ## Stato al 2026-11-11 (onda B-W7)

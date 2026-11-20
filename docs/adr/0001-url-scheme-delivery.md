@@ -7,6 +7,8 @@
 | **Riferimenti spec**  | §1.3, §2.2.1 (URI scheme), D-07, D-08                                            |
 | **Devia dallo spec?** | no                                                                               |
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** Il client desktop è su Wails **v3.1.0** (dalla 1.4.0), non più su Wails v2 (2.12): su macOS l'URL arriva con l'evento `ApplicationLaunchedWithUrl` (`apps/desktop/internal/shell/url.go`), non con `Mac.OnUrlOpen`; su Windows e Linux resta il single-instance lock con gli argomenti della seconda istanza. Lo schema URL e i metadati degli installer non sono più in `wails.json` (che non esiste più) ma in `apps/desktop/build/project.json`; lo schema oggi è `clarae://` (ADR-0052). Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 Lo scheme `memobrain://` serve ad aprire note (`memobrain://open?vault=…&file=…`) e come fallback del redirect OIDC (`memobrain://auth/callback`). Wails v2 (2.12) consegna l'URL in modo diverso per OS: su macOS tramite `Mac.OnUrlOpen` (anche ad app già in esecuzione, gestito dal sistema con l'handler di apertura URL); su Windows (solo installer NSIS) e Linux (`.desktop` con `x-scheme-handler`) il sistema avvia una **seconda istanza** con l'URL in `argv`, che il `SingleInstanceLock` inoltra all'istanza attiva tramite `OnSecondInstanceLaunch`.

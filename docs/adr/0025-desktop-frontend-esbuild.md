@@ -7,6 +7,8 @@
 | **Riferimenti spec**  | §2.7 (Excalidraw offline); ADR-0003 (stack), ADR-0005 (CSP), ADR-0010 (asset di Excalidraw)             |
 | **Devia dallo spec?** | sì, in modo puntuale: il bundler di `apps/desktop/frontend` e `web/` (lo spec e ADR-0003 indicano Vite) |
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** Il punto 3 (`frontend:dev:serverUrl` di Wails) non vale più: con Wails v3 il watcher di sviluppo (`wails3 tool watcher`, `apps/desktop/build/config.yml`) usa `FRONTEND_DEVSERVER_URL=http://127.0.0.1:5173`; `wails3 dev` non si usa perché impone `localhost` e una sua porta. Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 Il frontend desktop era costruito e servito in sviluppo da Vite (con `@vitejs/plugin-react`). Si è chiesto di sostituirlo con esbuild. La stessa sostituzione è stata estesa a `web/` (Web UI incorporata nel binario cloud, vedi «Estensione a `web/`»); i pacchetti condivisi non hanno build proprie.

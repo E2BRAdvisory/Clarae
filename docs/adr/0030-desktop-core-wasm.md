@@ -8,6 +8,8 @@
 | **Riferimenti spec**  | §1.2 (struttura del client), §3.4 (sync e merge sul client), §3.7 (index.db); ADR-0029, ADR-0020, D-07             |
 | **Devia dallo spec?** | no di per sé: è la realizzazione tecnica di ADR-0029                                                               |
 
+> **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** Il codice Wails sta in `internal/shell` (l'unico pacchetto che importa Wails v3); i binding TS non si leggono più da `frontend/wailsjs/go/app/*.d.ts` ma sono generati da `internal/app/gen/bindings`, e `App.Services()` è ancora l'unico elenco dei servizi. Il nome `cmd/memobrain-core` è anteriore al rebrand (ADR-0052). Il testo qui sotto è storico e non cambia.
+
 ## Contesto
 
 Il workbench web (ADR-0029) richiede le stesse funzioni del desktop. Sul desktop, gran parte di queste funzioni è in Go, in `apps/desktop/internal` (circa 24k LOC):
