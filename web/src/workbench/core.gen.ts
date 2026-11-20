@@ -173,6 +173,18 @@ export interface CoreClient {
     ReadSettings(arg1: string): Promise<string>;
     WriteSettings(arg1: string, arg2: string): Promise<void>;
   };
+  readonly TerminalAPI: {
+    CanOpen(arg1: string): Promise<Data<app.TerminalOpenCheck>>;
+    Close(arg1: string): Promise<void>;
+    Dock(): Promise<void>;
+    List(): Promise<Data<Array<app.TerminalSession>>>;
+    Open(arg1: string, arg2: number, arg3: number): Promise<Data<app.TerminalSession>>;
+    Resize(arg1: string, arg2: number, arg3: number): Promise<void>;
+    Snapshot(arg1: string): Promise<Data<app.TerminalSnapshot>>;
+    State(): Promise<Data<app.TerminalState>>;
+    Undock(): Promise<void>;
+    Write(arg1: string, arg2: string): Promise<void>;
+  };
   readonly UpdaterAPI: {
     Check(): Promise<Data<updater.Status>>;
     GetSettings(): Promise<Data<updater.Settings>>;
@@ -250,6 +262,7 @@ export const BINDINGS = {
   SyncAPI: ['ConflictTexts', 'Conflicts', 'CopyVerdict', 'DeleteCloudVault', 'Devices', 'History', 'Info', 'LinkExisting', 'LinkNew', 'ListCloudVaults', 'ListDeletedCloudVaults', 'RenameCloudVault', 'ResolveConflict', 'RestoreCloudVault', 'RestoreRevision', 'RevisionText', 'RevokeDevice', 'SetPaused', 'SetPollInterval', 'Status', 'SyncNow', 'Unlink', 'Usage'],
   TagsAPI: ['List'],
   TemplatesAPI: ['CreateFromTemplate', 'DailyAdjacent', 'Expand', 'List', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
+  TerminalAPI: ['CanOpen', 'Close', 'Dock', 'List', 'Open', 'Resize', 'Snapshot', 'State', 'Undock', 'Write'],
   UpdaterAPI: ['Check', 'GetSettings', 'Install', 'SetSettings', 'Skip', 'Status'],
   VaultAPI: ['CloseVault', 'CreateFolder', 'DownloadFile', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'MergeEdit', 'OpenVault', 'OpenWithSystemApp', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'RevealInFolder', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
   VaultCryptoAPI: ['Activity', 'ChangePassphrase', 'DiskEncryption', 'Lock', 'RegenerateRecoveryKey', 'SetPassphrase', 'Unlock'],
@@ -444,6 +457,20 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         OpenDaily: (arg1: string, arg2: Data<app.DailyOptions>) => call('TemplatesAPI', 'OpenDaily', [arg1, arg2]),
         ReadSettings: (arg1: string) => call('TemplatesAPI', 'ReadSettings', [arg1]),
         WriteSettings: (arg1: string, arg2: string) => call('TemplatesAPI', 'WriteSettings', [arg1, arg2]),
+      };
+    },
+    get TerminalAPI(): CoreClient['TerminalAPI'] {
+      return {
+        CanOpen: (arg1: string) => call('TerminalAPI', 'CanOpen', [arg1]),
+        Close: (arg1: string) => call('TerminalAPI', 'Close', [arg1]),
+        Dock: () => call('TerminalAPI', 'Dock', []),
+        List: () => call('TerminalAPI', 'List', []),
+        Open: (arg1: string, arg2: number, arg3: number) => call('TerminalAPI', 'Open', [arg1, arg2, arg3]),
+        Resize: (arg1: string, arg2: number, arg3: number) => call('TerminalAPI', 'Resize', [arg1, arg2, arg3]),
+        Snapshot: (arg1: string) => call('TerminalAPI', 'Snapshot', [arg1]),
+        State: () => call('TerminalAPI', 'State', []),
+        Undock: () => call('TerminalAPI', 'Undock', []),
+        Write: (arg1: string, arg2: string) => call('TerminalAPI', 'Write', [arg1, arg2]),
       };
     },
     get UpdaterAPI(): CoreClient['UpdaterAPI'] {

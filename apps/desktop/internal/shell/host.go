@@ -41,6 +41,9 @@ type Host struct {
 	waiting []dialog // error dialogs asked before that
 	// views are the native web views of the window, made on first use; nil on a system with no driver.
 	views webview.Driver
+	// term is the separate window of the terminal (terminal_window.go), made on first use.
+	termOnce sync.Once
+	term     *terminalWindows
 	// dataDir is the data directory of the application, where the drivers that keep the sessions of the
 	// applications in a folder of their own put it (SetDataDir).
 	dataDir string
@@ -52,8 +55,9 @@ type Host struct {
 type dialog struct{ title, message string }
 
 var (
-	_ app.Host           = (*Host)(nil)
-	_ app.NativeViewHost = (*Host)(nil)
+	_ app.Host               = (*Host)(nil)
+	_ app.NativeViewHost     = (*Host)(nil)
+	_ app.TerminalWindowHost = (*Host)(nil)
 )
 
 // NewHost returns the Wails host.

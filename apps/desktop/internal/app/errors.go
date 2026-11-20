@@ -71,6 +71,25 @@ const (
 	ErrCodeWebViewInvalidKey = "webview-invalid-accelerator"
 )
 
+// Codes of TerminalAPI, the integrated terminal (internal/terminal).
+const (
+	// ErrCodeTerminalUnavailable: no terminal here (the browser: capability terminal).
+	ErrCodeTerminalUnavailable = "terminal-unavailable"
+	// ErrCodeTerminalReadOnly: the vault is read-only for this user (a share as viewer, or revoked):
+	// the terminal would let a shell change what the application refuses to.
+	ErrCodeTerminalReadOnly = "terminal-read-only"
+	// ErrCodeTerminalNotFound: no such session (closed, or it ended).
+	ErrCodeTerminalNotFound = "terminal-not-found"
+	// ErrCodeTerminalLimit: too many sessions are open.
+	ErrCodeTerminalLimit = "terminal-limit"
+	// ErrCodeTerminalBusy: the shell is not reading its input.
+	ErrCodeTerminalBusy = "terminal-busy"
+	// ErrCodeTerminalTooLarge: the input is larger than the core accepts in one call.
+	ErrCodeTerminalTooLarge = "terminal-too-large"
+	// ErrCodeTerminalFailed: the shell could not be started, or the window could not be opened; see the log.
+	ErrCodeTerminalFailed = "terminal-failed"
+)
+
 // codedError is a binding error with a stable code; Unwrap keeps the cause
 // for errors.Is in Go callers.
 type codedError struct {

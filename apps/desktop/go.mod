@@ -5,6 +5,7 @@ go 1.27.4
 require (
 	github.com/Bios-Marcel/wastebasket/v2 v2.0.3
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.11.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/getkin/kin-openapi v0.152.0

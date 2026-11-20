@@ -198,3 +198,31 @@ func TestGuardReleaseArmsTheWatchdog(t *testing.T) {
 		t.Fatalf("timeout path: OnRelease called %d times, want 1", released.Load())
 	}
 }
+
+// Stop closes the windows besides the main one before the core shuts down, and does not wait for
+// a window that never closes (closing needs the UI thread, which may be the one running Stop).
+func TestLifecycleStopClosesWindowsFirst(t *testing.T) {
+	core := &fakeCore{}
+	l := NewLifecycle(core, nil)
+	var order []string
+	l.CloseWindowsOnStop(func() { core.mu.Lock(); order = append(order, "windows"); core.mu.Unlock() })
+	l.Start()
+	l.Stop()
+	l.Stop()
+	if got := core.log(); len(got) != 2 || got[1] != "shutdown" {
+		t.Fatalf("calls = %v", got)
+	}
+	if len(order) != 1 {
+		t.Fatalf("the windows were closed %d times, want 1", len(order))
+	}
+
+	stuck := make(chan struct{})
+	defer close(stuck)
+	l2 := NewLifecycle(&fakeCore{}, nil)
+	l2.CloseWindowsOnStop(func() { <-stuck })
+	start := time.Now()
+	l2.Stop()
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("Stop waited %v for a window that does not close", d)
+	}
+}

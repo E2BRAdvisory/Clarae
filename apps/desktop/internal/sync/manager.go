@@ -115,6 +115,11 @@ type Hooks struct {
 	// its applications) must go before the lock screen does. It runs on the goroutine that locked
 	// the vault, holding no lock of the manager: it may wait for the UI thread.
 	Locked func(localVaultID string)
+	// ReadOnly is called when a vault that was writable became read-only for this user: the share
+	// was lowered to viewer (UpdateMount) or ended (markRevoked). The meta of the vault already says
+	// so (Manager.ReadOnly is true). It holds no lock of the manager and may run on the goroutine of
+	// a sync loop: it must not wait for anything slow.
+	ReadOnly func(localVaultID string)
 }
 
 // SetManagedPoll sets the polling interval distributed by the administrator (0 = none).

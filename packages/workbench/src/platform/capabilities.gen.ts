@@ -81,6 +81,14 @@ export interface CoreCapabilities {
    * own (WebViewAPI refuses every call there).
    */
   embeddedBrowser: boolean;
+  /**
+   * The integrated terminal (ADR-0064): shells on pseudo-terminals that the Go core starts, in the
+   * root of the vault, docked in the window or in a separate window of the system. Only the desktop
+   * can run processes (macOS, Windows and Linux); TerminalAPI refuses every call in the browser
+   * with terminal-unavailable, and Host.OpenTerminalWindow and Host.CloseTerminalWindow fail there.
+   * A vault that is read-only for the user does not open one (TerminalAPI.CanOpen).
+   */
+  terminal: boolean;
 }
 
 /** The kinds of host. */
@@ -101,6 +109,7 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     openWithSystemApp: true,
     aiAssistant: true,
     embeddedBrowser: true,
+    terminal: true,
   },
   web: {
     localFolders: false,
@@ -115,5 +124,6 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     openWithSystemApp: false,
     aiAssistant: false,
     embeddedBrowser: false,
+    terminal: false,
   },
 };

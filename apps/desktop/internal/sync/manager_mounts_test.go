@@ -611,3 +611,67 @@ func TestCloudVaultNotFoundIsNotADeleteUnlessConfirmed(t *testing.T) {
 		})
 	}
 }
+
+// The application hears when a mount becomes read-only (Hooks.ReadOnly: the terminal ends the shells
+// opened in it): when the owner lowers the share to viewer, and when the share ends. Not when the
+// level is raised or does not change, and the vault is already read-only when the hook runs.
+func TestReadOnlyHookFiresWhenAMountBecomesReadOnly(t *testing.T) {
+	cloud, sess := newAccountCloud(t)
+	cloud.set(map[string]bool{mountShareA: true}, nil)
+	m := NewManager(sess, nil, zerolog.Nop(), (&recorder{}).emit)
+	rem := &pullRemote{}
+	m.remoteFor = func(string) Remote { return rem }
+	var mu stdsync.Mutex
+	var fired []string
+	var readOnlyInHook []bool
+	m.SetHooks(Hooks{ReadOnly: func(id string) {
+		mu.Lock()
+		defer mu.Unlock()
+		fired = append(fired, id)
+		readOnlyInHook = append(readOnlyInHook, m.ReadOnly(context.Background(), id))
+	}})
+	dir := t.TempDir()
+	attach(t, m, "mount", mountAt(t, dir, mountShareA, lifeOwner))
+	ctx := context.Background()
+	editor := MountMeta{ShareID: mountShareA, CloudVaultID: mountCloud, Scope: "share:" + mountShareA, Permission: PermEditor, Name: "Team", OwnerName: "ada", ResourceType: "folder"}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return len(fired) }
+
+	if err := m.UpdateMount(ctx, "mount", MountMeta{ShareID: editor.ShareID, CloudVaultID: editor.CloudVaultID, Scope: editor.Scope, Permission: PermOwner, Name: "Team renamed", OwnerName: "ada", ResourceType: "folder"}); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 0 {
+		t.Fatal("a level that is not viewer fired the read-only hook")
+	}
+	viewer := editor
+	viewer.Permission = PermViewer
+	if err := m.UpdateMount(ctx, "mount", viewer); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 1 {
+		t.Fatalf("lowering the share to viewer fired the hook %d times, want 1", count())
+	}
+	if err := m.UpdateMount(ctx, "mount", viewer); err != nil { // nothing changed
+		t.Fatal(err)
+	}
+	if count() != 1 {
+		t.Fatal("an update that changes nothing fired the hook")
+	}
+
+	// The share ends: the loop confirms it with the server and marks the mount revoked.
+	rem.gone.Store(true)
+	cloud.set(map[string]bool{}, nil)
+	if err := m.SyncNow("mount"); err != nil {
+		t.Fatal(err)
+	}
+	waitTill(t, "the hook of the revocation", func() bool { return count() == 2 })
+	mu.Lock()
+	defer mu.Unlock()
+	if fired[0] != "mount" || fired[1] != "mount" {
+		t.Errorf("hook called for %v", fired)
+	}
+	for i, ro := range readOnlyInHook {
+		if !ro {
+			t.Errorf("call %d: the vault was not read-only yet when the hook ran", i)
+		}
+	}
+}

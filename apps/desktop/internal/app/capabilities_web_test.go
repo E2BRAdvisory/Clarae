@@ -99,6 +99,17 @@ func TestWebCoreFunctionsFailWhereTheirCapabilityIsOff(t *testing.T) {
 	if caps.EmbeddedBrowser {
 		t.Error("every WebViewAPI method fails in the browser, but embeddedBrowser is true")
 	}
+	for name, err := range callAll(t, reflect.ValueOf(NewTerminalAPI(nil))) {
+		var ce *codedError
+		if err == nil {
+			t.Errorf("TerminalAPI.%s succeeds in the browser: a page runs no processes", name)
+		} else if !errors.As(err, &ce) || ce.code != ErrCodeTerminalUnavailable {
+			t.Errorf("TerminalAPI.%s fails with %v, want the code %s", name, err, ErrCodeTerminalUnavailable)
+		}
+	}
+	if caps.Terminal {
+		t.Error("every TerminalAPI method fails in the browser, but terminal is true")
+	}
 	if got := (&VaultCryptoAPI{}).DiskEncryption(); got != "unknown" || caps.DiskEncryptionCheck {
 		t.Errorf("DiskEncryption = %q, diskEncryptionCheck %v: the browser cannot tell", got, caps.DiskEncryptionCheck)
 	}

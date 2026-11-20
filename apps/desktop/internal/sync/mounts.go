@@ -224,6 +224,13 @@ func (m *Manager) Permission(ctx context.Context, localID string) string {
 	return PermOwner
 }
 
+// notifyReadOnly tells the application that a vault became read-only (Hooks.ReadOnly).
+func (m *Manager) notifyReadOnly(localID string) {
+	if h := m.hooksSnapshot().ReadOnly; h != nil {
+		h(localID)
+	}
+}
+
 // ReadOnly reports whether the caller may not change this vault (viewer on a mount, or a
 // mount whose share was revoked).
 func (m *Manager) ReadOnly(ctx context.Context, localID string) bool {
@@ -251,6 +258,9 @@ func (m *Manager) UpdateMount(ctx context.Context, localID string, mm MountMeta)
 		}
 	}
 	_ = mv.db.DeleteMeta(ctx, MetaRevoked)
+	if mm.Permission == PermViewer {
+		m.notifyReadOnly(mv.localID) // before activate, which waits for the engine to stop
+	}
 	return m.activate(ctx, mv) // stops the running engine and waits for it first
 }
 
@@ -261,6 +271,7 @@ func (m *Manager) UpdateMount(ctx context.Context, localID string, mm MountMeta)
 func (m *Manager) markRevoked(ctx context.Context, mv *managed) {
 	ctx = context.WithoutCancel(ctx)
 	_ = mv.db.SetMeta(ctx, MetaRevoked, "1")
+	m.notifyReadOnly(mv.localID)
 	m.mu.Lock()
 	m.stopLocked(mv) // no wait: this may run on the loop itself, which returns right after
 	eng := mv.engine

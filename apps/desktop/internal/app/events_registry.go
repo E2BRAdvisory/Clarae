@@ -6,6 +6,7 @@ import (
 	"clarae/apps/desktop/internal/auth"
 	"clarae/apps/desktop/internal/events"
 	syncpkg "clarae/apps/desktop/internal/sync"
+	"clarae/apps/desktop/internal/terminal"
 	"clarae/apps/desktop/internal/webview"
 	"clarae/shared/syncproto"
 )
@@ -45,6 +46,9 @@ var Events = []events.Spec{
 	webview.EventCrashed.Spec(),
 	webview.EventFocus.Spec(),
 	webview.EventClosed.Spec(),
+	terminal.EventOutput.Spec(),
+	terminal.EventExit.Spec(),
+	terminal.EventLayout.Spec(),
 }
 
 // EventEnums are the string types of the payloads that TypeScript sees as unions of their values
@@ -57,6 +61,8 @@ var EventEnums = []events.EnumSpec{
 	events.Enum(webview.BlockEmpty, webview.BlockTooLong, webview.BlockCharacters, webview.BlockMalformed, webview.BlockScheme,
 		webview.BlockCredentials, webview.BlockHost, webview.BlockPort, webview.BlockPrivateNetwork, webview.BlockThrottled, webview.BlockOther),
 	events.Enum(webview.ClosedVaultClosed, webview.ClosedVaultLocked, webview.ClosedDataCleared, webview.ClosedDisabled, webview.ClosedQuit),
+	events.Enum(terminal.ModeDocked, terminal.ModeDetached),
+	events.Enum(terminal.ReasonExited, terminal.ReasonClosed, terminal.ReasonReadOnly, terminal.ReasonWindowClosed),
 	events.Enum(syncproto.KindMarkdown, syncproto.KindCanvas, syncproto.KindBase, syncproto.KindExcalidraw,
 		syncproto.KindAttachment, syncproto.KindConfig, syncproto.KindOther, syncproto.KindOpaque),
 }

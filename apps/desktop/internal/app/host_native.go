@@ -44,3 +44,5 @@ func (headlessHost) RevealPath(context.Context, string) error    { return errNoW
 func (headlessHost) ShowWindow(context.Context)                  {}
 func (headlessHost) Quit(context.Context)                        {}
 func (headlessHost) ErrorDialog(context.Context, string, string) {}
+func (headlessHost) OpenTerminalWindow(context.Context) error    { return errNoWindow }
+func (headlessHost) CloseTerminalWindow(context.Context)         {}

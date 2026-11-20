@@ -42,6 +42,9 @@ type Lifecycle struct {
 	stopOnce sync.Once
 	wdOnce   sync.Once
 
+	// windows closes the windows besides the main one (the separate terminal) when the application stops.
+	windows func()
+
 	// replaced in tests
 	afterFunc func(d time.Duration, f func())
 	exit      func(code int)
@@ -55,6 +58,19 @@ func NewLifecycle(core Core, guard *CloseGuard) *Lifecycle {
 		afterFunc: func(d time.Duration, f func()) { time.AfterFunc(d, f) },
 		exit:      os.Exit,
 	}
+}
+
+// windowsCloseTimeout bounds the wait for the windows to close at stop: closing one needs the UI
+// thread, which on quitting may be the one that is running Stop.
+const windowsCloseTimeout = 500 * time.Millisecond
+
+// CloseWindowsOnStop sets what Stop does about the windows besides the main one (the separate window of the terminal): f closes them
+// before the core shuts down. Stop waits for it only briefly (windowsCloseTimeout); a window that is
+// not closed by then goes with the process.
+func (l *Lifecycle) CloseWindowsOnStop(f func()) {
+	l.mu.Lock()
+	l.windows = f
+	l.mu.Unlock()
 }
 
 // Start starts the core with the context of the lifecycle. It never fails: the core reports what
@@ -82,9 +98,21 @@ func (l *Lifecycle) Stop() {
 		l.mu.Lock()
 		l.stopped = true
 		started := l.started
+		windows := l.windows
 		l.mu.Unlock()
 		if l.guard != nil {
 			l.guard.Shutdown()
+		}
+		if windows != nil {
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				windows()
+			}()
+			select {
+			case <-done:
+			case <-time.After(windowsCloseTimeout):
+			}
 		}
 		if started {
 			l.core.Shutdown(l.ctx)

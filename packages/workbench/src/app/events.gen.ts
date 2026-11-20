@@ -78,6 +78,15 @@ export const Events = {
    * were cleared, the application is quitting).
    */
   webviewClosed: 'webview:closed',
+  /**
+   * Desktop: output of a terminal session, coalesced (about 16 ms or 32 KiB). `data` is valid UTF-8 text; `seq` counts the
+   * events of the session from 1 and is what Snapshot compares against: ignore an event with a seq not greater than the snapshot's.
+   */
+  terminalOutput: 'terminal:output',
+  /** Desktop: a terminal session ended (the shell exited, the UI closed it, or the core did: see `reason`). No output follows. */
+  terminalExit: 'terminal:exit',
+  /** Desktop: the terminal panel moved to the separate window (`detached`) or back to the main window (`docked`). */
+  terminalLayout: 'terminal:layout',
 } as const;
 
 /** A name the UI can subscribe to. */
@@ -114,6 +123,9 @@ export interface EventPayloads {
   'webview:crashed': WebviewCrashedPayload;
   'webview:focus': WebviewFocusPayload;
   'webview:closed': WebviewClosedPayload;
+  'terminal:output': TerminalOutputPayload;
+  'terminal:exit': TerminalExitPayload;
+  'terminal:layout': TerminalLayoutPayload;
 }
 
 /** The payload of the event `N`. */
@@ -323,6 +335,31 @@ export interface SyncStatus {
 
 /** SyncprotoFileKind (Go syncproto.FileKind). */
 export type SyncprotoFileKind = 'md' | 'canvas' | 'base' | 'excalidraw' | 'attachment' | 'config' | 'other' | 'opaque';
+
+/** Go terminal.ExitPayload. */
+export interface TerminalExitPayload {
+  id: string;
+  code: number;
+  reason: TerminalExitReason;
+}
+
+/** TerminalExitReason (Go terminal.ExitReason). */
+export type TerminalExitReason = 'exited' | 'closed' | 'read-only' | 'window-closed';
+
+/** Go terminal.LayoutPayload. */
+export interface TerminalLayoutPayload {
+  mode: TerminalMode;
+}
+
+/** TerminalMode (Go terminal.Mode). */
+export type TerminalMode = 'docked' | 'detached';
+
+/** Go terminal.OutputPayload. */
+export interface TerminalOutputPayload {
+  id: string;
+  seq: number;
+  data: string;
+}
 
 /** Go updater.Status. */
 export interface UpdaterStatus {

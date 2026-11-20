@@ -260,6 +260,15 @@ func (h webHost) Print(context.Context)                 { _, _ = h.call("print")
 func (webHost) ShowWindow(context.Context)              {} // capability nativeWindow
 func (h webHost) Quit(context.Context)                  { _, _ = h.call("quit") }
 
+// OpenTerminalWindow is not offered: a browser runs no processes and has no window to give the terminal.
+// Capability: terminal (HostMethodCapability).
+func (webHost) OpenTerminalWindow(context.Context) error {
+	return errors.New("the terminal is not available in the browser")
+}
+
+// CloseTerminalWindow has nothing to close. Capability: terminal.
+func (webHost) CloseTerminalWindow(context.Context) {}
+
 func (h webHost) ErrorDialog(_ context.Context, title, message string) {
 	_, _ = h.call("error", title, message)
 }

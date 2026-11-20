@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"flag"
@@ -102,6 +103,8 @@ func run() int {
 	host.SetDataDir(dataDir)
 	a := app.New(app.Options{DataDir: dataDir, LegacyDataDir: dd.LegacyDir, Logger: logger, Version: Version, Host: host})
 	lc = shell.NewLifecycle(a, guard)
+	// The separate window of the terminal goes when the application stops (the sessions go with the core).
+	lc.CloseWindowsOnStop(func() { host.CloseTerminalWindow(context.Background()) })
 
 	dispatcher := rpc.New()
 	for _, s := range a.Services() {
@@ -160,7 +163,14 @@ func run() int {
 	host.Attach(wa, win)
 	// The window close button (on macOS the only gesture that reaches the guard through the window:
 	// wails#6570) and Cmd+Q, Alt+F4 and Quit (ShouldQuit) all go through the one guard.
-	win.RegisterHook(events.Common.WindowClosing, guard.WindowClosing)
+	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		guard.WindowClosing(e)
+		// The main window closes for good: the window of the terminal must not outlive it (Wails quits
+		// when the last window goes, and with one left it would not). Its sessions end with the core.
+		if !e.IsCancelled() {
+			host.CloseTerminalWindow(context.Background())
+		}
+	})
 
 	// ServiceStartup runs before the loop of the platform: a failure of the core to start is shown
 	// when the loop does.

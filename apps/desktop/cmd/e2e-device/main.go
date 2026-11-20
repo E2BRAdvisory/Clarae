@@ -204,6 +204,10 @@ func (h *host) Print(context.Context)                            {}
 func (h *host) ShowWindow(context.Context)                       {}
 func (h *host) Quit(context.Context)                             {}
 func (h *host) ErrorDialog(_ context.Context, title, msg string) { log.Printf("%s: %s", title, msg) }
+func (h *host) OpenTerminalWindow(context.Context) error {
+	return errors.New("no window: the e2e device has no terminal")
+}
+func (h *host) CloseTerminalWindow(context.Context) {}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

@@ -43,6 +43,14 @@ type Host interface {
 	Quit(ctx context.Context)
 	// ErrorDialog tells the user about a failure that stops the application.
 	ErrorDialog(ctx context.Context, title, message string)
+	// OpenTerminalWindow opens the separate window of the integrated terminal, or brings it forward
+	// when it is open (ADR-0064). The window shows the page of the terminal; it does not start a shell.
+	// Capability: terminal (the browser has no second window and no processes: it fails).
+	OpenTerminalWindow(ctx context.Context) error
+	// CloseTerminalWindow closes the separate window of the terminal, if open, without telling the core
+	// that the user did it (TerminalWindowHost.SetTerminalWindowClosed).
+	// Capability: terminal (the browser has no such window: it does nothing).
+	CloseTerminalWindow(ctx context.Context)
 }
 
 // HostMethodCapability classifies every method of Host: the capability that gates it, or "" when
@@ -61,6 +69,9 @@ var HostMethodCapability = map[string]Capability{
 	"ShowWindow":    CapNativeWindow,
 	"Quit":          "",
 	"ErrorDialog":   "",
+
+	"OpenTerminalWindow":  CapTerminal,
+	"CloseTerminalWindow": CapTerminal,
 }
 
 // SessionHost is implemented by a host that owns the cloud sign-in: in the browser the page already
@@ -68,6 +79,14 @@ var HostMethodCapability = map[string]Capability{
 // running the system-browser flow, and keeps vault keys in memory only.
 type SessionHost interface {
 	Session() *auth.Hosted
+}
+
+// TerminalWindowHost is implemented by a host whose separate terminal window can be closed by the
+// user: the host calls the function it was given when that happens (the close button of the system,
+// not CloseTerminalWindow), and the core ends the sessions that lived in it and docks the panel.
+// The function does not block.
+type TerminalWindowHost interface {
+	SetTerminalWindowClosed(func())
 }
 
 // NativeViewHost is implemented by a host whose window can carry native web views, the browser

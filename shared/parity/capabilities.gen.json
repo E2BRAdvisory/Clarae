@@ -11,7 +11,8 @@
     "detachedCopies": true,
     "openWithSystemApp": true,
     "aiAssistant": true,
-    "embeddedBrowser": true
+    "embeddedBrowser": true,
+    "terminal": true
   },
   "web": {
     "localFolders": false,
@@ -25,6 +26,7 @@
     "detachedCopies": false,
     "openWithSystemApp": false,
     "aiAssistant": false,
-    "embeddedBrowser": false
+    "embeddedBrowser": false,
+    "terminal": false
   }
 }

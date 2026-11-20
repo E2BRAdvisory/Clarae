@@ -34,6 +34,7 @@ const (
 	CapOpenWithSystemApp   Capability = "openWithSystemApp"
 	CapAIAssistant         Capability = "aiAssistant"
 	CapEmbeddedBrowser     Capability = "embeddedBrowser"
+	CapTerminal            Capability = "terminal"
 )
 
 // Capabilities is what SettingsAPI.Capabilities returns: one bool per capability, the json tag
@@ -51,6 +52,7 @@ type Capabilities struct {
 	OpenWithSystemApp   bool `json:"openWithSystemApp"`
 	AIAssistant         bool `json:"aiAssistant"`
 	EmbeddedBrowser     bool `json:"embeddedBrowser"`
+	Terminal            bool `json:"terminal"`
 }
 
 // CapabilitySpec declares a capability: whether each host offers it, and what it gates (the doc
@@ -119,6 +121,11 @@ var capabilitySpecs = []CapabilitySpec{
 			"(WebViewAPI.Status). The table says what a desktop can offer; SettingsAPI.Capabilities says what this " +
 			"device does (it turns the capability off when the driver cannot be had, for the whole session). The " +
 			"browser opens the page in a tab of its own (WebViewAPI refuses every call there)."},
+	{CapTerminal, true, false, nil,
+		"The integrated terminal (ADR-0064): shells on pseudo-terminals that the Go core starts, in the root of the vault, " +
+			"docked in the window or in a separate window of the system. Only the desktop can run processes (macOS, Windows " +
+			"and Linux); TerminalAPI refuses every call in the browser with terminal-unavailable, and Host.OpenTerminalWindow " +
+			"and Host.CloseTerminalWindow fail there. A vault that is read-only for the user does not open one (TerminalAPI.CanOpen)."},
 }
 
 // CapabilitySpecs returns the declared capabilities, in order (for the generator and the tests).
