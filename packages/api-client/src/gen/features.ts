@@ -8,8 +8,9 @@ export const Feature = {
   // Applications: a web page registered in the vault (a `.webapp` file) opens in a browser embedded
   // in a tab. On by default since 1.7.2; a profile turns it off. Without it the commands that
   // create, open and edit applications are not offered. The page is embedded only by a desktop
-  // client that can embed a browser (macOS); elsewhere, the browser workbench included, it opens in
-  // the system browser or in a new tab of the browser.
+  // client that can embed a browser (macOS; since 1.7.3 also Windows with WebView2 and Linux with
+  // WebKitGTK, unless CLARAE_WEBVIEW=off or the runtime is missing); elsewhere, the browser
+  // workbench included, it opens in the system browser or in a new tab of the browser.
   WebViewer: 'web_viewer',
   // Chat bar of the workbench (a disabled placeholder until the ACP integration exists, ADR-0026).
   Chat: 'chat',

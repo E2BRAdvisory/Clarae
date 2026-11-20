@@ -4,11 +4,11 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.7.3] - 2026-11-20
 
-Gli ADR 0057, 0058, 0059, 0060 e 0061 della 1.7.2 e l'ADR-0052 (rebrand) sono **accettati** dall'owner il 2026-11-16 (milestone M21, [roadmap](docs/roadmap.md) §13-quaterdecies). Nessuna modifica al prodotto: la 1.7.2 resta com'è. `Specifications.md` passa alla **v1.7**, che li recepisce con la nomenclatura _Clarae notanda_ in tutto lo spec; lo spec lo aggiorna l'owner.
+Milestone M22 ([roadmap](docs/roadmap.md) §13-quindecies, ADR-0062 e ADR-0063, entrambi in stato _proposta_: non sono accettati e non sono recepiti in `Specifications.md`, che non è toccato). **Le applicazioni si aprono dentro Clarae notanda anche su Windows e su Linux**, accese di default, con ripiego automatico a «Apri nel browser»; **l'esploratore, le schede e le intestazioni mostrano i nomi dei file senza estensione** per tutto ciò che si apre in una scheda, e **la rinomina non fa più perdere il tipo di un file**. **Nulla di ciò che riguarda Windows e Linux è provato su una finestra reale** (vedi _Non provato e lavoro successivo_). Nessuna migrazione del cloud e nessuna modifica delle API: il cloud 1.7.3 è la 1.7.2 con la versione e la descrizione di `features.web_viewer` aggiornate.
 
-Milestone M22 ([roadmap](docs/roadmap.md) §13-quindecies, ADR-0062 e ADR-0063, entrambi in stato _proposta_: non sono accettati e non sono recepiti in `Specifications.md`, che non è toccato). **Le applicazioni si aprono dentro Clarae notanda anche su Windows e su Linux**, accese di default, con ripiego automatico a «Apri nel browser»; **l'esploratore, le schede e le intestazioni mostrano i nomi dei file senza estensione** per tutto ciò che si apre in una scheda, e **la rinomina non fa più perdere il tipo di un file**. **Nulla di ciò che riguarda Windows e Linux è provato su una finestra reale** (vedi _Non provato e lavoro successivo_). Non è una versione rilasciata: nessun tag, nessuna migrazione del cloud.
+Gli ADR 0057, 0058, 0059, 0060 e 0061 della 1.7.2 e l'ADR-0052 (rebrand) sono **accettati** dall'owner il 2026-11-16 (milestone M21, [roadmap](docs/roadmap.md) §13-quaterdecies) e `Specifications.md` è alla **v1.7**, che li recepisce con la nomenclatura _Clarae notanda_ in tutto lo spec.
 
 ### Compatibilità
 
@@ -27,7 +27,7 @@ Milestone M22 ([roadmap](docs/roadmap.md) §13-quindecies, ADR-0062 e ADR-0063, 
 
 ### Contratti
 
-- `api/openapi.yaml`: nessuna modifica. Binding del core: nessun metodo né evento nuovo; cambia solo il codice di errore di `WebViewAPI.Open` quando la piattaforma non può mostrare viste (`webview-unavailable` al posto di `webview-failed`).
+- `api/openapi.yaml`: solo `info.version` a 1.7.3 (stub rigenerati). Schema del Config Profile: la descrizione di `features.web_viewer` nomina Windows e Linux (`task gen`); chiavi e default non cambiano. Binding del core: nessun metodo né evento nuovo; cambia solo il codice di errore di `WebViewAPI.Open` quando la piattaforma non può mostrare viste (`webview-unavailable` al posto di `webview-failed`).
 - Capability `embeddedBrowser`: il campo `DesktopOS` ora elenca `darwin`, `windows` e `linux`; il testo della capability e `capabilities.gen.ts` sono rigenerati (`task gen`).
 - Variabile d'ambiente nuova `CLARAE_WEBVIEW` (client desktop, Windows e Linux): `off` spegne la vista integrata. Tolta `CLARAE_WEBVIEW2_EXPERIMENTAL`. Registro di parità: la voce `webapp.embedded` dice «macOS, Windows e Linux» e porta le prove nuove; `docs/web-workbench-parity.md` rigenerato.
 
@@ -36,6 +36,12 @@ Milestone M22 ([roadmap](docs/roadmap.md) §13-quindecies, ADR-0062 e ADR-0063, 
 - **`task vet-linux`** (in `task ci`, dopo `vet-windows`): in un container Docker (`scripts/linux-vet`, con `libgtk-3-dev` e `libwebkit2gtk-4.1-dev`) esegue `go vet -tags gtk3`, compila i test di `internal/shell`, `internal/app` e `internal/webview` e il file C del driver con `-Wall -Wextra`, e controlla con `go list` che il pacchetto si elenchi in sei combinazioni di tag e di cgo (il file C porta lo stesso vincolo di build del driver: una build senza GTK 3 non deve rompersi). Serve Docker; `LINUX_ARCH=arm64` lo rende molto più veloce su un Mac Apple silicon.
 - **`task test-nativeview-linux`** (a mano, non in `task ci`): i 14 test live del driver Linux contro una finestra vera di Wails su GTK3, sotto Xvfb, in Docker, **con la sandbox di WebKit accesa**: il container parte con `--init --cap-add SYS_ADMIN --cap-add NET_ADMIN --security-opt seccomp=unconfined --security-opt systempaths=unconfined` (o `--privileged`), perché bubblewrap deve creare i namespace; un container amd64 su un Mac arm64 non può (l'emulatore non ha seccomp): lì serve `LINUX_ARCH=arm64`. Opzioni `RUN=<regexp>`, `NO_MENU=1` e `CLARAE_NATIVEVIEW_CFLAGS=-DCLARAE_NATIVEVIEW_TRACE`. Verdi su arm64 con la sandbox accesa (riportato dagli sviluppatori); il vecchio esito su amd64 era senza sandbox e non vale più.
 - **Prove nuove:** `manager_test.go` (`TestAPlatformThatCannotShowViewsIsUnavailableForTheSession`, `TestAPlatformFailureAfterAViewWasMadeDoesNotEndTheSession`, `TestAnOrdinaryCreateFailureKeepsTheManagerAvailable`), `bindings_webview_test.go` (`TestAPlatformThatCannotShowViewsFallsBackToTheSystemBrowser`), i tre test dei frame di `manager_test.go` (`TestUnknownFrameFollowsTheRulesOfTheTopFrameWithoutMovingIt`, `TestRedirectOfUnknownFrameDoesNotReturnToThePrivateNetwork`, `TestTopFrameStillMovesThePage`), `switch_test.go`, `datafolders_test.go`, `driver_linux_live_test.go` (anche `TestLiveAStoreThatIsBeingDeletedRefusesNewViews`) e `driver_windows_test.go`; `media.test.ts` (`splitName`, `displayName`, `displayPath`), `rename.test.ts` (`renameTarget`, `promptRename`) e i test aggiornati di esploratore, schede, segnalibri, embed e anteprime; e2e `keyboard.spec.ts` («F2 shows a file without its extension and the rename keeps it») e gli spec aggiornati di disegni, presentazioni, flussi e apertura per tipo.
+
+### Verificato
+
+- `task ci` verde sull'albero di M22 (835 s): lint (compreso `lint-brand`), `vet-windows` e il nuovo `vet-linux` in Docker, typecheck, `govulncheck`, test Go con `-race`, vitest (2554 test), conformance, `test-wasm`, `test-core`, budget (console 701 kB su 720), parità e `check-gen`. Dopo il passaggio alla versione 1.7.3 rieseguiti `check-gen`, parità e i controlli dei file toccati.
+- I test live del driver Linux (`task test-nativeview-linux`) verdi su arm64 sotto Xvfb con la sandbox di WebKit accesa; le spec Playwright toccate da M22 verdi sul mock dei binding e nella matrice sul core WASM; una revisione avversariale del diff, i cui cinque rilievi sono corretti.
+- **Non eseguiti su questo albero:** `task test-integration`, `task test-desktop-e2e` e l'intera suite `task e2e` dopo le ultime correzioni (nessuna modifica del cloud né della sync).
 
 ### Non provato e lavoro successivo
 
