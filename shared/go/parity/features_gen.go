@@ -211,6 +211,9 @@ const (
 	// WebappEmbedded: Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
 	WebappEmbedded FeatureID = "webapp.embedded"
 
+	// Terminal: Terminale integrato multi-tab, ancorabile e sganciabile in una finestra separata
+	Terminal FeatureID = "terminal"
+
 	// Slides: Presentazioni da una nota
 	Slides FeatureID = "slides"
 
@@ -364,6 +367,7 @@ var Features = []FeatureID{
 	Graph3d,
 	Webapp,
 	WebappEmbedded,
+	Terminal,
 	Slides,
 	Bookmarks,
 	Workspaces,

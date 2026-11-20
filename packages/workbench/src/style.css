@@ -2739,3 +2739,226 @@ textarea.merge {
   background: color-mix(in srgb, var(--danger) 10%, var(--bg));
   color: var(--text);
 }
+
+/* ---- integrated terminal (M23, ADR-0064) ---- */
+.terminal-layout {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.terminal-layout.bottom {
+  flex-direction: column;
+}
+.terminal-layout.left,
+.terminal-layout.right {
+  flex-direction: row;
+}
+.terminal-work {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.terminal-dock {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+.terminal-dock[hidden] {
+  display: none;
+}
+.terminal-dock.bottom {
+  border-top: 1px solid var(--border);
+}
+.terminal-dock.left {
+  order: -1;
+  border-right: 1px solid var(--border);
+}
+.terminal-dock.right {
+  border-left: 1px solid var(--border);
+}
+/* the splitter sits on the edge that faces the work area; its hit area spills over the border */
+.terminal-resizer {
+  position: absolute;
+  z-index: 5;
+  background: transparent;
+}
+.terminal-dock.bottom .terminal-resizer {
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+}
+.terminal-dock.left .terminal-resizer {
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+.terminal-dock.right .terminal-resizer {
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+.terminal-resizer:hover,
+.terminal-resizer:focus-visible {
+  background: var(--accent-bright);
+  opacity: 0.4;
+}
+.terminal-window {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+.terminal-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.terminal-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.terminal-bar .spacer {
+  flex: 1;
+}
+.terminal-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+}
+.terminal-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  padding: 2px 4px 2px 10px;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.terminal-tab:hover {
+  background: var(--bg-hover);
+}
+.terminal-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent-bright);
+}
+.terminal-tab.ended .terminal-tab-title {
+  font-style: italic;
+}
+.terminal-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.terminal-tab .close {
+  visibility: hidden;
+  padding: 0 2px;
+}
+.terminal-tab:hover .close,
+.terminal-tab.active .close {
+  visibility: visible;
+}
+.terminal-bar button.icon:disabled {
+  opacity: 0.4;
+}
+.terminal-position {
+  padding: 0 4px;
+  font-size: 12px;
+}
+.terminal-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.terminal-view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.terminal-view[hidden] {
+  display: none;
+}
+.terminal-host {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px 0 0 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.terminal-screen {
+  width: 100%;
+  height: 100%;
+}
+.terminal-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text-muted);
+  text-align: center;
+}
+.terminal-exit,
+.terminal-notice {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text);
+}
+.terminal-notice {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 8px 0;
+  border-color: var(--danger);
+}
+.terminal-notice span {
+  flex: 1;
+}
+.terminal-empty,
+.terminal-loading {
+  flex: 1;
+  padding: 12px;
+}

@@ -37,6 +37,7 @@ import * as SharingAPI from '../../wailsjs/go/app/SharingAPI';
 import * as ConfigAPI from '../../wailsjs/go/app/ConfigAPI';
 import * as GraphAPI from '../../wailsjs/go/app/GraphAPI';
 import * as WebViewAPI from '../../wailsjs/go/app/WebViewAPI';
+import * as TerminalAPI from '../../wailsjs/go/app/TerminalAPI';
 import type { GraphData, GraphOptions } from '../graph/types';
 import * as BasesAPI from '../../wailsjs/go/app/BasesAPI';
 import type { BaseInfo, BaseResult, ViewPatch } from '../bases/types';
@@ -56,6 +57,9 @@ export type VaultInfo = Plain<app.VaultInfo>;
 export type ExportResult = Plain<app.ExportResult>;
 export type WebViewStatus = Plain<app.WebViewStatus>;
 export type WebViewOpened = Plain<app.WebViewOpened>;
+export type TerminalSession = Plain<app.TerminalSession>;
+export type TerminalSnapshot = Plain<app.TerminalSnapshot>;
+export type TerminalOpenCheck = Plain<app.TerminalOpenCheck>;
 /** A rectangle of the window as fractions (0..1) of its content view, origin top-left (WebViewAPI). */
 export interface ViewBounds {
   x: number;
@@ -563,6 +567,29 @@ export const api = {
     reserveKeys: (accelerators: string[]): Promise<void> => WebViewAPI.ReserveKeys(accelerators),
     /** Deletes the session data of the vault's applications on this device. */
     clearData: (vaultId: string): Promise<void> => WebViewAPI.ClearData(vaultId),
+  },
+  /**
+   * The integrated terminal (desktop with the capability `terminal`; elsewhere every call is refused
+   * with `terminal-unavailable`). The UI never names a program or a path: it passes the id of a vault and
+   * the core starts the shell in its root. Only terminal/controller.ts talks to it.
+   */
+  terminal: {
+    /** Starts a shell for the vault (`''` = the home directory) at the size of the panel. */
+    open: (vaultId: string, cols: number, rows: number): Promise<TerminalSession> =>
+      TerminalAPI.Open(vaultId, cols, rows),
+    /** Whether `open` would start a shell: not for a vault the user may only read. */
+    canOpen: (vaultId: string): Promise<TerminalOpenCheck> => TerminalAPI.CanOpen(vaultId),
+    write: (id: string, data: string): Promise<void> => TerminalAPI.Write(id, data),
+    resize: (id: string, cols: number, rows: number): Promise<void> =>
+      TerminalAPI.Resize(id, cols, rows),
+    close: (id: string): Promise<void> => TerminalAPI.Close(id),
+    list: (): Promise<TerminalSession[]> => TerminalAPI.List(),
+    /** What a session has shown and the `seq` of its last event (to redraw it in another window). */
+    snapshot: (id: string): Promise<TerminalSnapshot> => TerminalAPI.Snapshot(id),
+    /** Where the panel is shown: in the main window (`docked`) or in the window of its own (`detached`). */
+    state: (): Promise<{ mode: string }> => TerminalAPI.State(),
+    undock: (): Promise<void> => TerminalAPI.Undock(),
+    dock: (): Promise<void> => TerminalAPI.Dock(),
   },
   /**
    * Subscribes to a backend event (`Events.<key>`; names and payload types are generated from the Go

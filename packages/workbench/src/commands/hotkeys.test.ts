@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   comboFromEvent,
+  combosFromEvent,
   comboIndex,
   effectiveCombos,
   formatCombo,
@@ -40,6 +41,55 @@ describe('hotkeys', () => {
     expect(comboFromEvent(ev({ key: '1', code: 'Digit1', ctrlKey: true }), false)).toBe('Mod-1');
     expect(comboFromEvent(ev({ key: 'Enter', ctrlKey: true }), false)).toBe('Mod-Enter');
     expect(comboFromEvent(ev({ key: 'Shift', shiftKey: true }), true)).toBeNull();
+  });
+
+  it('reads the combo of the character, as it always did, whatever key makes it', () => {
+    // the key left of 1: "`" on a US layout, "~" with Shift, "\\" on an Italian one
+    expect(comboFromEvent(ev({ key: '`', code: 'Backquote', ctrlKey: true }), false)).toBe('Mod-`');
+    expect(
+      comboFromEvent(ev({ key: '~', code: 'Backquote', ctrlKey: true, shiftKey: true }), false),
+    ).toBe('Mod-Shift-~');
+    expect(comboFromEvent(ev({ key: '\\', code: 'Backquote', ctrlKey: true }), false)).toBe(
+      'Mod-\\',
+    );
+    expect(comboFromEvent(ev({ key: '\\', code: 'Backslash', ctrlKey: true }), false)).toBe(
+      'Mod-\\',
+    );
+    expect(comboFromEvent(ev({ key: 'Dead', code: 'Backquote' }), false)).toBeNull();
+    expect(comboFromEvent(ev({ key: 'Dead', code: 'KeyE' }), false)).toBeNull();
+  });
+
+  it('adds the key left of 1 as "`" after the combo of its character', () => {
+    const combos = (o: Partial<KeyboardEvent> & { key: string }, mac: boolean) =>
+      combosFromEvent(ev({ code: 'Backquote', ...o }), mac);
+    expect(combos({ key: '`', ctrlKey: true }, false)).toEqual(['Mod-`']); // the same: once
+    expect(combos({ key: '~', ctrlKey: true, shiftKey: true }, false)).toEqual([
+      'Mod-Shift-~',
+      'Mod-Shift-`',
+    ]);
+    expect(combos({ key: '\\', ctrlKey: true }, true)).toEqual(['Ctrl-\\', 'Ctrl-`']);
+    expect(combos({ key: '\\', metaKey: true }, true)).toEqual(['Mod-\\', 'Mod-`']);
+    // an ISO keyboard on macOS: the top-left key is IntlBackslash and the "<>" key is Backquote, both count
+    const iso = { key: '§', code: 'IntlBackslash', ctrlKey: true };
+    expect(combosFromEvent(ev(iso), true)).toEqual(['Ctrl-§', 'Ctrl-`']);
+    expect(combosFromEvent(ev({ ...iso, key: '±', shiftKey: true }), true)).toEqual([
+      'Ctrl-Shift-±',
+      'Ctrl-Shift-`',
+    ]);
+    // elsewhere IntlBackslash is another key (the "<>" key of an ISO keyboard): no alias
+    expect(combosFromEvent(ev(iso), false)).toEqual(['Mod-§']);
+    // a dead key has no character: only the place is left
+    expect(combos({ key: 'Dead', ctrlKey: true }, false)).toEqual(['Mod-`']);
+    // any other key has one combo, and a bare modifier none
+    expect(combosFromEvent(ev({ key: 'p', code: 'KeyP', ctrlKey: true }), false)).toEqual([
+      'Mod-p',
+    ]);
+    expect(combosFromEvent(ev({ key: '\\', code: 'Backslash', ctrlKey: true }), false)).toEqual([
+      'Mod-\\',
+    ]);
+    expect(combosFromEvent(ev({ key: 'Shift', code: 'ShiftLeft', shiftKey: true }), false)).toEqual(
+      [],
+    );
   });
 
   it('formats combos for display', () => {

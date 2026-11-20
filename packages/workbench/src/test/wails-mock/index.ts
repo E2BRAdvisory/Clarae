@@ -21,6 +21,7 @@ import { mockMergeEdit, type MergeEditResult } from './mergeEdit';
 import { createImporterMock } from '../../importer/mock';
 import { createUpdaterMock } from '../../updater/mock';
 import { createWebViewMock, type MockWebView } from './webview';
+import { createTerminalMock, type MockTerminal } from './terminal';
 import type {
   AppSettings,
   ConfigState,
@@ -113,6 +114,8 @@ export interface MockSharing {
 export interface WailsMock {
   /** The native views of the applications (WebViewAPI): what the UI asked for, and a way to answer. */
   webview: MockWebView;
+  /** The shells of the integrated terminal (TerminalAPI): what the UI asked for, and a way to answer. */
+  terminal: MockTerminal;
   sync: MockSync;
   sharing: MockSharing;
   /** Local file snapshots (HistoryAPI). */
@@ -407,6 +410,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     listeners: (name) => handlers.get(name)?.size ?? 0,
     deleteCloudVaultElsewhere: () => undefined, // set with the SyncAPI below
     webview: undefined as unknown as MockWebView, // set with the WebViewAPI below
+    terminal: undefined as unknown as MockTerminal, // set with the TerminalAPI below
   };
   // A run that wants the desktop of a system without a driver says so before the page loads:
   // `window.__CLARAE_WEBVIEW__ = { available: false }`.
@@ -421,6 +425,12 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     ...seeded,
   });
   mock.webview = webviews.state;
+  const terminals = createTerminalMock({
+    emit: (name, payload) => mock.emit(name, payload),
+    vaultPath: (id) => mock.vaults.get(id)?.info.path ?? '',
+    readOnly: (id) => sy.links.get(id)?.readOnly === true,
+  });
+  mock.terminal = terminals.state;
   const vaultOf = (id: string): MockVault => {
     const v = mock.vaults.get(id);
     if (!v) throw new Error('vault is not open');
@@ -1747,6 +1757,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       ConfigAPI,
       GraphAPI,
       WebViewAPI: webviews.api,
+      TerminalAPI: terminals.api,
       ...notesMock({ vaultOf, resolve, changed }),
       HistoryAPI: createHistoryAPI(mock.history, {
         files: (id) => vaultOf(id).files,
@@ -1767,6 +1778,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     EventsEmit: (name: string, ...data: unknown[]) => mock.emit(name, data[0]),
     BrowserOpenURL: () => undefined,
     WindowShow: () => undefined,
+    WindowSetTitle: () => undefined,
     Quit: () => {
       mock.quits++;
     },

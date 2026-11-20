@@ -1522,6 +1522,50 @@ features:
         - packages/workbench/src/webapp/BrowserView.test.tsx
         - apps/desktop/frontend/e2e/webapp.spec.ts
 
+  - id: terminal
+    title: Terminale integrato multi-tab, ancorabile e sganciabile in una finestra separata
+    desktop:
+      status: yes
+      note: shell su pseudo-terminale avviate dal core Go (ADR-0064, capability terminal), una per tab, con la cartella di lavoro nella radice del vault (la home senza vault); il frontend non nomina mai un programma o un percorso, passa l'id del vault e il core lo risolve tra i vault aperti. Un vault in sola lettura per l'utente (condivisione come lettore, o revocata) non apre il terminale (`terminal-read-only`; `TerminalAPI.CanOpen` e `SyncAPI.Info.readOnly` dicono lo stesso) e chiude le sessioni già aperte se lo diventa (`terminal:exit` con motivo `read-only`). Unix con creack/pty (SIGHUP al gruppo, SIGKILL dopo 1 s anche ai processi della sessione che lo ignorano), Windows con ConPTY e un Job Object con KILL_ON_JOB_CLOSE, nessun orfano alla chiusura del tab, della finestra separata o dell'app; il driver di Windows è provato solo in compilazione (`task vet-windows`). L'output arriva come `terminal:output` (coalescenza di 16 ms o 32 KiB, testo UTF-8 valido, `seq` per scartare i duplicati dopo `Snapshot`); la finestra separata (`terminal.html`, stessa CSP) si apre con `Undock` e si chiude con `Dock` senza riavviare le shell, e chiuderla col pulsante del sistema termina tutte le sessioni. Nessun flag del profilo di configurazione
+      capability: terminal
+      bindings:
+        - TerminalAPI.Open
+        - TerminalAPI.CanOpen
+        - TerminalAPI.Write
+        - TerminalAPI.Resize
+        - TerminalAPI.Close
+        - TerminalAPI.List
+        - TerminalAPI.Snapshot
+        - TerminalAPI.State
+        - TerminalAPI.Undock
+        - TerminalAPI.Dock
+      commands:
+        [terminal:toggle, terminal:new-tab, terminal:close-tab, terminal:undock, terminal:dock]
+    workbench:
+      status: exception
+      reason: una pagina non può avviare processi del sistema; il workbench non ha il terminale e TerminalAPI rifiuta ogni chiamata (terminal-unavailable)
+    tests:
+      desktop:
+        - apps/desktop/internal/terminal/terminal_unix_test.go
+        - apps/desktop/internal/terminal/terminal_test.go
+        - apps/desktop/internal/terminal/ring_test.go
+        - apps/desktop/internal/app/bindings_terminal_test.go
+        - apps/desktop/internal/app/capabilities_test.go
+        - apps/desktop/internal/shell/terminal_window_test.go
+        - apps/desktop/internal/sync/manager_mounts_test.go
+        - apps/desktop/terminal_window_test.go
+        - packages/workbench/src/terminal/model.test.ts
+        - packages/workbench/src/terminal/dock.test.ts
+        - packages/workbench/src/terminal/keys.test.ts
+        - packages/workbench/src/terminal/controller.test.ts
+        - packages/workbench/src/terminal/commands.test.ts
+        - packages/workbench/src/terminal/TerminalPanel.test.tsx
+        - packages/workbench/src/terminal/instances.test.ts
+        - packages/workbench/src/terminal/TerminalWindow.test.tsx
+        - packages/workbench/src/shell/Ribbon.test.tsx
+        - packages/workbench/src/commands/hotkeys.test.ts
+        - apps/desktop/frontend/e2e/terminal.spec.ts
+
   - id: slides
     title: Presentazioni da una nota
     desktop:

@@ -59,6 +59,7 @@ export interface WailsRuntime {
     Fullscreen(): Promise<void>;
     UnFullscreen(): Promise<void>;
     IsFullscreen(): Promise<boolean>;
+    SetTitle(title: string): Promise<void>;
   };
 }
 
@@ -252,6 +253,10 @@ export async function installWailsHost(options: InstallOptions = {}): Promise<()
       rt.Window.UnFullscreen().catch(report('WindowUnfullscreen'));
     },
     WindowIsFullscreen: () => rt.Window.IsFullscreen(),
+    // The title of the window the page is in (the separate terminal window sets its own, translated).
+    WindowSetTitle: (title: string) => {
+      rt.Window.SetTitle(title).catch(report('WindowSetTitle'));
+    },
   };
 
   return installDropGuard(target);

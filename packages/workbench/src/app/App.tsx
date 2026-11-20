@@ -32,6 +32,8 @@ import { can, useCan, usePlatform } from '../platform';
 import { followLinkPath } from './open';
 import { applyVaultChanges, onVaultChanges } from './fileChanges';
 import { startWebapps } from '../webapp/start';
+import { startTerminal } from '../terminal/controller';
+import { TerminalLayout } from '../terminal/TerminalLayout';
 
 // The import wizard, the settings and the file recovery are fetched the first time they open: they
 // stay out of the startup bundle (ADR-0020).
@@ -92,6 +94,7 @@ function RecoveryGate() {
 export function App() {
   const vault = useAppStore((s) => s.vault);
   const updater = useCan('updater');
+  const terminal = useCan('terminal');
   const setSettings = useAppStore((s) => s.setSettings);
   const setAuth = useAppStore((s) => s.setAuth);
   const setIndexProgress = useAppStore((s) => s.setIndexProgress);
@@ -209,6 +212,10 @@ export function App() {
   // its events, the tabs it follows, and the keys of the application it hands back (M18, track E).
   useEffect(() => startWebapps(), []);
 
+  // The integrated terminal (desktop with the capability; elsewhere nothing starts): the sessions of the core,
+  // and where its panel is (this window or the separate one), outlive the vault view.
+  useEffect(() => (terminal ? startTerminal('main') : undefined), [terminal]);
+
   // Application hotkeys. Editors handle theirs first (they call preventDefault).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -228,7 +235,13 @@ export function App() {
       <DeviceRevokedBanner />
       {/* The header stays usable (vault menu, account) when the vault view fails. */}
       <ErrorBoundary scope="view" resetKey={vault?.id}>
-        {vault ? <VaultView key={vault.id} vaultId={vault.id} /> : <Welcome onOpen={openVault} />}
+        {vault ? (
+          <VaultView key={vault.id} vaultId={vault.id} />
+        ) : (
+          <TerminalLayout>
+            <Welcome onOpen={openVault} />
+          </TerminalLayout>
+        )}
       </ErrorBoundary>
       <SettingsGate />
       <SyncDialogs />

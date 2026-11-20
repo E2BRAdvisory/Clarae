@@ -40,3 +40,31 @@ describe('settings, files section', () => {
     expect(screen.queryByLabelText('Deleted files go to')).not.toBeInTheDocument();
   });
 });
+
+describe('settings, about section', () => {
+  beforeEach(async () => {
+    initI18n('en');
+    installWailsMock();
+    const info = await api.vault.open('/vaults/Notes');
+    useAppStore.getState().setVault(info);
+    act(() => useAppStore.setState({ settingsOpen: true, settingsSection: 'about' }));
+  });
+  afterEach(() => configurePlatform());
+
+  it('credits the terminal libraries with their versions, creack/pty too on the desktop', async () => {
+    renderFiles();
+    const text = (await screen.findByText(/Twemoji/)).textContent ?? '';
+    expect(text).toMatch(
+      /xterm\.js \(@xterm\/xterm 6\.0\.0, @xterm\/addon-fit 0\.11\.0, @xterm\/addon-web-links 0\.12\.0\)/,
+    );
+    expect(text).toMatch(/creack\/pty \(v1\.1\.24\), MIT licence/);
+  });
+
+  it('credits xterm.js alone in the browser, whose build has no pty', async () => {
+    configurePlatform({ kind: 'web' });
+    renderFiles();
+    const text = (await screen.findByText(/Twemoji/)).textContent ?? '';
+    expect(text).toMatch(/xterm\.js/);
+    expect(text).not.toMatch(/creack/);
+  });
+});

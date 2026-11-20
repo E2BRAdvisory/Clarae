@@ -405,6 +405,12 @@ export function SettingsPanel() {
             <Row label={t('settings.licenses')}>
               <span className="muted" style={{ userSelect: 'text' }}>
                 {t('settings.twemojiAttribution')}
+                {/* xterm is in every build (the terminal's chunk ships with the workbench); creack/pty only in the desktop binary */}{' '}
+                {t(
+                  can('terminal')
+                    ? 'settings.terminalAttribution'
+                    : 'settings.terminalAttributionWeb',
+                )}
               </span>
             </Row>
           </>

@@ -33,6 +33,7 @@ function rig(methods: unknown = METHODS): Rig {
     full: vi.fn(() => Promise.resolve()),
     unfull: vi.fn(() => Promise.resolve()),
     isFull: vi.fn(() => Promise.resolve(true)),
+    title: vi.fn(() => Promise.resolve()),
     emit: vi.fn(() => Promise.resolve()),
   };
   const r: Rig = {
@@ -68,6 +69,7 @@ function rig(methods: unknown = METHODS): Rig {
         Fullscreen: fn.full,
         UnFullscreen: fn.unfull,
         IsFullscreen: fn.isFull,
+        SetTitle: fn.title,
       },
     },
   };
@@ -233,6 +235,8 @@ describe('window.runtime window and browser', () => {
     runtime()['Quit']?.();
     runtime()['WindowFullscreen']?.();
     runtime()['WindowUnfullscreen']?.();
+    runtime()['WindowSetTitle']?.('Clarae notanda — Terminal');
+    expect(r.fn['title']).toHaveBeenCalledWith('Clarae notanda — Terminal');
     expect(r.fn['open']).toHaveBeenCalledWith('https://example.com/');
     expect(r.fn['show']).toHaveBeenCalledOnce();
     expect(r.fn['quit']).toHaveBeenCalledOnce();
@@ -251,6 +255,7 @@ describe('window.runtime window and browser', () => {
       'Quit',
       'WindowFullscreen',
       'WindowIsFullscreen',
+      'WindowSetTitle',
       'WindowShow',
       'WindowUnfullscreen',
     ]);

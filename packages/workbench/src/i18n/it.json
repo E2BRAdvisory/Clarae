@@ -196,6 +196,8 @@
     "dataDir": "Cartella dati",
     "licenses": "Licenze",
     "twemojiAttribution": "Grafica delle emoji: Twemoji, Copyright Twitter, Inc. e altri collaboratori, con licenza CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/), usata senza modifiche.",
+    "terminalAttribution": "Terminale: xterm.js (@xterm/xterm 6.0.0, @xterm/addon-fit 0.11.0, @xterm/addon-web-links 0.12.0) e creack/pty (v1.1.24), licenza MIT.",
+    "terminalAttributionWeb": "Codice del terminale: xterm.js (@xterm/xterm 6.0.0, @xterm/addon-fit 0.11.0, @xterm/addon-web-links 0.12.0), licenza MIT.",
     "needsVault": "Apri un vault per modificare queste impostazioni (sono salvate per vault).",
     "section_general": "Generale",
     "section_editor": "Editor",
@@ -628,7 +630,12 @@
     "drawing_set_slide_notes": "Disegno: modifica le note del relatore della cornice selezionata",
     "drawing_describe": "Disegno: descrivi il disegno come testo",
     "editor_find": "Cerca nella nota",
-    "editor_goto_line": "Vai alla riga"
+    "editor_goto_line": "Vai alla riga",
+    "terminal_toggle": "Terminale: mostra o nascondi",
+    "terminal_new_tab": "Terminale: nuova scheda",
+    "terminal_close_tab": "Terminale: chiudi la scheda",
+    "terminal_undock": "Terminale: sgancia in una finestra separata",
+    "terminal_dock": "Terminale: riaggancia a Clarae"
   },
   "sync": {
     "title": "Sync",
@@ -1314,6 +1321,28 @@
   "ribbon": {
     "label": "Azioni rapide"
   },
+  "terminal": {
+    "title": "Terminale",
+    "tabs": "Schede del terminale",
+    "newTab": "Nuovo terminale",
+    "newTabReadOnly": "Nuovo terminale: questo vault è in sola lettura per te",
+    "closeTab": "Chiudi {{title}}",
+    "position": "Posizione del terminale",
+    "positions": {
+      "bottom": "In basso",
+      "left": "A sinistra",
+      "right": "A destra"
+    },
+    "undock": "Sgancia terminale",
+    "dock": "Aggancia a Clarae",
+    "dismiss": "Chiudi l'avviso",
+    "resize": "Ridimensiona il terminale",
+    "empty": "Nessun terminale aperto. Usa + per aprirne uno.",
+    "locked": "Questo vault è bloccato. Sbloccalo per vedere il suo terminale; i programmi al suo interno continuano a funzionare.",
+    "exited": "La shell è terminata (codice di uscita {{code}}). Chiudi la scheda quando hai finito.",
+    "readOnlyClosed": "Il vault è diventato di sola lettura: sessione chiusa.",
+    "readOnlyVault": "questo vault è in sola lettura per te"
+  },
   "vaultSwitcher": {
     "label": "Cambia vault",
     "open": "Apri un'altra cartella…",
@@ -1581,7 +1610,14 @@
     "webview-not-found": "La pagina non è più aperta.",
     "webview-limit": "Ci sono troppe applicazioni aperte: chiudine una e riprova.",
     "webview-failed": "Il sistema non è riuscito a farlo: vedi il registro.",
-    "webview-invalid-accelerator": "Questa combinazione di tasti non si può usare in un'applicazione."
+    "webview-invalid-accelerator": "Questa combinazione di tasti non si può usare in un'applicazione.",
+    "terminal-unavailable": "Il terminale non è disponibile qui.",
+    "terminal-read-only": "Questo vault è in sola lettura per te: un terminale permetterebbe a un programma di cambiare ciò che l'applicazione non cambia.",
+    "terminal-not-found": "Quel terminale non è più aperto.",
+    "terminal-limit": "Troppi terminali aperti: chiudine uno e riprova.",
+    "terminal-busy": "Il programma nel terminale non sta leggendo ciò che scrivi.",
+    "terminal-too-large": "È troppo da inviare al terminale in una volta.",
+    "terminal-failed": "Il terminale non è riuscito: guarda il log."
   },
   "webapp": {
     "new": {

@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { Ribbon } from './Ribbon';
-import { api } from '../app/api';
+import { api, linkInfo } from '../app/api';
 import { initI18n } from '../i18n';
+import { configurePlatform } from '../platform';
 import { installWailsMock } from '../test/wails-mock';
 import { useManaged } from '../state/managed';
 import { useAppStore } from '../state/store';
+import { useSync } from '../state/sync';
+import { resetTerminal } from '../terminal/controller';
+import { useTerminal } from '../terminal/store';
 
 beforeEach(async () => {
   initI18n('en');
@@ -13,7 +17,12 @@ beforeEach(async () => {
   const info = await api.vault.open('/vaults/Ribbon');
   useAppStore.getState().setVault(info);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  configurePlatform();
+  resetTerminal();
+  useSync.setState({ info: {} });
+});
 
 const open = (path: string) => act(() => useAppStore.getState().openNote(path, { newTab: true }));
 const labels = (): string[] =>
@@ -68,5 +77,50 @@ describe('ribbon applications', () => {
     act(() => useManaged.setState({ features: { web_viewer: false } }));
     expect(screen.queryByRole('button', { name: 'New application' })).toBeNull();
     act(() => useManaged.setState({ features: {} }));
+  });
+});
+
+describe('ribbon terminal', () => {
+  const button = () => screen.queryByRole('button', { name: /^Terminal/ });
+
+  it('sits right above Settings, off until a terminal is open', () => {
+    render(<Ribbon />);
+    const b = button();
+    expect(b).toBeEnabled();
+    expect(b).toHaveAttribute('aria-pressed', 'false');
+    const bottom = b?.closest('.ribbon-bottom');
+    const names = [...(bottom?.querySelectorAll('button') ?? [])].map((x) =>
+      x.getAttribute('aria-label'),
+    );
+    expect(names.indexOf('Settings')).toBe(names.indexOf(b?.getAttribute('aria-label') ?? '') + 1);
+  });
+
+  it('is pressed while the panel is open, and while the terminal is in its own window', () => {
+    render(<Ribbon />);
+    act(() => useTerminal.setState({ open: true }));
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    act(() => useTerminal.setState({ open: false }));
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    act(() => useTerminal.setState({ mode: 'detached' }));
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('is not there where the host cannot run processes', () => {
+    configurePlatform({ kind: 'web' });
+    render(<Ribbon />);
+    expect(button()).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeNull();
+  });
+
+  it('is off, with the reason in its tooltip, for a vault the user may only read', () => {
+    render(<Ribbon />);
+    const id = useAppStore.getState().vault?.id ?? '';
+    act(() => useSync.setState({ info: { [id]: linkInfo({ readOnly: true }) } }));
+    const b = button();
+    expect(b).toBeDisabled();
+    expect(b?.getAttribute('title')).toBe('Terminal: this vault is read-only for you');
+    // an open terminal can still be closed
+    act(() => useTerminal.setState({ open: true }));
+    expect(button()).toBeEnabled();
   });
 });

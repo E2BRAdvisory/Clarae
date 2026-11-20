@@ -2,11 +2,19 @@ import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Feature } from '@clarae/api-client/features';
 import { classify, type EmbedKind } from '../embeds/media';
-import { commandById, commandTitle, isEnabled, runCommand } from '../commands/registry';
+import {
+  commandById,
+  commandTitle,
+  isAvailable,
+  isEnabled,
+  runCommand,
+} from '../commands/registry';
 import { getSceneController, subscribeSceneController } from '../drawing/actions/active';
 import { featureOn, useManaged } from '../state/managed';
 import { selectActivePath, useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
+import { readOnlyVault } from '../terminal/commands';
+import { terminalOpen, useTerminal } from '../terminal/store';
 import { AccountButton } from './AccountButton';
 import { Icon, type IconName } from './icons';
 
@@ -55,6 +63,16 @@ export function Ribbon() {
   useAppStore((s) => s.vault);
   useSync((s) => s);
   const features = useManaged((s) => s.features);
+  // The terminal button is pressed while a terminal is open, docked or in its own window.
+  const terminalPressed = useTerminal(terminalOpen);
+  useTerminal((s) => s.role);
+  const terminal = commandById.get('terminal:toggle');
+  const terminalTitle = t('terminal.title');
+  // Why it is off, said in the tooltip: a vault the user may only read does not open a shell.
+  const terminalWhy =
+    terminal && isAvailable(terminal) && !isEnabled(terminal) && readOnlyVault()
+      ? `${terminalTitle}: ${t('terminal.readOnlyVault')}`
+      : terminalTitle;
   const exports = activePath ? (EXPORTS[classify(activePath)] ?? []) : [];
   const shown = ITEMS.filter((i) => !i.flag || featureOn(features, i.flag));
   const items = exports.length
@@ -79,6 +97,18 @@ export function Ribbon() {
         );
       })}
       <div className="ribbon-bottom">
+        {terminal && isAvailable(terminal) && (
+          <button
+            className="icon"
+            title={terminalWhy}
+            aria-label={terminalWhy}
+            aria-pressed={terminalPressed}
+            disabled={!isEnabled(terminal)}
+            onClick={() => void runCommand('terminal:toggle')}
+          >
+            <Icon name="terminal" />
+          </button>
+        )}
         <button
           className="icon"
           title={t('settings.title')}

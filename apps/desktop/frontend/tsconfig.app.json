@@ -6,7 +6,10 @@
     "types": [],
     // The workbench is type-checked by its own project (yarn workspace @clarae/workbench run
     // typecheck); here only its public signature matters, declared in src/workbench.d.ts.
-    "paths": { "@clarae/workbench": ["./src/workbench.d.ts"] }
+    "paths": {
+      "@clarae/workbench": ["./src/workbench.d.ts"],
+      "@clarae/workbench/terminal-window": ["./src/workbench.d.ts"]
+    }
   },
   "include": ["src"]
 }

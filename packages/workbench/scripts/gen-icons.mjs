@@ -93,6 +93,11 @@ const ICONS = {
   forward: 'ArrowForward',
   refresh: 'Refresh',
   openInBrowser: 'OpenInNew',
+  // the integrated terminal
+  terminal: 'Terminal',
+  undock: 'OpenInNew',
+  dock: 'Dock',
+  plus: 'Add',
   // sync
   cloud: 'Cloud',
   cloudOff: 'CloudOff',

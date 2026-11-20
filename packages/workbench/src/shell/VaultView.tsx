@@ -3,6 +3,7 @@ import { releaseVaultMedia } from '../embeds/media';
 import { releaseCanvasPreviews } from '../canvas/preview';
 import { releaseDrawingPreviews } from '../drawing/preview';
 import { useAppStore } from '../state/store';
+import { TerminalLayout } from '../terminal/TerminalLayout';
 import { WorkspaceView } from '../workspace/WorkspaceView';
 import { ChatBar } from './ChatBar';
 import { LeftSidebar } from './LeftSidebar';
@@ -35,7 +36,9 @@ export function VaultView({ vaultId }: { vaultId: string }) {
       <Ribbon />
       {left.open ? <LeftSidebar vaultId={vaultId} /> : <div />}
       <main className="main">
-        <WorkspaceView vaultId={vaultId} />
+        <TerminalLayout>
+          <WorkspaceView vaultId={vaultId} />
+        </TerminalLayout>
         <StatusBar vaultId={vaultId} />
         <ChatBar />
       </main>

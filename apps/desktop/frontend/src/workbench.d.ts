@@ -13,3 +13,8 @@ export declare function mountWorkbench(
   root: HTMLElement,
   options?: WorkbenchOptions,
 ): Promise<WorkbenchHandle>;
+/** The page of the separate terminal window (the `@clarae/workbench/terminal-window` entry, ADR-0064). */
+export declare function mountTerminalWindow(
+  root: HTMLElement,
+  options?: Pick<WorkbenchOptions, 'kind'>,
+): Promise<void>;

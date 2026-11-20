@@ -75,6 +75,7 @@ export type FeatureId =
   | 'graph.3d' // Grafo del vault in 3D, con le icone dei tipi di documento
   | 'webapp' // Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
   | 'webapp.embedded' // Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
+  | 'terminal' // Terminale integrato multi-tab, ancorabile e sganciabile in una finestra separata
   | 'slides' // Presentazioni da una nota
   | 'bookmarks' // Segnalibri
   | 'workspaces' // Workspace salvati
@@ -174,6 +175,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'graph.3d',
   'webapp',
   'webapp.embedded',
+  'terminal',
   'slides',
   'bookmarks',
   'workspaces',

@@ -33,6 +33,7 @@ import { notesCommands } from '../daily/commands';
 import { bookmarkCommands } from '../bookmarks/commands';
 import { workspaceCommands } from '../workspaces/commands';
 import { previewCommands } from '../preview/commands';
+import { terminalCommands } from '../terminal/commands';
 import { exportNoteHtml, exportNoteImage, exportNotePdf } from '../export/commands';
 import { displayPath } from '../embeds/media';
 import { startSlideshow } from '../slides/actions';
@@ -56,7 +57,7 @@ import {
   webappsOn,
 } from '../webapp/commands';
 import i18next from 'i18next';
-import { comboFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
+import { combosFromEvent, comboIndex, effectiveCombos, normalizeCombo } from './hotkeys';
 import { can, type Capabilities } from '../platform';
 import type { FeatureId } from '../parity/features.gen';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
@@ -1009,6 +1010,9 @@ export const commands: Command[] = [
   ...workspaceCommands,
   ...previewCommands,
 
+  // ---- the integrated terminal (M23, desktop only) ----
+  ...terminalCommands,
+
   // ---- app ----
   {
     id: 'settings:open',
@@ -1044,17 +1048,22 @@ export function currentCombos(overrides: Record<string, string[]>): Map<string, 
   return effectiveCombos(commands, overrides);
 }
 
-/** The enabled command a keyboard event triggers, if any. */
+/**
+ * The enabled command a keyboard event triggers, if any. An event may stand for more than one combo
+ * (combosFromEvent): they are tried in order, so the one of the character wins over an alias of the key's place.
+ * `accept` narrows the commands considered (the separate terminal window handles the terminal's only).
+ */
 export function commandForEvent(
   e: KeyboardEvent,
   overrides: Record<string, string[]>,
+  accept: (c: Command) => boolean = () => true,
 ): Command | null {
-  const combo = comboFromEvent(e);
-  if (!combo) return null;
-  const ids = comboIndex(currentCombos(overrides)).get(normalizeCombo(combo)) ?? [];
-  for (const id of ids) {
-    const c = commandById.get(id);
-    if (c && isEnabled(c)) return c;
+  const index = comboIndex(currentCombos(overrides));
+  for (const combo of combosFromEvent(e)) {
+    for (const id of index.get(normalizeCombo(combo)) ?? []) {
+      const c = commandById.get(id);
+      if (c && accept(c) && isEnabled(c)) return c;
+    }
   }
   return null;
 }

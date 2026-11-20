@@ -38,29 +38,38 @@ const collab = process.env['CLARAE_COLLAB'] === '1';
 // of the Config Profile; a released build is made without it, so a profile cannot switch the assistant on.
 const ai = process.env['CLARAE_AI'] === '1';
 
-/** Writes dist/index.html with the hashed bundle and stylesheet, and copies Excalidraw's fonts. */
+/**
+ * The pages of the app, each with its entry: the workbench (index.html) and the separate window of the
+ * terminal (terminal.html, ADR-0064: the core serves it from the same dist/, so it has the same CSP).
+ */
+const PAGES = [
+  { entry: 'src/main.tsx', html: 'index.html' },
+  { entry: 'src/terminal.tsx', html: 'terminal.html' },
+];
+
+/** Writes dist/index.html and dist/terminal.html with the hashed bundle and stylesheet of each, and copies Excalidraw's fonts. */
 const html = {
   name: 'index-html',
   setup(build) {
     build.onEnd(async (result) => {
       if (result.errors.length || !result.metafile) return;
-      const out = Object.entries(result.metafile.outputs).find(
-        ([, o]) => o.entryPoint === 'src/main.tsx',
-      );
-      if (!out) return;
-      const [file, meta] = out;
       const url = (p) => '/' + relative(dist, join(root, p)).replaceAll('\\', '/');
-      const css = meta.cssBundle
-        ? `    <link rel="stylesheet" href="${url(meta.cssBundle)}" />\n  `
-        : '';
       const reload = dev ? '\n    <script src="/dev-reload.js"></script>' : '';
-      const page = (await readFile(join(root, 'index.html'), 'utf8'))
-        .replace('</head>', `${css}</head>`)
-        .replace(
-          /<script[^>]*src="\.\/src\/main\.tsx"[^>]*><\/script>/,
-          `<script type="module" src="${url(file)}"></script>${reload}`,
+      for (const { entry, html: name } of PAGES) {
+        const out = Object.entries(result.metafile.outputs).find(([, o]) => o.entryPoint === entry);
+        if (!out) continue;
+        const [file, meta] = out;
+        const css = meta.cssBundle
+          ? `    <link rel="stylesheet" href="${url(meta.cssBundle)}" />\n  `
+          : '';
+        const script = new RegExp(
+          `<script[^>]*src="\\./${entry.replace('.', '\\.')}"[^>]*></script>`,
         );
-      await writeFile(join(dist, 'index.html'), page);
+        const page = (await readFile(join(root, name), 'utf8'))
+          .replace('</head>', `${css}</head>`)
+          .replace(script, `<script type="module" src="${url(file)}"></script>${reload}`);
+        await writeFile(join(dist, name), page);
+      }
     });
   },
 };
@@ -127,7 +136,7 @@ const options = {
   ...base,
   // The metafile paths (the entry, the sheets of lazyStyles) start at the package, wherever the script is run from.
   absWorkingDir: root,
-  entryPoints: { main: join(root, 'src/main.tsx') },
+  entryPoints: { main: join(root, 'src/main.tsx'), terminal: join(root, 'src/terminal.tsx') },
   outdir: dist,
   entryNames: dev ? 'assets/[name]' : 'assets/[name]-[hash]',
   chunkNames: dev ? 'assets/[name]-[hash]' : 'assets/[name]-[hash]',
@@ -147,7 +156,7 @@ const options = {
   plugins: [
     ...base.plugins,
     liveCollab(collab),
-    lazyStyles({ root, dist, entries: ['src/main.tsx'] }),
+    lazyStyles({ root, dist, entries: PAGES.map((p) => p.entry) }),
     ...(dev ? [html, reload] : [html]),
   ],
 };
@@ -175,6 +184,13 @@ const BUDGET = { initialKB: 2000, totalKB: 23000 };
 
 function checkBudget(meta) {
   const outputs = meta.outputs;
+  // Every page is in the build: the core opens terminal.html in its own window (ADR-0064) and answers 404 without it.
+  for (const { entry, html: name } of PAGES) {
+    if (!Object.values(outputs).some((o) => o.entryPoint === entry)) {
+      console.error(`The build has no ${name} (entry ${entry}).`);
+      process.exit(1);
+    }
+  }
   const entry = Object.entries(outputs).find(([, o]) => o.entryPoint === 'src/main.tsx')?.[0];
   const seen = new Set();
   const walk = (file) => {

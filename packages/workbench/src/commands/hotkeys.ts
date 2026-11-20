@@ -60,23 +60,56 @@ export function normalizeCombo(combo: string): string {
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Dead']);
 
-/** The combo a keyboard event represents, or null for a bare modifier press. */
-export function comboFromEvent(
-  e: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
-  mac = isMac(),
-): string | null {
-  if (MODIFIER_KEYS.has(e.key)) return null;
+type KeyEventLike = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>;
+
+function comboOf(e: KeyEventLike, key: string, mac: boolean): string {
   const mods: string[] = [];
   if (mac ? e.metaKey : e.ctrlKey) mods.push('Mod');
   if (mac ? e.ctrlKey : false) mods.push('Ctrl');
   if (e.altKey) mods.push('Alt');
   if (e.shiftKey) mods.push('Shift');
   if (!mac && e.metaKey) mods.push('Meta');
+  return normalizeCombo([...mods, canonicalKey(key)].join('-') || canonicalKey(key));
+}
+
+/** The combo a keyboard event represents, or null for a bare modifier press. */
+export function comboFromEvent(e: KeyEventLike, mac = isMac()): string | null {
+  if (MODIFIER_KEYS.has(e.key)) return null;
   // Letters and digits come from the physical key so Shift/Alt do not change them.
   let key = e.key;
   const code = /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code ?? '');
   if (code) key = (code[1] ?? code[2] ?? key).toLowerCase();
-  return normalizeCombo([...mods, canonicalKey(key)].join('-') || canonicalKey(key));
+  return comboOf(e, key, mac);
+}
+
+/**
+ * The physical keys that count as "`" (the terminal's key): the one left of 1 everywhere, and on macOS
+ * the other key an ISO (Italian, German…) keyboard has there: macOS reports the top-left key of such a
+ * keyboard as IntlBackslash and the "<>" key next to the left Shift as Backquote, so both are tried.
+ */
+const aliasCodes = (mac: boolean): readonly string[] =>
+  mac ? ['Backquote', 'IntlBackslash'] : ['Backquote'];
+
+/**
+ * The combos an event may stand for, in the order to try them: the one of its character
+ * (comboFromEvent), then, for those keys (aliasCodes), the one of their place, written "`". The key
+ * left of 1 is "`" on a US layout but "~" with Shift, and has no "`" at all on an Italian one (it types
+ * "\\"), yet it is one shortcut key everywhere (the terminal's). The character goes first so that a
+ * layout's own "\\" still finds what is bound to it; the place is the alias, tried only when nothing matches.
+ */
+export function combosFromEvent(e: KeyEventLike, mac = isMac()): string[] {
+  const out: string[] = [];
+  const primary = comboFromEvent(e, mac);
+  if (primary) out.push(primary);
+  // a layout that composes accents reports the key as "Dead": its place is what counts
+  if (aliasCodes(mac).includes(e.code)) {
+    const alias = comboOf(e, '`', mac);
+    if (!out.includes(alias)) out.push(alias);
+  }
+  return out;
 }
 
 const MAC_SYMBOLS: Record<string, string> = {

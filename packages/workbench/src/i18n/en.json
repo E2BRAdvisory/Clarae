@@ -196,6 +196,8 @@
     "dataDir": "Data folder",
     "licenses": "Licenses",
     "twemojiAttribution": "Emoji graphics: Twemoji, Copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/), used unmodified.",
+    "terminalAttribution": "Terminal: xterm.js (@xterm/xterm 6.0.0, @xterm/addon-fit 0.11.0, @xterm/addon-web-links 0.12.0) and creack/pty (v1.1.24), MIT licence.",
+    "terminalAttributionWeb": "Terminal code: xterm.js (@xterm/xterm 6.0.0, @xterm/addon-fit 0.11.0, @xterm/addon-web-links 0.12.0), MIT licence.",
     "needsVault": "Open a vault to change these settings (they are stored per vault).",
     "section_general": "General",
     "section_editor": "Editor",
@@ -628,7 +630,12 @@
     "drawing_set_slide_notes": "Drawing: edit the presenter notes of the selected frame",
     "drawing_describe": "Drawing: describe the drawing as text",
     "editor_find": "Find in note",
-    "editor_goto_line": "Go to line"
+    "editor_goto_line": "Go to line",
+    "terminal_toggle": "Terminal: show or hide",
+    "terminal_new_tab": "Terminal: new tab",
+    "terminal_close_tab": "Terminal: close the tab",
+    "terminal_undock": "Terminal: undock into its own window",
+    "terminal_dock": "Terminal: dock back into Clarae"
   },
   "sync": {
     "title": "Sync",
@@ -1314,6 +1321,28 @@
   "ribbon": {
     "label": "Quick actions"
   },
+  "terminal": {
+    "title": "Terminal",
+    "tabs": "Terminal tabs",
+    "newTab": "New terminal",
+    "newTabReadOnly": "New terminal: this vault is read-only for you",
+    "closeTab": "Close {{title}}",
+    "position": "Position of the terminal",
+    "positions": {
+      "bottom": "Bottom",
+      "left": "Left",
+      "right": "Right"
+    },
+    "undock": "Undock terminal",
+    "dock": "Dock to Clarae",
+    "dismiss": "Dismiss",
+    "resize": "Resize the terminal",
+    "empty": "No terminal is open. Use + to start one.",
+    "locked": "This vault is locked. Unlock it to see its terminal; the programs in it keep running.",
+    "exited": "The shell ended (exit code {{code}}). Close the tab when you are done.",
+    "readOnlyClosed": "The vault became read-only: the session was closed.",
+    "readOnlyVault": "this vault is read-only for you"
+  },
   "vaultSwitcher": {
     "label": "Switch vault",
     "open": "Open another folder…",
@@ -1581,7 +1610,14 @@
     "webview-not-found": "The page is no longer open.",
     "webview-limit": "Too many applications are open: close one and try again.",
     "webview-failed": "The system could not do it: see the log.",
-    "webview-invalid-accelerator": "That key combination cannot be used in an application."
+    "webview-invalid-accelerator": "That key combination cannot be used in an application.",
+    "terminal-unavailable": "The terminal is not available here.",
+    "terminal-read-only": "This vault is read-only for you: a terminal would let a program change what the application does not.",
+    "terminal-not-found": "That terminal is no longer open.",
+    "terminal-limit": "Too many terminals are open: close one and try again.",
+    "terminal-busy": "The program in the terminal is not reading what you type.",
+    "terminal-too-large": "That is too much to send to the terminal at once.",
+    "terminal-failed": "The terminal could not do it: see the log."
   },
   "webapp": {
     "new": {
