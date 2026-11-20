@@ -1,6 +1,6 @@
 # Verifica manuale di M22: nomi dei file senza estensione e applicazioni su Windows e Linux
 
-Prove a mano per ciò che le suite automatiche non vedono: l'esploratore su un vault vero e, per le applicazioni, la finestra reale di Windows e di Linux. Il lavoro è descritto in [roadmap §13-quindecies](../roadmap.md#13-quindecies-m22--applicazioni-integrate-su-windows-e-linux-nomi-dei-file-senza-estensione) e negli ADR [0062](../adr/0062-vista-integrata-windows-linux.md) e [0063](../adr/0063-nomi-file-senza-estensione.md), **entrambi in proposta**.
+Prove a mano per ciò che le suite automatiche non vedono: l'esploratore su un vault vero e, per le applicazioni, la finestra reale di Windows e di Linux. Il lavoro è descritto in [roadmap §13-quindecies](../roadmap.md#13-quindecies-m22--applicazioni-integrate-su-windows-e-linux-nomi-dei-file-senza-estensione) e negli ADR [0062](../adr/0062-vista-integrata-windows-linux.md) e [0063](../adr/0063-nomi-file-senza-estensione.md), **entrambi accettati il 2026-11-20** (recepiti in `Specifications.md` v1.8 il 2026-11-20; [`spec-v1.8-proposta.md`](../spec-v1.8-proposta.md) resta come storia).
 
 **Stato al 2026-11-19: nessun caso di questo runbook è stato eseguito.** I nomi e i comandi sono stati letti sul codice e su `Taskfile.yml`. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1 o P2) oppure `n/d`, con data, sistema e versione, nel registro in fondo.
 
@@ -57,7 +57,7 @@ Si eseguono i casi della [matrice](m18-webview-matrice.md): **sezione 2** (WE1�
 
 ## Registro delle esecuzioni
 
-Una riga per esecuzione. Un difetto va annotato sotto il caso con il suo livello e, se riguarda l'accettazione di ADR-0062 o ADR-0063, riportato in [`docs/roadmap.md`](../roadmap.md) §13-quindecies.
+Una riga per esecuzione. Un difetto va annotato sotto il caso con il suo livello e, se riguarda ADR-0062 o ADR-0063 (accettati il 2026-11-20), riportato in [`docs/roadmap.md`](../roadmap.md) §13-quindecies.
 
 | Data | Sistema operativo e versione | Versione dell'app | Esecutore | Casi eseguiti | Difetti |
 | ---- | ---------------------------- | ----------------- | --------- | ------------- | ------- |

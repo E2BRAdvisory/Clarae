@@ -32,11 +32,12 @@ Non sono previsti plugin, temi di terze parti né CSS personalizzato: l'aspetto 
 | Link / wikilink                | `Mod+K` / `Mod+Maiusc+K` | Elenco puntato / numerato / citazione | `Mod+Maiusc+8` / `7` / `9` |
 | Attiva attività                | `Mod+Invio`              | Sincronizza ora                       | `Mod+Maiusc+S`             |
 | Impostazioni                   | `Mod+,`                  | Cerca nella nota                      | `Mod+F`                    |
-| Vai alla riga                  | `Mod+Alt+G`              |                                       |                            |
+| Vai alla riga                  | `Mod+Alt+G`              | Terminale: mostra o nascondi          | ``Ctrl+` `` (anche su Mac) |
+| Terminale: nuova scheda        | ``Ctrl+Maiusc+` ``       |                                       |                            |
 
 _Cerca nella nota_ apre la barra di ricerca dell'editor, con espressioni regolari, distinzione delle maiuscole e «sostituisci tutto»: in Live è la barra propria di Live e cerca il testo reso (non i simboli Markdown), in Sorgente è il pannello di ricerca del testo; _Vai alla riga_ chiede il numero di riga. Valgono per la nota aperta in Live o in Sorgente, non in Lettura.
 
-Senza scorciatoia predefinita, ma nella palette e assegnabili da _Scorciatoie_: cambio vault, passaggio chiaro/scuro, blocca/sblocca scheda e chiusure delle schede (a destra, a sinistra, altre, tutte), nuova cartella, inserisci separatore, esporta come immagine, avvio della presentazione (dall'inizio o dalla slide corrente), mostra le schede della barra destra (proprietà, link, slide, statistiche).
+Senza scorciatoia predefinita, ma nella palette e assegnabili da _Scorciatoie_: cambio vault, passaggio chiaro/scuro, blocca/sblocca scheda e chiusure delle schede (a destra, a sinistra, altre, tutte), nuova cartella, inserisci separatore, esporta come immagine, avvio della presentazione (dall'inizio o dalla slide corrente), mostra le schede della barra destra (proprietà, link, slide, statistiche). Del terminale (solo nel client desktop, vedi [Terminale](terminale.md)) sono senza scorciatoia: chiudi la scheda, sgancia in una finestra separata, riaggancia; con il layout italiano su Windows e Linux `Mod+\` resta _Dividi a destra_ (conflitto noto).
 
 **Applicazioni** (solo dove c'è il browser incorporato, cioè su macOS, e con la funzione accesa dal profilo): _Applicazione: indietro_ `Mod+[`, _Applicazione: avanti_ `Mod+]`, _Applicazione: ricarica_ `Mod+R`; _Nuova applicazione_, _Apri applicazione…_, _Cambia l'indirizzo dell'applicazione_, _Apri l'applicazione nel browser_ ed _Elimina i dati delle applicazioni_ non hanno scorciatoia. Vedi [Applicazioni](applicazioni.md).
 

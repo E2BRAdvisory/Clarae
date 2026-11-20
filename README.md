@@ -177,6 +177,8 @@ Dettagli in [docs/architecture.md](docs/architecture.md); vincoli e decisioni in
 
 La grafica delle emoji è [Twemoji](https://github.com/jdecked/twemoji): Copyright Twitter, Inc. e altri collaboratori, con licenza [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), usata senza modifiche (il codice del progetto Twemoji è MIT). L'attribuzione è anche in _Impostazioni → Informazioni → Licenze_ e nel file `emoji/ATTRIBUTION.txt` incluso in ogni build dell'interfaccia.
 
+Il terminale integrato (M23, ADR-0064) usa software con licenza MIT, di cui questa è l'attribuzione: [xterm.js](https://github.com/xtermjs/xterm.js) (`@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0 e `@xterm/addon-web-links` 0.12.0, Copyright The xterm.js authors e altri) e [creack/pty](https://github.com/creack/pty) (`github.com/creack/pty` v1.1.24, Copyright Keith Rarick). Il testo della licenza MIT di ciascun pacchetto è nel pacchetto stesso (`LICENSE`).
+
 ## Contribuire
 
 Regole su lingua, messaggi di commit, ADR, file generati, moduli del cloud, sicurezza, parità desktop/web

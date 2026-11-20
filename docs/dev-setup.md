@@ -190,6 +190,16 @@ Ogni funzione utente ha una voce in `shared/parity/features.yaml` (ADR-0037 §1)
 6. **Un'operazione che non è una funzione utente** (sonda, bootstrap pubblico) va in `server_only`, con il motivo.
 7. **Rigenera e verifica:** `node scripts/parity.mjs` aggiorna le tabelle di `docs/web-workbench-parity.md`; `task parity` esegue i test del controllo e `node scripts/parity.mjs --check`.
 
+## Terminale integrato (M23)
+
+Solo desktop (ADR-0064); la struttura è in [desktop-web-sync.md](desktop-web-sync.md) e la guida per gli utenti è [terminale.md](user-guide/terminale.md).
+
+- **Test del core:** `cd apps/desktop && go test -race ./internal/terminal/... ./internal/app/... ./internal/shell/...`. I test del `Manager` con una shell vera (`/bin/sh`: `cwd`, eco, resize, chiusura del gruppo di processi, `Shutdown` entro 3 s) hanno il vincolo `!windows`: su Windows si compilano soltanto (`task vet-windows`, che copre ConPTY e Job Object), e **non girano** su un computer Windows. `task vet-linux` fa il `go vet` di `internal/terminal` per Linux (con `./...`); non ne compila i test, che girano su macOS e Linux con `go test`.
+- **Frontend:** `packages/workbench/src/terminal/` (`yarn workspace @clarae/workbench exec vitest run src/terminal`), spec Playwright sul mock dei binding `apps/desktop/frontend/e2e/terminal.spec.ts` (`task e2e`), con il mock `packages/workbench/src/test/wails-mock/terminal.ts`. Nel workbench web il terminale non esiste: la voce `terminal` del registro è `exception`.
+- **Due pagine nella build:** `apps/desktop/frontend/scripts/esbuild.mjs` costruisce `index.html` e `terminal.html` (la finestra separata); la build fallisce se una delle due manca, perché il core risponde 404 a una pagina che non c'è. `xterm.js` è un chunk lazy: non pesa sul budget iniziale.
+- **Dipendenze:** `@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links` (workbench) e `github.com/creack/pty` (desktop), tutte MIT; l'attribuzione è nel `README.md`.
+- **Prova a mano:** [qa/m23-terminale.md](qa/m23-terminale.md). Per vedere la finestra separata serve `task run-desktop` (il mock di Playwright la simula).
+
 ## Flag e chiavi del Config Profile
 
 `api/config-profile.schema.json` è l'unica fonte delle chiavi del Config Profile: ogni flag `features.*` ha `type`, `default` e `description`, e le altre chiavi un `default` se il prodotto ne ha uno. `task gen` (`task gen-features`, `go run ./features/gen` in `shared/go`) ne genera:

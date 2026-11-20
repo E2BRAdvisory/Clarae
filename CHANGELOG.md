@@ -4,6 +4,51 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+L'owner **accetta il 2026-11-20 gli ADR 0051, 0062, 0063 e 0064** e `Specifications.md` passa alla **v1.8**: il client desktop su Wails v3.1.0 (ADR-0051, già rilasciato dalla 1.4.0: lo spec lo recepisce, opzione A della proposta; la matrice manuale B-W8 su Windows e Linux resta da eseguire), la vista integrata delle applicazioni su Windows e Linux (ADR-0062) e i nomi dei file senza estensione (ADR-0063), già rilasciati nella 1.7.3 (milestone M22, [roadmap](docs/roadmap.md) §13-quindecies), e il terminale integrato con la finestra separata (ADR-0064, milestone M23, [roadmap](docs/roadmap.md) §13-sedecies). **Il terminale integrato è nuovo e non ancora rilasciato**: è implementato (Onde A, B e C) ma **nulla è provato su una finestra reale**, e il driver di Windows (ConPTY, Job Object) è provato solo in compilazione. `Specifications.md` è ora alla **v1.8** (20 novembre 2026) e dichiara M23 «1.8.0»: il tag seguirà.
+
+### Compatibilità
+
+- **Terminale integrato (solo client desktop).** Nuovo pulsante nel ribbon, sopra _Impostazioni_, che apre un pannello con una shell per scheda. Nessun cambio per chi non lo usa: una shell parte solo da un gesto dell'utente.
+- **Un amministratore non può spegnerlo.** Non esiste un flag del Config Profile (decisione dell'owner, ADR-0064): lo schema e le chiavi del profilo non cambiano. Su un computer gestito va limitato con i mezzi del sistema operativo.
+- **Il terminale esegue qualunque comando dell'utente e non è un confine di sicurezza.** Una shell può modificare file fuori dalle regole dell'app (altri vault, `.clarae/`, mount in sola lettura aperti come cartella). Per un vault in sola lettura (lettore di un mount, condivisione revocata) il pulsante e `+` sono disabilitati, il core rifiuta l'apertura (`terminal-read-only`) e le sessioni già aperte in un vault che lo diventa si chiudono con un avviso. **Limite noto:** un mount già chiuso che diventa di sola lettura non chiude le sessioni aperte in lui.
+- **Il workbench web non ha il terminale** (eccezione di parità: il browser non può avviare processi).
+- **Scorciatoie.** ``Ctrl+` `` mostra o nasconde il terminale e ``Ctrl+Maiusc+` `` apre una scheda nuova, su tutti i sistemi, **anche macOS** (``Cmd+` `` resta al sistema). Il tasto si riconosce dal carattere e poi dalla posizione fisica; su macOS con una tastiera ISO valgono sia il tasto in alto a sinistra sia `<>`. **Conflitto noto:** con il layout italiano su Windows e Linux il tasto a sinistra del `1` scrive `\`: fuori dal terminale, con una nota aperta, `Ctrl+\` esegue _Dividi a destra_ invece del terminale (dentro il terminale `Ctrl+\` resta alla shell); _Impostazioni → Scorciatoie_ non lo segnala. Nella finestra separata valgono le scorciatoie del vault della scheda in primo piano. Copia e incolla nel terminale: `Cmd+C`/`Cmd+V` su macOS, `Ctrl+Maiusc+C`/`Ctrl+Maiusc+V` altrove.
+
+### Client desktop e workbench
+
+- **Pannello.** In basso (predefinito), a sinistra o a destra, ridimensionabile; posizione e dimensione sono preferenze del dispositivo (`localStorage`, `clarae.terminal.dock`), non nel vault. Schede con `+` e `×`, selettore di posizione e, all'estrema destra, **Sgancia terminale** / **Aggancia a Clarae**.
+- **Finestra separata.** Una seconda finestra del sistema (`/terminal.html`), l'unica oltre alla principale: le shell **non ripartono** allo sgancio e al riaggancio (lo schermo si ridisegna da uno snapshot). Chiuderla con il pulsante del sistema termina tutte le shell; chiudere la finestra principale chiude anche quella; **Aggancia** la chiude e tiene le shell. In quella finestra una scheda nuova usa il vault della scheda in primo piano.
+- **Shell e cartella.** Unix: `$SHELL -l` (ripiego `/bin/zsh`, `/bin/bash`, `/bin/sh`); Windows: `pwsh.exe`, poi `powershell.exe`, poi `%ComSpec%` (ConPTY, Job Object). `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=Clarae`. Cartella di partenza: la radice del vault corrente (la home senza vault).
+- **Fine di una sessione.** `exit` con codice 0 chiude la scheda; con un codice diverso da 0 la scheda resta con il codice. Nessun processo orfano alla chiusura di una scheda, della finestra separata o dell'app (Unix: `SIGHUP` al gruppo e `SIGKILL` dopo 1 s; Windows: Job Object con `KILL_ON_JOB_CLOSE`); l'uscita dell'app avviene entro 3 secondi. Al massimo 16 sessioni.
+- **Vault privato bloccato.** Le schede di quel vault sono coperte e non ricevono tasti, anche con la sincronizzazione in pausa (conta lo stato del vault, non la fase della sync); i processi restano vivi.
+- **Collegamenti.** Gli indirizzi nell'output e i collegamenti OSC 8 si aprono nel browser di sistema, solo se web, e-mail o telefono.
+- **Finestra separata:** il titolo segue la lingua dell'app. Una shell che esce prima che la scheda compaia dà una scheda già segnata come terminata (o nessuna scheda, se l'uscita è pulita).
+
+### Contratti
+
+- Nessuna modifica di `api/openapi.yaml` né dello schema del Config Profile. Binding nuovo `TerminalAPI` (`Open`, `CanOpen`, `Write`, `Resize`, `Close`, `List`, `Snapshot`, `State`, `Undock`, `Dock`), eventi `terminal:output`, `terminal:exit` (con il campo `reason`) e `terminal:layout`, capability `terminal` (desktop su macOS, Windows e Linux; web falsa), metodi `Host.OpenTerminalWindow` e `Host.CloseTerminalWindow` (e `app.TerminalWindowHost`), codici d'errore `terminal-unavailable`, `terminal-read-only`, `terminal-not-found`, `terminal-limit`, `terminal-busy`, `terminal-too-large`, `terminal-failed`. Voce `terminal` del registro di parità (`exception` sul workbench); `task gen` rigenerato.
+
+### Build e sviluppo
+
+- **Dipendenze nuove, tutte con licenza MIT:** `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0 e `@xterm/addon-web-links` 0.12.0 (caricate in modo lazy: il budget iniziale non cambia) e `github.com/creack/pty` v1.1.24. Le attribuzioni sono nel `README.md` e in _Impostazioni → Informazioni → Licenze_ (xterm.js sempre, creack/pty solo sul desktop). Le versioni `@xterm/*` sono esatte in `packages/workbench/package.json`, e `yarn.lock` e `go.sum` le fissano.
+- La build del frontend desktop produce due pagine, `index.html` e `terminal.html`, e fallisce se una manca.
+
+### Documentazione
+
+- ADR **0051**, **0062**, **0063** e **0064** in stato _accettata_ (2026-11-20) e **«Recepito in: `Specifications.md` v1.8»**; indice degli ADR, note di emendamento di ADR-0047, ADR-0051, ADR-0056 e ADR-0060, roadmap (M22 e M23), guida admin, `docs/architecture.md` e runbook di QA allineati. Note di emendamento (testo storico invariato) in ADR-0001, 0005, 0023, 0025, 0029, 0030 e 0031, che dicevano Wails v2, `wails.json`, `wails build` o `-tags webkit2_41` come stato attuale.
+- **`Specifications.md` v1.8** (20 novembre 2026), applicata dalla proposta [`docs/spec-v1.8-proposta.md`](docs/spec-v1.8-proposta.md), che resta come storia: ADR-0051 (V-07, D-07, A-03, §1.3, §2.3.2, §2.5, §4.2, §4.5, C.2), ADR-0062 (§2.2.1, §2.6.6, §3.7, §4.2, C.2), ADR-0063 (§2.2.1) e ADR-0064 (V-02, A-03, §2.2.1, §2.5, §2.8.3, §3.7, §4.2, App. B, C.2), con il registro delle revisioni e le righe di C.4. Priorità del terminale: P2. **Deriva nota, non corretta:** `Specifications.md:1903` cita ancora il tag `webkit2_41` (di Wails v2), mentre la build Linux usa `gtk3`.
+- **ADR-0051 accettato** (opzione A): lo spec non dice più Wails v2 se non come storia. Accettarlo non esegue la matrice B-W8 su Windows e Linux: il rischio resta, dichiarato.
+- **Guide e runbook del terminale:** nuova pagina [`docs/user-guide/terminale.md`](docs/user-guide/terminale.md) (con le avvertenze di sicurezza) e voce nell'indice della guida; nota in `docs/admin-guide/profili-quote-audit.md` (il terminale non si spegne dal profilo); `docs/desktop-web-sync.md`, `docs/architecture.md` e `docs/dev-setup.md`; il runbook [`docs/qa/m23-terminale.md`](docs/qa/m23-terminale.md).
+- **Licenze del terminale controllate** (2026-11-20): `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0, `@xterm/addon-web-links` 0.12.0 e `creack/pty` v1.1.24 sono MIT (campo `license` dei pacchetti e `LICENSE`).
+- **Ancora da fare:** le prove manuali su macOS, Windows e Linux.
+
+### Non provato e lavoro successivo
+
+- **Il terminale non è mai stato eseguito su una finestra reale**, né su ConPTY e Job Object (Windows: solo `task vet-windows`). Le prove sono a carico dell'owner: [`docs/qa/m23-terminale.md`](docs/qa/m23-terminale.md) (shell e cartella, cambio vault, schede, posizioni, sgancio con `top` che continua, riaggancio, chiusure senza orfani, sola lettura, vault privato bloccato, scorciatoie su layout americano e italiano).
+- **Da fare (owner):** le prove manuali di M23 e B-W8, e il tag 1.8.0.
+
 ## [1.7.3] - 2026-11-20
 
 Milestone M22 ([roadmap](docs/roadmap.md) §13-quindecies, ADR-0062 e ADR-0063, entrambi in stato _proposta_: non sono accettati e non sono recepiti in `Specifications.md`, che non è toccato). **Le applicazioni si aprono dentro Clarae notanda anche su Windows e su Linux**, accese di default, con ripiego automatico a «Apri nel browser»; **l'esploratore, le schede e le intestazioni mostrano i nomi dei file senza estensione** per tutto ciò che si apre in una scheda, e **la rinomina non fa più perdere il tipo di un file**. **Nulla di ciò che riguarda Windows e Linux è provato su una finestra reale** (vedi _Non provato e lavoro successivo_). Nessuna migrazione del cloud e nessuna modifica delle API: il cloud 1.7.3 è la 1.7.2 con la versione e la descrizione di `features.web_viewer` aggiornate.
