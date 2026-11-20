@@ -1,7 +1,9 @@
 import type { KeyboardEvent } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { commandById, isEnabled, runCommand } from '../commands/registry';
 import { Icon } from '../shell/icons';
+import { useSettings } from '../state/settings';
 import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import {
@@ -13,6 +15,7 @@ import {
   stepTab,
 } from './controller';
 import { canStartTerminal } from './commands';
+import { fontScreens } from './instances';
 import { DOCK_POSITIONS, type DockPosition } from './dock';
 import { panelVisible, useTerminal } from './store';
 import { TerminalView } from './TerminalView';
@@ -31,6 +34,10 @@ export function TerminalPanel() {
   const position = useTerminal((s) => s.dock.position);
   const locked = useTerminal((s) => s.locked);
   const notice = useTerminal((s) => s.notice);
+  // The font of Settings (the vault's, in the window of the vault in front): the screens that exist take it live.
+  const font = useSettings((s) => s.appearance.terminalFont);
+  const fontSize = useSettings((s) => s.appearance.terminalFontSize);
+  useEffect(() => fontScreens(font, fontSize), [font, fontSize]);
   // Whether a command is enabled depends on these; subscribing re-evaluates it on change.
   useTerminal((s) => s.mode);
   useAppStore((s) => s.vault);

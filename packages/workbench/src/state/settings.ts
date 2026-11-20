@@ -74,6 +74,13 @@ export interface AppearanceSettings {
   fontFamily: string;
   zoom: number;
   interfaceFontSize: number;
+  /**
+   * The font family of the integrated terminal (a name as the system knows it, not a CSS list; an empty
+   * value is the default). The font is not part of the app: where it is not installed a monospace one is used.
+   */
+  terminalFont: string;
+  /** The size of the terminal's font in pixels, between TERMINAL_FONT_SIZE_MIN and _MAX. */
+  terminalFontSize: number;
   /** Compact bar under the editor area with the figures of the active editor (ADR-0035). */
   statusBar: boolean;
 }
@@ -90,11 +97,29 @@ export function customAccent(accent: string): string | null {
   return a === DEFAULT_ACCENT || LEGACY_DEFAULT_ACCENTS.includes(a) ? null : accent;
 }
 
+/** The default font of the terminal: a Nerd Font (the prompts of the popular shell themes need its symbols). */
+export const DEFAULT_TERMINAL_FONT = 'MesloLGS NF';
+
+export const DEFAULT_TERMINAL_FONT_SIZE = 13;
+export const TERMINAL_FONT_SIZE_MIN = 8;
+export const TERMINAL_FONT_SIZE_MAX = 32;
+
+/** A size a vault stores: a whole number of pixels in range, else the default (a field of the UI clamps instead). */
+export function terminalFontSizeOf(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return DEFAULT_TERMINAL_FONT_SIZE;
+  const n = Math.round(v);
+  return n >= TERMINAL_FONT_SIZE_MIN && n <= TERMINAL_FONT_SIZE_MAX
+    ? n
+    : DEFAULT_TERMINAL_FONT_SIZE;
+}
+
 export const defaultAppearance: AppearanceSettings = {
   accent: DEFAULT_ACCENT,
   fontFamily: '',
   zoom: 100,
   interfaceFontSize: 14,
+  terminalFont: DEFAULT_TERMINAL_FONT,
+  terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
   statusBar: false,
 };
 
@@ -187,6 +212,7 @@ export function resolveSettings(user: UserSettings, managed: Managed) {
   })) {
     if (field in ma) appearance[field] = (ma as Record<string, unknown>)[field];
   }
+  appearance['terminalFontSize'] = terminalFontSizeOf(appearance['terminalFontSize']);
   const mh = managedHotkeys(managed.config);
   const hotkeys: HotkeyOverrides = { ...mh, ...user.hotkeys };
   for (const id of Object.keys(mh))

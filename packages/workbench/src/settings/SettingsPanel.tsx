@@ -6,6 +6,10 @@ import { applyTheme, type Theme } from '../app/theme';
 import { initI18n } from '../i18n';
 import {
   DEFAULT_ACCENT,
+  DEFAULT_TERMINAL_FONT,
+  DEFAULT_TERMINAL_FONT_SIZE,
+  TERMINAL_FONT_SIZE_MAX,
+  TERMINAL_FONT_SIZE_MIN,
   applyAppearance,
   customAccent,
   useSettings,
@@ -345,6 +349,41 @@ export function SettingsPanel() {
                 }}
               />
             </Row>
+            {can('terminal') && (
+              <Row label={t('settings.terminalFont')} htmlFor="terminalFont">
+                <input
+                  id="terminalFont"
+                  value={appearance.terminalFont}
+                  placeholder={DEFAULT_TERMINAL_FONT}
+                  aria-describedby="terminalFontHint"
+                  onChange={(e) => setAppearance({ terminalFont: e.target.value })}
+                />
+                <span id="terminalFontHint" className="muted">
+                  {t('settings.terminalFontHint')}
+                </span>
+              </Row>
+            )}
+            {can('terminal') && (
+              <Row label={t('settings.terminalFontSize')} htmlFor="terminalFontSize">
+                <input
+                  id="terminalFontSize"
+                  type="number"
+                  min={TERMINAL_FONT_SIZE_MIN}
+                  max={TERMINAL_FONT_SIZE_MAX}
+                  value={appearance.terminalFontSize}
+                  onChange={(e) => {
+                    const v = Math.min(
+                      TERMINAL_FONT_SIZE_MAX,
+                      Math.max(
+                        TERMINAL_FONT_SIZE_MIN,
+                        Math.round(Number(e.target.value)) || DEFAULT_TERMINAL_FONT_SIZE,
+                      ),
+                    );
+                    setAppearance({ terminalFontSize: v });
+                  }}
+                />
+              </Row>
+            )}
             <Row label={t('settings.zoom')} cfg="appearance.zoom" htmlFor="zoom">
               <input
                 id="zoom"

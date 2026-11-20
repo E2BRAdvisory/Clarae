@@ -62,6 +62,40 @@ describe('the page of the separate terminal window', () => {
     expect(mock.terminal.log).toContain('Dock');
   });
 
+  it('uses the terminal font size of the vault of the front tab, and 13 without one', async () => {
+    vi.spyOn(api.vault, 'readConfig').mockImplementation((_id, name) =>
+      Promise.resolve(name === 'appearance.json' ? JSON.stringify({ terminalFontSize: 18 }) : ''),
+    );
+    render(<TerminalWindow />);
+    await settle();
+    expect(useSettings.getState().appearance.terminalFontSize).toBe(18);
+    cleanup();
+    useSettings.getState().reset();
+    expect(useSettings.getState().appearance.terminalFontSize).toBe(13);
+  });
+
+  it('uses the terminal font of the vault of the front tab, and the default without one', async () => {
+    vi.spyOn(api.vault, 'readConfig').mockImplementation((_id, name) =>
+      Promise.resolve(
+        name === 'appearance.json' ? JSON.stringify({ terminalFont: 'Fira Code' }) : '',
+      ),
+    );
+    render(<TerminalWindow />);
+    await settle();
+    expect(useSettings.getState().appearance.terminalFont).toBe('Fira Code');
+    cleanup();
+    useSettings.getState().reset();
+    resetTerminal();
+    (window as unknown as { __CLARAE_TERMINAL__: unknown }).__CLARAE_TERMINAL__ = {
+      mode: 'detached',
+      sessions: [{ id: 'term-8', vaultId: '', cwd: '/home/mock', title: 'mock' }],
+    };
+    mock = installWailsMock();
+    render(<TerminalWindow />);
+    await settle();
+    expect(useSettings.getState().appearance.terminalFont).toBe('MesloLGS NF');
+  });
+
   it('keeps the defaults when the vault of the front tab cannot be read', async () => {
     vi.spyOn(api.vault, 'readConfig').mockRejectedValue(new Error('vault-not-open: closed'));
     render(<TerminalWindow />);

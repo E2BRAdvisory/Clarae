@@ -7,7 +7,8 @@ import { useAppStore } from '../state/store';
 import { useSync } from '../state/sync';
 import { installWailsMock, type WailsMock } from '../test/wails-mock';
 import { openTab, resetTerminal, startTerminal } from './controller';
-import { dispose, mountScreen } from './instances';
+import { dispose, fontScreens, mountScreen } from './instances';
+import { useSettings } from '../state/settings';
 import { DOCK_KEY } from './dock';
 import { TerminalLayout } from './TerminalLayout';
 import { TerminalPanel } from './TerminalPanel';
@@ -16,6 +17,7 @@ import { useTerminal } from './store';
 // The screens are xterm's: they are covered by the browser specs. Here the panel around them.
 vi.mock('./instances', () => ({
   mountScreen: vi.fn(),
+  fontScreens: vi.fn(),
   fit: vi.fn(),
   focusScreen: vi.fn(),
   themeScreens: vi.fn(),
@@ -187,6 +189,23 @@ describe('terminal panel', () => {
     render(<TerminalPanel />);
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.getByRole('button', { name: 'Dock to Clarae' })).toBeEnabled();
+  });
+});
+
+describe('terminal font', () => {
+  it('is given to the screens, and again when Settings changes the font or its size', () => {
+    render(<TerminalPanel />);
+    expect(fontScreens).toHaveBeenLastCalledWith('MesloLGS NF', 13);
+    const appearance = useSettings.getState().appearance;
+    act(() => useSettings.setState({ appearance: { ...appearance, terminalFontSize: 18 } }));
+    expect(fontScreens).toHaveBeenLastCalledWith('MesloLGS NF', 18);
+    act(() =>
+      useSettings.setState({
+        appearance: { ...appearance, terminalFont: 'Fira Code', terminalFontSize: 18 },
+      }),
+    );
+    expect(fontScreens).toHaveBeenLastCalledWith('Fira Code', 18);
+    act(() => useSettings.getState().reset());
   });
 });
 

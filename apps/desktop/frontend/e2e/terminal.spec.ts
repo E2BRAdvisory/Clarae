@@ -281,6 +281,63 @@ test.describe('on the desktop', () => {
     await expect.poll(() => log(page)).toEqual(expect.arrayContaining(['Close term-7', 'Dock']));
   });
 
+  test('the font of Settings > Appearance is the terminal’s, live, and MesloLGS NF by default', async ({
+    page,
+  }) => {
+    const family = () =>
+      page.evaluate(
+        () => getComputedStyle(document.querySelector('.xterm-rows') as Element).fontFamily,
+      );
+    await openVault(page);
+    await terminalButton(page).click();
+    await expect(screen(page)).toContainText('$');
+    expect(await family()).toContain('MesloLGS NF');
+    expect(await family()).toContain('monospace'); // the fallbacks follow it
+
+    await page.keyboard.press('ControlOrMeta+,');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    const field = page.getByLabel('Terminal font', { exact: true });
+    await expect(field).toHaveValue('MesloLGS NF');
+    await field.fill('Fira "Code"');
+    await expect.poll(family).toContain('Fira Code');
+    expect(await family()).not.toContain('MesloLGS');
+    // the size is measured again and told to the core
+    await expect
+      .poll(async () => (await log(page)).filter((l) => l.startsWith('Resize term-1')).length)
+      .toBeGreaterThan(0);
+    await field.fill('');
+    await expect.poll(family).toContain('MesloLGS NF');
+  });
+
+  test('the font size of Settings > Appearance is the terminal’s, live, 13 by default', async ({
+    page,
+  }) => {
+    const size = () =>
+      page.evaluate(
+        () => getComputedStyle(document.querySelector('.xterm-rows') as Element).fontSize,
+      );
+    const resizes = async () =>
+      (await log(page)).filter((l) => l.startsWith('Resize term-1')).length;
+    await openVault(page);
+    await terminalButton(page).click();
+    await expect(screen(page)).toContainText('$');
+    expect(await size()).toBe('13px');
+
+    await page.keyboard.press('ControlOrMeta+,');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    const field = page.getByLabel('Terminal font size');
+    await expect(field).toHaveValue('13');
+    const before = await resizes();
+    await field.fill('20');
+    await expect.poll(size).toBe('20px');
+    // the cells are bigger: the columns and rows are measured again and told to the core
+    await expect.poll(resizes).toBeGreaterThan(before);
+    await field.fill('99'); // kept in range
+    await expect.poll(size).toBe('32px');
+    await field.fill('');
+    await expect.poll(size).toBe('13px');
+  });
+
   test('the panel passes the accessibility scan, light and dark', async ({ page }) => {
     for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });

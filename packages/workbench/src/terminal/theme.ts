@@ -2,6 +2,7 @@
 // tokens of the workbench (so the accent a user picked and the theme follow); the sixteen colours of a
 // shell's output are fixed per theme, chosen to read on that ground (no token has sixteen colours).
 import type { ITheme } from '@xterm/xterm';
+import { DEFAULT_TERMINAL_FONT, DEFAULT_TERMINAL_FONT_SIZE } from '../state/settings';
 
 type Ansi = Pick<
   ITheme,
@@ -77,11 +78,58 @@ export function xtermTheme(dark: boolean, root: Element = document.documentEleme
   };
 }
 
-/** The font stack of the page's monospace token, for xterm (it needs the resolved string). */
-export function xtermFont(root: Element = document.documentElement): string {
-  return token(
-    getComputedStyle(root),
-    '--font-mono',
-    "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
-  );
+/** What stands in for the chosen font where it is not installed: the monospace fonts of the three systems. */
+export const FONT_FALLBACK = 'ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace';
+
+/** The longest family name taken: a name is a few words, not a list. */
+const FAMILY_MAX = 64;
+
+/**
+ * The name of a font family, as typed in Settings: quotes and everything that is not a letter, a digit, a
+ * space or one of `_ . + - ( )` are dropped (a comma would add a family, a semicolon or a bracket would leave
+ * the declaration), and the spaces are collapsed. '' when nothing is left.
+ */
+export function cleanFamily(name: string): string {
+  return name
+    .replace(/[^\p{L}\p{N} _.+()-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, FAMILY_MAX)
+    .trim();
+}
+
+/**
+ * The `fontFamily` of a screen for the font chosen in Settings: the name, quoted, then the monospace
+ * fallbacks. An empty value (or one with nothing usable) is the default font.
+ */
+export function xtermFontFamily(setting: string): string {
+  const name = cleanFamily(setting) || DEFAULT_TERMINAL_FONT;
+  return `"${name}", ${FONT_FALLBACK}`;
+}
+
+/**
+ * Resolves when a font the page may still be loading is ready to be measured (a screen that measures its
+ * cells before that gets them wrong). A font installed on the computer needs no loading and resolves at once;
+ * the wait is bounded, and a page without the Font Loading API does not wait.
+ */
+export async function fontReady(
+  family: string,
+  size = DEFAULT_TERMINAL_FONT_SIZE,
+  limitMs = 1500,
+): Promise<void> {
+  const fonts = (document as { fonts?: FontFaceSet }).fonts;
+  if (!fonts) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      fonts.load(`${size}px ${family}`).then(() => fonts.ready),
+      new Promise<void>((done) => {
+        timer = setTimeout(done, limitMs);
+      }),
+    ]);
+  } catch {
+    /* a font that cannot be loaded is not waited for */
+  } finally {
+    clearTimeout(timer);
+  }
 }

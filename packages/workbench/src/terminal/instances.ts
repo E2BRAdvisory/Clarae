@@ -6,7 +6,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { useSettings } from '../state/settings';
+import { DEFAULT_TERMINAL_FONT_SIZE, terminalFontSizeOf, useSettings } from '../state/settings';
 import { openExternal } from '../util/external';
 import {
   attachSink,
@@ -19,7 +19,7 @@ import {
 import { isCopyKey, isPasteKey } from './keys';
 import { isReservedKey } from './reserved';
 import { useTerminal } from './store';
-import { xtermFont, xtermTheme } from './theme';
+import { fontReady, xtermFontFamily, xtermTheme } from './theme';
 
 interface Instance {
   term: Terminal;
@@ -65,8 +65,8 @@ function create(id: string, host: HTMLElement, dark: boolean): Instance {
   const term = new Terminal({
     cursorBlink: true,
     scrollback: SCROLLBACK,
-    fontFamily: xtermFont(),
-    fontSize: 13,
+    fontFamily: xtermFontFamily(useSettings.getState().appearance.terminalFont),
+    fontSize: terminalFontSizeOf(useSettings.getState().appearance.terminalFontSize),
     theme: xtermTheme(dark),
     allowProposedApi: false,
     // A link a program writes itself (OSC 8) opens in the system browser too. Without a handler xterm
@@ -94,6 +94,10 @@ function create(id: string, host: HTMLElement, dark: boolean): Instance {
   };
   inst.unregister = attachSink(id, sink);
   instances.set(id, inst);
+  // The cells are measured with the font the screen was made with: measure again once it is ready.
+  void fontReady(term.options.fontFamily ?? '', term.options.fontSize).then(
+    () => instances.get(id) === inst && fitScreen(id, inst, true),
+  );
   return inst;
 }
 
@@ -135,6 +139,21 @@ export function focusScreen(id: string): void {
 export function themeScreens(dark: boolean): void {
   const theme = xtermTheme(dark);
   for (const inst of instances.values()) inst.term.options.theme = theme;
+}
+
+/**
+ * The font or its size, chosen in Settings, changed: every screen takes it, and once the font is ready the size
+ * is measured again and told to the core (the cells, so the columns and rows, are not those of the old font).
+ */
+export function fontScreens(setting: string, size: number = DEFAULT_TERMINAL_FONT_SIZE): void {
+  const family = xtermFontFamily(setting);
+  const px = terminalFontSizeOf(size);
+  for (const [id, inst] of instances) {
+    if (inst.term.options.fontFamily === family && inst.term.options.fontSize === px) continue;
+    inst.term.options.fontFamily = family;
+    inst.term.options.fontSize = px;
+    void fontReady(family, px).then(() => instances.get(id) === inst && fitScreen(id, inst, true));
+  }
 }
 
 /** Releases the screen of a session (it ended, or the panel went to the other window). */
