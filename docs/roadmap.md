@@ -1339,6 +1339,38 @@ La deviazione dallo spec (una seconda finestra, solo per il terminale; un'archit
 
 ---
 
+## 13-septendecies. M24 — Carattere del terminale
+
+Richiesta dell'owner del 2026-11-20, dopo il tag v1.8.0. In _Impostazioni → Aspetto_ ci sono i campi **«Carattere del terminale»**, con default **`MesloLGS NF`** (un Nerd Font con le icone dei prompt di shell), e **«Dimensione del carattere del terminale»**, default **13** px, perché il carattere a spaziatura fissa del sistema non le mostra. Lavoro piccolo, sopra M23; nessuna deviazione dallo spec e nessun ADR (vedi sotto).
+
+**Decisioni dell'owner e fatti (verificati sul codice)**
+
+- Salvato in `appearance.json` **del vault**, come il carattere dell'interfaccia (`terminalFont` in `packages/workbench/src/state/settings.ts`, default `DEFAULT_TERMINAL_FONT`); **non** nel Config Profile, nessun flag. Il file è tra quelli sincronizzati «per utente» (`Specifications.md`, §3.4.6): lo stesso nome arriva agli altri dispositivi dell'utente, dove il carattere va installato.
+- Vuoto → default. Il valore è un **solo nome di famiglia** (`cleanFamily` in `terminal/theme.ts`: tolti i caratteri non ammessi, al massimo 64), tra virgolette e seguito dal ripiego `ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace` (`xtermFontFamily`).
+- **Dimensione:** `terminalFontSize` in `appearance.json`, da 8 a 32 (`TERMINAL_FONT_SIZE_MIN` e `_MAX`), default 13 (`DEFAULT_TERMINAL_FONT_SIZE`); `terminalFontSizeOf` arrotonda e riporta a 13 un valore non valido o fuori intervallo (anche al caricamento delle impostazioni); il campo numerico di Impostazioni tiene il valore nell'intervallo.
+- **Il font non è incluso nell'app:** se non è installato vale il ripiego.
+- I terminali aperti si aggiornano subito, per carattere e dimensione (`fontScreens(setting, size)` in `terminal/instances.ts`, chiamata da `TerminalPanel`) e, dopo il caricamento del font (`fontReady`, attesa al massimo 1,5 s), lo schermo si misura di nuovo (`fit`) e il PTY riceve il nuovo numero di colonne e righe (`Resize`).
+- La finestra separata usa le impostazioni del vault della scheda in primo piano (senza vault, 13 e il carattere predefinito). **Nel workbench web i due campi non compaiono** (`can('terminal')` in `SettingsPanel.tsx`).
+
+**Stato (2026-11-20): implementata (M24-S1), nel working tree; `task ci` in corso.**
+
+| Sessione   | Contenuto                                                                                                                                                                                                                                                                                                                       | Stato                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **M24-S1** | Impostazioni `terminalFont` e `terminalFontSize` in `appearance.json`, due campi in _Impostazioni → Aspetto_ solo sul desktop (chiavi i18n `settings.terminalFont`, `settings.terminalFontHint` e `settings.terminalFontSize`), `cleanFamily`, `xtermFontFamily`, `terminalFontSizeOf`, `fontReady`, `fontScreens`; test vitest | **implementata (2026-11-20), nel working tree** |
+| **M24-S2** | Documentazione: guida del terminale e di _Impostazioni_, runbook [`qa/m23-terminale.md`](qa/m23-terminale.md) (sezione 8, T20…T27), CHANGELOG _Unreleased_, questa sezione                                                                                                                                                      | **fatta (2026-11-20)**                          |
+| **M24-S3** | Rilascio **1.8.1** (versione, note di rilascio dal CHANGELOG, tag a cura dell'owner)                                                                                                                                                                                                                                            | da fare                                         |
+
+**Criteri di uscita:** `task ci` verde; manuale a carico dell'owner (T20…T27): rendering con `MesloLGS NF` installato e non installato su una finestra reale, cambio di carattere e di dimensione con un terminale aperto, ridimensionamento della shell dopo il cambio, valori fuori intervallo, finestra separata.
+
+**ADR e spec: nessuna modifica.** ADR-0064 e lo spec v1.8 non parlano del carattere del terminale; la scelta non li contraddice. ADR-0064 fissa per dispositivo (`localStorage`) solo posizione e dimensione del pannello, mentre il carattere è un'impostazione dell'aspetto del vault, come quello dell'interfaccia. V-02 («nessun CSS personalizzato») non è toccato: il valore è un solo nome di famiglia depurato, non CSS. Se l'owner vuole che il campo sia per dispositivo, o un elenco di caratteri, sarebbe una nuova decisione.
+
+**Rischi**
+
+- **Rendering con il font vero non provato su una finestra reale** (misura delle celle, caricamento ritardato, Windows e Linux): runbook T20…T27.
+- **Il nome sincronizzato** arriva a dispositivi dove il font non è installato: vale il ripiego, senza errori.
+
+---
+
 ## 14. Trasversale: test e verifica
 
 | Livello            | Strumento                                                                         | Dove                                                       |

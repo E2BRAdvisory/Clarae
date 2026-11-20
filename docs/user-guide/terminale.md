@@ -65,6 +65,18 @@ Dentro il terminale quasi ogni tasto è della shell (`Ctrl+C`, `Ctrl+R`, `Ctrl+P
 
 I collegamenti nell'output si aprono nel browser di sistema con un clic, solo se sono indirizzi web, e-mail o telefono: questo vale anche per i collegamenti che un programma scrive con la sequenza OSC 8 (testo cliccabile con un indirizzo diverso dal testo mostrato). Altri schemi non si aprono.
 
+## Il carattere del terminale
+
+_Impostazioni → Aspetto → **Carattere del terminale**_ sceglie il carattere dello schermo del terminale e _**Dimensione del carattere del terminale**_ la sua dimensione. Il predefinito è **`MesloLGS NF`**, un carattere Nerd Font con le icone che molti prompt di shell usano (per esempio i temi di Powerlevel10k).
+
+- **Il carattere non è incluso nell'app.** Va **installato su questo computer**: se non lo è, il terminale usa un carattere a spaziatura fissa del sistema (`ui-monospace`, `Menlo`, `Consolas`, `DejaVu Sans Mono`, nell'ordine) e le icone dei prompt appaiono come quadratini o caratteri strani.
+- **Che cosa scrivere.** Un solo nome di famiglia, come lo elenca il sistema (per esempio `Fira Code`). Virgole, virgolette, punti e virgola, parentesi graffe e simili sono tolti, gli spazi doppi si riducono e il nome si ferma a 64 caratteri: non si può scrivere una lista di caratteri. Campo vuoto: torna il predefinito.
+- **Dimensione.** Un numero di pixel tra **8 e 32**, predefinito **13**. Un valore non valido o fuori intervallo torna a 13 e un numero decimale si arrotonda; il campo stesso tiene il valore dentro l'intervallo.
+- **Effetto immediato.** I terminali già aperti prendono il nuovo carattere o la nuova dimensione subito, senza riavviare le shell; dopo il caricamento del carattere lo schermo si misura di nuovo e la shell riceve il nuovo numero di colonne e righe (un programma a schermo intero come `top` si adatta).
+- **Dove sta.** Come il carattere dell'interfaccia, nelle impostazioni **del vault** (`appearance.json`, nella cartella `.clarae/`), non nel profilo di configurazione: un amministratore non li imposta. Nei vault sincronizzati le impostazioni dell'aspetto seguono il vostro utente, quindi lo stesso nome arriva anche agli altri vostri computer, dove il carattere va installato a sua volta.
+- **Finestra separata.** Usa le impostazioni (carattere e dimensione) del vault della scheda in primo piano; per una scheda nella home, senza vault, valgono i predefiniti (`MesloLGS NF`, 13).
+- **Workbench web.** Il campo non compare: il browser non ha il terminale. Il valore scelto sul desktop resta in `appearance.json` del vault e il web lo conserva.
+
 ## Vault in sola lettura
 
 Per un vault che per voi è **solo in lettura** (siete lettori di una condivisione, o la condivisione è stata revocata) il terminale **non si apre**: il pulsante del ribbon e `+` sono disabilitati, con il motivo nel suggerimento, e il core rifiuta la richiesta con l'errore `terminal-read-only`. Se un vault diventa di sola lettura mentre ha dei terminali aperti, quelle shell vengono **chiuse** e la scheda lo dice («Il vault è diventato di sola lettura: sessione chiusa»).

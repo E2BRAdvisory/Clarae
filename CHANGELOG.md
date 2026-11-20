@@ -4,6 +4,26 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Milestone M24 ([roadmap](docs/roadmap.md) §13-septendecies), richiesta dell'owner del 2026-11-20 dopo la 1.8.0: **il terminale ha carattere e dimensione del carattere configurabili**, con default `MesloLGS NF` e 13 px. Nessuna migrazione del cloud, nessuna modifica delle API né dello schema del Config Profile.
+
+### Client desktop e workbench
+
+- **«Carattere del terminale» in _Impostazioni → Aspetto_.** Il default è **`MesloLGS NF`** (un Nerd Font, con le icone dei prompt di shell come Powerlevel10k). **Il carattere non è incluso nell'app**: va installato sul computer; se manca, il terminale usa un carattere a spaziatura fissa del sistema (`ui-monospace`, `Menlo`, `Consolas`, `DejaVu Sans Mono`, nell'ordine) e le icone possono apparire come quadratini.
+- **«Dimensione del carattere del terminale»**, nello stesso posto: da **8 a 32** pixel, predefinita **13** (un valore non valido o fuori intervallo torna a 13, un decimale si arrotonda).
+- Si scrive **un solo nome di famiglia**: virgolette, virgole e gli altri caratteri non ammessi sono tolti e il nome si ferma a 64 caratteri; il campo vuoto torna al default.
+- **Effetto immediato:** i terminali aperti cambiano carattere o dimensione senza riavviare le shell e, caricato il font, la shell riceve il nuovo numero di colonne e righe.
+- **Dove sta:** nelle impostazioni del vault (`.clarae/appearance.json`), come il carattere dell'interfaccia, non nel Config Profile (nessun flag per gli amministratori). Nei vault sincronizzati segue l'utente sui suoi dispositivi. La finestra separata usa le impostazioni del vault della scheda in primo piano (13 px e il carattere predefinito per una scheda senza vault). Nel workbench web i due campi **non compaiono** (il browser non ha il terminale); i valori scelti sul desktop restano in `appearance.json`.
+
+### Documentazione
+
+- La guida del terminale ([`docs/user-guide/terminale.md`](docs/user-guide/terminale.md), sezione «Il carattere del terminale») e quella delle impostazioni, il runbook [`docs/qa/m23-terminale.md`](docs/qa/m23-terminale.md) (sezione 8, T20…T27) e la roadmap (M24).
+
+### Non provato e lavoro successivo
+
+- **Il rendering con il font vero non è provato su una finestra reale** (con `MesloLGS NF` installato e non installato, su macOS, Windows e Linux): la misura delle celle e il ridimensionamento della shell dopo il cambio sono coperti solo dai test automatici. Le prove sono a carico dell'owner (T20…T27).
+
 ## [1.8.0] - 2026-11-20
 
 L'owner **accetta il 2026-11-20 gli ADR 0051, 0062, 0063 e 0064** e `Specifications.md` passa alla **v1.8**: il client desktop su Wails v3.1.0 (ADR-0051, già rilasciato dalla 1.4.0: lo spec lo recepisce, opzione A della proposta; la matrice manuale B-W8 su Windows e Linux resta da eseguire), la vista integrata delle applicazioni su Windows e Linux (ADR-0062) e i nomi dei file senza estensione (ADR-0063), già rilasciati nella 1.7.3 (milestone M22, [roadmap](docs/roadmap.md) §13-quindecies), e il terminale integrato con la finestra separata (ADR-0064, milestone M23, [roadmap](docs/roadmap.md) §13-sedecies). **La 1.8.0 porta il terminale integrato** (pulsante nella ribbon, più tab, pannello ancorabile, finestra separata senza riavviare le shell; non nei vault in sola lettura; non nel workbench web), ma **nulla del terminale è provato su una finestra reale**, e il driver di Windows (ConPTY, Job Object) è provato solo in compilazione. Nessuna migrazione del cloud e nessuna modifica delle API del cloud: il cloud 1.8.0 è la 1.7.3 con la versione aggiornata.
