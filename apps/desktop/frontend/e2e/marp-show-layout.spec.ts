@@ -18,7 +18,7 @@ for (const size of [
   }) => {
     await page.setViewportSize(size);
     await openVault(page, { 'Kickoff.marp': DECK });
-    await page.locator('.tree .node', { hasText: 'Kickoff.marp' }).click();
+    await page.locator('.tree .node', { hasText: 'Kickoff' }).click();
     await expect(page.locator('.note-view .cm-content')).toContainText('# Kick-off');
     await page.getByRole('button', { name: 'Toggle right sidebar' }).click();
     await page.getByRole('tab', { name: 'Slides' }).click();

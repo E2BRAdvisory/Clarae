@@ -2,6 +2,7 @@
 // page on a canvas with previous/next buttons. <embed>/<iframe> are blocked by
 // the CSP on purpose (object-src and frame-src are 'none').
 import { i18next } from '../i18n';
+import { displayName } from './media';
 
 /**
  * Renders the PDF into el; returns a disposer that stops the work and frees the pdf.js document
@@ -53,7 +54,7 @@ export function renderPdf(
     };
     const draw = async (): Promise<void> => {
       const want = page;
-      label.textContent = `${path.split('/').pop() ?? ''} — ${want}/${doc.numPages}`;
+      label.textContent = `${displayName(path)} — ${want}/${doc.numPages}`;
       const p = await doc.getPage(want);
       if (disposed || want !== page) return; // gone, or a newer page was asked for meanwhile
       rendering?.cancel();

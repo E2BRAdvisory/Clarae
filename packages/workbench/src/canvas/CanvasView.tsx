@@ -42,6 +42,7 @@ import { Icon } from '../shell/icons';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 import { errorMessage } from '../util/errors';
 import { isHidden } from '../sidebar/FileExplorer';
+import { displayName, displayPath, pickItems } from '../embeds/media';
 
 const AUTOSAVE_MS = 1000;
 const MIN_ZOOM = 0.1;
@@ -122,7 +123,7 @@ function FileBlock({ node, vaultId, path }: { node: CNode; vaultId: string; path
         title={file}
         onDoubleClick={() => void followLink(path, { target: file, heading: '', block: '' }, false)}
       >
-        {file.split('/').pop()}
+        {displayName(file)}
       </div>
       <div className="cv-embed" ref={ref} />
     </>
@@ -307,10 +308,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
     const notes = (await api.vault.listTree(vaultId)).filter(
       (e) => !e.isDir && e.path.endsWith('.md') && !isHidden(e.path),
     );
-    const picked = await dialog.pick(
-      t('canvas.addNote'),
-      notes.map((n) => ({ value: n.path, label: n.path.replace(/\.md$/, '') })),
-    );
+    const picked = await dialog.pick(t('canvas.addNote'), pickItems(notes.map((n) => n.path)));
     if (picked) {
       const c = centerWorld();
       place({
@@ -327,10 +325,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
     const files = (await api.vault.listTree(vaultId)).filter(
       (e) => !e.isDir && !/\.(md|canvas|base)$/i.test(e.path) && !isHidden(e.path),
     );
-    const picked = await dialog.pick(
-      t('canvas.addMedia'),
-      files.map((f) => ({ value: f.path, label: f.path })),
-    );
+    const picked = await dialog.pick(t('canvas.addMedia'), pickItems(files.map((f) => f.path)));
     if (picked) {
       const c = centerWorld();
       place({
@@ -538,7 +533,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
     <div className={`note-view canvas-view${full ? ' fullscreen' : ''}`} ref={frame}>
       <div className="note-header">
         <span className="path" title={path}>
-          {path.replace(/\.canvas$/, '')}
+          {displayPath(path)}
         </span>
         <span className={`save-state ${doc.save}`} aria-live="polite">
           {saveLabel}

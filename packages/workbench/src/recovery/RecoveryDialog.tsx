@@ -9,6 +9,7 @@ import { diffLines } from '../sync/diff';
 import { useRecovery } from './store';
 import { mergeVersions, type Version } from './versions';
 import { errorMessage } from '../util/errors';
+import { displayPath } from '../embeds/media';
 
 const msg = (e: unknown): string => errorMessage(e);
 
@@ -142,7 +143,7 @@ function NoteRecovery({ vaultId, path }: { vaultId: string; path: string }) {
       onMouseDown={(e) => e.stopPropagation()}
     >
       <h2>
-        {t('recovery.title')} · {path.replace(/\.md$/, '')}
+        {t('recovery.title')} · {displayPath(path)}
       </h2>
       {local.error && (
         <div className="error" role="alert">

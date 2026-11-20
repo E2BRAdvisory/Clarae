@@ -34,7 +34,9 @@ async function openDeck(page: Page, files: Record<string, string>, path: string)
   await openVault(page, files);
   const dir = path.includes('/') ? path.split('/')[0] : '';
   if (dir) await page.locator('.tree .node', { hasText: dir }).click();
-  await page.locator('.tree .node', { hasText: path.split('/').pop() ?? path }).click();
+  await page
+    .locator('.tree .node', { hasText: (path.split('/').pop() ?? path).replace(/\.marp$/, '') })
+    .click();
   await expect(page.locator('.note-view .cm-content')).toContainText('# Kick-off');
   await openSlidesTab(page);
 }

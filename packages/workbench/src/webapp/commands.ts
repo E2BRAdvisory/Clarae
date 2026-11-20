@@ -25,6 +25,7 @@ import {
 } from './model';
 import { nativeViews } from './nativeViews';
 import { forgetOrigins } from './origins';
+import { displayPath } from '../embeds/media';
 
 const t = (key: string, options?: Record<string, unknown>): string =>
   options ? i18next.t(key, options) : i18next.t(key);
@@ -119,7 +120,7 @@ export async function pickApplication(): Promise<void> {
     .filter(
       (e) => !e.isDir && isWebapp(e.path) && !e.path.split('/').some((s) => s.startsWith('.')),
     )
-    .map((e) => ({ value: e.path, label: e.path.slice(0, -WEBAPP_EXT.length) }))
+    .map((e) => ({ value: e.path, label: displayPath(e.path) }))
     .sort((a, b) => a.label.localeCompare(b.label));
   if (items.length === 0) {
     await dialog.alert(t('webapp.pick.title'), t('webapp.pick.none'));

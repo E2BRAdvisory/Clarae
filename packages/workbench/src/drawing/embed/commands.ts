@@ -7,6 +7,7 @@ import { getSceneController, type SceneController } from '../actions/active';
 import { bytesToBase64 } from '../export/render';
 import { renderSvg } from '../preview';
 import { imagePatch, isImagePath, noteCardPatch } from './insert';
+import { pickItems } from '../../embeds/media';
 
 const MAX_LISTED = 2000;
 
@@ -41,10 +42,7 @@ export function insertImageIntoDrawing(): Promise<void> {
       .sort()
       .slice(0, MAX_LISTED);
     if (images.length === 0) return dialog.alert(t('imageTitle'), t('noImages'));
-    const picked = await dialog.pick(
-      t('imageTitle'),
-      images.map((p) => ({ value: p, label: p })),
-    );
+    const picked = await dialog.pick(t('imageTitle'), pickItems(images));
     if (!picked) return;
     await insertImageAt(picked);
   });
@@ -119,10 +117,7 @@ export function insertDrawingIntoDrawing(): Promise<void> {
       .sort()
       .slice(0, MAX_LISTED);
     if (drawings.length === 0) return dialog.alert(t('drawingTitle'), t('noDrawings'));
-    const picked = await dialog.pick(
-      t('drawingTitle'),
-      drawings.map((p) => ({ value: p, label: p.replace(/\.excalidraw$/i, '') })),
-    );
+    const picked = await dialog.pick(t('drawingTitle'), pickItems(drawings));
     if (picked) await insertDrawingAt(picked);
   });
 }
@@ -154,10 +149,7 @@ export function insertNoteIntoDrawing(): Promise<void> {
     const rows = await api.links.suggest(c.vaultId, 'notes', query, '', 30);
     const paths = [...new Set(rows.map((r) => r.path).filter(Boolean))];
     if (paths.length === 0) return dialog.alert(t('noteTitle'), t('noNotes'));
-    const picked = await dialog.pick(
-      t('noteTitle'),
-      paths.map((p) => ({ value: p, label: p.replace(/\.md$/i, '') })),
-    );
+    const picked = await dialog.pick(t('noteTitle'), pickItems(paths));
     if (!picked) return;
     await insertNoteAt(picked);
   });

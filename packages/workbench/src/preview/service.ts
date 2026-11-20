@@ -5,7 +5,7 @@ import { canvasPreviewUrl } from '../canvas/preview';
 import { drawingPreviewUrl } from '../drawing/preview';
 import type { LinkSpec } from '../editor/types';
 import type { EmbedBackend } from '../embeds/hydrate';
-import { classify } from '../embeds/media';
+import { classify, displayName } from '../embeds/media';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
 import { queryClient } from '../state/queryClient';
@@ -36,7 +36,7 @@ export async function loadPreview(
       if (blk === null) return { ok: false, reason: 'section' };
       md = blk;
     }
-    const title = (path.split('/').pop() ?? path).replace(/\.md$/, '');
+    const title = displayName(path);
     return { ok: true, path, title, html: renderMarkdown(md) };
   } catch {
     return { ok: false, reason: 'error' };

@@ -9,6 +9,7 @@ import { activeTab } from '../workspace/layout';
 import { useSettings } from '../state/settings';
 import { embedMarkdown, EMPTY_DRAWING } from './scene';
 import { drawingDir, drawingName, useDrawingSettings } from './settings';
+import { displayPath } from '../embeds/media';
 
 /** Inserts text at the cursor of the note being edited; false when no editor is open. */
 export function insertIntoActiveNote(text: string): boolean {
@@ -51,7 +52,7 @@ export async function insertDrawing(): Promise<void> {
     return dialog.alert(i18next.t('drawing.insert'), i18next.t('drawing.none'));
   const picked = await dialog.pick(
     i18next.t('drawing.insert'),
-    drawings.map((d) => ({ value: d.path, label: d.path.replace(/\.excalidraw$/i, '') })),
+    drawings.map((d) => ({ value: d.path, label: displayPath(d.path) })),
   );
   if (picked)
     insertIntoActiveNote(embedMarkdown(picked, useDrawingSettings.getState().settings.embedWidth));

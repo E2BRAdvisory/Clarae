@@ -88,6 +88,7 @@ import {
   type RawScene,
 } from './scene';
 import { DRAG_PATH } from '../util/dragTypes';
+import { displayPath } from '../embeds/media';
 
 // The fork needs its host before it mounts (its text editor throws without one): registered here, as
 // soon as this module (which imports the fork) is evaluated, whatever loaded the library first.
@@ -1074,7 +1075,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     <div className="note-view drawing-view" ref={host}>
       <div className="note-header">
         <span className="path" title={path}>
-          {path.replace(/\.excalidraw$/, '')}
+          {displayPath(path)}
         </span>
         <span className={`save-state ${doc.save}`} aria-live="polite">
           {saveLabel}

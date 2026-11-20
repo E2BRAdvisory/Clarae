@@ -13,6 +13,27 @@ const e = (path: string, isDir = false, mtime = '2024-01-01T00:00:00Z'): Entry =
 });
 
 describe('buildTree', () => {
+  it('sorts by the name the row shows, with the extension as the tie-breaker', () => {
+    const tree = buildTree([
+      e('Plan.md'),
+      e('Plan.canvas'),
+      e('Plan 2.md'),
+      e('Plan.docx'),
+      e('Plan-b.md'),
+      e('Plan.base'),
+      e('Planet.md'),
+    ]);
+    expect(tree.map((n) => n.entry.name)).toEqual([
+      'Plan.base',
+      'Plan.canvas',
+      'Plan.md',
+      'Plan 2.md',
+      'Plan-b.md',
+      'Plan.docx',
+      'Planet.md',
+    ]);
+  });
+
   const entries = [
     e('b.md'),
     e('Notes', true),

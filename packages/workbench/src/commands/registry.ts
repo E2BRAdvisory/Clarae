@@ -3,7 +3,13 @@
 // "commands.<id>"; hotkeys are defaults that Settings > Hotkeys can override.
 import { useSettings, type NoteMode } from '../state/settings';
 import { activeTab, findPane } from '../workspace/layout';
-import { createNote, deleteEntry, promptNewFolder, renameEntry, toggleTheme } from '../app/actions';
+import {
+  createNote,
+  deleteEntry,
+  promptNewFolder,
+  promptRename,
+  toggleTheme,
+} from '../app/actions';
 import { api } from '../app/api';
 import { getActiveEditor } from '../editor/registry';
 import { headingCommand, type EditorCommand } from '../editor/handle';
@@ -28,6 +34,7 @@ import { bookmarkCommands } from '../bookmarks/commands';
 import { workspaceCommands } from '../workspaces/commands';
 import { previewCommands } from '../preview/commands';
 import { exportNoteHtml, exportNoteImage, exportNotePdf } from '../export/commands';
+import { displayPath } from '../embeds/media';
 import { startSlideshow } from '../slides/actions';
 import {
   exportDeckHtml,
@@ -145,22 +152,13 @@ async function guard(p: Promise<unknown>): Promise<void> {
 async function renameActive(): Promise<void> {
   const path = activePath();
   if (!path) return;
-  const name = path.split('/').pop() ?? path;
-  const next = await dialog.prompt(t('sidebar.promptRename'), name);
-  if (!next || next === name) return;
-  const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
-  const to = dir + (path.endsWith('.md') && !next.endsWith('.md') ? next + '.md' : next);
-  await guard(
-    renameEntry(path, to, ({ notes, links }) =>
-      dialog.confirm(t('sidebar.rename'), i18next.t('sidebar.confirmLinkUpdate', { links, notes })),
-    ),
-  );
+  await guard(promptRename({ path, isDir: false }));
 }
 
 async function deleteActive(): Promise<void> {
   const path = activePath();
   if (!path) return;
-  if (!(await dialog.confirm(t('sidebar.trash'), path, true))) return;
+  if (!(await dialog.confirm(t('sidebar.trash'), displayPath(path), true))) return;
   await guard(deleteEntry(path));
 }
 

@@ -7,8 +7,7 @@ import { useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
 import { errorCodeOf, errorMessage } from '../util/errors';
 import { diffLines, hasChanges } from './diff';
-
-const base = (p: string): string => p.slice(p.lastIndexOf('/') + 1).replace(/\.md$/, '');
+import { displayName } from '../embeds/media';
 
 /** One conflict: the server version and the version saved from this device side by side (remounted per conflict). */
 function ConflictDetail({ vaultId, conflict }: { vaultId: string; conflict: SyncConflict }) {
@@ -161,7 +160,7 @@ export function ConflictsView({ vaultId }: { vaultId: string }) {
                   className={c.id === current?.id ? 'active' : ''}
                   onClick={() => setSelected(c.id)}
                 >
-                  <strong>{base(c.path)}</strong>
+                  <strong>{displayName(c.path)}</strong>
                   <span className="muted small">
                     {new Date(c.createdAt).toLocaleString(i18next.language)}
                   </span>

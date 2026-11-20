@@ -7,6 +7,7 @@ import { useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
 import { diffLines } from './diff';
 import { errorMessage } from '../util/errors';
+import { displayPath } from '../embeds/media';
 
 const msg = (e: unknown): string => errorMessage(e);
 
@@ -99,7 +100,7 @@ export function HistoryView({ vaultId, path }: { vaultId: string; path: string }
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>
-          {t('sync.historyTitle')} · {path.replace(/\.md$/, '')}
+          {t('sync.historyTitle')} · {displayPath(path)}
         </h2>
         {error && (
           <div className="error" role="alert">

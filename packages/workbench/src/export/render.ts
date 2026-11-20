@@ -12,7 +12,7 @@
 import { parseDrawingRef } from '../drawing/embed/ref';
 import type { BinaryContent } from '../app/api';
 import type { EmbedBackend } from '../embeds/hydrate';
-import { classify, embedOptions } from '../embeds/media';
+import { classify, displayName, embedOptions } from '../embeds/media';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
 import { sanitizeHtml } from '../util/sanitize';
@@ -190,7 +190,7 @@ async function inlineEmbed(
         md = blk;
       }
       const box = el('div', 'embed-note');
-      box.append(el('div', 'embed-note-title', name.replace(/\.md$/, '')));
+      box.append(el('div', 'embed-note-title', displayName(name)));
       const body = el('div', 'embed-note-body');
       body.innerHTML = renderMarkdown(md); // sanitized by renderMarkdown
       box.append(body);

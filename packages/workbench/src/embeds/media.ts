@@ -93,6 +93,47 @@ export function openTarget(path: string): 'in-app' | 'external' {
   return IN_APP.has(classify(name)) ? 'in-app' : 'external';
 }
 
+/** The Obsidian Excalidraw plugin's drawings, stored as notes: `Name.excalidraw.md`. */
+const LEGACY_DRAWING = /\.excalidraw\.md$/i;
+
+/**
+ * A file name split into the part the interface shows and the extension it keeps out of sight.
+ * The extension is hidden only for the files that open in a tab of the application
+ * (`openTarget(name) === 'in-app'`: notes, drawings, canvases, bases, applications, images, PDFs,
+ * audio, video); a file opened outside it (.docx, .zip, LICENSE, .gitignore) keeps its whole name.
+ * `ext` keeps the case of the file and includes the dot; the Obsidian drawing `X.excalidraw.md`
+ * splits as `X` and `.excalidraw.md`. Folders do not go through here.
+ */
+export function splitName(name: string): { stem: string; ext: string } {
+  const base = name.slice(name.lastIndexOf('/') + 1);
+  if (openTarget(base) !== 'in-app') return { stem: base, ext: '' };
+  const legacy = LEGACY_DRAWING.exec(base);
+  const i = legacy ? legacy.index : base.lastIndexOf('.');
+  return { stem: base.slice(0, i), ext: base.slice(i) };
+}
+
+/** What the interface shows of a file: its name (the last segment of a path) without a hidden extension. */
+export const displayName = (pathOrName: string): string => splitName(pathOrName).stem;
+
+/** A path as the interface shows it: the folders as they are, the file's name without a hidden extension. */
+export const displayPath = (path: string): string =>
+  path.slice(0, path.lastIndexOf('/') + 1) + displayName(path);
+
+/**
+ * The items of a pick list of files, labelled like `displayPath`. A list that mixes kinds can hold
+ * files whose labels coincide once the extension is hidden (`Plan.pdf`, `Plan.png`, `Plan.marp`):
+ * those show the whole path, so they can be told apart (a pick list has no icons).
+ */
+export function pickItems(paths: readonly string[]): { value: string; label: string }[] {
+  const labels = paths.map(displayPath);
+  const count = new Map<string, number>();
+  for (const l of labels) count.set(l.toLowerCase(), (count.get(l.toLowerCase()) ?? 0) + 1);
+  return paths.map((value, i) => {
+    const label = labels[i] as string;
+    return { value, label: (count.get(label.toLowerCase()) ?? 0) > 1 ? value : label };
+  });
+}
+
 /** Size hint of an embed alias: "300" or "300x200". */
 export function parseSize(alias: string): { width?: number; height?: number } {
   const m = /^(\d+)(?:x(\d+))?$/.exec(alias.trim());

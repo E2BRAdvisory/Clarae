@@ -71,7 +71,18 @@ describe('the explorer and applications', () => {
     expect(display({ name: 'Road.WEBAPP', isDir: false } as never)).toBe('Road');
     expect(display({ name: 'a.webapp', isDir: true } as never)).toBe('a.webapp'); // a folder keeps its name
     expect(display({ name: 'plan.md', isDir: false } as never)).toBe('plan');
-    expect(display({ name: 'pic.png', isDir: false } as never)).toBe('pic.png');
+    // every file that opens in a tab of the application hides its extension, the others keep it
+    for (const [name, shown] of [
+      ['pic.png', 'pic'],
+      ['Sketch.excalidraw', 'Sketch'],
+      ['Old.excalidraw.md', 'Old'],
+      ['Map.canvas', 'Map'],
+      ['Deck.MARP', 'Deck'],
+      ['Report.docx', 'Report.docx'],
+      ['LICENSE', 'LICENSE'],
+      ['.gitignore', '.gitignore'],
+    ] as const)
+      expect(display({ name, isDir: false } as never)).toBe(shown);
   });
 
   it('has a toolbar button that creates an application in the folder of the row in focus', async () => {

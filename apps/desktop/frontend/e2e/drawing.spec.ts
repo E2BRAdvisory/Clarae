@@ -161,7 +161,7 @@ test('New drawing and New canvas are in the file explorer menu', async ({ page }
   await openVault(page, { 'Folder/Note.md': 'x' });
   await page.locator('.tree .node', { hasText: 'Folder' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New drawing' }).click();
-  await expect(page.getByRole('tab', { name: /Drawing \d{4}.*excalidraw/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Drawing \d{4}/ })).toBeVisible();
   await expect
     .poll(async () =>
       (await listVaultFiles(page)).some((p) => /^Folder\/Drawing .*\.excalidraw$/.test(p)),
@@ -170,7 +170,7 @@ test('New drawing and New canvas are in the file explorer menu', async ({ page }
 
   await page.locator('.tree .node', { hasText: 'Folder' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New canvas' }).click();
-  await expect(page.getByRole('tab', { name: /Canvas \d{4}.*canvas/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Canvas \d{4}/ })).toBeVisible();
 });
 
 test('app dialogs stay above an open drawing', async ({ page }) => {

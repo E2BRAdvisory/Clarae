@@ -22,6 +22,7 @@ import { useBase, type BaseState } from './useBase';
 import type { BaseCell, BaseColumn, BaseInfo, BaseResult, BaseRow, BaseViewInfo } from './types';
 import './bases.css';
 import { Icon } from '../shell/icons';
+import { displayName } from '../embeds/media';
 
 interface BodyProps {
   vaultId: string;
@@ -465,12 +466,7 @@ export function BaseView({ vaultId, path }: { vaultId: string; path: string }) {
   return (
     <div className="base-view">
       <div className="base-toolbar">
-        <strong className="base-title">
-          {path
-            .split('/')
-            .pop()
-            ?.replace(/\.base$/, '')}
-        </strong>
+        <strong className="base-title">{displayName(path)}</strong>
         {info && info.views.length > 0 && (
           <select
             aria-label={t('bases.view')}
@@ -534,11 +530,7 @@ export function BaseEmbed({
 }) {
   const readOnly = useSync((s) => infoOf(s, vaultId).readOnly);
   const state = useBase({ vaultId, path, thisPath, viewName, isAlive, onDetached });
-  const title =
-    path
-      .split('/')
-      .pop()
-      ?.replace(/\.base$/, '') ?? path;
+  const title = displayName(path);
   const view = state.info?.views[state.viewIndex];
   return (
     <div className="base-view embedded">

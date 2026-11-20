@@ -135,10 +135,12 @@ async function openOnWeb(
   await page.goto(`/vaults/${opts.open}/open`);
   await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible({ timeout: 90_000 });
   // The seeded notes arrived through the sync (tree, changes, blobs of the mock).
-  // Listed as the explorer shows them: a file of a folder by its top folder, a note or an application
-  // without its extension.
+  // Listed as the explorer shows them: a file of a folder by its top folder, a file that opens in a tab
+  // of the application (a note, an application, a drawing, a picture, ...) without its extension.
   const listed = (path: string): string =>
-    path.includes('/') ? (path.split('/')[0] as string) : path.replace(/\.(md|webapp)$/, '');
+    path.includes('/')
+      ? (path.split('/')[0] as string)
+      : path.replace(/\.(md|webapp|excalidraw|canvas|base|marp|pdf|png|jpe?g|gif|webp|svg)$/i, '');
   for (const name of new Set(Object.keys(opts.files ?? {}).map(listed)))
     await expect(page.locator('.tree .node', { hasText: name })).toBeVisible();
 }

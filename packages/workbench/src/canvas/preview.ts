@@ -2,6 +2,7 @@
 // It is drawn from the data alone (no DOM measurement), so it also works for embeds that
 // are rendered while the canvas editor is not open.
 import { api } from '../app/api';
+import { displayName } from '../embeds/media';
 import { PreviewUrls } from '../embeds/previewUrls';
 import {
   boundsOf,
@@ -39,7 +40,7 @@ function nodeLabel(n: CNode): string {
     case 'text':
       return n.text ?? '';
     case 'file':
-      return (n.file ?? '').split('/').pop() ?? '';
+      return displayName(n.file ?? '');
     case 'link':
       return n.url ?? '';
     case 'group':

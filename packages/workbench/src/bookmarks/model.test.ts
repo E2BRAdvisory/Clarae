@@ -62,6 +62,10 @@ describe('items', () => {
   it('derives labels and targets', () => {
     expect(itemLabel(f('Notes/A.md', '#Intro'))).toBe('A > Intro');
     expect(itemLabel(f('A.md', '#^abc'))).toBe('A > ^abc');
+    // the extension of any file the application opens stays out of the label, the others keep it
+    expect(itemLabel(f('Maps/Atlas.canvas'))).toBe('Atlas');
+    expect(itemLabel(f('Draw/Sketch.excalidraw'))).toBe('Sketch');
+    expect(itemLabel(f('Docs/Report.docx'))).toBe('Report.docx');
     expect(fileTarget(f('A.md', '#^abc'))).toEqual({ path: 'A.md', heading: '', block: 'abc' });
     expect(fileTarget(f('A.md', '#Intro'))).toEqual({ path: 'A.md', heading: 'Intro', block: '' });
     expect(itemLabel({ ...searchItem('tag:#x'), title: 'Mine' })).toBe('Mine');

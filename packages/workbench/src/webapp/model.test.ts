@@ -150,6 +150,7 @@ describe('nameOf', () => {
     expect(nameOf('Tools/Status board.webapp')).toBe('Status board');
     expect(nameOf('Tools/GitHub.WEBAPP')).toBe('GitHub');
     expect(nameOf('example.com.webapp')).toBe('example.com');
-    expect(nameOf('Notes/a.md')).toBe('a.md');
+    expect(nameOf('Notes/a.md')).toBe('a'); // as the interface shows any file the application opens
+    expect(nameOf('Docs/Report.docx')).toBe('Report.docx');
   });
 });

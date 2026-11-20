@@ -143,7 +143,7 @@ test('deconstruct moves the selection into a new drawing and opens it', async ({
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await selectAll(page);
   await runCommand(page, 'move the selection into a new drawing');
-  await expect(page.getByRole('tab', { name: /Board - part\.excalidraw/ })).toBeVisible({
+  await expect(page.getByRole('tab', { name: /Board - part/ })).toBeVisible({
     timeout: 15_000,
   });
   const read = async () => ({

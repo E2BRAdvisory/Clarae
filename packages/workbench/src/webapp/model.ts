@@ -9,14 +9,15 @@
 // again when the view opens) and only an http or https address with a host, without credentials,
 // ever leaves this module.
 
+import { displayName } from '../embeds/media';
+
 export const WEBAPP_EXT = '.webapp';
 
 /** A file of the vault that stands for an application. */
 export const isWebapp = (path: string): boolean => /\.webapp$/i.test(path);
 
 /** The name of an application as the interface shows it: the file's name without the extension. */
-export const nameOf = (path: string): string =>
-  (path.split('/').pop() ?? path).replace(new RegExp(`\\${WEBAPP_EXT}$`, 'i'), '');
+export const nameOf = (path: string): string => displayName(path);
 
 /** Longest address accepted (webview.MaxURLBytes). */
 export const MAX_URL_LENGTH = 16 * 1024;

@@ -3,6 +3,7 @@ import { useAppStore } from '../state/store';
 import { useBacklinks } from '../state/queries';
 import { openLocalGraph } from '../graph/commands';
 import { Icon } from '../shell/icons';
+import { displayName, displayPath } from '../embeds/media';
 
 export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: string }) {
   const { t } = useTranslation();
@@ -10,14 +11,13 @@ export function BacklinksPanel({ vaultId, path }: { vaultId: string; path: strin
   const { data } = useBacklinks(vaultId, path);
   const linked = data?.linked ?? [];
   const mentions = data?.mentions ?? [];
-  const name = (p: string) => p.slice(p.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
   // A drawing or a canvas links to the note too: labelled by what it is, without a line number.
   const label = (p: string) =>
     /\.excalidraw$/i.test(p)
-      ? t('backlinks.drawing', { name: name(p) })
+      ? t('backlinks.drawing', { name: displayName(p) })
       : /\.canvas$/i.test(p)
-        ? t('backlinks.canvas', { name: name(p) })
-        : p.replace(/\.md$/, '');
+        ? t('backlinks.canvas', { name: displayName(p) })
+        : displayPath(p);
   const hasLines = (p: string) => /\.md$/i.test(p);
 
   return (

@@ -1,6 +1,7 @@
 // Pure helpers of the Bases UI (no React, no backend): display text of cells, sort toggling,
 // column selection and embed fragments.
 import type { BaseCell, BaseInfo, BaseViewInfo, SortSpec, ViewPatch } from './types';
+import { displayName } from '../embeds/media';
 
 /** `[[target|display]]` -> parts (a plain string is a target). */
 export function splitLink(v: unknown): { target: string; display: string } {
@@ -8,7 +9,7 @@ export function splitLink(v: unknown): { target: string; display: string } {
   const m = /^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]$/.exec(s);
   if (!m) return { target: s, display: s };
   const target = m[1] ?? '';
-  return { target, display: m[2] || (target.split('/').pop() ?? target).replace(/\.md$/, '') };
+  return { target, display: m[2] || displayName(target) };
 }
 
 function durationText(ms: number): string {

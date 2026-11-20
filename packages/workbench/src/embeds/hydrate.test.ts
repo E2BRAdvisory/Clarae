@@ -178,6 +178,6 @@ describe('embeds', () => {
         backend: { ...backend, resolve: (_f, t) => Promise.resolve(t) },
       }),
     );
-    expect(el.textContent).toBe('Sketch.excalidraw');
+    expect(el.textContent).toBe('Sketch');
   });
 });

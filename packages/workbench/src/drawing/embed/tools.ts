@@ -11,6 +11,7 @@ import { elementMeta, withElementMeta } from '../meta';
 import { folderOf } from '../scene';
 import { deconstruct } from './deconstruct';
 import { noteCardPatch, noteExcerpt, wrapLines } from './insert';
+import { displayName } from '../../embeds/media';
 
 const t = (key: string): string => i18next.t(`drawing.tools.${key}`);
 
@@ -48,11 +49,7 @@ export function deconstructIntoNewDrawing(): Promise<void> {
     const out = deconstruct(c.context(), c.files());
     if (!out) return;
     const tree = await api.vault.listTree(c.vaultId);
-    const base =
-      c.drawingPath
-        .split('/')
-        .pop()
-        ?.replace(/\.excalidraw$/i, '') ?? 'Drawing';
+    const base = displayName(c.drawingPath) || 'Drawing';
     const path = uniqueName(tree, folderOf(c.drawingPath), `${base} - part`, '.excalidraw');
     await api.vault.writeNote(c.vaultId, path, out.json, '');
     invalidateVault(c.vaultId);
@@ -64,7 +61,7 @@ export function deconstructIntoNewDrawing(): Promise<void> {
 
 /** A card's label, re-read from the note: the text only (the card keeps its size and look). */
 export function refreshedLabel(path: string, markdown: string): string {
-  const name = path.split('/').pop()?.replace(/\.md$/i, '') ?? path;
+  const name = displayName(path);
   const body = markdown.replace(/^---\n[\s\S]*?\n---\n?/, '').replace(/^\s*#\s+.*(?:\n|$)/, '');
   return wrapLines(`${name}\n\n${noteExcerpt(body)}`.trimEnd(), 36).join('\n');
 }

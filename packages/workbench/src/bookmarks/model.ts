@@ -16,6 +16,8 @@
 // Items are addressed by their index path in the tree ([2, 0] = first child of
 // the third root item); the file carries no ids.
 
+import { displayName } from '../embeds/media';
+
 export interface BookmarkItem {
   type: string;
   title?: string;
@@ -141,15 +143,15 @@ export function fileTarget(item: BookmarkItem): { path: string; heading: string;
   };
 }
 
-const baseName = (p: string): string => (p.split('/').pop() ?? p).replace(/\.md$/, '');
-
 /** What the sidebar shows: the user's title, or one derived from the target. */
 export function itemLabel(item: BookmarkItem): string {
   if (item.title) return item.title;
   switch (item.type) {
     case 'file': {
       const t = fileTarget(item);
-      return baseName(t.path) + (t.heading ? ` > ${t.heading}` : t.block ? ` > ^${t.block}` : '');
+      return (
+        displayName(t.path) + (t.heading ? ` > ${t.heading}` : t.block ? ` > ^${t.block}` : '')
+      );
     }
     case 'folder':
       return item.path ?? '';

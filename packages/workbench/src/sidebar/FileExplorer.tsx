@@ -12,8 +12,7 @@ import { newBase } from '../bases/commands';
 import { newPresentation } from '../marp/commands';
 import { newDrawing } from '../drawing/commands';
 import { newApplication } from '../webapp/commands';
-import { isWebapp, nameOf } from '../webapp/model';
-import { createFolder, createNote, deleteEntry, renameEntry } from '../app/actions';
+import { createFolder, createNote, deleteEntry, promptRename, renameEntry } from '../app/actions';
 import { selectActivePath, useAppStore } from '../state/store';
 import { useTree } from '../state/queries';
 import { bookmarkMenuItems } from '../bookmarks/actions';
@@ -21,7 +20,14 @@ import { useSettings } from '../state/settings';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { dialog } from '../ui/dialogs';
 import { useExpanded } from './expanded';
-import { classify, KIND_ICON, openTarget } from '../embeds/media';
+import {
+  classify,
+  displayName,
+  displayPath,
+  KIND_ICON,
+  openTarget,
+  splitName,
+} from '../embeds/media';
 import { Icon, type IconName } from '../shell/icons';
 import { DRAG_PATH } from '../util/dragTypes';
 
@@ -31,6 +37,8 @@ interface TreeNode {
 }
 
 export type FileSort = 'name' | 'name-desc' | 'modified' | 'created';
+
+const extOf = (e: Entry): string => (e.isDir ? '' : splitName(e.name).ext);
 
 export function buildTree(entries: Entry[], sort: FileSort = 'name'): TreeNode[] {
   const byPath = new Map<string, TreeNode>();
@@ -45,10 +53,12 @@ export function buildTree(entries: Entry[], sort: FileSort = 'name'): TreeNode[]
   const time = (e: Entry): number => new Date(e.mtime as string).getTime() || 0;
   const cmp = (a: TreeNode, b: TreeNode): number => {
     if (a.entry.isDir !== b.entry.isDir) return a.entry.isDir ? -1 : 1;
-    const byName = a.entry.name.localeCompare(b.entry.name, undefined, {
-      sensitivity: 'base',
-      numeric: true,
-    });
+    // By the name the row shows; the extension only tells apart files that look alike ("Plan" the note
+    // and "Plan" the canvas), so they stay together in a stable order.
+    const collate = (x: string, y: string): number =>
+      x.localeCompare(y, undefined, { sensitivity: 'base', numeric: true });
+    const byName =
+      collate(display(a.entry), display(b.entry)) || collate(extOf(a.entry), extOf(b.entry));
     if (sort === 'name-desc') return -byName;
     if (sort === 'modified' || sort === 'created') return time(b.entry) - time(a.entry) || byName;
     return byName;
@@ -99,15 +109,11 @@ export const isHidden = (path: string): boolean => path.split('/').some((s) => s
 
 const parentDir = (path: string | null): string =>
   path && path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-/** A row's text: a note without `.md`, an application without `.webapp`, any other file as it is. */
-export const display = (e: Entry): string =>
-  e.isDir
-    ? e.name
-    : isWebapp(e.name)
-      ? nameOf(e.name)
-      : e.name.endsWith('.md')
-        ? e.name.slice(0, -3)
-        : e.name;
+/**
+ * A row's text: a folder's name, a file that opens in a tab of the application (note, drawing, canvas,
+ * base, application, image, PDF, audio, video) without its extension, any other file with it.
+ */
+export const display = (e: Entry): string => (e.isDir ? e.name : displayName(e.name));
 
 async function guard(p: Promise<unknown>): Promise<void> {
   try {
@@ -193,19 +199,16 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     if (name) await guard(createFolder((dir ? dir + '/' : '') + name));
   };
   const rename = async (entry: Entry) => {
-    const name = await dialog.prompt(t('sidebar.promptRename'), entry.name);
-    if (!name || name === entry.name) return;
-    const dir = parentDir(entry.path);
-    await guard(
-      renameEntry(entry.path, (dir ? dir + '/' : '') + name, ({ notes, links }) =>
-        dialog.confirm(t('sidebar.rename'), t('sidebar.confirmLinkUpdate', { links, notes })),
-      ),
-    );
+    await guard(promptRename(entry));
   };
   const trash = async (entry: Entry) => {
     if (
       useSettings.getState().editor.confirmDelete &&
-      !(await dialog.confirm(t('sidebar.trash'), entry.path, true))
+      !(await dialog.confirm(
+        t('sidebar.trash'),
+        entry.isDir ? entry.path : displayPath(entry.path),
+        true,
+      ))
     )
       return;
     await guard(deleteEntry(entry.path));

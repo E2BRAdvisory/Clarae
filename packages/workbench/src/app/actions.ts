@@ -13,6 +13,7 @@ import { selectActivePath, useAppStore } from '../state/store';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
 import { dialog } from '../ui/dialogs';
 import { flushAllNotes, settleNotes } from '../workspaces/flush';
+import { splitName } from '../embeds/media';
 
 function vaultId(): string {
   const v = useAppStore.getState().vault;
@@ -177,6 +178,49 @@ export async function renameEntry(
   useBookmarks.getState().pathRenamed(from, to);
   invalidateVault(id);
   return { notesUpdated: notes, linksUpdated: links };
+}
+
+/**
+ * The path a rename gives to `path` once the user typed `input` in the prompt, or null when nothing
+ * is to be done (an empty name, or the same one). The prompt shows the name without the extension of
+ * a file the application opens (`splitName`) and the extension is put back: a rename never changes
+ * it, so a drawing stays a drawing. An input that already ends with that extension (any case) is not
+ * given a second one. Folders and files opened outside the application are renamed as typed.
+ */
+export function renameTarget(path: string, isDir: boolean, input: string): string | null {
+  const name = input.trim();
+  if (!name) return null;
+  const slash = path.lastIndexOf('/');
+  const current = path.slice(slash + 1);
+  const { ext } = isDir ? { ext: '' } : splitName(current);
+  const typed =
+    ext && name.length > ext.length && name.toLowerCase().endsWith(ext.toLowerCase())
+      ? name.slice(0, -ext.length)
+      : name;
+  const next = typed + ext;
+  return next === current ? null : path.slice(0, slash + 1) + next;
+}
+
+/**
+ * Asks for a new name for a file or a folder (the prefilled text is the name without the extension
+ * the rename keeps) and renames it with the update of the links that point to it. Nothing happens
+ * when the dialog is cancelled or the name is empty or unchanged. Errors are the caller's.
+ */
+export async function promptRename(entry: {
+  path: string;
+  isDir: boolean;
+}): Promise<RenameResult | null> {
+  const name = entry.path.slice(entry.path.lastIndexOf('/') + 1);
+  const shown = entry.isDir ? name : splitName(name).stem;
+  const input = await dialog.prompt(i18next.t('sidebar.promptRename'), shown);
+  const to = input ? renameTarget(entry.path, entry.isDir, input) : null;
+  if (!to) return null;
+  return renameEntry(entry.path, to, ({ notes, links }) =>
+    dialog.confirm(
+      i18next.t('sidebar.rename'),
+      i18next.t('sidebar.confirmLinkUpdate', { links, notes }),
+    ),
+  );
 }
 
 export async function deleteEntry(path: string): Promise<void> {

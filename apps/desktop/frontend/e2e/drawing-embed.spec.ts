@@ -25,7 +25,7 @@ test('an image of the vault is inserted into the drawing and stored in its files
   await runCommand(page, 'insert an image from the vault');
   await page
     .getByRole('listbox', { name: 'Insert an image' })
-    .getByRole('button', { name: 'pics/dot.png' })
+    .getByRole('button', { name: 'pics/dot' })
     .click();
   await expect
     .poll(async () => (await savedDrawing(page)).elements.some((e) => e.type === 'image'), {
@@ -144,7 +144,7 @@ test('dragging a note and an image from the explorer onto the canvas adds them w
   expect(card.y + card.height / 2).toBeLessThan(240);
   expect(card['link']).toBe('[[Plan]]');
 
-  await dragAndDrop(page.locator('.tree .node', { hasText: 'dot.png' }), canvas, {
+  await dragAndDrop(page.locator('.tree .node', { hasText: 'dot' }), canvas, {
     x: Math.round(box.width - 100),
     y: 100,
   });
@@ -179,7 +179,7 @@ test('the default style of the vault applies to new drawings', async ({ page }) 
 
   // A new drawing starts with that stroke color.
   await runCommand(page, 'New drawing');
-  await expect(page.getByRole('tab', { name: /Drawing \d{4}.*excalidraw/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Drawing \d{4}/ })).toBeVisible();
   const canvas = page.locator('.drawing-canvas .excalidraw canvas.interactive');
   await expect(canvas).toBeVisible({ timeout: 60_000 });
   const box = (await canvas.boundingBox())!;

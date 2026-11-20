@@ -3,8 +3,7 @@ import { BookmarksPanel } from '../bookmarks/BookmarksPanel';
 import { useBacklinks } from '../state/queries';
 import { selectActivePath, useAppStore } from '../state/store';
 import { BacklinksPanel } from './BacklinksPanel';
-
-const name = (p: string) => p.slice(p.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
+import { displayName } from '../embeds/media';
 
 /** Links written in the note in focus; unresolved ones are shown as such and cannot be opened. */
 function OutgoingLinks({ vaultId, path }: { vaultId: string; path: string }) {
@@ -37,7 +36,7 @@ function OutgoingLinks({ vaultId, path }: { vaultId: string; path: string }) {
               })
             }
           >
-            {l.alias || name(l.path)}
+            {l.alias || displayName(l.path)}
           </div>
         ) : (
           <div key={`${l.path}|${l.raw}`} className="item muted" title={t('links.unresolved')}>

@@ -4,7 +4,16 @@ import type { BinaryContent } from '../app/api';
 import { i18next } from '../i18n';
 import { renderMarkdown } from '../reading/render';
 import { extractBlock, extractSection, stripFrontmatter } from '../reading/sections';
-import { classify, embedOptions, loadMedia, parseSize, pdfPage, type FileStamp } from './media';
+import {
+  classify,
+  displayName,
+  displayPath,
+  embedOptions,
+  loadMedia,
+  parseSize,
+  pdfPage,
+  type FileStamp,
+} from './media';
 import { renderPdf } from './pdf';
 import { renderMath, renderMermaid } from './typeset';
 import type { LinkSpec } from '../editor/types';
@@ -167,8 +176,7 @@ async function fill(
         if (!h) return;
         const img = document.createElement('img');
         img.src = h.url;
-        img.alt =
-          spec.alias && !parseSize(spec.alias).width ? spec.alias : (path.split('/').pop() ?? path);
+        img.alt = spec.alias && !parseSize(spec.alias).width ? spec.alias : displayName(path);
         const { width, height } = parseSize(spec.alias);
         if (width) img.width = width;
         if (height) img.height = height;
@@ -225,7 +233,7 @@ async function fill(
         el.className = 'embed-note';
         const title = document.createElement('div');
         title.className = 'embed-note-title';
-        title.textContent = path.replace(/\.md$/, '').split('/').pop() ?? path;
+        title.textContent = displayName(path);
         title.addEventListener('click', () =>
           deps.openLink?.(
             { target: path, heading: spec.heading, block: spec.block, alias: '', embed: false },
@@ -261,10 +269,10 @@ async function fill(
           throw e;
         }
         if (disposed()) return;
-        if (!url) return notice(el, 'embed-other', path);
+        if (!url) return notice(el, 'embed-other', displayPath(path));
         const img = document.createElement('img');
         img.src = url;
-        img.alt = path.split('/').pop() ?? path;
+        img.alt = displayName(path);
         img.className = 'embed-drawing';
         const { size, align } = embedOptions(spec.alias);
         const { width, height } = size;
@@ -282,10 +290,10 @@ async function fill(
       case 'canvas': {
         const url = await deps.backend.canvasPreview?.(path);
         if (disposed()) return;
-        if (!url) return notice(el, 'embed-other', path);
+        if (!url) return notice(el, 'embed-other', displayPath(path));
         const img = document.createElement('img');
         img.src = url;
-        img.alt = path.split('/').pop() ?? path;
+        img.alt = displayName(path);
         img.className = 'embed-canvas';
         const { size, align } = embedOptions(spec.alias);
         const { width, height } = size;
@@ -299,7 +307,7 @@ async function fill(
         return;
       }
       case 'base':
-        if (!deps.backend.baseEmbed) return notice(el, 'embed-other', path);
+        if (!deps.backend.baseEmbed) return notice(el, 'embed-other', displayPath(path));
         // `![[x.base#View]]`: the fragment names the view.
         el.className = 'embed-base-wrap';
         {
@@ -313,11 +321,11 @@ async function fill(
           el,
           'embed-other',
           i18next.t('embeds.webapp', {
-            name: (path.split('/').pop() ?? path).replace(/\.webapp$/i, ''),
+            name: displayName(path),
           }),
         );
       default:
-        return notice(el, 'embed-other', path);
+        return notice(el, 'embed-other', displayPath(path));
     }
   } catch {
     if (!disposed()) notice(el, 'embed-missing', i18next.t('embeds.loadFailed', { label }));

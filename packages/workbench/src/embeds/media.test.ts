@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { BinaryContent } from '../app/api';
 import {
   classify,
+  displayName,
+  displayPath,
   forgetMedia,
   KIND_ICON,
   loadMedia,
   mediaLimits,
   mediaStats,
   openTarget,
+  pickItems,
   releaseVaultMedia,
+  splitName,
 } from './media';
 
 let reads: number;
@@ -114,5 +118,80 @@ describe('applications', () => {
     expect(classify('webapp.txt')).toBe('other');
     expect(classify('webapp')).toBe('note');
     expect(openTarget('.webapp')).toBe('external');
+  });
+});
+
+describe('file names without the extension', () => {
+  it('hides it for the files that open in a tab of the application, and keeps its case', () => {
+    expect(splitName('Plan.md')).toEqual({ stem: 'Plan', ext: '.md' });
+    expect(splitName('Plan.MD')).toEqual({ stem: 'Plan', ext: '.MD' });
+    expect(splitName('Map.canvas')).toEqual({ stem: 'Map', ext: '.canvas' });
+    expect(splitName('Sketch.excalidraw')).toEqual({ stem: 'Sketch', ext: '.excalidraw' });
+    expect(splitName('Review.marp')).toEqual({ stem: 'Review', ext: '.marp' });
+    expect(splitName('Tasks.base')).toEqual({ stem: 'Tasks', ext: '.base' });
+    expect(splitName('GitHub.webapp')).toEqual({ stem: 'GitHub', ext: '.webapp' });
+    expect(splitName('photo.png')).toEqual({ stem: 'photo', ext: '.png' });
+    expect(splitName('Talk.pdf')).toEqual({ stem: 'Talk', ext: '.pdf' });
+    expect(splitName('take.mp3')).toEqual({ stem: 'take', ext: '.mp3' });
+    expect(splitName('clip.mp4')).toEqual({ stem: 'clip', ext: '.mp4' });
+    expect(splitName('clip.webm')).toEqual({ stem: 'clip', ext: '.webm' });
+  });
+
+  it('cuts only the last extension, and the Obsidian drawing in notes as one', () => {
+    expect(splitName('a.b.canvas')).toEqual({ stem: 'a.b', ext: '.canvas' });
+    expect(splitName('v1.2 notes.md')).toEqual({ stem: 'v1.2 notes', ext: '.md' });
+    expect(splitName('Old.excalidraw.md')).toEqual({ stem: 'Old', ext: '.excalidraw.md' });
+    expect(splitName('Old.Excalidraw.MD')).toEqual({ stem: 'Old', ext: '.Excalidraw.MD' });
+  });
+
+  it('keeps the whole name of a file that opens outside the application', () => {
+    for (const name of [
+      'Report.docx',
+      'data.zip',
+      'LICENSE',
+      '.gitignore',
+      'Makefile',
+      '.md',
+      'a.',
+    ]) {
+      expect(splitName(name)).toEqual({ stem: name, ext: '' });
+    }
+  });
+
+  it('works on the last segment of a path', () => {
+    expect(splitName('Projects/2026/Plan.md')).toEqual({ stem: 'Plan', ext: '.md' });
+    expect(displayName('Projects/2026/Plan.md')).toBe('Plan');
+    expect(displayName('Docs/Report.docx')).toBe('Report.docx');
+    expect(displayName('Docs/Old.excalidraw.md')).toBe('Old');
+    expect(displayPath('Projects/2026/Plan.md')).toBe('Projects/2026/Plan');
+    expect(displayPath('Docs/Report.docx')).toBe('Docs/Report.docx');
+    expect(displayPath('Sketch.excalidraw')).toBe('Sketch');
+  });
+});
+
+describe('pick lists of files', () => {
+  it('label the files without their extension', () => {
+    expect(pickItems(['A/Plan.md', 'Map.canvas', 'Docs/Report.docx'])).toEqual([
+      { value: 'A/Plan.md', label: 'A/Plan' },
+      { value: 'Map.canvas', label: 'Map' },
+      { value: 'Docs/Report.docx', label: 'Docs/Report.docx' },
+    ]);
+  });
+
+  it('show the whole path of files that would look alike', () => {
+    expect(
+      pickItems(['Plan.excalidraw', 'Plan.marp', 'Plan.pdf', 'Plan.png', 'Other.png']),
+    ).toEqual([
+      { value: 'Plan.excalidraw', label: 'Plan.excalidraw' },
+      { value: 'Plan.marp', label: 'Plan.marp' },
+      { value: 'Plan.pdf', label: 'Plan.pdf' },
+      { value: 'Plan.png', label: 'Plan.png' },
+      { value: 'Other.png', label: 'Other' },
+    ]);
+    expect(pickItems(['pics/dot.png', 'pics/DOT.svg', 'dot.png'])).toEqual([
+      { value: 'pics/dot.png', label: 'pics/dot.png' },
+      { value: 'pics/DOT.svg', label: 'pics/DOT.svg' },
+      { value: 'dot.png', label: 'dot' },
+    ]);
   });
 });

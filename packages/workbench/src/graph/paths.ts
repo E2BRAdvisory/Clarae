@@ -1,6 +1,8 @@
 // The graph is not a file: its tab uses a pseudo path in the workspace layout, so it is
 // persisted in .clarae/workspace.json like any other tab. "graph://global" is the whole vault,
 // "graph://local/<note path>" the neighbourhood of one note.
+import { displayName } from '../embeds/media';
+
 const GLOBAL = 'graph://global';
 const LOCAL = 'graph://local/';
 
@@ -26,6 +28,6 @@ export function graphCenter(path: string): string | null {
 export function graphTitle(path: string): { key: string; name: string } {
   const c = graphCenter(path);
   if (c === null) return { key: 'graph.title', name: '' };
-  const base = c.slice(c.lastIndexOf('/') + 1).replace(LINKED, '');
+  const base = displayName(c);
   return { key: 'graph.localTitle', name: base };
 }

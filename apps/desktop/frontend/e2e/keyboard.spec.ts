@@ -1,4 +1,4 @@
-import { expect, test, openVault } from './support';
+import { expect, test, openVault, listVaultFiles } from './support';
 
 test('sidebar tabs use a roving tabindex and arrow keys', async ({ page }) => {
   await openVault(page);
@@ -74,6 +74,45 @@ test('F2 renames and the context-menu key opens a keyboard-navigable menu', asyn
   await page.keyboard.press('Escape');
   await expect(page.locator('#dialog-input')).toHaveCount(0);
   await expect(alpha).toBeFocused();
+});
+
+test('F2 shows a file without its extension and the rename keeps it', async ({ page }) => {
+  await openVault(page, {
+    'Sketch.excalidraw': JSON.stringify({ type: 'excalidraw', version: 2, elements: [] }),
+    'Folder/Plan.md': '# Plan',
+  });
+  const input = page.locator('#dialog-input');
+  // A drawing: the explorer shows "Sketch", the prompt offers "Sketch", the file stays a drawing.
+  const sketch = page.getByRole('tree').getByRole('treeitem', { name: /Sketch/ });
+  await expect(sketch).not.toContainText('.excalidraw');
+  await sketch.focus();
+  await page.keyboard.press('F2');
+  await expect(input).toHaveValue('Sketch');
+  await input.fill('Diagram');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => listVaultFiles(page)).toContain('Diagram.excalidraw');
+  expect(await listVaultFiles(page)).not.toContain('Sketch.excalidraw');
+  await expect(page.locator('.tree .node', { hasText: 'Diagram' })).toBeVisible();
+  // Typing the extension again does not double it.
+  await page
+    .getByRole('tree')
+    .getByRole('treeitem', { name: /Diagram/ })
+    .focus();
+  await page.keyboard.press('F2');
+  await expect(input).toHaveValue('Diagram');
+  await input.fill('Drawing.excalidraw');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => listVaultFiles(page)).toContain('Drawing.excalidraw');
+  // An empty name does nothing.
+  await page
+    .getByRole('tree')
+    .getByRole('treeitem', { name: /Drawing/ })
+    .focus();
+  await page.keyboard.press('F2');
+  await input.fill('   ');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveCount(0);
+  expect(await listVaultFiles(page)).toContain('Drawing.excalidraw');
 });
 
 test('open tabs: arrow keys move between tabs, Delete closes', async ({ page }) => {

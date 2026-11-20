@@ -14,7 +14,7 @@ import type { LinkSpec } from '../editor/types';
 import type { LivePreviewContext } from '../editor/context';
 import { useNoteDocument } from '../editor/useNoteDocument';
 import { renderEmbedInto } from '../embeds/hydrate';
-import { classify } from '../embeds/media';
+import { classify, displayPath } from '../embeds/media';
 import { renderMath, renderMermaid } from '../embeds/typeset';
 import { renderQueryInto } from '../query/env';
 import { attachmentDir } from '../settings/locations';
@@ -390,7 +390,7 @@ function MarkdownNote({
     >
       <div className="note-header">
         <span className="path" title={path}>
-          {path.replace(/\.md$/, '')}
+          {displayPath(path)}
         </span>
         <span className={`save-state ${doc.save}`} aria-live="polite">
           {saveLabel}

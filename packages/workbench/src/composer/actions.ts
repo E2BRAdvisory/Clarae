@@ -9,6 +9,7 @@ import { useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
 import { activeTab } from '../workspace/layout';
 import { isConfigPath, isTrashPath } from '../platform/vaultPaths';
+import { displayPath } from '../embeds/media';
 
 const stem = (p: string): string => p.replace(/^.*\//, '').replace(/\.md$/, '');
 
@@ -34,7 +35,7 @@ export async function mergeActiveNote(): Promise<void> {
   );
   const target = await dialog.pick(
     i18next.t('composer.mergePick', { name: stem(source) }),
-    candidates.map((e) => ({ value: e.path, label: e.path.replace(/\.md$/, '') })),
+    candidates.map((e) => ({ value: e.path, label: displayPath(e.path) })),
   );
   if (!target) return;
   // Pending edits of the source must be on disk before they are copied.

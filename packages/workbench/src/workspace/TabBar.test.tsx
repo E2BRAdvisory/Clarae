@@ -78,16 +78,25 @@ describe('tab labels', () => {
     useSettings.getState().reset();
   });
 
-  it('drop .md and .webapp, and keep any other extension', () => {
+  it('drop the extension of the files the application opens, and keep any other', () => {
     useAppStore.setState({
-      layout: layoutOf('Notes/a.md', 'Apps/GitHub.webapp', 'Apps/Road.WEBAPP', 'pic.png'),
+      layout: layoutOf(
+        'Notes/a.md',
+        'Apps/GitHub.webapp',
+        'Apps/Road.WEBAPP',
+        'pic.png',
+        'Draw.excalidraw',
+        'Report.docx',
+      ),
     });
     render(<TabBar pane={pane()} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'a',
       'GitHub',
       'Road',
-      'pic.png',
+      'pic',
+      'Draw',
+      'Report.docx',
     ]);
   });
 });

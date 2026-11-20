@@ -26,7 +26,7 @@ test('create notes, link them, see the backlink, rename with link update', async
   // Rename Second: the link in Untitled is rewritten.
   await page.locator('.tree .node', { hasText: 'Second' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Rename' }).click();
-  await page.locator('#dialog-input').fill('Renamed.md');
+  await page.locator('#dialog-input').fill('Renamed');
   await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'OK' }).click(); // "1 link(s) in 1 note(s) will be updated"
   await expect(page.locator('.tree .node', { hasText: 'Renamed' })).toBeVisible();

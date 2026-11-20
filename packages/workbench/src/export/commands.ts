@@ -10,6 +10,7 @@ import { dialog } from '../ui/dialogs';
 import { printCss, standaloneCss } from './css';
 import { buildHtmlDocument } from './html';
 import { renderExportBody, type ExportBody } from './render';
+import { displayName } from '../embeds/media';
 
 const t = (key: string, opts: Record<string, unknown> = {}): string =>
   i18next.t(`exportNote.${key}`, opts);
@@ -29,7 +30,7 @@ async function currentNote(): Promise<{ vaultId: string; path: string; content: 
   return { vaultId: st.vault.id, path, content: read.content };
 }
 
-const title = (path: string): string => (path.split('/').pop() ?? path).replace(/\.md$/i, '');
+const title = (path: string): string => displayName(path);
 
 async function render(): Promise<{ path: string; vaultId: string; body: ExportBody } | null> {
   const note = await currentNote();

@@ -26,7 +26,7 @@ describe('canvas preview', () => {
     expect(svg.startsWith('<svg')).toBe(true);
     expect(svg).toContain('Hello &lt;b&gt;world&lt;/b&gt;');
     expect(svg).not.toContain('<b>');
-    expect(svg).toContain('Plan.md');
+    expect(svg).toContain('>Plan</text>');
     expect(svg).toContain('uses');
     expect(svg).toContain('marker-end');
     expect(svg).toContain('#44cf6e'); // preset color 4

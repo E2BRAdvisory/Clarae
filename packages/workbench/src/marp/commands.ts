@@ -15,6 +15,7 @@ import { importWithRetry } from '../ui/lazyView';
 import { activeTab } from '../workspace/layout';
 import { exportAssets } from './assets';
 import { useMarpShow } from './showStore';
+import { displayName } from '../embeds/media';
 
 /** The first content of a new presentation: Marp on, the default theme, page numbers, two slides. */
 export function newDeckContent(title: string): string {
@@ -23,7 +24,7 @@ export function newDeckContent(title: string): string {
 
 export const isDeck = (path: string): boolean => /\.marp$/i.test(path);
 
-const titleOf = (path: string): string => (path.split('/').pop() ?? path).replace(/\.marp$/i, '');
+const titleOf = (path: string): string => displayName(path);
 
 /** Creates a presentation next to the active file (or in dir) and opens it. */
 export async function newPresentation(opts: { dir?: string } = {}): Promise<string> {

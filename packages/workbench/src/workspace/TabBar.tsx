@@ -8,14 +8,13 @@ import { useRecovery } from '../recovery/store';
 import { Icon } from '../shell/icons';
 import type { Pane, Tab } from './layout';
 import { DRAG_TAB } from '../util/dragTypes';
-import { isWebapp, nameOf } from '../webapp/model';
+import { displayName } from '../embeds/media';
 
 /** Whether closing would remove at least one of these tabs (locked ones stay). */
 const closable = (tabs: Tab[]): boolean => tabs.some((x) => !x.pinned);
 
-/** The tab's text: the file's name, without `.md`, and without `.webapp` for an application. */
-const label = (path: string): string =>
-  isWebapp(path) ? nameOf(path) : (path.split('/').pop() ?? path).replace(/\.md$/, '');
+/** The tab's text: the file's name, without the extension of a file the application opens. */
+const label = (path: string): string => displayName(path);
 
 export function TabBar({ pane }: { pane: Pane }) {
   const { t } = useTranslation();

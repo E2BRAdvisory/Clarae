@@ -20,7 +20,7 @@ const tabTitles = (page: Page) => page.locator('.tabbar .tab');
 test('a picture opens in a tab', async ({ page }) => {
   await openVault(page, { 'Readme.md': '# Readme\n' }, { 'Media/photo.png': PNG });
   await page.locator('.tree .node', { hasText: 'Media' }).click();
-  await page.locator('.tree .node', { hasText: 'photo.png' }).click();
+  await page.locator('.tree .node', { hasText: 'photo' }).click();
   await expect(page.locator('.attachment-view img')).toBeVisible();
 });
 
