@@ -25,10 +25,6 @@ const (
 var (
 	errNoClientDLLFound = errors.New("no webview2 found")
 
-	kChannelName = [kNumChannels]string{
-		"", "beta", "dev", "canary", // "internal"
-	}
-
 	kChannelUuid = [kNumChannels]string{
 		"{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
 		"{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",
@@ -39,25 +35,35 @@ var (
 	minimumCompatibleVersion, _ = parseVersion(kMinimumCompatibleVersion)
 )
 
+// RuntimeInstalled says whether a runtime of WebView2 that the loader can use is installed: nil, or an error that
+// wraps ErrNoRuntime. It is the check that CreateCoreWebView2EnvironmentWithOptions makes first, made alone (no
+// environment, no library loaded), so a caller can know early that nothing will work.
+func RuntimeInstalled() error {
+	_, err := findInstalledClientDll()
+	return err
+}
+
+// ErrNoRuntime is what RuntimeInstalled returns (and CreateCoreWebView2EnvironmentWithOptions, before it loads anything)
+// when no runtime of WebView2 is installed, or the one that is installed is older than the loader supports.
+var ErrNoRuntime = errNoClientDLLFound
+
 // findInstalledClientDll looks for the runtime of WebView2 that is installed, by channel (the stable one
 // first), for the machine and then for the user.
-func findInstalledClientDll() (clientPath string, version *version, err error) {
+func findInstalledClientDll() (string, error) {
 	for channel := range kNumChannels {
 		key := kInstallKeyPath + kChannelUuid[channel]
 		for _, checkSystem := range []bool{true, false} {
-			clientPath, version, err := findInstalledClientDllForChannel(key, checkSystem)
+			clientPath, _, err := findInstalledClientDllForChannel(key, checkSystem)
 			if errors.Is(err, errNoClientDLLFound) {
 				continue
 			}
 			if err != nil {
-				return "", nil, err
+				return "", err
 			}
-
-			version.channel = kChannelName[channel]
-			return clientPath, version, nil
+			return clientPath, nil
 		}
 	}
-	return "", nil, errNoClientDLLFound
+	return "", errNoClientDLLFound
 }
 
 func findInstalledClientDllForChannel(subKey string, system bool) (clientPath string, clientVersion *version, err error) {

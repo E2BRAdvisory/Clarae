@@ -23,6 +23,12 @@ vars:
   WASM_OUT: '{{.WASM_OUT | default "build/wasm"}}'
   IMAGE: '{{.IMAGE | default "ghcr.io/e2br/clarae-cloud"}}'
   PLATFORMS: '{{.PLATFORMS | default "linux/amd64,linux/arm64"}}'
+  # The Linux build of the desktop is checked from any system in a container (scripts/linux-vet): the architecture of
+  # the release (amd64), the image tag follows it. `task vet-linux LINUX_ARCH=arm64` runs the native one on an Apple
+  # silicon Mac (much faster).
+  LINUX_ARCH: '{{.LINUX_ARCH | default "amd64"}}'
+  LINUX_IMAGE: 'clarae-linux-vet:go1.27-{{.LINUX_ARCH}}'
+  LINUX_DOCKER: 'docker run --rm --init --platform linux/{{.LINUX_ARCH}} -v {{.ROOT_DIR}}:/src:ro -v clarae-linux-gobuild-{{.LINUX_ARCH}}:/root/.cache/go-build -v clarae-linux-gomod:/go/pkg/mod'
   PERF_NOTES: '{{.PERF_NOTES | default "50000"}}'
   PERF_DIR: '{{.PERF_DIR | default (print .ROOT_DIR "/.perf")}}'
   PERF_OUT: '{{.PERF_OUT | default (print .PERF_DIR "/results-" .PERF_NOTES ".json")}}'
@@ -198,6 +204,32 @@ tasks:
           golangci-lint run ./... || exit 1
         done
 
+  linux-image:
+    internal: true
+    silent: true
+    cmds:
+      - docker info >/dev/null 2>&1 || { echo "Docker is not running (needed for the Linux checks)" >&2; exit 1; }
+      - docker build --quiet --platform linux/{{.LINUX_ARCH}} -t {{.LINUX_IMAGE}} scripts/linux-vet >/dev/null
+
+  # The Linux code of the desktop (the driver of the native web views: internal/shell/nativeview/driver_linux.go and
+  # guest_linux.c, and Wails on GTK3 under it) is never compiled by the tasks above on another system, and uses cgo: it is
+  # built in a container with Go and the libraries the release links (libgtk-3-dev, libwebkit2gtk-4.1-dev). go vet (which also
+  # type-checks the tests), the compilation of the tests of internal/shell, internal/app and internal/webview without
+  # running them, and the C file with -Wall -Wextra. Needs Docker; the first run builds the image (a few minutes).
+  vet-linux:
+    desc: go vet, test compile and C warnings of apps/desktop for linux with cgo and the gtk3 tag, in a Docker container (ADR-0062)
+    silent: true
+    deps: [frontend-placeholder, linux-image]
+    cmds:
+      - '{{.LINUX_DOCKER}} {{.LINUX_IMAGE}} bash /src/scripts/linux-vet/vet.sh'
+
+  test-nativeview-linux:
+    desc: 'By hand, in Docker: the Linux driver of the native web views against a real window under Xvfb (M22; not part of `task ci`). RUN=<regexp> picks tests, NO_MENU=1 runs without a menu bar'
+    silent: true
+    deps: [frontend-placeholder, linux-image]
+    cmds:
+      - '{{.LINUX_DOCKER}} --cap-add SYS_ADMIN --cap-add NET_ADMIN --security-opt seccomp=unconfined --security-opt systempaths=unconfined -e RUN="{{.RUN}}" -e CLARAE_NATIVEVIEW_CFLAGS="{{.CLARAE_NATIVEVIEW_CFLAGS}}" -e CLARAE_LIVE_NO_MENU="{{.NO_MENU}}" {{.LINUX_IMAGE}} bash /src/scripts/linux-vet/live.sh'
+
   lint-ts:
     desc: ESLint + Prettier
     cmds:
@@ -353,6 +385,7 @@ tasks:
     cmds:
       - task: lint
       - task: vet-windows
+      - task: vet-linux
       - task: typecheck
       - task: vuln
       - task: wailsjs

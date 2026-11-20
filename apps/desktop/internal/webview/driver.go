@@ -1,6 +1,6 @@
 // Package webview is the core of the "applications" of a vault (M18, track E): a web page that opens
 // in a browser embedded in a tab. The page runs in a native web view that the platform adds as a
-// child of the window of the application (internal/shell/nativeview, macOS only); this package holds
+// child of the window of the application (internal/shell/nativeview: macOS, Windows and Linux); this package holds
 // everything that does not depend on the platform and builds to WebAssembly like the rest of the
 // core:
 //
@@ -14,6 +14,17 @@
 // and a certificate error is a failed load, never a choice. The core never opens a view of its own
 // accord: the UI asks for each one (a tab restored with the layout loads nothing until it is shown).
 package webview
+
+import "errors"
+
+// ErrPlatformUnavailable is what Driver.Create returns when the platform cannot show native web views at all, as
+// opposed to failing for one view: the runtime of the web engine is missing or too old, the toolkit has a
+// hierarchy the driver cannot graft onto. The Manager answers it with ErrUnavailable (the UI then opens the page in
+// the system browser) and, if no view was ever made in this session, takes the driver as unavailable for the
+// rest of the session: Available() is false, so the capability embeddedBrowser goes off and nothing tries again
+// at every tab. A driver wraps it (fmt.Errorf("%w: ...", webview.ErrPlatformUnavailable)) and keeps the cause in
+// the message.
+var ErrPlatformUnavailable = errors.New("the platform cannot show native web views")
 
 // Bounds is a rectangle of the window, normalised: every value is a fraction (0..1) of the content
 // view of the window, with the origin at its top-left corner. The content view is what the web view
@@ -87,13 +98,48 @@ type Event struct {
 // the page. Without a policy a driver refuses everything.
 type Policy func(id, rawURL string, mainFrame bool) (allow bool)
 
+// FrameKind says which frame a navigation is for.
+type FrameKind int
+
+const (
+	// FrameMain: the top frame of the page.
+	FrameMain FrameKind = iota + 1
+	// FrameSub: a frame inside the page.
+	FrameSub
+	// FrameUnknown: the platform does not say (WebKitGTK gives the same decision for the top frame and for a frame
+	// inside the page). The Manager judges it by the rules of the top frame, which are the stricter ones, without
+	// letting it change what it knows of the top frame (it is told that by MainFrameNotice) and without calling it a
+	// navigation of the top frame in its events.
+	FrameUnknown
+)
+
+// FramePolicy is the Policy of a driver that cannot always tell the frame (FrameAwareDriver). redirect says that the
+// navigation is the next step of one that the server redirected: the Manager then does not take the address the page is
+// on for granted (a chain that left a private host through a public one must not come back to the private network by
+// redirect). Like Policy it is asked synchronously, on the thread of the toolkit, and must return at once.
+type FramePolicy func(id, rawURL string, frame FrameKind, redirect bool) (allow bool)
+
+// MainFrameNotice tells the Manager that the top frame of a view has started to load an address that the policy
+// allowed (a load of the top frame started or was redirected). It is how the Manager learns where the top frame is when
+// the driver could not say which frame a decision was for. Like Policy it is called synchronously, on the thread of
+// the toolkit, and returns at once.
+type MainFrameNotice func(id, rawURL string)
+
+// FrameAwareDriver is a Driver that reports FrameUnknown: the Manager gives it FramePolicy and MainFrameNotice (it
+// still gives it the Policy, which such a driver may use for the frames it can tell).
+type FrameAwareDriver interface {
+	Driver
+	SetFramePolicy(p FramePolicy, onMainFrame MainFrameNotice)
+}
+
 // Driver is what a platform provides: a native web view as a child of the window of the
 // application. Every method may be called from any goroutine; a driver moves the work to the
 // thread of its toolkit. A view is identified by the id the Manager chooses, unique in the process.
 type Driver interface {
 	// Create adds a guest above the web view of the application. dataStore is the stable
 	// identifier (a UUID) of its session data: guests that share it share cookies and storage.
-	// The URL has been through ValidateURL.
+	// The URL has been through ValidateURL. An error that wraps ErrPlatformUnavailable says the platform
+	// cannot do this for any view (see there); any other error is the failure of this view.
 	Create(id, rawURL string, b Bounds, dataStore string) error
 	SetBounds(id string, b Bounds) error
 	SetVisible(id string, visible bool) error

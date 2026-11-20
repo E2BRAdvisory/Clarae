@@ -458,6 +458,11 @@ func (missingError) Error() string {
 	return "the WebView2 runtime is too old for this (it needs 1.0.2210.55 or later: update it)"
 }
 
+// Is makes a runtime that is too old a platform that cannot show views (webview.ErrPlatformUnavailable): the Manager
+// answers "unavailable" and the page opens in the system browser, for this view and, if none was ever made, for the
+// rest of the session.
+func (missingError) Is(target error) bool { return target == webview.ErrPlatformUnavailable }
+
 var errMissing error = missingError{}
 
 // ---- what a handler does ----------------------------------------------------------------------

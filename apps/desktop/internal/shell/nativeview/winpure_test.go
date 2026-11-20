@@ -11,22 +11,6 @@ import (
 	"clarae/apps/desktop/internal/webview"
 )
 
-func TestExperimentalSwitch(t *testing.T) {
-	// Only the exact value "1" turns the driver on: nothing a user may have in the environment by
-	// chance (an empty value, "true", "yes", "0", spaces) does.
-	for _, v := range []string{"", "0", "true", "TRUE", "yes", "on", " 1", "1 ", "01", "2"} {
-		if experimentalOn(v) {
-			t.Errorf("experimentalOn(%q) = true", v)
-		}
-	}
-	if !experimentalOn("1") {
-		t.Error(`experimentalOn("1") = false`)
-	}
-	if experimentalEnv != "CLARAE_WEBVIEW2_EXPERIMENTAL" {
-		t.Errorf("the name of the switch changed: %s (guides and the matrix of tests name it)", experimentalEnv)
-	}
-}
-
 func TestPhysicalRect(t *testing.T) {
 	tests := []struct {
 		name string

@@ -358,6 +358,78 @@ func TestDriverFailures(t *testing.T) {
 	}
 }
 
+// A platform that cannot show views at all (the runtime of the web engine is missing, the toolkit is not the
+// one the driver grafts onto) says so with ErrPlatformUnavailable: the first Open is answered "unavailable", and the
+// Manager is unavailable for the rest of the session, so the capability goes off and no later tab tries again.
+func TestAPlatformThatCannotShowViewsIsUnavailableForTheSession(t *testing.T) {
+	e := newEnv(t)
+	if !e.m.Available() {
+		t.Fatal("a Manager with a driver is not available")
+	}
+	e.f.Fail(fmt.Errorf("%w: the WebView2 runtime is missing", ErrPlatformUnavailable))
+	_, err := e.m.Open("v1", "https://example.com/", full)
+	if !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrDriver) {
+		t.Fatalf("Open on a platform that cannot: %v, want ErrUnavailable and not ErrDriver", err)
+	}
+	if !strings.Contains(err.Error(), "WebView2 runtime is missing") {
+		t.Errorf("the cause is lost: %v", err)
+	}
+	if e.m.Available() || e.m.PersistentData() {
+		t.Fatal("the Manager is still available after the platform said it cannot")
+	}
+	if e.m.Count("") != 0 {
+		t.Fatal("a view that was not made is counted")
+	}
+	before := len(e.f.Calls())
+	if _, err := e.m.Open("v1", "https://example.com/", full); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("the next Open: %v", err)
+	}
+	if err := e.m.ReserveKeys([]string{"cmd+w"}); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("ReserveKeys: %v", err)
+	}
+	if err := e.m.ClearData("v1"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("ClearData: %v", err)
+	}
+	if after := len(e.f.Calls()); after != before {
+		t.Fatalf("the driver was called again after it said it cannot: %v", e.f.Calls()[before:])
+	}
+	e.m.Shutdown() // the driver still gets CloseAll: whatever it grafted is let go
+	if e.f.CloseAllCalls() != 1 {
+		t.Errorf("CloseAll calls = %d, want 1", e.f.CloseAllCalls())
+	}
+}
+
+// Once a view was made the platform can show views: a later "cannot" is the failure of that call, not the end of the
+// session (the views that run keep running and the UI is told "unavailable" for that tab only).
+func TestAPlatformFailureAfterAViewWasMadeDoesNotEndTheSession(t *testing.T) {
+	e := newEnv(t)
+	id := e.open("v1", "https://example.com/")
+	e.f.Fail(fmt.Errorf("%w: the second environment", ErrPlatformUnavailable))
+	if _, err := e.m.Open("v1", "https://example.org/", full); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Open: %v", err)
+	}
+	if !e.m.Available() {
+		t.Fatal("the session went to the fallback although a view runs")
+	}
+	if err := e.m.Reload("v1", id); err != nil {
+		t.Fatalf("the view that runs: %v", err)
+	}
+	e.open("v1", "https://example.net/")
+}
+
+// An ordinary failure of Create is the failure of that view: the Manager stays available and the next Open tries.
+func TestAnOrdinaryCreateFailureKeepsTheManagerAvailable(t *testing.T) {
+	e := newEnv(t)
+	e.f.Fail(errors.New("no window yet"))
+	if _, err := e.m.Open("v1", "https://example.com/", full); !errors.Is(err, ErrDriver) || errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Open: %v", err)
+	}
+	if !e.m.Available() {
+		t.Fatal("an ordinary failure made the Manager unavailable")
+	}
+	e.open("v1", "https://example.com/")
+}
+
 // Without a driver (a platform that has none, the browser) every call says so, and nothing is created.
 func TestNoDriver(t *testing.T) {
 	m := NewManager(Options{Logger: zerolog.Nop()})
@@ -534,6 +606,177 @@ func lastState(t *testing.T, r *recorder, id string) StatePayload {
 }
 
 // What the user navigates to by hand may be private, and from then on the page may go there by itself.
+// frameFake is a driver that cannot tell the frame of a navigation (WebKitGTK): it gets the frame-aware policy.
+type frameFake struct {
+	*Fake
+	policy FramePolicy
+	main   MainFrameNotice
+}
+
+func (f *frameFake) SetFramePolicy(p FramePolicy, n MainFrameNotice) { f.policy, f.main = p, n }
+
+var _ FrameAwareDriver = (*frameFake)(nil)
+
+func newFrameEnv(t *testing.T) (*Manager, *frameFake, *recorder) {
+	t.Helper()
+	f := &frameFake{Fake: NewFake()}
+	rec := &recorder{}
+	m := NewManager(Options{Driver: func() Driver { return f }, Emit: rec.emit, Logger: zerolog.Nop()})
+	t.Cleanup(m.Shutdown)
+	if _, err := m.Open("v1", "https://example.com/", full); err != nil { // makes the driver, which gets the policies
+		t.Fatal(err)
+	}
+	if f.policy == nil || f.main == nil {
+		t.Fatal("the frame-aware driver was not given its policy")
+	}
+	return m, f, rec
+}
+
+// blockedMark is a point in the events of refusals, after the ones that are queued have been delivered.
+func blockedMark(rec *recorder, m *Manager) int {
+	rec.settle(m)
+	return len(rec.named("webview:blocked"))
+}
+
+func blockedOf(rec *recorder, m *Manager, since int) []BlockedPayload {
+	rec.settle(m)
+	var out []BlockedPayload
+	for _, p := range rec.named("webview:blocked")[since:] {
+		out = append(out, p.(BlockedPayload))
+	}
+	return out
+}
+
+// A driver that cannot tell the frame of a navigation (WebKitGTK) gets the rules of the top frame for every navigation,
+// but a navigation it cannot place never decides where the top frame is: that is learned when the top frame starts to
+// load. Otherwise a page on a private host that embeds a public frame would lose its right to link to its neighbours, and
+// a private frame on a public page could stand for the page.
+func TestUnknownFrameFollowsTheRulesOfTheTopFrameWithoutMovingIt(t *testing.T) {
+	m, f, rec := newFrameEnv(t)
+	id := f.Views()[0].ID
+	// A private page.
+	if err := m.Navigate("v1", id, "http://localhost:3000/"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.policy(id, "http://localhost:3000/", FrameMain, false) {
+		t.Fatal("the user's own address was refused")
+	}
+	// It embeds a public frame, and then links to a private neighbour: the frame did not move the page.
+	if !f.policy(id, "https://widgets.example.net/embed", FrameUnknown, false) {
+		t.Fatal("a public frame in a private page was refused")
+	}
+	if !f.policy(id, "http://192.168.0.9/", FrameUnknown, false) {
+		t.Fatal("a private page lost its right to a private neighbour because it embeds a public frame")
+	}
+	// The top frame really goes to a public site: from now on the page is public and the private network is out.
+	f.main(id, "https://accounts.example.net/login")
+	before := blockedMark(rec, m)
+	if f.policy(id, "http://192.168.0.9/", FrameUnknown, false) {
+		t.Fatal("a public page reached the private network")
+	}
+	got := blockedOf(rec, m, before)
+	if len(got) != 1 || got[0].Reason != BlockPrivateNetwork || got[0].MainFrame {
+		t.Fatalf("event of the refused navigation: %+v, want a private-network refusal that is not called a navigation of the top frame", got)
+	}
+	// A private frame on a public page does not make the page private: the next navigation is still judged from the public one.
+	if !f.policy(id, "https://accounts.example.net/next", FrameUnknown, false) {
+		t.Fatal("a public address was refused")
+	}
+	if f.policy(id, "http://localhost:9999/", FrameUnknown, false) {
+		t.Fatal("a private frame on a public page was let through")
+	}
+	if f.policy(id, "http://localhost:9999/", FrameUnknown, false) {
+		t.Fatal("refused once, let through the second time")
+	}
+	// Schemes: the rules of the top frame, reported as a navigation that is not known to be the top frame's.
+	before = blockedMark(rec, m)
+	for _, u := range []string{"wails://wails/", "file:///etc/hosts", "clarae://auth/callback?code=1"} {
+		if f.policy(id, u, FrameUnknown, false) {
+			t.Errorf("%s was let through", u)
+		}
+	}
+	for _, b := range blockedOf(rec, m, before) {
+		if b.Reason != BlockScheme || b.MainFrame {
+			t.Errorf("event %+v, want a scheme refusal not called a navigation of the top frame", b)
+		}
+	}
+	// A notice about something that is not an address of the top frame changes nothing.
+	f.main(id, "about:blank")
+	f.main("wv-nobody", "http://localhost/")
+	if f.policy(id, "http://192.168.0.9/", FrameUnknown, false) {
+		t.Fatal("about:blank made the page private")
+	}
+	// Frames the platform can tell keep their own rules, and the notice never opens the private network.
+	if !f.policy(id, "about:blank", FrameSub, false) || !f.policy(id, "data:text/html,x", FrameSub, false) || f.policy(id, "file:///etc/hosts", FrameSub, false) {
+		t.Fatal("the rules of a frame inside the page changed")
+	}
+}
+
+// The top frame is told where it is when its address changes, which is after a redirect is followed: a page on a private
+// host that links to a public site that redirects to the private network must not get there because the notice has not
+// come yet. A redirect that stays in the private network, and a redirect after a notice, are what they always were.
+func TestRedirectOfUnknownFrameDoesNotReturnToThePrivateNetwork(t *testing.T) {
+	m, f, rec := newFrameEnv(t)
+	id := f.Views()[0].ID
+	if err := m.Navigate("v1", id, "http://localhost:3000/"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.policy(id, "http://localhost:3000/", FrameMain, false) {
+		t.Fatal("the user's address was refused")
+	}
+	// The private page links to a public site (no notice yet), which redirects to a private address.
+	if !f.policy(id, "https://tracker.example.net/go", FrameUnknown, false) {
+		t.Fatal("a link to a public site was refused")
+	}
+	before := blockedMark(rec, m)
+	if f.policy(id, "http://192.168.0.9/admin", FrameUnknown, true) {
+		t.Fatal("a public site took the page back to the private network by a redirect")
+	}
+	if got := blockedOf(rec, m, before); len(got) != 1 || got[0].Reason != BlockPrivateNetwork || got[0].MainFrame {
+		t.Fatalf("event of the refused redirect: %+v", got)
+	}
+	// The same hop as a link of the page (not a redirect) is what the page may do.
+	if !f.policy(id, "http://192.168.0.9/admin", FrameUnknown, false) {
+		t.Fatal("a private page lost its right to a private neighbour")
+	}
+	// A redirect inside the private network, and one that follows a private link, stay allowed.
+	if !f.policy(id, "http://192.168.0.9/login", FrameUnknown, true) {
+		t.Fatal("a redirect inside the private network was refused")
+	}
+	// After the top frame has said where it is, the redirect is judged from there.
+	if !f.policy(id, "https://tracker.example.net/go2", FrameUnknown, false) {
+		t.Fatal("a link to a public site was refused")
+	}
+	f.main(id, "http://192.168.0.9/") // the page that the user stayed on (a frame went public)
+	if !f.policy(id, "http://192.168.0.10/", FrameUnknown, true) {
+		t.Fatal("after the notice the page is private again and its redirect to a neighbour is allowed")
+	}
+	// A public page's redirect to the private network is refused as ever.
+	f.main(id, "https://example.org/")
+	if f.policy(id, "http://192.168.0.9/", FrameUnknown, true) || f.policy(id, "http://192.168.0.9/", FrameUnknown, false) {
+		t.Fatal("a public page reached the private network")
+	}
+}
+
+// The top frame of a driver that tells the frame still decides where the page is, as before.
+func TestTopFrameStillMovesThePage(t *testing.T) {
+	m, f, _ := newFrameEnv(t)
+	id := f.Views()[0].ID
+	if f.policy(id, "http://localhost:3000/", FrameMain, false) {
+		t.Fatal("a public page took the top frame to a private host by itself")
+	}
+	_ = m
+	if err := m.Navigate("v1", id, "http://localhost:3000/"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.policy(id, "http://localhost:3000/", FrameMain, false) || !f.policy(id, "http://192.168.0.9/", FrameMain, false) {
+		t.Fatal("a page the user pointed at a private host cannot stay in the private network")
+	}
+	if !f.policy(id, "https://example.org/", FrameMain, false) || f.policy(id, "http://192.168.0.9/", FrameMain, false) {
+		t.Fatal("after going public the page may still go private")
+	}
+}
+
 func TestNavigateByTheUserWidensThePolicy(t *testing.T) {
 	e := newEnv(t)
 	id := e.open("v1", "https://example.com/")

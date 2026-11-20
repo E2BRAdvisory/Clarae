@@ -4,9 +4,10 @@
 package nativeview
 
 // The driver of Windows: a WebView2 controller added to the window of the application, beside the one
-// Wails made for the application itself. It is written and compiled; it has never run on a Windows
-// machine, and for that reason New returns nil unless the environment says otherwise (see
-// experimentalEnv in winpure.go). On macOS the same job is guest_darwin.m.
+// Wails made for the application itself. It is on by default (ADR-0062) and falls back to the system browser when
+// the runtime of WebView2 is missing or too old: New returns nil without a runtime, and a Create that finds the
+// platform unable returns webview.ErrPlatformUnavailable. CLARAE_WEBVIEW=off turns it off (switch.go). On macOS the
+// same job is guest_darwin.m.
 //
 // Technique. Every data store (every vault) has its own WebView2 environment with its own user data
 // folder, <data dir>\webapps\<store>, hence its own browser process: nothing is shared with the web view
@@ -40,10 +41,12 @@ import (
 	"clarae/apps/desktop/internal/webview"
 )
 
-// Supported says whether this build has a driver: only with the switch of experimentalEnv. Once a
-// Windows machine has proved the driver this becomes true, the switch goes, and capabilities.go lists
-// "windows" (see the matrix of manual tests).
-var Supported = experimentalOn(os.Getenv(experimentalEnv))
+// Supported says whether this build has a driver: it does. Whether the machine can run it, and whether the environment
+// turned it off (CLARAE_WEBVIEW=off, see switch.go), is what New and Create answer (no runtime of WebView2 gives no
+// driver, and the page opens in the system browser). It stays true when the views are off so that the sweep of the
+// session data (webviews_sweep.go) does not forget, at a start where they are off, the data of the vaults that it
+// could not delete.
+const Supported = true
 
 const (
 	// eventBuffer is the room for reports that Go has not read yet; a report that finds the queue full is
@@ -59,19 +62,32 @@ const (
 	activityInterval = 5 * time.Second
 )
 
+// runtimeMissing is nil when a runtime of WebView2 is installed. The answer is kept for the session: a runtime that
+// is installed while the application runs is found at the next start, as the sessions of the applications are not
+// the kind of thing that appears midway.
+var runtimeMissing = sync.OnceValue(loader.RuntimeInstalled)
+
 var (
 	errGuestClosed = errors.New("the view was closed while it was being made")
 	errQuitting    = errors.New("the application is quitting")
 )
 
 // New returns the driver of the native web views of the window, or nil: while the driver is off
-// (Supported), when Wails was not given the data folder the sessions are kept in, and before the window
-// exists. The core then answers "unavailable" and the page of an application opens in the system browser.
-func New(win *application.WebviewWindow) webview.Driver {
-	if !Supported || win == nil {
+// (CLARAE_WEBVIEW=off), when no runtime of WebView2 is installed, when there is no data folder to keep the sessions in, and
+// before the window exists. The core then answers "unavailable" and the page of an application opens in the system
+// browser. dataDir is the data directory of the application; empty, the folder is derived from the one Wails was
+// given for its own web view.
+func New(win *application.WebviewWindow, dataDir string) webview.Driver {
+	if win == nil || !enabledByEnvironment() {
 		return nil
 	}
-	root := webappsRoot(application.Get().Config().Windows.WebviewUserDataPath)
+	if runtimeMissing() != nil {
+		return nil
+	}
+	root := webappsDir(dataDir)
+	if root == "" {
+		root = webappsRoot(application.Get().Config().Windows.WebviewUserDataPath)
+	}
 	if root == "" {
 		return nil
 	}
@@ -112,8 +128,9 @@ type driver struct {
 	relayout atomic.Bool   // a relayout is queued
 
 	// ---- UI thread ----
-	guests map[string]*guest
-	envs   map[string]*environment // by data store
+	environmentMade bool // an environment was made in this session: the runtime starts
+	guests          map[string]*guest
+	envs            map[string]*environment // by data store
 }
 
 var _ webview.Driver = (*driver)(nil)
@@ -295,10 +312,15 @@ func (d *driver) whenReady(e *environment, then func(error)) {
 		switch {
 		case hr < 0 || com == nil:
 			err = fmt.Errorf("the WebView2 environment could not be made: %w", webview2.Error(hr)) //nolint:gosec // an HRESULT is 32 bits
+			if !d.environmentMade {
+				// The first environment of the session failed: the runtime does not start here, whatever the vault.
+				err = fmt.Errorf("%w: %w", webview.ErrPlatformUnavailable, err)
+			}
 		default:
 			com.AddRef() // the loader releases its own when this returns
 			e.com = (*webview2.ICoreWebView2Environment)(unsafe.Pointer(com))
 			e.ready = true
+			d.environmentMade = true
 		}
 		d.environmentDone(e, err)
 	}
@@ -306,7 +328,8 @@ func (d *driver) whenReady(e *environment, then func(error)) {
 	// second environment on a folder with other options fails (0x8007139F), and no other kind of
 	// environment shares our folders.
 	if err := loader.CreateCoreWebView2EnvironmentWithOptions(h, loader.WithUserDataFolder(e.folder)); err != nil {
-		d.environmentDone(e, fmt.Errorf("WebView2 is not available: %w", err))
+		// No runtime, or one whose library does not load: nothing will work, for any view.
+		d.environmentDone(e, fmt.Errorf("%w: WebView2 is not available: %w", webview.ErrPlatformUnavailable, err))
 	}
 }
 

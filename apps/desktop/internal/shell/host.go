@@ -41,6 +41,9 @@ type Host struct {
 	waiting []dialog // error dialogs asked before that
 	// views are the native web views of the window, made on first use; nil on a system with no driver.
 	views webview.Driver
+	// dataDir is the data directory of the application, where the drivers that keep the sessions of the
+	// applications in a folder of their own put it (SetDataDir).
+	dataDir string
 
 	// showError displays an error dialog now (replaced in tests).
 	showError func(title, message string)
@@ -58,6 +61,13 @@ func NewHost() *Host {
 	h := &Host{}
 	h.showError = h.showErrorNow
 	return h
+}
+
+// SetDataDir tells the host the data directory of the application, before the first native web view is made.
+func (h *Host) SetDataDir(dir string) {
+	h.mu.Lock()
+	h.dataDir = dir
+	h.mu.Unlock()
 }
 
 // Attach gives the host the application and its main window.
@@ -88,7 +98,8 @@ func (h *Host) application() (*application.App, *application.WebviewWindow) {
 }
 
 // NativeViews returns the driver of the native web views of the window, or nil: on a system that has
-// none (anything but macOS with cgo), and before the window exists. It is not an app.Host method:
+// none (a build without cgo, Linux without GTK3), where the platform has no runtime for it, and before the window
+// exists. It is not an app.Host method:
 // a host either offers it or does not (app.NativeViewHost).
 func (h *Host) NativeViews() webview.Driver {
 	h.mu.Lock()
@@ -97,7 +108,7 @@ func (h *Host) NativeViews() webview.Driver {
 		return nil
 	}
 	if h.views == nil {
-		h.views = nativeview.New(h.win)
+		h.views = nativeview.New(h.win, h.dataDir)
 	}
 	return h.views
 }

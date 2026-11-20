@@ -307,7 +307,7 @@ func TestMain(m *testing.M) {
 				time.Sleep(100 * time.Millisecond)
 			}
 			time.Sleep(1200 * time.Millisecond) // the page of the window is loaded and shown
-			lv.drv = New(lv.win)
+			lv.drv = New(lv.win, "")
 			lv.hooks = TestHooks(lv.drv)
 			lv.mgr = webview.NewManager(webview.Options{
 				Driver:     func() webview.Driver { return lv.drv },

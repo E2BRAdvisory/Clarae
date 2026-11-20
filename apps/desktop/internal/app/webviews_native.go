@@ -4,7 +4,7 @@ package app
 
 // The browser inside the tab of an application (M18, track E). The desktop core owns a webview.Manager;
 // the driver behind it is the native web view of the platform, which only the desktop shell can give
-// (macOS today). The browser build has none (webviews_js.go): the page of an application opens in a
+// (macOS, Windows and Linux, ADR-0062). The browser build has none (webviews_js.go): the page of an application opens in a
 // tab of the browser, and the capability embeddedBrowser is false there.
 
 import (

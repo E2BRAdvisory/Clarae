@@ -83,6 +83,10 @@ type Manager struct {
 	seq      uint64
 	keys     []string
 	closed   bool // Shutdown ran: nothing opens any more
+	// broken: the driver said the platform cannot show views (ErrPlatformUnavailable) before it made any. For the
+	// rest of the session driver() answers nil, so Available() is false and no call reaches the driver again.
+	broken      bool
+	everCreated bool // the driver made a view in this session
 
 	// internal carries what the navigation policy reports to the pump (it must not send events on the thread of the toolkit).
 	internal chan Event
@@ -100,7 +104,11 @@ type view struct {
 	// curPrivate: the main frame is, as far as the policy has seen, on a private host. A page on a
 	// private host may go to other private hosts (a tool of the local network links its neighbours); a
 	// page on a public host that was reached from one may not.
-	curPrivate    bool
+	curPrivate bool
+	// pendingPublic: the last navigation of unknown frame that was let through went to a public host and the top frame
+	// has not said since that it is there (MainFrameNotice). It may be the top frame leaving a private host, or a frame
+	// inside the page: only a redirect that follows it needs the difference (see framePolicy).
+	pendingPublic bool
 	visible       bool
 	created       bool // the driver has made it
 	lastNewWindow time.Time
@@ -121,8 +129,8 @@ func (v *view) choose(info URLInfo) {
 // mayGoTo says whether a page of this view may take the main frame (or open a window) at an address
 // without the user having asked: public hosts always; a private one only when the user chose it or the
 // page is itself on a private host. Called with Manager.mu held.
-func (v *view) mayGoTo(info URLInfo) bool {
-	return !info.Private || v.curPrivate || v.userAddrs[info.Authority]
+func (v *view) mayGoTo(info URLInfo, onPrivate bool) bool {
+	return !info.Private || onPrivate || v.userAddrs[info.Authority]
 }
 
 // NewManager returns a Manager with no views.
@@ -142,8 +150,11 @@ func NewManager(o Options) *Manager {
 // no view is made before the policy that judges its first request.
 func (m *Manager) driver() Driver {
 	m.mu.Lock()
-	d, closed := m.drv, m.closed
+	d, closed, broken := m.drv, m.closed, m.broken
 	m.mu.Unlock()
+	if broken {
+		return nil
+	}
 	if d != nil || closed || m.opts.Driver == nil {
 		return d
 	}
@@ -160,6 +171,9 @@ func (m *Manager) driver() Driver {
 		return nil
 	}
 	d.SetPolicy(m.policy)
+	if fd, ok := d.(FrameAwareDriver); ok {
+		fd.SetFramePolicy(m.framePolicy, m.mainFrameStarted)
+	}
 	d.ReserveKeys(keys)
 	go m.pump(d.Events())
 	m.mu.Lock()
@@ -168,7 +182,8 @@ func (m *Manager) driver() Driver {
 	return d
 }
 
-// Available reports whether there is a driver: whether the platform can show a view.
+// Available reports whether there is a driver: whether the platform can show a view. It is false for the rest of
+// the session once the driver has said, before making any view, that the platform cannot (ErrPlatformUnavailable).
 func (m *Manager) Available() bool { return m.driver() != nil }
 
 // PersistentData reports whether the session data of the applications survive a restart.
@@ -228,20 +243,46 @@ func (m *Manager) Open(vaultID, rawURL string, b Bounds) (string, error) {
 	}
 	if err := d.Create(id, rawURL, b, store); err != nil {
 		m.forget(id)
+		if errors.Is(err, ErrPlatformUnavailable) {
+			m.markUnavailable(err)
+			return "", fmt.Errorf("%w: %w", ErrUnavailable, err)
+		}
 		return "", fmt.Errorf("%w: %w", ErrDriver, err)
 	}
 	m.mu.Lock()
 	cur, still := m.views[id]
-	if still {
+	broken := m.broken
+	if still && !broken {
 		cur.created = true
+		m.everCreated = true
 	}
 	m.mu.Unlock()
+	if broken { // another Open found the platform unable while this one was made: the session is on the fallback
+		m.forget(id)
+		_ = d.Close(id)
+		return "", ErrUnavailable
+	}
 	if !still { // the vault was closed, or the application is quitting, while the driver worked
 		_ = d.Close(id)
 		return "", ErrNotFound
 	}
 	m.log.Debug().Str("view", id).Str("url", describe(rawURL)).Msg("view opened")
 	return id, nil
+}
+
+// markUnavailable takes the driver as unavailable for the rest of the session, when the platform said it cannot show
+// views (Driver.Create returned ErrPlatformUnavailable) and nothing was ever shown: a driver that already runs views
+// keeps them (the failure is then one of that view, and the caller is told it as "unavailable" all the same).
+func (m *Manager) markUnavailable(cause error) {
+	m.mu.Lock()
+	first := !m.broken && !m.everCreated
+	if first {
+		m.broken = true
+	}
+	m.mu.Unlock()
+	if first {
+		m.log.Warn().Err(cause).Msg("native web views are not available on this system: applications open in the system browser")
+	}
 }
 
 // SetBounds moves and resizes a view.
@@ -539,7 +580,15 @@ func checkBounds(b Bounds) (Bounds, error) {
 // policy is the navigation policy the driver asks (see Policy). It runs on the thread of the
 // toolkit: it decides at once and leaves the event for the pump.
 func (m *Manager) policy(id, rawURL string, mainFrame bool) bool {
-	if !mainFrame {
+	if mainFrame {
+		return m.framePolicy(id, rawURL, FrameMain, false)
+	}
+	return m.framePolicy(id, rawURL, FrameSub, false)
+}
+
+// framePolicy is the policy for a navigation of a given kind of frame (see FramePolicy).
+func (m *Manager) framePolicy(id, rawURL string, frame FrameKind, redirect bool) bool {
+	if frame == FrameSub {
 		if _, ok := m.viewOf(id); !ok {
 			return false
 		}
@@ -550,6 +599,10 @@ func (m *Manager) policy(id, rawURL string, mainFrame bool) bool {
 		m.report(Event{ID: id, Kind: EvBlocked, URL: rawURL, Text: string(BlockScheme)})
 		return false
 	}
+	// The top frame, or a frame that cannot be told from it: the same rules. Only the top frame is the page the next
+	// navigation starts from (curPrivate): a navigation of unknown frame is not written down here, mainFrameStarted
+	// does it when the top frame really starts to load.
+	top := frame == FrameMain
 	info, err := Inspect(rawURL)
 	m.mu.Lock()
 	v := m.views[id]
@@ -557,11 +610,24 @@ func (m *Manager) policy(id, rawURL string, mainFrame bool) bool {
 		m.mu.Unlock()
 		return false
 	}
-	if err == nil && !v.mayGoTo(info) {
-		err = &URLError{Reason: BlockPrivateNetwork}
+	if err == nil {
+		// The page the navigation starts from. For the step of a redirect that follows a navigation of unknown frame to a
+		// public host, the top frame may already be there (the notice of the driver comes when the address changes, not
+		// before the redirect is followed): a redirect back to the private network is then refused, whatever the page
+		// was before. A frame inside the page that is redirected to the private network is refused too, which is the
+		// stricter side.
+		onPrivate := v.curPrivate && (!redirect || !v.pendingPublic)
+		if !v.mayGoTo(info, onPrivate) {
+			err = &URLError{Reason: BlockPrivateNetwork}
+		}
 	}
 	if err == nil {
-		v.curPrivate = info.Private // the main frame is going there: it is the page the next navigation starts from
+		if top {
+			v.curPrivate = info.Private // the main frame is going there: it is the page the next navigation starts from
+			v.pendingPublic = false
+		} else {
+			v.pendingPublic = !info.Private
+		}
 	}
 	m.mu.Unlock()
 	if err != nil {
@@ -570,10 +636,25 @@ func (m *Manager) policy(id, rawURL string, mainFrame bool) bool {
 		if errors.As(err, &ue) {
 			reason = ue.Reason
 		}
-		m.report(Event{ID: id, Kind: EvBlocked, URL: rawURL, Text: string(reason), MainFrame: true})
+		m.report(Event{ID: id, Kind: EvBlocked, URL: rawURL, Text: string(reason), MainFrame: top})
 		return false
 	}
 	return true
+}
+
+// mainFrameStarted records where the top frame of a view is going, for a driver that could not say which frame the
+// decisions of the policy were for (see MainFrameNotice).
+func (m *Manager) mainFrameStarted(id, rawURL string) {
+	info, err := Inspect(rawURL)
+	if err != nil {
+		return // not an address the top frame may have (about:blank, a page the platform made): nothing to learn
+	}
+	m.mu.Lock()
+	if v := m.views[id]; v != nil {
+		v.curPrivate = info.Private
+		v.pendingPublic = false
+	}
+	m.mu.Unlock()
 }
 
 // frameURLAllowed: what a frame inside a page may load. The host rules (private hosts) apply to
@@ -690,7 +771,7 @@ func (m *Manager) newWindow(id, vault, rawURL string, gesture bool) {
 		if errors.As(err, &ue) {
 			p.Reason = ue.Reason
 		}
-	case !v.mayGoTo(info):
+	case !v.mayGoTo(info, v.curPrivate):
 		p.Reason = BlockPrivateNetwork
 	case !gesture || !v.visible || m.opts.OpenExternal == nil:
 		p.Reason = BlockOther

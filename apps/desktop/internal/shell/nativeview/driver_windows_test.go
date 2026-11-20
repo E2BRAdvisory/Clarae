@@ -4,27 +4,43 @@
 package nativeview
 
 import (
-	"os"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 
 	"clarae/apps/desktop/internal/shell/nativeview/webview2"
+	"clarae/apps/desktop/internal/webview"
 )
 
-// What does not need a window: the switch and the IUnknown of the handlers. Written on a machine
+// What does not need a window: the switch, the fallback errors and the IUnknown of the handlers. Written on a machine
 // that is not Windows and compiled there (go test -c); it has not been run.
 
-func TestDriverIsOffUnlessTheSwitchIsOn(t *testing.T) {
-	if os.Getenv(experimentalEnv) != "" {
-		t.Skipf("%s is set", experimentalEnv)
+func TestDriverIsOnUnlessSwitchedOff(t *testing.T) {
+	if !Supported {
+		t.Error("Supported is false: this build has a driver, whatever the switch says")
 	}
-	if Supported {
-		t.Error("Supported is true with no switch")
+	// No window: no driver, and nothing that needs a window or the runtime is touched.
+	if d := New(nil, ""); d != nil {
+		t.Error("New returned a driver with no window")
 	}
-	if d := New(nil); d != nil {
-		t.Error("New returned a driver with no switch (and no window)")
+}
+
+// A runtime that lacks an interface the driver needs is a platform that cannot show views, not a failure of one
+// view: the Manager turns it into the fallback to the system browser.
+func TestAnOldRuntimeIsAPlatformThatCannotShowViews(t *testing.T) {
+	err := fmt.Errorf("download handler: %w", errMissing)
+	if !errors.Is(err, webview.ErrPlatformUnavailable) {
+		t.Errorf("%v is not webview.ErrPlatformUnavailable", err)
+	}
+	if errors.Is(errors.New("something else"), webview.ErrPlatformUnavailable) {
+		t.Error("an unrelated error is taken for it")
+	}
+	if !strings.Contains(errMissing.Error(), "1.0.2210.55") {
+		t.Errorf("the message does not say what to update to: %v", errMissing)
 	}
 }
 

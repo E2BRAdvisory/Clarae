@@ -117,7 +117,7 @@ func TestSettingsCapabilitiesFollowTheBuild(t *testing.T) {
 // A capability that depends on the system the desktop runs on is narrowed to it, and the tables that
 // `task gen` writes keep the column as declared (they are the same on every system).
 func TestEmbeddedBrowserFollowsTheSystem(t *testing.T) {
-	for goos, want := range map[string]bool{"darwin": true, "windows": false, "linux": false, "freebsd": false, "": true} {
+	for goos, want := range map[string]bool{"darwin": true, "windows": true, "linux": true, "freebsd": false, "openbsd": false, "": true} {
 		c, err := capabilitiesAt(false, goos)
 		if err != nil {
 			t.Fatal(err)
@@ -136,7 +136,7 @@ func TestEmbeddedBrowserFollowsTheSystem(t *testing.T) {
 		t.Error("the browser has no embedded browser, whatever the system")
 	}
 	if declared, _ := CapabilitiesFor("desktop"); !declared.EmbeddedBrowser {
-		t.Error("the declared desktop column says what a desktop can offer: macOS can")
+		t.Error("the declared desktop column says what a desktop can offer: macOS, Windows and Linux can")
 	}
 	if declared, _ := CapabilitiesFor("web"); declared.EmbeddedBrowser {
 		t.Error("the declared web column has no embedded browser")

@@ -56,8 +56,9 @@ type reply struct {
 	msg string
 }
 
-// New returns the driver of the native web views of the window.
-func New(win *application.WebviewWindow) webview.Driver {
+// New returns the driver of the native web views of the window. dataDir is the data directory of the
+// application: WebKit keeps the data of its stores in its own container, so it is not used here.
+func New(win *application.WebviewWindow, _ string) webview.Driver {
 	d := &driver{win: win, events: make(chan webview.Event, eventBuffer)}
 	current.Store(d)
 	return d

@@ -80,7 +80,7 @@ func CreateCoreWebView2EnvironmentWithOptions(handler ICoreWebView2CreateCoreWeb
 	for _, opt := range opts {
 		opt(&params)
 	}
-	dllPath, _, err := findInstalledClientDll()
+	dllPath, err := findInstalledClientDll()
 	if err != nil {
 		return err
 	}

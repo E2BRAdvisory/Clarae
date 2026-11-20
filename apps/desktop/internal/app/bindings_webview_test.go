@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -517,9 +518,36 @@ func TestEmbeddedBrowserCapabilityNeedsADriver(t *testing.T) {
 		t.Fatal("no driver, and the capability is on")
 	}
 	a.opts.NativeViews = func() webview.Driver { return webview.NewFake() }
-	want := runtime.GOOS == "darwin" // the table: macOS only
+	want := slices.Contains([]string{"darwin", "windows", "linux"}, runtime.GOOS) // the table
 	if got := st.Capabilities().EmbeddedBrowser; got != want {
 		t.Fatalf("with a driver on %s: %v, want %v", runtime.GOOS, got, want)
+	}
+}
+
+// A platform that cannot show views (the runtime is missing, the toolkit is not the one the driver grafts onto) makes
+// the first Open answer "unavailable", which is what the UI turns into the card "Open in the browser", and takes the
+// capability embeddedBrowser away for the rest of the session: later tabs do not try the driver again.
+func TestAPlatformThatCannotShowViewsFallsBackToTheSystemBrowser(t *testing.T) {
+	h := newWVHarness(t)
+	st := &SettingsAPI{app: h.a}
+	h.fake.Fail(fmt.Errorf("%w: the WebView2 runtime is missing", webview.ErrPlatformUnavailable))
+	_, err := h.api().Open(h.vaultID, "https://example.com/", webview.Bounds{X: 0.1, Y: 0.1, Width: 0.5, Height: 0.5})
+	if err == nil || !strings.HasPrefix(err.Error(), ErrCodeWebViewUnavailable+":") {
+		t.Fatalf("Open = %v, want the code %q (not %q)", err, ErrCodeWebViewUnavailable, ErrCodeWebViewFailed)
+	}
+	if st.Capabilities().EmbeddedBrowser {
+		t.Error("the capability embeddedBrowser is still on after the platform said it cannot")
+	}
+	if s, _ := h.api().Status(); s.Available {
+		t.Error("Status says the browser is available")
+	}
+	calls := len(h.fake.Calls())
+	if _, err := h.api().Open(h.vaultID, "https://example.org/", webview.Bounds{X: 0.1, Y: 0.1, Width: 0.5, Height: 0.5}); err == nil ||
+		!strings.HasPrefix(err.Error(), ErrCodeWebViewUnavailable+":") {
+		t.Fatalf("the next Open = %v", err)
+	}
+	if got := len(h.fake.Calls()); got != calls {
+		t.Errorf("the driver was called again: %v", h.fake.Calls()[calls:])
 	}
 }
 

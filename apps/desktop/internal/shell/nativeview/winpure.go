@@ -2,30 +2,18 @@
 
 package nativeview
 
-// The part of the Windows driver (driver_windows.go) that does not touch the system: the switch that
-// turns the driver on, the conversion of the rectangle of a view to pixels, the folder of the session
-// data, the names of keys, permissions and load errors. It builds everywhere (except WebAssembly) so that
-// a machine that is not Windows can test it.
+// The part of the Windows driver (driver_windows.go) that does not touch the system: the conversion of the
+// rectangle of a view to pixels, the names of keys, permissions and load errors. It builds everywhere (except
+// WebAssembly) so that a machine that is not Windows can test it.
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	"clarae/apps/desktop/internal/webview"
 )
-
-// experimentalEnv names the variable that turns the Windows driver on. The driver was written and
-// compiled, never run on a Windows machine (ADR-0056 §2 says macOS only): until someone proves it, a
-// build of Windows has none and the page of an application opens in the system browser. The variable is
-// read in driver_windows.go and nowhere else. Only the exact value "1" turns it on.
-const experimentalEnv = "CLARAE_WEBVIEW2_EXPERIMENTAL"
-
-// experimentalOn says whether the value of experimentalEnv turns the driver on.
-func experimentalOn(value string) bool { return value == "1" }
 
 // pixelRect is a rectangle of the client area of a window, in physical pixels (what WebView2 wants).
 type pixelRect struct{ Left, Top, Right, Bottom int32 }
@@ -50,42 +38,6 @@ func physicalRect(b webview.Bounds, w, h int32) pixelRect {
 	}
 	r.Right, r.Bottom = max(r.Right, r.Left), max(r.Bottom, r.Top)
 	return r
-}
-
-var errNoDataFolder = errors.New("no data folder for the applications")
-
-// webappsRoot is where the session data of the applications live: a folder next to the one of the web
-// view of the application (platform.WebViewDataDir, <data dir>/webview), so <data dir>/webapps. It is
-// derived from the path the application gave to Wails, because the driver is not told the data
-// directory; "" when Wails was given none (its default is %AppData%\<executable>, which is not ours).
-func webappsRoot(webviewUserDataPath string) string {
-	if webviewUserDataPath == "" || !filepath.IsAbs(webviewUserDataPath) {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(filepath.Clean(webviewUserDataPath)), "webapps")
-}
-
-// userDataFolder is the user data folder of WebView2 for a data store: <root>\<store>. One folder per
-// store, hence per vault, and a store is never a path: it must be a UUID-like identifier, so nothing
-// of it can reach outside root. The name is lower case, because the file system of Windows is not
-// sensitive to it and two spellings must not make two folders (or one folder shared by two stores).
-func userDataFolder(root, store string) (string, error) {
-	if root == "" {
-		return "", errNoDataFolder
-	}
-	if store == "" || len(store) > 64 {
-		return "", fmt.Errorf("data store %q is not an identifier", store)
-	}
-	for _, c := range store {
-		alnum := c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
-		if !alnum && c != '-' {
-			return "", fmt.Errorf("data store %q is not an identifier", store)
-		}
-	}
-	if strings.HasPrefix(store, "-") {
-		return "", fmt.Errorf("data store %q is not an identifier", store)
-	}
-	return filepath.Join(root, strings.ToLower(store)), nil
 }
 
 // ---- keys ------------------------------------------------------------------------------------

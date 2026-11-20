@@ -26,7 +26,7 @@ import (
 //     are closed when the vault is closed or locked (the UI hears it from webview:closed) and all of them
 //     when the application quits.
 //   - The function needs the configuration flag features.web_viewer (Open refuses without it, and turning
-//     it off closes the views) and a driver, which the capability embeddedBrowser tells (macOS only).
+//     it off closes the views) and a driver, which the capability embeddedBrowser tells (macOS, Windows and Linux, where the runtime is there).
 //
 // The events are webview:state, webview:blocked, webview:new-window, webview:download, webview:permission,
 // webview:key, webview:load-error, webview:crashed, webview:focus and webview:closed.

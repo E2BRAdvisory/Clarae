@@ -72,10 +72,12 @@ export interface CoreCapabilities {
   aiAssistant: boolean;
   /**
    * The page of an application (a `.webapp` file) opens in a browser embedded in the tab, a native
-   * web view that the shell adds to the window. Only the desktop on macOS has a driver for it
-   * (Windows and Linux have none: the page opens in the system browser), and the core also needs
-   * the flag `web_viewer` of the profile (WebViewAPI.Status). The table says macOS-capable desktop;
-   * SettingsAPI.Capabilities says what this device does. The browser opens the page in a tab of its
+   * web view that the shell adds to the window (ADR-0056, ADR-0062). The desktop has a driver for
+   * it on macOS (WKWebView), Windows (WebView2) and Linux (WebKitGTK); where the runtime is missing
+   * or too old, or CLARAE_WEBVIEW=off, the page opens in the system browser. The core also needs
+   * the flag `web_viewer` of the profile (WebViewAPI.Status). The table says what a desktop can
+   * offer; SettingsAPI.Capabilities says what this device does (it turns the capability off when
+   * the driver cannot be had, for the whole session). The browser opens the page in a tab of its
    * own (WebViewAPI refuses every call there).
    */
   embeddedBrowser: boolean;

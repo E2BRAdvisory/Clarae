@@ -99,6 +99,7 @@ func run() int {
 	var lc *shell.Lifecycle
 	guard, guardWindow := shell.NewWailsCloseGuard(func() { lc.ArmWatchdog() })
 	host := shell.NewHost()
+	host.SetDataDir(dataDir)
 	a := app.New(app.Options{DataDir: dataDir, LegacyDataDir: dd.LegacyDir, Logger: logger, Version: Version, Host: host})
 	lc = shell.NewLifecycle(a, guard)
 
