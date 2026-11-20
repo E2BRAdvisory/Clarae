@@ -4,7 +4,7 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.8.1] - 2026-11-20
 
 Milestone M24 ([roadmap](docs/roadmap.md) §13-septendecies), richiesta dell'owner del 2026-11-20 dopo la 1.8.0: **il terminale ha carattere e dimensione del carattere configurabili**, con default `MesloLGS NF` e 13 px. Nessuna migrazione del cloud, nessuna modifica delle API né dello schema del Config Profile.
 
@@ -15,6 +15,16 @@ Milestone M24 ([roadmap](docs/roadmap.md) §13-septendecies), richiesta dell'own
 - Si scrive **un solo nome di famiglia**: virgolette, virgole e gli altri caratteri non ammessi sono tolti e il nome si ferma a 64 caratteri; il campo vuoto torna al default.
 - **Effetto immediato:** i terminali aperti cambiano carattere o dimensione senza riavviare le shell e, caricato il font, la shell riceve il nuovo numero di colonne e righe.
 - **Dove sta:** nelle impostazioni del vault (`.clarae/appearance.json`), come il carattere dell'interfaccia, non nel Config Profile (nessun flag per gli amministratori). Nei vault sincronizzati segue l'utente sui suoi dispositivi. La finestra separata usa le impostazioni del vault della scheda in primo piano (13 px e il carattere predefinito per una scheda senza vault). Nel workbench web i due campi **non compaiono** (il browser non ha il terminale); i valori scelti sul desktop restano in `appearance.json`.
+
+### Contratti
+
+- `api/openapi.yaml`: solo `info.version` a 1.8.1 (stub rigenerati); nessun binding, evento o capability nuovi: le due impostazioni stanno in `appearance.json` del vault (`terminalFont`, `terminalFontSize`).
+
+### Verificato
+
+- `task ci` verde sull'albero di M24 (1306 s): lint, `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (120 pacchetti), vitest (2675 test), conformance, `test-wasm`, `test-core`, budget, parità e `check-gen`. Due esecuzioni precedenti si erano fermate a `test-ts` per il carico della macchina (budget di tempo di `perf.test.ts`, attese di `marpNotesTabSwitch`, `taskSerialization` e della porta A di conformance, file non toccati da M24): rilanciati isolati passano sempre.
+- `task e2e` verde: desktop 264 passati, bundle di produzione 48, console web 103. Dopo il passaggio alla versione 1.8.1 rieseguiti `check-gen`, parità e i controlli dei file toccati.
+- **Non eseguiti:** `task test-integration` e `task test-desktop-e2e` (nessuna modifica del cloud né della sync).
 
 ### Documentazione
 
