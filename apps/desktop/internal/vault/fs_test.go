@@ -316,3 +316,71 @@ func TestListFilesSeesWhatWalkExcludes(t *testing.T) {
 		t.Error("a folder outside the vault must be refused")
 	}
 }
+
+// WalkReport tells what Walk leaves out (ADR-0066): an unrepresentable name, a symlink and an excluded
+// folder, each once and without its contents; Walk and WalkReport visit the same entries.
+func TestWalkReportTellsWhatItSkips(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("':' and symlinks cannot be created by an ordinary Windows user")
+	}
+	f := newTestFS(t)
+	root := f.Root()
+	for _, p := range []string{"Notes/a.md", "Notes/Meeting 10:30.md", ".git/HEAD", ".git/objects/ab/cd", "Repo/.hg/store", "Notes/.DS_Store", "Bad:dir/inner.md"} {
+		abs := filepath.Join(root, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(root, "Notes", "a.md"), filepath.Join(root, "Notes", "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	var seen, plain []string
+	skipped := map[string]Skipped{}
+	err := f.WalkReport(func(e Entry) error {
+		seen = append(seen, e.Path)
+		return nil
+	}, func(s Skipped) {
+		if _, dup := skipped[s.Path]; dup {
+			t.Errorf("%s reported twice", s.Path)
+		}
+		skipped[s.Path] = s
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Walk(func(e Entry) error {
+		plain = append(plain, e.Path)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(seen, ",") != "Notes,Notes/a.md,Repo" || strings.Join(plain, ",") != strings.Join(seen, ",") {
+		t.Fatalf("visited %v, Walk %v", seen, plain)
+	}
+	want := map[string]Skipped{
+		".git":                   {Path: ".git", IsDir: true, Kind: SkipExcluded, Exclusion: pathrules.ReasonVCS},
+		"Repo/.hg":               {Path: "Repo/.hg", IsDir: true, Kind: SkipExcluded, Exclusion: pathrules.ReasonVCS},
+		"Notes/.DS_Store":        {Path: "Notes/.DS_Store", Kind: SkipExcluded, Exclusion: pathrules.ReasonOSJunk},
+		"Notes/link.md":          {Path: "Notes/link.md", Kind: SkipSymlink},
+		"Notes/Meeting 10:30.md": {Path: "Notes/Meeting 10:30.md", Kind: SkipInvalidName},
+		"Bad:dir":                {Path: "Bad:dir", IsDir: true, Kind: SkipInvalidName},
+	}
+	if len(skipped) != len(want) {
+		t.Fatalf("skipped %+v", skipped)
+	}
+	for p, w := range want {
+		got, ok := skipped[p]
+		if w.Kind == SkipInvalidName && ok {
+			if !strings.Contains(got.Detail, "forbidden character") {
+				t.Errorf("%s: detail %q", p, got.Detail)
+			}
+			got.Detail = ""
+		}
+		if !ok || got != w {
+			t.Errorf("%s: got %+v want %+v", p, got, w)
+		}
+	}
+}

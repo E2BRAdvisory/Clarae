@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -190,6 +191,44 @@ func (d *DB) PutFile(ctx context.Context, f File) error {
 		f.Path, f.FileID, f.ServerRev, f.BaseRev, f.ServerHash, f.LocalHash, f.LocalSize, f.LocalMtime, string(f.State), f.MovedFrom,
 		b2i(f.Dirty), b2i(f.Tombstoned), f.ConflictOf, f.Attempts, f.LastError, f.HeadAuthor)
 	return err
+}
+
+// ErrorFiles returns the rows with an error (parked, failing or in conflict for too many concurrent
+// edits), ordered by path.
+func (d *DB) ErrorFiles(ctx context.Context) ([]File, error) {
+	rows, err := d.db.QueryContext(ctx, `SELECT `+fileCols+` FROM sync_files WHERE last_error <> '' ORDER BY path`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []File
+	for rows.Next() {
+		f, err := scanFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// Unpark clears the attempts and the error of the parked rows at paths (all of them when paths is
+// empty), leaving the rows in conflict alone; it reports how many changed.
+func (d *DB) Unpark(ctx context.Context, paths []string) (int, error) {
+	q := `UPDATE sync_files SET attempts = 0, last_error = '' WHERE attempts >= ? AND last_error <> '' AND state <> ?`
+	args := []any{MaxAttempts, string(StateConflict)}
+	if len(paths) > 0 {
+		q += ` AND path IN (` + strings.TrimSuffix(strings.Repeat("?,", len(paths)), ",") + `)`
+		for _, p := range paths {
+			args = append(args, p)
+		}
+	}
+	res, err := d.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
 }
 
 // DeleteFile removes the row of a file id.

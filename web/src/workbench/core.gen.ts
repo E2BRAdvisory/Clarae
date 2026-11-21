@@ -156,6 +156,7 @@ export interface CoreClient {
     ResolveConflict(arg1: string, arg2: number, arg3: string, arg4: string): Promise<void>;
     RestoreCloudVault(arg1: string): Promise<Data<cloudapi.Vault>>;
     RestoreRevision(arg1: string, arg2: string, arg3: number): Promise<void>;
+    RetryUnsent(arg1: string, arg2: Array<string>): Promise<void>;
     RevisionText(arg1: string, arg2: string, arg3: number): Promise<string>;
     RevokeDevice(arg1: string): Promise<void>;
     SetPaused(arg1: string, arg2: boolean): Promise<void>;
@@ -163,6 +164,7 @@ export interface CoreClient {
     Status(arg1: string): Promise<Data<sync.Status>>;
     SyncNow(arg1: string): Promise<void>;
     Unlink(arg1: string): Promise<void>;
+    Unsent(arg1: string): Promise<Data<Array<sync.UnsentItem>>>;
     Usage(): Promise<Data<cloudapi.Usage>>;
   };
   readonly TagsAPI: {
@@ -265,7 +267,7 @@ export const BINDINGS = {
   SearchAPI: ['Explain', 'Query'],
   SettingsAPI: ['Capabilities', 'Get', 'Info', 'Set'],
   SharingAPI: ['AcceptShare', 'CreateCloudShare', 'CreateShare', 'DeclineShare', 'Invitations', 'ListShares', 'Mounts', 'OpenMount', 'RemoveGrant', 'RemoveMount', 'RevokeShare', 'SearchDirectoryGroups', 'SearchDirectoryUsers', 'SetGrant', 'Share', 'UpdateShare', 'VaultShares'],
-  SyncAPI: ['ConflictTexts', 'Conflicts', 'CopyVerdict', 'DeleteCloudVault', 'Devices', 'History', 'Info', 'LinkExisting', 'LinkNew', 'ListCloudVaults', 'ListDeletedCloudVaults', 'RenameCloudVault', 'ResolveConflict', 'RestoreCloudVault', 'RestoreRevision', 'RevisionText', 'RevokeDevice', 'SetPaused', 'SetPollInterval', 'Status', 'SyncNow', 'Unlink', 'Usage'],
+  SyncAPI: ['ConflictTexts', 'Conflicts', 'CopyVerdict', 'DeleteCloudVault', 'Devices', 'History', 'Info', 'LinkExisting', 'LinkNew', 'ListCloudVaults', 'ListDeletedCloudVaults', 'RenameCloudVault', 'ResolveConflict', 'RestoreCloudVault', 'RestoreRevision', 'RetryUnsent', 'RevisionText', 'RevokeDevice', 'SetPaused', 'SetPollInterval', 'Status', 'SyncNow', 'Unlink', 'Unsent', 'Usage'],
   TagsAPI: ['List'],
   TemplatesAPI: ['CreateFromTemplate', 'DailyAdjacent', 'Expand', 'List', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
   TerminalAPI: ['CanOpen', 'Close', 'Dock', 'List', 'Open', 'Resize', 'Snapshot', 'State', 'Undock', 'Write'],
@@ -445,6 +447,7 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         ResolveConflict: (arg1: string, arg2: number, arg3: string, arg4: string) => call('SyncAPI', 'ResolveConflict', [arg1, arg2, arg3, arg4]),
         RestoreCloudVault: (arg1: string) => call('SyncAPI', 'RestoreCloudVault', [arg1]),
         RestoreRevision: (arg1: string, arg2: string, arg3: number) => call('SyncAPI', 'RestoreRevision', [arg1, arg2, arg3]),
+        RetryUnsent: (arg1: string, arg2: Array<string>) => call('SyncAPI', 'RetryUnsent', [arg1, arg2]),
         RevisionText: (arg1: string, arg2: string, arg3: number) => call('SyncAPI', 'RevisionText', [arg1, arg2, arg3]),
         RevokeDevice: (arg1: string) => call('SyncAPI', 'RevokeDevice', [arg1]),
         SetPaused: (arg1: string, arg2: boolean) => call('SyncAPI', 'SetPaused', [arg1, arg2]),
@@ -452,6 +455,7 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         Status: (arg1: string) => call('SyncAPI', 'Status', [arg1]),
         SyncNow: (arg1: string) => call('SyncAPI', 'SyncNow', [arg1]),
         Unlink: (arg1: string) => call('SyncAPI', 'Unlink', [arg1]),
+        Unsent: (arg1: string) => call('SyncAPI', 'Unsent', [arg1]),
         Usage: () => call('SyncAPI', 'Usage', []),
       };
     },

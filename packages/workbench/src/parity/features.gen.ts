@@ -20,6 +20,7 @@ export type FeatureId =
   | 'sync.link' // Collegamento di un vault locale a un vault cloud
   | 'sync.unlink' // Scollegamento di un vault dal cloud
   | 'sync.engine' // Sincronizzazione del vault (stato, pausa, sincronizza ora)
+  | 'sync.unsent' // File non inviati al cloud, con il motivo (ADR-0066)
   | 'conflicts' // Conflitti di sincronizzazione
   | 'revisions' // Storico delle revisioni nel cloud
   | 'history.local' // Storico locale delle note
@@ -121,6 +122,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'sync.link',
   'sync.unlink',
   'sync.engine',
+  'sync.unsent',
   'conflicts',
   'revisions',
   'history.local',

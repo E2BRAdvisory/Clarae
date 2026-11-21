@@ -45,6 +45,9 @@ type Status struct {
 	// Quarantined counts the server entries this device cannot read (an
 	// undecryptable path): they are neither applied nor taken for deletions.
 	Quarantined int `json:"quarantined"`
+	// Unsent counts the files this device does not send and that call for the user: parked or
+	// rejected, invalid names, symlinks (Engine.Unsent lists them, ADR-0066).
+	Unsent int `json:"unsent"`
 }
 
 // ErrLocked means the private vault must be unlocked before it can sync.
@@ -180,6 +183,9 @@ type Engine struct {
 	// scans counts the scans started; wantScan is the scan a SyncNow waits for
 	// (see RequestScan). Both under e.mu.
 	scans, wantScan uint64
+	// skipped are the entries the last complete scan left out that the list of the files not sent
+	// shows (keepSkipped, at most maxSkipped; under e.mu).
+	skipped []UnsentItem
 	// renames are the rename hints (Renamed) not applied yet, oldest first
 	// (under e.mu). Renamed never waits for e.run: whoever holds it applies
 	// them at its next safe point (applyRenames).
@@ -285,13 +291,14 @@ func (e *Engine) Sync(ctx context.Context) (err error) {
 		pending, _ := e.cfg.DB.PendingCount(ctx)
 		conflicts, _ := e.cfg.DB.OpenConflictCount(ctx)
 		quarantined, _ := e.cfg.DB.QuarantineCount(ctx)
+		unsent := e.unsentCount(ctx)
 		notice := ""
 		if err == nil {
 			// Not a failure of the cycle (no backoff), but the user must know.
 			notice = e.shareRootNotice(ctx)
 		}
 		e.setStatus(func(s *Status) {
-			s.Pending, s.Conflicts, s.Quarantined = pending, conflicts, quarantined
+			s.Pending, s.Conflicts, s.Quarantined, s.Unsent = pending, conflicts, quarantined, unsent
 			s.Done, s.Total = 0, 0
 			switch {
 			case err == nil && e.wantScan > e.scans:

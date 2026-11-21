@@ -1096,6 +1096,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       pending: 0,
       conflicts: 0,
       quarantined: 0,
+      unsent: 0,
       done: 0,
       total: 0,
       error: '',
@@ -1135,6 +1136,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       pending: 0,
       conflicts: 0,
       quarantined: 0,
+      unsent: 0,
       done: 0,
       total: 0,
       error: '',
@@ -1159,6 +1161,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
         pending: 0,
         conflicts: 0,
         quarantined: 0,
+        unsent: 0,
         done: 0,
         total: 0,
         error: CLOUD_VAULT_DELETED_MESSAGE,
@@ -1183,6 +1186,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
           pending: 0,
           conflicts: 0,
           quarantined: 0,
+          unsent: 0,
           done: 0,
           total: 0,
           error: '',
@@ -1322,6 +1326,9 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve();
     },
     Conflicts: (id: string): Promise<SyncConflict[]> => Promise.resolve(sy.conflicts.get(id) ?? []),
+    // The list of the files not sent (ADR-0066): empty until a test needs entries.
+    Unsent: (_id: string) => Promise.resolve([]),
+    RetryUnsent: (_id: string, _paths: string[]): Promise<void> => Promise.resolve(),
     // Like the core, ConflictTexts remembers the version of the file it showed, and keep-local and
     // merged refuse with a conflict error once the file holds another one (a test changes
     // conflictTexts' currentHash to simulate an edit made after the texts were read).

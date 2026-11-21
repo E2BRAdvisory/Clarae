@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"clarae/shared/hashing"
 	"clarae/shared/pathrules"
@@ -646,7 +647,34 @@ type Entry struct {
 // .clarae/ internals other than user settings. fn receives vault-relative
 // paths. Returning fs.SkipDir from fn for a folder skips its contents.
 func (f *FS) Walk(fn func(e Entry) error) error {
-	return f.walk(f.root, "", fn)
+	return f.walk(f.root, "", fn, nil)
+}
+
+// SkipKind says why Walk left an entry out (WalkReport).
+type SkipKind string
+
+// The kinds of Skipped.
+const (
+	SkipInvalidName SkipKind = "invalid-name" // a name pathrules.Normalize refuses
+	SkipSymlink     SkipKind = "symlink"      // symlinks are never followed
+	SkipExcluded    SkipKind = "excluded"     // pathrules.IsExcluded (Exclusion says why)
+)
+
+// Skipped is an entry Walk left out. A skipped folder is reported once, its contents are not visited.
+type Skipped struct {
+	// Path is the vault-relative path; for an invalid name, the raw name made valid UTF-8 (it may not be
+	// a path the vault package accepts).
+	Path      string
+	IsDir     bool
+	Kind      SkipKind
+	Exclusion pathrules.Reason // for SkipExcluded
+	Detail    string           // for SkipInvalidName: the rule the name breaks
+}
+
+// WalkReport is Walk that also tells skipped what it leaves out: names that cannot be represented,
+// symlinks and excluded entries (ADR-0066). skipped may be nil.
+func (f *FS) WalkReport(fn func(e Entry) error, skipped func(s Skipped)) error {
+	return f.walk(f.root, "", fn, skipped)
 }
 
 // WalkDir is Walk restricted to what lies below the folder rel (rel itself is
@@ -667,10 +695,10 @@ func (f *FS) WalkDir(rel string, fn func(e Entry) error) error {
 	} else if st.Mode()&fs.ModeSymlink != 0 || !st.IsDir() {
 		return nil // Walk does not follow symlinks either
 	}
-	return f.walk(abs, normalized, fn)
+	return f.walk(abs, normalized, fn, nil)
 }
 
-func (f *FS) walk(absDir, relDir string, fn func(e Entry) error) error {
+func (f *FS) walk(absDir, relDir string, fn func(e Entry) error, skipped func(s Skipped)) error {
 	entries, err := os.ReadDir(absDir)
 	if err != nil {
 		return err
@@ -684,12 +712,27 @@ func (f *FS) walk(absDir, relDir string, fn func(e Entry) error) error {
 		}
 		normalized, err := pathrules.Normalize(rel)
 		if err != nil {
-			continue // names we cannot represent are invisible to the app
-		}
-		if de.Type()&fs.ModeSymlink != 0 {
+			// Names we cannot represent are invisible to the app.
+			if skipped != nil {
+				detail := err.Error()
+				var pe *pathrules.Error
+				if errors.As(err, &pe) {
+					detail = pe.Reason
+				}
+				skipped(Skipped{Path: strings.ToValidUTF8(rel, string(utf8.RuneError)), IsDir: de.IsDir(), Kind: SkipInvalidName, Detail: detail})
+			}
 			continue
 		}
-		if pathrules.IsExcluded(normalized, false) {
+		if de.Type()&fs.ModeSymlink != 0 {
+			if skipped != nil {
+				skipped(Skipped{Path: normalized, Kind: SkipSymlink})
+			}
+			continue
+		}
+		if reason := pathrules.ExclusionReason(normalized, false); reason != pathrules.ReasonNone {
+			if skipped != nil {
+				skipped(Skipped{Path: normalized, IsDir: de.IsDir(), Kind: SkipExcluded, Exclusion: reason})
+			}
 			continue
 		}
 		info, err := de.Info()
@@ -703,7 +746,7 @@ func (f *FS) walk(absDir, relDir string, fn func(e Entry) error) error {
 		}
 		err = fn(e)
 		if err == nil && e.IsDir {
-			err = f.walk(filepath.Join(absDir, name), normalized, fn)
+			err = f.walk(filepath.Join(absDir, name), normalized, fn, skipped)
 		}
 		if errors.Is(err, fs.SkipDir) {
 			continue

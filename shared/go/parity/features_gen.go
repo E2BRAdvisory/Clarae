@@ -46,6 +46,9 @@ const (
 	// SyncEngine: Sincronizzazione del vault (stato, pausa, sincronizza ora)
 	SyncEngine FeatureID = "sync.engine"
 
+	// SyncUnsent: File non inviati al cloud, con il motivo (ADR-0066)
+	SyncUnsent FeatureID = "sync.unsent"
+
 	// Conflicts: Conflitti di sincronizzazione
 	Conflicts FeatureID = "conflicts"
 
@@ -315,6 +318,7 @@ var Features = []FeatureID{
 	SyncLink,
 	SyncUnlink,
 	SyncEngine,
+	SyncUnsent,
 	Conflicts,
 	Revisions,
 	HistoryLocal,

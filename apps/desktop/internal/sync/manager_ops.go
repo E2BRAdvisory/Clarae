@@ -789,6 +789,28 @@ func (m *Manager) Conflicts(ctx context.Context, localID string) ([]Conflict, er
 	return mv.db.Conflicts(ctx, "open")
 }
 
+// Unsent lists what the vault does not send to the cloud, with the reason (Engine.Unsent, ADR-0066).
+func (m *Manager) Unsent(ctx context.Context, localID string) ([]UnsentItem, error) {
+	mv, err := m.linked(localID)
+	if err != nil {
+		return nil, err
+	}
+	return mv.engine.Unsent(ctx)
+}
+
+// RetryUnsent puts the parked files at paths (all of them when empty) back in the queue and starts a
+// cycle that sends them (Engine.RetryUnsent).
+func (m *Manager) RetryUnsent(ctx context.Context, localID string, paths []string) error {
+	mv, err := m.linked(localID)
+	if err != nil {
+		return err
+	}
+	if _, err := mv.engine.RetryUnsent(ctx, paths); err != nil {
+		return err
+	}
+	return m.SyncNow(localID)
+}
+
 // ConflictAction is how the user settles a conflict.
 type ConflictAction string
 

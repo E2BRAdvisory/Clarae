@@ -65,7 +65,8 @@ type folderMove struct {
 type forcedMove struct {
 	prefixPair
 	fileID string
-	reason string
+	// code and detail are the server's refusal, the reason of the park when the rename cannot be sent.
+	code, detail string
 }
 
 // verdict of a candidate folder rename.
@@ -268,7 +269,7 @@ func (e *Engine) folderMoves(ctx context.Context) (moves []folderMove, held map[
 			if row, ok, err := e.cfg.DB.GetFileByID(ctx, f.fileID); err != nil {
 				return nil, nil, err
 			} else if ok && row.State == StateLocalMoved {
-				if err := e.park(ctx, row, f.reason); err != nil {
+				if err := e.park(ctx, row, f.code, f.detail); err != nil {
 					return nil, nil, err
 				}
 			}
@@ -361,7 +362,7 @@ func (e *Engine) applyPrefixResult(ctx context.Context, p prepared, res syncprot
 				return false, err
 			}
 			if ok && row.State == StateLocalMoved {
-				return false, e.park(ctx, row, forced.reason)
+				return false, e.park(ctx, row, forced.code, forced.detail)
 			}
 		}
 		return true, nil
@@ -406,13 +407,13 @@ func (e *Engine) applyPrefixResult(ctx context.Context, p prepared, res syncprot
 // move is parked with the server's explanation, the file staying where the
 // user put it (D-04), and the status shows it (shareRootNotice).
 func (e *Engine) shareRootMove(ctx context.Context, p prepared, row File, res syncproto.OpResult) (bool, error) {
-	reason := fmt.Sprintf("%s: %s", res.Code, res.Detail)
+	code, detail := string(res.Code), res.Detail
 	if p.op.Op != syncproto.OpMove || e.cfg.Cipher != nil || row.MovedFrom == "" {
-		return false, e.park(ctx, row, reason)
+		return false, e.park(ctx, row, code, detail)
 	}
 	lister, ok := e.cfg.Remote.(FolderShareRooter)
 	if !ok {
-		return false, e.park(ctx, row, reason)
+		return false, e.park(ctx, row, code, detail)
 	}
 	roots, err := lister.FolderShareRoots(ctx)
 	if err != nil {
@@ -420,7 +421,7 @@ func (e *Engine) shareRootMove(ctx context.Context, p prepared, row File, res sy
 			return false, err // the move is tried again, and refused again, next time
 		}
 		e.log.Warn().Err(err).Msg("sync: cannot list the shares of the vault")
-		return false, e.park(ctx, row, reason)
+		return false, e.park(ctx, row, code, detail)
 	}
 	sort.Slice(roots, func(i, j int) bool { return len(roots[i]) < len(roots[j]) }) // the outermost share first
 	oldPath, newPath := row.MovedFrom, row.Path
@@ -437,11 +438,11 @@ func (e *Engine) shareRootMove(ctx context.Context, p prepared, row File, res sy
 		if pair.to == "" || e.noPrefix[pair.key()] || strings.HasPrefix(pathrules.Key(pair.to), rk+"/") {
 			continue
 		}
-		e.forcedPrefix[pair.key()] = forcedMove{prefixPair: pair, fileID: row.FileID, reason: reason}
+		e.forcedPrefix[pair.key()] = forcedMove{prefixPair: pair, fileID: row.FileID, code: code, detail: detail}
 		row.Attempts++
 		return true, e.cfg.DB.PutFile(ctx, row)
 	}
-	return false, e.park(ctx, row, reason)
+	return false, e.park(ctx, row, code, detail)
 }
 
 // shareRootNotice explains, for the status, the moves parked because they

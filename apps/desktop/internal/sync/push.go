@@ -267,7 +267,7 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 				if e.isLocked(err) {
 					return p, false, e.lockedErr(err) // not the file's fault: never park it
 				}
-				return p, false, e.park(ctx, row, "cannot encrypt the path: "+err.Error())
+				return p, false, e.park(ctx, row, CodeEncryptFailed, "cannot encrypt the path: "+err.Error())
 			}
 			op.Path, op.PathKey = tok, key
 		} else {
@@ -301,7 +301,7 @@ func (e *Engine) prepare(ctx context.Context, row File) (prepared, bool, error) 
 			if e.isLocked(err) {
 				return p, false, e.lockedErr(err)
 			}
-			return p, false, e.park(ctx, row, "cannot encrypt the content: "+err.Error())
+			return p, false, e.park(ctx, row, CodeEncryptFailed, "cannot encrypt the content: "+err.Error())
 		}
 		if int64(len(data)) > limit { // the ciphertext is slightly larger than the plaintext
 			return p, false, e.parkTooLarge(ctx, row, int64(len(data)), limit)
@@ -375,12 +375,14 @@ func (e *Engine) maxFileBytes() int64 {
 // parkTooLarge parks a file over the size limit with the server's error code,
 // so the UI explains it like a rejection.
 func (e *Engine) parkTooLarge(ctx context.Context, row File, size, limit int64) error {
-	return e.park(ctx, row, fmt.Sprintf("%s: file of %d bytes exceeds the limit of %d", syncproto.CodeFileTooLarge, size, limit))
+	return e.park(ctx, row, string(syncproto.CodeFileTooLarge), fmt.Sprintf("file of %d bytes exceeds the limit of %d", size, limit))
 }
 
-// park stops retrying a file until it changes, remembering why.
-func (e *Engine) park(ctx context.Context, row File, reason string) error {
-	row.Attempts, row.LastError = MaxAttempts, reason
+// park stops retrying a file until it changes, remembering why: the code (of the server, syncproto, or
+// a local one, CodeEncryptFailed) and the detail, kept as "<CODE>: <detail>" (lastError) so the list
+// of the files not sent can tell the reason (unsent.go, ADR-0066).
+func (e *Engine) park(ctx context.Context, row File, code, detail string) error {
+	row.Attempts, row.LastError = MaxAttempts, lastError(code, detail)
 	return e.cfg.DB.PutFile(ctx, row)
 }
 
@@ -446,7 +448,7 @@ func (e *Engine) upload(ctx context.Context, batch []prepared) (tooLarge map[str
 			_ = e.cfg.DB.PutOutbox(ctx, s.ob, e.cfg.Now())
 		}
 		if transport.IsCode(s.err, syncproto.CodeFileTooLarge) {
-			if err := e.park(ctx, s.p.row, s.err.Error()); err != nil {
+			if err := e.park(ctx, s.p.row, string(syncproto.CodeFileTooLarge), problemDetail(s.err)); err != nil {
 				return tooLarge, err
 			}
 			if tooLarge == nil {
@@ -534,7 +536,7 @@ func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpRe
 			}
 		}
 		if row.Attempts >= MaxAttempts {
-			row.State, row.LastError = StateConflict, "too many concurrent edits: resolve manually"
+			row.State, row.LastError = StateConflict, lastError(CodeTooManyConflicts, "too many concurrent edits: resolve manually")
 			return false, e.cfg.DB.PutFile(ctx, row)
 		}
 		return true, e.cfg.DB.PutFile(ctx, row)
@@ -577,6 +579,6 @@ func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncpro
 		_ = e.cfg.DB.DeleteOutbox(ctx, row.Path)
 		return true, e.cfg.DB.PutFile(ctx, row)
 	default:
-		return false, e.park(ctx, row, fmt.Sprintf("%s: %s", res.Code, res.Detail))
+		return false, e.park(ctx, row, string(res.Code), res.Detail)
 	}
 }

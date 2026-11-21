@@ -380,6 +380,7 @@ export interface SyncStatus {
   error: string;
   kind: string;
   quarantined: number;
+  unsent: number;
 }
 
 /** SyncprotoFileKind (Go syncproto.FileKind). */

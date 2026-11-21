@@ -121,6 +121,23 @@ func (s *SyncAPI) Conflicts(vaultID string) ([]syncpkg.Conflict, error) {
 	return c, bindingError(err)
 }
 
+// Unsent lists the files the vault does not send to the cloud, with the reason: parked or rejected
+// files, invalid names, symlinks, and the folders excluded on purpose (version control, trash) as
+// informative entries (ADR-0066). Status.unsent counts the ones that call for the user.
+func (s *SyncAPI) Unsent(vaultID string) ([]syncpkg.UnsentItem, error) {
+	items, err := s.app.sync.Unsent(context.Background(), vaultID)
+	if items == nil {
+		items = []syncpkg.UnsentItem{}
+	}
+	return items, bindingError(err)
+}
+
+// RetryUnsent puts the parked files at paths (all of them when paths is empty) back in the queue and
+// synchronizes at once.
+func (s *SyncAPI) RetryUnsent(vaultID string, paths []string) error {
+	return bindingError(s.app.sync.RetryUnsent(context.Background(), vaultID, paths))
+}
+
 // ConflictTexts returns both versions of a conflict.
 func (s *SyncAPI) ConflictTexts(vaultID string, id int64) (ConflictTexts, error) {
 	v, err := s.app.sync.ConflictTexts(context.Background(), vaultID, id)

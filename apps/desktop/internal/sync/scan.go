@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"sort"
 	"strconv"
@@ -20,17 +21,85 @@ type localFile struct {
 }
 
 // walkLocal lists the vault files that take part in synchronization
-// (§3.4.2: .DS_Store, *.tmp, the trash and device-local .clarae files are out).
+// (§3.4.2: .DS_Store, *.tmp, version control folders, the trash and device-local .clarae files are
+// out). What it leaves out that the user may want to know about (invalid names, symlinks, version
+// control folders, the trash) replaces, once the walk completed, the engine's list for Unsent.
 func (e *Engine) walkLocal() (map[string]localFile, error) {
 	out := map[string]localFile{}
-	err := e.cfg.FS.Walk(func(en vault.Entry) error {
-		if en.IsDir || pathrules.IsExcluded(en.Path, true) {
+	var skipped []UnsentItem
+	keep := func(s vault.Skipped) {
+		if len(skipped) < maxSkipped {
+			skipped = keepSkipped(skipped, s)
+		}
+	}
+	err := e.cfg.FS.WalkReport(func(en vault.Entry) error {
+		if reason := pathrules.ExclusionReason(en.Path, true); reason != pathrules.ReasonNone {
+			// Only the trash gets here (Walk skips the other exclusions): one entry for the folder.
+			keep(vault.Skipped{Path: en.Path, IsDir: en.IsDir, Kind: vault.SkipExcluded, Exclusion: reason})
+			if en.IsDir {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if en.IsDir {
 			return nil
 		}
 		out[en.Path] = localFile{Size: en.Size, Mtime: en.Mtime.UnixNano()}
 		return nil
-	})
+	}, keep)
+	if err == nil {
+		e.mu.Lock()
+		e.skipped = skipped
+		e.mu.Unlock()
+	}
 	return out, err
+}
+
+// forgetExcluded drops from sync.db the rows whose path is now one that is never synchronized (a rule
+// added by a newer version, ADR-0066: the .git folder of a vault synchronized before), and returns the
+// others. Such a file is not a local deletion: no delete is sent, so the server copy stays, and the
+// devices of an older version, which still sync it, keep theirs. The row, its outbox entry and its
+// merge candidate go in one transaction; the file on disk is not touched. A file the user moved here
+// to an excluded path from a synchronized one (MovedFrom) is not forgotten: it left its server path,
+// which is deleted as before. The trash is not concerned (pathrules' rules without it): a file put
+// in the trash is a deletion.
+func (e *Engine) forgetExcluded(ctx context.Context, rows []File) ([]File, error) {
+	var gone []File
+	keep := rows[:0:0]
+	for _, r := range rows {
+		if pathrules.IsExcluded(r.Path, false) && (r.MovedFrom == "" || pathrules.IsExcluded(r.MovedFrom, false)) {
+			gone = append(gone, r)
+			continue
+		}
+		keep = append(keep, r)
+	}
+	if len(gone) == 0 {
+		return rows, nil
+	}
+	err := e.cfg.DB.WithTx(ctx, func(tx *DB) error {
+		for _, r := range gone {
+			if err := tx.DeleteFile(ctx, r.FileID); err != nil {
+				return err
+			}
+			if err := tx.DeleteOutbox(ctx, r.Path); err != nil {
+				return err
+			}
+			if err := tx.DeletePending(ctx, r.FileID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range gone {
+		delete(e.candidates, r.FileID)
+		delete(e.staged, r.FileID)
+	}
+	e.log.Info().Int("files", len(gone)).Str("first", gone[0].Path).
+		Msg("sync: files now excluded from synchronization forgotten, their cloud copies left in place")
+	return keep, nil
 }
 
 func newFileID() string { return uuid.Must(uuid.NewV7()).String() }
@@ -49,6 +118,9 @@ func (e *Engine) scan(ctx context.Context) error {
 	}
 	rows, err := e.cfg.DB.Files(ctx)
 	if err != nil {
+		return err
+	}
+	if rows, err = e.forgetExcluded(ctx, rows); err != nil {
 		return err
 	}
 	byPath := make(map[string]File, len(rows))
