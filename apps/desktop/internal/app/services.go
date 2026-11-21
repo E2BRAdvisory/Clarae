@@ -28,5 +28,6 @@ func (a *App) Services() []any {
 		NewAIAPI(a),
 		NewWebViewAPI(a),
 		NewTerminalAPI(a),
+		NewPresenceAPI(a),
 	}
 }

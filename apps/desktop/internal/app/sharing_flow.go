@@ -112,4 +112,5 @@ func (a *App) applyConfig() {
 	a.sync.SetConfigDirV2(configDirV2Enabled(cur))
 	a.applyLockTimeout()
 	a.applyWebViewFlag(cur.Config)
+	a.refreshPresence() // features.presence, also while a connection is open
 }

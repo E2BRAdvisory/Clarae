@@ -89,6 +89,14 @@ export interface CoreCapabilities {
    * A vault that is read-only for the user does not open one (TerminalAPI.CanOpen).
    */
   terminal: boolean;
+  /**
+   * Live presence on shared vaults (ADR-0065): the avatars of the other users who have the same
+   * document open and their cursors. The Go core keeps a WebSocket to the cloud (the platform's own
+   * in the browser) while a file of a shared vault is watched (PresenceAPI.Watch); a private vault
+   * never takes part. It also needs the `presence` flag of the profile, which turns it off at once:
+   * Watch answers `disabled` and the UI shows nothing.
+   */
+  presence: boolean;
 }
 
 /** The kinds of host. */
@@ -110,6 +118,7 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     aiAssistant: true,
     embeddedBrowser: true,
     terminal: true,
+    presence: true,
   },
   web: {
     localFolders: false,
@@ -125,5 +134,6 @@ export const CORE_CAPABILITIES: Readonly<Record<HostKind, Readonly<CoreCapabilit
     aiAssistant: false,
     embeddedBrowser: false,
     terminal: false,
+    presence: true,
   },
 };

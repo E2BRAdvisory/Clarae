@@ -12,7 +12,8 @@
     "openWithSystemApp": true,
     "aiAssistant": true,
     "embeddedBrowser": true,
-    "terminal": true
+    "terminal": true,
+    "presence": true
   },
   "web": {
     "localFolders": false,
@@ -27,6 +28,7 @@
     "openWithSystemApp": false,
     "aiAssistant": false,
     "embeddedBrowser": false,
-    "terminal": false
+    "terminal": false,
+    "presence": true
   }
 }

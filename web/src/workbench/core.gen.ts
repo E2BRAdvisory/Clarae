@@ -6,7 +6,7 @@
 // with a time limit (`coreClient(core, ms)`; 0 = no limit). The host never writes a service or
 // method name by hand: ESLint refuses them outside this file. A new binding appears here after
 // `task gen` (docs/desktop-web-sync.md, "Contratto degli eventi").
-import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, search, sync, updater, vault, webview } from '@clarae/workbench/wailsjs/models';
+import type { app, auth, bases, cloudapi, composer, graph, history, importer, links, presence, search, sync, updater, vault, webview } from '@clarae/workbench/wailsjs/models';
 
 /** A model of the bindings as plain data: the core answers with JSON, not with model classes. */
 export type Data<T> = T extends (...args: never[]) => unknown
@@ -98,6 +98,11 @@ export interface CoreClient {
     Resolve(arg1: string, arg2: string, arg3: string): Promise<string>;
     Suggest(arg1: string, arg2: string, arg3: string, arg4: string, arg5: number): Promise<Data<Array<links.Suggestion>>>;
     UnlinkedMentions(arg1: string, arg2: string): Promise<Data<Array<links.Mention>>>;
+  };
+  readonly PresenceAPI: {
+    Move(arg1: string, arg2: string, arg3: Data<presence.Pos>): Promise<void>;
+    Unwatch(arg1: string, arg2: string): Promise<void>;
+    Watch(arg1: string, arg2: string): Promise<Data<presence.Watching>>;
   };
   readonly PropertiesAPI: {
     Keys(arg1: string): Promise<Data<Array<app.PropertyKey>>>;
@@ -255,6 +260,7 @@ export const BINDINGS = {
   HistoryAPI: ['GetSettings', 'List', 'ListDeleted', 'Read', 'Restore', 'SetSettings'],
   ImporterAPI: ['Cancel', 'DefaultFolder', 'Detect', 'ListSources', 'PickFile', 'Preview', 'Report', 'Run'],
   LinksAPI: ['ApplyRename', 'Backlinks', 'Outgoing', 'PlanRename', 'Resolve', 'Suggest', 'UnlinkedMentions'],
+  PresenceAPI: ['Move', 'Unwatch', 'Watch'],
   PropertiesAPI: ['Keys', 'Remove', 'Schema', 'SetType', 'Update'],
   SearchAPI: ['Explain', 'Query'],
   SettingsAPI: ['Capabilities', 'Get', 'Info', 'Set'],
@@ -369,6 +375,13 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
         Resolve: (arg1: string, arg2: string, arg3: string) => call('LinksAPI', 'Resolve', [arg1, arg2, arg3]),
         Suggest: (arg1: string, arg2: string, arg3: string, arg4: string, arg5: number) => call('LinksAPI', 'Suggest', [arg1, arg2, arg3, arg4, arg5]),
         UnlinkedMentions: (arg1: string, arg2: string) => call('LinksAPI', 'UnlinkedMentions', [arg1, arg2]),
+      };
+    },
+    get PresenceAPI(): CoreClient['PresenceAPI'] {
+      return {
+        Move: (arg1: string, arg2: string, arg3: Data<presence.Pos>) => call('PresenceAPI', 'Move', [arg1, arg2, arg3]),
+        Unwatch: (arg1: string, arg2: string) => call('PresenceAPI', 'Unwatch', [arg1, arg2]),
+        Watch: (arg1: string, arg2: string) => call('PresenceAPI', 'Watch', [arg1, arg2]),
       };
     },
     get PropertiesAPI(): CoreClient['PropertiesAPI'] {

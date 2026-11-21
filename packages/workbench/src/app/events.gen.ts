@@ -87,6 +87,15 @@ export const Events = {
   terminalExit: 'terminal:exit',
   /** Desktop: the terminal panel moved to the separate window (`detached`) or back to the main window (`docked`). */
   terminalLayout: 'terminal:layout',
+  /**
+   * The other users who have a watched file open (PresenceAPI.Watch), after a change. The own session and the other
+   * devices of the same user are left out. The list is complete, not a delta.
+   */
+  presenceMembers: 'presence:members',
+  /** Another user moved their cursor in a watched file. Coalesced (about 25 per second at most, the last position wins). */
+  presenceMove: 'presence:move',
+  /** Nothing is known about a watched file any more (connection lost, presence off, share revoked): drop its avatars and cursors. */
+  presenceCleared: 'presence:cleared',
 } as const;
 
 /** A name the UI can subscribe to. */
@@ -126,6 +135,9 @@ export interface EventPayloads {
   'terminal:output': TerminalOutputPayload;
   'terminal:exit': TerminalExitPayload;
   'terminal:layout': TerminalLayoutPayload;
+  'presence:members': PresenceMembersChanged;
+  'presence:move': PresenceMemberMoved;
+  'presence:cleared': PresenceCleared;
 }
 
 /** The payload of the event `N`. */
@@ -258,6 +270,43 @@ export interface MountsChangedPayload {
 export interface OpenRequestPayload {
   vault: string;
   file: string;
+}
+
+/** Go presence.Cleared. */
+export interface PresenceCleared {
+  vaultId: string;
+  path: string;
+}
+
+/** Go presence.Member. */
+export interface PresenceMember {
+  sid: string;
+  userId: string;
+  name: string;
+}
+
+/** Go presence.MemberMoved. */
+export interface PresenceMemberMoved {
+  vaultId: string;
+  path: string;
+  sid: string;
+  pos: PresencePos;
+}
+
+/** Go presence.MembersChanged. */
+export interface PresenceMembersChanged {
+  vaultId: string;
+  path: string;
+  members: PresenceMember[];
+}
+
+/** Go presence.Pos. */
+export interface PresencePos {
+  kind: string;
+  line: number;
+  col: number;
+  x: number;
+  y: number;
 }
 
 /** Go sync.CloudVaultDeleted. */

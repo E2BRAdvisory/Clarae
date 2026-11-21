@@ -24,6 +24,7 @@ import (
 	"clarae/apps/desktop/internal/history"
 	"clarae/apps/desktop/internal/indexer"
 	"clarae/apps/desktop/internal/platform"
+	"clarae/apps/desktop/internal/presence"
 	"clarae/apps/desktop/internal/search"
 	"clarae/apps/desktop/internal/store"
 	syncpkg "clarae/apps/desktop/internal/sync"
@@ -74,6 +75,7 @@ type App struct {
 	updates   updaterState             // the update channel (none in the browser build)
 	ai        aiState                  // the writing assistant (inactive; none in the browser build)
 	views     webviewState             // the browser inside the tab of an application (desktop with a driver; none in the browser build)
+	presence  *presence.Hub            // live presence on shared vaults (M25), same code in the browser core
 	terminal  terminalState            // the integrated terminal (desktop; none in the browser build)
 	// reconciler runs the reconciles of the mounts one at a time (requestReconcile).
 	reconciler coalescer
@@ -141,6 +143,7 @@ func New(opts Options) *App {
 		OnState: func(st auth.State) {
 			EventAuthState.Send(a.emit, st)
 			a.sync.SessionChanged()
+			a.refreshPresence() // another account, or none: the connection follows
 			if st.Status == auth.StatusReady {
 				go a.onSignedIn()
 			}
@@ -149,7 +152,7 @@ func New(opts Options) *App {
 	a.crypto = crypto.NewManager(crypto.Options{Store: opts.KeyStore})
 	a.sync = syncpkg.NewManager(sessionAdapter{a}, a.crypto, opts.Logger.With().Str("module", "sync").Logger(), a.emit)
 	a.sync.SetHooks(syncpkg.Hooks{
-		Shares:          func(transport.ShareEvent) { a.requestReconcile() },
+		Shares:          func(transport.ShareEvent) { a.requestReconcile(); a.refreshPresence() },
 		Config:          func(int) { go a.refreshConfigQuietly() },
 		ConfigVersion:   func() int { return a.config.Version() },
 		BeforeOverwrite: a.snapshotBeforeOverwrite,
@@ -162,6 +165,7 @@ func New(opts Options) *App {
 		// them write where the application does not).
 		ReadOnly: a.closeReadOnlyTerminals,
 	})
+	a.initPresence()
 	a.initWebViews()
 	a.initTerminal()
 	return a
@@ -243,6 +247,7 @@ func (a *App) Shutdown(_ context.Context) {
 	// First: the shells are processes of the user and have to be gone within the watchdog of the quit,
 	// and ending them touches neither the vaults nor the database.
 	a.shutdownTerminal()
+	a.presence.Close()
 	a.shutdownAI()
 	// Before a.mu: closing a view waits for the UI thread, which on quitting is the one running this,
 	// and another goroutine may hold a.mu while it waits for that thread.

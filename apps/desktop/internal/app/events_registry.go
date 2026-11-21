@@ -5,6 +5,7 @@ package app
 import (
 	"clarae/apps/desktop/internal/auth"
 	"clarae/apps/desktop/internal/events"
+	"clarae/apps/desktop/internal/presence"
 	syncpkg "clarae/apps/desktop/internal/sync"
 	"clarae/apps/desktop/internal/terminal"
 	"clarae/apps/desktop/internal/webview"
@@ -49,6 +50,9 @@ var Events = []events.Spec{
 	terminal.EventOutput.Spec(),
 	terminal.EventExit.Spec(),
 	terminal.EventLayout.Spec(),
+	presence.EventMembers.Spec(),
+	presence.EventMove.Spec(),
+	presence.EventCleared.Spec(),
 }
 
 // EventEnums are the string types of the payloads that TypeScript sees as unions of their values

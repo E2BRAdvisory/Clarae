@@ -35,6 +35,7 @@ const (
 	CapAIAssistant         Capability = "aiAssistant"
 	CapEmbeddedBrowser     Capability = "embeddedBrowser"
 	CapTerminal            Capability = "terminal"
+	CapPresence            Capability = "presence"
 )
 
 // Capabilities is what SettingsAPI.Capabilities returns: one bool per capability, the json tag
@@ -53,6 +54,7 @@ type Capabilities struct {
 	AIAssistant         bool `json:"aiAssistant"`
 	EmbeddedBrowser     bool `json:"embeddedBrowser"`
 	Terminal            bool `json:"terminal"`
+	Presence            bool `json:"presence"`
 }
 
 // CapabilitySpec declares a capability: whether each host offers it, and what it gates (the doc
@@ -126,6 +128,11 @@ var capabilitySpecs = []CapabilitySpec{
 			"docked in the window or in a separate window of the system. Only the desktop can run processes (macOS, Windows " +
 			"and Linux); TerminalAPI refuses every call in the browser with terminal-unavailable, and Host.OpenTerminalWindow " +
 			"and Host.CloseTerminalWindow fail there. A vault that is read-only for the user does not open one (TerminalAPI.CanOpen)."},
+	{CapPresence, true, true, nil,
+		"Live presence on shared vaults (ADR-0065): the avatars of the other users who have the same document open " +
+			"and their cursors. The Go core keeps a WebSocket to the cloud (the platform's own in the browser) while a " +
+			"file of a shared vault is watched (PresenceAPI.Watch); a private vault never takes part. It also needs the " +
+			"`presence` flag of the profile, which turns it off at once: Watch answers `disabled` and the UI shows nothing."},
 }
 
 // CapabilitySpecs returns the declared capabilities, in order (for the generator and the tests).
