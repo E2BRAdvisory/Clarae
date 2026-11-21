@@ -207,6 +207,29 @@ func TestIsExcluded(t *testing.T) {
 		{"Notes/.clarae-tmp-123", false, true},
 		{"Notes/" + legacyTmp + "123", false, true}, // a leftover of a 1.4.0 crash
 		{"Notes/.clarae-tmpfile.md", false, false},
+		// Version control folders (ADR-0066): at any depth, folder or file, in any case.
+		{".git", false, true},
+		{".git/HEAD", false, true},
+		{".git/objects/ab/cdef", false, true},
+		{"Projects/site/.git/config", false, true},
+		{"Projects/site/.git", false, true}, // the .git file of a worktree or a submodule
+		{".hg/store/data", false, true},
+		{".svn/wc.db", false, true},
+		{".bzr/branch-format", false, true},
+		{".jj/repo/store", false, true},
+		{".GIT/HEAD", false, true},
+		{"Notes/.Hg/x", false, true},
+		{".clarae/.git/config", false, true},
+		{".gitignore", false, false},
+		{".gitattributes", false, false},
+		{".gitmodules", false, false},
+		{".github/workflows/ci.yml", false, false},
+		{".hgignore", false, false},
+		{"Notes/git/a.md", false, false},
+		{"Notes/.git.md", false, false},
+		{"Notes/my.git/a.md", false, false},
+		{"CVS/a.md", false, false},
+		{"_darcs/a.md", false, false},
 	}
 	// The rules of the configuration folder hold under its former names: the synchronized settings
 	// are kept, everything local is excluded.
@@ -324,6 +347,54 @@ func TestIsShapeLibrary(t *testing.T) {
 	} {
 		if got := IsShapeLibrary(p); got != want {
 			t.Errorf("%q: got %v, want %v", p, got, want)
+		}
+	}
+}
+
+func TestExclusionReason(t *testing.T) {
+	tests := []struct {
+		path  string
+		trash bool
+		want  Reason
+	}{
+		{"Notes/a.md", true, ReasonNone},
+		{".git/HEAD", false, ReasonVCS},
+		{"a/.svn/.DS_Store", false, ReasonVCS}, // a version control folder wins over the rest
+		{".trash/.git/HEAD", true, ReasonVCS},
+		{"Notes/.DS_Store", false, ReasonOSJunk},
+		{"desktop.ini", false, ReasonOSJunk},
+		{"Notes/draft.tmp", false, ReasonTemporary},
+		{"Notes/.clarae-tmp-1", false, ReasonTemporary},
+		{".trash/a.md", true, ReasonTrash},
+		{".trash/a.md", false, ReasonNone},
+		{".clarae/workspace.json", false, ReasonDeviceLocal},
+		{".clarae/cache/x", false, ReasonDeviceLocal},
+		{".clarae/sync.db-wal", false, ReasonDeviceLocal},
+		{legacyDir + "/snapshots/a.md", false, ReasonDeviceLocal},
+		{".clarae/editor.json", false, ReasonNone},
+	}
+	for _, tt := range tests {
+		got := ExclusionReason(tt.path, tt.trash)
+		if got != tt.want {
+			t.Errorf("ExclusionReason(%q, trash=%v) = %q want %q", tt.path, tt.trash, got, tt.want)
+		}
+		if IsExcluded(tt.path, tt.trash) != (got != ReasonNone) {
+			t.Errorf("IsExcluded(%q, trash=%v) disagrees with ExclusionReason", tt.path, tt.trash)
+		}
+	}
+}
+
+func TestIsVCSName(t *testing.T) {
+	for _, d := range VCSDirs {
+		for _, s := range []string{d, strings.ToUpper(d)} {
+			if !IsVCSName(s) {
+				t.Errorf("IsVCSName(%q) = false", s)
+			}
+		}
+	}
+	for _, s := range []string{"git", ".gitignore", ".github", "CVS", "_darcs", ".git ", ""} {
+		if IsVCSName(s) {
+			t.Errorf("IsVCSName(%q) = true", s)
 		}
 	}
 }

@@ -373,6 +373,11 @@ func (s *Service) movePrefix(ctx context.Context, tx db.DBTX, env commitEnv, op 
 		if pathrules.Validate(np) != nil {
 			return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "moving would create an invalid path: %s", np)
 		}
+		if pathrules.IsExcluded(np, false) {
+			// The same rule as resolvePath: a folder renamed into .git (ADR-0066) or a device-local
+			// path of the configuration folder would hold files no client synchronizes.
+			return syncproto.OpResult{}, reject(syncproto.CodePathInvalid, "%s is excluded from synchronization", np)
+		}
 		nk := pathrules.Key(np)
 		if taken, err := q.PathKeyTaken(ctx, syncdb.PathKeyTakenParams{VaultID: env.vault.ID, PathKey: nk}); err == nil && !moving[taken] {
 			return syncproto.OpResult{}, reject(syncproto.CodePathCollision, "%s already exists", np)

@@ -297,50 +297,92 @@ func IsShapeLibrary(p string) bool {
 	return ok && name == ShapeLibraryFile
 }
 
-// IsExcluded reports whether a normalized path must never be synchronized
-// (§3.4.2): OS junk files, temporary files, device-specific workspace layout,
-// caches, snapshots and local databases. When excludeTrash is true the
-// in-vault trash folder is excluded as well. The rules of the configuration
-// folder hold under its former names too.
-func IsExcluded(normalized string, excludeTrash bool) bool {
+// VCSDirs are the names of the folders of the version control systems (Git, Mercurial, Subversion,
+// Bazaar, Jujutsu). A path with any segment of these names, at any depth and in any case, is never
+// synchronized (ADR-0066): a folder, or the file Git writes in its place for a worktree or a submodule.
+// CVS and _darcs are left out on purpose: they are plausible names for ordinary folders.
+var VCSDirs = []string{".git", ".hg", ".svn", ".bzr", ".jj"}
+
+// IsVCSName reports whether a path segment is one of VCSDirs, ignoring case: the rule depends on the
+// path string only, so it gives the same answer on every device and file system.
+func IsVCSName(seg string) bool {
+	for _, d := range VCSDirs {
+		if strings.EqualFold(seg, d) {
+			return true
+		}
+	}
+	return false
+}
+
+// Reason says why a path is never synchronized (ExclusionReason); "" when it is.
+type Reason string
+
+// The reasons of ExclusionReason. Their values are stable: the sync engine reports them to the UI.
+const (
+	ReasonNone        Reason = ""
+	ReasonVCS         Reason = "vcs"          // inside (or being) the folder of a version control system
+	ReasonOSJunk      Reason = "os-junk"      // .DS_Store, Thumbs.db, desktop.ini
+	ReasonTemporary   Reason = "temporary"    // *.tmp and the staging files of atomic writes
+	ReasonTrash       Reason = "trash"        // the in-vault trash, when excluded
+	ReasonDeviceLocal Reason = "device-local" // layout, caches, snapshots and databases of the configuration folder
+)
+
+// ExclusionReason tells whether a normalized path must never be synchronized (§3.4.2, ADR-0066) and
+// why: version control folders, OS junk files, temporary files, device-specific workspace layout,
+// caches, snapshots and local databases. When excludeTrash is true the in-vault trash folder is
+// excluded as well. The rules of the configuration folder hold under its former names too.
+func ExclusionReason(normalized string, excludeTrash bool) Reason {
+	for _, seg := range strings.Split(normalized, "/") {
+		if IsVCSName(seg) {
+			return ReasonVCS
+		}
+	}
 	dir, base := Split(normalized)
 	switch base {
 	case ".DS_Store", "Thumbs.db", "desktop.ini":
-		return true
+		return ReasonOSJunk
 	}
 	if strings.HasSuffix(strings.ToLower(base), ".tmp") {
-		return true
+		return ReasonTemporary
 	}
 	// Staging files of atomic writes (vault.WriteFile): a crash can leave one behind
 	// and it must never be synchronized, indexed or listed.
 	if IsTmpName(base) {
-		return true
+		return ReasonTemporary
 	}
 	if excludeTrash && (normalized == TrashDir || strings.HasPrefix(normalized, TrashDir+"/")) {
-		return true
+		return ReasonTrash
 	}
 	cfg := configRoot(normalized)
 	if cfg == "" {
-		return false
+		return ReasonNone
 	}
 	// Inside the configuration folder: only user settings are synchronized (§3.4.6); everything
 	// device-specific or derived stays local.
 	for _, local := range []string{"cache", "snapshots"} {
 		if HasPrefix(normalized, cfg+"/"+local) {
-			return true
+			return ReasonDeviceLocal
 		}
 	}
 	if dir == cfg {
 		switch {
 		case strings.HasPrefix(base, "workspace") && strings.HasSuffix(base, ".json"):
-			return true
+			return ReasonDeviceLocal
 		case base == "index.db", base == "sync.db", base == "app.db":
-			return true
+			return ReasonDeviceLocal
 		case strings.HasSuffix(base, ".db-journal"), strings.HasSuffix(base, ".db-wal"), strings.HasSuffix(base, ".db-shm"):
-			return true
+			return ReasonDeviceLocal
 		}
 	}
-	return false
+	return ReasonNone
+}
+
+// IsExcluded reports whether a normalized path must never be synchronized: ExclusionReason gives a
+// reason. The same rule decides what the client sees of a vault (vault.FS.Walk) and which commits the
+// cloud refuses, so a path that becomes excluded must be forgotten, never taken for a deletion
+// (ADR-0066).
+func IsExcluded(normalized string, excludeTrash bool) bool {
+	return ExclusionReason(normalized, excludeTrash) != ReasonNone
 }
 
 // executableExts are the extensions the operating systems run, or hand to an interpreter, when such

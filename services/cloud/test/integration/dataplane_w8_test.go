@@ -374,3 +374,32 @@ func TestSharedVaultRefusesWindowsReservedNames(t *testing.T) {
 		t.Errorf("folder rename to a reserved name: %v", res[0])
 	}
 }
+
+// Shared vaults refuse the folders of version control systems at any depth (ADR-0066), and keep the
+// files around them (.gitignore, .github/).
+func TestSharedVaultRefusesVCSPaths(t *testing.T) {
+	e := newEnv(t)
+	ada := e.user("ada")
+	v := ada.createVault("Repo", "shared")
+	h := ada.putBlob(v, []byte("x"))
+	for _, p := range []string{".git/config", ".git", "Projects/site/.git/HEAD", ".hg/store/data", ".svn/wc.db", ".bzr/branch-format", ".jj/repo/store", ".GIT/index"} {
+		if res := ada.commit(v, create(newID(), p, h)); res[0].code() != "PATH_INVALID" {
+			t.Errorf("%s: %v", p, res[0])
+		}
+	}
+	for _, p := range []string{".gitignore", ".github/workflows/ci.yml", "docs/a.md"} {
+		mustAccepted(t, ada.commit(v, create(newID(), p, h))[0])
+	}
+	tree, _ := ada.tree(v)
+	if len(tree) != 3 {
+		t.Fatalf("tree: %v", tree)
+	}
+	f := newID()
+	mustAccepted(t, ada.commit(v, create(f, "notes/b.md", h))[0])
+	if res := ada.commit(v, move(f, 1, ".git/b.md")); res[0].code() != "PATH_INVALID" {
+		t.Errorf("move into .git: %v", res[0])
+	}
+	if res := ada.commit(v, map[string]any{"op_id": newID(), "op": "move_prefix", "from": "docs", "to": "site/.hg"}); res[0].code() != "PATH_INVALID" {
+		t.Errorf("folder rename into .hg: %v", res[0])
+	}
+}
