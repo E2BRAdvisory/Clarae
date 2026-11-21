@@ -4,6 +4,42 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [1.8.3] - 2026-11-21
+
+Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S1…S3: **le cartelle dei sistemi di versione non si sincronizzano più**, e il core sa elencare **i file che non invia, con il motivo** ([ADR-0066](docs/adr/0066-vcs-esclusi-e-file-non-inviati.md), accettato dall'owner il 2026-11-21, non ancora recepito in `Specifications.md`). Il blocco «File non inviati» in Impostazioni › Sincronizzazione arriva con M26-S4: in questa versione l'elenco esiste nel core e nei binding, non nell'interfaccia. Nessuna migrazione del database.
+
+### Compatibilità
+
+- **`.git`, `.hg`, `.svn`, `.bzr` e `.jj` sono esclusi dalla sincronizzazione**: cartelle o file con questi nomi, a qualunque profondità, senza distinzione di maiuscole. Restano sincronizzati `.gitignore`, `.gitattributes`, `.gitmodules`, `.github/` e `.hgignore`. Le cartelle escono anche dall'indice, dalla ricerca e dagli ZIP; su disco restano intatte per git e per il terminale.
+- **I file VCS già nel cloud restano dove sono.** Un dispositivo 1.8.3 li dimentica nel proprio `sync.db` senza inviare cancellazioni, quindi un dispositivo ancora su 1.8.2 o precedente non perde la propria `.git`. Le copie restano nella quota del proprietario finché qualcuno non le toglie.
+- **Il cloud 1.8.3 rifiuta con `PATH_INVALID`** i nuovi commit su quei percorsi nei vault condivisi, anche come destinazione di una rinomina di cartella (`move_prefix`, che prima non controllava le esclusioni). Un client 1.8.2 che prova a inviarli mette da parte il file, senza bloccare la sincronizzazione. Nei vault privati il cloud non vede i percorsi: i client 1.8.2 continuano a scambiarsi la `.git` tra loro, quelli 1.8.3 la ignorano.
+- **Un file che diventa escluso non è più una cancellazione**, per qualunque regola presente o futura. Fa eccezione un file sincronizzato che l'utente rinomina in un nome escluso (per esempio `nota.md` → `nota.tmp`): lascia il suo percorso nel cloud, che si cancella come prima.
+
+### Client desktop e workbench
+
+- **Elenco dei file non inviati nel core** (`Engine.Unsent`, binding `SyncAPI.Unsent`): file messi da parte (`too-large`, `rejected` con il codice del server, `encrypt-failed`, `share-root-move`), in conflitto per troppe modifiche concorrenti, in attesa di un merge, nomi che le regole dei percorsi rifiutano (es. `:` nel nome), link simbolici, e come voci informative una per cartella le cartelle VCS e il cestino. File di sistema, temporanei e locali di `.clarae/` non si elencano.
+- **`SyncAPI.RetryUnsent`** rimette in coda i file messi da parte (tutti, o quelli indicati) e sincronizza subito; i conflitti restano alla loro vista. **`Status.unsent`** (evento `sync:status`) conta le voci che richiedono un intervento.
+- Il motivo di un file messo da parte è ora salvato come `<CODE>: <dettaglio>`, con codici locali `ENCRYPT_FAILED` e `TOO_MANY_CONFLICTS`. Le righe scritte dalle versioni precedenti sono riconosciute.
+- `vault.FS.WalkReport` riporta ciò che la visita salta, senza una seconda visita del disco.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 1.8.3 (stub rigenerati); nessuna operazione nuova. Binding `SyncAPI.Unsent` e `SyncAPI.RetryUnsent`, campo `unsent` di `sync.Status`; voce `sync.unsent` nel registro di parità (`partial` fino all'interfaccia di M26-S4).
+
+### Documentazione
+
+- ADR-0066 e la sezione M26 della roadmap. Le righe da aggiornare in `Specifications.md` (§3.4.2, §3.4.3, §3.4.4 A, C.4) sono nelle «Conseguenze» dell'ADR, a cura dell'owner.
+
+### Verificato
+
+- `task ci` verde sull'albero della 1.8.3: lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
+- Test d'integrazione del cloud mirati (`TestSharedVaultRefusesVCSPaths`, `TestSharedVaultRefusesWindowsReservedNames`) verdi su container veri. **Non eseguiti** in questa versione `task e2e` e il `task test-integration` completo: nessuna modifica all'interfaccia, ma restano da rilanciare con M26-S4.
+
+### Non provato e lavoro successivo
+
+- **Nessun e2e a due dispositivi contro il cloud reale** per la dimenticanza delle righe escluse. Un cloud 1.8.3 rifiuta i percorsi `.git` nei vault condivisi, quindi lo stato «già sincronizzato» non si prepara: lo copre il test del motore con il remote finto, verificato anche togliendo la correzione (il test fallisce).
+- Da fare in M26-S4 e M26-S5: interfaccia «File non inviati» con «Riprova», guide utente, revisione avversariale.
+
 ## [1.8.2] - 2026-11-21
 
 Milestone M25 ([roadmap](docs/roadmap.md) §13-octodecies), rilasciata nella 1.8.2: **presenza in tempo reale sui vault condivisi** ([ADR-0065](docs/adr/0065-presenza-in-tempo-reale.md), accettato dall'owner il 2026-11-20 e recepito in `Specifications.md` v1.9). Gli avatar degli **altri** utenti che hanno aperto lo stesso file compaiono nella barra dell'Esplora file, e sopra il documento i loro cursori con il nome. **Non è co-editing:** il merge resta sul client e [ADR-0050](docs/adr/0050-ai-inattiva-e-collab-spento.md) resta in vigore. Questa sezione non è ancora una release: versione, `info.version` dell'OpenAPI e tag si fanno al rilascio. Nessuna migrazione del database.
