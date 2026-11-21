@@ -4,9 +4,9 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.8.2] - 2026-11-21
 
-Milestone M25 ([roadmap](docs/roadmap.md) §13-octodecies), prevista nella 1.8.2: **presenza in tempo reale sui vault condivisi** ([ADR-0065](docs/adr/0065-presenza-in-tempo-reale.md), accettato dall'owner il 2026-11-20 e recepito in `Specifications.md` v1.9). Gli avatar degli **altri** utenti che hanno aperto lo stesso file compaiono nella barra dell'Esplora file, e sopra il documento i loro cursori con il nome. **Non è co-editing:** il merge resta sul client e [ADR-0050](docs/adr/0050-ai-inattiva-e-collab-spento.md) resta in vigore. Questa sezione non è ancora una release: versione, `info.version` dell'OpenAPI e tag si fanno al rilascio. Nessuna migrazione del database.
+Milestone M25 ([roadmap](docs/roadmap.md) §13-octodecies), rilasciata nella 1.8.2: **presenza in tempo reale sui vault condivisi** ([ADR-0065](docs/adr/0065-presenza-in-tempo-reale.md), accettato dall'owner il 2026-11-20 e recepito in `Specifications.md` v1.9). Gli avatar degli **altri** utenti che hanno aperto lo stesso file compaiono nella barra dell'Esplora file, e sopra il documento i loro cursori con il nome. **Non è co-editing:** il merge resta sul client e [ADR-0050](docs/adr/0050-ai-inattiva-e-collab-spento.md) resta in vigore. Questa sezione non è ancora una release: versione, `info.version` dell'OpenAPI e tag si fanno al rilascio. Nessuna migrazione del database.
 
 ### Compatibilità
 
@@ -33,7 +33,7 @@ Milestone M25 ([roadmap](docs/roadmap.md) §13-octodecies), prevista nella 1.8.2
 
 ### Contratti
 
-- `api/openapi.yaml`: rotta esterna `GET /presence` (WebSocket, il primo frame `auth` porta il token), con frame, codici d'errore e limiti. `api/config-profile.schema.json`: `features.presence` (booleano, default `true`).
+- `api/openapi.yaml`: `info.version` a 1.8.2 (stub rigenerati) e rotta esterna `GET /presence` (WebSocket, il primo frame `auth` porta il token), con frame, codici d'errore e limiti. `api/config-profile.schema.json`: `features.presence` (booleano, default `true`).
 - Binding `PresenceAPI` (`Watch`, `Unwatch`, `Move`), eventi `presence:members`, `presence:move`, `presence:cleared`, capability `presence`; voce `presence` nel registro di parità.
 
 ### Build
@@ -45,11 +45,17 @@ Milestone M25 ([roadmap](docs/roadmap.md) §13-octodecies), prevista nella 1.8.2
 - ADR-0065 accettato e allineato al contratto effettivo; [`Specifications.md` v1.9](docs/spec-v1.9-proposta.md) applicato (2026-11-20).
 - Nuove pagine: [Presenza](docs/user-guide/presenza.md) (guida utente), [Presenza in tempo reale](docs/admin-guide/presenza.md) (guida dell'amministratore) e il runbook [`docs/qa/m25-presenza.md`](docs/qa/m25-presenza.md) (P1…P22). Aggiornati data-retention, `desktop-web-sync.md`, `architecture.md` e la roadmap.
 
+### Verificato
+
+- `task ci` verde sull'albero di M25 (598 s): lint, `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (98 funzioni) e `check-gen`. Un primo tentativo si era fermato al lint (un file della guida admin non formattato) e un `task e2e` era stato interrotto per il carico della macchina; rilanciati a macchina scarica.
+- `task e2e` verde (desktop 272, bundle di produzione 48, console web 103), `task e2e-matrix -- presence.spec webapp.spec` verde (44 passati) sul mock e sul core WASM, `task test-integration` verde (115 s, compresi i test della presenza tra due repliche sullo stesso PostgreSQL).
+- Dopo il passaggio alla versione 1.8.2 rieseguiti `check-gen`, parità e i controlli dei file toccati.
+
 ### Non provato e lavoro successivo
 
 - **Nessuna prova con più utenti reali** (desktop e web insieme), su un Ingress vero, con più repliche, né su Safari (corrispondenza di `'self'` con `wss:`): i test sono automatici (hub, due «repliche» sullo stesso PostgreSQL, server finto, mock dei binding). Il manuale è in `docs/qa/m25-presenza.md`, a carico dell'owner.
 - Il carico di `NOTIFY` con molti utenti nella stessa stanza e i limiti (40 movimenti/s, ~15 Hz) vanno misurati. L'avatar con immagine non c'è (solo iniziali e colore).
-- Revisione: **Pass con riserve**, quattro rilievi bassi corretti. `task ci` della milestone ancora da eseguire.
+- Revisione: **Pass con riserve**, quattro rilievi bassi corretti.
 
 ## [1.8.1] - 2026-11-20
 
