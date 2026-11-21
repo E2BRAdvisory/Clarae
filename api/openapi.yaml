@@ -59,7 +59,8 @@ info:
     deadline and their own size limits.
 
     **Routes outside this contract** (ADR-0037 §3): resumable uploads (tus 1.0.0) and
-    the Server-Sent Events stream (`GET /events`) speak their own protocol, so no stub
+    the Server-Sent Events stream (`GET /events`) and the presence WebSocket (`GET /presence`)
+    speak their own protocol, so no stub
     or client is generated for them. They are documented in the root extension
     `x-clarae-external-routes`.
 servers:
@@ -90,7 +91,8 @@ tags:
 
 x-clarae-external-routes:
   description: >-
-    Routes served under the same base path, with the same bearer authentication and the same
+    Routes served under the same base path, with the same bearer authentication (the presence
+    WebSocket authenticates with its first frame instead) and the same
     per-client rate limit, but outside the generated contract (ADR-0037 §3). The request
     validator, the 60 s deadline and the 8 MiB JSON body limit do not apply to them. Errors are
     `application/problem+json` with the codes of `ErrorCode`. Besides the answers listed for each
@@ -208,6 +210,66 @@ x-clarae-external-routes:
         when the account is deleted) the stream ends and a reconnect is refused
       token-expired: '`{}`: the access token expired; the stream closes right after'
       heartbeat: 'the comment line `: ping`, every 25 s (not an event: no `event:` field)'
+
+  presence:
+    protocol: WebSocket (RFC 6455), JSON text frames
+    description: >-
+      Live presence on shared vaults (ADR-0065, M25): who else has the same document open and where
+      their pointer is. It is ephemeral: nothing is saved, nothing goes to the audit log, no frame
+      is logged. It is **not** co-editing. Private (end-to-end encrypted) vaults have no presence.
+
+      **Authentication.** A browser cannot send an `Authorization` header on a WebSocket, so the
+      route has no bearer middleware: the first frame must be `{"t":"auth","token":"<access token>"}`
+      within 10 s, verified exactly like the bearer middleware (signature, `iss`, `aud`, `azp`, the
+      user status with its 30 s cache). Before the token expires the client sends another `auth`
+      frame with a fresh token (same user); otherwise the server sends `error` `token-expired` and
+      closes (close code 4401). A suspension closes the connection (`user-suspended`, 4403). The
+      per-client rate limit applies to the upgrade request only.
+
+      **Room** = `{"vault": "<vault uuid>", "file": "<file uuid>"}`, the ids the server assigns
+      (the same for the owner and for a mount of a folder share). The server stamps the identity of
+      every member: `{"sid": "<random per connection>", "user_id": "<uuid>", "name": "<display name>"}`.
+
+      **Client to server.** `join {room}` (authorized for that file: at least viewer through
+      ownership, a vault, folder or document share, directly or through a group; the vault must be
+      shared), `leave {room}`, `move {room, pos}` (`pos` is opaque JSON of at most 256 bytes, for
+      example `{"k":"text","line":3,"col":7}` or `{"k":"scene","x":10,"y":20}`; the server never
+      interprets it), `auth {token}` (renewal) and `ping`.
+
+      **Server to client.** `ready {sid}` after authentication; `members {room, list}` after a
+      `join` (everyone in the room, the caller included); `joined {room, member}` and `left {room,
+      sid}` for the others; `move {room, sid, pos}` (never sent back to its sender; latest position
+      wins, at most about 15 per second per client); `pong`; `error {code, room?}`. When the error
+      carries a `room` it concerns that room only (the connection stays open); without it the
+      connection closes after the frame.
+
+      **Error codes.** `unauthenticated`, `user-suspended`, `token-expired`, `presence-disabled`
+      (`features.presence` is off in the user's Config Profile; closes), `vault-encrypted` (the
+      vault is private), `not-found` (no such file, or not visible to the user), `forbidden` (sent
+      with a `room` when the user lost access: share revoked or changed, file moved out of the
+      share; the connection leaves that room), `too-many-rooms`, `rate-limited` (more than 32
+      connections for the user on this replica: closes with 1013; or too many joins),
+      `not-joined`, `bad-frame`, `frame-too-large`, `slow-consumer`, `internal`.
+
+      **Limits.** A client frame is at most 1 KiB, except `auth` (8 KiB, a token); more than 40
+      `move` per second per connection are held and only the latest is sent; at most 16 rooms per
+      connection and 32 connections per user per replica. The server pings every 30 s; the
+      connection closes if the pong does not arrive within 20 s. Access is rechecked on every
+      `share_changed`, `account_changed` and `config_changed` event and every 60 s.
+
+      **Replicas.** Rooms live in memory on the replica holding the connections; replicas exchange
+      joins, leaves and (only for rooms with members elsewhere) moves on the PostgreSQL channel
+      `presence`. A reverse proxy must allow the WebSocket upgrade and idle connections of at least
+      an hour (see deploy/compose/Caddyfile and the `ingress.presence` values of the Helm chart).
+      Server: services/cloud/internal/presence; client: apps/desktop/internal/presence.
+    routes:
+      - method: GET
+        path: /presence
+        summary: Open the presence WebSocket (upgrade request without credentials; the first frame authenticates)
+        responses:
+          '101': switching protocols
+          '403': the browser origin is not allowed
+          '429': 'RATE_LIMITED: the client address exhausted its bucket'
 
 paths:
   /healthz:

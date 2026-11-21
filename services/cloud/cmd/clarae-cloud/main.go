@@ -212,6 +212,13 @@ func run(role config.Role) error {
 			return application.Hub.Run(hubCtx)
 		})
 		g.Go(func() error {
+			// Presence follows the same lifecycle as the notification hub.
+			presenceCtx, stopPresence := context.WithCancel(context.WithoutCancel(ctx))
+			defer stopPresence()
+			go func() { <-drain.Closed(); stopPresence() }()
+			return application.Presence.Run(presenceCtx)
+		})
+		g.Go(func() error {
 			logger.Info().Str("addr", cfg.GRPCListenAddr).Msg("grpc listening")
 			return grpcSrv.Serve(lis)
 		})

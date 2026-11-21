@@ -4,6 +4,8 @@
 package app
 
 import (
+	"net/url"
+
 	"github.com/rs/zerolog"
 
 	"clarae/services/cloud/internal/admin"
@@ -16,6 +18,7 @@ import (
 	"clarae/services/cloud/internal/jobs"
 	"clarae/services/cloud/internal/keycloak"
 	"clarae/services/cloud/internal/notify"
+	"clarae/services/cloud/internal/presence"
 	"clarae/services/cloud/internal/privacy"
 	"clarae/services/cloud/internal/quota"
 	"clarae/services/cloud/internal/revisions"
@@ -41,6 +44,7 @@ type App struct {
 	Groups    *groups.Service
 	Config    *configprofiles.Service
 	Hub       *notify.Hub
+	Presence  *presence.Service
 	// Keycloak is the identity provider admin client; main replaces the Disabled default
 	// before FillDeps, tests substitute a fake.
 	Keycloak keycloak.Admin
@@ -80,6 +84,7 @@ func New(d *db.DB, store storage.BlobStore, log zerolog.Logger, opts ...Option) 
 	a.Sync = syncmod.NewService(d, a.Sharing, a.Quota)
 	a.Revisions = revisions.NewService(d, a.Sharing, a.Sync, a.Blobs)
 	a.Hub = notify.NewHub(d, log)
+	a.Presence = presence.NewService(d, log, a.Sharing, a.Config, a.Hub)
 	return a
 }
 
@@ -113,5 +118,20 @@ func (a *App) FillDeps(d httpserver.Deps) httpserver.Deps {
 	d.Quota = quota.NewHTTP(a.Quota)
 	d.Tus = blobs.NewTusHandler(a.Blobs, a.Sync.MaxFileBytes, nil)
 	d.Events = a.Hub.SSEHandler()
+	if d.Auth != nil {
+		opts := presence.Options{}
+		if d.WebUIOrigin != "" {
+			opts.OriginPatterns = []string{originHost(d.WebUIOrigin)}
+		}
+		d.Presence = a.Presence.Handler(d.Auth, opts)
+	}
 	return d
+}
+
+// originHost is the host[:port] of an origin URL, the form websocket origin patterns take.
+func originHost(origin string) string {
+	if u, err := url.Parse(origin); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return origin
 }

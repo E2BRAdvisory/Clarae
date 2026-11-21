@@ -111,6 +111,29 @@ func TestCSPWithoutIssuerIsSelfOnly(t *testing.T) {
 	}
 }
 
+// The presence WebSocket (M25) is same-origin (/api/v1/presence): 'self' in connect-src covers
+// ws: and wss: of the page's own origin in the CSP3 browsers the workbench supports (Chrome,
+// Firefox, Safari 15.4+). The policy must neither list a scheme-wide ws:/wss: source, which would
+// allow any host, nor lose 'self'.
+func TestWorkbenchCSPAllowsTheSameOriginWebSocket(t *testing.T) {
+	for _, csp := range []string{WorkbenchCSP("https://id.example.com"), WorkbenchCSP("")} {
+		var connect string
+		for _, d := range strings.Split(csp, ";") {
+			if d = strings.TrimSpace(d); strings.HasPrefix(d, "connect-src ") {
+				connect = d
+			}
+		}
+		if !strings.Contains(connect, "'self'") {
+			t.Errorf("connect-src lacks 'self': %q", connect)
+		}
+		for _, src := range strings.Fields(connect) {
+			if src == "ws:" || src == "wss:" || src == "*" {
+				t.Errorf("connect-src allows every host through %q: %q", src, connect)
+			}
+		}
+	}
+}
+
 func TestMethodsAndHead(t *testing.T) {
 	if rec := get(testHandler(), http.MethodPost, "/"); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST: %d", rec.Code)

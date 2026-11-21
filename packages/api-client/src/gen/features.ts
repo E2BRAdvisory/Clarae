@@ -22,6 +22,11 @@ export const Feature = {
   Collab: 'collab',
   // Opening vaults in the browser (vault workbench of the Web UI, ADR-0029). The desktop ignores it.
   WebWorkbench: 'web_workbench',
+  // Live presence on shared vaults (ADR-0065): the avatars of the other users who have the same
+  // document open and their cursors. Only shared vaults take part; a private vault has no presence.
+  // Off, the client opens no presence connection and the cloud refuses it. Presence is not saved or
+  // audited.
+  Presence: 'presence',
   // Excalidraw drawings: creating, opening and embedding .excalidraw files. Off also disables every
   // drawing_* flag.
   Drawings: 'drawings',
@@ -73,6 +78,7 @@ export const FEATURES: readonly Feature[] = [
   Feature.Ai,
   Feature.Collab,
   Feature.WebWorkbench,
+  Feature.Presence,
   Feature.Drawings,
   Feature.Canvas,
   Feature.Presentations,
@@ -94,6 +100,7 @@ export const FEATURE_DEFAULTS: Readonly<Record<Feature, boolean>> = {
   [Feature.Ai]: false,
   [Feature.Collab]: false,
   [Feature.WebWorkbench]: true,
+  [Feature.Presence]: true,
   [Feature.Drawings]: true,
   [Feature.Canvas]: true,
   [Feature.Presentations]: true,

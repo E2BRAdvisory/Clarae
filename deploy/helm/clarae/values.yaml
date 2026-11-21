@@ -190,6 +190,12 @@ ingress:
     secretName: clarae-tls
   annotations: {} # applied to both Ingress objects (cert-manager issuer, ...)
   proxyBodySize: 64m
+  # Live presence (WebSocket /api/v1/presence, M25): a dedicated Ingress object on the main host raises the
+  # proxy timeouts of nginx (a WebSocket is an idle connection most of the time; the server pings every 30 s).
+  # Keep at least 3600. Other controllers: put their equivalent in annotations.
+  presence:
+    timeoutSeconds: 3600
+    annotations: {} # extra annotations for the presence Ingress only
   grpc:
     mode: host # host | path
     host: notify.clarae.example.com

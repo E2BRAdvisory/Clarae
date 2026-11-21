@@ -32,6 +32,12 @@ const (
 	// desktop ignores it.
 	WebWorkbench = "web_workbench"
 
+	// Presence: Live presence on shared vaults (ADR-0065): the avatars of the other users who have the
+	// same document open and their cursors. Only shared vaults take part; a private vault has no
+	// presence. Off, the client opens no presence connection and the cloud refuses it. Presence is not
+	// saved or audited.
+	Presence = "presence"
+
 	// Drawings: Excalidraw drawings: creating, opening and embedding .excalidraw files. Off also
 	// disables every drawing_* flag.
 	Drawings = "drawings"
@@ -91,6 +97,7 @@ var Known = []string{
 	Ai,
 	Collab,
 	WebWorkbench,
+	Presence,
 	Drawings,
 	Canvas,
 	Presentations,
@@ -112,6 +119,7 @@ var Defaults = map[string]bool{
 	Ai:                false,
 	Collab:            false,
 	WebWorkbench:      true,
+	Presence:          true,
 	Drawings:          true,
 	Canvas:            true,
 	Presentations:     true,
@@ -133,6 +141,7 @@ var Descriptions = map[string]string{
 	Ai:                "Reserved: AI writing assistant of the editor (ADR-0050). Implemented but inactive: it also needs a build that enables it, so a profile alone cannot switch it on in a released build.",
 	Collab:            "Reserved: real-time collaboration in the editor (ADR-0050). Implemented but off: it also needs a build that enables it and a registered provider, and none exists.",
 	WebWorkbench:      "Opening vaults in the browser (vault workbench of the Web UI, ADR-0029). The desktop ignores it.",
+	Presence:          "Live presence on shared vaults (ADR-0065): the avatars of the other users who have the same document open and their cursors. Only shared vaults take part; a private vault has no presence. Off, the client opens no presence connection and the cloud refuses it. Presence is not saved or audited.",
 	Drawings:          "Excalidraw drawings: creating, opening and embedding .excalidraw files. Off also disables every drawing_* flag.",
 	Canvas:            "Canvas (.canvas): creating and opening canvases.",
 	Presentations:     "Marp presentations (.marp): creating them, the SlideShow panel, full-screen presenting and the HTML, PDF and PPTX exports (ADR-0047, ADR-0048).",
@@ -166,6 +175,7 @@ func productDefaults() map[string]any {
 			"drawings":            true,
 			"envelope_v2":         true,
 			"path_v2":             true,
+			"presence":            true,
 			"presentations":       true,
 			"sharing":             true,
 			"web_viewer":          true,

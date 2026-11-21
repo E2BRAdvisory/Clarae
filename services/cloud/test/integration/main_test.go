@@ -150,6 +150,7 @@ func newEnv(t *testing.T) *env {
 	hubCtx, stopHub := context.WithCancel(ctx)
 	t.Cleanup(stopHub)
 	go func() { _ = application.Hub.Run(hubCtx) }()
+	go func() { _ = application.Presence.Run(hubCtx) }()
 	router := httpserver.NewRouter(application.FillDeps(httpserver.Deps{
 		Logger: zerolog.Nop(),
 		Auth:   authn,

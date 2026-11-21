@@ -61,6 +61,9 @@ type Deps struct {
 	// outside the generated router and are optional (nil in unit tests).
 	Tus    *blobs.TusHandler
 	Events http.Handler
+	// Presence serves the WebSocket of live presence (M25). It authenticates
+	// with its first frame, so it is mounted without the bearer middleware.
+	Presence http.Handler
 	// WebUI serves the embedded SPA for every path the API does not own
 	// (nil: plain 404).
 	WebUI       http.Handler
@@ -156,6 +159,16 @@ func NewRouter(d Deps) http.Handler {
 			events = d.Drain.Streams(events)
 		}
 		r.With(d.Auth.Protect).Method(http.MethodGet, BasePath+"/events", events)
+	}
+
+	if d.Presence != nil {
+		presence := d.Presence
+		if d.Drain != nil {
+			presence = d.Drain.Streams(presence)
+		}
+		// No Auth.Protect: a browser cannot send an Authorization header on a
+		// WebSocket; the handler verifies the token of the first frame itself.
+		r.Method(http.MethodGet, BasePath+"/presence", presence)
 	}
 
 	strict := api.NewStrictHandlerWithOptions(

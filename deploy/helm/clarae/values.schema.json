@@ -165,6 +165,13 @@
         },
         "annotations": { "type": "object" },
         "proxyBodySize": { "type": "string" },
+        "presence": {
+          "type": "object",
+          "properties": {
+            "timeoutSeconds": { "type": "integer", "minimum": 60 },
+            "annotations": { "type": "object" }
+          }
+        },
         "grpc": {
           "type": "object",
           "properties": {

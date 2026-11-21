@@ -26,6 +26,9 @@
 		health_interval 10s
 		# Streaming responses (SSE) must not be buffered.
 		flush_interval -1
+		# The presence WebSocket (/api/v1/presence) needs nothing more: Caddy upgrades the connection by
+		# itself, keeps it open as long as the peers do (no idle timeout; the server pings every 30 s) and
+		# closes it when the backend drops out of the pool, so the client simply reconnects.
 	}
 }
 

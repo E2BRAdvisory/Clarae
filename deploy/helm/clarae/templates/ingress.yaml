@@ -26,6 +26,39 @@ spec:
                 name: {{ include "clarae.fullname" . }}
                 port: { name: http }
 ---
+# Live presence (WebSocket, /api/v1/presence): ingress-nginx upgrades the connection by itself, but closes an
+# idle one after proxy-read-timeout (60 s by default). The server pings every 30 s, which keeps it open; the long
+# timeouts let a quiet connection (the user reading) survive a slow network and a restart of the proxy config.
+# The more specific path wins over "/" of the first Ingress. With another controller, set the equivalent in
+# ingress.presence.annotations.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "clarae.fullname" . }}-presence
+  labels: {{- include "clarae.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.presence.timeoutSeconds | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.presence.timeoutSeconds | quote }}
+    {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
+    {{- with .Values.ingress.presence.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /api/v1/presence
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "clarae.fullname" . }}
+                port: { name: http }
+---
 # gRPC (notification stream): nginx must speak HTTP/2 to the backend, hence its own Ingress object.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
