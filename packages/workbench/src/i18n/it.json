@@ -1728,5 +1728,9 @@
     "webapp": "Applicazione «{{name}}»: si apre nella sua scheda",
     "pdfPrev": "Pagina precedente",
     "pdfNext": "Pagina successiva"
+  },
+  "presence": {
+    "collaborators": "Persone in questo file",
+    "more": "Altre {{count}}: {{names}}"
   }
 }

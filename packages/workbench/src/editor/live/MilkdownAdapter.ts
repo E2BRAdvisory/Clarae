@@ -28,8 +28,10 @@ import type {
   LinkHit,
   NoteEditorHandle,
   RevealTarget,
+  ScreenPoint,
   ViewSnapshot,
 } from '../handle';
+import { insideBox, watchLayout } from '../layoutWatch';
 import type { AnchorRect, EditorStats, SourceEdit } from '../types';
 import { loadEmoji, loadLanguages } from './chunks';
 import { COMMANDS } from './commands';
@@ -659,6 +661,47 @@ export class LiveEditor implements NoteEditorHandle {
       spec: { target: p.target, heading: p.heading, block: p.block, alias: p.alias, embed: false },
       rect: rectOf(dom.getBoundingClientRect()),
     };
+  }
+
+  locAt(at: { x: number; y: number }): { line: number; col: number } | null {
+    const { view } = this;
+    let pos: number | null = null;
+    try {
+      pos = view.posAtCoords({ left: at.x, top: at.y })?.pos ?? null;
+    } catch {
+      /* no layout */
+    }
+    if (pos === null) return null;
+    return locsOf(this.textSource, view.state.doc, [{ pos }])[0] ?? null;
+  }
+
+  /** What `posAt` found for a place, per document: the search writes the document once per step, a scroll must not repeat it. */
+  private readonly placed = new WeakMap<PMNode, Map<string, number>>();
+
+  pointAt(loc: { line: number; col: number }): ScreenPoint | null {
+    const { view } = this;
+    const doc = view.state.doc;
+    const line = Math.max(1, Math.trunc(loc.line) || 1);
+    const col = Math.max(1, Math.trunc(loc.col) || 1);
+    let cache = this.placed.get(doc);
+    if (!cache) this.placed.set(doc, (cache = new Map<string, number>()));
+    const key = `${line}:${col}`;
+    let pos = cache.get(key);
+    if (pos === undefined) {
+      pos = posAt(this.textSource, doc, { line, col });
+      cache.set(key, pos);
+    }
+    try {
+      const c = view.coordsAtPos(pos);
+      const point = { x: c.left, y: c.top, height: c.bottom - c.top };
+      return insideBox(point, this.root.getBoundingClientRect()) ? point : null;
+    } catch {
+      return null; // no layout, or the place is not rendered
+    }
+  }
+
+  onLayout(listener: () => void): () => void {
+    return watchLayout(this.root, this.view.dom, listener);
   }
 
   openSearch(): void {

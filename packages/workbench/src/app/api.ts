@@ -38,6 +38,7 @@ import * as ConfigAPI from '../../wailsjs/go/app/ConfigAPI';
 import * as GraphAPI from '../../wailsjs/go/app/GraphAPI';
 import * as WebViewAPI from '../../wailsjs/go/app/WebViewAPI';
 import * as TerminalAPI from '../../wailsjs/go/app/TerminalAPI';
+import * as PresenceAPI from '../../wailsjs/go/app/PresenceAPI';
 import type { GraphData, GraphOptions } from '../graph/types';
 import * as BasesAPI from '../../wailsjs/go/app/BasesAPI';
 import type { BaseInfo, BaseResult, ViewPatch } from '../bases/types';
@@ -66,6 +67,14 @@ export interface ViewBounds {
   y: number;
   width: number;
   height: number;
+}
+/** Where a collaborator is in a file, in the document (never screen pixels): a text position or a point of the scene. */
+export type PresencePos =
+  { kind: 'text'; line: number; col: number } | { kind: 'scene'; x: number; y: number };
+/** Why a file is not watched: `not-shared` (private or not shared vault), `not-synced` (no `file_id` yet), `disabled` (flag), `offline`. */
+export interface PresenceWatching {
+  watching: boolean;
+  reason: string;
 }
 export type NoteContent = Plain<app.NoteContent>;
 export type WriteResult = Plain<app.WriteResult>;
@@ -590,6 +599,26 @@ export const api = {
     state: (): Promise<{ mode: string }> => TerminalAPI.State(),
     undock: (): Promise<void> => TerminalAPI.Undock(),
     dock: (): Promise<void> => TerminalAPI.Dock(),
+  },
+  /**
+   * Live presence on shared vaults (ADR-0065, capability `presence`): who else has a file open and where their
+   * pointer is. The core keeps a count per file (one Watch and one Unwatch per view) and throttles `move`; the
+   * events are `Events.presenceMembers`, `presenceMove` and `presenceCleared`. Only presence/ talks to it.
+   */
+  presence: {
+    /** Starts watching a file; when it cannot yet (`reason`), ask again once it is synced or the sync state changes. */
+    watch: (vaultId: string, path: string): Promise<PresenceWatching> =>
+      PresenceAPI.Watch(vaultId, path),
+    unwatch: (vaultId: string, path: string): Promise<void> => PresenceAPI.Unwatch(vaultId, path),
+    /** Where the pointer is, in the document. Latest wins. */
+    move: (vaultId: string, path: string, pos: PresencePos): Promise<void> =>
+      PresenceAPI.Move(vaultId, path, {
+        kind: pos.kind,
+        line: pos.kind === 'text' ? pos.line : 0,
+        col: pos.kind === 'text' ? pos.col : 0,
+        x: pos.kind === 'scene' ? pos.x : 0,
+        y: pos.kind === 'scene' ? pos.y : 0,
+      }),
   },
   /**
    * Subscribes to a backend event (`Events.<key>`; names and payload types are generated from the Go

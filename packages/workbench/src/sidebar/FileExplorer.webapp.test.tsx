@@ -85,12 +85,13 @@ describe('the explorer and applications', () => {
       expect(display({ name, isDir: false } as never)).toBe(shown);
   });
 
-  it('has a toolbar button that creates an application in the folder of the row in focus', async () => {
+  it('has no toolbar button for it, and the menu of a folder creates it in that folder', async () => {
     renderExplorer();
     fireEvent.click(await screen.findByText('Projects'));
     await screen.findByText('plan');
-    fireEvent.click(screen.getByText('plan')); // a file: its folder is the target
-    fireEvent.click(newApplicationButton()!);
+    expect(newApplicationButton()).toBeNull();
+    fireEvent.contextMenu(screen.getByText('Projects'));
+    fireEvent.click(within(await screen.findByRole('menu')).getByText('New application'));
     await fillTheForm('https://github.com/', 'GitHub');
     await waitFor(() => expect(webapps()).toContain('Projects/GitHub.webapp'));
     expect(JSON.parse(files().get('Projects/GitHub.webapp')!)).toEqual({
@@ -102,14 +103,6 @@ describe('the explorer and applications', () => {
       expect(selectActivePath(useAppStore.getState())).toBe('Projects/GitHub.webapp'),
     );
     expect(await screen.findByText('GitHub')).toBeInTheDocument();
-  });
-
-  it('creates it at the top of the vault when nothing is in focus', async () => {
-    renderExplorer();
-    await screen.findByText('Projects');
-    fireEvent.click(newApplicationButton()!);
-    await fillTheForm('https://example.org/', 'Top app');
-    await waitFor(() => expect(webapps()).toContain('Top app.webapp'));
   });
 
   it('offers the same entry in the menu of a folder and in the one of the empty space', async () => {

@@ -1,4 +1,6 @@
 import { useRef } from 'react';
+import { isGraphPath } from '../graph/paths';
+import { usePresenceEnabled, usePresenceWatch } from '../presence/watch';
 import { useAppStore } from '../state/store';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { EmptyPane } from './EmptyPane';
@@ -10,6 +12,10 @@ function PaneView({ vaultId, pane }: { vaultId: string; pane: Pane }) {
   const activePane = useAppStore((s) => s.layout.activePane);
   const focusPane = useAppStore((s) => s.focusPane);
   const tab = pane.tabs.find((x) => x.id === pane.active);
+  // The tab in front of each pane is watched for the people who have the same file open (ADR-0065): the
+  // core counts the watches, so the same file in two panes is two of them.
+  const presence = usePresenceEnabled(vaultId);
+  usePresenceWatch(vaultId, tab && !isGraphPath(tab.path) ? tab.path : null, presence);
   return (
     <div
       className={`pane ${activePane === pane.id ? 'focused' : ''}`}

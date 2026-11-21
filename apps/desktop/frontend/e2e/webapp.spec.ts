@@ -201,9 +201,14 @@ test('the explorer creates an application in the chosen folder, by name, and ope
     return dialog;
   };
 
-  // the toolbar button, with the folder in focus
-  await tree(page, 'Projects').click();
-  await page.locator('.sidebar .toolbar').getByRole('button', { name: 'New application' }).click();
+  // the explorer has no toolbar button for it (the avatars of the collaborators sit there): the menu of
+  // a folder creates it in that folder
+  await expect(
+    page.locator('.sidebar .toolbar').getByRole('button', { name: 'New application' }),
+  ).toHaveCount(0);
+  await tree(page, 'Projects').click(); // opens the folder
+  await tree(page, 'Projects').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New application' }).click();
   let dialog = await dialogFor();
   await dialog.getByLabel('Address').fill('https://example.com/docs');
   await dialog.getByLabel('Name').fill('Wiki');
@@ -223,7 +228,7 @@ test('the explorer creates an application in the chosen folder, by name, and ope
   await expect(tab(page, 'Top')).toBeVisible();
   await expect.poll(rows).toEqual(['Projects', 'Plan', 'Wiki', 'Readme', 'Top']);
 
-  // the menu of a folder
+  // the menu of a folder again, with no name: named after the site
   await tree(page, 'Projects').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New application' }).click();
   dialog = await dialogFor();

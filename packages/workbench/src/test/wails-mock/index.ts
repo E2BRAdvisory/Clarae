@@ -22,6 +22,7 @@ import { createImporterMock } from '../../importer/mock';
 import { createUpdaterMock } from '../../updater/mock';
 import { createWebViewMock, type MockWebView } from './webview';
 import { createTerminalMock, type MockTerminal } from './terminal';
+import { createPresenceMock, type MockPresence } from './presence';
 import type {
   AppSettings,
   ConfigState,
@@ -116,6 +117,8 @@ export interface WailsMock {
   webview: MockWebView;
   /** The shells of the integrated terminal (TerminalAPI): what the UI asked for, and a way to answer. */
   terminal: MockTerminal;
+  /** The presence hub (PresenceAPI, ADR-0065): what the UI watched and sent, and a way to say who is in a file. */
+  presence: MockPresence;
   sync: MockSync;
   sharing: MockSharing;
   /** Local file snapshots (HistoryAPI). */
@@ -411,6 +414,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     deleteCloudVaultElsewhere: () => undefined, // set with the SyncAPI below
     webview: undefined as unknown as MockWebView, // set with the WebViewAPI below
     terminal: undefined as unknown as MockTerminal, // set with the TerminalAPI below
+    presence: undefined as unknown as MockPresence, // set with the PresenceAPI below
   };
   // A run that wants the desktop of a system without a driver says so before the page loads:
   // `window.__CLARAE_WEBVIEW__ = { available: false }`.
@@ -431,6 +435,11 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
     readOnly: (id) => sy.links.get(id)?.readOnly === true,
   });
   mock.terminal = terminals.state;
+  const presences = createPresenceMock({
+    emit: (name, payload) => mock.emit(name, payload),
+    link: (id) => sy.links.get(id),
+  });
+  mock.presence = presences.state;
   const vaultOf = (id: string): MockVault => {
     const v = mock.vaults.get(id);
     if (!v) throw new Error('vault is not open');
@@ -1758,6 +1767,7 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       GraphAPI,
       WebViewAPI: webviews.api,
       TerminalAPI: terminals.api,
+      PresenceAPI: presences.api,
       ...notesMock({ vaultOf, resolve, changed }),
       HistoryAPI: createHistoryAPI(mock.history, {
         files: (id) => vaultOf(id).files,

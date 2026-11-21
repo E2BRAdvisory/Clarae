@@ -1465,7 +1465,7 @@ features:
     title: Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
     desktop:
       status: yes
-      note: dietro il flag `features.web_viewer` del profilo (acceso di default per ADR-0060, un profilo può spegnerlo). Un'applicazione è un file `.webapp` (`{"version":1,"url":"https://…"}`) del vault, quindi rinomina, eliminazione, segnalibri e ripristino delle tab valgono come per ogni file (il selettore rapido li trova per nome, come note, lavagne, basi e disegni, e li apre nella loro tab; `app:open` elenca solo le applicazioni). L'Esplora file ha il pulsante e la voce dei menu contestuali «Nuova applicazione» (la stessa funzione di `app:new`, nella cartella scelta), e mostra e intitola la tab col nome senza `.webapp`. Alla prima apertura di un'origine su questo dispositivo la UI chiede conferma (per dispositivo e per vault, fuori dal vault). Dove non c'è il browser incorporato (vedi webapp.embedded) la tab è una scheda con il pulsante che apre la pagina nel browser di sistema
+      note: dietro il flag `features.web_viewer` del profilo (acceso di default per ADR-0060, un profilo può spegnerlo). Un'applicazione è un file `.webapp` (`{"version":1,"url":"https://…"}`) del vault, quindi rinomina, eliminazione, segnalibri e ripristino delle tab valgono come per ogni file (il selettore rapido li trova per nome, come note, lavagne, basi e disegni, e li apre nella loro tab; `app:open` elenca solo le applicazioni). L'Esplora file ha la voce «Nuova applicazione» nei menu contestuali (la stessa funzione di `app:new`, nella cartella scelta; non c'è più il pulsante nella barra, al suo posto stanno gli avatar della presenza), e mostra e intitola la tab col nome senza `.webapp`. Alla prima apertura di un'origine su questo dispositivo la UI chiede conferma (per dispositivo e per vault, fuori dal vault). Dove non c'è il browser incorporato (vedi webapp.embedded) la tab è una scheda con il pulsante che apre la pagina nel browser di sistema
       commands: [app:new, app:open, app:edit-url, app:open-in-browser]
     workbench:
       status: yes
@@ -1565,6 +1565,41 @@ features:
         - packages/workbench/src/shell/Ribbon.test.tsx
         - packages/workbench/src/commands/hotkeys.test.ts
         - apps/desktop/frontend/e2e/terminal.spec.ts
+
+  - id: presence
+    title: Presenza in tempo reale sui vault condivisi (avatar degli altri utenti e cursori)
+    desktop:
+      status: yes
+      note: il core Go tiene un WebSocket verso il cloud (`GET /api/v1/presence`, ADR-0065) solo mentre almeno un file di un vault condiviso collegato è osservato (mai un vault privato o non collegato), lo chiude 30 s dopo l'ultima stanza e lo riapre con backoff rientrando nelle stanze attive; il token viaggia nel primo frame e si rinnova prima della scadenza. La stanza è (vault cloud, `file_id` del `sync.db`; i path dei mount sono relativi alla condivisione); un file senza `file_id` non è osservabile (`not-synced`). `Move` ha un throttle di 40 ms (vince l'ultima posizione) e non invia una posizione invariata; gli eventi escludono la propria sessione e gli altri dispositivi dello stesso utente. Si spegne col flag `features.presence` (anche a caldo con l'aggiornamento del profilo) e con `presence-disabled` del server
+      capability: presence
+      bindings:
+        - PresenceAPI.Watch
+        - PresenceAPI.Unwatch
+        - PresenceAPI.Move
+    workbench:
+      status: yes
+      note: "lo stesso core Go compilato in WebAssembly, con il WebSocket del browser (coder/websocket, build js; il token va nel primo frame perché il browser non manda header). La UI è la stessa del desktop: gli avatar degli altri utenti (al posto del pulsante «Nuova applicazione» nella barra dell'Esplora file, quattro e un `+N`), i puntatori sulle note (Source e Live, riga e colonna del sorgente), sui disegni (coordinate di scena) e sui canvas (coordinate del piano); lettura, basi, PDF, immagini e applicazioni mostrano solo gli avatar. Il colore di una persona è `getUserColor(userId)` (palette fissa di otto token `--presence-N`, con il testo a 4,5:1), lo stesso per avatar, puntatore ed etichetta. Ogni vista osservata è un `Watch` e un `Unwatch` (conteggio nel core), per la tab in primo piano di ogni pannello"
+    tests:
+      desktop:
+        - apps/desktop/internal/presence/hub_test.go
+        - apps/desktop/internal/sync/manager_presence_test.go
+        - apps/desktop/internal/app/bindings_presence_test.go
+        - packages/workbench/src/presence/colors.test.ts
+        - packages/workbench/src/presence/store.test.ts
+        - packages/workbench/src/presence/throttle.test.ts
+        - packages/workbench/src/presence/adapters.test.ts
+        - packages/workbench/src/presence/watch.test.tsx
+        - packages/workbench/src/presence/workspace.test.tsx
+        - packages/workbench/src/presence/useCursorSender.test.tsx
+        - packages/workbench/src/presence/CollaboratorAvatars.test.tsx
+        - packages/workbench/src/presence/LiveCursorsOverlay.test.tsx
+        - packages/workbench/src/editor/source/CodeMirrorAdapter.presence.test.ts
+        - packages/ui/src/avatar.test.tsx
+        - apps/desktop/frontend/e2e/presence.spec.ts
+      workbench:
+        - apps/desktop/frontend/e2e/presence.spec.ts
+      cloud:
+        - services/cloud/internal/presence/ws_test.go
 
   - id: slides
     title: Presentazioni da una nota

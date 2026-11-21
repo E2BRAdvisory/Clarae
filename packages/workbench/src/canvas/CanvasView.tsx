@@ -39,6 +39,7 @@ import {
   type Side,
 } from './model';
 import { Icon } from '../shell/icons';
+import { BoardCursors } from '../presence/views';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 import { errorMessage } from '../util/errors';
 import { isHidden } from '../sidebar/FileExplorer';
@@ -793,6 +794,7 @@ export function CanvasView({ vaultId, path }: { vaultId: string; path: string })
           </svg>
         </div>
         {data.nodes.length === 0 && <div className="cv-hint muted">{t('canvas.hint')}</div>}
+        <BoardCursors vaultId={vaultId} path={path} view={view} board={board} />
       </div>
     </div>
   );

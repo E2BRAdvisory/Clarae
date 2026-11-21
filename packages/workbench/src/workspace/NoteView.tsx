@@ -35,6 +35,7 @@ import { safeDecodeURI } from '../util/uri';
 import type { Pane, Tab } from './layout';
 import { lazyView } from '../ui/lazyView';
 import { useCan } from '../platform';
+import { NoteCursors } from '../presence/views';
 
 // The graph (its renderer and the d3 layout) and the canvas are fetched when a tab of theirs first
 // opens, which keeps them out of the bundle loaded at startup (ADR-0020).
@@ -471,6 +472,7 @@ function MarkdownNote({
               if (view) useMarpDeck.getState().setCursor(view.cursor().line - 1);
             }}
           />
+          {!presentation && <NoteCursors vaultId={vaultId} path={path} paneId={pane.id} />}
         </>
       )}
     </div>

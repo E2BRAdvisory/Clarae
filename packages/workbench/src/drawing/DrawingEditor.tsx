@@ -26,6 +26,7 @@ import { invalidateVault } from '../app/actions';
 import { useNoteDocument } from '../editor/useNoteDocument';
 import { registerNoteFlusher } from '../workspaces/flush';
 import { useEffectiveTheme } from '../app/useTheme';
+import { SceneCursors } from '../presence/views';
 import { useAppStore } from '../state/store';
 import { infoOf, useSync } from '../state/sync';
 import { dialog } from '../ui/dialogs';
@@ -1151,6 +1152,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
             UIOptions={UI_OPTIONS}
           />
         </ExcalidrawIsland>
+        <SceneCursors vaultId={vaultId} path={path} api={excalidraw} host={canvasHost} />
         {excalidraw && !zen && !present && (
           <NavigationTools api={excalidraw} host={canvasHost} onZoom={zoomToSelected} />
         )}

@@ -94,6 +94,19 @@ describe.each(Object.entries(themes))('the colour tokens of the %s theme', (_, t
   });
 });
 
+// The colours of presence (ADR-0065): every one carries its own text at 4.5:1, and is a mark of 3:1 on the two
+// surfaces an avatar, a pointer and its label are drawn on (WCAG 1.4.3, 1.4.11).
+describe.each(Object.entries(themes))('the presence colours of the %s theme', (_, theme) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])('--presence-%d', (n) => {
+    const bg = resolve(theme, `--presence-${n}`);
+    expect(contrast(resolve(theme, `--presence-${n}-fg`), bg), 'its text').toBeGreaterThanOrEqual(
+      4.5,
+    );
+    for (const surface of ['--bg', '--bg-secondary'])
+      expect(contrast(bg, resolve(theme, surface)), `on ${surface}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('the brand palette', () => {
   it('is the one of the brand board', () => {
     const root = block(UI, ':root');

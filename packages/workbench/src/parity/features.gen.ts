@@ -76,6 +76,7 @@ export type FeatureId =
   | 'webapp' // Applicazioni, pagine web registrate nel vault (file .webapp) che si aprono in una tab
   | 'webapp.embedded' // Pagina di un'applicazione in un browser incorporato nella tab (vista nativa del sistema)
   | 'terminal' // Terminale integrato multi-tab, ancorabile e sganciabile in una finestra separata
+  | 'presence' // Presenza in tempo reale sui vault condivisi (avatar degli altri utenti e cursori)
   | 'slides' // Presentazioni da una nota
   | 'bookmarks' // Segnalibri
   | 'workspaces' // Workspace salvati
@@ -176,6 +177,7 @@ export const FEATURE_IDS: readonly FeatureId[] = [
   'webapp',
   'webapp.embedded',
   'terminal',
+  'presence',
   'slides',
   'bookmarks',
   'workspaces',

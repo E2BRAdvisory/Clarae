@@ -16,6 +16,7 @@ import { createServer, request } from 'node:http';
 import { dirname, extname, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { installPresenceRelay, presenceControl } from './e2ePresence.mjs';
 // The workbench's address (/vaults/:id/open), shared with the pages and checked against the cloud's.
 import { isWorkbenchRoute } from '../src/shared/routes.ts';
 import {
@@ -222,6 +223,8 @@ const TYPES = {
 function serve(port) {
   const server = createServer(async (req, res) => {
     const path = decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/');
+    // The cloud's presence channel for the e2e matrix: the core's WebSocket lives in a Worker (e2ePresence.mjs).
+    if (e2e && presenceControl(req, res, path)) return;
     if (path.startsWith('/api/')) {
       const upstream = request(
         {
@@ -267,6 +270,7 @@ function serve(port) {
       .on('error', () => res.destroy())
       .pipe(res);
   });
+  if (e2e) installPresenceRelay(server);
   return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
 }
 

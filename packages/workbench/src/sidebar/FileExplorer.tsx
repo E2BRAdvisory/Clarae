@@ -30,6 +30,7 @@ import {
 } from '../embeds/media';
 import { Icon, type IconName } from '../shell/icons';
 import { DRAG_PATH } from '../util/dragTypes';
+import { CollaboratorAvatars } from '../presence/CollaboratorAvatars';
 
 interface TreeNode {
   entry: Entry;
@@ -144,7 +145,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   const canvasOn = useManaged((m) => featureOn(m.features, 'canvas'));
   const presentationsOn = useManaged((m) => featureOn(m.features, 'presentations'));
   // The same condition as the command `app:new` (canEditWebapps): the flag, and a vault that may be written
-  // (the menus below are only built for one that may; the toolbar button checks it itself).
+  // (the menus below are only built for a vault that may be written).
   const webappsOn = useManaged((m) => featureOn(m.features, 'web_viewer'));
   const canShare = sharingOn && info.linked && info.kind === 'shared' && !info.mount;
   const tree = useMemo(
@@ -171,8 +172,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
     return () => ro.disconnect();
   }, []);
 
-  // The folder a new file goes to when nothing was asked for: the one of the row the user is on.
-  const focusEntry = focusPath ? entries.find((e) => e.path === focusPath) : undefined;
+  // The folder a new file goes to when nothing was asked for: the one of the open file.
   const dirForNew = (entry?: Entry): string =>
     entry ? (entry.isDir ? entry.path : parentDir(entry.path)) : parentDir(activePath);
 
@@ -480,18 +480,7 @@ export function FileExplorer({ vaultId }: { vaultId: string }) {
   return (
     <>
       <div className="toolbar">
-        {webappsOn && !readOnly && (
-          <button
-            type="button"
-            className="icon"
-            data-testid="explorer-new-application"
-            title={t('commands.app_new')}
-            aria-label={t('commands.app_new')}
-            onClick={() => void newApplicationIn(dirForNew(focusEntry))}
-          >
-            <Icon name="webapp" />
-          </button>
-        )}
+        <CollaboratorAvatars vaultId={vaultId} />
         <span className="spacer" />
         <select
           aria-label={t('sidebar.sort')}

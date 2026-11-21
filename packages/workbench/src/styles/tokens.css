@@ -38,6 +38,26 @@
   --mark: #c4e8e2;
   /* the title bar: Deep Navy in both themes */
   --header-bg: var(--brand-navy);
+
+  /* The colours of the people in a shared file (presence, ADR-0065): one per user, the same for the avatar, the
+     pointer and its label. Each background carries its --presence-N-fg text at 4.5:1 and is a mark of 3:1 on --bg and
+     --bg-secondary (tokens.contrast.test.ts). getUserColor (presence/colors.ts) picks the number. */
+  --presence-1: #c2410c;
+  --presence-1-fg: var(--brand-white);
+  --presence-2: #b91c1c;
+  --presence-2-fg: var(--brand-white);
+  --presence-3: #a21caf;
+  --presence-3-fg: var(--brand-white);
+  --presence-4: #6d28d9;
+  --presence-4-fg: var(--brand-white);
+  --presence-5: #1d4ed8;
+  --presence-5-fg: var(--brand-white);
+  --presence-6: #0f766e;
+  --presence-6-fg: var(--brand-white);
+  --presence-7: #4d7c0f;
+  --presence-7-fg: var(--brand-white);
+  --presence-8: #92400e;
+  --presence-8-fg: var(--brand-white);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -55,6 +75,22 @@
     --text-muted: var(--brand-fog);
     --text-faint: var(--brand-fog-soft);
     --mark: #1f5f5a;
+    --presence-1: #fdba74;
+    --presence-1-fg: var(--brand-navy);
+    --presence-2: #fca5a5;
+    --presence-2-fg: var(--brand-navy);
+    --presence-3: #f0abfc;
+    --presence-3-fg: var(--brand-navy);
+    --presence-4: #c4b5fd;
+    --presence-4-fg: var(--brand-navy);
+    --presence-5: #93c5fd;
+    --presence-5-fg: var(--brand-navy);
+    --presence-6: #5eead4;
+    --presence-6-fg: var(--brand-navy);
+    --presence-7: #bef264;
+    --presence-7-fg: var(--brand-navy);
+    --presence-8: #fde047;
+    --presence-8-fg: var(--brand-navy);
   }
 }
 
@@ -72,6 +108,22 @@
   --text-muted: var(--brand-fog);
   --text-faint: var(--brand-fog-soft);
   --mark: #1f5f5a;
+  --presence-1: #fdba74;
+  --presence-1-fg: var(--brand-navy);
+  --presence-2: #fca5a5;
+  --presence-2-fg: var(--brand-navy);
+  --presence-3: #f0abfc;
+  --presence-3-fg: var(--brand-navy);
+  --presence-4: #c4b5fd;
+  --presence-4-fg: var(--brand-navy);
+  --presence-5: #93c5fd;
+  --presence-5-fg: var(--brand-navy);
+  --presence-6: #5eead4;
+  --presence-6-fg: var(--brand-navy);
+  --presence-7: #bef264;
+  --presence-7-fg: var(--brand-navy);
+  --presence-8: #fde047;
+  --presence-8-fg: var(--brand-navy);
 }
 
 /* The shared tokens of @clarae/ui (--nd-*, ADR-0043) with the workbench's values, so the nd-*

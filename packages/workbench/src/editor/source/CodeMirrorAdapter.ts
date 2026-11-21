@@ -14,8 +14,10 @@ import type {
   LinkHit,
   NoteEditorHandle,
   RevealTarget,
+  ScreenPoint,
   ViewSnapshot,
 } from '../handle';
+import { insideBox, watchLayout } from '../layoutWatch';
 import type { EditorStats, SourceEdit } from '../types';
 import { wikilinkAtPos } from './links';
 
@@ -170,6 +172,26 @@ class CodeMirrorHandle implements NoteEditorHandle {
     if (pos === null) return null;
     const hit = wikilinkAtPos(this.view, pos);
     return hit?.rect ? { spec: hit.spec, rect: hit.rect } : null;
+  }
+
+  locAt(at: { x: number; y: number }): { line: number; col: number } | null {
+    const pos = this.view.posAtCoords(at);
+    if (pos === null) return null;
+    const line = this.view.state.doc.lineAt(pos);
+    return { line: line.number, col: pos - line.from + 1 };
+  }
+  pointAt(loc: { line: number; col: number }): ScreenPoint | null {
+    const { view } = this;
+    const doc = view.state.doc;
+    const line = doc.line(Math.min(doc.lines, Math.max(1, Math.trunc(loc.line) || 1)));
+    const pos = Math.min(line.to, line.from + Math.max(1, Math.trunc(loc.col) || 1) - 1);
+    const c = view.coordsAtPos(pos);
+    if (!c) return null;
+    const point = { x: c.left, y: c.top, height: c.bottom - c.top };
+    return insideBox(point, view.scrollDOM.getBoundingClientRect()) ? point : null;
+  }
+  onLayout(listener: () => void): () => void {
+    return watchLayout(this.view.scrollDOM, this.view.contentDOM, listener);
   }
 
   stats(): EditorStats {

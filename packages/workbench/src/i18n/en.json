@@ -1728,5 +1728,9 @@
     "webapp": "Application “{{name}}”: it opens in its own tab",
     "pdfPrev": "Previous page",
     "pdfNext": "Next page"
+  },
+  "presence": {
+    "collaborators": "People in this file",
+    "more": "{{count}} more: {{names}}"
   }
 }

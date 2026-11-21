@@ -71,6 +71,13 @@ export interface ViewSnapshot {
   topLine: number;
 }
 
+/** Where a place of the text is on the screen: the top of its line in viewport pixels and the height of the line. */
+export interface ScreenPoint {
+  x: number;
+  y: number;
+  height: number;
+}
+
 export interface LinkHit {
   spec: LinkSpec;
   /** Where the link is on screen. */
@@ -125,6 +132,23 @@ export interface NoteEditorHandle {
   gotoLine(line: number): void;
   /** The wikilink under a point of the screen or under the cursor, if any. */
   linkAt(at: { x: number; y: number } | 'cursor'): LinkHit | null;
+
+  /**
+   * The source line and column under a point of the screen (viewport pixels), null when the point is not on
+   * the text of the editor. The column is exact in Source and approximate inside a block in Live (ADR-0049).
+   * Presence sends this, never pixels (ADR-0065).
+   */
+  locAt(at: { x: number; y: number }): { line: number; col: number } | null;
+  /**
+   * Where a source line and column are on the screen; null when that place is not shown (scrolled out of the
+   * editor, or the view cannot tell). Lines and columns past the end are clamped to the text.
+   */
+  pointAt(loc: { line: number; col: number }): ScreenPoint | null;
+  /**
+   * Calls `listener` (at most once per frame) when what `pointAt` answers may have changed: the editor
+   * scrolled or was resized, or the text was edited. Returns the function that stops.
+   */
+  onLayout(listener: () => void): () => void;
 
   stats(): EditorStats;
   /** Opens the editor's find (and replace) bar. */

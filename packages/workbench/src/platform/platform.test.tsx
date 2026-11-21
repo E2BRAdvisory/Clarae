@@ -32,12 +32,16 @@ function renderWelcome() {
 }
 
 describe('platform capabilities', () => {
-  it('the desktop has everything, the browser only cloud vaults (as the core declares)', () => {
+  it('the desktop has everything, the browser only what runs in a page (as the core declares)', () => {
     expect(Object.keys(capabilitiesFor('desktop')).sort()).toEqual(
       Object.keys(CORE_CAPABILITIES.desktop).sort(),
     );
     expect(Object.values(capabilitiesFor('desktop')).every(Boolean)).toBe(true);
-    expect(Object.values(capabilitiesFor('web')).some(Boolean)).toBe(false);
+    // what the browser has is what the core does in a page: presence on shared vaults (the WebSocket of the browser)
+    const inBrowser = Object.entries(capabilitiesFor('web'))
+      .filter(([, on]) => on)
+      .map(([name]) => name);
+    expect(inBrowser).toEqual(['presence']);
   });
 
   it('lets the host switch a capability off, never on', () => {

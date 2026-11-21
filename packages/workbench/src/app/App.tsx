@@ -29,6 +29,7 @@ import { DeviceRevokedBanner } from '../sync/DeviceRevokedBanner';
 import { VaultView } from '../shell/VaultView';
 import { Welcome } from '../shell/Welcome';
 import { can, useCan, usePlatform } from '../platform';
+import { installPresenceFeed } from '../presence/store';
 import { followLinkPath } from './open';
 import { applyVaultChanges, onVaultChanges } from './fileChanges';
 import { startWebapps } from '../webapp/start';
@@ -187,6 +188,11 @@ export function App() {
       offDeleted();
     };
   }, []);
+
+  // The people in the watched files of the shared vaults (ADR-0065): the core's events, and nothing kept from a vault
+  // that was left.
+  const openVaultId = vault?.id;
+  useEffect(() => installPresenceFeed(), [openVaultId]);
 
   const vaultId = vault?.id;
   const syncInfo = useSync((s) => infoOf(s, vaultId));

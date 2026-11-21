@@ -718,6 +718,76 @@ describe('the scroll of the view', () => {
   });
 });
 
+// ---- presence: where the text is on the screen, and the other way round (a layout is stubbed) -------------
+
+describe('the places of the text on the screen (presence)', () => {
+  it('names the source line and column under a point, and none off the text', async () => {
+    const live = await openLive('one\n\ntwo\n\nthree\n');
+    try {
+      const view = EditorViewOf(live.editor);
+      const at = posAfter(view.state.doc, 'thr');
+      vi.spyOn(view, 'posAtCoords').mockReturnValue({ pos: at, inside: at - 1 });
+      expect(live.editor.locAt({ x: 10, y: 10 })).toEqual({ line: 5, col: 4 });
+      vi.spyOn(view, 'posAtCoords').mockReturnValue(null);
+      expect(live.editor.locAt({ x: 10, y: 10 })).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+      live.dispose();
+    }
+  });
+
+  it('puts a source line and column on the screen, once per document, and not where it is scrolled out', async () => {
+    const live = await openLive('one\n\ntwo\n\nthree\n');
+    try {
+      const view = EditorViewOf(live.editor);
+      vi.spyOn(live.parent, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 600, 400));
+      const coords = vi
+        .spyOn(view, 'coordsAtPos')
+        .mockReturnValue({ left: 50, top: 200, right: 60, bottom: 218 });
+      const here = live.editor.pointAt({ line: 5, col: 2 });
+      expect(here).toEqual({ x: 50, y: 200, height: 18 });
+      // the line asked for is the one the position was found for
+      expect(coords.mock.calls[0]?.[0]).toBe(
+        posAt(live.editor['textSource'], view.state.doc, { line: 5, col: 2 }),
+      );
+      // the same place again does not search again: a scroll asks for it many times
+      const searches = vi.spyOn(live.editor['textSource'], 'text');
+      live.editor.pointAt({ line: 5, col: 2 });
+      expect(searches).not.toHaveBeenCalled();
+      // scrolled out of the editor: not shown
+      coords.mockReturnValue({ left: 50, top: 900, right: 60, bottom: 918 });
+      expect(live.editor.pointAt({ line: 5, col: 2 })).toBeNull();
+      // no layout at all: not shown, no error
+      coords.mockImplementation(() => {
+        throw new Error('no layout');
+      });
+      expect(live.editor.pointAt({ line: 1, col: 1 })).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+      live.dispose();
+    }
+  });
+
+  it('tells when the places may have changed: scroll and edit, once per frame, until stopped', async () => {
+    const live = await openLive('one\n');
+    try {
+      let calls = 0;
+      const stop = live.editor.onLayout(() => calls++);
+      live.parent.dispatchEvent(new Event('scroll'));
+      live.parent.dispatchEvent(new Event('scroll'));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(calls).toBe(1);
+      stop();
+      live.parent.dispatchEvent(new Event('scroll'));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      expect(calls).toBe(1);
+    } finally {
+      live.dispose();
+    }
+  });
+});
+
 describe('the emoji', () => {
   it('are drawn from the images the application serves, and written back as the characters they are', async () => {
     const raw = 'a 😀 and :smile: typed\n';

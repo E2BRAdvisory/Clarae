@@ -214,6 +214,9 @@ const (
 	// Terminal: Terminale integrato multi-tab, ancorabile e sganciabile in una finestra separata
 	Terminal FeatureID = "terminal"
 
+	// Presence: Presenza in tempo reale sui vault condivisi (avatar degli altri utenti e cursori)
+	Presence FeatureID = "presence"
+
 	// Slides: Presentazioni da una nota
 	Slides FeatureID = "slides"
 
@@ -368,6 +371,7 @@ var Features = []FeatureID{
 	Webapp,
 	WebappEmbedded,
 	Terminal,
+	Presence,
 	Slides,
 	Bookmarks,
 	Workspaces,

@@ -537,6 +537,57 @@ button.icon[aria-pressed='true'] {
   padding: 0 4px;
   font-size: 12px;
 }
+
+/* ---- presence (ADR-0065): the avatars in the toolbar of the explorer and the pointers over the documents ---- */
+.sidebar .toolbar .presence-avatars {
+  /* the ring of each avatar is the colour of the bar it sits on */
+  --nd-avatar-border: var(--bg-secondary);
+  align-self: center;
+}
+.presence-cursors {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 6;
+}
+.presence-cursors.fixed {
+  position: fixed;
+}
+.presence-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 80ms linear;
+}
+.presence-pointer {
+  flex: none;
+  fill: var(--presence-bg);
+  stroke: var(--bg);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.presence-cursor-label {
+  margin: 12px 0 0 -2px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--presence-bg);
+  color: var(--presence-fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px var(--bg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .presence-cursor {
+    transition: none;
+  }
+}
 .sidebar-resizer {
   position: absolute;
   top: 0;
