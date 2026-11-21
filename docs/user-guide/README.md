@@ -16,6 +16,7 @@ Clarae notanda è un'app per appunti e conoscenza personale che funziona **offli
 | [Sincronizzazione e cloud](sync-cloud.md)                       | Collegarsi al server, sincronizzare, conflitti, più dispositivi.                                   |
 | [Vault privati e condivisi](vault-privati-condivisi.md)         | Che cosa cambia, **che cosa significa E2EE**, passphrase e chiave di recupero.                     |
 | [Condivisione e gruppi](condivisione-gruppi.md)                 | Inviti, permessi, mount, gruppi.                                                                   |
+| [Presenza](presenza.md)                                         | Avatar e cursori degli altri utenti sullo stesso file, privacy, come si spegne.                    |
 | [Importare ed esportare](import-export.md)                      | Importer (Markdown, Evernote, Notion, Roam, Bear, Keep, CSV), PDF, HTML, ZIP.                      |
 | [Cronologia e recupero](cronologia-recupero.md)                 | Versioni locali e del cloud, ripristino, file eliminati.                                           |
 | [Impostazioni e scorciatoie](impostazioni-scorciatoie.md)       | Tutte le impostazioni, comandi e scorciatoie predefinite.                                          |

@@ -1371,6 +1371,42 @@ Richiesta dell'owner del 2026-11-20, dopo il tag v1.8.0. In _Impostazioni → As
 
 ---
 
+## 13-octodecies. M25 — Presenza in tempo reale sui vault condivisi
+
+Richiesta dell'owner del 2026-11-20, dopo il tag v1.8.1. Nella barra dell'esploratore, al posto del pulsante «Nuova applicazione», gli **avatar degli altri utenti** che hanno aperto lo stesso file; sopra il documento, i loro **cursori live** (puntatore con etichetta col nome). Solo **vault condivisi**. Non è co-editing: il merge resta sul client e [ADR-0050](adr/0050-ai-inattiva-e-collab-spento.md) resta com'è. Rilascio **1.8.2**. Decisione: [ADR-0065](adr/0065-presenza-in-tempo-reale.md) (**accettato dall'owner il 2026-11-20**).
+
+**Decisioni dell'owner (2026-11-20)**
+
+- `features.presence` **acceso di default**, spegnibile dal Config Profile.
+- Componenti **propri** `Avatar` e `AvatarGroup` in `@clarae/ui`: niente MUI (CSP della console, token, budget).
+- Trasporto **WebSocket** `GET /api/v1/presence` (rotta esterna come `/events`, token nel primo frame) e **PostgreSQL `LISTEN/NOTIFY`** tra le repliche, con coalescenza.
+- Nelle note il cursore è il **puntatore ancorato al testo** (riga e colonna); nei disegni e nei canvas, coordinate di scena.
+- Stanze `(vault cloud, file_id)`; identità timbrata dal server; autorizzazione per file al `join`, ricontrollata su revoca e sospensione; nessuna persistenza, nessun audit, nessun log per frame.
+- Il comando `app:new` resta in ribbon, menu contestuali, palette e stato vuoto; il pulsante dell'esploratore (`FileExplorer.tsx:483-495`) sparisce (emenda ADR-0060).
+
+**Stato (2026-11-20): onde 0, A, B e C implementate, onda D (documentazione) fatta; revisione: Pass con riserve (4 rilievi bassi corretti); `task ci` in corso. Nessuna prova con più utenti reali.**
+
+| Onda  | Sessione | Contenuto                                                                                                                                                                                                                                                                                          | Stato                                                                                                  |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **0** | M25-S1   | ADR-0065 (con note di emendamento in ADR-0060 e ADR-0050 e riga nell'indice) e questa sezione                                                                                                                                                                                                      | **fatta (2026-11-20), ADR accettato**                                                                  |
+| **A** | M25-S2   | Cloud: modulo `internal/presence` (hub delle stanze, WebSocket, autenticazione, limiti, PG NOTIFY, drain), flag `features.presence` nello schema, in `shared/go/features` e nella guida admin, rotta esterna in OpenAPI, Caddy e Helm (timeout), test unitari e di integrazione con due «repliche» | implementata; scostamento: niente metriche Prometheus della presenza                                   |
+| **B** | M25-S3   | Core (desktop e `GOOS=js`): client WebSocket, mappatura `vaultId/path` → `(vault cloud, file_id)` dallo stato di sync (anche mount), `PresenceAPI`, eventi, capability, stub, `task gen`, test con un server finto                                                                                 | implementata                                                                                           |
+| **C** | M25-S4   | Frontend: `Avatar`/`AvatarGroup` in `@clarae/ui`, `presence/` nel workbench (`getUserColor`, avatar nella barra dell'esploratore, overlay dei cursori, adattatori per note, disegni e canvas), rimozione del pulsante, test, e2e, registro di parità                                               | implementata; scostamento: il cursore delle note segue il `pointermove`, non il caret                  |
+| **D** | M25-S5   | Chiusura: guide, runbook `qa/m25-presenza.md`, CHANGELOG, data-retention, revisione, `task ci` e `task test-integration`, rilascio **1.8.2**                                                                                                                                                       | documentazione fatta; revisione e `task ci` in corso; `task test-integration` e rilascio 1.8.2 da fare |
+
+**Criteri di uscita:** `task ci` e `task test-integration` verdi; test dell'hub (autorizzazione per file, revoca, limiti, fan-out tra due hub); `task parity` con la voce `presence` provata sul core WASM; e2e con gli avatar al posto del pulsante e la pulizia alla chiusura; flag spento = nessuna connessione; guide, runbook e CHANGELOG aggiornati; **rilascio 1.8.2** (versione, note di rilascio, tag `v1.8.2` a cura dell'owner); manuale a carico dell'owner con due utenti (desktop e web).
+
+**Spec:** `Specifications.md` **v1.9 applicato il 2026-11-20** (con i punti facoltativi): [`spec-v1.9-proposta.md`](spec-v1.9-proposta.md) resta come storia; A-05, §2.6.4, D-04, V-01, §3.7, §2.6.6, C.2 e C.4 recepiscono ADR-0065.
+
+**Rischi**
+
+- **Carico di PostgreSQL `NOTIFY`** con molti utenti nella stessa stanza: coalescenza ~15 Hz e invio solo con membri su altre repliche; da misurare.
+- **Privacy:** nome e posizione visibili agli altri utenti del file; nulla viene salvato; il flag è spegnibile dall'amministratore. Aggiornare `security/data-retention.md`.
+- **Ingress e timeout:** proxy e bilanciatori devono ammettere l'upgrade WebSocket e non chiudere le connessioni inattive prima del `ping`; la CSP `connect-src 'self'` va provata con `wss:` nei tre browser.
+- **Nessuna prova reale con più utenti** durante lo sviluppo: i test usano un server finto e due «repliche» sullo stesso PostgreSQL; il manuale resta a carico dell'owner.
+
+---
+
 ## 14. Trasversale: test e verifica
 
 | Livello            | Strumento                                                                         | Dove                                                       |

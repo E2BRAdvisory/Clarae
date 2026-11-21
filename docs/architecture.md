@@ -91,6 +91,10 @@ La parità è **per costruzione** (ADR-0045): una sola UI (`@clarae/workbench`) 
 
 Guida per gli sviluppatori e procedura per una funzione nuova: [desktop-web-sync.md](desktop-web-sync.md); stato misurato: [web-workbench-parity.md](web-workbench-parity.md).
 
+## Presenza in tempo reale
+
+I vault condivisi hanno un canale WebSocket, `GET /api/v1/presence` (ADR-0065): avatar e cursori degli altri utenti sullo stesso file. Non è co-editing: il merge resta sul client. La stanza è `(vault cloud, file_id)`; il server timbra l'identità, autorizza per file al `join` e ricontrolla (condivisioni, sospensione, flag, ogni 60 s). Lo stato è **solo in memoria** nella replica; tra repliche passa da PostgreSQL `LISTEN/NOTIFY` (canale `presence`), senza persistenza, audit né log per frame. Il client è codice Go condiviso, nel core desktop e nel core WebAssembly. Vedi [desktop-web-sync.md](desktop-web-sync.md) e la [guida dell'amministratore](admin-guide/presenza.md).
+
 ## Il cloud come modular monolith
 
 Ogni modulo è un pacchetto `services/cloud/internal/<modulo>` con interfacce esplicite. Un modulo dipende solo da `db`, `storage`, `audit`, `notify` e dalle interfacce degli altri moduli, mai dalle loro tabelle: le sue query generate stanno in `<modulo>db`, che solo lui importa (depguard), e gli altri passano dalle funzioni esportate (`exported.go`, con un `db.DBTX`). La mappa delle tabelle e le eccezioni ammesse sono verificate da `internal/db/ownership_test.go` (ADR-0033).

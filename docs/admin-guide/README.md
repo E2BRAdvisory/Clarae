@@ -8,6 +8,7 @@ Per chi installa, configura e gestisce il **Cloud Service** (API, worker, Web UI
 | [Keycloak](keycloak.md)                             | Realm, client, ruoli, service account con i ruoli minimi (ADR-0012), ruolo `clarae-admin`.       |
 | [Configurazione](configurazione.md)                 | Riferimento di **tutte** le variabili d'ambiente (verificato da un test) e impostazioni runtime. |
 | [Profili, quote, audit](profili-quote-audit.md)     | Gruppi, config profile distribuiti ai client, limiti di archiviazione, registro di audit.        |
+| [Presenza in tempo reale](presenza.md)              | Flag `features.presence`, WebSocket, Ingress e timeout, scala e limiti per replica.              |
 | [Backup e upgrade](backup-upgrade.md)               | Cosa salvare, ripristino, aggiornamenti con migrazioni, rollback.                                |
 | [Monitoraggio](monitoraggio.md)                     | Metriche Prometheus, dashboard Grafana, regole di alerting, log.                                 |
 | [Runbook](runbook.md)                               | Sintomo → verifica → rimedio: login, sync, quota, sospensioni, export, database, S3.             |

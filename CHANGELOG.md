@@ -4,6 +4,53 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Milestone M25 ([roadmap](docs/roadmap.md) §13-octodecies), prevista nella 1.8.2: **presenza in tempo reale sui vault condivisi** ([ADR-0065](docs/adr/0065-presenza-in-tempo-reale.md), accettato dall'owner il 2026-11-20 e recepito in `Specifications.md` v1.9). Gli avatar degli **altri** utenti che hanno aperto lo stesso file compaiono nella barra dell'Esplora file, e sopra il documento i loro cursori con il nome. **Non è co-editing:** il merge resta sul client e [ADR-0050](docs/adr/0050-ai-inattiva-e-collab-spento.md) resta in vigore. Questa sezione non è ancora una release: versione, `info.version` dell'OpenAPI e tag si fanno al rilascio. Nessuna migrazione del database.
+
+### Compatibilità
+
+- **Nuovo endpoint WebSocket `GET /api/v1/presence`** nel cloud. Un proxy o un Ingress davanti al cloud deve lasciar passare l'upgrade WebSocket e non chiudere le connessioni inattive prima di circa un'ora. **Il chart Helm crea un Ingress in più**, `<release>-presence` (path esatto `/api/v1/presence`), con i timeout di `ingress.presence.timeoutSeconds` (3600) e annotazioni extra in `ingress.presence.annotations`; il `Caddyfile` di Compose non richiede modifiche. Chi non usa il chart o Caddy deve configurare il proprio proxy ([guida](docs/admin-guide/presenza.md)).
+- **`features.presence` è acceso di default**: aggiornando, gli utenti dei vault condivisi vedono avatar e cursori degli altri senza fare nulla. Si spegne dal Config Profile (anche a caldo); nuova chiave dello schema, non bloccabile.
+- **Privacy:** gli altri utenti del file vedono nome visualizzato e posizione del puntatore finché il file è aperto. Niente viene salvato né finisce nell'audit o nei log ([conservazione dei dati](docs/security/data-retention.md)). I vault privati non hanno presenza.
+- **Limite per replica:** al più 32 connessioni per utente **per replica**, non globali.
+- **I client 1.8.1 e precedenti** non aprono la connessione e non cambiano comportamento; il cloud nuovo li serve come prima.
+
+### Client desktop e workbench
+
+- **Avatar al posto del pulsante «Nuova applicazione»** nella barra dell'Esplora file: fino a quattro, poi `+N` (in `AvatarGroup` `max` conta gli avatar mostrati). `app:new` resta in ribbon, menu contestuali, palette e stato vuoto (emenda [ADR-0060](docs/adr/0060-web-viewer-acceso-di-default.md)).
+- **Cursori live** per note (Source e Live Preview), disegni e canvas; per lettura, basi, PDF, immagini e applicazioni solo avatar. Nelle note segue il **puntatore del mouse**, non il caret; in Live la colonna è approssimata dentro un blocco. Nei disegni e nei canvas la posizione è di scena e tiene conto di zoom e scroll di chi guarda.
+- **Colore deterministico per utente**, uguale per avatar, puntatore ed etichetta: otto token `--presence-1…8` con contrasto AA. Con la riduzione del movimento il puntatore non scivola.
+- Si vedono solo gli altri utenti (non sé stessi né un altro dispositivo dello stesso account), solo file già sincronizzati, solo dove si ha almeno il permesso di lettore.
+- Funziona uguale sul desktop e nel workbench web (stesso core Go, WebAssembly nel browser). Capability `presence`.
+
+### Cloud
+
+- Modulo `internal/presence`: stanze in memoria per `(vault, file)`, identità timbrata dal server, autorizzazione per file al `join` e ricontrollo su revoca, sospensione, cambio di profilo e ogni 60 s; heartbeat di 30 s, limiti (16 stanze, 40 movimenti/s con trattenuta dell'ultimo, frame da 1 KiB, 8 KiB per `auth`), controllo dell'origine per il browser, chiusura ordinata allo spegnimento.
+- **Più repliche** sul canale PostgreSQL `presence` (`LISTEN/NOTIFY`, nessun Redis): movimenti solo se la stanza ha membri altrove (circa 15/s), heartbeat di 20 s e scadenza dei membri remoti a 70 s.
+- Ricontrollo delle stanze di un vault a ogni commit, al più ogni 5 s per sessione: uno spostamento fuori dallo scope di una share espelle in circa 5 s. Il `join` non salta mai l'autorizzazione; i battiti tra repliche non si perdono (coda fino a 100000, `NOTIFY` a blocchi di 500); i `Refresh` del core sono serializzati.
+- **Nessuna metrica Prometheus della presenza nella 1.8.2** (deciso dall’owner).
+
+### Contratti
+
+- `api/openapi.yaml`: rotta esterna `GET /presence` (WebSocket, il primo frame `auth` porta il token), con frame, codici d'errore e limiti. `api/config-profile.schema.json`: `features.presence` (booleano, default `true`).
+- Binding `PresenceAPI` (`Watch`, `Unwatch`, `Move`), eventi `presence:members`, `presence:move`, `presence:cleared`, capability `presence`; voce `presence` nel registro di parità.
+
+### Build
+
+- Nuova dipendenza `github.com/coder/websocket` (cloud e desktop, anche per `GOOS=js`) e `golang.org/x/time` nel cloud. Il relay `web/scripts/e2ePresence.mjs` per gli e2e del workbench è attivo solo con `CLARAE_E2E=1`.
+
+### Documentazione
+
+- ADR-0065 accettato e allineato al contratto effettivo; [`Specifications.md` v1.9](docs/spec-v1.9-proposta.md) applicato (2026-11-20).
+- Nuove pagine: [Presenza](docs/user-guide/presenza.md) (guida utente), [Presenza in tempo reale](docs/admin-guide/presenza.md) (guida dell'amministratore) e il runbook [`docs/qa/m25-presenza.md`](docs/qa/m25-presenza.md) (P1…P22). Aggiornati data-retention, `desktop-web-sync.md`, `architecture.md` e la roadmap.
+
+### Non provato e lavoro successivo
+
+- **Nessuna prova con più utenti reali** (desktop e web insieme), su un Ingress vero, con più repliche, né su Safari (corrispondenza di `'self'` con `wss:`): i test sono automatici (hub, due «repliche» sullo stesso PostgreSQL, server finto, mock dei binding). Il manuale è in `docs/qa/m25-presenza.md`, a carico dell'owner.
+- Il carico di `NOTIFY` con molti utenti nella stessa stanza e i limiti (40 movimenti/s, ~15 Hz) vanno misurati. L'avatar con immagine non c'è (solo iniziali e colore).
+- Revisione: **Pass con riserve**, quattro rilievi bassi corretti. `task ci` della milestone ancora da eseguire.
+
 ## [1.8.1] - 2026-11-20
 
 Milestone M24 ([roadmap](docs/roadmap.md) §13-septendecies), richiesta dell'owner del 2026-11-20 dopo la 1.8.0: **il terminale ha carattere e dimensione del carattere configurabili**, con default `MesloLGS NF` e 13 px. Nessuna migrazione del cloud, nessuna modifica delle API né dello schema del Config Profile.
