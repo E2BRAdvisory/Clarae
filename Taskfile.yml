@@ -500,6 +500,23 @@ tasks:
       - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
       - git checkout -- {{.WEBEMBED}}/dist/index.html
 
+  # Documentation site: VitePress on docs/ (config in docs/.vitepress/config.mjs), static output in docs_html/
+  # (git-ignored), ready for GitHub Pages. The base path is /Clarae/ (project site); DOCS_BASE=/ for a custom domain.
+  docs-build:
+    desc: Build the documentation site from docs/ into docs_html/ (GitHub Pages; DOCS_BASE overrides the base path /Clarae/)
+    cmds:
+      - '{{if .DOCS_BASE}}DOCS_BASE={{.DOCS_BASE}} {{end}}yarn vitepress build docs'
+
+  docs-dev:
+    desc: Documentation site with live reload (http://localhost:5175/Clarae/)
+    cmds:
+      - yarn vitepress dev docs --port 5175
+
+  docs-preview:
+    desc: Serve the built docs_html/ as GitHub Pages would (run docs-build first)
+    cmds:
+      - yarn vitepress preview docs --port 5176
+
   build-cloud:
     desc: 'Build the cloud binary into bin/ (embeds whatever is in web-embed/dist: run web-build first)'
     dir: '{{.CLOUD}}'

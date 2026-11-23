@@ -63,3 +63,7 @@ apps/desktop/frontend/package.json.md5
 
 # Go core compiled to WebAssembly (task wasm-core)
 build/wasm/
+
+# Documentation site (task docs-build) and the VitePress cache
+docs_html/
+docs/.vitepress/cache/

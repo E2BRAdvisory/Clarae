@@ -175,6 +175,19 @@ task perf-load-env USERS=1000              # ambiente per il test di carico k6 d
 
 Metodo, obiettivi e misure in [perf/README.md](perf/README.md).
 
+## Sito della documentazione
+
+```sh
+task docs-build                  # docs/ → docs_html/ (sito statico per GitHub Pages, base /Clarae/)
+task docs-build DOCS_BASE=/      # stesso sito per un dominio personalizzato o la radice di un server
+task docs-dev                    # anteprima con ricarica su http://localhost:5175/Clarae/
+task docs-preview                # serve docs_html/ come farebbe GitHub Pages (dopo docs-build)
+```
+
+Il sito è generato da [VitePress](https://vitepress.dev) con la configurazione in `docs/.vitepress/config.mjs`: la barra laterale segue le sezioni di [index.md](index.md) (gli ADR sono elencati tutti da `docs/adr/`), ogni `README.md` diventa l'indice della sua cartella, e i link relativi a file che non sono pagine del sito (`Specifications.md`, `api/openapi.yaml`, sorgenti) puntano al file su GitHub. `docs_html/` è ignorata da git e contiene anche `.nojekyll`. Le pagine sono template Vue: il testo fuori dal codice non deve contenere tag HTML non chiusi (scrivere `\<nome\>` o metterlo tra backtick); il codice inline è già protetto.
+
+GitHub Pages pubblica da un branch solo la radice o `/docs`: `docs_html/` va quindi pubblicata su un branch dedicato.
+
 ## Registro delle funzioni
 
 Ogni funzione utente ha una voce in `shared/parity/features.yaml` (ADR-0037 §1), che dice cosa la realizza su desktop, nel workbench web e nella console, con quale stato e quali test. `task parity` (anche in `task ci`) fallisce se un comando, un'azione dei pannelli, un binding Go o un'operazione di `api/openapi.yaml` nuovi non compaiono in nessuna voce. Quando aggiungi una funzione, un comando, un'azione, un binding o un'operazione (la checklist completa è in [desktop-web-sync.md](desktop-web-sync.md#una-funzione-nuova-passo-per-passo)):

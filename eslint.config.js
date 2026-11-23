@@ -243,6 +243,9 @@ export default tseslint.config(
       '**/playwright-report/**',
       // Local copies of the repository made by tooling (git-ignored, not part of the workspace).
       '.delta/**',
+      // Documentation site (task docs-build) and the VitePress cache.
+      'docs_html/**',
+      'docs/.vitepress/cache/**',
     ],
   },
   js.configs.recommended,

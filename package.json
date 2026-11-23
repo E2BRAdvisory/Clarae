@@ -18,7 +18,10 @@
     "test": "yarn workspaces foreach -A run test",
     "build": "yarn workspaces foreach -A --topological run build",
     "dev:desktop": "bash scripts/run-desktop.sh --demo",
-    "dev:cloud:k3d": "bash scripts/run-cloud-k3d.sh"
+    "dev:cloud:k3d": "bash scripts/run-cloud-k3d.sh",
+    "docs:build": "vitepress build docs",
+    "docs:dev": "vitepress dev docs --port 5175",
+    "docs:preview": "vitepress preview docs --port 5176"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -30,6 +33,7 @@
     "prettier": "^3.9.10",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.0",
+    "vitepress": "1.6.4",
     "yaml": "^2.8.0"
   },
   "resolutions": {
