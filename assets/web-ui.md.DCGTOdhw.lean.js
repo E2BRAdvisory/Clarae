@@ -1,1 +1,0 @@
-import{_ as o,o as a,c as i,a2 as c}from"./chunks/framework.BN2sqjC1.js";const h=JSON.parse('{"title":"Web UI","description":"","frontmatter":{},"headers":[],"relativePath":"web-ui.md","filePath":"web-ui.md"}'),d={name:"web-ui.md"};function t(n,e,r,s,l,u){return a(),i("div",null,[...e[0]||(e[0]=[c("",55)])])}const m=o(d,[["render",t]]);export{h as __pageData,m as default};
