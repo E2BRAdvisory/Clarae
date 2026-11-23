@@ -178,7 +178,7 @@ Metodo, obiettivi e misure in [perf/README.md](perf/README.md).
 ## Sito della documentazione
 
 ```sh
-task docs-build                  # docs/ → docs_html/ (sito statico per GitHub Pages, base /Clarae/)
+task docs-build                  # guide e sicurezza di docs/ → docs_html/ (sito statico per GitHub Pages, base /Clarae/)
 task docs-build DOCS_BASE=/      # stesso sito per un dominio personalizzato o la radice di un server
 task docs-dev                    # anteprima con ricarica su http://localhost:5175/Clarae/
 task docs-preview                # serve docs_html/ come farebbe GitHub Pages (dopo docs-build)
@@ -186,9 +186,9 @@ task docs-publish                # build e pubblicazione di docs_html/ sul branc
 task docs-publish DOCS_DRY_RUN=1 # prepara il commit senza pushare
 ```
 
-Il sito è generato da [VitePress](https://vitepress.dev) con la configurazione in `docs/.vitepress/config.mjs`: la barra laterale segue le sezioni di [index.md](index.md) (gli ADR sono elencati tutti da `docs/adr/`), ogni `README.md` diventa l'indice della sua cartella, e i link relativi a file che non sono pagine del sito (`Specifications.md`, `api/openapi.yaml`, sorgenti) puntano al file su GitHub. `docs_html/` è ignorata da git e contiene anche `.nojekyll`. Le pagine sono template Vue: il testo fuori dal codice non deve contenere tag HTML non chiusi (scrivere `\<nome\>` o metterlo tra backtick); il codice inline è già protetto.
+Il sito è generato da [VitePress](https://vitepress.dev) con la configurazione in `docs/.vitepress/config.mjs` e pubblica solo `docs/user-guide`, `docs/admin-guide` e `docs/security`, con la home `docs/site-home.md`; il resto di `docs/` (ADR, QA, roadmap, questo documento, anche [index.md](index.md)) resta nel repository. Per pubblicare un'altra cartella si aggiunge a `sections` nella configurazione e ai `paths` di `.github/workflows/docs.yml`. La barra laterale segue le sezioni di [index.md](index.md) limitandosi alle pagine pubblicate, ogni `README.md` diventa l'indice della sua cartella, e i link relativi a file che non sono pagine del sito (documenti esclusi, `Specifications.md`, `api/openapi.yaml`, sorgenti) puntano al file su GitHub. `docs_html/` è ignorata da git e contiene anche `.nojekyll`. Le pagine sono template Vue: il testo fuori dal codice non deve contenere tag HTML non chiusi (scrivere `\<nome\>` o metterlo tra backtick); il codice inline è già protetto.
 
-GitHub Pages pubblica da un branch solo la radice o `/docs`, quindi `docs_html/` va sul branch `gh-pages` ([ADR-0067](adr/0067-sito-documentazione-github-pages.md)). `scripts/docs-publish.sh` vi aggiunge un commit sopra la punta remota, senza checkout né branch locali, e non fa nulla se il sito non è cambiato. Lo stesso script gira nel workflow `.github/workflows/docs.yml` a ogni push su `main` che tocca `docs/` (o a mano da _Actions_ → _Docs_): costruisce e pubblica, senza controlli, per cui `task ci` resta il cancello prima del merge. Una sola volta, in _Settings_ → _Pages_ del repository: _Deploy from a branch_, `gh-pages`, `/ (root)`.
+GitHub Pages pubblica da un branch solo la radice o `/docs`, quindi `docs_html/` va sul branch `gh-pages` ([ADR-0067](adr/0067-sito-documentazione-github-pages.md)). `scripts/docs-publish.sh` vi aggiunge un commit sopra la punta remota, senza checkout né branch locali, e non fa nulla se il sito non è cambiato. Lo stesso script gira nel workflow `.github/workflows/docs.yml` a ogni push su `main` che tocca le pagine del sito, la sua configurazione o `docs/index.md` (o a mano da _Actions_ → _Docs_): costruisce e pubblica, senza controlli, per cui `task ci` resta il cancello prima del merge. Una sola volta, in _Settings_ → _Pages_ del repository: _Deploy from a branch_, `gh-pages`, `/ (root)`.
 
 ## Registro delle funzioni
 

@@ -1,7 +1,8 @@
 name: Docs
 
-# Builds the documentation site (VitePress, docs/ → docs_html/) and publishes it on the gh-pages branch, which GitHub
-# Pages serves (Settings → Pages → Deploy from a branch → gh-pages, / (root)). ADR-0067: an exception to ADR-0036 that
+# Builds the documentation site (VitePress: docs/user-guide, docs/admin-guide and docs/security, with docs/site-home.md
+# as the home page, into docs_html/) and publishes it on the gh-pages branch, which GitHub Pages serves
+# (Settings → Pages → Deploy from a branch → gh-pages, / (root)). ADR-0067: an exception to ADR-0036 that
 # publishes and checks nothing else; task ci stays the gate before a merge. Locally the same is `task docs-publish`.
 #
 # Supply chain: actions pinned to a full commit SHA, as in release.yml (refreshing the pins: deploy/PINS.md).
@@ -10,7 +11,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/**'
+      - 'docs/user-guide/**'
+      - 'docs/admin-guide/**'
+      - 'docs/security/**'
+      - 'docs/.vitepress/**'
+      - 'docs/site-home.md'
+      # The sidebar follows the sections of docs/index.md.
+      - 'docs/index.md'
       - 'assets/brand/**'
       - 'package.json'
       - 'yarn.lock'

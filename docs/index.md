@@ -7,7 +7,7 @@
 - **Due tipi di vault cloud**, scelti alla creazione: _privati_, cifrati end-to-end sul client e non condivisibili, e _condivisi_, collaborativi e con la presenza in tempo reale degli altri utenti.
 - **Web UI** incorporata nel binario del cloud: console utente e di amministrazione, e il workbench del vault nel browser, con la stessa interfaccia del desktop sul core Go compilato in WebAssembly.
 
-Questa pagina è il punto d'ingresso alla documentazione del repository; la versione corrente è descritta nel [CHANGELOG](../CHANGELOG.md).
+Questa pagina è il punto d'ingresso alla documentazione del repository; la versione corrente è descritta nel [CHANGELOG](../CHANGELOG.md). Il sito della documentazione su GitHub Pages pubblica solo la guida utente, la guida dell'amministratore e i documenti di sicurezza ([ADR-0067](adr/0067-sito-documentazione-github-pages.md)).
 
 ## Fonti di verità
 

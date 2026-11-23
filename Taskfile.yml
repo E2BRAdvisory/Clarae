@@ -500,8 +500,9 @@ tasks:
       - rm -rf {{.WEBEMBED}}/dist && mkdir -p {{.WEBEMBED}}/dist
       - git checkout -- {{.WEBEMBED}}/dist/index.html
 
-  # Documentation site: VitePress on docs/ (config in docs/.vitepress/config.mjs), static output in docs_html/
-  # (git-ignored), ready for GitHub Pages. The base path is /Clarae/ (project site); DOCS_BASE=/ for a custom domain.
+  # Documentation site: VitePress on docs/user-guide, docs/admin-guide and docs/security only, home docs/site-home.md
+  # (config in docs/.vitepress/config.mjs, ADR-0067), static output in docs_html/ (git-ignored), ready for GitHub
+  # Pages. The base path is /Clarae/ (project site); DOCS_BASE=/ for a custom domain.
   docs-build:
     desc: Build the documentation site from docs/ into docs_html/ (GitHub Pages; DOCS_BASE overrides the base path /Clarae/)
     cmds:
@@ -517,7 +518,7 @@ tasks:
     cmds:
       - yarn vitepress preview docs --port 5176
 
-  # The same publication runs in .github/workflows/docs.yml on every push to main that touches docs/ (ADR-0067).
+  # The same publication runs in .github/workflows/docs.yml on every push to main that touches the site (ADR-0067).
   docs-publish:
     desc: Build the documentation site and publish docs_html/ on the gh-pages branch (DOCS_REMOTE, DOCS_BRANCH; DOCS_DRY_RUN=1 does not push)
     cmds:

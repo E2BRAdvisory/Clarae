@@ -4,6 +4,12 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+### Documentazione
+
+- **Il sito della documentazione pubblica solo `docs/user-guide`, `docs/admin-guide` e `docs/security`** ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), emendato), con una home dedicata (`docs/site-home.md`); `docs/index.md` resta l'indice del repository. Le altre voci di `docs/` sono escluse dal build (`srcExclude`), i link verso di esse puntano al file su GitHub, la barra laterale e la navigazione non hanno più ADR, roadmap e architettura, e il workflow `docs.yml` parte solo quando cambiano le pagine pubblicate, la configurazione del sito o `docs/index.md`.
+
 ## [1.8.4] - 2026-11-23
 
 Milestone M27 ([roadmap](docs/roadmap.md) §13-vicies), sessioni M27-S1…S5: **la documentazione diventa un sito** generato da `docs/` e pubblicato su GitHub Pages ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), in stato di proposta). Milestone M28 (§13-unvicies), sessioni M28-S1…S5: **il repository non nomina più l'editor di note a cui il prodotto si ispirava**, nemmeno in `Specifications.md` e nei documenti storici. Nel prodotto cambiano solo i testi della conversione dei disegni `.excalidraw.md` e il riconoscimento di uno schema di link; nessuna migrazione del database, nessun cambiamento dei formati.
