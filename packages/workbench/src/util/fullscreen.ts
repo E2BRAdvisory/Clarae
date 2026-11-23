@@ -3,6 +3,10 @@
 // through the Wails runtime. Both are undone by `leaveFullscreen`. A browser has no window to
 // control: the element Fullscreen API is all there is, and the overlay still fills the page when it
 // is refused.
+//
+// A presentation is also shown at actual size: `data-presenting` on the root lets the style sheet
+// override the interface zoom of the appearance settings (`applyAppearance`), which would otherwise
+// scale the slides too (and misplace them in WebKit, where Marp's polyfill does not know about it).
 import {
   WindowFullscreen,
   WindowIsFullscreen,
@@ -13,7 +17,11 @@ import { can } from '../platform';
 /** True while this module put the window in full screen (so that it only undoes its own). */
 let windowFull = false;
 
+/** The attribute on the root element while a presentation is shown (see style.css). */
+export const PRESENTING_ATTR = 'data-presenting';
+
 export async function enterFullscreen(el: HTMLElement): Promise<void> {
+  document.documentElement.setAttribute(PRESENTING_ATTR, ''); // at actual size, even without full screen
   try {
     if (el.requestFullscreen) {
       await el.requestFullscreen();
@@ -33,6 +41,7 @@ export async function enterFullscreen(el: HTMLElement): Promise<void> {
 }
 
 export async function leaveFullscreen(): Promise<void> {
+  document.documentElement.removeAttribute(PRESENTING_ATTR); // the interface zoom applies again
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
   } catch {

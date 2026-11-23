@@ -36,7 +36,7 @@ Note: ricordare l'esempio dei grafi
 - Scheda **Slide** nella barra laterale destra: _Avvia la presentazione_, _Dalla slide corrente_ (usa la posizione del cursore) o un clic su una miniatura per partire da quella slide.
 - Palette comandi: _Avvia la presentazione_ e _Avvia la presentazione dalla slide corrente_.
 
-La presentazione occupa l'intera finestra (e lo schermo intero, dove il sistema lo consente).
+La presentazione occupa l'intera finestra (e lo schermo intero, dove il sistema lo consente) ed è sempre al 100%: lo zoom dell'interfaccia (Aspetto → Zoom) non vale durante la presentazione e torna all'uscita. Lo stesso vale per le presentazioni Marp, dei disegni e per il canvas a tutto schermo.
 
 | Azione                                | Tasti                                     |
 | ------------------------------------- | ----------------------------------------- |

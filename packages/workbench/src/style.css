@@ -2043,6 +2043,12 @@ textarea.merge {
   color: #e8890c;
 }
 
+/* A presentation is shown at actual size: the interface zoom of the appearance settings, set inline
+   on the root by applyAppearance, does not apply while one is open (util/fullscreen.ts). */
+html[data-presenting] {
+  zoom: 1 !important;
+}
+
 /* Full-screen presentation of a .marp file (ADR-0048) */
 .marp-show {
   position: fixed;
